@@ -13,7 +13,7 @@ use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
-    TransactionEvents,
+    TransactionEffectsV2, TransactionEvents,
 };
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
@@ -32,7 +32,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
+    storage::{BackingPackageStore, ParentSync, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -232,6 +232,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws,
+            retry_request: None,
         }
     }
 
@@ -339,15 +340,18 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
+            shared_object_refs,
+            loaded_per_epoch_config_objects,
+            &object_changes,
+        );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
             status,
             epoch,
             gas_cost_summary,
-            // TODO: Provide the list of read-only shared objects directly.
-            shared_object_refs,
-            loaded_per_epoch_config_objects,
+            unchanged_consensus_objects,
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -1107,7 +1111,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

@@ -3,7 +3,7 @@
 
 // tests invalid attempts at manually supplying &mut/&TxContext
 
-//# init --addresses test=0x0 --allow-references-in-ptbs
+//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
 
 //# publish
 module test::m;

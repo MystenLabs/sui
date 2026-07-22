@@ -4,7 +4,7 @@
 use move_symbol_pool::Symbol;
 
 use crate::{
-    cfgir::visitor::CFGIRVisitor,
+    cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
     command_line::compiler::Visitor,
     diagnostics::{
         codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
@@ -25,6 +25,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod unused_return_value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -176,6 +177,12 @@ lints!(
         "combinable_comparisons",
         "comparison operations condition can be simplified"
     ),
+    (
+        UnusedReturnValue,
+        LinterDiagnosticCategory::Suspicious,
+        "unused_return_value",
+        "return value of a non-mutating call is discarded"
+    ),
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
@@ -220,6 +227,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                unused_return_value::UnusedReturnValue.visitor(),
             ]
         }
     }

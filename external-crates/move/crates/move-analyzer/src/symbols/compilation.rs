@@ -5,7 +5,7 @@
 //! to a represenatation that can be used for computing symbols.
 
 use crate::{
-    compiler_info::{CompilerAnalysisInfo, CompilerAutocompleteInfo, process_ide_annotations},
+    compiler_info::{CompilerAnalysisInfo, CompilerAutocompleteInfo, process_ide_info},
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     symbols::{
         def_info::DefInfo,
@@ -41,7 +41,8 @@ use move_compiler::{
     linters::LintLevel,
     parser::ast as P,
     shared::{
-        NamedAddressMap, NamedAddressMaps, PackagePaths, files::MappedFiles, unique_map::UniqueMap,
+        Identifier, NamedAddressMap, NamedAddressMaps, PackagePaths, files::MappedFiles,
+        unique_map::UniqueMap,
     },
     typing::ast::ModuleDefinition,
 };
@@ -108,7 +109,7 @@ pub struct CompiledPkgInfo {
     /// Compiler analysis info
     pub compiler_analysis_info: CompilerAnalysisInfo,
     /// Compiler autocomplete info
-    pub compiler_autocomplete_info: Option<CompilerAutocompleteInfo>,
+    pub compiler_autocomplete_info: Option<Arc<CompilerAutocompleteInfo>>,
     /// IDE diagnostics related to the package
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
@@ -743,22 +744,23 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                 let (compiler, typed_program) = compiler.into_ast();
                 typed_ast = Some(typed_program.clone());
                 let (analysis_info, autocomplete_info) =
-                    process_ide_annotations(compiler.compilation_env().ide_information().clone());
+                    process_ide_info(compiler.compilation_env().ide_information().clone());
                 // Don't update caching_result here - will be merged in conditional below
                 compiler_analysis_info_opt = Some(analysis_info);
 
                 // Filter autocomplete info based on cursor file
                 // - If cursor_file_opt is None: no autocomplete needed, use empty info
                 // - If cursor_file_opt is Some: only keep autocomplete info for that file
-                compiler_autocomplete_info_opt = Some(if let Some(cursor_file) = cursor_file_opt {
-                    filter_autocomplete_for_file(
-                        autocomplete_info,
-                        cursor_file,
-                        mapped_files_data.files.file_name_mapping(),
-                    )
-                } else {
-                    CompilerAutocompleteInfo::new()
-                });
+                compiler_autocomplete_info_opt =
+                    Some(Arc::new(if let Some(cursor_file) = cursor_file_opt {
+                        filter_autocomplete_for_file(
+                            autocomplete_info,
+                            cursor_file,
+                            mapped_files_data.files.file_name_mapping(),
+                        )
+                    } else {
+                        CompilerAutocompleteInfo::new()
+                    }));
                 // compile to CFGIR for accurate diags
                 eprintln!("compiling to CFGIR");
                 let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
@@ -1188,6 +1190,9 @@ fn merge_compiler_analysis_info(
 
     // Remove entries from modified files
     result.macro_info.retain(|loc, _| !is_modified(loc));
+    result
+        .macro_function_bodies
+        .retain(|(_, function_name), _| !is_modified(&function_name.loc()));
     result.expanded_lambdas.retain(|loc| !is_modified(loc));
     result.ellipsis_binders.retain(|loc| !is_modified(loc));
     result.string_values.retain(|loc, _| !is_modified(loc));
@@ -1202,6 +1207,9 @@ fn merge_compiler_analysis_info(
             .or_default()
             .append(&mut entries);
     }
+    result
+        .macro_function_bodies
+        .extend(new_info.macro_function_bodies);
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
     result.string_values.extend(new_info.string_values);

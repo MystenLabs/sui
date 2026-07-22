@@ -21,6 +21,7 @@ mod core;
 mod core_thread;
 mod dag_state;
 mod error;
+mod flex_committer;
 mod leader_schedule;
 mod leader_schedule_v3;
 mod leader_scoring;
@@ -39,6 +40,7 @@ mod stake_aggregator;
 pub mod storage;
 mod subscriber;
 mod synchronizer;
+mod task;
 mod threshold_clock;
 mod transaction;
 mod transaction_vote_tracker;
@@ -71,7 +73,7 @@ pub use context::Clock;
 pub use metrics::Metrics;
 pub use network::RandomnessSignatureHandler;
 pub use transaction::{
-    BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
+    BlockStatus, ClientError, Priority, TransactionClient, TransactionVerifier, ValidationError,
 };
 
 // Exported API for benchmarking

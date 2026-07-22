@@ -21,7 +21,7 @@ async fn receive_object_feature_deny() {
     use sui_protocol_config::ProtocolConfig;
 
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_receive_object_for_testing(false);
+        config.set_receive_objects_for_testing(false);
         config
     });
 

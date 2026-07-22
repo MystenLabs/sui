@@ -13,13 +13,19 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
 
 use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
@@ -42,14 +48,28 @@ pub(crate) mod filter;
 mod lookups;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
-pub(crate) struct EventCursor {
+pub struct EventCursor {
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
+    /// `u32` matches the primary format's `event_index` bound: legitimate values are event array
+    /// indices, capped by `max_num_event_emit` in the protocol config.
     #[serde(rename = "e")]
-    pub ev_sequence_number: u64,
+    pub ev_sequence_number: u32,
 }
 
-pub(crate) type CEvent = JsonCursor<EventCursor>;
+/// Validated event cursor coordinates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+    event_index: u32,
+}
+
+/// Compatibility dispatch over the on-wire cursor formats: `CursorToken` (primary) or the
+/// legacy JSON cursor (secondary).
+pub type CEvent = MultiCursor<OpaqueCursor<EventToken>, JsonCursor<EventCursor>>;
 
 #[derive(Clone)]
 pub(crate) struct Event {
@@ -188,12 +208,151 @@ impl Event {
         )
         .await?;
 
-        page.paginate_results(events, |(c, _)| JsonCursor::new(*c), |(_, e)| Ok(e))
+        page.paginate_results(
+            events,
+            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
+            |(_, e)| Ok(e),
+        )
+    }
+}
+
+impl EventToken {
+    /// Mint the edge cursor for the event at the given coordinates.
+    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
+        CEvent::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Item,
+            checkpoint,
+            tx_seq,
+            event_index,
+        }))
+    }
+}
+
+impl CEvent {
+    pub(crate) fn ev_sequence_number(&self) -> u32 {
+        match self {
+            CEvent::Primary(c) => c.event_index,
+            CEvent::Secondary(c) => c.ev_sequence_number,
+        }
+    }
+}
+
+impl ByteCursor for EventToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)?.try_into()
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&EventToken> for CursorToken {
+    fn from(token: &EventToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Events {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+                event_index: token.event_index,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for EventToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index,
+        } = token.position
+        else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+            event_index,
+        })
+    }
+}
+
+impl Eq for CEvent {}
+
+/// Cursors minted by different paths disagree on the checkpoint hint (and kind), so pagination
+/// only compares the event coordinates.
+impl PartialEq for CEvent {
+    fn eq(&self, other: &Self) -> bool {
+        (self.tx_sequence_number(), self.ev_sequence_number())
+            == (other.tx_sequence_number(), other.ev_sequence_number())
     }
 }
 
 impl TxBoundsCursor for CEvent {
     fn tx_sequence_number(&self) -> u64 {
-        self.tx_sequence_number
+        match self {
+            CEvent::Primary(c) => c.tx_seq,
+            CEvent::Secondary(c) => c.tx_sequence_number,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::connection::CursorType;
+    use fastcrypto::encoding::Base64 as B64;
+    use fastcrypto::encoding::Encoding;
+
+    /// Legacy pg-style cursor: a JSON-encoded `EventCursor`.
+    fn legacy_cursor(tx_sequence_number: u64, ev_sequence_number: u32) -> CEvent {
+        CEvent::Secondary(JsonCursor::new(EventCursor {
+            tx_sequence_number,
+            ev_sequence_number,
+        }))
+    }
+
+    #[test]
+    fn primary_cursor_roundtrips() {
+        let cursor = EventToken::cursor(1, 2, 3);
+        let decoded = CEvent::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
+        assert_eq!(decoded.tx_sequence_number(), 2);
+        assert_eq!(decoded.ev_sequence_number(), 3);
+        assert_eq!(decoded, cursor);
+    }
+
+    /// Pagination equality keys off the event coordinates only: legacy cursors and grpc cursors
+    /// minted with different checkpoint hints all compare equal at the same position.
+    #[test]
+    fn equality_ignores_checkpoint_hint() {
+        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(0, 2, 3));
+        assert_eq!(EventToken::cursor(7, 2, 3), EventToken::cursor(0, 2, 3));
+        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(100, 2, 3));
+        assert_ne!(legacy_cursor(2, 4), EventToken::cursor(0, 2, 3));
+    }
+
+    /// Legacy cursors carrying an event index beyond `u32` were never minted by a server
+    /// (indices are capped by `max_num_event_emit`) and must fail to parse rather than
+    /// limp through the window clamps.
+    #[test]
+    fn rejects_oversized_legacy_event_index() {
+        let bytes = format!(r#"{{"t":2,"e":{}}}"#, u64::MAX);
+        let encoded = B64::encode(bytes.as_bytes());
+        assert!(CEvent::decode_cursor(&encoded).is_err());
+    }
+
+    /// A token scoped to another endpoint must not decode as an event cursor.
+    #[test]
+    fn rejects_wrong_variant_cursor() {
+        let token = CursorToken::item(Position::Transactions {
+            checkpoint: 1,
+            tx_seq: 2,
+        });
+        let encoded = B64::encode(token.encode());
+        assert!(CEvent::decode_cursor(&encoded).is_err());
     }
 }

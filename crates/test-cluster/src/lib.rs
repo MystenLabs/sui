@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{StreamExt, future::join_all};
+use fastcrypto_zkp::bn254::zk_login::JwkId;
+use futures::future::join_all;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
@@ -18,7 +19,6 @@ use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CO
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
@@ -60,7 +60,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
-use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{Transaction, TransactionData};
 use tokio::sync::broadcast;
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
@@ -485,6 +485,49 @@ impl TestCluster {
             .expect("timed out waiting for reconfiguration to complete");
     }
 
+    /// Waits until every node advances to a strictly higher epoch than the one it is at when this is
+    /// called. Unlike `wait_for_epoch_all_nodes`, which matches a target epoch exactly, this only
+    /// requires forward progress, so it is safe when the cluster catches up through several epochs at
+    /// once (e.g. recovering from a stall) and would blow past any fixed target.
+    pub async fn wait_for_next_epoch_all_nodes(&self) {
+        let handles: Vec<_> = self
+            .swarm
+            .all_nodes()
+            .map(|node| node.get_node_handle().unwrap())
+            .collect();
+        let tasks: Vec<_> = handles
+            .iter()
+            .map(|handle| {
+                handle.with_async(|node| async {
+                    let start_epoch = node.state().epoch_store_for_testing().epoch();
+                    let mut retries = 0;
+                    loop {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch > start_epoch {
+                            if let Some(agg) = node.clone_authority_aggregator() {
+                                // Fullnode: also wait for its auth aggregator to reconfigure.
+                                if agg.committee.epoch() > start_epoch {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        retries += 1;
+                        if retries % 5 == 0 {
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting {:?}s for an epoch beyond {:?}; currently at {:?}", retries, start_epoch, epoch);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        timeout(Duration::from_secs(40), join_all(tasks))
+            .await
+            .expect("timed out waiting for all nodes to advance an epoch");
+    }
+
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         // fullnode_handle is not part of swarm and cannot be dropped / killed
         self.fullnode_handle
@@ -532,40 +575,40 @@ impl TestCluster {
         }
     }
 
+    /// Wait until the on-chain authenticator state contains any active JWK.
     pub async fn wait_for_authenticator_state_update(&self) {
-        timeout(
-            Duration::from_secs(60),
-            self.fullnode_handle.sui_node.with_async(|node| async move {
-                let state = node.state();
-                let mut txns = state.subscription_handler.subscribe_transactions(
-                    TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
-                );
+        self.wait_for_authenticator_state_update_for_providers(&[])
+            .await;
+    }
 
-                // Check if the state was already updated before subscribe_transactions was called
-                // above (after trigger_reconfiguration completes, the AuthenticatorStateUpdate
-                // transaction may have already been committed).
-                let has_active_jwks = get_authenticator_state(state.get_object_store())
-                    .ok()
-                    .flatten()
-                    .is_some_and(|state| !state.active_jwks.is_empty());
-                if has_active_jwks {
+    /// Wait until the on-chain authenticator state contains all the given JWK ids.
+    pub async fn wait_for_authenticator_state_update_for_providers(&self, jwk_ids: &[JwkId]) {
+        timeout(Duration::from_secs(60), async {
+            loop {
+                let active: Vec<JwkId> = self.fullnode_handle.sui_node.with(|node| {
+                    get_authenticator_state(node.state().get_object_store())
+                        .ok()
+                        .flatten()
+                        .map(|state| {
+                            state
+                                .active_jwks
+                                .iter()
+                                .map(|active| active.jwk_id.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                });
+                let ready = if jwk_ids.is_empty() {
+                    !active.is_empty()
+                } else {
+                    jwk_ids.iter().all(|id| active.contains(id))
+                };
+                if ready {
                     return;
                 }
-
-                while let Some(tx) = txns.next().await {
-                    let digest = *tx.transaction_digest();
-                    let tx = state
-                        .get_transaction_cache_reader()
-                        .get_transaction_block(&digest)
-                        .unwrap();
-                    match &tx.data().intent_message().value.kind() {
-                        TransactionKind::EndOfEpochTransaction(_) => (),
-                        TransactionKind::AuthenticatorStateUpdate(_) => break,
-                        _ => panic!("{:?}", tx),
-                    }
-                }
-            }),
-        )
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
         .await
         .expect("Timed out waiting for authenticator state update");
     }
@@ -734,10 +777,7 @@ impl TestCluster {
             .collect();
 
         let wait_responses = join_all(wait_futures).await;
-        for ((index, _), response) in submitted_positions
-            .into_iter()
-            .zip_debug_eq(wait_responses.into_iter())
-        {
+        for ((index, _), response) in submitted_positions.into_iter().zip_debug_eq(wait_responses) {
             match response? {
                 WaitForEffectsResponse::Executed { details, .. } => {
                     let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
@@ -759,25 +799,14 @@ impl TestCluster {
             }
         }
 
-        // Effects were already obtained from the validator above; this call is a
-        // synchronization barrier so callers that query the fullnode (e.g. RPC)
-        // after this returns see the transactions' effects.
-        self.fullnode_handle
-            .sui_node
-            .with_async(|node| {
-                let digests = digests.clone();
-                async move {
-                    let state = node.state();
-                    let transaction_cache_reader = state.get_transaction_cache_reader();
-                    transaction_cache_reader
-                        .notify_read_executed_effects_digests(
-                            "sign_and_execute_txns_in_soft_bundle",
-                            &digests,
-                        )
-                        .await
-                }
-            })
-            .await;
+        // Effects were already obtained from the validator above. Wait for the
+        // rpc fullnode to settle the transactions in an executed checkpoint and
+        // for its embedded rpc-store index to catch up, so callers that query
+        // the fullnode (e.g. RPC for owned objects or balances) after this
+        // returns observe these transactions. The embedded indexer follows the
+        // tip asynchronously and is not a blocker for execution, so the index
+        // wait is required for read-after-write consistency.
+        self.wait_for_tx_settlement(&digests).await;
 
         executed_results
             .into_iter()
@@ -867,7 +896,7 @@ impl TestCluster {
 
         let results: SuiResult<Vec<_>> = digests
             .into_iter()
-            .zip_debug_eq(responses.into_iter())
+            .zip_debug_eq(responses)
             .map(|(digest, response)| Ok((digest, response?)))
             .collect();
 
@@ -900,25 +929,94 @@ impl TestCluster {
         handles: &[SuiNodeHandle],
         digests: &[TransactionDigest],
     ) {
-        let waits = handles.iter().map(|handle| {
-            handle.with_async(|node| async move {
-                let state = node.state();
-                // wait until the transactions are in checkpoints on this node
-                let checkpoint_seqs = state
-                    .epoch_store_for_testing()
-                    .transactions_executed_in_checkpoint_notify(digests.to_vec())
-                    .await
-                    .unwrap();
+        let waits = handles.iter().map(|handle| async move {
+            let max_checkpoint_seq = handle
+                .with_async(|node| async move {
+                    let state = node.state();
+                    // wait until the transactions are in checkpoints on this node
+                    let checkpoint_seqs = state
+                        .epoch_store_for_testing()
+                        .transactions_executed_in_checkpoint_notify(digests.to_vec())
+                        .await
+                        .unwrap();
 
-                // then wait until the highest of those checkpoints is executed on this node
-                let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
-                state
-                    .checkpoint_store
-                    .notify_read_executed_checkpoint(max_checkpoint_seq)
-                    .await;
-            })
+                    // then wait until the highest of those checkpoints is executed on this node
+                    let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();
+                    state
+                        .checkpoint_store
+                        .notify_read_executed_checkpoint(max_checkpoint_seq)
+                        .await;
+                    max_checkpoint_seq
+                })
+                .await;
+
+            // The embedded rpc-store indexes asynchronously, decoupled from
+            // checkpoint execution, so a settled transaction is not yet visible
+            // through the live index surface (owned objects, balances). Wait
+            // for the live cohort to catch up so subsequent index reads
+            // observe it.
+            Self::wait_for_rpc_index_on_handle(handle, max_checkpoint_seq, false).await;
         });
         join_all(waits).await;
+    }
+
+    /// Wait until the embedded rpc-store on `handle` has indexed through
+    /// `checkpoint`. No-op for a node without an embedded store (a validator,
+    /// or a fullnode with indexing disabled).
+    ///
+    /// Unlike the legacy synchronous `rpc-index`, the embedded indexer follows
+    /// the tip asynchronously and is not a blocker for checkpoint execution, so
+    /// reads of the index surface must wait for it explicitly.
+    async fn wait_for_rpc_index_on_handle(
+        handle: &SuiNodeHandle,
+        checkpoint: u64,
+        wait_for_history: bool,
+    ) {
+        // Skip nodes without an embedded index; there is nothing to wait for.
+        if handle.with(|node| node.embedded_rpc_store().is_none()) {
+            return;
+        }
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            let (live_committed, history_committed) = handle.with(|node| {
+                node.embedded_rpc_store()
+                    .map(|embedded| {
+                        (
+                            embedded.live_committed_checkpoint(),
+                            embedded.history_committed_checkpoint(),
+                        )
+                    })
+                    .unwrap_or((None, None))
+            });
+            if live_committed.is_some_and(|c| c >= checkpoint)
+                && (!wait_for_history || history_committed.is_some_and(|c| c >= checkpoint))
+            {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for the embedded rpc-store to index checkpoint \
+                 {checkpoint} (live committed = {live_committed:?}, \
+                 history committed = {history_committed:?})",
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    /// Wait until the rpc fullnode's embedded rpc-store has indexed through its
+    /// current highest executed checkpoint. Call after building the cluster so
+    /// genesis data is queryable through index surfaces before tests issue
+    /// their first index reads. No-op when the fullnode has indexing disabled.
+    pub async fn wait_for_rpc_index_ready(&self) {
+        let handle = &self.fullnode_handle.sui_node;
+        let highest_executed = handle.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("db error")
+                .unwrap_or(0)
+        });
+        Self::wait_for_rpc_index_on_handle(handle, highest_executed, true).await;
     }
 
     /// Execute a transaction on the network and wait for it to be executed on the rpc fullnode.
@@ -933,16 +1031,15 @@ impl TestCluster {
     /// returns raw effects, events and extra objects returned by the validators,
     /// aggregated manually (without authority aggregator).
     /// It also does not check whether the transaction is executed successfully.
-    /// In order to keep the fullnode up-to-date so that latter queries can read consistent
-    /// results, it calls execute_transaction_may_fail again which goes through fullnode.
-    /// This is less efficient and verbose, but can be used if more details are needed
-    /// from the execution results, and if the transaction is expected to fail.
+    /// Before returning, it waits for the transaction to settle on the fullnode so that
+    /// subsequent queries there read consistent results.
     pub async fn execute_transaction_return_raw_effects(
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
-        let results = self.submit_and_execute(tx.clone(), None).await?;
-        self.wallet.execute_transaction_may_fail(tx).await.unwrap();
+        let digest = *tx.digest();
+        let results = self.submit_and_execute(tx, None).await?;
+        self.wait_for_tx_settlement(&[digest]).await;
         Ok(results)
     }
 
@@ -1001,6 +1098,7 @@ impl TestCluster {
             };
 
             let mut consensus_position = None;
+            let mut rejected_transient = false;
             for result in submit_response.results {
                 match result {
                     SubmitTxResult::Executed { details, .. } => {
@@ -1010,6 +1108,13 @@ impl TestCluster {
                         return Ok((data.effects, events));
                     }
                     SubmitTxResult::Rejected { error } => {
+                        // Mirror the production `TransactionDriver`: a rejection with a
+                        // retriable category (e.g. validator overloaded) is resubmitted.
+                        if error.as_inner().categorize().is_submission_retriable() {
+                            last_transient_err = Some(error.into());
+                            rejected_transient = true;
+                            break;
+                        }
                         return Err(error.into());
                     }
                     SubmitTxResult::Submitted {
@@ -1018,6 +1123,9 @@ impl TestCluster {
                         consensus_position = Some(position);
                     }
                 }
+            }
+            if rejected_transient {
+                continue;
             }
 
             let consensus_position = consensus_position
@@ -1038,16 +1146,34 @@ impl TestCluster {
                     let events = data.events.unwrap_or_default();
                     return Ok((data.effects, events));
                 }
-                Ok(WaitForEffectsResponse::Rejected { error }) => {
-                    return Err(error
-                        .unwrap_or_else(|| {
+                Ok(WaitForEffectsResponse::Rejected { error }) => match error {
+                    // The validator cast a reject vote with a definite cause (e.g. an
+                    // invalid transaction); surface it unless the category is retriable.
+                    Some(err) if !err.as_inner().categorize().is_submission_retriable() => {
+                        return Err(err.into());
+                    }
+                    Some(err) => {
+                        last_transient_err = Some(err.into());
+                    }
+                    // No reject vote was cast locally: the position was indirectly
+                    // rejected at commit time because finalization did not complete
+                    // within INDIRECT_REJECT_DEPTH leader rounds — typically when the
+                    // proposer's block disseminates slowly right after reconfiguration.
+                    // The transaction itself may be perfectly valid, so mirror the
+                    // production `TransactionDriver` (`RejectedByConsensus` maps to the
+                    // retriable `ErrorCategory::Aborted`) and resubmit for a fresh
+                    // position.
+                    None => {
+                        last_transient_err = Some(
                             SuiErrorKind::GenericAuthorityError {
-                                error: "Transaction was rejected".to_string(),
+                                error: "Transaction was rejected by consensus without a \
+                                    reject vote; resubmitting"
+                                    .to_string(),
                             }
-                            .into()
-                        })
-                        .into());
-                }
+                            .into(),
+                        );
+                    }
+                },
                 // The position we waited on was garbage-collected before being sequenced; resubmit
                 // to obtain a fresh position.
                 Ok(WaitForEffectsResponse::Expired { .. }) => {
@@ -1223,6 +1349,9 @@ pub struct TestClusterBuilder {
 
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
+    peer_deny_sync_config_callback:
+        Option<sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -1268,6 +1397,7 @@ impl TestClusterBuilder {
             execution_time_observer_config: None,
             validator_observer_config: None,
             state_sync_config: None,
+            peer_deny_sync_config_callback: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
@@ -1275,6 +1405,18 @@ impl TestClusterBuilder {
 
     pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
         self.state_sync_config = Some(config);
+        self
+    }
+
+    /// Per-validator hook for `peer_deny_sync_config`. The closure receives this
+    /// validator's authority name and the slice of all genesis-committee authority
+    /// names, so callers can compute an allowlist that references peers (e.g.
+    /// "trust everyone but myself").
+    pub fn with_peer_deny_sync_config_per_validator(
+        mut self,
+        f: sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback,
+    ) -> Self {
+        self.peer_deny_sync_config_callback = Some(f);
         self
     }
 
@@ -1564,11 +1706,18 @@ impl TestClusterBuilder {
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
         let wallet = WalletContext::new(&wallet_conf).unwrap();
 
-        TestCluster {
+        let cluster = TestCluster {
             swarm,
             wallet,
             fullnode_handle,
-        }
+        };
+
+        // The embedded rpc-store indexes the tip asynchronously, so genesis
+        // data is not queryable through every index surface the instant the node
+        // is up. Wait for it before handing the cluster to tests.
+        cluster.wait_for_rpc_index_ready().await;
+
+        cluster
     }
 
     /// Start a Swarm and set up WalletConfig
@@ -1649,6 +1798,10 @@ impl TestClusterBuilder {
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {
             builder = builder.with_state_sync_config(state_sync_config);
+        }
+
+        if let Some(cb) = self.peer_deny_sync_config_callback.clone() {
+            builder = builder.with_peer_deny_sync_config_per_validator(cb);
         }
 
         if self.disable_fullnode_pruning {

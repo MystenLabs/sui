@@ -421,7 +421,7 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
 
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.enable_accumulators_for_testing();
+    protocol_config.set_enable_accumulators_for_testing(true);
 
     let authority = TestAuthorityBuilder::new()
         .with_starting_objects(&[gas_object])

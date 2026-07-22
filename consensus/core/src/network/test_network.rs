@@ -121,7 +121,7 @@ impl ObserverNetworkService for Mutex<TestService> {
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<Round>,
     ) -> ConsensusResult<ObserverBlockStream> {
         use futures::stream;
 

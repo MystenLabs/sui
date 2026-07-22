@@ -213,8 +213,8 @@ public fun withdraw<T>(
 
 fun staking() {
     let unadjusted_staking_reward_amount = unadjusted_staking_reward_amounts[i];
-    let adjusted_staking_reward_amount // If the validator is one of the slashed ones, then subtract the adjustment.
-     = if (individual_staking_reward_adjustments.contains(&i)) {
+    let adjusted_staking_reward_amount = // If the validator is one of the slashed ones, then subtract the adjustment.
+    if (individual_staking_reward_adjustments.contains(&i)) {
         let adjustment = individual_staking_reward_adjustments[&i];
         unadjusted_staking_reward_amount - adjustment
     } else {

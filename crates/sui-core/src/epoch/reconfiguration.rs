@@ -6,11 +6,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
 
+// Certs are legacy names for transactions before fastpath was removed.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ReconfigCertStatus {
     AcceptAllCerts,
 
-    // User certs rejected, but we still accept certs received through consensus.
+    // This state is only used during manual epoch close, to close user transaction submission
+    // and persist the manually closed epoch state.
+    // Transactions received through consensus are still accepted.
     RejectUserCerts,
 
     // All certs rejected, including ones received through consensus.

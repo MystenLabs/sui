@@ -14,7 +14,7 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
     use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -37,19 +37,19 @@ mod checked {
 
     use crate::static_programmable_transactions as SPT;
     use crate::sui_types::gas::SuiGasStatusAPI;
-    use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
     use move_core_types::language_storage::TypeTag;
     use sui_move_natives::all_natives;
     use sui_protocol_config::{
-        LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig, check_limit_by_meter,
+        Chain, LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig,
+        check_limit_by_meter,
     };
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::base_types::SequenceNumber;
+    use sui_types::base_types::{ObjectID, SequenceNumber};
     use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
     use sui_types::bridge::{
         BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME, BRIDGE_MODULE_NAME,
@@ -63,7 +63,7 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorTrait};
-    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings, SharedInput};
     use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -88,27 +88,6 @@ mod checked {
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
 
-    // MAGIC CONSTANTS -- these are all mainnet-only hardcoded constants and should not be changed
-    // (but can be removed in future execution cuts).
-
-    /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
-    /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
-    /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
-    const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(692949576);
-
-    /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
-    /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
-    /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
-    /// protocol flag, because it must take effect mid-epoch during recovery when the network cannot
-    /// reconfigure. Only consulted when an accumulator version is assigned (mainnet committed
-    /// execution); everywhere else the short-circuit is protocol gated (see
-    /// `should_short_circuit_insufficient_funds`).
-    ///
-    /// Value is the mainnet accumulator root version where the new binary was activated on the network.
-    const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION: SequenceNumber =
-        SequenceNumber::from_u64(693531074);
-
     /// Whether the *head* early error is `InsufficientFundsForWithdraw`. Used to gate the first
     /// address-balance gas-payment pruning hotfix: the head error is the one surfaced as the
     /// failure status, so keying off it (rather than any occurrence) keeps the pruning bit-for-bit
@@ -122,60 +101,6 @@ mod checked {
                 ExecutionErrorKind::InsufficientFundsForWithdraw
             )
         })
-    }
-
-    /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
-    /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
-    /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
-    /// upstream, so reaching here implies the flag is off (asserted below).
-    fn should_filter_address_balance_gas_smash(
-        execution_params: &ExecutionOrEarlyError,
-        protocol_config: &ProtocolConfig,
-    ) -> bool {
-        if !head_error_is_insufficient_funds_for_withdraw(execution_params) {
-            return false;
-        }
-        debug_assert!(
-            !protocol_config.early_exit_on_iffw(),
-            "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
-        );
-        // In test/debug builds, always apply the fix unconditionally to match the behaviour of
-        // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
-        in_test_configuration()
-            || protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION)
-    }
-
-    /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
-    /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
-    /// (every other chain and non-committed paths, where no accumulator version is assigned) the
-    /// short-circuit applies based on `early_exit_on_iffw`.
-    fn should_short_circuit_insufficient_funds(
-        execution_params: &ExecutionOrEarlyError,
-        protocol_config: &ProtocolConfig,
-    ) -> bool {
-        // If no IFWWs, then does not apply
-        if !execution_params.early_errors().is_some_and(|errors| {
-            errors
-                .iter()
-                .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
-        }) {
-            return false;
-        }
-
-        // In test/debug builds, always short-circuit unconditionally to match the behaviour of
-        // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
-        if in_test_configuration() {
-            return true;
-        }
-
-        // otherwise gate by accumulator version (if present) or protocol flag
-        protocol_config.early_exit_on_iffw()
-            || execution_params
-                .accumulator_version()
-                .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION)
     }
 
     fn payment_kind(
@@ -214,60 +139,19 @@ mod checked {
         }
     }
 
-    /// Compute the per-`(address, type)` funds-accumulator reservation budget consumed by
-    /// `TemporaryStore::check_address_balance_changes`. Today every funds accumulator is a
-    /// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more
-    /// accumulator types are added. Sources:
-    /// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as
-    ///   owner).
-    /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
-    /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
-    fn compute_input_reservations(
-        transaction_kind: &TransactionKind,
-        gas_data: &GasData,
-        transaction_signer: SuiAddress,
-    ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
-        use sui_types::balance::Balance;
-        use sui_types::gas_coin::GAS;
-        use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
-
-        let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
-        let sui_balance_type = Balance::type_tag(GAS::type_tag());
-
-        for arg in transaction_kind.get_funds_withdrawals() {
-            let owner = match arg.withdraw_from {
-                WithdrawFrom::Sender => transaction_signer,
-                WithdrawFrom::Sponsor => gas_data.owner,
-            };
-            let Reservation::MaxAmountU64(reservation) = arg.reservation;
-            *reservations
-                .entry((owner, arg.type_arg.to_type_tag()))
-                .or_insert(0) += reservation;
-        }
-
-        if is_gas_paid_from_address_balance(gas_data, transaction_kind) {
-            *reservations
-                .entry((gas_data.owner, sui_balance_type.clone()))
-                .or_insert(0) += gas_data.budget;
-        }
-
-        for entry in &gas_data.payment {
-            if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-                *reservations
-                    .entry((gas_data.owner, sui_balance_type.clone()))
-                    .or_insert(0) += parsed.reservation_amount();
-            }
-        }
-
-        reservations
-    }
-
-    #[allow(clippy::type_complexity)]
+    type ExecutionOutput<Mode> = (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<<Mode as ExecutionMode>::ExecutionResults, <Mode as ExecutionMode>::Error>,
+    );
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        mut gas_data: GasData,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -281,13 +165,7 @@ mod checked {
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> (
-        InnerTemporaryStore,
-        SuiGasStatus,
-        TransactionEffects,
-        Vec<ExecutionTiming>,
-        Result<Mode::ExecutionResults, Mode::Error>,
-    ) {
+    ) -> ExecutionOutput<Mode> {
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
             input_objects.all_mutable_inputs().keys().copied().collect()
@@ -296,238 +174,99 @@ mod checked {
         };
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
-        let mut transaction_dependencies = input_objects.transaction_dependencies();
+        let transaction_dependencies = input_objects.transaction_dependencies();
 
-        let mut temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new(
             store,
             input_objects,
             receiving_objects,
             transaction_digest,
             protocol_config,
             *epoch_id,
+            system_object_versions,
         );
 
-        // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
-        // and has nothing to execute, so skip the executor pipeline. Bump versions of mutable
-        // inputs (so locks advance) and emit effects with a zero gas cost summary. On mainnet
-        // committed execution this is gated on the settlement-version rollout point (below it we
-        // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
-        // it applies based on `early_exit_on_iffw`.
-        if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
-            assert_reachable!("IFFW short-circuit fired");
-            temporary_store.ensure_active_inputs_mutated();
-            transaction_dependencies.remove(&TransactionDigest::genesis_marker());
-
-            let execution_error: Mode::Error =
-                ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw).into();
-            let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
-            let mut gas_meter = GasCharger::new(
-                transaction_digest,
-                PaymentKind::gasless(),
-                gas_status,
-                &mut temporary_store,
-                protocol_config,
-            );
-
-            let (inner, effects) = temporary_store.into_effects(
-                shared_object_refs,
-                &transaction_digest,
-                transaction_dependencies,
-                GasCostSummary::default(),
-                status,
-                &mut gas_meter,
-                *epoch_id,
-            );
-
-            return (
-                inner,
-                gas_meter.into_gas_status(),
-                effects,
-                vec![],
-                Err(execution_error),
-            );
-        }
-
-        let sponsor = {
-            let gas_owner = gas_data.owner;
-            if gas_owner == transaction_signer {
-                None
-            } else {
-                Some(gas_owner)
-            }
-        };
-        let gas_price = gas_status.gas_price();
-        let rgp = gas_status.reference_gas_price();
-
-        // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so the
-        // pruned list flows into `payment_kind`/`compute_input_reservations` with no special
-        // handling. See `should_filter_address_balance_gas_smash` for when this applies.
-        if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
-            && gas_data.payment.len() > 1
-            && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
-        {
-            gas_data
-                .payment
-                .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
-        }
-
-        let mut gas_charger = GasCharger::new(
-            transaction_digest,
-            payment_kind(&gas_data, &transaction_kind, protocol_config),
-            gas_status,
-            &mut temporary_store,
-            protocol_config,
-        );
-
-        let tx_ctx = TxContext::new_from_components(
-            &transaction_signer,
-            &transaction_digest,
-            epoch_id,
-            epoch_timestamp_ms,
-            rgp,
-            gas_price,
-            gas_data.budget,
-            sponsor,
-            protocol_config,
-        );
-        let tx_ctx = Rc::new(RefCell::new(tx_ctx));
-
-        let is_gasless = protocol_config.enable_gasless()
-            && is_gasless_transaction(&gas_data, &transaction_kind);
-        let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
-
-        let input_reservations =
-            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
-
-        let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
+        // TODO: remove all `legacy` code on the next execution version cut
+        legacy::execute_transaction_inner::<Mode>(
             store,
-            &mut temporary_store,
+            temporary_store,
+            gas_data,
+            gas_status,
             transaction_kind,
             rewritten_inputs,
-            &mut gas_charger,
-            tx_ctx,
+            transaction_signer,
+            transaction_digest,
             move_vm,
+            epoch_id,
+            epoch_timestamp_ms,
             protocol_config,
-            metrics.clone(),
+            metrics,
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
-            is_gasless,
-            &input_reservations,
-        );
-
-        let status = if let Err(error) = &execution_result {
-            ExecutionStatus::new_failure(error.to_execution_failure())
-        } else {
-            ExecutionStatus::Success
-        };
-
-        #[skip_checked_arithmetic]
-        trace!(
-            tx_digest = ?transaction_digest,
-            computation_gas_cost = gas_cost_summary.computation_cost,
-            storage_gas_cost = gas_cost_summary.storage_cost,
-            storage_gas_rebate = gas_cost_summary.storage_rebate,
-            "Finished execution of transaction with status {:?}",
-            status
-        );
-
-        // Genesis writes a special digest to indicate that an object was created during
-        // genesis and not written by any normal transaction - remove that from the
-        // dependencies
-        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
-
-        if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
-            temporary_store
-                .check_ownership_invariants(
-                    &transaction_signer,
-                    &sponsor,
-                    &gas_charger,
-                    &mutable_inputs,
-                    &input_reservations,
-                    is_epoch_change,
-                )
-                .unwrap()
-        } // else, in dev inspect mode and anything goes--don't check
-
-        let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
-            &transaction_digest,
             transaction_dependencies,
-            gas_cost_summary,
-            status,
-            &mut gas_charger,
-            *epoch_id,
-        );
-
-        // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
-        // spun-up each time.
-        if !Mode::TRACK_EXECUTION {
-            metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
-                let t = move_vm.get_telemetry_report();
-                vm_metrics
-                    .move_vm_package_cache_count
-                    .set(t.package_cache_count as i64);
-                vm_metrics
-                    .move_vm_total_arena_size_bytes
-                    .set(t.total_arena_size as i64);
-                vm_metrics.move_vm_module_count.set(t.module_count as i64);
-                vm_metrics
-                    .move_vm_function_count
-                    .set(t.function_count as i64);
-                vm_metrics.move_vm_type_count.set(t.type_count as i64);
-                vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_count
-                    .set(t.vtable_cache_count as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_hits
-                    .set(t.vtable_cache_hits as i64);
-                vm_metrics
-                    .move_vm_vtable_cache_misses
-                    .set(t.vtable_cache_misses as i64);
-                vm_metrics
-                    .move_vm_load_time_ms
-                    .set(t.total_load_time as i64);
-                vm_metrics.move_vm_load_count.set(t.load_count as i64);
-                vm_metrics
-                    .move_vm_validation_time_ms
-                    .set(t.total_validation_time as i64);
-                vm_metrics
-                    .move_vm_validation_count
-                    .set(t.validation_count as i64);
-                vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
-                vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
-                vm_metrics
-                    .move_vm_execution_time_ms
-                    .set(t.total_execution_time as i64);
-                vm_metrics
-                    .move_vm_execution_count
-                    .set(t.execution_count as i64);
-                vm_metrics
-                    .move_vm_interpreter_time_ms
-                    .set(t.total_interpreter_time as i64);
-                vm_metrics
-                    .move_vm_interpreter_count
-                    .set(t.interpreter_count as i64);
-                vm_metrics
-                    .move_vm_max_callstack_size
-                    .set(t.max_callstack_size as i64);
-                vm_metrics
-                    .move_vm_max_valuestack_size
-                    .set(t.max_valuestack_size as i64);
-                vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
-                vm_metrics.move_vm_total_count.set(t.total_count as i64);
-            });
-        }
-
-        (
-            inner,
-            gas_charger.into_gas_status(),
-            effects,
-            timings,
-            execution_result,
+            mutable_inputs,
         )
+    }
+
+    fn update_vm_telemetry_metrics(metrics: &ExecutionMetrics, move_vm: &MoveRuntime) {
+        metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
+            let t = move_vm.get_telemetry_report();
+            vm_metrics
+                .move_vm_package_cache_count
+                .set(t.package_cache_count as i64);
+            vm_metrics
+                .move_vm_total_arena_size_bytes
+                .set(t.total_arena_size as i64);
+            vm_metrics.move_vm_module_count.set(t.module_count as i64);
+            vm_metrics
+                .move_vm_function_count
+                .set(t.function_count as i64);
+            vm_metrics.move_vm_type_count.set(t.type_count as i64);
+            vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
+            vm_metrics
+                .move_vm_vtable_cache_count
+                .set(t.vtable_cache_count as i64);
+            vm_metrics
+                .move_vm_vtable_cache_hits
+                .set(t.vtable_cache_hits as i64);
+            vm_metrics
+                .move_vm_vtable_cache_misses
+                .set(t.vtable_cache_misses as i64);
+            vm_metrics
+                .move_vm_load_time_ms
+                .set(t.total_load_time as i64);
+            vm_metrics.move_vm_load_count.set(t.load_count as i64);
+            vm_metrics
+                .move_vm_validation_time_ms
+                .set(t.total_validation_time as i64);
+            vm_metrics
+                .move_vm_validation_count
+                .set(t.validation_count as i64);
+            vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
+            vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
+            vm_metrics
+                .move_vm_execution_time_ms
+                .set(t.total_execution_time as i64);
+            vm_metrics
+                .move_vm_execution_count
+                .set(t.execution_count as i64);
+            vm_metrics
+                .move_vm_interpreter_time_ms
+                .set(t.total_interpreter_time as i64);
+            vm_metrics
+                .move_vm_interpreter_count
+                .set(t.interpreter_count as i64);
+            vm_metrics
+                .move_vm_max_callstack_size
+                .set(t.max_callstack_size as i64);
+            vm_metrics
+                .move_vm_max_valuestack_size
+                .set(t.max_valuestack_size as i64);
+            vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
+            vm_metrics.move_vm_total_count.set(t.total_count as i64);
+        });
     }
 
     pub fn execute_genesis_state_update(
@@ -547,6 +286,7 @@ mod checked {
             tx_context.borrow().digest(),
             protocol_config,
             0,
+            BTreeMap::new(),
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(
@@ -566,224 +306,518 @@ mod checked {
         Ok(temporary_store.into_inner(BTreeMap::new()))
     }
 
-    #[instrument(name = "tx_execute", level = "debug", skip_all)]
-    fn execute_transaction<Mode: ExecutionMode>(
-        store: &dyn BackingStore,
-        temporary_store: &mut TemporaryStore<'_>,
-        transaction_kind: TransactionKind,
-        rewritten_inputs: Option<Vec<bool>>,
-        gas_charger: &mut GasCharger,
-        tx_ctx: Rc<RefCell<TxContext>>,
-        move_vm: &Arc<MoveRuntime>,
-        protocol_config: &ProtocolConfig,
-        metrics: Arc<ExecutionMetrics>,
-        enable_expensive_checks: bool,
-        execution_params: ExecutionOrEarlyError,
-        trace_builder_opt: &mut Option<MoveTraceBuilder>,
-        is_gasless: bool,
-        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
-    ) -> (
-        GasCostSummary,
-        Result<Mode::ExecutionResults, Mode::Error>,
-        Vec<ExecutionTiming>,
-    ) {
-        // At this point no charges have been applied yet
-        debug_assert!(
-            gas_charger.no_charges(),
-            "No gas charges must be applied yet"
-        );
+    /// Frozen pre-v15 (`gas_model_version < 15`) execution, mirroring `origin/main`. Removed at the
+    /// next execution-version cut.
+    mod legacy {
+        use super::*;
 
-        let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
-        let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
-        let digest = tx_ctx.borrow().digest();
-        let withdrawal_reservations =
-            if is_gasless && protocol_config.gasless_verify_remaining_balance() {
-                gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
+        // MAGIC CONSTANTS -- these are all mainnet-only hardcoded constants and should not be
+        // changed (but can be removed in future execution cuts).
+
+        /// Mainnet recovery point: the fix replays for transactions at/above this accumulator root
+        /// version and keeps the old behavior below it. A compiled constant (not a protocol flag)
+        /// because it had to take effect mid-epoch during recovery, when the network can't reconfigure.
+        pub(super) const ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION: SequenceNumber =
+            SequenceNumber::from_u64(692949576);
+
+        /// Mainnet settlement version at/above which an `InsufficientFundsForWithdraw` transaction
+        /// short-circuits execution entirely (zero-gas effects, mutable-input version bumps only),
+        /// superseding the address-balance gas-payment pruning hotfix. A compiled constant, not a
+        /// protocol flag, because it must take effect mid-epoch during recovery when the network cannot
+        /// reconfigure. Only consulted when an accumulator version is assigned (mainnet committed
+        /// execution); everywhere else the short-circuit is protocol gated (see
+        /// `should_short_circuit_insufficient_funds`).
+        ///
+        /// Value is the mainnet accumulator root version where the new binary was activated on the network.
+        pub(super) const ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION:
+            SequenceNumber = SequenceNumber::from_u64(693531074);
+
+        /// Whether to prune the address-balance leg of gas smashing for an IFFW transaction. This is
+        /// the mainnet-only accumulator backfill that replays the pre-flag incident hotfix below the
+        /// short-circuit rollout point; once `early_exit_on_iffw` is set the short-circuit handles IFFW
+        /// upstream, so reaching here implies the flag is off (asserted below).
+        pub(super) fn should_filter_address_balance_gas_smash(
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) -> bool {
+            if !head_error_is_insufficient_funds_for_withdraw(execution_params) {
+                return false;
+            }
+            debug_assert!(
+                !protocol_config.early_exit_on_iffw(),
+                "Should not reach gas smashing filtering address balances if IFFW early exit is enabled"
+            );
+            // In test/debug builds, always apply the fix unconditionally to match the behaviour of
+            // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
+            in_test_configuration()
+                || protocol_config.early_exit_on_iffw()
+                || (protocol_config.chain() == Chain::Mainnet
+                    && execution_params
+                        .accumulator_version()
+                        .is_some_and(|v| v >= ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION))
+        }
+
+        /// Whether to short-circuit an IFFW transaction. When an accumulator version is assigned
+        /// (mainnet committed execution) it gates on the settlement-version rollout point; otherwise
+        /// (every other chain and non-committed paths, where no accumulator version is assigned) the
+        /// short-circuit applies based on `early_exit_on_iffw`.
+        pub(super) fn should_short_circuit_insufficient_funds(
+            execution_params: &ExecutionOrEarlyError,
+            protocol_config: &ProtocolConfig,
+        ) -> bool {
+            // If no IFWWs, then does not apply
+            if !execution_params.early_errors().is_some_and(|errors| {
+                errors
+                    .iter()
+                    .any(|e| matches!(e, ExecutionErrorKind::InsufficientFundsForWithdraw))
+            }) {
+                return false;
+            }
+
+            // In test/debug builds, always short-circuit unconditionally to match the behaviour of
+            // the 1.72 mainnet release (where it was deployed as an ungated hotfix).
+            if in_test_configuration() {
+                return true;
+            }
+
+            // otherwise gate by accumulator version (if present) or protocol flag
+            protocol_config.early_exit_on_iffw()
+                || (protocol_config.chain() == Chain::Mainnet
+                    && execution_params.accumulator_version().is_some_and(|v| {
+                        v >= ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION
+                    }))
+        }
+
+        /// Frozen pre-v15 (`gas_model_version < 15`) execution; mirrors `origin/main`.
+        #[allow(clippy::too_many_arguments)]
+        pub(super) fn execute_transaction_inner<Mode: ExecutionMode>(
+            store: &dyn BackingStore,
+            mut temporary_store: TemporaryStore<'_>,
+            mut gas_data: GasData,
+            gas_status: SuiGasStatus,
+            transaction_kind: TransactionKind,
+            rewritten_inputs: Option<Vec<bool>>,
+            transaction_signer: SuiAddress,
+            transaction_digest: TransactionDigest,
+            move_vm: &Arc<MoveRuntime>,
+            epoch_id: &EpochId,
+            epoch_timestamp_ms: u64,
+            protocol_config: &ProtocolConfig,
+            metrics: Arc<ExecutionMetrics>,
+            enable_expensive_checks: bool,
+            execution_params: ExecutionOrEarlyError,
+            trace_builder_opt: &mut Option<MoveTraceBuilder>,
+            shared_object_refs: Vec<SharedInput>,
+            mut transaction_dependencies: BTreeSet<TransactionDigest>,
+            mutable_inputs: HashSet<ObjectID>,
+        ) -> ExecutionOutput<Mode> {
+            // Short-circuit on InsufficientFundsForWithdraw: the transaction is guaranteed to fail
+            // and has nothing to execute, so skip the executor pipeline. Bump versions of mutable
+            // inputs (so locks advance) and emit effects with a zero gas cost summary. On mainnet
+            // committed execution this is gated on the settlement-version rollout point (below it we
+            // fall through to the address-balance gas-payment pruning hotfix instead); everywhere else
+            // it applies based on `early_exit_on_iffw`.
+            if should_short_circuit_insufficient_funds(&execution_params, protocol_config) {
+                assert_reachable!("IFFW short-circuit fired");
+                temporary_store.ensure_active_inputs_mutated();
+                transaction_dependencies.remove(&TransactionDigest::genesis_marker());
+
+                let execution_error: Mode::Error =
+                    ExecutionError::from_kind(ExecutionErrorKind::InsufficientFundsForWithdraw)
+                        .into();
+                let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
+                let gas_meter = GasCharger::new(
+                    transaction_digest,
+                    PaymentKind::gasless(),
+                    gas_status,
+                    &mut temporary_store,
+                    protocol_config,
+                );
+
+                let gas_coin = gas_meter.gas_coin();
+                let (inner, effects) = temporary_store.into_effects(
+                    shared_object_refs,
+                    &transaction_digest,
+                    transaction_dependencies,
+                    GasCostSummary::default(),
+                    status,
+                    gas_coin,
+                    *epoch_id,
+                );
+
+                return (
+                    inner,
+                    gas_meter.into_gas_status(),
+                    effects,
+                    vec![],
+                    Err(execution_error),
+                );
+            }
+
+            let sponsor = {
+                let gas_owner = gas_data.owner;
+                if gas_owner == transaction_signer {
+                    None
+                } else {
+                    Some(gas_owner)
+                }
+            };
+            let gas_price = gas_status.gas_price();
+            let rgp = gas_status.reference_gas_price();
+
+            // On an IFFW abort, drop the address-balance gas payments (keeping real coins) so the
+            // pruned list flows into `payment_kind`/`compute_input_reservations` with no special
+            // handling. See `should_filter_address_balance_gas_smash` for when this applies.
+            if should_filter_address_balance_gas_smash(&execution_params, protocol_config)
+                && gas_data.payment.len() > 1
+                && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
+            {
+                gas_data
+                    .payment
+                    .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+            }
+
+            let mut gas_charger = GasCharger::new(
+                transaction_digest,
+                payment_kind(&gas_data, &transaction_kind, protocol_config),
+                gas_status,
+                &mut temporary_store,
+                protocol_config,
+            );
+
+            let tx_ctx = TxContext::new_from_components(
+                &transaction_signer,
+                &transaction_digest,
+                epoch_id,
+                epoch_timestamp_ms,
+                rgp,
+                gas_price,
+                gas_data.budget,
+                sponsor,
+                protocol_config,
+            );
+            let tx_ctx = Rc::new(RefCell::new(tx_ctx));
+
+            let is_gasless = protocol_config.enable_gasless()
+                && is_gasless_transaction(&gas_data, &transaction_kind);
+            let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
+
+            // Cache the transaction-derived invariant-check inputs (reservation budget, advance-epoch
+            // mint/burn, genesis flag) on the store, after the gas-smash filtering above. The
+            // conservation checks and the ownership-invariant check read them from there.
+            temporary_store.set_invariant_inputs(&transaction_kind, &gas_data, transaction_signer);
+
+            let (gas_cost_summary, mut execution_result, timings) = execute_transaction::<Mode>(
+                store,
+                &mut temporary_store,
+                transaction_kind,
+                rewritten_inputs,
+                &mut gas_charger,
+                tx_ctx,
+                move_vm,
+                protocol_config,
+                metrics.clone(),
+                execution_params,
+                trace_builder_opt,
+                is_gasless,
+            );
+
+            // Post-execution system-invariant checks, run after gas charging: SUI conservation
+            // (recoverable) followed by object-ownership authentication (panics on violation).
+            if let Err(e) = run_invariant_checks::<Mode>(
+                &mut temporary_store,
+                &mut gas_charger,
+                transaction_digest,
+                move_vm,
+                protocol_config,
+                enable_expensive_checks,
+                &gas_cost_summary,
+                &transaction_signer,
+                &sponsor,
+                &mutable_inputs,
+                is_epoch_change,
+            ) {
+                // FIXME: we cannot fail the transaction if this is an epoch change transaction.
+                execution_result = Err(e);
+            }
+
+            let status = if let Err(error) = &execution_result {
+                ExecutionStatus::new_failure(error.to_execution_failure())
             } else {
-                None
+                ExecutionStatus::Success
             };
 
-        // We must charge object read here during transaction execution, because if this fails
-        // we must still ensure an effect is committed and all objects versions incremented
-        let result = gas_charger.charge_input_objects(temporary_store);
+            #[skip_checked_arithmetic]
+            trace!(
+                tx_digest = ?transaction_digest,
+                computation_gas_cost = gas_cost_summary.computation_cost,
+                storage_gas_cost = gas_cost_summary.storage_cost,
+                storage_gas_rebate = gas_cost_summary.storage_rebate,
+                "Finished execution of transaction with status {:?}",
+                status
+            );
 
-        let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
-            result.map_err(|e| (e.into(), vec![])).and_then(
-                |()| -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
-                    let mut execution_result: ResultWithTimings<
-                        Mode::ExecutionResults,
-                        Mode::Error,
-                    > = match execution_params.into_early_errors() {
-                        Some(early_execution_errors) => {
-                            Err((Mode::Error::from_kind(early_execution_errors.head), vec![]))
-                        }
-                        None => execution_loop::<Mode>(
-                            store,
+            // Genesis writes a special digest to indicate that an object was created during
+            // genesis and not written by any normal transaction - remove that from the
+            // dependencies
+            transaction_dependencies.remove(&TransactionDigest::genesis_marker());
+
+            let gas_coin = gas_charger.gas_coin();
+            let (inner, effects) = temporary_store.into_effects(
+                shared_object_refs,
+                &transaction_digest,
+                transaction_dependencies,
+                gas_cost_summary,
+                status,
+                gas_coin,
+                *epoch_id,
+            );
+
+            // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
+            // spun-up each time.
+            if !Mode::TRACK_EXECUTION {
+                update_vm_telemetry_metrics(&metrics, move_vm);
+            }
+
+            (
+                inner,
+                gas_charger.into_gas_status(),
+                effects,
+                timings,
+                execution_result,
+            )
+        }
+
+        #[instrument(name = "tx_execute", level = "debug", skip_all)]
+        fn execute_transaction<Mode: ExecutionMode>(
+            store: &dyn BackingStore,
+            temporary_store: &mut TemporaryStore<'_>,
+            transaction_kind: TransactionKind,
+            rewritten_inputs: Option<Vec<bool>>,
+            gas_charger: &mut GasCharger,
+            tx_ctx: Rc<RefCell<TxContext>>,
+            move_vm: &Arc<MoveRuntime>,
+            protocol_config: &ProtocolConfig,
+            metrics: Arc<ExecutionMetrics>,
+            execution_params: ExecutionOrEarlyError,
+            trace_builder_opt: &mut Option<MoveTraceBuilder>,
+            is_gasless: bool,
+        ) -> (
+            GasCostSummary,
+            Result<Mode::ExecutionResults, Mode::Error>,
+            Vec<ExecutionTiming>,
+        ) {
+            // At this point no charges have been applied yet
+            debug_assert!(
+                gas_charger.no_charges(),
+                "No gas charges must be applied yet"
+            );
+
+            let withdrawal_reservations =
+                if is_gasless && protocol_config.gasless_verify_remaining_balance() {
+                    gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
+                } else {
+                    None
+                };
+
+            // We must charge object read here during transaction execution, because if this fails
+            // we must still ensure an effect is committed and all objects versions incremented
+            let result = gas_charger.charge_input_objects_legacy(temporary_store);
+
+            let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
+                result.map_err(|e| (e.into(), vec![])).and_then(
+                    |()| -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
+                        let mut execution_result: ResultWithTimings<
+                            Mode::ExecutionResults,
+                            Mode::Error,
+                        > = match execution_params.into_early_errors() {
+                            Some(early_execution_errors) => {
+                                Err((Mode::Error::from_kind(early_execution_errors.head), vec![]))
+                            }
+                            None => execution_loop::<Mode>(
+                                store,
+                                temporary_store,
+                                transaction_kind,
+                                rewritten_inputs,
+                                tx_ctx,
+                                move_vm,
+                                gas_charger,
+                                protocol_config,
+                                metrics.clone(),
+                                trace_builder_opt,
+                            ),
+                        };
+
+                        let meter_check = check_meter_limit::<Mode>(
                             temporary_store,
-                            transaction_kind,
-                            rewritten_inputs,
-                            tx_ctx,
-                            move_vm,
                             gas_charger,
                             protocol_config,
                             metrics.clone(),
-                            trace_builder_opt,
-                        ),
-                    };
-
-                    let meter_check = check_meter_limit::<Mode>(
-                        temporary_store,
-                        gas_charger,
-                        protocol_config,
-                        metrics.clone(),
-                    );
-                    if let Err(e) = meter_check {
-                        execution_result = Err((e, vec![]));
-                    }
-
-                    if execution_result.is_ok() {
-                        let gas_check = check_written_objects_limit::<Mode>(
-                            temporary_store,
-                            gas_charger,
-                            protocol_config,
-                            metrics,
                         );
-                        if let Err(e) = gas_check {
+                        if let Err(e) = meter_check {
                             execution_result = Err((e, vec![]));
                         }
-                    }
 
-                    execution_result
-                },
-            );
-
-        let (mut result, timings) = match result {
-            Ok((r, t)) => (Ok(r), t),
-            Err((e, t)) => (Err(e), t),
-        };
-        if is_gasless
-            && result.is_ok()
-            && let Err(msg) = temporary_store
-                .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
-        {
-            result = Err(Mode::Error::new_with_source(
-                ExecutionErrorKind::InsufficientGas,
-                msg,
-            ));
-        }
-
-        // Reject transactions whose per-key accumulator totals are not representable *before*
-        // charging gas. For SUI this bounds each per-key gross Merge/Split total to the total supply;
-        // for other balances it bounds them to u64. Doing so here means the rejected PTB-emitted
-        // accumulator events are dropped during the gas reset on the error path (only the bounded gas
-        // events remain). Bounding SUI to the supply (which is ~8.4B SUI below u64::MAX) leaves enough
-        // headroom that the gas-smash deposit / gas-charge events emitted *after* this point cannot
-        // push any per-key total past u64::MAX, so the fold in AccumulatorWriteV1::merge cannot
-        // overflow even though those gas events are not re-checked here.
-        //
-        // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
-        // which produces no committed effects and so cannot diverge from any previously-committed
-        // result, and it applies uniformly across protocol versions.
-        if result.is_ok()
-            && let Err(e) = temporary_store.check_accumulator_amounts_representable()
-        {
-            result = Err(e.into());
-        }
-
-        let cost_summary = gas_charger.charge_gas(temporary_store, protocol_config, &mut result);
-        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-        // information provided to check_sui_conserved, because we mint rewards, and burn
-        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-        // We could probably clean up the code a bit.
-        // Put all the storage rebate accumulated in the system transaction
-        // to the 0x5 object so that it's not lost.
-        temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
-
-        if let Err(e) = run_conservation_checks::<Mode>(
-            temporary_store,
-            gas_charger,
-            digest,
-            move_vm,
-            protocol_config,
-            enable_expensive_checks,
-            &cost_summary,
-            is_genesis_tx,
-            advance_epoch_gas_summary,
-            input_reservations,
-        ) {
-            // FIXME: we cannot fail the transaction if this is an epoch change transaction.
-            result = Err(e);
-        }
-
-        (cost_summary, result, timings)
-    }
-
-    #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
-    fn run_conservation_checks<Mode: ExecutionMode>(
-        temporary_store: &mut TemporaryStore<'_>,
-        gas_charger: &mut GasCharger,
-        tx_digest: TransactionDigest,
-        move_vm: &Arc<MoveRuntime>,
-        protocol_config: &ProtocolConfig,
-        enable_expensive_checks: bool,
-        cost_summary: &GasCostSummary,
-        is_genesis_tx: bool,
-        advance_epoch_gas_summary: Option<(u64, u64)>,
-        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
-    ) -> Result<(), Mode::Error> {
-        let simple_conservation_checks = protocol_config.simple_conservation_checks();
-        let mut result: Result<(), Mode::Error> = Ok(());
-        if !is_genesis_tx && !Mode::skip_conservation_checks() {
-            let run_checks = |store: &TemporaryStore<'_>| -> Result<(), ExecutionError> {
-                store
-                    .check_sui_conserved(simple_conservation_checks, cost_summary)
-                    .and_then(|()| {
-                        if enable_expensive_checks {
-                            let mut layout_resolver = TypeLayoutResolver::new(
-                                move_vm,
-                                store.protocol_config(),
-                                Box::new(store),
+                        if execution_result.is_ok() {
+                            let gas_check = check_written_objects_limit::<Mode>(
+                                temporary_store,
+                                gas_charger,
+                                protocol_config,
+                                metrics,
                             );
-                            store.check_sui_conserved_expensive(
-                                cost_summary,
-                                advance_epoch_gas_summary,
-                                &mut layout_resolver,
-                            )
-                        } else {
-                            Ok(())
+                            if let Err(e) = gas_check {
+                                execution_result = Err((e, vec![]));
+                            }
                         }
-                    })
-                    .and_then(|()| {
-                        store.check_address_balance_changes(
-                            store.protocol_config(),
-                            input_reservations,
-                        )
-                    })
+
+                        execution_result
+                    },
+                );
+
+            let (mut result, timings) = match result {
+                Ok((r, t)) => (Ok(r), t),
+                Err((e, t)) => (Err(e), t),
+            };
+            if is_gasless
+                && result.is_ok()
+                && let Err(msg) = temporary_store
+                    .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
+            {
+                result = Err(Mode::Error::new_with_source(
+                    ExecutionErrorKind::InsufficientGas,
+                    msg,
+                ));
+            }
+
+            // Reject transactions whose per-key accumulator totals are not representable *before*
+            // charging gas. For SUI this bounds each per-key gross Merge/Split total to the total supply;
+            // for other balances it bounds them to u64. Doing so here means the rejected PTB-emitted
+            // accumulator events are dropped during the gas reset on the error path (only the bounded gas
+            // events remain). Bounding SUI to the supply (which is ~8.4B SUI below u64::MAX) leaves enough
+            // headroom that the gas-smash deposit / gas-charge events emitted *after* this point cannot
+            // push any per-key total past u64::MAX, so the fold in AccumulatorWriteV1::merge cannot
+            // overflow even though those gas events are not re-checked here.
+            //
+            // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
+            // which produces no committed effects and so cannot diverge from any previously-committed
+            // result, and it applies uniformly across protocol versions.
+            if result.is_ok()
+                && let Err(e) = temporary_store.check_accumulator_amounts_representable()
+            {
+                result = Err(e.into());
+            }
+
+            let cost_summary =
+                gas_charger.legacy_charge_gas(temporary_store, protocol_config, &mut result);
+            // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+            // information provided to check_sui_conserved, because we mint rewards, and burn
+            // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+            // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+            // We could probably clean up the code a bit.
+            // Put all the storage rebate accumulated in the system transaction
+            // to the 0x5 object so that it's not lost.
+            temporary_store
+                .conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
+
+            (cost_summary, result, timings)
+        }
+
+        /// Run all post-execution system-invariant checks against the finalized (gas-charged) store.
+        ///
+        /// Two families, with deliberately different failure handling:
+        /// - SUI conservation / balance-accumulator authorization, via [`run_conservation_checks`]. A
+        ///   violation is recoverable: the tx is aborted (and conserves SUI) rather than panicking.
+        /// - Object-ownership authentication (expensive-checks only, skipped under dev-inspect). This
+        ///   is a non-recoverable assertion, so it runs *after* conservation and *outside* its
+        ///   gas-charging recovery, and panics on violation. (Folding it into the recovery would let
+        ///   the recovery's `drop_writes` mask a real violation into a silent abort.)
+        ///
+        /// Returns the conservation result so the caller can fail the transaction on a violation; an
+        /// ownership violation panics directly.
+        #[allow(clippy::too_many_arguments)]
+        fn run_invariant_checks<Mode: ExecutionMode>(
+            temporary_store: &mut TemporaryStore<'_>,
+            gas_charger: &mut GasCharger,
+            tx_digest: TransactionDigest,
+            move_vm: &Arc<MoveRuntime>,
+            protocol_config: &ProtocolConfig,
+            enable_expensive_checks: bool,
+            cost_summary: &GasCostSummary,
+            sender: &SuiAddress,
+            sponsor: &Option<SuiAddress>,
+            mutable_inputs: &HashSet<ObjectID>,
+            is_epoch_change: bool,
+        ) -> Result<(), Mode::Error> {
+            let conservation = run_conservation_checks::<Mode>(
+                temporary_store,
+                gas_charger,
+                tx_digest,
+                move_vm,
+                protocol_config,
+                enable_expensive_checks,
+                cost_summary,
+            );
+            if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
+                temporary_store
+                    .check_ownership_invariants(
+                        sender,
+                        sponsor,
+                        gas_charger,
+                        mutable_inputs,
+                        is_epoch_change,
+                    )
+                    .unwrap()
+            } // else, in dev inspect mode and anything goes--don't check
+            conservation
+        }
+
+        /// Run the SUI-conservation and balance-accumulator invariant checks
+        /// ([`TemporaryStore::check_conservation_invariants`]) against the finalized store. On a
+        /// violation, recover by dumping all writes, charging gas in
+        /// the aborted state, and re-checking; a surviving double failure means gas charging itself
+        /// mints or burns SUI, which is unrecoverable, so we panic. The checks themselves are read-only;
+        /// the recovery's gas-charging mutations are orchestrated here alongside the main-path charge.
+        #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
+        fn run_conservation_checks<Mode: ExecutionMode>(
+            temporary_store: &mut TemporaryStore<'_>,
+            gas_charger: &mut GasCharger,
+            tx_digest: TransactionDigest,
+            move_vm: &Arc<MoveRuntime>,
+            protocol_config: &ProtocolConfig,
+            enable_expensive_checks: bool,
+            cost_summary: &GasCostSummary,
+        ) -> Result<(), Mode::Error> {
+            let Err(conservation_err) = temporary_store.check_conservation_invariants::<Mode>(
+                move_vm,
+                enable_expensive_checks,
+                cost_summary,
+            ) else {
+                return Ok(());
             };
 
-            if let Err(conservation_err) = run_checks(temporary_store) {
-                // conservation violated. try to avoid panic by dumping all writes, charging for gas,
-                // re-checking conservation, and surfacing an aborted transaction with an invariant
-                // violation if all of that works.
-                result = Err(conservation_err.into());
-                gas_charger.reset(temporary_store);
-                gas_charger.charge_gas(temporary_store, protocol_config, &mut result);
-                if let Err(recovery_err) = run_checks(temporary_store) {
-                    // if we still fail, it's a problem with gas charging that happens even in the
-                    // "aborted" case — no other option but panic. We will create or destroy SUI
-                    // otherwise (or admit an unauthorized accumulator Split).
-                    panic!(
-                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_digest,
-                        recovery_err,
-                        gas_charger.summary()
-                    )
-                }
+            // Conservation violated. Try to avoid a panic by dumping all writes, charging for gas in
+            // the aborted state, and re-checking; surface an aborted transaction with the invariant
+            // violation if that works.
+            let mut result: Result<(), Mode::Error> = Err(conservation_err.into());
+            gas_charger.reset(temporary_store);
+            gas_charger.legacy_charge_gas(temporary_store, protocol_config, &mut result);
+            if let Err(recovery_err) = temporary_store.check_conservation_invariants::<Mode>(
+                move_vm,
+                enable_expensive_checks,
+                cost_summary,
+            ) {
+                // If we still fail, it's a problem with gas charging that happens even in the
+                // "aborted" case — no other option but panic. We would create or destroy SUI
+                // otherwise (or admit an unauthorized accumulator Split).
+                panic!(
+                    "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                    tx_digest,
+                    recovery_err,
+                    gas_charger.summary()
+                )
             }
-        } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-        // we're in the non-production dev inspect mode which allows us to violate conservation
-        result
+            result
+        }
     }
 
     #[instrument(name = "check_meter_limit", level = "debug", skip_all)]
@@ -1076,15 +1110,15 @@ mod checked {
                             builder = setup_randomness_state_create(builder);
                         }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
-                            assert!(protocol_config.enable_coin_deny_list_v1());
+                            assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
                         EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
-                            assert!(protocol_config.enable_bridge());
+                            assert!(protocol_config.bridge());
                             builder = setup_bridge_create(builder, chain_id)
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(bridge_shared_version) => {
-                            assert!(protocol_config.enable_bridge());
+                            assert!(protocol_config.bridge());
                             assert!(protocol_config.should_try_to_finalize_bridge_committee());
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
@@ -1853,7 +1887,7 @@ mod checked {
 
     #[cfg(test)]
     mod address_balance_smash_gate_tests {
-        use super::{
+        use super::legacy::{
             ADDRESS_BALANCE_SMASH_FIX_MIN_ACCUMULATOR_VERSION,
             should_filter_address_balance_gas_smash,
         };
@@ -1936,7 +1970,7 @@ mod checked {
 
     #[cfg(test)]
     mod address_balance_smash_short_circuit_tests {
-        use super::{
+        use super::legacy::{
             ADDRESS_BALANCE_SMASH_SHORT_CIRCUIT_MIN_ACCUMULATOR_VERSION,
             should_short_circuit_insufficient_funds,
         };

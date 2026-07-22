@@ -17,8 +17,8 @@
 //!   `Processor` + `sequential::Handler` traits can be driven by
 //!   the alt framework against a [`Db`].
 //! - [`Synchronizer`] — coordinates writes from multiple pipelines
-//!   into a single [`Db`], taking cross-pipeline snapshots at
-//!   stride boundaries.
+//!   into a single [`Db`], taking a cross-pipeline snapshot at every
+//!   checkpoint boundary.
 //!
 //! [`rocksdb`] is re-exported so consumers can construct the
 //! [`rocksdb::Options`] / [`rocksdb::WriteOptions`] values the

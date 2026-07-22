@@ -1,0 +1,14 @@
+//# print-bytecode
+// `copy(C)` does not conflict with a function named `C`: `Self::C()` is the
+// call, `copy(C)` is the constant.
+mvir 0x42::M {
+    const C: u64 = 7u64;
+    public fun C(): u64 {
+    label b0:
+        return 0u64;
+    }
+    public fun f(): u64 {
+    label b0:
+        return Self::C() + copy(C);
+    }
+}

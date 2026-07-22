@@ -1,8 +1,41 @@
 ---
 title: Object Display
-description: The Sui Object Display standard is a template engine that enables onchain management of offchain representation (display) for a type.
-keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects, Unique objects with dynamic representation, objects with unique static content ]
+description: >-
+  The Sui Object Display standard is a template engine that enables onchain
+  management of offchain representation (display) for a type.
+keywords:
+  - Object Display
+  - object
+  - display
+  - display properties
+  - object properties
+  - 'sui::display'
+  - Sui utility objects
+  - Unique objects with dynamic representation
+  - objects with unique static content
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the Object Display standard (V2 via
+    sui::display_registry) for managing offchain representation of a type
+    onchain
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Object Display in Sui?
+  - What topics does Object Display cover?
+  - How does object display work on Sui?
+answer: >-
+  Object Display V2 is the current Object Display standard. Use the
+  `sui::display_registry` APIs when creating or updating displays from Move
+  code.
 ---
 
 :::info

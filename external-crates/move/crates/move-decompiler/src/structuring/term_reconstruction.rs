@@ -1,9 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ast as Out;
+use crate::{ast as Out, structuring::predicates};
 
 use move_stackless_bytecode_2::ast::{DataOp, RValue, RegId, Trivial};
+use petgraph::graph::NodeIndex;
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -12,11 +13,17 @@ use std::collections::{BTreeMap, HashSet};
 /// `let_binds` is the per-block "already let-bound in this block" set: the first StoreLoc of a
 /// local emits `let X = e`, subsequent stores `X = e`. Lifting that `let` to a wider scope when
 /// the block sits inside an IfElse/Switch/Loop arm is `hoist_declarations`'s job.
+///
+/// Condition blocks (those ending in `JumpIf`) emit `let __c{block_id} = <test>` as their
+/// trailing item - the same convention `predicates::cond_var_name` produces. The recovered
+/// boolean lowering (`Formula::to_exp`) then references the variable directly instead of
+/// re-inlining the condition expression at every atom.
 pub fn exp(
     block: move_stackless_bytecode_2::ast::BasicBlock,
     let_binds: &mut HashSet<RegId>,
 ) -> Out::Exp {
     use move_stackless_bytecode_2::ast::Instruction as SI;
+    let block_label = block.label;
     let mut map: BTreeMap<RegId, Out::Exp> = BTreeMap::new();
     let mut seq = Vec::new();
 
@@ -28,7 +35,12 @@ pub fn exp(
             }
             SI::AssignReg {
                 lhs,
-                rhs: RValue::Call { target, args },
+                rhs:
+                    RValue::Call {
+                        target,
+                        type_arguments: _,
+                        args,
+                    },
             } => {
                 let args = trivials(&mut map, args);
                 let call = Out::Exp::Call((Out::ModuleRef::Qualified(target.0), target.1), args);
@@ -165,7 +177,14 @@ pub fn exp(
             SI::Abort(triv) => seq.push(Out::Exp::Abort(Box::new(trivial(&mut map, triv)))),
 
             SI::Jump(_) => continue,
-            SI::JumpIf { condition, .. } => seq.push(trivial(&mut map, condition)),
+            SI::JumpIf { condition, .. } => {
+                let cond_exp = trivial(&mut map, condition);
+                let var_name = predicates::cond_var_name(NodeIndex::new(block_label));
+                seq.push(Out::Exp::LetBind(
+                    vec![var_name.as_str().to_string()],
+                    Box::new(cond_exp),
+                ));
+            }
             SI::VariantSwitch { condition, .. } => seq.push(trivial(&mut map, condition)),
             SI::Nop | SI::Drop(_) | SI::NotImplemented(_) => continue,
         }

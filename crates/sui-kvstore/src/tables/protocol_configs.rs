@@ -16,11 +16,6 @@ use crate::ProtocolConfigData;
 pub const NAME: &str = "protocol_configs";
 
 pub mod col {
-    /// BCS-serialized scalar-only attributes map. Legacy qualifier; new readers should prefer
-    /// the lossless `CONFIGS` cell instead.
-    pub const ATTRIBUTES: &str = "cf";
-    /// BCS-serialized feature flags map.
-    pub const FLAGS: &str = "ff";
     /// Protobuf-encoded `prost_types::Struct` carrying every protocol-config attribute
     /// (scalar and non-scalar) and feature flag rendered via
     /// `ProtocolConfig::render::<prost_types::Value>`. Unset fields are preserved as
@@ -32,33 +27,20 @@ pub fn encode_key(protocol_version: u64) -> Vec<u8> {
     protocol_version.to_be_bytes().to_vec()
 }
 
-pub fn encode(
-    attributes: &BTreeMap<String, Option<String>>,
-    flags: &BTreeMap<String, bool>,
-    configs: &BTreeMap<String, Value>,
-) -> Result<[(&'static str, Bytes); 3]> {
+pub fn encode(configs: &BTreeMap<String, Value>) -> [(&'static str, Bytes); 1] {
     let configs_struct = Struct {
         fields: configs.clone(),
     };
-    Ok([
-        (col::ATTRIBUTES, Bytes::from(bcs::to_bytes(attributes)?)),
-        (col::FLAGS, Bytes::from(bcs::to_bytes(flags)?)),
-        (col::CONFIGS, Bytes::from(configs_struct.encode_to_vec())),
-    ])
+    [(col::CONFIGS, Bytes::from(configs_struct.encode_to_vec()))]
 }
 
 pub fn decode(row: &[(Bytes, Bytes)]) -> Result<ProtocolConfigData> {
     let mut data = ProtocolConfigData::default();
 
     for (col, value) in row {
-        match col.as_ref() {
-            b"cf" => data.attributes = bcs::from_bytes(value)?,
-            b"ff" => data.flags = bcs::from_bytes(value)?,
-            b"c" => {
-                let configs_struct = Struct::decode(value.as_ref())?;
-                data.configs = configs_struct.fields;
-            }
-            _ => {}
+        if col.as_ref() == b"c" {
+            let configs_struct = Struct::decode(value.as_ref())?;
+            data.configs = configs_struct.fields;
         }
     }
 

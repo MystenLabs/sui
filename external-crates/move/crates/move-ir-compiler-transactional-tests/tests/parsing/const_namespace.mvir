@@ -1,0 +1,15 @@
+//# print-bytecode
+// Constants live in their own namespace, distinguished by case: the uppercase
+// name `C` is simultaneously a constant and a struct, while the lowercase `c`
+// is a local. `copy(C)` loads the constant and `copy(c)` reads the local,
+// without conflict.
+mvir 0x42::M {
+    const C: u64 = 99u64;
+    public struct C { f: u64 }
+    public fun f(): u64 {
+        let c: u64;
+    label b0:
+        c = 1u64;
+        return move(c) + copy(C);
+    }
+}

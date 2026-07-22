@@ -6,8 +6,10 @@ use std::sync::Arc;
 
 use anyhow::ensure;
 use prometheus::HistogramVec;
+use prometheus::IntCounterVec;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
 use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
@@ -22,6 +24,7 @@ use sui_package_resolver::PackageStore;
 use sui_package_resolver::PackageStoreWithLruCache;
 use sui_package_resolver::Resolver;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::ServerVersion;
 use sui_types::digests::ChainIdentifier;
@@ -43,9 +46,6 @@ mod pipeline;
 mod render;
 mod resolve;
 mod v2;
-mod v2alpha;
-
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
 
 use bigtable_client::Metrics as BigTableLimiterMetrics;
 pub use config::KvRpcConfig;
@@ -75,8 +75,14 @@ pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 pub(crate) struct KvRpcMetrics {
     bigtable_limiter: Arc<BigTableLimiterMetrics>,
     response_render_latency_ms: HistogramVec,
-    stream_item_yield_wait_ms: HistogramVec,
+    response_page_bytes: HistogramVec,
+    stream_first_frame_latency_ms: HistogramVec,
+    stream_frame_yield_wait_ms: HistogramVec,
+    stream_watermark_frames_total: IntCounterVec,
+    final_stream_poll_wait_ms: HistogramVec,
     bitmap_buckets_evaluated: HistogramVec,
+    bitmap_buckets_discarded: HistogramVec,
+    bitmap_leaf_seeks: HistogramVec,
 }
 
 impl KvRpcMetrics {
@@ -85,17 +91,48 @@ impl KvRpcMetrics {
             bigtable_limiter: BigTableLimiterMetrics::new(registry),
             response_render_latency_ms: register_histogram_vec_with_registry!(
                 "kv_rpc_response_render_latency_ms",
-                "Wall time spent rendering one v2alpha response item.",
-                &["method"],
-                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                "Wall time spent rendering one consumed or emitted List response item. Histogram sums across concurrent render work are not an additive request critical-path waterfall. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
                 registry,
             )
             .unwrap(),
-            stream_item_yield_wait_ms: register_histogram_vec_with_registry!(
-                "kv_rpc_stream_item_yield_wait_ms",
-                "Wall time from yielding one v2alpha response item until the stream is polled again.",
+            response_page_bytes: register_histogram_vec_with_registry!(
+                "kv_rpc_response_page_bytes",
+                "Protobuf encoded size of data-bearing List response frames, measured with encoded_len without serializing or copying the response for metrics. Watermark-only and terminal-only frames are excluded and counted by kv_rpc_stream_watermark_frames_total. The histogram sum reports data-page byte throughput. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(1_024.0, 2.0, 17).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_first_frame_latency_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_stream_first_frame_latency_ms",
+                "Wall time from List request start to the first response frame of any kind, the client's first actionable signal; a watermark carries the resume cursor. Do not treat it as purely server-owned latency or page on it alone without checking yield-wait and backpressure. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(1.0, 2.0, 17).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_frame_yield_wait_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_stream_frame_yield_wait_ms",
+                "Wall time from yielding one List response frame of any kind until the handler stream is polled again. It may include mpsc blocking, tonic/protobuf/Hyper/H2 work, executor scheduling, network flow control, and client drain. It is a broad downstream transport-consumption and backpressure signal, not proof of a slow client; correlate it with payload bytes, client telemetry, and network metrics. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_watermark_frames_total: register_int_counter_vec_with_registry!(
+                "kv_rpc_stream_watermark_frames_total",
+                "Total non-data List response frames (watermark-only and terminal-only) emitted by streaming List APIs.",
                 &["method"],
-                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            final_stream_poll_wait_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_final_stream_poll_wait_ms",
+                "Wall time from polling the final resolved response stream until the poll returns data, a watermark, an error, or EOF. Excludes time when downstream backpressure prevents the response producer from being polled. May include hydration, scheduling, and render work performed inside the upstream stream. The resolution label is the coarse response detail selected from the read mask; it does not describe filter or scan complexity.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.01, 2.0, 24).unwrap(),
                 registry,
             )
             .unwrap(),
@@ -109,18 +146,83 @@ impl KvRpcMetrics {
                 registry,
             )
             .unwrap(),
+            bitmap_buckets_discarded: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_buckets_discarded",
+                "Charged dead bucket rows discarded while bitmap leaves catch up across provably unmatchable gaps.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            bitmap_leaf_seeks: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_leaf_seeks",
+                "Bitmap leaf scans abandoned and reopened beyond provably unmatchable gaps.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
         })
     }
 
-    fn observe_response_render(&self, method: &'static str, elapsed: std::time::Duration) {
+    fn observe_response_render(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
         self.response_render_latency_ms
-            .with_label_values(&[method])
+            .with_label_values(&[method, resolution])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
 
-    fn observe_stream_item_yield_wait(&self, method: &'static str, elapsed: std::time::Duration) {
-        self.stream_item_yield_wait_ms
+    fn observe_response_page_bytes(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        bytes: usize,
+    ) {
+        self.response_page_bytes
+            .with_label_values(&[method, resolution])
+            .observe(bytes as f64);
+    }
+
+    fn observe_stream_first_frame_latency(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.stream_first_frame_latency_ms
+            .with_label_values(&[method, resolution])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_stream_frame_yield_wait(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.stream_frame_yield_wait_ms
+            .with_label_values(&[method, resolution])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn inc_stream_watermark_frames(&self, method: &'static str) {
+        self.stream_watermark_frames_total
             .with_label_values(&[method])
+            .inc();
+    }
+
+    fn observe_final_stream_poll_wait(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+        elapsed: std::time::Duration,
+    ) {
+        self.final_stream_poll_wait_ms
+            .with_label_values(&[method, resolution])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
 
@@ -128,6 +230,17 @@ impl KvRpcMetrics {
         self.bitmap_buckets_evaluated
             .with_label_values(&[method])
             .observe(buckets as f64);
+    }
+    fn observe_bitmap_buckets_discarded(&self, method: &'static str, buckets: u64) {
+        self.bitmap_buckets_discarded
+            .with_label_values(&[method])
+            .observe(buckets as f64);
+    }
+
+    fn observe_bitmap_leaf_seeks(&self, method: &'static str, seeks: u64) {
+        self.bitmap_leaf_seeks
+            .with_label_values(&[method])
+            .observe(seeks as f64);
     }
 }
 
@@ -143,6 +256,11 @@ pub struct KvRpcServer {
     pub(crate) ledger_history: LedgerHistoryConfig,
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) stages: StagesConfig,
+    // The list RPCs are part of the stable v2 LedgerService, but serving them
+    // requires the experimental query indexing pipelines. Instances without
+    // them reject list requests with `Unimplemented`, matching the behavior
+    // from when the RPCs lived in a separately registered v2alpha service.
+    query_apis_enabled: bool,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -152,6 +270,13 @@ pub struct ServerConfig {
     pub metrics_registry: Option<Registry>,
     pub enable_reflection: bool,
     pub enable_experimental_query_apis: bool,
+}
+
+fn ledger_service_with_response_compression<T>(service: T) -> LedgerServiceServer<T>
+where
+    T: LedgerService,
+{
+    LedgerServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
 }
 
 impl KvRpcServer {
@@ -209,6 +334,29 @@ impl KvRpcServer {
         instance_id: String,
         server_version: Option<ServerVersion>,
     ) -> anyhow::Result<Self> {
+        Self::new_local_with_config(
+            host,
+            instance_id,
+            server_version,
+            LedgerHistoryConfig::default(),
+            KvRpcConfig::default().request_bigtable_concurrency(),
+            StagesConfig::default(),
+        )
+        .await
+    }
+
+    /// Construct a KvRpcServer backed by a local BigTable emulator with explicit
+    /// ledger-history and per-stage configuration. Tests use this to exercise
+    /// scan-budget / chunk-size behaviour (e.g. a small `tx_seq_digest` chunk
+    /// size) against a modest synthetic dataset.
+    pub async fn new_local_with_config(
+        host: String,
+        instance_id: String,
+        server_version: Option<ServerVersion>,
+        ledger_history: LedgerHistoryConfig,
+        request_bigtable_concurrency: usize,
+        stages: StagesConfig,
+    ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
         // request-scoped BigTable wrapper still expects a handle.
@@ -219,9 +367,9 @@ impl KvRpcServer {
             server_version,
             default_service_info_watermark_pipelines(false),
             metrics,
-            LedgerHistoryConfig::default(),
-            KvRpcConfig::default().request_bigtable_concurrency(),
-            StagesConfig::default(),
+            ledger_history,
+            request_bigtable_concurrency,
+            stages,
         )
     }
 
@@ -259,6 +407,7 @@ impl KvRpcServer {
             ledger_history,
             request_bigtable_concurrency,
             stages,
+            query_apis_enabled: false,
         };
 
         let server_clone = server.clone();
@@ -285,14 +434,24 @@ impl KvRpcServer {
         Ok(server)
     }
 
+    pub(crate) fn check_query_apis_enabled(&self) -> Result<(), tonic::Status> {
+        if self.query_apis_enabled {
+            Ok(())
+        } else {
+            Err(tonic::Status::unimplemented(
+                "the List APIs are not enabled on this instance",
+            ))
+        }
+    }
+
     /// Start this server as a tonic gRPC service on the given address.
     /// Returns a `Service` handle for lifecycle management.
     pub async fn start_service(
-        self,
+        mut self,
         listen_address: SocketAddr,
         config: ServerConfig,
     ) -> anyhow::Result<sui_futures::service::Service> {
-        use mysten_network::callback::CallbackLayer;
+        use sui_http::middleware::callback::CallbackLayer;
         use sui_rpc_api::{
             RpcMetrics, RpcMetricsMakeCallbackHandler, grpc_method_paths_from_file_descriptor_sets,
         };
@@ -307,15 +466,12 @@ impl KvRpcServer {
         // backs a gRPC service mounted below. Consumed by both the
         // reflection services and the metrics allowlist so they cannot drift
         // out of sync.
-        let enable_experimental_query_apis = config.enable_experimental_query_apis;
-        let mut file_descriptor_sets: Vec<&'static [u8]> = vec![
+        self.query_apis_enabled = config.enable_experimental_query_apis;
+        let file_descriptor_sets: Vec<&'static [u8]> = vec![
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
         ];
-        if enable_experimental_query_apis {
-            file_descriptor_sets.push(sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET);
-        }
 
         let registry = config.metrics_registry.unwrap_or_default();
         let grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
@@ -328,11 +484,12 @@ impl KvRpcServer {
                     grpc_method_allowlist,
                 ),
             ))
-            .add_service(LedgerServiceServer::new(self.clone()));
-
-        if enable_experimental_query_apis {
-            router = router.add_service(KvLedgerServiceServer::new(self));
-        }
+            .layer(
+                mysten_network::request_log::GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+                    file_descriptor_sets.iter().copied(),
+                )?,
+            )
+            .add_service(ledger_service_with_response_compression(self));
 
         if config.enable_reflection {
             let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();

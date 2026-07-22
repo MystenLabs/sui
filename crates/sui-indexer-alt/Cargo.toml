@@ -10,10 +10,8 @@ edition = "2024"
 name = "sui-indexer-alt"
 path = "src/main.rs"
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(msim)',
-] }
+[lints]
+workspace = true
 
 [dependencies]
 anyhow.workspace = true
@@ -34,7 +32,6 @@ toml.workspace = true
 tracing.workspace = true
 url.workspace = true
 
-sui-default-config.workspace = true
 sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true

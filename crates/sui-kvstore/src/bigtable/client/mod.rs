@@ -78,6 +78,17 @@ const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 // TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
 const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Max transaction digest row keys to send in a single `ReadRowsRequest`
+/// (see [`BigTableClient::get_transactions_stream`]).
+///
+/// BigTable rejects a serialized `ReadRowsRequest` above 512 KiB
+/// (524_288 bytes). Transaction-table row keys are 32-byte digests that encode
+/// to ~34 bytes each inside `RowSet.row_keys`; reserving ~1 KiB for the table
+/// name and filter leaves `(524_288 - 1_024) / 34 ≈ 15_390` keys, so 10_000
+/// keeps comfortable headroom. This is a backend-owned invariant, not a
+/// user-tunable knob.
+pub(crate) const MAX_TX_DIGESTS_PER_REQUEST: usize = 10_000;
+
 /// Error returned when a batch write has per-entry failures.
 /// Contains the keys and error details for each failed mutation.
 #[derive(Debug)]
@@ -696,6 +707,13 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
+        if let Some(metrics) = &self.metrics {
+            let labels = [self.client_name.as_str(), table_name];
+            metrics
+                .kv_bt_read_rows_started_total
+                .with_label_values(&labels)
+                .inc();
+        }
         let response = self.client.clone().read_rows(request).await?.into_inner();
         let metrics = self.metrics.clone();
         let client_name = self.client_name.clone();
@@ -905,7 +923,114 @@ impl BigTableClient {
             filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
         }
     }
+}
 
+struct ActivePollWait {
+    accumulated_wait: Duration,
+    demand_started_at: Option<Instant>,
+}
+
+impl ActivePollWait {
+    fn new(open_wait: Duration) -> Self {
+        Self {
+            accumulated_wait: open_wait,
+            demand_started_at: None,
+        }
+    }
+
+    fn start(&mut self, now: Instant) {
+        self.demand_started_at.get_or_insert(now);
+    }
+
+    fn finish(&mut self, now: Instant) {
+        if let Some(started_at) = self.demand_started_at.take() {
+            self.accumulated_wait += now.duration_since(started_at);
+        }
+    }
+}
+
+type MultiGetRowStream = futures::stream::BoxStream<'static, Result<(Bytes, Vec<(Bytes, Bytes)>)>>;
+
+struct MultiGetStreamPollWait {
+    inner: MultiGetRowStream,
+    active_poll_wait: ActivePollWait,
+    metrics: Arc<KvMetrics>,
+    client_name: String,
+    table_name: String,
+    requested_key_count: usize,
+    failed: bool,
+    finished: bool,
+}
+
+impl MultiGetStreamPollWait {
+    fn new(
+        inner: MultiGetRowStream,
+        open_wait: Duration,
+        metrics: Arc<KvMetrics>,
+        client_name: String,
+        table_name: String,
+        requested_key_count: usize,
+    ) -> Self {
+        Self {
+            inner,
+            active_poll_wait: ActivePollWait::new(open_wait),
+            metrics,
+            client_name,
+            table_name,
+            requested_key_count,
+            failed: false,
+            finished: false,
+        }
+    }
+}
+
+impl futures::Stream for MultiGetStreamPollWait {
+    type Item = Result<(Bytes, Vec<(Bytes, Bytes)>)>;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        if this.finished {
+            return std::task::Poll::Ready(None);
+        }
+
+        this.active_poll_wait.start(Instant::now());
+        match this.inner.as_mut().poll_next(cx) {
+            std::task::Poll::Pending => std::task::Poll::Pending,
+            std::task::Poll::Ready(item) => {
+                this.active_poll_wait.finish(Instant::now());
+                match item {
+                    Some(Ok(row)) => std::task::Poll::Ready(Some(Ok(row))),
+                    Some(Err(error)) => {
+                        this.failed = true;
+                        std::task::Poll::Ready(Some(Err(error)))
+                    }
+                    None => {
+                        this.finished = true;
+                        if !this.failed {
+                            let elapsed_ms =
+                                this.active_poll_wait.accumulated_wait.as_secs_f64() * 1000.0;
+                            let labels = [this.client_name.as_str(), this.table_name.as_str()];
+                            this.metrics
+                                .kv_get_stream_poll_wait_ms
+                                .with_label_values(&labels)
+                                .observe(elapsed_ms);
+                            this.metrics
+                                .kv_get_stream_poll_wait_ms_per_key
+                                .with_label_values(&labels)
+                                .observe(elapsed_ms / this.requested_key_count as f64);
+                        }
+                        std::task::Poll::Ready(None)
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl BigTableClient {
     /// Streaming variant of `multi_get`. Rows arrive on the stream as soon as
     /// BigTable writes them on the wire, so downstream stages in a pipeline
     /// can start work before the full batch completes. Emits rows in arrival
@@ -923,7 +1048,23 @@ impl BigTableClient {
         if keys.is_empty() {
             return Ok(futures::stream::empty().boxed());
         }
+        let requested_key_count = keys.len();
         let request = self.build_multi_get_request(table_name, keys, filter);
+        if let Some(metrics) = self.metrics.clone() {
+            let open_started_at = Instant::now();
+            let stream = self.read_rows_stream(request, table_name).await?;
+            let open_wait = open_started_at.elapsed();
+            return Ok(MultiGetStreamPollWait::new(
+                stream.boxed(),
+                open_wait,
+                metrics,
+                self.client_name.clone(),
+                table_name.to_owned(),
+                requested_key_count,
+            )
+            .boxed());
+        }
+
         let stream = self.read_rows_stream(request, table_name).await?;
         Ok(stream.boxed())
     }
@@ -1194,7 +1335,24 @@ impl BigTableClient {
         if tx_sequence_numbers.is_empty() {
             return Ok(Vec::new());
         }
+        let rows = self
+            .resolve_tx_checkpoints_stream(tx_sequence_numbers.to_vec())
+            .await?;
+        futures::pin_mut!(rows);
+        let mut result = Vec::with_capacity(tx_sequence_numbers.len());
+        while let Some(row) = rows.next().await {
+            result.push(row?);
+        }
+        Ok(result)
+    }
 
+    /// Streaming variant of `resolve_tx_checkpoints`. Yields
+    /// `(tx_sequence_number, checkpoint_number)` per row as it arrives (arrival
+    /// order, not key order — callers needing a stable order must reorder).
+    pub async fn resolve_tx_checkpoints_stream(
+        &mut self,
+        tx_sequence_numbers: Vec<u64>,
+    ) -> Result<impl futures::Stream<Item = Result<(u64, CheckpointSequenceNumber)>> + use<>> {
         let keys: Vec<Vec<u8>> = tx_sequence_numbers
             .iter()
             .map(|s| tx_seq_digest::encode_key(*s))
@@ -1202,47 +1360,58 @@ impl BigTableClient {
         let filter = Some(Self::column_filter(&[
             tx_seq_digest::col::CHECKPOINT_NUMBER,
         ]));
-        let rows = self.multi_get(tx_seq_digest::NAME, keys, filter).await?;
-
-        let mut result = Vec::with_capacity(rows.len());
-        for (row_key, cells) in &rows {
-            let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
-            let checkpoint_number = tx_seq_digest::decode_checkpoint_number(cells)?;
-            result.push((tx_seq, checkpoint_number));
-        }
-
-        Ok(result)
-    }
-
-    /// Streaming variant of `get_transactions_filtered`. Yields
-    /// `(TransactionDigest, TransactionData)` per row as it arrives.
-    /// Takes an owned `column_filter` so the returned stream does not borrow
-    /// from caller-scoped values (avoids lifetime capture in `impl Stream`).
-    pub async fn get_transactions_stream(
-        &mut self,
-        digests: Vec<TransactionDigest>,
-        column_filter: Option<RowFilter>,
-    ) -> Result<impl futures::Stream<Item = Result<(TransactionDigest, TransactionData)>> + use<>>
-    {
-        let keys = digests
-            .iter()
-            .map(tables::transactions::encode_key)
-            .collect();
-        let filter = column_filter;
         let rows = self
-            .multi_get_stream(tables::transactions::NAME, keys, filter)
+            .multi_get_stream(tx_seq_digest::NAME, keys, filter)
             .await?;
 
         Ok(async_stream::try_stream! {
             futures::pin_mut!(rows);
             while let Some(row) = rows.next().await {
                 let (key, cells) = row?;
-                let digest = TransactionDigest::from(
-                    <[u8; 32]>::try_from(key.as_ref())
-                        .context("invalid transaction digest key length")?,
-                );
-                let tx = tables::transactions::decode(digest, &cells)?;
-                yield (digest, tx);
+                let tx_seq = tx_seq_digest::decode_key(key.as_ref())?;
+                let checkpoint_number = tx_seq_digest::decode_checkpoint_number(&cells)?;
+                yield (tx_seq, checkpoint_number);
+            }
+        })
+    }
+
+    /// Streaming variant of `get_transactions_filtered`. Yields
+    /// `(TransactionDigest, TransactionData)` per row as it arrives.
+    /// Takes an owned `column_filter` so the returned stream does not borrow
+    /// from caller-scoped values (avoids lifetime capture in `impl Stream`).
+    ///
+    /// Splits `digests` into sequential sub-requests of at most
+    /// `MAX_TX_DIGESTS_PER_REQUEST` keys so a single call can never
+    /// exceed BigTable's `ReadRowsRequest` size limit, regardless of how many
+    /// digests a caller passes. An empty `digests` yields an empty stream and
+    /// issues no read.
+    pub async fn get_transactions_stream(
+        &mut self,
+        digests: Vec<TransactionDigest>,
+        column_filter: Option<RowFilter>,
+    ) -> Result<impl futures::Stream<Item = Result<(TransactionDigest, TransactionData)>> + use<>>
+    {
+        let mut client = self.clone();
+        Ok(async_stream::try_stream! {
+            for chunk in digests.chunks(MAX_TX_DIGESTS_PER_REQUEST) {
+                let keys: Vec<Vec<u8>> = chunk
+                    .iter()
+                    .map(tables::transactions::encode_key)
+                    .collect();
+                let filter = column_filter.clone();
+                let rows = client
+                    .multi_get_stream(tables::transactions::NAME, keys, filter)
+                    .await?;
+                futures::pin_mut!(rows);
+                while let Some(row) = rows.next().await {
+                    let (key, cells) = row?;
+                    let digest = TransactionDigest::from(
+                        <[u8; 32]>::try_from(key.as_ref())
+                            .context("invalid transaction digest key length")?,
+                    );
+                    let tx = tables::transactions::decode(digest, &cells)?;
+                    yield (digest, tx);
+                }
             }
         })
     }
@@ -1617,11 +1786,18 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
+        let lower_limit = Bytes::from(Self::raw_object_key(&ObjectKey::min_for_id(object_id)));
         let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
-        if let Some((_, row)) = self
+
+        tracing::debug!(
+            ?object_id,
+            "get_latest_object: scanning range from ObjectKey::min_for_id to ObjectKey::max_for_id"
+        );
+
+        if let Some((row_key, row)) = self
             .range_scan(
                 tables::objects::NAME,
-                None,
+                Some(lower_limit),
                 Some(upper_limit),
                 1,
                 true,
@@ -1630,8 +1806,22 @@ impl KeyValueStoreReader for BigTableClient {
             .await?
             .pop()
         {
-            return Ok(Some(tables::objects::decode(&row)?));
+            let object = tables::objects::decode(&row)?;
+            let row_key_hex = row_key
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>();
+            tracing::debug!(
+                ?object_id,
+                found_id = ?object.id(),
+                found_version = %object.version(),
+                row_key = %row_key_hex,
+                "get_latest_object: found object"
+            );
+            return Ok(Some(object));
         }
+
+        tracing::debug!(?object_id, "get_latest_object: object not found in range");
         Ok(None)
     }
 
@@ -1973,8 +2163,8 @@ fn column_exists_filter(column: &str) -> RowFilter {
 
 #[cfg(test)]
 mod tests {
-    use futures::TryStreamExt;
-    use futures::stream;
+    use futures::{TryStreamExt, stream};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
 
@@ -1986,6 +2176,118 @@ mod tests {
         let bytes: [u8; 8] = key.as_ref().try_into().context("invalid key")?;
         let sequence = u64::from_be_bytes(bytes);
         Ok((sequence, sequence))
+    }
+
+    const TOTAL: &str = "kv_get_stream_poll_wait_ms";
+    const PER_KEY: &str = "kv_get_stream_poll_wait_ms_per_key";
+    fn histogram(registry: &Registry, name: &str, labels: [&str; 2]) -> (u64, f64) {
+        let Some(family) = registry
+            .gather()
+            .into_iter()
+            .find(|family| family.name() == name)
+        else {
+            return (0, 0.0);
+        };
+        let Some(metric) = family.get_metric().iter().find(|metric| {
+            metric
+                .get_label()
+                .iter()
+                .map(|label| (label.name(), label.value()))
+                .eq([("client", labels[0]), ("table", labels[1])])
+        }) else {
+            return (0, 0.0);
+        };
+        let histogram = metric.get_histogram();
+        (histogram.get_sample_count(), histogram.get_sample_sum())
+    }
+    fn counts(registry: &Registry, labels: [&str; 2]) -> [u64; 2] {
+        [TOTAL, PER_KEY].map(|name| histogram(registry, name, labels).0)
+    }
+    type Metrics = Arc<KvMetrics>;
+    fn wrap(metrics: &Metrics, table: &str, inner: MultiGetRowStream) -> MultiGetStreamPollWait {
+        let wait = Duration::from_millis(4);
+        let client = "poll-client";
+        MultiGetStreamPollWait::new(inner, wait, metrics.clone(), client.into(), table.into(), 2)
+    }
+    #[test]
+    fn active_poll_wait_excludes_idle_and_includes_pending() {
+        let first_poll = Instant::now();
+        let mut wait = ActivePollWait::new(Duration::from_millis(7));
+        wait.finish(first_poll);
+        assert_eq!(wait.accumulated_wait, Duration::from_millis(7));
+        wait.start(first_poll);
+        wait.start(first_poll + Duration::from_millis(3));
+        wait.finish(first_poll + Duration::from_millis(8));
+        assert_eq!(wait.accumulated_wait, Duration::from_millis(15));
+    }
+    #[tokio::test]
+    async fn multi_get_stream_poll_wait_observes_natural_drain_and_preserves_lazy_order() {
+        let registry = Registry::new();
+        let metrics = KvMetrics::new(&registry);
+        let polls = Arc::new(AtomicUsize::new(0));
+        let poll_count = polls.clone();
+        let mut rows = [row(7), row(3)].into_iter();
+        let inner = stream::poll_fn(move |_| {
+            poll_count.fetch_add(1, Ordering::SeqCst);
+            std::task::Poll::Ready(rows.next())
+        })
+        .boxed();
+        let labels = ["poll-client", "natural-drain"];
+        let mut drained = wrap(&metrics, labels[1], inner);
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        for (sequence, expected_polls) in [(7, 1), (3, 2)] {
+            assert_eq!(
+                drained.next().await.unwrap().unwrap().0,
+                row(sequence).unwrap().0
+            );
+            assert_eq!(polls.load(Ordering::SeqCst), expected_polls);
+            assert_eq!(counts(&registry, labels), [0; 2]);
+        }
+        assert!(drained.next().await.is_none());
+        assert_eq!(polls.load(Ordering::SeqCst), 3);
+        let sums = [TOTAL, PER_KEY].map(|name| {
+            let (count, sum) = histogram(&registry, name, labels);
+            assert_eq!(count, 1);
+            sum
+        });
+        assert!(sums[0] >= 4.0);
+        assert_eq!(sums[1], sums[0] / 2.0);
+    }
+    #[tokio::test]
+    async fn multi_get_stream_poll_wait_ignores_drop_and_error() {
+        let registry = Registry::new();
+        let metrics = KvMetrics::new(&registry);
+        let mut dropped = wrap(&metrics, "dropped", stream::iter([row(1), row(2)]).boxed());
+        assert_eq!(dropped.next().await.unwrap().unwrap().0, row(1).unwrap().0);
+        drop(dropped);
+        let inner = stream::iter([row(3), Err(anyhow::anyhow!("injected stream error"))]).boxed();
+        let mut errored = wrap(&metrics, "errored", inner);
+        assert_eq!(errored.next().await.unwrap().unwrap().0, row(3).unwrap().0);
+        let error = errored.next().await.unwrap().unwrap_err();
+        assert_eq!(error.to_string(), "injected stream error");
+        assert!(errored.next().await.is_none());
+        for table in ["dropped", "errored"] {
+            assert_eq!(counts(&registry, ["poll-client", table]), [0; 2]);
+        }
+    }
+    #[tokio::test]
+    async fn multi_get_stream_empty_keys_issue_no_read_or_observation() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let registry = Registry::new();
+        let host = addr.to_string();
+        let name = "empty-client";
+        let mut client = BigTableClient::new_for_host(host, "test".into(), name)
+            .await
+            .unwrap();
+        client.metrics = Some(KvMetrics::new(&registry));
+        let mut rows = client
+            .multi_get_stream("empty-table", Vec::new(), None)
+            .await
+            .unwrap();
+        assert!(rows.next().await.is_none());
+        assert!(mock.read_rows_calls().await.is_empty());
+        assert_eq!(counts(&registry, [name, "empty-table"]), [0; 2]);
     }
 
     #[tokio::test]
@@ -2054,5 +2356,100 @@ mod tests {
         .await
         .expect("rows_limit can stop before range end");
         assert_eq!(got, vec![3, 4]);
+    }
+
+    /// Build `n` deterministic, unique transaction digests.
+    fn tx_digest(i: u64) -> TransactionDigest {
+        let mut bytes = [0u8; 32];
+        bytes[24..32].copy_from_slice(&i.to_be_bytes());
+        TransactionDigest::new(bytes)
+    }
+
+    /// Insert a minimal transaction row so `tables::transactions::decode`
+    /// succeeds for `digest`.
+    async fn insert_tx_row(
+        mock: &crate::bigtable::mock_server::MockBigtableServer,
+        digest: &TransactionDigest,
+    ) {
+        mock.insert_row(
+            tables::transactions::NAME,
+            tables::transactions::encode_key(digest),
+            [
+                (
+                    tables::transactions::col::CHECKPOINT_NUMBER,
+                    Bytes::from(bcs::to_bytes(&0u64).unwrap()),
+                ),
+                (
+                    tables::transactions::col::TIMESTAMP,
+                    Bytes::from(bcs::to_bytes(&0u64).unwrap()),
+                ),
+            ],
+        )
+        .await;
+    }
+
+    /// Recorded `ReadRows` calls scoped to the transactions table.
+    async fn tx_read_calls(
+        mock: &crate::bigtable::mock_server::MockBigtableServer,
+    ) -> Vec<crate::bigtable::mock_server::ReadRowsCall> {
+        mock.read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::transactions::NAME)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn get_transactions_stream_splits_digest_batches_at_max() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
+            .await
+            .unwrap();
+
+        let n = MAX_TX_DIGESTS_PER_REQUEST + 1;
+        let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
+        for d in &digests {
+            insert_tx_row(&mock, d).await;
+        }
+
+        let stream = client
+            .get_transactions_stream(digests.clone(), None)
+            .await
+            .unwrap();
+        let got: Vec<_> = stream.try_collect().await.unwrap();
+        let got_digests: std::collections::HashSet<_> = got.iter().map(|(d, _)| *d).collect();
+        assert_eq!(got_digests.len(), n, "all digests returned");
+        for d in &digests {
+            assert!(got_digests.contains(d), "missing digest {d}");
+        }
+
+        let calls = tx_read_calls(&mock).await;
+        let lens: Vec<usize> = calls.iter().map(|c| c.row_keys.len()).collect();
+        assert_eq!(
+            lens,
+            vec![MAX_TX_DIGESTS_PER_REQUEST, 1],
+            "digest batches split at the cap"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_transactions_stream_empty_digest_list_issues_no_read() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
+            .await
+            .unwrap();
+
+        let stream = client
+            .get_transactions_stream(Vec::new(), None)
+            .await
+            .unwrap();
+        let got: Vec<_> = stream.try_collect().await.unwrap();
+        assert!(got.is_empty(), "empty digest list yields no rows");
+        assert!(
+            tx_read_calls(&mock).await.is_empty(),
+            "empty digest list must not issue a transactions ReadRows"
+        );
     }
 }

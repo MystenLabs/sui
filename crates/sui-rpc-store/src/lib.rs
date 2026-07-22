@@ -24,11 +24,12 @@ pub mod reader;
 pub mod schema;
 
 use std::path::Path;
+use std::sync::Arc;
 
 use prometheus::Registry;
 use sui_consistent_store::DbOptions;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
@@ -48,10 +49,13 @@ pub use crate::indexer::METRICS_PREFIX;
 pub use crate::indexer::Store;
 pub use crate::indexer::checkpoint_broadcast::CheckpointBroadcast;
 pub use crate::indexer::checkpoint_broadcast::seed_watermark_to_tip as seed_checkpoint_broadcast_watermark;
+pub use crate::indexer::pruner::embedded_prunable_checkpoint;
 pub use crate::indexer::pruner::prune_history_cohort;
 pub use crate::indexer::restore::HISTORY_COHORT;
 pub use crate::indexer::restore::LIVE_COHORT;
 pub use crate::indexer::restore::floor_unrestored_pipelines;
+pub use crate::indexer::restore::history_seed_pending;
+pub use crate::indexer::restore::restore_in_progress;
 pub use crate::indexer::restore::restore_indexes;
 pub use crate::indexer::restore::seed_current_epoch_start;
 pub use crate::indexer::restore::seed_history_cohort;
@@ -90,13 +94,13 @@ pub async fn start_indexer(
     // `registry`.
     let ingestion_metrics = IngestionMetrics::new(metrics_prefix, registry);
     let ingestion_client = IngestionClient::new(client_args.ingestion, ingestion_metrics)?;
-    let streaming_client: Option<BoxedStreamingClient> =
+    let streaming_client: Option<ArcStreamingClient> =
         client_args.streaming.streaming_url.map(|uri| {
-            Box::new(GrpcStreamingClient::new(
+            Arc::new(GrpcStreamingClient::new(
                 uri,
                 ingestion_config.streaming_connection_timeout(),
                 ingestion_config.streaming_statement_timeout(),
-            )) as BoxedStreamingClient
+            )) as ArcStreamingClient
         });
 
     let mut indexer = Indexer::new(

@@ -24,16 +24,18 @@ async fn test_transaction_subscription() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 transactions(filter: { sentAddress: $sender }) {
-                    digest
-                    sender { address }
-                    gasInput { gasBudget }
-                    effects {
-                        status
-                        balanceChanges {
-                            nodes {
-                                amount
-                                coinType { repr }
-                                owner { address }
+                    node {
+                        digest
+                        sender { address }
+                        gasInput { gasBudget }
+                        effects {
+                            status
+                            balanceChanges {
+                                nodes {
+                                    amount
+                                    coinType { repr }
+                                    owner { address }
+                                }
                             }
                         }
                     }
@@ -61,24 +63,26 @@ async fn test_transaction_subscription_object_changes() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 transactions(filter: { sentAddress: $sender }) {
-                    digest
-                    effects {
-                        objectChanges {
-                            nodes {
-                                inputState {
-                                    address
-                                    version
-                                    digest
-                                    asMoveObject {
-                                        contents { type { repr } }
+                    node {
+                        digest
+                        effects {
+                            objectChanges {
+                                nodes {
+                                    inputState {
+                                        address
+                                        version
+                                        digest
+                                        asMoveObject {
+                                            contents { type { repr } }
+                                        }
                                     }
-                                }
-                                outputState {
-                                    address
-                                    version
-                                    digest
-                                    asMoveObject {
-                                        contents { type { repr } }
+                                    outputState {
+                                        address
+                                        version
+                                        digest
+                                        asMoveObject {
+                                            contents { type { repr } }
+                                        }
                                     }
                                 }
                             }

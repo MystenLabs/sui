@@ -7,7 +7,7 @@
 // transfer) and re-smash undoes the override. The gas charge falls back to
 // A's AB (the original smash-target location); C is not charged.
 
-//# init --addresses test=0x0 --accounts A B C --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C
 
 //# publish
 module test::big;

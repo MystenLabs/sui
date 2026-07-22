@@ -1,0 +1,45 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// tx_context_restrictions_verifier only applies to system packages: it is a
+// checksum on our own implementations, and cannot be enforced generally
+// because user packages can express the same shape through generic
+// instantiation (PTB arity and auto-injection checks are the actual safety
+// mechanism for user code). Every publish below has a signature the rule
+// rejects in system packages, but publishes successfully at a user address
+// even with the flag on. System packages cannot be published from these
+// tests; the rule is exercised against the real system packages at framework
+// build time via `sui-move-build`'s bytecode verification.
+
+//# init --enable-feature-flags framework_tx_context_mut_restrictions
+
+// `&mut TxContext` only, `&mut u64` return.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// `&mut TxContext` plus an immutable non-TxContext ref, `&mut u64` return —
+// no non-TxContext `&mut` present.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun bad(ctx: &mut tx_context::TxContext, x: &u64): &mut u64 {
+        label l0:
+        abort 0;
+    }
+}
+
+// Identity-shape return: `&mut TxContext -> &mut TxContext`.
+//# publish
+mvir 0x0::m {
+    import 0x2::tx_context;
+    public fun mut_id(ctx: &mut tx_context::TxContext): &mut tx_context::TxContext {
+        label l0:
+        return move(ctx);
+    }
+}

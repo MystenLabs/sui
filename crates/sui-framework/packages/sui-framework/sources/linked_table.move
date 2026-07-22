@@ -5,7 +5,7 @@
 /// removal
 module sui::linked_table;
 
-use sui::dynamic_field as field;
+use sui::dynamic_field as df;
 
 // Attempted to destroy a non-empty table
 const ETableNotEmpty: u64 = 0;
@@ -64,14 +64,12 @@ public fun push_front<K: copy + drop + store, V: store>(
     let old_head = table.head.swap_or_fill(k);
     if (table.tail.is_none()) table.tail.fill(k);
     let prev = option::none();
-    let next = if (old_head.is_some()) {
-        let old_head_k = old_head.destroy_some();
-        field::borrow_mut<K, Node<K, V>>(&mut table.id, old_head_k).prev = option::some(k);
-        option::some(old_head_k)
-    } else {
-        option::none()
-    };
-    field::add(&mut table.id, k, Node { prev, next, value });
+    let next = old_head.map!(|old_head_k| {
+        df::borrow_mut<K, Node<K, V>>(&mut table.id, old_head_k).prev = option::some(k);
+        old_head_k
+    });
+
+    df::add(&mut table.id, k, Node { prev, next, value });
     table.size = table.size + 1;
 }
 
@@ -86,15 +84,60 @@ public fun push_back<K: copy + drop + store, V: store>(
 ) {
     if (table.head.is_none()) table.head.fill(k);
     let old_tail = table.tail.swap_or_fill(k);
-    let prev = if (old_tail.is_some()) {
-        let old_tail_k = old_tail.destroy_some();
-        field::borrow_mut<K, Node<K, V>>(&mut table.id, old_tail_k).next = option::some(k);
-        option::some(old_tail_k)
-    } else {
-        option::none()
-    };
+    let prev = old_tail.map!(|old_tail_k| {
+        df::borrow_mut<K, Node<K, V>>(&mut table.id, old_tail_k).next = option::some(k);
+        old_tail_k
+    });
     let next = option::none();
-    field::add(&mut table.id, k, Node { prev, next, value });
+    df::add(&mut table.id, k, Node { prev, next, value });
+    table.size = table.size + 1;
+}
+
+/// Inserts a key-value pair immediately before the entry with key `anchor: K`.
+/// If `anchor` is the front of the table, the newly inserted pair becomes the new front.
+/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry
+/// with the key `anchor: K`.
+/// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry
+/// with the key `k: K`.
+public fun insert_before<K: copy + drop + store, V: store>(
+    table: &mut LinkedTable<K, V>,
+    anchor: K,
+    k: K,
+    value: V,
+) {
+    let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
+    let old_prev = anchor_node.prev.swap_or_fill(k);
+
+    old_prev.fold!(
+        table.head = option::some(k),
+        |old_prev| df::borrow_mut<K, Node<K, V>>(&mut table.id, old_prev).next = option::some(k),
+    );
+
+    df::add(&mut table.id, k, Node { prev: old_prev, next: option::some(anchor), value });
+    table.size = table.size + 1;
+}
+
+/// Inserts a key-value pair immediately after the entry with key `anchor: K`.
+/// If `anchor` is the back of the table, the newly inserted pair becomes the new back.
+/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry
+/// with the key `anchor: K`.
+/// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry
+/// with the key `k: K`.
+public fun insert_after<K: copy + drop + store, V: store>(
+    table: &mut LinkedTable<K, V>,
+    anchor: K,
+    k: K,
+    value: V,
+) {
+    let anchor_node = df::borrow_mut<K, Node<K, V>>(&mut table.id, anchor);
+    let old_next = anchor_node.next.swap_or_fill(k);
+
+    old_next.fold!(
+        table.tail = option::some(k),
+        |old_next| df::borrow_mut<K, Node<K, V>>(&mut table.id, old_next).prev = option::some(k),
+    );
+
+    df::add(&mut table.id, k, Node { prev: option::some(anchor), next: old_next, value });
     table.size = table.size + 1;
 }
 
@@ -103,7 +146,7 @@ public fun push_back<K: copy + drop + store, V: store>(
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
 /// that key `k: K`.
 public fun borrow<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: K): &V {
-    &field::borrow<K, Node<K, V>>(&table.id, k).value
+    &df::borrow<K, Node<K, V>>(&table.id, k).value
 }
 
 #[syntax(index)]
@@ -114,7 +157,7 @@ public fun borrow_mut<K: copy + drop + store, V: store>(
     table: &mut LinkedTable<K, V>,
     k: K,
 ): &mut V {
-    &mut field::borrow_mut<K, Node<K, V>>(&mut table.id, k).value
+    &mut df::borrow_mut<K, Node<K, V>>(&mut table.id, k).value
 }
 
 /// Borrows the key for the previous entry of the specified key `k: K` in the table
@@ -122,7 +165,7 @@ public fun borrow_mut<K: copy + drop + store, V: store>(
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
 /// that key `k: K`
 public fun prev<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: K): &Option<K> {
-    &field::borrow<K, Node<K, V>>(&table.id, k).prev
+    &df::borrow<K, Node<K, V>>(&table.id, k).prev
 }
 
 /// Borrows the key for the next entry of the specified key `k: K` in the table
@@ -130,7 +173,7 @@ public fun prev<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: 
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
 /// that key `k: K`
 public fun next<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: K): &Option<K> {
-    &field::borrow<K, Node<K, V>>(&table.id, k).next
+    &df::borrow<K, Node<K, V>>(&table.id, k).next
 }
 
 /// Removes the key-value pair in the table `table: &mut LinkedTable<K, V>` and returns the value.
@@ -138,14 +181,11 @@ public fun next<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: 
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
 /// that key `k: K`. Note: this is also what happens when the table is empty.
 public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>, k: K): V {
-    let Node<K, V> { prev, next, value } = field::remove(&mut table.id, k);
+    let Node<K, V> { prev, next, value } = df::remove(&mut table.id, k);
     table.size = table.size - 1;
-    if (prev.is_some()) {
-        field::borrow_mut<K, Node<K, V>>(&mut table.id, *prev.borrow()).next = next
-    };
-    if (next.is_some()) {
-        field::borrow_mut<K, Node<K, V>>(&mut table.id, *next.borrow()).prev = prev
-    };
+    prev.do!(|prev| df::borrow_mut<K, Node<K, V>>(&mut table.id, prev).next = next);
+    next.do!(|next| df::borrow_mut<K, Node<K, V>>(&mut table.id, next).prev = prev);
+
     if (table.head.borrow() == &k) table.head = next;
     if (table.tail.borrow() == &k) table.tail = prev;
     value
@@ -154,23 +194,21 @@ public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V
 /// Removes the front of the table `table: &mut LinkedTable<K, V>`, returns the key and value.
 /// Aborts with `ETableIsEmpty` if the table is empty
 public fun pop_front<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-    assert!(table.head.is_some(), ETableIsEmpty);
-    let head = *table.head.borrow();
+    let head = table.head.destroy_or!(abort ETableIsEmpty);
     (head, table.remove(head))
 }
 
 /// Removes the back of the table `table: &mut LinkedTable<K, V>`, returns the key and value.
 /// Aborts with `ETableIsEmpty` if the table is empty
 public fun pop_back<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>): (K, V) {
-    assert!(table.tail.is_some(), ETableIsEmpty);
-    let tail = *table.tail.borrow();
+    let tail = table.tail.destroy_or!(abort ETableIsEmpty);
     (tail, table.remove(tail))
 }
 
 /// Returns true iff there is a value associated with the key `k: K` in table
 /// `table: &LinkedTable<K, V>`
 public fun contains<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: K): bool {
-    field::exists_with_type<K, Node<K, V>>(&table.id, k)
+    df::exists_with_type<K, Node<K, V>>(&table.id, k)
 }
 
 /// Returns the size of the table, the number of key-value pairs
@@ -186,7 +224,7 @@ public fun is_empty<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>)
 /// Destroys an empty table
 /// Aborts with `ETableNotEmpty` if the table still contains values
 public fun destroy_empty<K: copy + drop + store, V: store>(table: LinkedTable<K, V>) {
-    let LinkedTable { id, size, head: _, tail: _ } = table;
+    let LinkedTable { id, size, .. } = table;
     assert!(size == 0, ETableNotEmpty);
     id.delete()
 }
@@ -194,6 +232,6 @@ public fun destroy_empty<K: copy + drop + store, V: store>(table: LinkedTable<K,
 /// Drop a possibly non-empty table.
 /// Usable only if the value type `V` has the `drop` ability
 public fun drop<K: copy + drop + store, V: drop + store>(table: LinkedTable<K, V>) {
-    let LinkedTable { id, size: _, head: _, tail: _ } = table;
+    let LinkedTable { id, .. } = table;
     id.delete()
 }

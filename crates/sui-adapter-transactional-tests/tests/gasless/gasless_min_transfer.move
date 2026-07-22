@@ -3,7 +3,7 @@
 
 // Tests minimum transfer amount enforcement for gasless transactions.
 
-//# init --addresses test=0x0 --accounts A B C --enable-gasless --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C --enable-gasless
 
 //# publish --sender A
 #[allow(deprecated_usage)]

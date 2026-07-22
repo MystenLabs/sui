@@ -39,6 +39,7 @@ pub use read_store::DynamicFieldIteratorItem;
 pub use read_store::DynamicFieldKey;
 pub use read_store::EpochInfo;
 pub use read_store::LedgerBitmapBucket;
+pub use read_store::LedgerBitmapBucketIter;
 pub use read_store::LedgerBitmapBucketIterator;
 pub use read_store::LedgerTxSeqDigest;
 pub use read_store::LedgerTxSeqDigestIterator;
@@ -181,12 +182,12 @@ pub enum ObjectChange {
     Delete(DeleteKindWithOldVersion),
 }
 
-pub trait StorageView: Storage + ParentSync + ChildObjectResolver {}
-impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
+pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
+impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
-pub trait ChildObjectResolver {
+pub trait RuntimeObjectResolver {
     /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
@@ -477,14 +478,14 @@ impl<S: ParentSync> ParentSync for &mut S {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for std::sync::Arc<S> {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(
+        RuntimeObjectResolver::read_child_object(
             self.as_ref(),
             parent,
             child,
@@ -498,7 +499,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             self.as_ref(),
             owner,
             receiving_object_id,
@@ -508,14 +509,14 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for &S {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+        RuntimeObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
         &self,
@@ -524,7 +525,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             *self,
             owner,
             receiving_object_id,
@@ -534,14 +535,14 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
     }
 }
 
-impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
+impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+        RuntimeObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
         &self,
@@ -550,7 +551,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        ChildObjectResolver::get_object_received_at_version(
+        RuntimeObjectResolver::get_object_received_at_version(
             *self,
             owner,
             receiving_object_id,
@@ -718,7 +719,7 @@ impl Display for DeleteKind {
 }
 
 pub trait BackingStore:
-    BackingPackageStore + ChildObjectResolver + ObjectStore + ParentSync
+    BackingPackageStore + RuntimeObjectResolver + ObjectStore + ParentSync
 {
     fn as_object_store(&self) -> &dyn ObjectStore;
 }
@@ -726,7 +727,7 @@ pub trait BackingStore:
 impl<T> BackingStore for T
 where
     T: BackingPackageStore,
-    T: ChildObjectResolver,
+    T: RuntimeObjectResolver,
     T: ObjectStore,
     T: ParentSync,
 {
@@ -887,7 +888,7 @@ impl BackingPackageStore for TrackingBackingStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TrackingBackingStore<'_> {
+impl RuntimeObjectResolver for TrackingBackingStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

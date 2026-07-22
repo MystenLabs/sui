@@ -57,7 +57,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "MA==",
+            "cursor": "KAE6BAgAEAA=",
             "node": {
               "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
               "effects": {
@@ -71,7 +71,7 @@ Response: {
             }
           },
           {
-            "cursor": "MQ==",
+            "cursor": "KAE6BAgAEAE=",
             "node": {
               "digest": "GtHkWEVdLDkA1QeXAhPuJBYbUEGPLAGKheGcsguXwoMo",
               "effects": {
@@ -92,7 +92,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "MA==",
+            "cursor": "KAE6BAgAEAA=",
             "node": {
               "digest": "85r5mfnut7T1NNBmbL7RpGMf9caJe5VEnpiCJxkz7eDE",
               "effects": {
@@ -119,7 +119,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "Mg==",
+            "cursor": "KAE6BAgAEAI=",
             "node": {
               "digest": "66AZSNZxfPXuoPJ2XLMnSxPqqcSN1y1NZx9G69AEKnDs",
               "effects": {
@@ -133,7 +133,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "KAE6BAgAEAM=",
             "node": {
               "digest": "887ZoGG2uRiXqs9ytzyVJom4YDjJjoDXJKruvKcepsT2",
               "effects": {
@@ -154,7 +154,7 @@ Response: {
       "transactions": {
         "edges": [
           {
-            "cursor": "Mg==",
+            "cursor": "KAE6BAgAEAI=",
             "node": {
               "digest": "66AZSNZxfPXuoPJ2XLMnSxPqqcSN1y1NZx9G69AEKnDs",
               "effects": {
@@ -168,7 +168,7 @@ Response: {
             }
           },
           {
-            "cursor": "Mw==",
+            "cursor": "KAE6BAgAEAM=",
             "node": {
               "digest": "887ZoGG2uRiXqs9ytzyVJom4YDjJjoDXJKruvKcepsT2",
               "effects": {
@@ -182,7 +182,7 @@ Response: {
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "KAE6BAgAEAQ=",
             "node": {
               "digest": "5QdTEu1h7fuRih364SecoELKZ8BQvetNyZHhrGV8YF2i",
               "effects": {

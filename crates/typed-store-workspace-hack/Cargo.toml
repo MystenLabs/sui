@@ -12,6 +12,9 @@ license = "Apache-2.0"
 edition = "2024"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 libc = { version = "0.2", features = ["extra_traits"] }
 zstd-sys = { version = "2", features = ["std"] }

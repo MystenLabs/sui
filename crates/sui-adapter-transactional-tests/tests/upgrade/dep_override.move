@@ -98,13 +98,16 @@ module Test_V3::M1 {
 
 // call same function from two different module versions but defined in both modules (should produce
 // different result due to overrides)
+
 //# programmable --sender A
-//> 0: Test_V2::M1::baz();
-//> 1: Test_V3::M1::baz();
+//> Test_V2::M1::baz();
+
+//# programmable --sender A
+//> Test_V3::M1::baz();
 
 //# view-object 15,0
 
-//# view-object 15,1
+//# view-object 16,0
 
 
 // expected upgrade errors

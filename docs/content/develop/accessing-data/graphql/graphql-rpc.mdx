@@ -1,7 +1,39 @@
 ---
 title: GraphQL for Sui RPC
 description: Use GraphQL to make Sui RPC calls.
-keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
+keywords:
+  - graphql
+  - graphql headers
+  - x-sui-rpc-version
+  - x-sui-rpc-show-usage
+  - variables
+  - fragments
+  - pagination
+  - graphql limits
+  - make rpc call
+  - sui rpc calls
+goal:
+  description: Reader can use GraphQL to make Sui RPC calls
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is GraphQL for Sui RPC in Sui?
+  - When to use?
+  - How does graphql for sui rpc work on Sui?
+answer: Use GraphQL to make Sui RPC calls.
 ---
 
 GraphQL provides a flexible way to query the Sui network, submit transactions, and simulate transactions. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.
@@ -18,7 +50,7 @@ The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-c
 
 #### Release status
 
-GraphQL RPC Server and the General-purpose Indexer are generally available. JSON-RPC is deprecated, and applications should migrate to GraphQL RPC or gRPC by July 2026, when JSON-RPC is planned for deactivation.
+GraphQL RPC Server and the General-purpose Indexer are generally available. JSON-RPC is deprecated. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline.
 
 
 :::info

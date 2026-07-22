@@ -3,7 +3,7 @@
 
 // Tests passing Gas by value to sui::coin::send_funds in various scenarios.
 
-//# init --addresses test=0x0 --accounts A B C D E --enable-accumulators --enable-address-balance-gas-payments
+//# init --addresses test=0x0 --accounts A B C D E
 
 //# programmable --sender A --inputs @B --gas-budget 10000000
 // Send gas coin to another address via send_funds

@@ -180,10 +180,14 @@ jobs:
           swap-size-gb: 256
       - name: cargo test with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core --features typed-store/tidehunter
-      - name: cargo check sui-tool with tidehunter + tideconsole
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core -p typed-store --features typed-store/tidehunter
+      - run: rustup component add clippy
+      # Same as the main `cargo xclippy` run, denying warnings, but with USE_TIDEHUNTER=1 and
+      # scoped to the crates whose build.rs emits cfg(tidehunter) so tidehunter-only code is
+      # linted too. --all-features covers typed-store/tidehunter and sui-tool/tideconsole.
+      - name: cargo clippy with tidehunter
         run: |
-          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo check --quiet -p sui-tool --features typed-store/tidehunter,sui-tool/tideconsole
+          USE_TIDEHUNTER=1 cargo xclippy -p sui-core -p sui-tool -p sui-benchmark -p typed-store -p consensus-core -- -D warnings
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -598,9 +602,9 @@ jobs:
       #   with:
       #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
 
-      # See '.cargo/config' for list of enabled/disappled clippy lints
+      # See '[workspace.lints]' in the root Cargo.toml for the project-wide lint set
       - name: cargo clippy
-        run: cargo xclippy -D warnings
+        run: cargo xclippy -- -D warnings
 
   rustfmt:
     needs: diff

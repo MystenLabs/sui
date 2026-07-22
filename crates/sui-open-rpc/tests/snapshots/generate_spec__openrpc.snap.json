@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.75.0"
+    "version": "1.77.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "127",
+              "maxSupportedProtocolVersion": "132",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1339,6 +1339,7 @@
                 "correct_gas_payment_limit_check": false,
                 "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
+                "defer_owned_object_double_spend": false,
                 "defer_unpaid_amplification": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops": false,
@@ -1365,6 +1366,7 @@
                 "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
+                "enable_init_on_upgrade": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_multi_epoch_transaction_expiration": false,
                 "enable_nitro_attestation": false,
@@ -1377,6 +1379,7 @@
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
+                "enable_unified_linkage": false,
                 "enable_vdf": false,
                 "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1384,6 +1387,7 @@
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fix_checkpoint_signature_mapping": false,
                 "flexible_tx_context_positions": false,
+                "framework_tx_context_mut_restrictions": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_rounding_halve_digits": false,
                 "gasless_transaction_drop_safety": false,
@@ -1428,6 +1432,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_net_unsettled_object_withdraws": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relax_valid_during_for_owned_inputs": false,
@@ -1438,6 +1443,7 @@
                 "restrict_hot_or_not_entry_functions": false,
                 "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
+                "share_transaction_deny_config_in_consensus": false,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
                 "simplified_unwrap_then_delete": false,
@@ -1684,6 +1690,7 @@
                 "ed25519_ed25519_verify_msg_cost_per_byte": {
                   "u64": "2"
                 },
+                "epoch_close_deadline_ms": null,
                 "event_emit_auth_stream_cost": null,
                 "event_emit_cost_base": {
                   "u64": "52"
@@ -1857,6 +1864,8 @@
                 "max_generic_instantiation_length": {
                   "u64": "32"
                 },
+                "max_generic_instantiation_type_nodes_per_function": null,
+                "max_generic_instantiation_type_nodes_per_module": null,
                 "max_input_objects": {
                   "u64": "2048"
                 },
@@ -1916,6 +1925,7 @@
                 "max_push_size": {
                   "u64": "10000"
                 },
+                "max_scratch_pad_size": null,
                 "max_serialized_tx_effects_size_bytes": {
                   "u64": "524288"
                 },
@@ -2023,6 +2033,13 @@
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
+                "scratch_add_cost_base": null,
+                "scratch_exists_cost_base": null,
+                "scratch_exists_with_type_cost_base": null,
+                "scratch_exists_with_type_type_cost": null,
+                "scratch_read_cost_base": null,
+                "scratch_read_value_cost": null,
+                "scratch_remove_cost_base": null,
                 "sip_45_consensus_amplification_threshold": null,
                 "storage_fund_reinvest_rate": {
                   "u64": "500"
@@ -2161,6 +2178,7 @@
                 "create_root_accumulator_object": false,
                 "crypto_invalid_arguments_cost": "100",
                 "debug_fatal_on_move_invariant_violation": false,
+                "defer_owned_object_double_spend": false,
                 "defer_unpaid_amplification": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops": false,
@@ -2236,6 +2254,7 @@
                 "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
+                "enable_init_on_upgrade": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_multi_epoch_transaction_expiration": false,
                 "enable_nitro_attestation": false,
@@ -2248,6 +2267,7 @@
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
+                "enable_unified_linkage": false,
                 "enable_vdf": false,
                 "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
@@ -2259,6 +2279,7 @@
                 "event_emit_value_size_derivation_cost_per_byte": "2",
                 "fix_checkpoint_signature_mapping": false,
                 "flexible_tx_context_positions": false,
+                "framework_tx_context_mut_restrictions": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_model_version": "5",
                 "gas_rounding_halve_digits": false,
@@ -2380,6 +2401,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_net_unsettled_object_withdraws": false,
                 "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relax_valid_during_for_owned_inputs": false,
@@ -2391,6 +2413,7 @@
                 "rethrow_serialization_type_layout_errors": false,
                 "reward_slashing_rate": "10000",
                 "scoring_decision_with_validity_cutoff": true,
+                "share_transaction_deny_config_in_consensus": false,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
                 "simplified_unwrap_then_delete": false,

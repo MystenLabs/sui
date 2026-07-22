@@ -7,6 +7,9 @@ description = "error types for typed-store crate"
 edition = "2024"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true

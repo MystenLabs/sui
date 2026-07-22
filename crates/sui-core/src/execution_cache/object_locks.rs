@@ -3,8 +3,10 @@
 
 use mysten_common::ZipDebugEqIteratorExt;
 
+#[cfg(test)]
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_types::base_types::{ObjectID, ObjectRef};
+#[cfg(test)]
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::object::Object;
@@ -20,6 +22,7 @@ impl ObjectLocks {
         Self {}
     }
 
+    #[cfg(test)]
     pub(crate) fn get_transaction_lock(
         &self,
         obj_ref: &ObjectRef,

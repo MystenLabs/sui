@@ -269,10 +269,6 @@ pub struct PackageData {
 /// Protocol config data returned by reader methods.
 #[derive(Clone, Debug, Default)]
 pub struct ProtocolConfigData {
-    /// Legacy scalar-only attributes map, BCS-encoded on disk. New readers should prefer the
-    /// lossless `configs` map instead.
-    pub attributes: std::collections::BTreeMap<String, Option<String>>,
-    pub flags: std::collections::BTreeMap<String, bool>,
     /// Lossless view of every protocol-config attribute (scalar and non-scalar) and feature
     /// flag rendered to `prost_types::Value`. Fields unset at this protocol version are
     /// preserved as explicit `NullValue` entries so the keyset is stable across versions.

@@ -13,7 +13,7 @@
 // confirming X's pre-tx version is folded into the tx's lamport timestamp
 // even though X itself is deleted.
 
-//# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::obj;

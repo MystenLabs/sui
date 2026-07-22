@@ -1,12 +1,77 @@
 ---
 title: JSON-RPC Migration Guide
-description: Choose between gRPC and GraphQL RPC when migrating from the deprecated JSON-RPC API. Includes a method mapping, decision criteria, and common migration gotchas.
-keywords: [ json-rpc, migration, grpc, graphql, deprecation, sui rpc, json-rpc migration, sui rpc migration, replace json-rpc ]
+description: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
+keywords:
+  - json-rpc
+  - migration
+  - grpc
+  - graphql
+  - deprecation
+  - sui rpc
+  - json-rpc migration
+  - sui rpc migration
+  - replace json-rpc
+goal:
+  description: >-
+    Reader can choose between gRPC and GraphQL RPC when migrating from the
+    deprecated JSON-RPC API.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Transaction indexing (migration)
+    stage: History
+    eval: partial
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Index payment history
+    stage: Ship
+    eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is JSON-RPC Migration Guide in Sui?
+  - How does json-rpc migration guide work on Sui?
+  - How do I migrate to json-rpc migration guide?
+answer: >-
+  Choose between gRPC and GraphQL RPC when migrating from the deprecated
+  JSON-RPC API. Includes a method mapping, decision criteria, and common
+  migration gotchas.
 ---
 
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
 
-JSON-RPC is deprecated and is planned for deactivation in July 2026. The two replacements are [gRPC](/develop/accessing-data/grpc) for full node access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for indexed, filterable reads.
+JSON-RPC is deprecated and is being decommissioned on the following timeline:
+
+| Milestone | Target date |
+| --- | --- |
+| Disable JSON-RPC on Sui Foundation's mainnet full nodes | Week of July 27, 2026 |
+| Sui Foundation stops publishing JSON-RPC snapshots for full nodes | End of August 2026 |
+| Implicit fallback from JSON-RPC to archival service disconnected | End of September 2026 |
+| Full decommission of JSON-RPC from full nodes, including code removal | Mid-October 2026 |
+
+The two replacements are [gRPC](/develop/accessing-data/grpc) for real-time full node access, archival service access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for rich, structured queries over live and historical blockchain data.
 
 ## Choose your replacement
 
@@ -60,7 +125,7 @@ The following table maps common JSON-RPC method families to their gRPC service a
 | `suix_getDynamicFields` | `StateService.ListDynamicFields` | `Object.dynamicFields` |
 | `suix_getDynamicFieldObject` | Derive the dynamic field's object ID locally from the parent object ID and the field name, then call `LedgerService.GetObject`. `ListDynamicFields` is not needed when you already know the field name. | `Object.dynamicObjectField` |
 | `suix_queryTransactionBlocks` | No direct filtered query. Enumerate finalized transactions through `SubscriptionService.SubscribeCheckpoints`, or fetch known transactions through `LedgerService.GetTransaction`. | `Query.transactions` with a `TransactionFilter` |
-| `suix_queryEvents` | Read events from transaction data returned by `LedgerService.GetTransaction` or streamed by `SubscriptionService.SubscribeCheckpoints` | `Query.events` with an `EventFilter` |
+| `suix_queryEvents` (deprecated) | Read events from transaction data returned by `LedgerService.GetTransaction` or streamed by `SubscriptionService.SubscribeCheckpoints`. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-grpc) for examples and migration guidance. | `Query.events` with an `EventFilter`. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-graphql) for examples. |
 | `sui_subscribeEvent`, `sui_subscribeTransaction` (WebSocket) | `SubscriptionService.SubscribeCheckpoints`, then read events and transactions from each checkpoint | No streaming subscription. Poll `Query.events` with an `EventFilter`, or `Query.transactions` with a `TransactionFilter`. |
 | `suix_getReferenceGasPrice` | `LedgerService.GetEpoch` (read `reference_gas_price` from the response) | `Epoch.referenceGasPrice` |
 | `suix_getStakes`, `suix_getStakesByIds` | No direct gRPC method. Read owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type, then fetch full contents through `LedgerService.GetObject`. | `Address.objects` with `filter: { type: "0x3::staking_pool::StakedSui" }` |
@@ -167,7 +232,7 @@ query {
 
 - **GraphQL:** Query `Address.balance` for a single coin type or `Address.balances` for all balances, both reached from `Query.address`. Read `Balance.totalBalance`, `Balance.coinBalance`, and `Balance.addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
 
-- **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages#sui-rpc-v2-GetBalanceRequest) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
+- **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
 
 <details>
 
@@ -240,7 +305,7 @@ Omit `after` to fetch the first page. The cursor is opaque, so use one returned 
 
 - **GraphQL:** See [Querying events with GraphQL](/develop/accessing-data/using-events#querying-events-with-graphql) for the `events(filter:)` field and the filtering reference.
 
-- **gRPC:** Events arrive as part of transaction data in `LedgerService.GetTransaction` responses, and live updates arrive in each checkpoint streamed by `SubscriptionService.SubscribeCheckpoints`. See [Querying events with RPC](/develop/accessing-data/using-events#querying-events-with-rpc).
+- **gRPC:** Events arrive as part of transaction data in `LedgerService.GetTransaction` responses, and live updates arrive in each checkpoint streamed by `SubscriptionService.SubscribeCheckpoints`. See [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
 
 <details>
 

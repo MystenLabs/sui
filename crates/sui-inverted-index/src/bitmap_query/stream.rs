@@ -20,31 +20,36 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use anyhow::Result;
 use futures::Stream;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use futures::stream::Peekable;
+use mysten_common::zip_debug_eq::ZipDebugEqIteratorExt;
 use roaring::RoaringBitmap;
 
 use super::BitmapBucketSource;
 use super::BitmapQuery;
-use super::BitmapScanLimitExceeded;
 use super::BucketItem;
 use super::BucketStream;
 use super::DedupedQuery;
 use super::LeafHead;
-use super::MultiError;
+use super::LeafStop;
 use super::ScanDirection;
+use super::ScanStop;
+use super::SkipPolicy;
 use super::Watermarked;
 use super::WatermarkedBucketStream;
+use super::advance_in_direction;
 use super::bound_in_direction;
 use super::bucket_edges;
 use super::build_term_specs;
+use super::collapse;
 use super::count_on_floor_refs;
 use super::eval_term_at_bucket;
 use super::frontier_advanced;
+use super::leaf_skip_targets;
 use super::recompute_unreferenced;
+use super::strictly_before;
 use super::take_snapshot_bitmap;
 
 /// Per-request bucket-scan accounting, delivered via the `on_metrics`
@@ -54,11 +59,13 @@ use super::take_snapshot_bitmap;
 /// before any scan is set up and emits nothing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BitmapScanMetrics {
-    /// Buckets actually evaluated (charged against the per-request
-    /// budget). At exhaustion each leaf may have fetched one extra
-    /// bucket that was discarded rather than evaluated, so observed
-    /// backend reads can exceed this by up to `BitmapQuery::unique_leaf_count()`.
+    /// Bucket rows charged against the budget, including dead rows drained
+    /// during gap catch-up.
     pub buckets_evaluated: u64,
+    /// Charged dead bucket rows discarded while catching up lagging leaves.
+    pub buckets_discarded: u64,
+    /// Physical leaf scans abandoned and reopened at a later bucket.
+    pub leaf_seeks: u64,
 }
 
 /// Per-request evaluated-bucket budget shared across all dimension
@@ -68,6 +75,8 @@ pub struct BitmapScanMetrics {
 pub(crate) struct BitmapScanBudget {
     initial: u64,
     remaining: Arc<AtomicU64>,
+    discarded: Arc<AtomicU64>,
+    seeks: Arc<AtomicU64>,
 }
 
 impl BitmapScanBudget {
@@ -75,6 +84,8 @@ impl BitmapScanBudget {
         Self {
             initial,
             remaining: Arc::new(AtomicU64::new(initial)),
+            discarded: Arc::new(AtomicU64::new(0)),
+            seeks: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -110,6 +121,21 @@ impl BitmapScanBudget {
         self.initial
             .saturating_sub(self.remaining.load(Ordering::SeqCst))
     }
+    fn note_discarded(&self) {
+        self.discarded.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn note_seek(&self) {
+        self.seeks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn discarded(&self) -> u64 {
+        self.discarded.load(Ordering::Relaxed)
+    }
+
+    fn seeks(&self) -> u64 {
+        self.seeks.load(Ordering::Relaxed)
+    }
 }
 
 /// RAII guard: fires `on_metrics` exactly once on drop with the final
@@ -125,6 +151,8 @@ impl<F: FnOnce(BitmapScanMetrics) + Send + 'static> Drop for ObserveOnDrop<F> {
         if let Some(cb) = self.callback.take() {
             cb(BitmapScanMetrics {
                 buckets_evaluated: self.budget.buckets_evaluated(),
+                buckets_discarded: self.budget.discarded(),
+                leaf_seeks: self.budget.seeks(),
             });
         }
     }
@@ -132,8 +160,8 @@ impl<F: FnOnce(BitmapScanMetrics) + Send + 'static> Drop for ObserveOnDrop<F> {
 
 /// Evaluate a DNF `BitmapQuery` against a backend-provided bitmap source.
 ///
-/// `budget` caps evaluated buckets across all dimension scans (see
-/// [`BitmapScanLimitExceeded`] and [`BitmapScanMetrics`]). `on_metrics`
+/// `budget` caps evaluated buckets across all dimension scans (see scan-limit
+/// handling and [`BitmapScanMetrics`]). `on_metrics`
 /// fires exactly once when the eval stream is dropped.
 ///
 /// Output emits `Watermarked::Item(absolute_member_id)` interleaved with
@@ -146,8 +174,9 @@ pub fn eval_bitmap_query_stream<S, F>(
     bucket_size: u64,
     direction: ScanDirection,
     budget: u64,
+    policy: SkipPolicy,
     on_metrics: F,
-) -> BoxStream<'static, Result<Watermarked<u64>>>
+) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
 where
     S: BitmapBucketSource,
     F: FnOnce(BitmapScanMetrics) + Send + 'static,
@@ -158,10 +187,11 @@ where
         // `on_metrics` here — there's no scan to account for, and the
         // error surfaces on its own. `on_metrics` is dropped uncalled.
         return async_stream::stream! {
-            yield Err(anyhow::anyhow!(
+            // Misconfiguration is a genuine fault, not a `ScanLimit` stop.
+            yield Err(ScanStop::Fault(anyhow::anyhow!(
                 "bitmap scan budget {budget} is insufficient for {leaves} leaf streams; \
                  server is misconfigured"
-            ));
+            )));
         }
         .boxed();
     }
@@ -173,6 +203,7 @@ where
         bucket_size,
         direction,
         budget.clone(),
+        policy,
     );
     let inner = flatten_watermarked_buckets(bucket_stream, range.clone(), bucket_size, direction);
     // Wrapping the guard inside `async_stream::stream!` keeps it alive
@@ -228,30 +259,16 @@ pub(crate) fn eval_bitmap_query_bucket_stream<S>(
     bucket_size: u64,
     direction: ScanDirection,
     budget: BitmapScanBudget,
+    policy: SkipPolicy,
 ) -> WatermarkedBucketStream
 where
     S: BitmapBucketSource,
 {
-    // One peekable leaf per *unique* dimension key — terms reference them by
-    // index. Identical keys across literals share a single backend scan, so
-    // `(sender=A AND module=X) OR (sender=A AND type=Y)` reads `sender=A`
-    // once. Budgeted bucket streams are `'static`, so `source` is only
-    // borrowed while building.
     let DedupedQuery {
         keys: unique_keys,
         mut terms,
     } = build_term_specs(query.terms);
-    let mut leaves: Vec<Peekable<BucketStream>> = Vec::with_capacity(unique_keys.len());
-    for key in unique_keys {
-        let raw = source.scan_bucket_stream(key, range.clone(), direction);
-        leaves.push(
-            budgeted_bucket_stream(raw, budget.clone())
-                .boxed()
-                .peekable(),
-        );
-    }
-
-    let leaf_count = leaves.len();
+    let leaf_count = unique_keys.len();
     let terminus = if direction.is_ascending() {
         range.end
     } else {
@@ -264,17 +281,21 @@ where
     };
 
     async_stream::try_stream! {
-        // `unreferenced[i]`: leaf is retired — either no satisfiable term still
-        // points at it, or its bucket stream is at EOF (a spent exclude).
+        let mut leaves: Vec<Peekable<BucketStream>> = Vec::with_capacity(leaf_count);
+        for key in &unique_keys {
+            let raw = source.scan_bucket_stream(key.clone(), range.clone(), direction);
+            leaves.push(
+                budgeted_bucket_stream(raw, budget.clone(), true)
+                    .boxed()
+                    .peekable(),
+            );
+        }
         let mut unreferenced = vec![false; leaf_count];
-        // `front[i]`: clamped position each leaf has provably scanned to. Bounds
-        // the resume cursor when a leaf errors before it can advance.
         let mut front = vec![request_floor; leaf_count];
-        let mut last_emitted: Option<u64> = None;
+        let mut drained = vec![0u64; leaf_count];
+        let mut progress_frontier = Some(request_floor);
 
         loop {
-            // Peek every active leaf concurrently (preserves cross-scan
-            // parallelism), recording each head and the position it scanned to.
             let mut peeks = Vec::new();
             for (i, leaf) in leaves.iter_mut().enumerate() {
                 if !unreferenced[i] {
@@ -291,15 +312,12 @@ where
             let results = futures::future::join_all(peeks).await;
             let mut class: Vec<Option<LeafHead>> = (0..leaf_count).map(|_| None).collect();
             for (i, head, scanned_to) in results {
-                if let Some(p) = scanned_to {
-                    front[i] = p;
+                if let Some(position) = scanned_to {
+                    front[i] = advance_in_direction(front[i], position, direction);
                 }
                 class[i] = Some(head);
             }
 
-            // An include at EOF makes its term unsatisfiable (the intersection
-            // is permanently empty). With dedup, an EOF'd leaf may be an
-            // include for several terms; all of them become unsatisfiable.
             for term in terms.iter_mut() {
                 if !term.unsatisfiable
                     && term
@@ -310,19 +328,21 @@ where
                     term.unsatisfiable = true;
                 }
             }
-            // Recompute leaf liveness from current term state. A leaf may be
-            // shared across terms (include for one, exclude for another), so it
-            // can only be retired when no satisfiable term still references
-            // it — or when its head is at EOF.
             recompute_unreferenced(&terms, &class, &mut unreferenced);
 
-            // Consume any budget-error frame so the error surfaces (after the
-            // floor watermark below).
-            let mut errors: Vec<anyhow::Error> = Vec::new();
+            let targets = leaf_skip_targets(&terms, &class, &unreferenced, direction);
+            for (i, target) in targets.iter().enumerate() {
+                if let Some(target) = target {
+                    let (pre, _) = bucket_edges(*target, bucket_size, &range, direction);
+                    front[i] = advance_in_direction(front[i], pre, direction);
+                }
+            }
+
+            let mut errors: Vec<LeafStop> = Vec::new();
             for i in 0..leaf_count {
                 if !unreferenced[i] && matches!(class[i], Some(LeafHead::Error)) {
                     match Pin::new(&mut leaves[i]).next().await {
-                        Some(Err(e)) => errors.push(e),
+                        Some(Err(error)) => errors.push(error),
                         _ => unreachable!("peek classified Error"),
                     }
                 }
@@ -330,104 +350,203 @@ where
 
             let active: Vec<usize> = (0..leaf_count).filter(|&i| !unreferenced[i]).collect();
             if active.is_empty() {
-                // Every term retired naturally: cap at the range terminus so the
-                // client learns the scan covered the whole range.
-                if frontier_advanced(last_emitted, terminus, direction) {
-                    yield Watermarked::Watermark(terminus);
-                }
                 return;
             }
 
-            // The floor is the slowest active leaf's scanned-to position: the
-            // merged "every source has scanned past here" watermark.
             let floor_pos = active
                 .iter()
                 .map(|&i| front[i])
                 .reduce(|a, b| bound_in_direction(a, b, direction))
                 .expect("active non-empty");
-            if frontier_advanced(last_emitted, floor_pos, direction) {
+            let collapsed = (!errors.is_empty()).then(|| collapse(errors, floor_pos));
+            let scan_limited = matches!(collapsed, Some(ScanStop::ScanLimit { .. }));
+            if !scan_limited && frontier_advanced(progress_frontier, floor_pos, direction) {
                 yield Watermarked::Watermark(floor_pos);
-                last_emitted = Some(floor_pos);
+                progress_frontier = Some(floor_pos);
+            }
+            if let Some(stop) = collapsed {
+                Err(stop)?;
             }
 
-            // Budget exhausted: the floor watermark above is the resume cursor;
-            // everything below it was fully evaluated in prior rounds.
-            if !errors.is_empty() {
-                Err(MultiError::collapse(errors))?;
-            }
-
-            // Evaluate the DNF at the nearest bucket any active leaf sits on.
-            let floor_bucket = active
+            // A target marks a leaf whose logical frontier is ahead of its
+            // physical stream. Its rows before the target are proven dead, but
+            // the stream still needs to drain or seek across them.
+            let lagging: Vec<usize> = active
                 .iter()
+                .copied()
+                .filter(|&i| targets[i].is_some())
+                .collect();
+            // A leaf gets a fresh drain probe after it catches up. Keeping the
+            // count while it remains lagging prevents a moving target from
+            // repeatedly restarting the probe.
+            for i in 0..leaf_count {
+                if targets[i].is_none() {
+                    drained[i] = 0;
+                }
+            }
+
+            // Lagging heads are intentionally excluded here. Find the next
+            // physical bucket among leaves that are ready to participate in
+            // evaluation.
+            let eval_bucket = active
+                .iter()
+                .filter(|&&i| targets[i].is_none())
                 .filter_map(|&i| match class[i] {
-                    Some(LeafHead::Bucket(b)) => Some(b),
+                    Some(LeafHead::Bucket(bucket)) => Some(bucket),
                     _ => None,
                 })
-                .reduce(|a, b| match direction {
-                    ScanDirection::Ascending => a.min(b),
-                    ScanDirection::Descending => a.max(b),
-                })
-                .expect("active leaves carry buckets when there is no error");
-            let (_pre, post) = bucket_edges(floor_bucket, bucket_size, &range, direction);
+                .reduce(|a, b| bound_in_direction(a, b, direction))
+                .expect("at least one active leaf has a ready bucket");
+            // Ready leaves may be evaluated before the nearest lagging target:
+            // any term that needs a lagging leaf is known to produce nothing
+            // there. Equality must wait so a leaf needed at the target is not
+            // omitted from that bucket's snapshot.
+            let lagging_target = lagging
+                .iter()
+                .filter_map(|&i| targets[i])
+                .reduce(|a, b| bound_in_direction(a, b, direction));
+            let evaluate = lagging_target
+                .is_none_or(|target| strictly_before(eval_bucket, target, direction));
 
-            // Snapshot the bitmaps of leaves sitting on `floor_bucket` —
-            // each unique leaf consumed exactly once, regardless of how many
-            // terms reference it — then distribute. Without dedup, a leaf
-            // shared across multiple terms would otherwise be polled once per
-            // term, each call advancing past the bucket so siblings see
-            // nothing. The single-consume + distribute keeps storage reads
-            // proportional to unique keys, not literal occurrences.
-            let mut snapshot: Vec<Option<RoaringBitmap>> =
-                (0..leaf_count).map(|_| None).collect();
-            let mut on_floor = vec![false; leaf_count];
-            for i in 0..leaf_count {
-                if !unreferenced[i]
-                    && matches!(class[i], Some(LeafHead::Bucket(b)) if b == floor_bucket)
-                {
-                    on_floor[i] = true;
-                    front[i] = post;
-                    snapshot[i] = match Pin::new(&mut leaves[i]).next().await {
-                        Some(Ok((_, bitmap))) => Some(bitmap),
-                        _ => None,
-                    };
+            if evaluate {
+                let (_, post) = bucket_edges(eval_bucket, bucket_size, &range, direction);
+                // Consume only ready leaves positioned at this bucket. Lagging
+                // leaves stay out of the snapshot until catch-up is observed in
+                // a later outer round.
+                let mut snapshot: Vec<Option<RoaringBitmap>> =
+                    (0..leaf_count).map(|_| None).collect();
+                let mut on_floor = vec![false; leaf_count];
+                for i in 0..leaf_count {
+                    if !unreferenced[i]
+                        && targets[i].is_none()
+                        && matches!(class[i], Some(LeafHead::Bucket(b)) if b == eval_bucket)
+                    {
+                        on_floor[i] = true;
+                        front[i] = advance_in_direction(front[i], post, direction);
+                        snapshot[i] = match Pin::new(&mut leaves[i]).next().await {
+                            Some(Ok((_, bitmap))) => Some(bitmap),
+                            _ => None,
+                        };
+                    }
+                }
+                // Evaluate each conjunction from the shared leaf snapshot, then
+                // union the non-empty bitmaps to implement the top-level OR.
+                let mut remaining_refs = count_on_floor_refs(&terms, &on_floor);
+                let mut result: Option<RoaringBitmap> = None;
+                for term in &terms {
+                    if term.unsatisfiable {
+                        continue;
+                    }
+                    let includes = term
+                        .includes
+                        .iter()
+                        .map(|&i| {
+                            take_snapshot_bitmap(
+                                &mut snapshot,
+                                &mut remaining_refs,
+                                &on_floor,
+                                i,
+                            )
+                        })
+                        .collect();
+                    let excludes = term
+                        .excludes
+                        .iter()
+                        .map(|&i| {
+                            take_snapshot_bitmap(
+                                &mut snapshot,
+                                &mut remaining_refs,
+                                &on_floor,
+                                i,
+                            )
+                        })
+                        .collect();
+                    if let Some(bitmap) = eval_term_at_bucket(includes, excludes) {
+                        result = Some(match result {
+                            None => bitmap,
+                            Some(acc) => acc | bitmap,
+                        });
+                    }
+                }
+                if let Some(bitmap) = result {
+                    yield Watermarked::Item((eval_bucket, bitmap));
+                }
+                if frontier_advanced(progress_frontier, post, direction) {
+                    yield Watermarked::Watermark(post);
+                    progress_frontier = Some(post);
                 }
             }
-            let mut remaining_refs = count_on_floor_refs(&terms, &on_floor);
 
-            let mut result: Option<RoaringBitmap> = None;
-            for term in &terms {
-                if term.unsatisfiable {
-                    continue;
-                }
-                let includes: Vec<Option<RoaringBitmap>> = term
-                    .includes
-                    .iter()
-                    .map(|&i| {
-                        take_snapshot_bitmap(&mut snapshot, &mut remaining_refs, &on_floor, i)
+            // Physically catch up all lagging leaves concurrently. The
+            // evaluator waits for every catch-up future before starting the
+            // next classification round.
+            let catch_up = leaves.iter_mut().zip_debug_eq(drained.iter_mut())
+                .enumerate()
+                .filter_map(|(i, (leaf, drained))| {
+                    let target = targets[i]?;
+                    let source = source.clone();
+                    let key = unique_keys[i].clone();
+                    let range = range.clone();
+                    let budget = budget.clone();
+                    Some(async move {
+                        // Stop on the landing row, an error, or EOF. Leaving it
+                        // buffered lets the next outer round classify it using
+                        // fresh term and target state.
+                        loop {
+                            let dead_row = matches!(
+                                Pin::new(&mut *leaf).peek().await,
+                                Some(Ok((bucket, _)))
+                                    if strictly_before(*bucket, target, direction)
+                            );
+                            if !dead_row {
+                                break;
+                            }
+                            // Drain short gaps from the open scan. Once the
+                            // probe is exhausted, abandon the scan and reopen at
+                            // the target instead.
+                            if policy
+                                .drain_probe_rows
+                                .is_some_and(|probe| *drained >= u64::from(probe.get()))
+                            {
+                                // The dead row in the peek slot was already
+                                // pulled through the budgeted stream. Replacing
+                                // the stream discards it without calling next().
+                                budget.note_discarded();
+                                // Narrow the replacement range so it includes
+                                // the target bucket and excludes the dead gap.
+                                let narrowed = match direction {
+                                    ScanDirection::Ascending => {
+                                        target.saturating_mul(bucket_size).max(range.start)
+                                            ..range.end
+                                    }
+                                    ScanDirection::Descending => {
+                                        range.start
+                                            ..target
+                                                .saturating_add(1)
+                                                .saturating_mul(bucket_size)
+                                                .min(range.end)
+                                    }
+                                };
+                                let raw = source.scan_bucket_stream(key, narrowed, direction);
+                                // This is still the same logical leaf, so the
+                                // reopened stream gets no second mandatory
+                                // first-row reservation.
+                                *leaf = budgeted_bucket_stream(raw, budget.clone(), false)
+                                    .boxed()
+                                    .peekable();
+                                budget.note_seek();
+                                break;
+                            }
+                            // Consuming a dead row keeps using the existing scan
+                            // and counts both the budgeted read and the discard.
+                            let discarded = Pin::new(&mut *leaf).next().await;
+                            debug_assert!(matches!(discarded, Some(Ok(_))));
+                            *drained += 1;
+                            budget.note_discarded();
+                        }
                     })
-                    .collect();
-                let excludes: Vec<Option<RoaringBitmap>> = term
-                    .excludes
-                    .iter()
-                    .map(|&i| {
-                        take_snapshot_bitmap(&mut snapshot, &mut remaining_refs, &on_floor, i)
-                    })
-                    .collect();
-                if let Some(bitmap) = eval_term_at_bucket(includes, excludes) {
-                    result = Some(match result {
-                        None => bitmap,
-                        Some(acc) => acc | bitmap,
-                    });
-                }
-            }
-
-            if let Some(bitmap) = result {
-                yield Watermarked::Item((floor_bucket, bitmap));
-            }
-            if frontier_advanced(last_emitted, post, direction) {
-                yield Watermarked::Watermark(post);
-                last_emitted = Some(post);
-            }
+                });
+            futures::future::join_all(catch_up).await;
         }
     }
     .boxed()
@@ -435,88 +554,28 @@ where
 
 /// Wrap a raw per-dimension bucket stream with the shared scan budget: charge
 /// one bucket per pull (the first via `take_first`, the rest via `try_take`),
-/// yielding [`BitmapScanLimitExceeded`] when the pool is empty. Never a silent
-/// EOF — the driver must see the error to truncate at the floor.
+/// yielding [`LeafStop::BudgetExhausted`] when the pool is empty — never a
+/// silent EOF.
 fn budgeted_bucket_stream<S>(
     inner: S,
     budget: BitmapScanBudget,
+    reserve_first: bool,
 ) -> impl Stream<Item = BucketItem> + Send + 'static
 where
     S: Stream<Item = BucketItem> + Send + 'static,
 {
     async_stream::try_stream! {
         futures::pin_mut!(inner);
-        let mut first = true;
+        let mut first = reserve_first;
         while let Some(item) = inner.next().await {
             let item = item?;
             if first {
                 budget.take_first();
                 first = false;
             } else if !budget.try_take() {
-                Err(anyhow::Error::new(BitmapScanLimitExceeded))?;
+                Err(LeafStop::BudgetExhausted)?;
             }
             yield item;
-        }
-    }
-}
-
-/// Convenience adapter: wrap a single raw `BucketStream` into a
-/// `WatermarkedBucketStream` with one `Watermark(post_bucket)` after each
-/// bucket plus one final at the range terminus on EOF.
-///
-/// The DNF eval pipeline budgets and merges leaves itself; this helper is for
-/// backend-side consumers (e.g. RocksDB single-dimension scans) that want
-/// bucket-level output without the full eval machinery.
-pub fn buckets_with_watermarks<S>(
-    stream: S,
-    range: Range<u64>,
-    bucket_size: u64,
-    direction: ScanDirection,
-) -> impl Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static
-where
-    S: Stream<Item = BucketItem> + Send + 'static,
-{
-    async_stream::try_stream! {
-        if range.is_empty() {
-            return;
-        }
-        futures::pin_mut!(stream);
-        let mut last_emitted: Option<u64> = None;
-        while let Some(item) = stream.next().await {
-            let (bucket_id, bitmap) = item?;
-            yield Watermarked::Item((bucket_id, bitmap));
-            // Ascending = just past this bucket. Descending = this
-            // bucket's low edge. Clamp to the request bounds — cursors
-            // round-trip into subsequent requests with different ranges.
-            let bucket_start = bucket_id.saturating_mul(bucket_size);
-            let watermark = if direction.is_ascending() {
-                bucket_start.saturating_add(bucket_size).min(range.end)
-            } else {
-                bucket_start.max(range.start)
-            };
-            last_emitted = Some(watermark);
-            yield Watermarked::Watermark(watermark);
-        }
-        // Natural EOF: cap with a watermark at the range boundary so
-        // handlers get an explicit "scan covered the range" signal.
-        // Skip if a per-bucket watermark already exceeded it.
-        let range_end = if direction.is_ascending() {
-            range.end
-        } else {
-            range.start
-        };
-        let should_emit = match last_emitted {
-            None => true,
-            Some(prev) => {
-                if direction.is_ascending() {
-                    range_end > prev
-                } else {
-                    range_end < prev
-                }
-            }
-        };
-        if should_emit {
-            yield Watermarked::Watermark(range_end);
         }
     }
 }
@@ -524,14 +583,15 @@ where
 /// Flatten marked bucket bitmaps into absolute member ids with
 /// edge-bucket trimming against `range`. Watermarks pass through
 /// unchanged.
-pub fn flatten_watermarked_buckets<S>(
+pub fn flatten_watermarked_buckets<S, E>(
     stream: S,
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> impl Stream<Item = Result<Watermarked<u64>>> + Send + 'static
+) -> impl Stream<Item = Result<Watermarked<u64>, E>> + Send + 'static
 where
-    S: Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>>> + Send + 'static,
+    S: Stream<Item = Result<Watermarked<(u64, RoaringBitmap)>, E>> + Send + 'static,
+    E: Send + 'static,
 {
     async_stream::try_stream! {
         if range.is_empty() {
@@ -589,7 +649,6 @@ mod tests {
     use crate::bitmap_query::BitmapLiteral;
     use crate::bitmap_query::BitmapTerm;
     use crate::bitmap_query::BucketStream;
-    use crate::bitmap_query::error_contains;
 
     const BUCKET_SIZE: u64 = 100_000;
     type TestBuckets = BTreeMap<Vec<u8>, Vec<(u64, Vec<u32>)>>;
@@ -603,7 +662,7 @@ mod tests {
         fn scan_bucket_stream(
             &self,
             dimension_key: Vec<u8>,
-            _range: Range<u64>,
+            range: Range<u64>,
             direction: ScanDirection,
         ) -> BucketStream {
             let mut buckets = self
@@ -611,6 +670,13 @@ mod tests {
                 .get(&dimension_key)
                 .cloned()
                 .unwrap_or_default();
+            if range.is_empty() {
+                buckets.clear();
+            } else {
+                let first_bucket = range.start / BUCKET_SIZE;
+                let last_bucket = (range.end - 1) / BUCKET_SIZE;
+                buckets.retain(|(bucket, _)| first_bucket <= *bucket && *bucket <= last_bucket);
+            }
             if matches!(direction, ScanDirection::Descending) {
                 buckets.reverse();
             }
@@ -642,8 +708,8 @@ mod tests {
     /// Drain into (items, watermarks) parallel vecs. Order between the
     /// two is lost; for ordering checks collect `Watermarked` directly.
     async fn drain_marked(
-        stream: BoxStream<'static, Result<Watermarked<u64>>>,
-    ) -> Result<(Vec<u64>, Vec<u64>)> {
+        stream: BoxStream<'static, Result<Watermarked<u64>, ScanStop>>,
+    ) -> Result<(Vec<u64>, Vec<u64>), ScanStop> {
         let all: Vec<Watermarked<u64>> = stream.try_collect().await?;
         let mut items = Vec::new();
         let mut watermarks = Vec::new();
@@ -668,15 +734,13 @@ mod tests {
         BitmapLiteral::exclude(test_key(value)).unwrap()
     }
 
-    /// Tightest-budget starvation. `term1 = (a AND b)` is disjoint (matches
-    /// nothing) and `term2 = c`'s only data sits far ahead of the request floor.
-    /// With `budget == unique_leaf_count`, round 1 still fetches every leaf's first
-    /// bucket, so the driver derives a real floor watermark before the budget
-    /// exhausts advancing `a`. The scan therefore ends with that forward-progress
-    /// watermark ahead of `SCAN_LIMIT` — never a cursorless error that would
-    /// livelock the client on retry.
+    /// Tightest-budget starvation. `term1 = (a AND b)` cannot match before
+    /// bucket 50, while independent `term2 = c` matches at bucket 40. The
+    /// logical jump lets bucket 40 evaluate before catch-up exhausts the shared
+    /// budget; the stopping round carries bucket 50's leading edge only in the
+    /// terminal frontier.
     #[tokio::test]
-    async fn nested_term_starvation_emits_frontier_before_scan_limit() {
+    async fn nested_term_starvation_bundles_frontier_in_scan_limit() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -707,32 +771,46 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             3,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
-        // Collect rather than try_collect: short-circuiting on Err would
-        // drop the pre-error watermark under test.
-        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
-        let last_ok =
-            all.iter().rev().find_map(|r| r.as_ref().ok()).expect(
-                "a frontier watermark must surface before the (otherwise cursorless) error",
-            );
-        match last_ok {
-            Watermarked::Watermark(p) => assert!(
-                *p > 0,
-                "frontier must reflect real progress past the request floor (got {p})"
-            ),
-            Watermarked::Item(_) => panic!("disjoint intersect must not emit items here"),
-        }
+        let items: Vec<u64> = all
+            .iter()
+            .filter_map(|result| match result {
+                Ok(Watermarked::Item(item)) => Some(*item),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(items, vec![40 * BUCKET_SIZE + 7]);
+
+        let watermarks: Vec<u64> = all
+            .iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Watermark(position)) => Some(*position),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(watermarks, vec![40 * BUCKET_SIZE, 41 * BUCKET_SIZE]);
+        assert_eq!(
+            all.len(),
+            items.len() + watermarks.len() + 1,
+            "the stopping round must add only its terminal, not another beacon"
+        );
         let err = all
             .last()
             .expect("non-empty")
             .as_ref()
             .expect_err("scan must terminate with an error");
-        assert!(
-            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
-        );
+        match err {
+            ScanStop::ScanLimit { scan_frontier } => assert_eq!(
+                *scan_frontier,
+                50 * BUCKET_SIZE,
+                "terminal must carry the logically advanced merged floor"
+            ),
+            other => panic!("expected ScanLimit, got {other:?}"),
+        }
     }
 
     /// Flush-on-error: a budget error truncates the scan at the floor, but
@@ -743,10 +821,8 @@ mod tests {
     /// (the livelock this guards against). The delivered item stays below the
     /// final watermark, so resuming from that cursor will not re-emit it.
     ///
-    /// The death floor is `post` of bucket 0 (one `BUCKET_SIZE`): every leaf's
-    /// first bucket is reserved (`take_first`), so the shared budget is spent
-    /// reaching bucket 0 across the leaves and `(a AND b)` errors before it can
-    /// advance to bucket 1.
+    /// The logical frontier for `a` advances to bucket 50 before catch-up. The
+    /// independent bucket-0 match remains below that valid resume edge.
     #[tokio::test]
     async fn flush_on_error_delivers_below_floor_sibling_result() {
         let source = TestBucketSource {
@@ -778,9 +854,10 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             3,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
-        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
         // c's bucket-0 match (member id 7) is delivered despite term1 dying.
         let items: Vec<u64> = all
@@ -792,22 +869,18 @@ mod tests {
             .collect();
         assert_eq!(items, vec![7], "c's below-floor match must be delivered");
 
-        // Resume frontier advances to term1's death floor (post of bucket 0),
-        // not stuck at the request floor 0.
-        let last_wm = all
+        let watermarks: Vec<u64> = all
             .iter()
-            .rev()
-            .find_map(|r| match r {
-                Ok(Watermarked::Watermark(p)) => Some(*p),
+            .filter_map(|r| match r {
+                Ok(Watermarked::Watermark(position)) => Some(*position),
                 _ => None,
             })
-            .expect("a frontier watermark must surface");
-        assert_eq!(last_wm, BUCKET_SIZE, "frontier must advance past floor");
-        // The delivered item is below the resume cursor, so a resume won't
-        // re-emit it.
-        assert!(
-            items.iter().all(|&i| i < last_wm),
-            "items must be below the resume cursor"
+            .collect();
+        assert_eq!(watermarks, vec![BUCKET_SIZE]);
+        assert_eq!(
+            all.len(),
+            items.len() + watermarks.len() + 1,
+            "the stopping round must add only its terminal, not another beacon"
         );
 
         let err = all
@@ -815,9 +888,18 @@ mod tests {
             .expect("non-empty")
             .as_ref()
             .expect_err("scan must terminate with an error");
+        let scan_frontier = match err {
+            ScanStop::ScanLimit { scan_frontier } => *scan_frontier,
+            other => panic!("expected ScanLimit, got {other:?}"),
+        };
+        assert_eq!(
+            scan_frontier,
+            50 * BUCKET_SIZE,
+            "terminal frontier must include the logical gap jump"
+        );
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            items.iter().all(|&i| i < scan_frontier),
+            "delivered items must be below the resume frontier"
         );
     }
 
@@ -859,6 +941,7 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -899,6 +982,7 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -929,6 +1013,7 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -957,6 +1042,7 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Descending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -964,39 +1050,25 @@ mod tests {
         assert_eq!(items, vec![BUCKET_SIZE + 5, 2]);
     }
 
-    /// End-to-end: `buckets_with_watermarks` injects watermarks, then
-    /// `flatten_watermarked_buckets` flattens items and passes watermarks through.
-    /// Verifies edge trimming + marker interleaving in one composed test.
+    /// Flattening trims edge buckets while preserving already-clamped
+    /// evaluator watermarks and their ordering among items.
     #[tokio::test]
-    async fn buckets_with_watermarks_then_flatten_watermarked_buckets_ascending() {
+    async fn flatten_watermarked_buckets_ascending() {
         let range = 50u64..(2 * BUCKET_SIZE + 50_001);
-        let items = stream::iter(vec![
-            // bucket 0: bit 10 trimmed (< 50); 50 and bucket_size-1 kept.
-            Ok((0u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(10);
-                bm.insert(50);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
-            // bucket 1: middle, full pass-through.
-            Ok((1u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
-            // bucket 2: bit 50_001 trimmed (>= hi=50_001 relative).
-            Ok((2u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert(50_000);
-                bm.insert(50_001);
-                bm
-            })),
+        let marked_buckets = stream::iter(vec![
+            Ok::<_, LeafStop>(Watermarked::Item((
+                0,
+                make_bitmap(&[10, 50, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(BUCKET_SIZE)),
+            Ok(Watermarked::Item((
+                1,
+                make_bitmap(&[0, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(2 * BUCKET_SIZE)),
+            Ok(Watermarked::Item((2, make_bitmap(&[0, 50_000, 50_001])))),
+            Ok(Watermarked::Watermark(2 * BUCKET_SIZE + 50_001)),
         ]);
-        let marked_buckets =
-            buckets_with_watermarks(items, range.clone(), BUCKET_SIZE, ScanDirection::Ascending);
         let out: Vec<Watermarked<u64>> = flatten_watermarked_buckets(
             marked_buckets,
             range,
@@ -1006,9 +1078,7 @@ mod tests {
         .try_collect()
         .await
         .unwrap();
-        // Items are interleaved with watermarks at each bucket boundary.
-        // Watermark(p) is emitted AFTER the bucket's items so its arrival proves
-        // those items also passed.
+
         assert_eq!(
             out,
             vec![
@@ -1020,53 +1090,7 @@ mod tests {
                 Watermarked::Watermark(2 * BUCKET_SIZE),
                 Watermarked::Item(2 * BUCKET_SIZE),
                 Watermarked::Item(2 * BUCKET_SIZE + 50_000),
-                // Edge bucket watermark is clamped to range.end so cursors
-                // don't claim progress past the requested upper bound.
                 Watermarked::Watermark(2 * BUCKET_SIZE + 50_001),
-            ],
-        );
-    }
-
-    /// `buckets_with_watermarks` standalone: verify each bucket gets its own
-    /// `Watermarked::Watermark` immediately after, with no flattening / trimming.
-    /// This is the variant the rocksdb branch consumes directly.
-    #[tokio::test]
-    async fn buckets_with_watermarks_one_per_bucket_no_flatten() {
-        let items = stream::iter(vec![
-            Ok((0u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(1);
-                bm.insert(2);
-                bm
-            })),
-            Ok((3u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(5);
-                bm
-            })),
-        ]);
-        // Range extends past the last populated bucket (bucket 3 = positions
-        // [3*BUCKET_SIZE, 4*BUCKET_SIZE)); the final natural-EOF watermark
-        // caps at the request range boundary so resume cursors don't leave
-        // the empty tail (4*BUCKET_SIZE..5*BUCKET_SIZE) un-acknowledged.
-        let out: Vec<Watermarked<(u64, Vec<u32>)>> = buckets_with_watermarks(
-            items,
-            0..(5 * BUCKET_SIZE),
-            BUCKET_SIZE,
-            ScanDirection::Ascending,
-        )
-        .map_ok(|m| m.map_item(|(bid, bm)| (bid, bm.iter().collect::<Vec<_>>())))
-        .try_collect()
-        .await
-        .unwrap();
-        assert_eq!(
-            out,
-            vec![
-                Watermarked::Item((0, vec![1, 2])),
-                Watermarked::Watermark(BUCKET_SIZE),
-                Watermarked::Item((3, vec![5])),
-                Watermarked::Watermark(4 * BUCKET_SIZE),
-                Watermarked::Watermark(5 * BUCKET_SIZE),
             ],
         );
     }
@@ -1076,9 +1100,9 @@ mod tests {
         // Defensive runtime guard: a per-request budget smaller than the
         // query's leaf count would produce a cursorless SCAN_LIMIT
         // (merged watermarks stay None until every child reports). The
-        // eval surfaces this as a plain anyhow error — distinct from
-        // BitmapScanLimitExceeded — so the handler propagates it as
-        // Internal rather than SCAN_LIMIT.
+        // eval surfaces this as a plain anyhow error — distinct from a
+        // scan-limit stop — so the handler propagates it as Internal rather
+        // than SCAN_LIMIT.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([(
                 test_key(b"a"),
@@ -1096,13 +1120,14 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             0,
+            SkipPolicy::DRAIN_ONLY,
             move |m| *metrics_sink.lock().unwrap() = Some(m),
         );
         let err = drain_marked(stream).await.unwrap_err();
 
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(&err).is_none(),
-            "must NOT surface as BitmapScanLimitExceeded; would be cursorless SCAN_LIMIT"
+            matches!(err, ScanStop::Fault(_)),
+            "must be a Fault (cursorless), never a clean ScanLimit end"
         );
         assert!(
             err.to_string().contains("insufficient for"),
@@ -1119,8 +1144,8 @@ mod tests {
     #[tokio::test]
     async fn scan_budget_shared_across_dimensions() {
         // Three include dimensions with several buckets each. Budget = 4
-        // should be consumed across all per-dimension fetches before
-        // ScanLimitExceeded surfaces from the merged eval stream.
+        // should be consumed across all per-dimension fetches before a
+        // scan-limit stop surfaces from the merged eval stream.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -1151,22 +1176,23 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             4,
+            SkipPolicy::DRAIN_ONLY,
             move |m| *metrics_sink.lock().unwrap() = Some(m),
         );
         let err = drain_marked(stream).await.unwrap_err();
 
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(&err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, ScanStop::ScanLimit { .. }),
+            "expected ScanLimit, got {err:?}"
         );
         // All four buckets were evaluated through budgeted_bucket_stream
-        // before the fifth try_take() failed and surfaced BitmapScanLimitExceeded.
+        // before the fifth try_take() failed and surfaced a scan-limit stop.
         assert_eq!(metrics.lock().unwrap().unwrap().buckets_evaluated, 4);
     }
 
     /// Budget exhausting on an exclude leaf must NOT be mistaken for the
     /// exclude reaching its range terminus. With silent EOF semantics, includes
-    /// past the exclude cutoff would leak unfiltered. With `ScanLimitExceeded`,
+    /// past the exclude cutoff would leak unfiltered. With scan-limit errors,
     /// the error propagates and the eval pipeline short-circuits cleanly.
     #[tokio::test]
     async fn scan_budget_exclude_side_exhaustion_does_not_leak_includes() {
@@ -1190,7 +1216,7 @@ mod tests {
         // Budget = leaf count gives every leaf one bucket fetch (the
         // minimum the runtime guard allows; see
         // `scan_budget_below_unique_leaf_count_yields_misconfig_error`). Once
-        // the budget exhausts mid-scan, ScanLimitExceeded propagates
+        // the budget exhausts mid-scan, the scan-limit stop propagates
         // without the driver mistaking the exclude leaf's error for a
         // natural EOF.
         let stream = eval_bitmap_query_stream(
@@ -1200,6 +1226,7 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             2,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let result = drain_marked(stream).await;
@@ -1207,20 +1234,17 @@ mod tests {
         // Must error, not return Ok with leaked include rows.
         let err = result.expect_err("must surface scan-limit, not silently emit includes");
         assert!(
-            error_contains::<BitmapScanLimitExceeded>(&err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+            matches!(err, ScanStop::ScanLimit { .. }),
+            "expected ScanLimit, got {err:?}"
         );
     }
 
-    /// Disjoint-intersect: the leaves advance but the term matches nothing, so
-    /// no item is ever emitted. The driver's floor watermark must still surface
-    /// real progress before the budget error; otherwise handlers fall back to
-    /// the request lower bound and the client livelocks on retry.
+    /// Disjoint intersect with a large gap. The logical frontier jumps to the
+    /// leading edge of bucket 100 before physical catch-up drains the dense
+    /// sibling and exhausts the budget. The stopping round must not duplicate
+    /// that frontier as an in-band beacon.
     #[tokio::test]
-    async fn sparse_intersect_emits_frontier_watermark_before_scan_limit() {
-        // include "a" at buckets [0, 1, 2, ...], include "b" at bucket 100 —
-        // disjoint, so the driver advances the floor through a's buckets one by
-        // one and emits zero output. Budget=4 forces error mid-scan.
+    async fn sparse_intersect_bundles_frontier_in_scan_limit() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -1248,35 +1272,42 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             4,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
-        // Don't try_collect — short-circuiting on Err would drop the
-        // pre-error watermark we're verifying.
-        let all: Vec<Result<Watermarked<u64>>> = stream.collect().await;
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
-        let last_ok = all
-            .iter()
-            .rev()
-            .find_map(|r| r.as_ref().ok())
-            .expect("expected a watermark item before the error");
-        match last_ok {
-            Watermarked::Watermark(p) => {
-                assert!(
-                    *p > 0,
-                    "frontier watermark must reflect real progress (got {p})"
-                );
-            }
-            Watermarked::Item(_) => panic!("disjoint intersect must not emit items"),
-        }
+        assert!(
+            all.iter().all(|r| !matches!(r, Ok(Watermarked::Item(_)))),
+            "disjoint intersect must not emit items"
+        );
         let err = all
             .last()
             .expect("non-empty")
             .as_ref()
             .expect_err("scan must terminate with an error");
-        assert!(
-            error_contains::<BitmapScanLimitExceeded>(err).is_some(),
-            "expected BitmapScanLimitExceeded, got {err:?}"
+        let scan_frontier = match err {
+            ScanStop::ScanLimit { scan_frontier } => *scan_frontier,
+            other => panic!("expected ScanLimit, got {other:?}"),
+        };
+        assert_eq!(
+            scan_frontier,
+            100 * BUCKET_SIZE,
+            "terminal must carry the logically advanced merged floor"
         );
+        let watermarks: Vec<u64> = all
+            .iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Watermark(position)) => Some(*position),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            watermarks,
+            vec![100 * BUCKET_SIZE],
+            "the stopping round must not append another frontier beacon"
+        );
+        assert_eq!(all.len(), watermarks.len() + 1);
     }
 
     #[tokio::test]
@@ -1296,20 +1327,19 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
 
         // Items at the bits within each of the three populated buckets.
         assert_eq!(items, vec![1, 3 * BUCKET_SIZE + 2, 7 * BUCKET_SIZE + 3]);
-        // The flat driver emits the floor bucket's leading edge (pre) and
-        // trailing edge (post) each round, so each populated bucket [0, 3, 7]
-        // contributes both: pre/post = (0, bs), (3bs, 4bs), (7bs, 8bs). The
-        // final post(7)=8bs is the range terminus.
+        // The request floor is suppressed; sparse leading edges and every
+        // post-bucket edge are emitted eagerly. The last bucket itself earns
+        // the range terminus.
         assert_eq!(
             watermarks,
             vec![
-                0,
                 BUCKET_SIZE,
                 3 * BUCKET_SIZE,
                 4 * BUCKET_SIZE,
@@ -1320,7 +1350,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn eval_emits_watermarks_at_bucket_boundaries_descending() {
+    async fn descending_exclusive_upper_bound_is_not_progress() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([(
                 test_key(b"a"),
@@ -1336,18 +1366,17 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Descending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
 
         assert_eq!(items, vec![7 * BUCKET_SIZE + 3, 3 * BUCKET_SIZE + 2, 1]);
-        // Descending pre/post per matched bucket [7, 3, 0]: pre is the high
-        // edge, post the low edge — (8bs, 7bs), (4bs, 3bs), (1bs, 0). pre(7)=8bs
-        // is range.end; post(0)=0 is the range terminus.
+        // The exclusive upper request position is not earned progress: the
+        // first beacon follows the highest bucket's items at its low edge.
         assert_eq!(
             watermarks,
             vec![
-                8 * BUCKET_SIZE,
                 7 * BUCKET_SIZE,
                 4 * BUCKET_SIZE,
                 3 * BUCKET_SIZE,
@@ -1358,12 +1387,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn eval_emits_per_source_watermarks_and_final_eof_when_no_bucket_yielded() {
-        // Two include dimensions whose buckets never align -> the term
-        // yields no Items. The floor watermark (pre+post per bucket) still
-        // propagates the actual scan progress, and the driver caps the stream
-        // with a final range_end watermark on natural EOF so clients see "scan
-        // covered the range with no matches."
+    async fn natural_completion_omits_terminus_but_retains_earned_progress() {
+        // The include dimensions never align, so the evaluator emits no items.
+        // Retiring the term is a natural terminal boundary, not additional scan
+        // progress; the last eager beacon is the final position both live leaves
+        // actually established before one reached EOF.
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
                 (
@@ -1388,33 +1416,21 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
 
         assert!(items.is_empty(), "disjoint intersect must not emit items");
-        // Watermarks reflect real per-source progress as intersect drops
-        // misaligned buckets, then the eval root adds the final range_end.
-        assert!(
-            !watermarks.is_empty(),
-            "expected per-source watermarks to propagate, got none"
-        );
-        let mut prev = 0u64;
-        for w in &watermarks {
-            assert!(
-                *w >= prev,
-                "ascending watermarks must be monotonic, got {watermarks:?}"
-            );
-            assert!(
-                *w <= 6 * BUCKET_SIZE,
-                "watermark exceeds range.end ({watermarks:?})"
-            );
-            prev = *w;
-        }
         assert_eq!(
-            *watermarks.last().unwrap(),
-            6 * BUCKET_SIZE,
-            "final watermark must be range.end on natural EOF"
+            watermarks,
+            vec![
+                BUCKET_SIZE,
+                2 * BUCKET_SIZE,
+                3 * BUCKET_SIZE,
+                4 * BUCKET_SIZE,
+                5 * BUCKET_SIZE,
+            ],
         );
     }
 
@@ -1439,18 +1455,17 @@ mod tests {
             BUCKET_SIZE,
             ScanDirection::Ascending,
             u64::MAX,
+            SkipPolicy::DRAIN_ONLY,
             |_| {},
         );
         let all: Vec<Watermarked<u64>> = stream.try_collect().await.unwrap();
 
-        // Per-source pre+post watermarks: each bucket emits Watermark(pre),
-        // Item(s)…, Watermark(post). pre(0)=0, post(0)=BUCKET_SIZE,
-        // pre(1)=BUCKET_SIZE (dup of post(0), filtered), post(1)=2*BUCKET_SIZE,
-        // EOF=2*BUCKET_SIZE (dup, filtered).
+        // The request floor is not scan progress. Each bucket's Items precede
+        // its post-bucket watermark, and the shared edge between adjacent
+        // buckets is emitted only once.
         assert_eq!(
             all,
             vec![
-                Watermarked::Watermark(0),
                 Watermarked::Item(10),
                 Watermarked::Item(20),
                 Watermarked::Item(30),
@@ -1463,32 +1478,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn buckets_with_watermarks_then_flatten_watermarked_buckets_descending() {
+    async fn flatten_watermarked_buckets_descending() {
         let range = 50u64..(2 * BUCKET_SIZE + 50_001);
-        let items = stream::iter(vec![
-            Ok((2u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert(50_000);
-                bm.insert(50_001);
-                bm
-            })),
-            Ok((1u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(0);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
-            Ok((0u64, {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(10);
-                bm.insert(50);
-                bm.insert((BUCKET_SIZE - 1) as u32);
-                bm
-            })),
+        let marked_buckets = stream::iter(vec![
+            Ok::<_, LeafStop>(Watermarked::Item((2, make_bitmap(&[0, 50_000, 50_001])))),
+            Ok(Watermarked::Watermark(2 * BUCKET_SIZE)),
+            Ok(Watermarked::Item((
+                1,
+                make_bitmap(&[0, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(BUCKET_SIZE)),
+            Ok(Watermarked::Item((
+                0,
+                make_bitmap(&[10, 50, (BUCKET_SIZE - 1) as u32]),
+            ))),
+            Ok(Watermarked::Watermark(50)),
         ]);
-        let marked_buckets =
-            buckets_with_watermarks(items, range.clone(), BUCKET_SIZE, ScanDirection::Descending);
         let out: Vec<Watermarked<u64>> = flatten_watermarked_buckets(
             marked_buckets,
             range,
@@ -1498,8 +1503,7 @@ mod tests {
         .try_collect()
         .await
         .unwrap();
-        // Descending: watermark(p) = "all items >= p have been emitted." After
-        // bucket 2 yields, frontier = 2 * BUCKET_SIZE (bucket 2's low edge).
+
         assert_eq!(
             out,
             vec![
@@ -1511,45 +1515,416 @@ mod tests {
                 Watermarked::Watermark(BUCKET_SIZE),
                 Watermarked::Item(BUCKET_SIZE - 1),
                 Watermarked::Item(50),
-                // Edge bucket watermark is clamped to range.start so cursors
-                // don't claim progress past the requested lower bound (in
-                // descending: lower position is "further past").
                 Watermarked::Watermark(50),
             ],
         );
     }
 
-    /// Single-error `collapse` returns the inner error directly so the
-    /// common case preserves `downcast_ref` on the concrete error type.
+    /// A lone leaf budget stop becomes a merged scan limit carrying the exact
+    /// floor supplied by the evaluator.
     #[test]
-    fn multi_error_collapses_single() {
-        let err = MultiError::collapse(vec![anyhow::Error::new(BitmapScanLimitExceeded)]);
-        assert!(err.downcast_ref::<MultiError>().is_none());
-        assert!(err.downcast_ref::<BitmapScanLimitExceeded>().is_some());
-        assert!(error_contains::<BitmapScanLimitExceeded>(&err).is_some());
+    fn collapse_single_budget_stop_binds_frontier() {
+        assert!(matches!(
+            collapse(vec![LeafStop::BudgetExhausted], 17 * BUCKET_SIZE),
+            ScanStop::ScanLimit { scan_frontier } if scan_frontier == 17 * BUCKET_SIZE
+        ));
     }
 
-    /// Multi-error `collapse` wraps; `error_contains` looks through the
-    /// aggregate to find the requested error type from any sibling.
+    /// Several leaf budget stops collapse to one scan limit without losing the
+    /// evaluator's merged floor.
     #[test]
-    fn multi_error_error_contains_finds_through_aggregate() {
-        let err = MultiError::collapse(vec![
-            anyhow::anyhow!("first transport"),
-            anyhow::Error::new(BitmapScanLimitExceeded),
-        ]);
-        assert!(err.downcast_ref::<MultiError>().is_some());
-        // Without `error_contains` you'd miss it — top-level isn't BSLE.
-        assert!(err.downcast_ref::<BitmapScanLimitExceeded>().is_none());
-        assert!(error_contains::<BitmapScanLimitExceeded>(&err).is_some());
+    fn collapse_all_budget_stops_bind_frontier() {
+        assert!(matches!(
+            collapse(
+                vec![LeafStop::BudgetExhausted, LeafStop::BudgetExhausted],
+                23 * BUCKET_SIZE
+            ),
+            ScanStop::ScanLimit { scan_frontier } if scan_frontier == 23 * BUCKET_SIZE
+        ));
     }
 
-    /// Display includes each inner error so logs are useful when the
-    /// aggregate hits the top level.
+    fn gap_probe_policy() -> SkipPolicy {
+        SkipPolicy {
+            drain_probe_rows: std::num::NonZeroU32::new(2),
+        }
+    }
+
+    fn skewed_and_source() -> TestBucketSource {
+        TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (test_key(b"a"), vec![(0, vec![1]), (50, vec![1])]),
+                (
+                    test_key(b"b"),
+                    (0..=50).map(|bucket| (bucket, vec![1])).collect(),
+                ),
+            ])),
+        }
+    }
+
+    #[tokio::test]
+    async fn skewed_and_seeks_past_dead_gap() {
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+        ])
+        .unwrap();
+        let (metrics_tx, metrics_rx) = std::sync::mpsc::channel();
+        let stream = eval_bitmap_query_stream(
+            skewed_and_source(),
+            query,
+            0..(51 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            1_000,
+            gap_probe_policy(),
+            move |observed| metrics_tx.send(observed).unwrap(),
+        );
+        let (items, watermarks) = drain_marked(stream).await.unwrap();
+
+        assert_eq!(items, vec![1, 50 * BUCKET_SIZE + 1]);
+        assert_eq!(
+            watermarks,
+            vec![BUCKET_SIZE, 50 * BUCKET_SIZE, 51 * BUCKET_SIZE]
+        );
+        assert_eq!(
+            metrics_rx.recv().unwrap(),
+            BitmapScanMetrics {
+                buckets_evaluated: 7,
+                buckets_discarded: 3,
+                leaf_seeks: 1,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn skewed_and_seeks_past_dead_gap_descending() {
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+        ])
+        .unwrap();
+        let (metrics_tx, metrics_rx) = std::sync::mpsc::channel();
+        let stream = eval_bitmap_query_stream(
+            skewed_and_source(),
+            query,
+            0..(51 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Descending,
+            1_000,
+            gap_probe_policy(),
+            move |observed| metrics_tx.send(observed).unwrap(),
+        );
+        let (items, watermarks) = drain_marked(stream).await.unwrap();
+
+        assert_eq!(items, vec![50 * BUCKET_SIZE + 1, 1]);
+        assert_eq!(watermarks, vec![50 * BUCKET_SIZE, BUCKET_SIZE, 0]);
+        assert_eq!(
+            metrics_rx.recv().unwrap(),
+            BitmapScanMetrics {
+                buckets_evaluated: 7,
+                buckets_discarded: 3,
+                leaf_seeks: 1,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn budget_death_mid_gap_carries_jumped_frontier() {
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+        ])
+        .unwrap();
+        let first: Vec<_> = eval_bitmap_query_stream(
+            skewed_and_source(),
+            query.clone(),
+            0..(51 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            5,
+            gap_probe_policy(),
+            |_| {},
+        )
+        .collect()
+        .await;
+        let first_items: Vec<_> = first
+            .iter()
+            .filter_map(|result| match result {
+                Ok(Watermarked::Item(item)) => Some(*item),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(first_items, vec![1]);
+        assert!(matches!(
+            first.last(),
+            Some(Err(ScanStop::ScanLimit { scan_frontier }))
+                if *scan_frontier == 50 * BUCKET_SIZE
+        ));
+
+        let resumed = eval_bitmap_query_stream(
+            skewed_and_source(),
+            query,
+            (50 * BUCKET_SIZE)..(51 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            100,
+            gap_probe_policy(),
+            |_| {},
+        );
+        let (resumed_items, _) = drain_marked(resumed).await.unwrap();
+        assert_eq!(resumed_items, vec![50 * BUCKET_SIZE + 1]);
+    }
+
+    #[tokio::test]
+    async fn shared_leaf_never_skips_past_its_own_terms_candidate() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (test_key(b"a"), vec![(0, vec![1]), (50, vec![1])]),
+                (test_key(b"e"), vec![(10, vec![3])]),
+            ])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), exclude(b"e")]).unwrap(),
+            BitmapTerm::new(vec![include(b"e")]).unwrap(),
+        ])
+        .unwrap();
+        let (metrics_tx, metrics_rx) = std::sync::mpsc::channel();
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(51 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            100,
+            gap_probe_policy(),
+            move |observed| metrics_tx.send(observed).unwrap(),
+        );
+        let (items, _) = drain_marked(stream).await.unwrap();
+
+        assert_eq!(items, vec![1, 10 * BUCKET_SIZE + 3, 50 * BUCKET_SIZE + 1]);
+        let metrics = metrics_rx.recv().expect("metrics callback ran");
+        assert_eq!(metrics.buckets_discarded, 0);
+        assert_eq!(metrics.leaf_seeks, 0);
+    }
+
+    #[tokio::test]
+    async fn exclude_leaf_drains_dead_rows_when_dragged() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (test_key(b"a"), vec![(0, vec![1]), (50, vec![1])]),
+                (test_key(b"e"), vec![(10, vec![3])]),
+            ])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), exclude(b"e")]).unwrap(),
+        ])
+        .unwrap();
+        let (metrics_tx, metrics_rx) = std::sync::mpsc::channel();
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(51 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            100,
+            gap_probe_policy(),
+            move |observed| metrics_tx.send(observed).unwrap(),
+        );
+        let (items, _) = drain_marked(stream).await.unwrap();
+
+        assert_eq!(items, vec![1, 50 * BUCKET_SIZE + 1]);
+        let metrics = metrics_rx.recv().expect("metrics callback ran");
+        assert_eq!(metrics.buckets_discarded, 1);
+        assert_eq!(metrics.leaf_seeks, 0);
+    }
+
+    /// A storage fault co-occurring with budget exhaustion must win: masking
+    /// the fault as a graceful scan limit would silently corrupt results.
     #[test]
-    fn multi_error_display_lists_inner() {
-        let err = MultiError::collapse(vec![anyhow::anyhow!("alpha"), anyhow::anyhow!("beta")]);
-        let s = err.to_string();
-        assert!(s.contains("alpha"));
-        assert!(s.contains("beta"));
+    fn collapse_fault_outranks_budget_stop() {
+        let collapsed = collapse(
+            vec![
+                LeafStop::BudgetExhausted,
+                LeafStop::Fault(anyhow::anyhow!("storage boom")),
+            ],
+            7,
+        );
+        match collapsed {
+            ScanStop::Fault(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Fault to win, got {other:?}"),
+        }
+    }
+
+    /// A storage fault outranks both budget exhaustion and cancellation.
+    #[test]
+    fn collapse_fault_outranks_budget_stop_and_cancelled() {
+        let collapsed = collapse(
+            vec![
+                LeafStop::BudgetExhausted,
+                LeafStop::Cancelled,
+                LeafStop::Fault(anyhow::anyhow!("storage boom")),
+            ],
+            11,
+        );
+        match collapsed {
+            ScanStop::Fault(e) => assert!(e.to_string().contains("storage boom")),
+            other => panic!("expected Fault to win, got {other:?}"),
+        }
+    }
+
+    /// Budget exhaustion outranks cancellation because it preserves a usable
+    /// merged resume frontier.
+    #[test]
+    fn collapse_budget_stop_outranks_cancelled() {
+        assert!(matches!(
+            collapse(vec![LeafStop::Cancelled, LeafStop::BudgetExhausted], 29),
+            ScanStop::ScanLimit { scan_frontier: 29 }
+        ));
+    }
+
+    /// Cancellation remains cancellation when no higher-precedence leaf stop
+    /// occurred in the evaluator round.
+    #[test]
+    fn collapse_all_cancelled() {
+        assert!(matches!(
+            collapse(vec![LeafStop::Cancelled, LeafStop::Cancelled], 31),
+            ScanStop::Cancelled
+        ));
+    }
+
+    /// Several concurrent faults combine into one terminal fault that retains
+    /// every leaf's message rather than dropping all but one.
+    #[test]
+    fn collapse_combines_concurrent_faults() {
+        let collapsed = collapse(
+            vec![
+                LeafStop::Fault(anyhow::anyhow!("boom one")),
+                LeafStop::Fault(anyhow::anyhow!("boom two")),
+            ],
+            37,
+        );
+        match collapsed {
+            ScanStop::Fault(e) => {
+                let s = e.to_string();
+                assert!(s.contains("boom one"), "missing first fault: {s}");
+                assert!(s.contains("boom two"), "missing second fault: {s}");
+            }
+            other => panic!("expected combined Fault, got {other:?}"),
+        }
+    }
+
+    /// `From<anyhow::Error>` on the leaf channel preserves backend failures as
+    /// leaf faults rather than manufacturing a terminal disposition.
+    #[test]
+    fn from_anyhow_funnels_to_leaf_fault() {
+        match LeafStop::from(anyhow::anyhow!("leaf storage boom")) {
+            LeafStop::Fault(e) => assert!(e.to_string().contains("leaf storage boom")),
+            other => panic!("expected leaf Fault, got {other:?}"),
+        }
+    }
+
+    /// `From<anyhow::Error>` on the merged channel preserves backend failures
+    /// as terminal faults rather than manufacturing a scan limit or cancel.
+    #[test]
+    fn from_anyhow_funnels_to_scan_fault() {
+        match ScanStop::from(anyhow::anyhow!("merged storage boom")) {
+            ScanStop::Fault(e) => assert!(e.to_string().contains("merged storage boom")),
+            other => panic!("expected scan Fault, got {other:?}"),
+        }
+    }
+
+    fn stream_items(all: &[Result<Watermarked<u64>, ScanStop>]) -> Vec<u64> {
+        all.iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Item(v)) => Some(*v),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Absent-dimension semantics (mirrors the iter-side tests): an include whose key has no rows
+    /// at all annihilates its conjunction (`∩ ∅ = ∅`). Pinned explicitly because this shape only
+    /// arises when a queried key was never written (e.g. a sender with no transactions), which
+    /// live-cluster tests never exercise.
+    #[tokio::test]
+    async fn absent_include_annihilates_term() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query =
+            BitmapQuery::new(vec![BitmapTerm::new(vec![include(b"ghost")]).unwrap()]).unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(2 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            SkipPolicy::DRAIN_ONLY,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
+        let items = stream_items(&all);
+
+        assert!(
+            items.is_empty(),
+            "absent include must annihilate: {items:?}"
+        );
+    }
+
+    /// A present include cannot rescue a conjunction whose other include is absent — the
+    /// intersection is still empty.
+    #[tokio::test]
+    async fn absent_include_annihilates_term_despite_present_include() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"ghost")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(2 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            SkipPolicy::DRAIN_ONLY,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
+        let items = stream_items(&all);
+
+        assert!(
+            items.is_empty(),
+            "absent include must annihilate: {items:?}"
+        );
+    }
+
+    /// An exclude whose key has no rows subtracts nothing (`∖ ∅`): the present include's matches
+    /// pass through untouched.
+    #[tokio::test]
+    async fn absent_exclude_is_noop() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), exclude(b"ghost")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(2 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            SkipPolicy::DRAIN_ONLY,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
+
+        assert_eq!(stream_items(&all), vec![1, 2]);
     }
 }

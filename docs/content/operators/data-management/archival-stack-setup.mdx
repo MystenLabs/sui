@@ -1,7 +1,42 @@
 ---
 title: Running the Archival Store and Service
-description: Setup instructions for running the archival indexer, Bigtable store, and gRPC service in production.
-keywords: [archival, bigtable, grpc, kvstore, indexer, setup, historical data]
+description: >-
+  Setup instructions for running the archival indexer, Bigtable store, and gRPC
+  service in production.
+keywords:
+  - archival
+  - bigtable
+  - grpc
+  - kvstore
+  - indexer
+  - setup
+  - historical data
+goal:
+  description: >-
+    Operator understands setup instructions for running the archival indexer,
+    Bigtable store, and gRPC service in production
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I set up the Sui Archival Store and Service?
+  - What are the components of the Sui archival stack?
+  - How do I run the archival indexer in production?
+answer: >-
+  See [Archival Store and Service](/develop/accessing-data/archival-store) for
+  more information on the stack.
 ---
 
 <ImportContent source="indexer-archival" mode="snippet" />

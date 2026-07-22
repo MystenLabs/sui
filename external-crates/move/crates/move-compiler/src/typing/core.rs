@@ -156,6 +156,8 @@ pub struct Context<'env, 'outer> {
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
+    /// True only while speculatively typing an IDE macro body with diagnostics thrown away.
+    pub ide_typing_macro_body: bool,
     max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Type>,
@@ -546,6 +548,7 @@ impl<'env> ModuleContext<'env> {
             use_funs,
             current_function: None,
             in_macro_function: false,
+            ide_typing_macro_body: false,
             max_variable_color: RefCell::new(0),
             return_type: None,
             locals: UniqueMap::new(),
@@ -755,8 +758,16 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.outer.current_module.as_ref()
     }
 
+    /// Checks the current feature using the currently-registered diagnostic reporter.
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
-        self.outer.check_feature(package, feature, loc)
+        self.env()
+            .check_feature(&self.reporter, package, feature, loc)
+    }
+
+    /// Asserts that normal compiler errors already exist or IDE macro-body diagnostics are discarded.
+    pub fn assert_has_errors(&self, msg: &str) {
+        let has_errors = self.env().has_errors() || self.ide_typing_macro_body;
+        assert!(has_errors, "{msg}");
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -1254,7 +1265,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
         }
 
         different.append(&mut same_filtered);
-        different.sort_by(|a1, a2| a1.method_name.cmp(&a2.method_name));
+        different.sort_by_key(|a1| a1.method_name);
         different
     }
 

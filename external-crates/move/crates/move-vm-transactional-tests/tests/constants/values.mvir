@@ -1,0 +1,45 @@
+//# init --addresses Foo=0x99
+
+//# run
+// Each constant, loaded via LdConst, must equal the same value built from a
+// literal/expression at runtime. Cross-checks the constant parsing and serialization against the
+// expressions.
+mvir 0x42::m {
+    const B: bool          = true;
+    const N8: u8           = 7u8;
+    const N16: u16         = 7u16;
+    const N32: u32         = 7u32;
+    const N64: u64         = 42u64;
+    const N128: u128       = 42u128;
+    const N256: u256       = 42u256;
+    const ADDR: address    = 0x42;
+    const ADDR_AT: address = @0x43;
+    const ADDR_NAMED: address = @Foo;
+    const BYTES: vector<u8> = h"deadbeef";
+    const NUMS: vector<u64> = vector(1u64, 2u64, 3u64);
+    const BOOLS: vector<bool> = vector(true, false);
+    const ADDRS: vector<address> = vector(@0x1, @0x2);
+    const EMPTY: vector<u8> = vector();
+    const NESTED: vector<vector<u8>> = vector(vector(1u8), vector(2u8));
+
+    entry fun check() {
+    label b0:
+        assert(copy(B) == true, 0);
+        assert(copy(N8) == 7u8, 1);
+        assert(copy(N16) == 7u16, 2);
+        assert(copy(N32) == 7u32, 3);
+        assert(copy(N64) == 42u64, 4);
+        assert(copy(N128) == 42u128, 5);
+        assert(copy(N256) == 42u256, 6);
+        assert(copy(ADDR) == @0x42, 7);
+        assert(copy(ADDR_AT) == @0x43, 8);
+        assert(copy(ADDR_NAMED) == @Foo, 9);
+        assert(copy(BYTES) == vector<u8; 4>(222u8, 173u8, 190u8, 239u8), 10);
+        assert(copy(NUMS) == vector<u64; 3>(1u64, 2u64, 3u64), 11);
+        assert(copy(BOOLS) == vector<bool; 2>(true, false), 12);
+        assert(copy(ADDRS) == vector<address; 2>(@0x1, @0x2), 13);
+        assert(copy(EMPTY) == vector<u8; 0>(), 14);
+        assert(copy(NESTED) == vector<vector<u8>; 2>(vector<u8; 1>(1u8), vector<u8; 1>(2u8)), 15);
+        return;
+    }
+}

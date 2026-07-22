@@ -7,7 +7,7 @@
 // accumulator event and gas coin charge reflect the post-abort state, not
 // the pre-abort attempt.
 
-//# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::boom;

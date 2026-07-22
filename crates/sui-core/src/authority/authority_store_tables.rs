@@ -12,12 +12,12 @@ use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
+use sui_types::messages_consensus::SharedTransactionDenyConfig;
 use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::{
-    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
-    read_size_from_env,
-};
+use typed_store::rocks::{DBBatch, DBMap, MetricConf};
+#[cfg(not(tidehunter))]
+use typed_store::rocks::{DBMapTableConfigMap, DBOptions, default_db_options, read_size_from_env};
 use typed_store::traits::Map;
 
 use crate::authority::authority_store_types::{
@@ -26,9 +26,13 @@ use crate::authority::authority_store_types::{
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::{DBMapUtils, DbIterator};
 
+#[cfg(not(tidehunter))]
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
+#[cfg(not(tidehunter))]
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
+#[cfg(not(tidehunter))]
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
+#[cfg(not(tidehunter))]
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 
 /// Options to apply to every column family of the `perpetual` DB.
@@ -43,6 +47,7 @@ pub struct AuthorityPerpetualTablesOptions {
 }
 
 impl AuthorityPerpetualTablesOptions {
+    #[cfg(not(tidehunter))]
     fn apply_to(&self, mut db_options: DBOptions) -> DBOptions {
         if !self.enable_write_stall {
             db_options = db_options.disable_write_throttling();
@@ -69,10 +74,10 @@ pub struct AuthorityPerpetualTables {
     /// objects are still accessible!
     pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
 
-    /// This is a map between object references of currently active objects that can be mutated.
-    ///
-    /// For old epochs, it may also contain the transaction that they are lock on for use by this
-    /// specific validator. The transaction locks themselves are now in AuthorityPerEpochStore.
+    /// DEPRECATED: markers of live address-owned object refs. Nothing reads this table
+    /// anymore; writes are still maintained so that rolling back to a previous binary
+    /// finds a correctly maintained table. The table (and its writes) will be removed
+    /// entirely in a follow-up once this version is deployed everywhere.
     #[rename = "owned_object_transaction_locks"]
     pub(crate) live_owned_object_markers: DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
 
@@ -121,20 +126,6 @@ pub struct AuthorityPerpetualTables {
     /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
     pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 
-    /// A singleton table recording the highest checkpoint whose transaction
-    /// outputs (objects, effects, etc.) are durably committed to this store.
-    /// It is written in the *same* atomic batch as those outputs (see
-    /// `AuthorityStore::build_db_batch` and the checkpoint executor), so it is
-    /// always consistent with the live object set even after an unclean stop.
-    ///
-    /// This differs from the checkpoint store's `highest_executed` watermark,
-    /// which is bumped in a separate write after the outputs are committed: an
-    /// abrupt stop can leave the object writes durable while `highest_executed`
-    /// still lags. Consumers that read the live object set directly (e.g. the
-    /// embedded rpc-store's bulk restore) use this watermark instead, so they
-    /// never observe objects beyond the checkpoint they think they are at.
-    pub(crate) highest_committed_checkpoint: DBMap<(), CheckpointSequenceNumber>,
-
     /// Expected total amount of SUI in the network. This is expected to remain constant
     /// throughout the lifetime of the network. We check it at the end of each epoch if
     /// expensive checks are enabled. We cannot use 10B today because in tests we often
@@ -158,6 +149,33 @@ pub struct AuthorityPerpetualTables {
     /// Used to support address balance gas payments feature.
     /// This table uses epoch-prefixed keys to support efficient pruning via range delete.
     pub(crate) executed_transaction_digests: DBMap<(EpochId, TransactionDigest), ()>,
+
+    /// A singleton table recording the highest checkpoint whose transaction
+    /// outputs (objects, effects, etc.) are durably committed to this store.
+    /// It is written in the *same* atomic batch as those outputs (see
+    /// `AuthorityStore::build_db_batch` and the checkpoint executor), so it is
+    /// always consistent with the live object set even after an unclean stop.
+    ///
+    /// This differs from the checkpoint store's `highest_executed` watermark,
+    /// which is bumped in a separate write after the outputs are committed: an
+    /// abrupt stop can leave the object writes durable while `highest_executed`
+    /// still lags. Consumers that read the live object set directly (e.g. the
+    /// embedded rpc-store's bulk restore) use this watermark instead, so they
+    /// never observe objects beyond the checkpoint they think they are at.
+    ///
+    /// IMPORTANT: TideHunter keyspaces are order-sensitive once written to disk.
+    /// Keep new keyspaces append-only to preserve compatibility with existing DBs.
+    pub(crate) highest_committed_checkpoint: DBMap<(), CheckpointSequenceNumber>,
+
+    /// Most recent `UpdateTransactionDenyConfig` consensus message accepted from each
+    /// allowlisted peer authority. Persisted across epochs so we can rebuild the
+    /// merged effective deny config after a node restart. Pruned at epoch transitions
+    /// when a peer is no longer in the active committee.
+    pub(crate) shared_transaction_deny_configs: DBMap<AuthorityName, SharedTransactionDenyConfig>,
+
+    /// Singleton: the highest generation this node has ever broadcast in an
+    /// `UpdateTransactionDenyConfig` message.
+    pub(crate) last_broadcast_deny_generation: DBMap<(), u64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -227,10 +245,10 @@ impl AuthorityPerpetualTables {
             let mut previous: Option<&[u8]> = None;
             const OID_SIZE: usize = 32;
             for key in iter.rev() {
-                if let Some(prev) = previous {
-                    if prev == &key[..OID_SIZE] {
-                        continue;
-                    }
+                if let Some(prev) = previous
+                    && prev == &key[..OID_SIZE]
+                {
+                    continue;
                 }
                 previous = Some(&key[..OID_SIZE]);
                 retain.insert(key.clone());
@@ -376,10 +394,6 @@ impl AuthorityPerpetualTables {
                 ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
-                "highest_committed_checkpoint".to_string(),
-                ThConfig::new(0, 1, KeyType::uniform(1)),
-            ),
-            (
                 "expected_network_sui_amount".to_string(),
                 ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
@@ -429,6 +443,21 @@ impl AuthorityPerpetualTables {
                         true,
                     ),
                 ),
+            ),
+            (
+                "highest_committed_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
+            (
+                "shared_transaction_deny_configs".to_string(),
+                // AuthorityName encodes to 104 bytes via BCS (8-byte tuple-struct
+                // prefix + 96-byte BLS12381 pubkey), matching authority_capabilities_v2.
+                // Tiny table (one row per allowlisted committee member).
+                ThConfig::new(104, 1, KeyType::uniform(1)),
+            ),
+            (
+                "last_broadcast_deny_generation".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
         ];
         Self::open_tables_read_write(
@@ -941,6 +970,7 @@ impl Iterator for LiveSetIter<'_> {
 }
 
 // These functions are used to initialize the DB tables
+#[cfg(not(tidehunter))]
 fn owned_object_transaction_locks_table_config(db_options: DBOptions) -> DBOptions {
     DBOptions {
         options: db_options
@@ -952,12 +982,14 @@ fn owned_object_transaction_locks_table_config(db_options: DBOptions) -> DBOptio
     }
 }
 
+#[cfg(not(tidehunter))]
 fn objects_table_config(db_options: DBOptions) -> DBOptions {
     db_options
         .optimize_for_write_throughput()
         .optimize_for_read(read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024))
 }
 
+#[cfg(not(tidehunter))]
 fn transactions_table_config(db_options: DBOptions) -> DBOptions {
     db_options
         .optimize_for_write_throughput()
@@ -966,6 +998,7 @@ fn transactions_table_config(db_options: DBOptions) -> DBOptions {
         )
 }
 
+#[cfg(not(tidehunter))]
 fn effects_table_config(db_options: DBOptions) -> DBOptions {
     db_options
         .optimize_for_write_throughput()

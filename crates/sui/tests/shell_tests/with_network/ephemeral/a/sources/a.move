@@ -3,5 +3,4 @@
 
 module a::a;
 
-public fun a() {
-}
+public fun a() {}

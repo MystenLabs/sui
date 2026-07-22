@@ -55,6 +55,11 @@ pub use generated::{
 };
 pub use server::{GetKnownPeersRequestV3, GetKnownPeersResponseV2, GetKnownPeersResponseV3};
 
+/// Per-source P2P addresses for trusted peers, keyed by peer then by address source.
+/// Returned by [`Sender::trusted_peer_p2p_addresses`].
+pub type TrustedPeerP2pAddresses =
+    BTreeMap<PeerId, BTreeMap<AddressSource, Vec<anemo::types::Address>>>;
+
 /// Message types for the discovery system mailbox.
 #[derive(Debug)]
 pub enum DiscoveryMessage {
@@ -73,6 +78,11 @@ pub enum DiscoveryMessage {
     TrustedPeersUpdated,
     /// A peer has been reported as continuously failing, triggering disconnect and cooldown.
     PeerFailureReport { peer_id: PeerId },
+    /// Request a snapshot of per-source P2P addresses, for trusted peers with at least one
+    /// recorded address.
+    GetTrustedPeerP2pAddresses {
+        reply: oneshot::Sender<TrustedPeerP2pAddresses>,
+    },
 }
 
 /// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
@@ -116,6 +126,22 @@ impl Sender {
         let _ = self
             .sender
             .try_send(DiscoveryMessage::PeerFailureReport { peer_id });
+    }
+
+    /// Snapshot of per-source P2P addresses for trusted peers only (configured/seed/allowlisted
+    /// peers and on-chain validators). Used by the address prober to enumerate probe candidates;
+    /// returns an empty map if the discovery event loop has shut down.
+    pub async fn trusted_peer_p2p_addresses(&self) -> TrustedPeerP2pAddresses {
+        let (s, r) = oneshot::channel();
+        if self
+            .sender
+            .send(DiscoveryMessage::GetTrustedPeerP2pAddresses { reply: s })
+            .await
+            .is_err()
+        {
+            return TrustedPeerP2pAddresses::default();
+        }
+        r.await.unwrap_or_default()
     }
 }
 
@@ -428,7 +454,6 @@ impl DiscoveryEventLoop {
             DiscoveryMessage::ReceivedNodeInfo { peer_info } => {
                 let changed = update_known_peers_versioned(
                     self.state.clone(),
-                    self.metrics.clone(),
                     vec![*peer_info],
                     self.configured_peers.clone(),
                     &self.chain_peers,
@@ -444,7 +469,22 @@ impl DiscoveryEventLoop {
             DiscoveryMessage::PeerFailureReport { peer_id } => {
                 self.handle_peer_failure_report(peer_id);
             }
+            DiscoveryMessage::GetTrustedPeerP2pAddresses { reply } => {
+                let _ = reply.send(self.trusted_peer_p2p_addresses());
+            }
         }
+    }
+
+    fn trusted_peer_p2p_addresses(&self) -> TrustedPeerP2pAddresses {
+        let state = self.state.read().unwrap();
+        state
+            .peer_addresses
+            .iter()
+            .filter(|(peer_id, _)| {
+                is_trusted_peer(peer_id, &self.configured_peers, &self.chain_peers)
+            })
+            .map(|(peer_id, sources)| (*peer_id, sources.clone()))
+            .collect()
     }
 
     fn handle_peer_failure_report(&mut self, peer_id: PeerId) {
@@ -634,14 +674,29 @@ impl DiscoveryEventLoop {
     /// Reads the highest-priority addresses from `peer_addresses` for the given peer
     /// and updates `network.known_peers()` if they differ from the current addresses.
     fn reconfigure_peer_addresses(&mut self, peer_id: PeerId) {
-        let priority_addresses = self
+        let priority = self
             .state
             .read()
             .unwrap()
             .peer_addresses
             .get(&peer_id)
-            .and_then(|sources| sources.first_key_value().map(|(_, addrs)| addrs.clone()))
-            .unwrap_or_default();
+            .and_then(|sources| {
+                sources
+                    .first_key_value()
+                    .map(|(source, addrs)| (*source, addrs.clone()))
+            });
+
+        // Record the active P2P address source for trusted peers (one gauge per
+        // peer, value-encoded). Untrusted peers are skipped to bound metric
+        // cardinality. A `None` priority (no installed source) records 0.
+        if self.is_trusted_peer(&peer_id) {
+            self.metrics.set_active_p2p_address_source(
+                &peer_id.to_string(),
+                priority.as_ref().map(|(source, _)| *source),
+            );
+        }
+
+        let priority_addresses = priority.map(|(_, addrs)| addrs).unwrap_or_default();
         let current_addresses = self
             .network
             .known_peers()
@@ -688,7 +743,6 @@ impl DiscoveryEventLoop {
 
         update_known_peers_versioned(
             self.state.clone(),
-            self.metrics.clone(),
             entries,
             self.configured_peers.clone(),
             &self.chain_peers,
@@ -732,7 +786,6 @@ impl DiscoveryEventLoop {
                         peer,
                         self.discovery_config.clone(),
                         self.state.clone(),
-                        self.metrics.clone(),
                         self.configured_peers.clone(),
                         self.chain_peers.clone(),
                         self.endpoint_manager.clone(),
@@ -762,7 +815,6 @@ impl DiscoveryEventLoop {
                 self.network.clone(),
                 self.discovery_config.clone(),
                 self.state.clone(),
-                self.metrics.clone(),
                 self.configured_peers.clone(),
                 self.chain_peers.clone(),
                 self.endpoint_manager.clone(),
@@ -807,6 +859,24 @@ impl DiscoveryEventLoop {
         // Spawn some dials
         let state = self.state.read().unwrap();
         let our_peer_id = self.network.peer_id();
+
+        // Recompute the number of distinct peers with an external address from the
+        // deduped union of both known-peer maps. With v3 enabled a peer can appear
+        // in both maps, so a HashSet avoids double-counting; recomputing each tick
+        // (rather than inc/dec) also avoids drift when expired entries are culled.
+        let mut peers_with_external_address: HashSet<PeerId> = HashSet::new();
+        for (peer_id, info) in state.known_peers.iter() {
+            if !info.addresses.is_empty() {
+                peers_with_external_address.insert(*peer_id);
+            }
+        }
+        for (peer_id, info) in state.known_peers_v2.iter() {
+            if !info.p2p_addresses().is_empty() {
+                peers_with_external_address.insert(*peer_id);
+            }
+        }
+        self.metrics
+            .set_num_peers_with_external_address(peers_with_external_address.len() as i64);
 
         // Collect eligible peers from both known_peers (V2) and known_peers_v2 (V3),
         // preferring fresher timestamps when a peer appears in both maps.
@@ -1019,7 +1089,6 @@ async fn query_peer_for_their_known_peers(
     peer: Peer,
     discovery_config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
-    metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     chain_peers: Arc<RwLock<HashSet<PeerId>>>,
     endpoint_manager: EndpointManager,
@@ -1058,7 +1127,6 @@ async fn query_peer_for_their_known_peers(
             if let Some(found_peers) = found_peers_v2 {
                 update_known_peers(
                     state.clone(),
-                    metrics.clone(),
                     found_peers,
                     configured_peers.clone(),
                     &chain_peers,
@@ -1067,7 +1135,6 @@ async fn query_peer_for_their_known_peers(
             if let Some(found_peers) = found_peers_v3 {
                 let changed = update_known_peers_versioned(
                     state,
-                    metrics,
                     found_peers,
                     configured_peers,
                     &chain_peers,
@@ -1083,7 +1150,7 @@ async fn query_peer_for_their_known_peers(
 
     // V3 not enabled or our_info_v2 not available - just run V2
     if let Some(found_peers) = query_peer_for_known_peers_v2(peer).await {
-        update_known_peers(state, metrics, found_peers, configured_peers, &chain_peers);
+        update_known_peers(state, found_peers, configured_peers, &chain_peers);
     }
 }
 
@@ -1091,7 +1158,6 @@ async fn query_connected_peers_for_their_known_peers(
     network: Network,
     config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
-    metrics: Metrics,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     chain_peers: Arc<RwLock<HashSet<PeerId>>>,
     endpoint_manager: EndpointManager,
@@ -1187,14 +1253,12 @@ async fn query_connected_peers_for_their_known_peers(
 
             update_known_peers(
                 state.clone(),
-                metrics.clone(),
                 found_peers_v2,
                 configured_peers.clone(),
                 &chain_peers,
             );
             let changed = update_known_peers_versioned(
                 state,
-                metrics,
                 found_peers_v3,
                 configured_peers,
                 &chain_peers,
@@ -1209,18 +1273,11 @@ async fn query_connected_peers_for_their_known_peers(
 
     // V3 not enabled or our_info_v2 not available - just run V2
     let found_peers_v2 = v2_query.await;
-    update_known_peers(
-        state,
-        metrics,
-        found_peers_v2,
-        configured_peers,
-        &chain_peers,
-    );
+    update_known_peers(state, found_peers_v2, configured_peers, &chain_peers);
 }
 
 fn update_known_peers(
     state: Arc<RwLock<State>>,
-    metrics: Metrics,
     found_peers: Vec<SignedNodeInfo>,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     chain_peers: &Arc<RwLock<HashSet<PeerId>>>,
@@ -1288,19 +1345,10 @@ fn update_known_peers(
         match known_peers.entry(peer.peer_id) {
             Entry::Occupied(mut o) => {
                 if peer.timestamp_ms > o.get().timestamp_ms {
-                    if o.get().addresses.is_empty() && !peer.addresses.is_empty() {
-                        metrics.inc_num_peers_with_external_address();
-                    }
-                    if !o.get().addresses.is_empty() && peer.addresses.is_empty() {
-                        metrics.dec_num_peers_with_external_address();
-                    }
                     o.insert(peer);
                 }
             }
             Entry::Vacant(v) => {
-                if !peer.addresses.is_empty() {
-                    metrics.inc_num_peers_with_external_address();
-                }
                 v.insert(peer);
             }
         }
@@ -1310,7 +1358,6 @@ fn update_known_peers(
 /// Returns true if any trusted peer was inserted or updated.
 fn update_known_peers_versioned(
     state: Arc<RwLock<State>>,
-    metrics: Metrics,
     found_peers: Vec<SignedVersionedNodeInfo>,
     configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
     chain_peers: &Arc<RwLock<HashSet<PeerId>>>,
@@ -1375,18 +1422,9 @@ fn update_known_peers_versioned(
             }
         }
 
-        let peer_p2p_addresses = peer.p2p_addresses();
-
         match known_peers_v2.entry(peer_id) {
             Entry::Occupied(mut o) => {
                 if peer.timestamp_ms() > o.get().timestamp_ms() {
-                    let old_addresses = o.get().p2p_addresses();
-                    if old_addresses.is_empty() && !peer_p2p_addresses.is_empty() {
-                        metrics.inc_num_peers_with_external_address();
-                    }
-                    if !old_addresses.is_empty() && peer_p2p_addresses.is_empty() {
-                        metrics.dec_num_peers_with_external_address();
-                    }
                     o.insert(peer);
                     if is_trusted {
                         trusted_peer_changed = true;
@@ -1394,9 +1432,6 @@ fn update_known_peers_versioned(
                 }
             }
             Entry::Vacant(v) => {
-                if !peer_p2p_addresses.is_empty() {
-                    metrics.inc_num_peers_with_external_address();
-                }
                 v.insert(peer);
                 if is_trusted {
                     trusted_peer_changed = true;

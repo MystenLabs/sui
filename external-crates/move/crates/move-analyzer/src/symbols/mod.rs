@@ -129,7 +129,7 @@ pub struct Symbols {
     /// Additional information about definitions
     pub def_info: DefMap,
     /// IDE Autocomplete Information from the Compiler
-    pub compiler_autocomplete_info: CompilerAutocompleteInfo,
+    pub compiler_autocomplete_info: Arc<CompilerAutocompleteInfo>,
     /// Cursor information gathered up during analysis
     pub cursor_context: Option<CursorContext>,
 }
@@ -727,7 +727,7 @@ pub fn empty_symbols() -> Symbols {
         mod_parsing_info: BTreeMap::new(),
         def_info: BTreeMap::new(),
         files: MappedFiles::empty(),
-        compiler_autocomplete_info: CompilerAutocompleteInfo::new(),
+        compiler_autocomplete_info: Arc::new(CompilerAutocompleteInfo::new()),
         cursor_context: None,
     }
 }

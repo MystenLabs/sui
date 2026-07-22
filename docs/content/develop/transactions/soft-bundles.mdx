@@ -1,0 +1,115 @@
+---
+title: Soft Bundles
+sidebar_label: Soft Bundles
+description: >-
+  Submit a sequence of transactions from different signers so that Sui orders
+  and executes them together with high probability, using the Soft Bundle API
+  introduced in SIP-19.
+keywords:
+  - soft bundle
+  - SIP-19
+  - MEV
+  - transaction bundling
+  - gRPC
+questions:
+  - What is Soft Bundles in Sui?
+  - When to use a soft bundle?
+  - How do I submit a soft bundle?
+answer: >-
+  Submit a sequence of transactions from different signers so that Sui orders
+  and executes them together with high probability, using the Soft Bundle API
+  introduced in SIP-19.
+---
+
+A soft bundle is a group of transactions, possibly from different signers, that Sui orders and executes together with high probability. The Soft Bundle API serves cases that a single [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) cannot, such as sequencing transactions that have different signers and allowing a subset of the bundle to revert independently.
+
+Shio authored and implemented this primitive in [SIP-19: Soft Bundle API](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md), which has a status of Final. Sui enables the feature through the `soft_bundle` protocol configuration flag.
+
+## When to use a soft bundle
+
+A PTB groups operations into one atomic transaction with a single signer. Every operation succeeds or the entire transaction reverts. This works well when one account controls all of the operations.
+
+A soft bundle covers the cases a PTB cannot:
+
+- **Different signers:** A bundle can contain transactions signed by separate accounts.
+- **Partial revert:** A transaction in the bundle can revert without forcing the rest of the bundle to revert.
+- **Sequencing across accounts:** A bundle attempts to keep its transactions in the same relative order when they reach consensus, on a best-effort basis.
+
+A common use case is Maximal Extractable Value (MEV) order flow, where an originating transaction and one or more back-run transactions from different parties need to land in the same consensus commit in a known order. For background, see [MEV on Sui: Current State and Next Steps](https://blog.sui.io/mev-on-sui-current-state/).
+
+## How soft bundles work
+
+In the standard flow, you submit each transaction to a validator on its own. The validator validates and signs the transaction, then submits it to [consensus](/develop/sui-architecture/consensus). Different validators can submit at different times, so the final order of transactions that share the same gas price depends on factors that a client cannot control directly.
+
+The Soft Bundle API adds a submission type that keeps related transactions together. You submit the group through the validator `SubmitTransaction` gRPC method with the submission type set to `SoftBundle`. The validator processes the transactions as a unit and submits them to consensus in the same batch, which preserves their relative order.
+
+When every transaction in the bundle uses the same gas price, post-consensus reordering (`PostConsensusTxReorder`), which sorts transactions by gas price, does not change their relative order. Transactions with different gas prices can still be reordered relative to one another.
+
+Soft bundles do not provide a strict ordering guarantee. Instead, they provide a high probability that the transactions land in the same consensus commit in the intended order.
+
+:::info
+
+Soft bundles trade a strict guarantee for a simpler design that avoids major changes to consensus. For most use cases, the high-probability behavior is sufficient. The SIP notes that a future post-consensus reordering mechanism could affect this behavior, so confirm the current guarantees against the network you target.
+
+:::
+
+## Bundle validity rules
+
+A soft bundle is subject to bundle-level limits and to per-transaction checks.
+
+The following bundle-level limits fail the whole request:
+
+- The bundle must contain at least one transaction.
+- The number of transactions cannot exceed `max_soft_bundle_size`. The active value comes from the network protocol configuration, and is 5 on Testnet and Mainnet.
+- The combined serialized size of the transactions cannot exceed half of the consensus block byte limit (`consensus_max_transactions_in_block_bytes`). The validator reserves the other half for serialization overhead.
+
+The validator then checks each transaction individually, with two possible outcomes:
+
+- The whole request fails if any transaction cannot be deserialized, fails its validity check, or has an invalid signature.
+- Otherwise, a transaction that the validator cannot admit, for example because it is already executed or the validator is overloaded, is recorded as rejected for its position only and does not fail the rest of the bundle.
+
+The SIP originally specified stricter bundle-level rules, such as requiring every transaction to access a shared object and use the same gas price. The current implementation does not enforce those as rejection rules. The same gas price still matters for ordering, as described in [How soft bundles work](#how-soft-bundles-work).
+
+Separately, owned-object locks are exclusive. If two transactions in the same bundle lock the same owned object, such as a shared gas object, the bundle cannot succeed. Give each transaction its own gas object. For the exact admission behavior of a specific service, see that service's documentation, such as the [Shio documentation](https://docs.getshio.com).
+
+## Submitting a soft bundle
+
+You can submit a soft bundle in two ways.
+
+### Through an MEV service
+
+Most integrations today submit through an MEV service rather than calling a validator directly. Shio, the team that proposed and implemented SIP-19, assembles a soft bundle from the transactions you submit and forwards it to validators. See the [Shio documentation](https://docs.getshio.com) for endpoint details, tip requirements, and bid rules.
+
+### Directly through gRPC
+
+Soft bundle submission belongs to the validator submission API, not the public full-node `sui.rpc.v2` API. You submit a bundle through the validator `SubmitTransaction` gRPC method, with the request's submission type set to `SoftBundle` and the signed transactions included in the request. The response returns one result per transaction, where each result reports that the validator submitted the transaction to consensus, already executed it, or rejected it.
+
+The Sui TypeScript SDK does not wrap the validator submission API. Its public gRPC `TransactionExecutionService` executes single transactions through `ExecuteTransaction` only. Direct integration therefore requires you to build gRPC requests against the validator proto definitions, sign each transaction, and submit them as a single request.
+
+Because no first-party SDK exposes this API today, most teams integrate through an MEV service instead.
+
+:::info
+
+Sui is migrating data access from JSON-RPC to gRPC and GraphQL RPC, with JSON-RPC disabled on Sui Foundation mainnet full nodes the week of July 27, 2026. The public full-node gRPC API does not include soft bundle execution. See [Sui and Community SDKs](/references/sui-sdks) for current SDK support.
+
+:::
+
+## Security considerations
+
+### Front-running
+
+An order originator, such as a full node, could front-run a user by submitting a carefully crafted transaction before the user's transaction. This risk exists today even without soft bundle support. The SIP acknowledges that the Soft Bundle API makes this attack easier, but argues that there is no fundamental difference and no new class of risk. The proposed mitigation is audit logging on the API, so that operators can detect attacks and advise users to avoid malicious order originators. Evaluate the trust model of any service that assembles bundles on your behalf.
+
+### Locked owned objects
+
+:::caution
+
+If a client gets its transactions signed by a quorum of validators but the bundle is then rejected, the owned objects in those transactions can stay locked until the end of the epoch.
+
+:::
+
+This is a pre-existing risk rather than a new one, because a client can already get a transaction signed and then never submit it. To manage the risk, a client is responsible for eventually submitting every transaction that validators sign. The SIP proposes an optional fallback where a rejected bundle is resubmitted as individual transactions with no bundling.
+
+### Consensus amplification
+
+A validator that accepts a bundle submits its transactions to consensus, so a malicious actor could send the same bundle to many validators to amplify consensus traffic. A validator processes a soft bundle as a single submission, subject to the same overload and admission controls it applies to other submissions, which keeps amplification at the level of the standard submission path.

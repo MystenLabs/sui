@@ -19,6 +19,7 @@ use prost::Message;
 use reqwest::Client;
 use serde_json::Value;
 use serde_json::json;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use sui_futures::service::Service;
 use sui_indexer_alt::BootstrapGenesis;
@@ -47,6 +48,7 @@ use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::ALPHA_PIPELINE_NAMES;
@@ -85,7 +87,9 @@ use url::Url;
 
 pub mod coin_registry;
 pub mod find;
+pub mod graphql;
 pub mod move_helpers;
+pub mod transaction;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.
@@ -160,6 +164,12 @@ pub struct OffchainClusterConfig {
     pub jsonrpc_node_args: JsonRpcNodeArgs,
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
+    pub kv_rpc_config: KvRpcConfig,
+    /// Whether the graphql server should be configured to consume the kv-rpc's v2alpha experimental
+    /// query APIs (e.g. bitmap-backed `Query.transactions`). The kv-rpc server itself always serves
+    /// alpha; this flag controls whether the *graphql consumer* asserts the server has it. Default
+    /// false to preserve PG-path behavior for existing tests; flip to true for bitmap-path tests.
+    pub experimental_query_apis: bool,
 }
 
 impl FullCluster {
@@ -231,6 +241,13 @@ impl FullCluster {
     /// Execute a system transaction advancing the lock by the given `duration`.
     pub fn advance_clock(&mut self, duration: Duration) -> TransactionEffects {
         self.executor.advance_clock(duration)
+    }
+
+    /// Advance the executor into the next epoch. This executes an end-of-epoch transaction and
+    /// creates the epoch's final checkpoint, but does not wait for the off-chain services to ingest
+    /// it — follow with [`create_checkpoint`](Self::create_checkpoint) to sync.
+    pub fn advance_epoch(&mut self) {
+        self.executor.advance_epoch(AdvanceEpochConfig::default());
     }
 
     /// Create a new checkpoint containing the transactions executed since the last checkpoint that
@@ -343,6 +360,8 @@ impl OffchainCluster {
             jsonrpc_node_args,
             graphql_config,
             bootstrap_genesis,
+            kv_rpc_config,
+            experimental_query_apis,
         }: OffchainClusterConfig,
         registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
@@ -419,7 +438,7 @@ impl OffchainCluster {
         };
 
         let (bigtable_client, bigtable_emulator, archival_service) =
-            start_archival(client_args.clone(), kv_rpc_address, registry).await?;
+            start_archival(client_args.clone(), kv_rpc_address, kv_rpc_config, registry).await?;
 
         let kv_args = KvArgs {
             ledger_grpc_url: Some(
@@ -427,6 +446,7 @@ impl OffchainCluster {
                     .parse()
                     .expect("Failed to parse kv-rpc URI"),
             ),
+            experimental_query_apis: Some(experimental_query_apis),
             ..Default::default()
         };
 
@@ -750,6 +770,8 @@ impl Default for OffchainClusterConfig {
             jsonrpc_node_args: Default::default(),
             graphql_config: Default::default(),
             bootstrap_genesis: None,
+            kv_rpc_config: KvRpcConfig::default(),
+            experimental_query_apis: false,
         }
     }
 }
@@ -819,6 +841,7 @@ pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Re
 async fn start_archival(
     client_args: ClientArgs,
     kv_rpc_address: SocketAddr,
+    kv_rpc_config: KvRpcConfig,
     registry: &prometheus::Registry,
 ) -> anyhow::Result<(BigTableClient, BigTableEmulator, Service)> {
     let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
@@ -862,10 +885,16 @@ async fn start_archival(
         .await
         .context("Failed to start BigTable indexer")?;
 
-    let kv_rpc_server =
-        KvRpcServer::new_local(emulator.host().to_string(), INSTANCE_ID.to_string(), None)
-            .await
-            .context("Failed to create KvRpcServer")?;
+    let kv_rpc_server = KvRpcServer::new_local_with_config(
+        emulator.host().to_string(),
+        INSTANCE_ID.to_string(),
+        None,
+        kv_rpc_config.ledger_history(),
+        kv_rpc_config.request_bigtable_concurrency(),
+        kv_rpc_config.stages(),
+    )
+    .await
+    .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
         .start_service(
             kv_rpc_address,

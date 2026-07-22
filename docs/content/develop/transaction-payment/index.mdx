@@ -1,12 +1,235 @@
 ---
 title: Paying for Transactions
-description: Understand how Sui transactions pay for computational execution costs and long-term object storage.
-keywords: ['transaction payment', 'gas fees', 'Sui gas', 'execution cost', 'storage cost', 'transaction fees', 'SUI token']
+description: >-
+  Understand how Sui transactions pay for gas, how coinWithBalance selects
+  funds automatically, when gasless transfers apply, and how to compose
+  multi-step DeFi operations in a single atomic transaction.
+keywords:
+  - transaction payment
+  - gas fees
+  - Sui gas
+  - execution cost
+  - storage cost
+  - transaction fees
+  - SUI token
+  - coinWithBalance
+  - gasless
+  - sponsored transactions
+  - DeFi composition
+  - PTB
+  - address balances
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the full transaction-payment landscape: automatic coin
+    selection, gasless eligibility, sponsored gas, and atomic DeFi composition
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Paying for Transactions in Sui?
+  - What topics does Paying for Transactions cover?
+  - How does paying for transactions work on Sui?
+  - How does coinWithBalance work?
+  - When can a transaction be gasless?
+  - How do I compose DeFi operations into one transaction?
+  - How do I sponsor gas for my users?
+answer: >-
+  Every Sui transaction pays for computation and storage. The TypeScript SDK's
+  coinWithBalance automatically selects funds from coins and address balances.
+  Qualified stablecoin transfers can execute with zero gas. Sponsored
+  transactions let apps pay gas on behalf of users. Programmable transaction
+  blocks let you compose swaps, deposits, and transfers into a single atomic
+  operation.
 ---
 
-A Sui transaction must pay for both the computational cost of execution and the long-term cost of storing the objects a transaction creates or mutates. 
+Every Sui transaction pays for 2 things: **computational execution** and **long-term object storage**. How you source those funds (from coins, address balances, a sponsor, or at zero cost) depends on what the transaction does and who pays.
 
-import DocCardList from '@theme/DocCardList';
+## Coin selection with `coinWithBalance` {#coin-selection}
 
-<DocCardList />
+When you build a transaction with the TypeScript SDK, you rarely need to pick individual coin objects. The `coinWithBalance` helper (and the `tx.coin()` shorthand) resolves the required amount automatically:
+
+```tsx
+import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
+
+const USDC = '0xdba34...::usdc::USDC';
+
+const tx = new Transaction();
+
+// coinWithBalance draws from address balances first, then coin objects
+const payment = coinWithBalance({ type: USDC, balance: 5_000_000n }); // 5 USDC
+tx.transferObjects([payment], recipient);
+```
+
+Under the hood:
+
+1. The SDK checks the sender's [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances) for the requested coin type.
+2. If the address balance covers the amount, it creates a withdrawal, with no coin objects needed.
+3. If the address balance is insufficient, it falls back to selecting and splitting coin objects.
+
+This means you can build transactions without knowing which coin objects the sender owns.
+
+For SUI gas specifically, passing an empty array to `setGasPayment` tells the network to draw gas from the address balance:
+
+```tsx
+tx.setGasPayment([]); // Gas paid from address balance — no coin lookup required
+```
+
+`setGasPayment([])` alone is not enough for fully offline transaction building. You also need to set `gasPrice`, `gasBudget`, and `ValidDuring` expiration, and all transaction inputs must be resolvable without network queries (no unresolved `coinWithBalance` or `tx.coin()` intents that require balance lookups). See [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances) for the full set of requirements.
+
+See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances) for the full API (TypeScript, Rust, CLI, and Move) and [Gas Smashing](/develop/transaction-payment/gas-smashing) for the legacy coin-merge approach.
+
+## Gas payment strategies {#gas-strategies}
+
+Sui offers 4 ways to pay for gas, each suited to different use cases:
+
+| **Strategy** | **Who pays** | **User holds SUI?** | **Best for** |
+|----------|----------|-----------------|----------|
+| **Standard gas** | User | Yes | General transactions |
+| **Address balance gas** | User | Yes (in address balance) | Offline-built transactions, no coin lookup |
+| **Sponsored gas** | App / relayer | No | Onboarding, free-to-play, enterprise |
+| **Gasless stablecoin** | Nobody (zero fee) | No | Peer-to-peer stablecoin transfers |
+
+### Standard gas
+
+The sender provides one or more `Coin<SUI>` objects to cover execution and storage costs. The SDK resolves this automatically when you don't explicitly configure gas. See [Gas Fees](/develop/transaction-payment/gas-in-sui) for the fee formula and budget rules.
+
+### Address balance gas
+
+Instead of selecting coin objects, the network withdraws gas from the sender's SUI address balance. This removes the need for coin lookups at gas-selection time. To use it, set `tx.setGasPayment([])` along with `gasPrice`, `gasBudget`, and `ValidDuring` expiration. When all other transaction inputs are also known at build time (no unresolved `coinWithBalance` intents), the transaction can be built fully offline. See [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances) for requirements.
+
+### Sponsored transactions
+
+A third party (the sponsor) pays gas on behalf of the user. The user builds the transaction, and the sponsor provides gas payment. Both sign. This is ideal for onboarding new users who don't hold SUI. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) for the full flow, including data structures, sequence diagrams, and risk considerations.
+
+With address balances, sponsored transactions become simpler: no gas coin locking risk, no coin inventory management, and the user can sign before the sponsor.
+
+### Gasless stablecoin transfers {#gasless}
+
+Peer-to-peer transfers of [allowlisted stablecoins](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) (USDC, USDSUI, and others) execute at zero gas cost. Eligibility requires:
+
+- The PTB calls only allowlisted `balance` or `coin` operations (primarily `balance::send_funds`).
+- `gasPayment` is empty and `gasPrice = 0`.
+- No objects are written.
+
+The gRPC and GraphQL transports detect eligibility automatically during simulation and set `gasBudget = 0`. See [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) for the full allowlist and integration guide.
+
+```tsx
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Transaction } from '@mysten/sui/transactions';
+
+const USDC = '0xdba34...::usdc::USDC';
+const client = new SuiGrpcClient({ network: 'mainnet', baseUrl: 'https://fullnode.mainnet.sui.io:443' });
+
+const tx = new Transaction();
+tx.setSender(senderAddress);
+tx.moveCall({
+  target: '0x2::balance::send_funds',
+  typeArguments: [USDC],
+  arguments: [tx.balance({ type: USDC, balance: 1_000_000n }), tx.pure.address(recipient)],
+});
+
+// SDK detects gasless eligibility and sets gasPrice = 0 and gasBudget = 0 automatically
+const result = await client.signAndExecuteTransaction({ transaction: tx, signer: keypair });
+```
+
+## Composing DeFi operations {#defi-composition}
+
+[Programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) let you chain multiple operations into a single atomic transaction. Outputs from earlier commands feed directly into later ones, with no intermediate state and no partial execution risk.
+
+### Swap and transfer
+
+Split a coin, swap part of it on a DEX, and transfer the result, all in one transaction:
+
+```tsx
+const tx = new Transaction();
+
+// 1. Source funds using coinWithBalance (auto-selects from address balance or coins)
+const [usdc] = tx.splitCoins(coinWithBalance({ type: USDC, balance: 200_000_000n }), [
+  tx.pure.u64(200_000_000),
+]);
+
+// 2. Swap USDC → SUI through a DEX pool
+const [sui] = tx.moveCall({
+  target: '0xDEX_PACKAGE::router::swap_exact_input',
+  typeArguments: [USDC, '0x2::sui::SUI'],
+  arguments: [tx.object('0xPOOL_ID'), usdc, tx.pure.u64(0)], // 0 = min output (set real slippage)
+});
+
+// 3. Transfer the swapped SUI to the recipient
+tx.transferObjects([sui], recipient);
+```
+
+### Swap, save, and send
+
+Compose 3 operations (a swap, a DeFi deposit, and a transfer) into one signed transaction:
+
+```tsx
+const tx = new Transaction();
+
+// Source 2000 USDC
+const [allUsdc] = tx.splitCoins(
+  coinWithBalance({ type: USDC, balance: 2_000_000_000n }),
+  [tx.pure.u64(2_000_000_000)],
+);
+
+// 1. Split off 200 USDC and swap to SUI
+const [swapPortion] = tx.splitCoins(allUsdc, [tx.pure.u64(200_000_000)]);
+const [sui] = tx.moveCall({
+  target: '0xDEX::router::swap',
+  typeArguments: [USDC, '0x2::sui::SUI'],
+  arguments: [tx.object('0xPOOL'), swapPortion, tx.pure.u64(0)],
+});
+
+// 2. Split 900 USDC and deposit into a yield protocol
+const [savePortion] = tx.splitCoins(allUsdc, [tx.pure.u64(900_000_000)]);
+tx.moveCall({
+  target: '0xYIELD::vault::deposit',
+  typeArguments: [USDC],
+  arguments: [tx.object('0xVAULT'), savePortion],
+});
+
+// 3. Split 100 USDC and send to Alice (splitCoins returns Coin<T>, so use coin::send_funds)
+const [sendPortion] = tx.splitCoins(allUsdc, [tx.pure.u64(100_000_000)]);
+tx.moveCall({
+  target: '0x2::coin::send_funds',
+  typeArguments: [USDC],
+  arguments: [sendPortion, tx.pure.address(aliceAddress)],
+});
+
+// Remaining 800 USDC stays with the sender
+tx.transferObjects([allUsdc, sui], tx.pure.address(senderAddress));
+```
+
+If any step fails (slippage breach, paused pool, invalid address), the entire transaction reverts. See [Payment Intents](/onchain-finance/payment-intents) for the Resolve, Plan, Execute pattern and more composition examples.
+
+### Key composition rules
+
+- **Outputs chain forward:** The result of `splitCoins` or a `moveCall` can be passed as input to the next command.
+- **All-or-nothing:** If any command fails, the entire PTB reverts.
+- **One gas payment:** The whole batch shares a gas budget, and the sponsor (user, app, or relayer) pays once.
+- **Up to 1,024 commands:** A single PTB can contain up to 1,024 commands.
+
+See [Building Transactions](/develop/transactions/ptbs/building-ptb) for the full PTB construction API.
+
+## Decision flowchart
+
+Use this to pick the right gas strategy for your transaction:
+
+1. **Is the transaction a basic stablecoin transfer of an allowlisted token?**
+   - Yes: use [gasless stablecoin transfer](/develop/transaction-payment/gasless-stablecoin-transfers). Zero gas cost.
+   - No: continue.
+2. **Does your app want to pay gas on behalf of the user?**
+   - Yes: use [sponsored transactions](/develop/transaction-payment/sponsor-txn). Consider address-balance sponsorship for simpler flows.
+   - No: continue.
+3. **Does the user have a SUI address balance?**
+   - Yes: use address balance gas (`tx.setGasPayment([])`). No coin lookup needed.
+   - No: use standard gas. The SDK auto-selects coin objects.
+
+For most transactions, use `coinWithBalance` for non-gas coins, and the SDK handles coin-vs-balance selection for you. The exception is [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers), which use `tx.balance()` with `balance::send_funds` so the transaction stays eligible for zero gas.

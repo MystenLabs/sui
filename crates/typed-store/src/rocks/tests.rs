@@ -105,6 +105,15 @@ async fn test_safe_drop_db() {
         .unwrap();
 }
 
+#[cfg(tidehunter)]
+#[test]
+fn test_is_tidehunter_db_detects_shape_v2_marker() {
+    let path = temp_dir();
+    std::fs::write(path.join("shape_v2.yaml"), "").unwrap();
+
+    assert!(is_tidehunter_db(&path));
+}
+
 #[tokio::test]
 async fn test_multi_contain() {
     let db = open_map(temp_dir(), None);
@@ -874,4 +883,71 @@ async fn test_safe_iter_returns_error_on_deserialization_failure() {
         verification_count, 3,
         "Data should still exist in the database"
     );
+}
+
+#[cfg(tidehunter)]
+fn open_th_map(name: &str) -> DBMap<u64, String> {
+    use crate::tidehunter_util::{KeyShapeBuilder, KeyType, ThConfig, add_key_space, open};
+    let mut builder = KeyShapeBuilder::new();
+    // u64 keys serialize to 8 fixed bytes via `be_fix_int_ser`.
+    let config = ThConfig::new(8, 16, KeyType::uniform(1));
+    add_key_space(&mut builder, name, &config);
+    let key_shape = builder.build();
+    let metric_conf = MetricConf::new("test_snapshot_iter");
+    let (inner_db, registry_id) = open(temp_dir().as_path(), key_shape, &metric_conf);
+    let ks = inner_db.ks(name);
+    let db = Arc::new(Database::new(
+        Storage::TideHunter(inner_db.clone()),
+        metric_conf,
+        Some(registry_id),
+    ));
+    DBMap::reopen_th(db, name, ks, None)
+}
+
+#[cfg(tidehunter)]
+#[tokio::test]
+async fn test_snapshot_iterator_tidehunter_point_in_time() {
+    let db = open_th_map("snapshot_iter");
+    db.insert(&1, &"a".to_string()).unwrap();
+    db.insert(&2, &"b".to_string()).unwrap();
+    db.insert(&3, &"c".to_string()).unwrap();
+
+    // Open the snapshot iterator (captures the frontier now), THEN mutate the
+    // live map: overwrite k1, delete k2, add k4.
+    let iter = db.snapshot_iterator();
+    db.insert(&1, &"A".to_string()).unwrap();
+    db.remove(&2).unwrap();
+    db.insert(&4, &"d".to_string()).unwrap();
+
+    // The iterator still yields the pre-mutation snapshot, even though the live
+    // map has advanced (this is what the tidehunter checkpoint buys us; a plain
+    // tidehunter iterator would not be stable here).
+    let snapshot: Vec<(u64, String)> = iter.map(Result::unwrap).collect();
+    assert_eq!(
+        snapshot,
+        vec![
+            (1, "a".to_string()),
+            (2, "b".to_string()),
+            (3, "c".to_string())
+        ]
+    );
+
+    // A fresh snapshot iterator observes the latest state.
+    let live: Vec<(u64, String)> = db.snapshot_iterator().map(Result::unwrap).collect();
+    assert_eq!(
+        live,
+        vec![
+            (1, "A".to_string()),
+            (3, "c".to_string()),
+            (4, "d".to_string())
+        ]
+    );
+
+    // Bounds and reverse work on the snapshot too: reverse [1, 3] inclusive over
+    // the live state {1, 3, 4} yields keys 3 then 1.
+    let reversed: Vec<(u64, String)> = db
+        .snapshot_iterator_with_bounds(Some(1), Some(3), true)
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(reversed, vec![(3, "c".to_string()), (1, "A".to_string())]);
 }

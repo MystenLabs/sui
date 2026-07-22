@@ -19,6 +19,9 @@ use anyhow::bail;
 use futures::future::try_join_all;
 use tokio::process::Command as TokioCommand;
 
+#[cfg(any(test, feature = "testing"))]
+use sui_types::full_checkpoint_content::Checkpoint;
+
 pub const INSTANCE_ID: &str = "bigtable_test_instance";
 
 /// New tables must be added here when introduced. The indexer will fail to write to missing
@@ -156,4 +159,51 @@ pub async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
     }))
     .await?;
     Ok(())
+}
+
+/// Deterministic in-memory mock BigTable server for cross-crate read/write
+/// path tests. Gated behind the `testing` feature so it never enters normal
+/// builds. See [`crate::bigtable::mock_server`].
+#[cfg(any(test, feature = "testing"))]
+pub use crate::bigtable::mock_server::{MockBigtableServer, ReadRowsCall, ReadRowsResponseOrder};
+
+/// Inserts checkpoint, transaction sequence, and transaction rows into mock BigTable.
+#[cfg(any(test, feature = "testing"))]
+pub async fn insert_checkpoint_rows(mock: &MockBigtableServer, checkpoint: &Checkpoint) {
+    use crate::tables::{checkpoints, transactions, tx_seq_digest};
+    use sui_types::balance_change::derive_balance_changes_2;
+    let summary = checkpoint.summary.data();
+    let checkpoint_number = summary.sequence_number;
+    let row = checkpoints::encode(summary, checkpoint.summary.auth_sig(), &checkpoint.contents)
+        .expect("encode checkpoint");
+    let key = checkpoints::encode_key(checkpoint_number);
+    mock.insert_row(checkpoints::NAME, key, row).await;
+    let first_transaction_sequence = summary
+        .network_total_transactions
+        .checked_sub(checkpoint.transactions.len() as u64)
+        .expect("checkpoint transaction range");
+    for (offset, transaction) in checkpoint.transactions.iter().enumerate() {
+        let transaction_sequence = first_transaction_sequence + offset as u64;
+        let digest = transaction.transaction.digest();
+        let events = transaction.events.as_ref();
+        let event_count = events.map_or(0, |events| events.data.len() as u32);
+        let row = tx_seq_digest::encode(&digest, event_count, offset as u32, checkpoint_number);
+        let key = tx_seq_digest::encode_key(transaction_sequence);
+        mock.insert_row(tx_seq_digest::NAME, key, row).await;
+        let balance_changes =
+            derive_balance_changes_2(&transaction.effects, &checkpoint.object_set);
+        let row = transactions::encode(
+            &transaction.transaction,
+            &transaction.signatures,
+            &transaction.effects,
+            &transaction.events,
+            checkpoint_number,
+            summary.timestamp_ms,
+            &balance_changes,
+            &transaction.unchanged_loaded_runtime_objects,
+        )
+        .expect("encode transaction");
+        mock.insert_row(transactions::NAME, transactions::encode_key(&digest), row)
+            .await;
+    }
 }

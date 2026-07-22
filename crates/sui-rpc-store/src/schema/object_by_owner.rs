@@ -30,7 +30,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 
-use crate::schema::keys::U64Varint;
+use crate::schema::primitives::U64Varint;
 
 pub const NAME: &str = "object_by_owner";
 
@@ -67,6 +67,31 @@ impl OwnerKind {
     }
 }
 
+/// Encoded as `kind_tag(1) || owner?(32)`: the leading bytes shared
+/// by every [`Key`] of this kind. Encoding an `OwnerKind` directly
+/// (or composing it with a [`TypeFilter`](super::type_filter::TypeFilter)
+/// via a tuple) yields a prefix that
+/// [`DbMap::iter_prefix`](sui_consistent_store::DbMap::iter_prefix)
+/// can scan; see [`Key`]'s `Encode` impl, which delegates here for
+/// its leading bytes.
+impl Encode for OwnerKind {
+    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        match self {
+            OwnerKind::AddressOwner(addr) => {
+                buf.put_u8(0);
+                buf.put_slice(addr.as_ref());
+            }
+            OwnerKind::ObjectOwner(addr) => {
+                buf.put_u8(1);
+                buf.put_slice(addr.as_ref());
+            }
+            OwnerKind::Shared => buf.put_u8(2),
+            OwnerKind::Immutable => buf.put_u8(3),
+        }
+        Ok(())
+    }
+}
+
 /// Encoded as
 /// `kind_tag(1) || owner?(32) || type(bcs) || balance_tag(1) || balance?(8 BE) || object_id(32)`.
 ///
@@ -90,22 +115,7 @@ pub type Value = U64Varint;
 
 impl Encode for Key {
     fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
-        match &self.kind {
-            OwnerKind::AddressOwner(addr) => {
-                buf.put_u8(0);
-                buf.put_slice(addr.as_ref());
-            }
-            OwnerKind::ObjectOwner(addr) => {
-                buf.put_u8(1);
-                buf.put_slice(addr.as_ref());
-            }
-            OwnerKind::Shared => {
-                buf.put_u8(2);
-            }
-            OwnerKind::Immutable => {
-                buf.put_u8(3);
-            }
-        }
+        self.kind.encode_into(buf)?;
         let type_bytes = bcs::to_bytes(&self.type_)
             .map_err(|e| EncodeError::with_source("bcs encode StructTag", e))?;
         buf.put_slice(&type_bytes);
@@ -142,7 +152,7 @@ impl Decode for Key {
         // streaming BCS parser. The parser stops at the StructTag's
         // natural end and leaves the rest of the buffer (balance
         // tag, balance payload, object id) intact.
-        let type_ = crate::schema::keys::read_struct_tag(buf)?;
+        let type_ = crate::schema::primitives::read_struct_tag(buf)?;
 
         if !buf.has_remaining() {
             return Err(DecodeError::msg(format!("{NAME} missing balance tag")));
@@ -217,56 +227,6 @@ pub fn store(object: &Object) -> Option<(Key, U64Varint)> {
     ))
 }
 
-/// Prefix encoder for "all address-owned objects of `owner`".
-///
-/// Encodes as `kind_tag(1) || owner(32)` — exactly the first 33
-/// bytes of every `Key` whose `kind` is `AddressOwner(owner)`. The
-/// schema's `Encode` impl matches this layout, so passing this
-/// type to [`DbMap::iter_prefix`](sui_consistent_store::DbMap::iter_prefix)
-/// walks every row owned by the given address.
-pub struct AddressOwnerPrefix(pub SuiAddress);
-
-impl Encode for AddressOwnerPrefix {
-    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
-        buf.put_u8(0);
-        buf.put_slice(self.0.as_ref());
-        Ok(())
-    }
-}
-
-/// Prefix encoder for "all objects owned by parent object `owner`".
-///
-/// Same layout as [`AddressOwnerPrefix`] but with the
-/// `ObjectOwner` discriminant — i.e. the leading 33 bytes of every
-/// `Key` whose `kind` is `ObjectOwner(owner)`. Useful for
-/// enumerating dynamic fields and other object-owned children of
-/// a parent.
-pub struct ObjectOwnerPrefix(pub SuiAddress);
-
-impl Encode for ObjectOwnerPrefix {
-    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
-        buf.put_u8(1);
-        buf.put_slice(self.0.as_ref());
-        Ok(())
-    }
-}
-
-/// Prefix encoder for "all objects owned by `owner` that match
-/// `type_filter`". Composes [`AddressOwnerPrefix`] with a
-/// [`TypeFilter`](super::type_filter::TypeFilter).
-pub struct AddressOwnerTypePrefix {
-    pub owner: SuiAddress,
-    pub type_filter: super::type_filter::TypeFilter,
-}
-
-impl Encode for AddressOwnerTypePrefix {
-    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
-        buf.put_u8(0);
-        buf.put_slice(self.owner.as_ref());
-        self.type_filter.encode_into(buf)
-    }
-}
-
 impl<R: Reader> super::RpcStoreSchema<R> {
     /// Iterate over every live object owned (in the address-owner
     /// sense) by `owner`, in the natural sort order of the index:
@@ -276,7 +236,8 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         &self,
         owner: SuiAddress,
     ) -> Result<Iter<'_, Key, U64Varint>, Error> {
-        self.object_by_owner.iter_prefix(&AddressOwnerPrefix(owner))
+        self.object_by_owner
+            .iter_prefix(&OwnerKind::AddressOwner(owner))
     }
 
     /// Iterate over every live object owned (in the address-owner
@@ -289,7 +250,7 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         type_filter: super::type_filter::TypeFilter,
     ) -> Result<Iter<'_, Key, U64Varint>, Error> {
         self.object_by_owner
-            .iter_prefix(&AddressOwnerTypePrefix { owner, type_filter })
+            .iter_prefix(&(OwnerKind::AddressOwner(owner), type_filter))
     }
 
     /// Iterate over every live object owned (in the object-owner
@@ -298,7 +259,8 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         &self,
         parent: SuiAddress,
     ) -> Result<Iter<'_, Key, U64Varint>, Error> {
-        self.object_by_owner.iter_prefix(&ObjectOwnerPrefix(parent))
+        self.object_by_owner
+            .iter_prefix(&OwnerKind::ObjectOwner(parent))
     }
 }
 

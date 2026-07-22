@@ -32,10 +32,10 @@ pub struct CheckpointStream {
 #[async_trait]
 pub trait CheckpointStreamingClient {
     /// Returns the CheckpointStream and chain id.
-    async fn connect(&mut self) -> Result<CheckpointStream>;
+    async fn connect(&self) -> Result<CheckpointStream>;
 
     /// Returns the latest checkpoint number available from the streaming source.
-    async fn latest_checkpoint_number(&mut self) -> Result<u64> {
+    async fn latest_checkpoint_number(&self) -> Result<u64> {
         let mut stream = self.connect().await?;
 
         match stream.stream.next().await {
@@ -73,7 +73,7 @@ impl GrpcStreamingClient {
 
 #[async_trait]
 impl CheckpointStreamingClient for GrpcStreamingClient {
-    async fn connect(&mut self) -> Result<CheckpointStream> {
+    async fn connect(&self) -> Result<CheckpointStream> {
         let endpoint = Endpoint::from(self.uri.clone())
             .connect_timeout(self.connection_timeout)
             .timeout(self.connection_timeout);
@@ -196,7 +196,7 @@ mod tests {
 
         let timeout = Duration::from_millis(200);
         let uri: Uri = format!("http://{addr}").parse().unwrap();
-        let mut client = GrpcStreamingClient::new(uri, timeout, timeout);
+        let client = GrpcStreamingClient::new(uri, timeout, timeout);
 
         let start = std::time::Instant::now();
         let result = client.connect().await;
@@ -215,6 +215,8 @@ pub mod test_utils {
     use std::pin::Pin;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
     use std::time::Instant;
 
@@ -288,8 +290,8 @@ pub mod test_utils {
     /// Mock streaming client for testing with predefined checkpoints.
     pub struct MockStreamingClient {
         actions: Arc<Mutex<Vec<StreamAction>>>,
-        connection_failures_remaining: usize,
-        connection_timeouts_remaining: usize,
+        connection_failures_remaining: AtomicUsize,
+        connection_timeouts_remaining: AtomicUsize,
         /// How long mock timeout actions hang (must be > statement_timeout for timeouts to fire).
         timeout_duration: Duration,
         /// Statement timeout applied to the stream wrapper.
@@ -313,8 +315,8 @@ pub mod test_utils {
                         .map(StreamAction::Checkpoint)
                         .collect(),
                 )),
-                connection_failures_remaining: 0,
-                connection_timeouts_remaining: 0,
+                connection_failures_remaining: AtomicUsize::new(0),
+                connection_timeouts_remaining: AtomicUsize::new(0),
                 statement_timeout: timeout_duration / 2,
                 timeout_duration,
             }
@@ -322,13 +324,13 @@ pub mod test_utils {
 
         /// Make `connect` fail for the next N calls
         pub fn fail_connection_times(mut self, times: usize) -> Self {
-            self.connection_failures_remaining = times;
+            self.connection_failures_remaining = AtomicUsize::new(times);
             self
         }
 
         /// Make `connect` timeout for the next N calls
         pub fn fail_connection_with_timeout(mut self, times: usize) -> Self {
-            self.connection_timeouts_remaining = times;
+            self.connection_timeouts_remaining = AtomicUsize::new(times);
             self
         }
 
@@ -368,17 +370,19 @@ pub mod test_utils {
 
     #[async_trait]
     impl CheckpointStreamingClient for MockStreamingClient {
-        async fn connect(&mut self) -> Result<CheckpointStream> {
-            if self.connection_timeouts_remaining > 0 {
-                self.connection_timeouts_remaining -= 1;
+        async fn connect(&self) -> Result<CheckpointStream> {
+            if self.connection_timeouts_remaining.load(Ordering::Relaxed) > 0 {
+                self.connection_timeouts_remaining
+                    .fetch_sub(1, Ordering::Relaxed);
                 // Simulate a connection timeout
                 tokio::time::sleep(self.timeout_duration).await;
                 return Err(Error::StreamingError(anyhow::anyhow!(
                     "Mock connection timeout"
                 )));
             }
-            if self.connection_failures_remaining > 0 {
-                self.connection_failures_remaining -= 1;
+            if self.connection_failures_remaining.load(Ordering::Relaxed) > 0 {
+                self.connection_failures_remaining
+                    .fetch_sub(1, Ordering::Relaxed);
                 return Err(Error::StreamingError(anyhow::anyhow!(
                     "Mock connection failure"
                 )));

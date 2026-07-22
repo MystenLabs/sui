@@ -2,21 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::http;
-use std::{borrow::Cow, collections::HashSet, sync::Arc, time::Instant};
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
-    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    Histogram, HistogramTimer, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry, register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use prost::Message;
+use sui_http::middleware::callback::{MakeCallbackHandler, ResponseHandler};
 
 #[derive(Clone)]
 pub struct RpcMetrics {
     inflight_requests: IntGaugeVec,
     num_requests: IntCounterVec,
     request_latency: HistogramVec,
+    request_handler_latency: HistogramVec,
+    first_chunk_latency: HistogramVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -42,12 +50,149 @@ impl RpcMetrics {
             .unwrap(),
             request_latency: register_histogram_vec_with_registry!(
                 "rpc_request_latency",
-                "Latency of RPC requests per route",
+                "Latency of RPC requests per route, measured from receipt of the request \
+                 until the response body finished streaming back to the client",
                 &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
+            request_handler_latency: register_histogram_vec_with_registry!(
+                "rpc_request_handler_latency",
+                "Latency of RPC requests per route, measured from receipt of the request \
+                 until the request handler produced a response, excluding the time spent \
+                 streaming the response body back to the client",
+                &["path"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            first_chunk_latency: register_histogram_vec_with_registry!(
+                "rpc_first_chunk_latency",
+                "Latency of RPC requests per route, measured from receipt of the request \
+                 until the first response body data chunk is produced. For streaming responses \
+                 this is when the first chunk is handed to the transport, which for gRPC \
+                 typically carries the first encoded message; response headers are excluded. \
+                 Responses whose body never yields a data chunk are not observed.",
+                &["path"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ListApiMetrics {
+    list_first_frame_seconds: HistogramVec,
+    list_response_page_bytes: HistogramVec,
+    list_watermark_frames_total: IntCounterVec,
+    list_stream_yield_wait_seconds: HistogramVec,
+    list_render_seconds: HistogramVec,
+    list_chunk_seconds: HistogramVec,
+    list_query_ends_total: IntCounterVec,
+    list_bitmap_buckets_evaluated: HistogramVec,
+}
+
+impl ListApiMetrics {
+    pub(crate) fn new(registry: &Registry) -> Self {
+        Self {
+            list_first_frame_seconds: register_histogram_vec_with_registry!(
+                "list_first_frame_seconds",
+                "Time in seconds from List handler entry to the first response frame of any kind — data, watermark-only, or terminal — the client's first actionable signal; resolution label derived only from the validated read mask.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.001, 2.0, 17).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_response_page_bytes: register_histogram_vec_with_registry!(
+                "list_response_page_bytes",
+                "Protobuf encoded size in bytes of data-bearing List response frames, measured with encoded_len without serializing or copying; watermark-only and terminal-only frames are excluded and counted by list_watermark_frames_total.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(1024.0, 2.0, 17).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_watermark_frames_total: register_int_counter_vec_with_registry!(
+                "list_watermark_frames_total",
+                "Total watermark-only and terminal-only response frames emitted by List handlers; data-bearing frames are excluded.",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+            list_stream_yield_wait_seconds: register_histogram_vec_with_registry!(
+                "list_stream_yield_wait_seconds",
+                "Time from yielding one List response frame (any kind) until the handler stream is polled again; downstream transport consumption and backpressure signal.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_render_seconds: register_histogram_vec_with_registry!(
+                "list_render_seconds",
+                "Time in seconds spent rendering one data item into a List response frame. Request setup, scan-only watermark rendering, standalone terminal rendering, and chunk-level batch reads are excluded. The resolution label is derived only from the validated read mask.",
+                &["method", "resolution"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_chunk_seconds: register_histogram_vec_with_registry!(
+                "list_chunk_seconds",
+                "Time in seconds for one blocking List chunk phase. queue spans immediately before spawn_blocking through entry into its closure; work spans execution of the blocking chunk and includes chunks that return an error.",
+                &["method", "phase"],
+                prometheus::exponential_buckets(0.0001, 2.0, 20).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            list_query_ends_total: register_int_counter_vec_with_registry!(
+                "list_query_ends_total",
+                "Successful List streams by effective protocol QueryEndReason. Errors, cancellation, and dropped streams are excluded.",
+                &["method", "reason"],
+                registry,
+            )
+            .unwrap(),
+            list_bitmap_buckets_evaluated: register_histogram_vec_with_registry!(
+                "list_bitmap_buckets_evaluated",
+                "Total bitmap buckets evaluated across all blocking chunks of one successfully completed filtered List request. Unfiltered requests are not observed.",
+                &["method"],
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub(crate) fn stream_metrics(
+        &self,
+        method: &'static str,
+        resolution: &'static str,
+    ) -> ListStreamMetrics {
+        ListStreamMetrics {
+            method,
+            first_frame: self
+                .list_first_frame_seconds
+                .with_label_values(&[method, resolution]),
+            page_bytes: self
+                .list_response_page_bytes
+                .with_label_values(&[method, resolution]),
+            watermark_frames: self
+                .list_watermark_frames_total
+                .with_label_values(&[method]),
+            yield_wait: self
+                .list_stream_yield_wait_seconds
+                .with_label_values(&[method, resolution]),
+            render: self
+                .list_render_seconds
+                .with_label_values(&[method, resolution]),
+            chunk_queue: self
+                .list_chunk_seconds
+                .with_label_values(&[method, "queue"]),
+            chunk_work: self.list_chunk_seconds.with_label_values(&[method, "work"]),
+            query_ends: self.list_query_ends_total.clone(),
+            bitmap_buckets_evaluated: self
+                .list_bitmap_buckets_evaluated
+                .with_label_values(&[method]),
         }
     }
 }
@@ -127,9 +272,13 @@ impl RpcMetricsMakeCallbackHandler {
 }
 
 impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
-    type Handler = RpcMetricsCallbackHandler;
+    type RequestHandler = ();
+    type ResponseHandler = RpcMetricsCallbackHandler;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
         let start = Instant::now();
         let metrics = self.metrics.clone();
 
@@ -154,12 +303,16 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
             .with_label_values(&[path.as_ref()])
             .inc();
 
-        RpcMetricsCallbackHandler {
-            metrics,
-            path,
-            start,
-            counted_response: false,
-        }
+        (
+            (),
+            RpcMetricsCallbackHandler {
+                metrics,
+                path,
+                start,
+                counted_response: false,
+                counted_first_chunk: false,
+            },
+        )
     }
 }
 
@@ -197,11 +350,20 @@ pub struct RpcMetricsCallbackHandler {
     // Indicates if we successfully counted the response. In some cases when a request is
     // prematurely canceled this will remain false
     counted_response: bool,
+    counted_first_chunk: bool,
 }
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
     fn on_response(&mut self, response: &http::response::Parts) {
         const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
+
+        // Unlike `request_latency` (observed in `Drop`, after the response
+        // body finished streaming), this fires as soon as the handler
+        // produced a response, so it excludes client-side network latency.
+        self.metrics
+            .request_handler_latency
+            .with_label_values(&[self.path.as_ref()])
+            .observe(self.start.elapsed().as_secs_f64());
 
         let status = if response
             .headers
@@ -228,7 +390,23 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         self.counted_response = true;
     }
 
-    fn on_error<E>(&mut self, _error: &E) {
+    fn on_body_chunk<B>(&mut self, _chunk: &B)
+    where
+        B: bytes::Buf,
+    {
+        if !self.counted_first_chunk {
+            self.metrics
+                .first_chunk_latency
+                .with_label_values(&[self.path.as_ref()])
+                .observe(self.start.elapsed().as_secs_f64());
+            self.counted_first_chunk = true;
+        }
+    }
+
+    fn on_service_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         // Do nothing if the whole service errored
         //
         // in Axum this isn't possible since all services are required to have an error type of
@@ -281,17 +459,190 @@ fn code_as_str(code: tonic::Code) -> &'static str {
 }
 
 #[derive(Clone)]
+pub(crate) struct ListStreamMetrics {
+    method: &'static str,
+    first_frame: Histogram,
+    page_bytes: Histogram,
+    watermark_frames: IntCounter,
+    yield_wait: Histogram,
+    render: Histogram,
+    chunk_queue: Histogram,
+    chunk_work: Histogram,
+    query_ends: IntCounterVec,
+    bitmap_buckets_evaluated: Histogram,
+}
+
+impl ListStreamMetrics {
+    pub(crate) fn observe_render(&self, elapsed: Duration) {
+        self.render.observe(elapsed.as_secs_f64());
+    }
+
+    pub(crate) fn start_queue_timer(&self) -> HistogramTimer {
+        self.chunk_queue.start_timer()
+    }
+
+    pub(crate) fn start_work_timer(&self) -> HistogramTimer {
+        self.chunk_work.start_timer()
+    }
+}
+
+pub(crate) struct ListRequestMetrics {
+    inner: Option<ListRequestMetricsInner>,
+}
+
+struct ListRequestMetricsInner {
+    handles: ListStreamMetrics,
+    started: Instant,
+    first_frame_observed: bool,
+    success_finished: bool,
+}
+
+impl ListRequestMetrics {
+    pub(crate) fn new(handles: Option<ListStreamMetrics>, started: Instant) -> Self {
+        Self {
+            inner: handles.map(|handles| ListRequestMetricsInner {
+                handles,
+                started,
+                first_frame_observed: false,
+                success_finished: false,
+            }),
+        }
+    }
+
+    pub(crate) fn chunk_metrics(&self) -> Option<ListStreamMetrics> {
+        self.inner.as_ref().map(|inner| inner.handles.clone())
+    }
+
+    pub(crate) fn observe_frame<M: prost::Message>(&mut self, response: &M, is_data: bool) {
+        let Some(inner) = &mut self.inner else {
+            return;
+        };
+        if is_data {
+            inner
+                .handles
+                .page_bytes
+                .observe(response.encoded_len() as f64);
+        } else {
+            inner.handles.watermark_frames.inc();
+        }
+        if !inner.first_frame_observed {
+            inner
+                .handles
+                .first_frame
+                .observe(inner.started.elapsed().as_secs_f64());
+            inner.first_frame_observed = true;
+        }
+    }
+
+    pub(crate) fn yield_clock(&self) -> Option<Instant> {
+        self.inner.as_ref().map(|_| Instant::now())
+    }
+
+    /// Pair with `yield_clock`: capture immediately before `yield`, then observe as the first
+    /// statement after resumption. A stream dropped while suspended records no sample.
+    pub(crate) fn observe_yield_wait(&self, yield_started: Option<Instant>) {
+        if let (Some(inner), Some(yield_started)) = (&self.inner, yield_started) {
+            inner
+                .handles
+                .yield_wait
+                .observe(yield_started.elapsed().as_secs_f64());
+        }
+    }
+
+    pub(crate) fn finish_success(
+        &mut self,
+        reason: sui_rpc::proto::sui::rpc::v2::QueryEndReason,
+        bitmap_buckets_evaluated: Option<usize>,
+    ) {
+        let Some(inner) = &mut self.inner else {
+            return;
+        };
+        if inner.success_finished {
+            return;
+        }
+        inner.success_finished = true;
+        let reason = match reason {
+            sui_rpc::proto::sui::rpc::v2::QueryEndReason::ItemLimit => "item_limit",
+            sui_rpc::proto::sui::rpc::v2::QueryEndReason::ScanLimit => "scan_limit",
+            sui_rpc::proto::sui::rpc::v2::QueryEndReason::LedgerTip => "ledger_tip",
+            sui_rpc::proto::sui::rpc::v2::QueryEndReason::CheckpointBound => "checkpoint_bound",
+            sui_rpc::proto::sui::rpc::v2::QueryEndReason::CursorBound => "cursor_bound",
+            // Validation guarantees successful List streams always have a concrete end reason.
+            sui_rpc::proto::sui::rpc::v2::QueryEndReason::Unknown => {
+                unreachable!("validated successful List stream has an unspecified end reason")
+            }
+            _ => unreachable!("validated successful List stream has an unsupported end reason"),
+        };
+        inner
+            .handles
+            .query_ends
+            .with_label_values(&[inner.handles.method, reason])
+            .inc();
+        if let Some(bitmap_buckets_evaluated) = bitmap_buckets_evaluated {
+            inner
+                .handles
+                .bitmap_buckets_evaluated
+                .observe(bitmap_buckets_evaluated as f64);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SubscriptionFrameKind {
+    Payload,
+    Watermark,
+}
+
+#[derive(Clone)]
+pub(crate) struct SubscriptionStreamMetrics {
+    pub(crate) payload_messages: IntCounter,
+    watermark_messages: IntCounter,
+    payload_bytes: Histogram,
+    yield_wait: Histogram,
+}
+
+impl SubscriptionStreamMetrics {
+    pub(crate) fn observe_frame<M: prost::Message>(
+        &self,
+        response: &M,
+        kind: SubscriptionFrameKind,
+    ) {
+        match kind {
+            SubscriptionFrameKind::Payload => {
+                self.payload_messages.inc();
+                self.payload_bytes.observe(response.encoded_len() as f64);
+            }
+            SubscriptionFrameKind::Watermark => {
+                self.watermark_messages.inc();
+            }
+        }
+    }
+
+    pub(crate) fn observe_yield_wait(&self, elapsed: Duration) {
+        self.yield_wait.observe(elapsed.as_secs_f64());
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct SubscriptionMetrics {
-    pub inflight_subscribers: IntGauge,
-    pub last_recieved_checkpoint: IntGauge,
+    pub(crate) inflight_subscribers: IntGaugeVec,
+    pub(crate) last_recieved_checkpoint: IntGauge,
+    pub payload_messages: IntCounterVec,
+    pub(crate) watermark_messages: IntCounterVec,
+    pub(crate) payload_bytes: HistogramVec,
+    pub(crate) stream_yield_wait_seconds: HistogramVec,
+    pub(crate) terminations_total: IntCounterVec,
+    pub(crate) index_wait_seconds: Histogram,
+    pub(crate) index_wait_timeouts_total: IntCounter,
 }
 
 impl SubscriptionMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            inflight_subscribers: register_int_gauge_with_registry!(
+            inflight_subscribers: register_int_gauge_vec_with_registry!(
                 "subscription_inflight_subscribers",
-                "Total in-flight subscriptions",
+                "Current admitted gRPC subscriptions by type and whether a filter is present.",
+                &["type", "filtered"],
                 registry,
             )
             .unwrap(),
@@ -301,6 +652,68 @@ impl SubscriptionMetrics {
                 registry,
             )
             .unwrap(),
+            payload_messages: register_int_counter_vec_with_registry!(
+                "subscription_payload_messages",
+                "Total number of payload messages emitted by gRPC subscriptions, by type",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            watermark_messages: register_int_counter_vec_with_registry!(
+                "subscription_watermark_messages_total",
+                "Total progress-only response frames emitted by gRPC subscriptions, including initial filtered-subscription start frames, by type.",
+                &["type"],
+                registry,
+            )
+            .unwrap(),
+            payload_bytes: register_histogram_vec_with_registry!(
+                "subscription_payload_bytes",
+                "Protobuf encoded size in bytes of payload response frames yielded by a gRPC subscription, measured with encoded_len without serializing or copying the response. Progress-only frames are excluded and counted by subscription_watermark_messages_total.",
+                &["type"],
+                prometheus::exponential_buckets(1024.0, 2.0, 17).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_yield_wait_seconds: register_histogram_vec_with_registry!(
+                "subscription_stream_yield_wait_seconds",
+                "Time in seconds from yielding any gRPC subscription response until the stream is polled again; this is a downstream transport consumption and backpressure signal.",
+                &["type"],
+                prometheus::exponential_buckets(0.00001, 2.0, 24).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            terminations_total: register_int_counter_vec_with_registry!(
+                "subscription_terminations_total",
+                "Admitted gRPC subscriptions terminated by bounded lifecycle reason. Admission rejections are excluded.",
+                &["type", "reason"],
+                registry,
+            )
+            .unwrap(),
+            index_wait_seconds: register_histogram_with_registry!(
+                "subscription_index_wait_seconds",
+                "Time in seconds spent waiting for the subscription index to catch up before dispatching a checkpoint. Checkpoints that do not wait are excluded.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            index_wait_timeouts_total: register_int_counter_with_registry!(
+                "subscription_index_wait_timeouts_total",
+                "Total subscription index waits that reached the 10-second timeout and dispatched the checkpoint before the index caught up.",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+impl SubscriptionMetrics {
+    pub(crate) fn stream_metrics(&self, type_label: &'static str) -> SubscriptionStreamMetrics {
+        SubscriptionStreamMetrics {
+            payload_messages: self.payload_messages.with_label_values(&[type_label]),
+            watermark_messages: self.watermark_messages.with_label_values(&[type_label]),
+            payload_bytes: self.payload_bytes.with_label_values(&[type_label]),
+            yield_wait: self
+                .stream_yield_wait_seconds
+                .with_label_values(&[type_label]),
         }
     }
 }
@@ -308,8 +721,14 @@ impl SubscriptionMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
     use prost_types::{
         FileDescriptorProto, FileDescriptorSet, MethodDescriptorProto, ServiceDescriptorProto,
+    };
+    use sui_rpc::proto::sui::rpc::v2::{
+        ListTransactionsResponse, QueryEnd, SubscribeCheckpointsResponse, SubscribeEventsResponse,
+        SubscribeTransactionsResponse, Watermark,
     };
 
     fn encode(set: FileDescriptorSet) -> Vec<u8> {
@@ -384,15 +803,15 @@ mod tests {
     #[test]
     fn known_grpc_method_without_matched_path_uses_uri_path_label() {
         let mut allowlist = HashSet::new();
-        allowlist.insert("/sui.rpc.v2alpha.LedgerService/ListTransactions".to_owned());
+        allowlist.insert("/sui.rpc.v2.LedgerService/ListTransactions".to_owned());
 
         let label = compute_metric_label(
             true,
-            "/sui.rpc.v2alpha.LedgerService/ListTransactions",
+            "/sui.rpc.v2.LedgerService/ListTransactions",
             None,
             &allowlist,
         );
-        assert_eq!(label, "/sui.rpc.v2alpha.LedgerService/ListTransactions");
+        assert_eq!(label, "/sui.rpc.v2.LedgerService/ListTransactions");
     }
 
     #[test]
@@ -436,5 +855,433 @@ mod tests {
         assert!(!is_grpc_content_type(&http::HeaderValue::from_static(
             "application/json"
         )));
+    }
+
+    /// Builds a handler for a request with no matched path, so all metric
+    /// observations land on the "unknown" label.
+    fn make_test_handler(metrics: &Arc<RpcMetrics>) -> RpcMetricsCallbackHandler {
+        let make = RpcMetricsMakeCallbackHandler::new(metrics.clone());
+        let (parts, _) = http::Request::new(()).into_parts();
+        let ((), handler) = make.make_handler(&parts);
+        handler
+    }
+
+    // The handler latency is observed as soon as the handler produces a
+    // response, while the total request latency is only observed once the
+    // handler is dropped (i.e. the response body finished streaming).
+    #[test]
+    fn handler_latency_observed_on_response_and_total_latency_on_drop() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let mut handler = make_test_handler(&metrics);
+
+        let handler_latency = metrics
+            .request_handler_latency
+            .with_label_values(&["unknown"]);
+        let total_latency = metrics.request_latency.with_label_values(&["unknown"]);
+
+        assert_eq!(handler_latency.get_sample_count(), 0);
+
+        let (parts, _) = http::Response::new(()).into_parts();
+        handler.on_response(&parts);
+
+        assert_eq!(handler_latency.get_sample_count(), 1);
+        assert_eq!(total_latency.get_sample_count(), 0);
+
+        drop(handler);
+
+        assert_eq!(handler_latency.get_sample_count(), 1);
+        assert_eq!(total_latency.get_sample_count(), 1);
+    }
+
+    #[test]
+    fn first_chunk_latency_observed_once_on_first_body_chunk() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let mut handler = make_test_handler(&metrics);
+        let first_chunk_latency = metrics.first_chunk_latency.with_label_values(&["unknown"]);
+
+        let (parts, _) = http::Response::new(()).into_parts();
+        handler.on_response(&parts);
+        handler.on_body_chunk(&bytes::Bytes::from_static(b"first"));
+        handler.on_body_chunk(&bytes::Bytes::from_static(b"second"));
+
+        assert_eq!(first_chunk_latency.get_sample_count(), 1);
+
+        drop(handler);
+
+        assert_eq!(first_chunk_latency.get_sample_count(), 1);
+    }
+
+    // A request canceled before the handler produces a response records the
+    // total latency and the canceled count, but no handler latency.
+    #[test]
+    fn handler_latency_not_observed_for_canceled_requests() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let handler = make_test_handler(&metrics);
+
+        drop(handler);
+
+        assert_eq!(
+            metrics
+                .request_handler_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .first_chunk_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", "canceled"])
+                .get(),
+            1
+        );
+    }
+    fn metric_label_sets(
+        family: &prometheus::proto::MetricFamily,
+    ) -> BTreeSet<Vec<(String, String)>> {
+        family
+            .get_metric()
+            .iter()
+            .map(|metric| {
+                let mut labels = metric
+                    .get_label()
+                    .iter()
+                    .map(|label| (label.name().to_owned(), label.value().to_owned()))
+                    .collect::<Vec<_>>();
+                labels.sort();
+                labels
+            })
+            .collect()
+    }
+
+    fn expected_label_sets(rows: Vec<Vec<(&str, &str)>>) -> BTreeSet<Vec<(String, String)>> {
+        rows.into_iter()
+            .map(|row| {
+                let mut labels = row
+                    .into_iter()
+                    .map(|(name, value)| (name.to_owned(), value.to_owned()))
+                    .collect::<Vec<_>>();
+                labels.sort();
+                labels
+            })
+            .collect()
+    }
+
+    fn assert_metric_family(
+        families: &[prometheus::proto::MetricFamily],
+        name: &str,
+        expected_labels: BTreeSet<Vec<(String, String)>>,
+    ) {
+        let family = families
+            .iter()
+            .find(|family| family.name() == name)
+            .unwrap_or_else(|| panic!("missing metric family {name}"));
+        assert_eq!(metric_label_sets(family), expected_labels, "{name}");
+    }
+
+    #[test]
+    fn focused_metric_families_use_exact_bounded_labels() {
+        let registry = Registry::new();
+        let list_metrics = ListApiMetrics::new(&registry);
+        let method_resolutions = [
+            ("list_checkpoints", "summary"),
+            ("list_checkpoints", "transactions"),
+            ("list_checkpoints", "objects"),
+            ("list_transactions", "digest"),
+            ("list_transactions", "full"),
+            ("list_transactions", "full_objects"),
+            ("list_events", "no_json"),
+            ("list_events", "json"),
+        ];
+        for (method, resolution) in method_resolutions {
+            list_metrics.stream_metrics(method, resolution);
+        }
+        let methods = ["list_checkpoints", "list_transactions", "list_events"];
+        let reasons = [
+            "item_limit",
+            "scan_limit",
+            "ledger_tip",
+            "checkpoint_bound",
+            "cursor_bound",
+        ];
+        for method in methods {
+            for reason in reasons {
+                list_metrics
+                    .list_query_ends_total
+                    .with_label_values(&[method, reason]);
+            }
+        }
+
+        let subscription_metrics = SubscriptionMetrics::new(&registry);
+        let types = ["checkpoint", "transaction", "event"];
+        for type_label in types {
+            subscription_metrics.stream_metrics(type_label);
+            for filtered in ["true", "false"] {
+                subscription_metrics
+                    .inflight_subscribers
+                    .with_label_values(&[type_label, filtered]);
+            }
+            for reason in [
+                "client_closed",
+                "slow_consumer",
+                "source_lag",
+                "service_shutdown",
+            ] {
+                subscription_metrics
+                    .terminations_total
+                    .with_label_values(&[type_label, reason]);
+            }
+        }
+
+        let families = registry.gather();
+        let method_resolution_labels = expected_label_sets(
+            method_resolutions
+                .into_iter()
+                .map(|(method, resolution)| vec![("method", method), ("resolution", resolution)])
+                .collect(),
+        );
+        for name in [
+            "list_first_frame_seconds",
+            "list_response_page_bytes",
+            "list_stream_yield_wait_seconds",
+            "list_render_seconds",
+        ] {
+            assert_metric_family(&families, name, method_resolution_labels.clone());
+        }
+        assert_metric_family(
+            &families,
+            "list_watermark_frames_total",
+            expected_label_sets(
+                methods
+                    .into_iter()
+                    .map(|method| vec![("method", method)])
+                    .collect(),
+            ),
+        );
+        assert_metric_family(
+            &families,
+            "list_chunk_seconds",
+            expected_label_sets(
+                methods
+                    .into_iter()
+                    .flat_map(|method| {
+                        ["queue", "work"]
+                            .into_iter()
+                            .map(move |phase| vec![("method", method), ("phase", phase)])
+                    })
+                    .collect(),
+            ),
+        );
+        assert_metric_family(
+            &families,
+            "list_query_ends_total",
+            expected_label_sets(
+                methods
+                    .into_iter()
+                    .flat_map(|method| {
+                        reasons
+                            .into_iter()
+                            .map(move |reason| vec![("method", method), ("reason", reason)])
+                    })
+                    .collect(),
+            ),
+        );
+        assert_metric_family(
+            &families,
+            "list_bitmap_buckets_evaluated",
+            expected_label_sets(
+                methods
+                    .into_iter()
+                    .map(|method| vec![("method", method)])
+                    .collect(),
+            ),
+        );
+
+        let type_labels = expected_label_sets(
+            types
+                .into_iter()
+                .map(|type_label| vec![("type", type_label)])
+                .collect(),
+        );
+        assert_metric_family(
+            &families,
+            "subscription_payload_messages",
+            type_labels.clone(),
+        );
+        assert_metric_family(
+            &families,
+            "subscription_watermark_messages_total",
+            type_labels.clone(),
+        );
+        assert_metric_family(
+            &families,
+            "subscription_stream_yield_wait_seconds",
+            type_labels.clone(),
+        );
+        assert_metric_family(&families, "subscription_payload_bytes", type_labels);
+        assert_metric_family(
+            &families,
+            "subscription_inflight_subscribers",
+            expected_label_sets(
+                types
+                    .into_iter()
+                    .flat_map(|type_label| {
+                        ["true", "false"]
+                            .into_iter()
+                            .map(move |filtered| vec![("type", type_label), ("filtered", filtered)])
+                    })
+                    .collect(),
+            ),
+        );
+        assert_metric_family(
+            &families,
+            "subscription_terminations_total",
+            expected_label_sets(
+                types
+                    .into_iter()
+                    .flat_map(|type_label| {
+                        [
+                            "client_closed",
+                            "slow_consumer",
+                            "source_lag",
+                            "service_shutdown",
+                        ]
+                        .into_iter()
+                        .map(move |reason| vec![("type", type_label), ("reason", reason)])
+                    })
+                    .collect(),
+            ),
+        );
+        assert_metric_family(
+            &families,
+            "subscription_index_wait_seconds",
+            expected_label_sets(vec![vec![]]),
+        );
+        assert_metric_family(
+            &families,
+            "subscription_index_wait_timeouts_total",
+            expected_label_sets(vec![vec![]]),
+        );
+    }
+
+    #[test]
+    fn list_page_and_watermark_metrics_cover_all_frame_kinds() {
+        let registry = Registry::new();
+        let metrics = ListApiMetrics::new(&registry);
+        let handles = metrics.stream_metrics("list_transactions", "full");
+        let mut request_metrics = ListRequestMetrics::new(Some(handles.clone()), Instant::now());
+
+        let mut data = ListTransactionsResponse::default();
+        data.transaction = Some(Default::default());
+        let mut watermark_only = ListTransactionsResponse::default();
+        watermark_only.watermark = Some(Watermark::default());
+        let mut terminal = ListTransactionsResponse::default();
+        terminal.end = Some(QueryEnd::default());
+
+        request_metrics.observe_frame(&watermark_only, false);
+        assert_eq!(handles.first_frame.get_sample_count(), 1);
+        let yield_started = request_metrics.yield_clock();
+        request_metrics.observe_yield_wait(yield_started);
+        request_metrics.observe_frame(&data, true);
+        let yield_started = request_metrics.yield_clock();
+        request_metrics.observe_yield_wait(yield_started);
+        request_metrics.observe_frame(&terminal, false);
+        let yield_started = request_metrics.yield_clock();
+        request_metrics.observe_yield_wait(yield_started);
+        handles.observe_render(Duration::from_millis(1));
+
+        assert_eq!(handles.page_bytes.get_sample_count(), 1);
+        assert_eq!(
+            handles.page_bytes.get_sample_sum(),
+            data.encoded_len() as f64
+        );
+        assert_eq!(handles.watermark_frames.get(), 2);
+        assert_eq!(handles.first_frame.get_sample_count(), 1);
+        assert_eq!(handles.yield_wait.get_sample_count(), 3);
+        assert_eq!(handles.render.get_sample_count(), 1);
+
+        let terminal_registry = Registry::new();
+        let terminal_metrics = ListApiMetrics::new(&terminal_registry);
+        let terminal_handles = terminal_metrics.stream_metrics("list_transactions", "digest");
+        let mut terminal_request =
+            ListRequestMetrics::new(Some(terminal_handles.clone()), Instant::now());
+        terminal_request.observe_frame(&terminal, false);
+
+        assert_eq!(terminal_handles.page_bytes.get_sample_count(), 0);
+        assert_eq!(terminal_handles.page_bytes.get_sample_sum(), 0.0);
+        assert_eq!(terminal_handles.watermark_frames.get(), 1);
+        assert_eq!(terminal_handles.first_frame.get_sample_count(), 1);
+    }
+
+    fn assert_subscription_response_metrics<M: Message>(
+        metrics: &SubscriptionMetrics,
+        type_label: &'static str,
+        payload: &M,
+        watermark: &M,
+    ) {
+        let stream_metrics = metrics.stream_metrics(type_label);
+        stream_metrics.observe_frame(payload, SubscriptionFrameKind::Payload);
+        stream_metrics.observe_yield_wait(Duration::from_millis(1));
+        stream_metrics.observe_frame(watermark, SubscriptionFrameKind::Watermark);
+        stream_metrics.observe_yield_wait(Duration::from_millis(2));
+
+        assert_eq!(stream_metrics.payload_messages.get(), 1);
+        assert_eq!(stream_metrics.watermark_messages.get(), 1);
+        assert_eq!(stream_metrics.payload_bytes.get_sample_count(), 1);
+        assert_eq!(
+            stream_metrics.payload_bytes.get_sample_sum(),
+            payload.encoded_len() as f64
+        );
+        assert_eq!(stream_metrics.yield_wait.get_sample_count(), 2);
+    }
+
+    #[test]
+    fn subscription_response_metrics_split_payload_and_watermark_frames() {
+        let registry = Registry::new();
+        let metrics = SubscriptionMetrics::new(&registry);
+
+        let mut checkpoint_payload = SubscribeCheckpointsResponse::default();
+        checkpoint_payload.cursor = Some(7);
+        checkpoint_payload.checkpoint = Some(Default::default());
+        let mut checkpoint_watermark = SubscribeCheckpointsResponse::default();
+        checkpoint_watermark.cursor = Some(8);
+        assert_subscription_response_metrics(
+            &metrics,
+            "checkpoint",
+            &checkpoint_payload,
+            &checkpoint_watermark,
+        );
+
+        let mut transaction_payload = SubscribeTransactionsResponse::default();
+        transaction_payload.transaction = Some(Default::default());
+        transaction_payload.watermark = Some(Watermark::default());
+        let mut transaction_watermark = SubscribeTransactionsResponse::default();
+        transaction_watermark.watermark = Some(Watermark::default());
+        assert_subscription_response_metrics(
+            &metrics,
+            "transaction",
+            &transaction_payload,
+            &transaction_watermark,
+        );
+
+        let mut event_payload = SubscribeEventsResponse::default();
+        event_payload.event = Some(Default::default());
+        event_payload.watermark = Some(Watermark::default());
+        let mut event_watermark = SubscribeEventsResponse::default();
+        event_watermark.watermark = Some(Watermark::default());
+        assert_subscription_response_metrics(&metrics, "event", &event_payload, &event_watermark);
     }
 }

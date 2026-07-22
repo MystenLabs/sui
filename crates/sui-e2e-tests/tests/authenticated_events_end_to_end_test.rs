@@ -32,7 +32,7 @@ async fn setup_test_cluster_with_auth_events() -> TestCluster {
 async fn setup_test_cluster_with_auth_events_disabled() -> TestCluster {
     let _guard: sui_protocol_config::OverrideGuard =
         ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-            cfg.disable_authenticated_event_streams_for_testing();
+            cfg.set_enable_authenticated_event_streams_for_testing(false);
             cfg
         });
 

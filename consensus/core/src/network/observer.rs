@@ -1,15 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    pin::Pin,
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt as _};
-use mysten_network::{Multiaddr, callback::CallbackLayer};
+use mysten_network::Multiaddr;
 use parking_lot::RwLock;
+use sui_http::middleware::callback::CallbackLayer;
 use tokio_stream::Iter;
 use tonic::{Request, Response};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
@@ -23,7 +29,8 @@ use crate::{
         metrics_layer::MetricsCallbackMaker,
         to_host_port_str,
         tonic_network::{
-            Channel, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, max_fetch_blocks_response_bytes,
+            Channel, MAX_FETCH_RESPONSE_BYTES, ReboxRequestFn, chunk_blocks,
+            max_fetch_blocks_response_bytes, rebox_request,
         },
         tonic_tls::certificate_server_name,
     },
@@ -34,8 +41,8 @@ use super::{ObserverNetworkService, tonic_gen::observer_service_server::Observer
 // Observer block streaming messages
 #[derive(Clone, prost::Message)]
 pub(crate) struct BlockStreamRequest {
-    #[prost(uint64, repeated, tag = "1")]
-    pub(crate) highest_round_per_authority: Vec<u64>,
+    #[prost(uint32, repeated, tag = "1")]
+    pub(crate) highest_round_per_authority: Vec<Round>,
 }
 
 /// Auxiliary data carried alongside blocks in the observer stream.
@@ -205,6 +212,7 @@ impl ChannelPool {
                 self.context.metrics.network_metrics.outbound.clone(),
                 self.context.parameters.tonic.excessive_message_size,
             )))
+            .map_request(rebox_request as ReboxRequestFn)
             .layer(
                 TraceLayer::new_for_grpc()
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
@@ -256,7 +264,7 @@ impl ObserverNetworkClient for TonicObserverClient {
     async fn stream_blocks(
         &self,
         peer: PeerId,
-        highest_round_per_authority: Vec<u64>,
+        highest_round_per_authority: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream> {
         let mut client = self.get_client(peer.clone(), timeout).await?;
@@ -392,12 +400,25 @@ impl ObserverNetworkClient for TonicObserverClient {
 /// Proxies Observer Tonic requests to ObserverNetworkService.
 /// Extracts peer NodeId from TLS certificates and delegates to the service layer.
 pub(crate) struct ObserverServiceProxy<S: ObserverNetworkService> {
-    service: Arc<S>,
+    // ObserverServiceProxy is cloned into per-connection server tasks, which complete on the
+    // network's schedule during graceful shutdown, and can briefly outlive the node if it is
+    // dropped without stop(). Hold the service weakly so lingering connections cannot extend
+    // the life of the observer service and its state; requests racing shutdown fail with
+    // `unavailable` instead.
+    service: Weak<S>,
 }
 
 impl<S: ObserverNetworkService> ObserverServiceProxy<S> {
     pub(crate) fn new(service: Arc<S>) -> Self {
-        Self { service }
+        Self {
+            service: Arc::downgrade(&service),
+        }
+    }
+
+    fn service(&self) -> Result<Arc<S>, tonic::Status> {
+        self.service
+            .upgrade()
+            .ok_or_else(|| tonic::Status::unavailable("Consensus authority is shutting down"))
     }
 }
 
@@ -423,7 +444,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
         let highest_round_per_authority = request.into_inner().highest_round_per_authority;
 
         let block_stream = self
-            .service
+            .service()?
             .handle_stream_blocks(peer_id, highest_round_per_authority)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -472,7 +493,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
         let fetch_after_rounds = inner.fetch_after_rounds;
         let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_blocks(
                 peer_id,
                 block_refs,
@@ -506,7 +527,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
             })?;
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
-            .service
+            .service()?
             .handle_fetch_commits(peer_id, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -563,7 +584,7 @@ mod tests {
         let observer_peer_id = keys[0].0.public().clone();
 
         let block_stream = service
-            .handle_stream_blocks(observer_peer_id.clone(), vec![0u64, 0, 0, 0])
+            .handle_stream_blocks(observer_peer_id.clone(), vec![0u32, 0, 0, 0])
             .await
             .unwrap();
 
@@ -595,7 +616,7 @@ mod tests {
 
         let observer_peer_id = keys[0].0.public().clone();
 
-        let highest_round_per_authority = vec![50u64, 50, 50, 50];
+        let highest_round_per_authority = vec![50u32, 50, 50, 50];
 
         let block_stream = service
             .handle_stream_blocks(observer_peer_id, highest_round_per_authority)
@@ -664,7 +685,7 @@ mod tests {
         let peer_id = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
 
         let result = observer_client_0
-            .stream_blocks(peer_id, vec![10u64, 10, 10, 10], Duration::from_secs(5))
+            .stream_blocks(peer_id, vec![10u32, 10, 10, 10], Duration::from_secs(5))
             .await;
 
         // This should work with proper TonicManager setup

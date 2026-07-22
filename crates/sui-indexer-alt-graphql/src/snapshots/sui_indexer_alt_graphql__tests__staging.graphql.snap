@@ -4133,11 +4133,13 @@ type StoreExecutionTimeObservationsTransaction {
 
 type Subscription {
 	"""
-	Subscribe to checkpoints as they are finalized, starting from the current tip.
+	Subscribe to checkpoints as they are finalized.
+	
+	Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number) to resume from a known point. If both are provided, the subscription resumes from whichever is later.
 	
 	This subscription is not yet available for use.
 	"""
-	checkpoints: Checkpoint!
+	checkpoints(after: String, afterCheckpoint: UInt53): CheckpointEdge!
 	"""
 	Subscribe to events as they are emitted, with optional filtering.
 	
@@ -4147,7 +4149,7 @@ type Subscription {
 	
 	This subscription is not yet available for use.
 	"""
-	events(filter: EventFilter): Event!
+	events(filter: EventFilter): EventEdge!
 	"""
 	Subscribe to transactions as they are finalized, with optional filtering.
 	
@@ -4157,7 +4159,7 @@ type Subscription {
 	
 	This subscription is not yet available for use.
 	"""
-	transactions(filter: TransactionFilter): Transaction!
+	transactions(filter: TransactionFilter): TransactionEdge!
 }
 
 """

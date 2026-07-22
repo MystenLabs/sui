@@ -7,7 +7,6 @@ use crate::{
     authority::{
         ExecutionEnv,
         authority_per_epoch_store::AuthorityPerEpochStore,
-        epoch_start_configuration::EpochStartConfigTrait,
         shared_object_version_manager::{AssignedVersions, Schedulable},
     },
     checkpoints::causal_order::CausalOrder,

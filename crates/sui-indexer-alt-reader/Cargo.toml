@@ -9,11 +9,15 @@ edition = "2024"
 [lints]
 workspace = true
 
+[features]
+testing = []
+
 [dependencies]
 anyhow.workspace = true
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait.workspace = true
 bcs.workspace = true
+bytes.workspace = true
 clap.workspace = true
 diesel.workspace = true
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }

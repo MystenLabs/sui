@@ -16,16 +16,20 @@ use consensus_core::{
     RandomnessSignatureHandler, storage::rocksdb_store::RocksDBStore,
 };
 use core::panic;
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysten_network::Multiaddr;
-use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
+use prometheus::{
+    IntGauge, IntGaugeVec, Registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
+};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_network::endpoint_manager::ConsensusAddressUpdater;
+use sui_network::endpoint_manager::{AddressSource, ConsensusAddressUpdater};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
@@ -93,14 +97,19 @@ impl AddressOverridesMap {
         }
     }
 
-    pub fn get_highest_priority_address(
+    /// Returns the highest-priority active override `(source, address)` for the
+    /// peer, or `None` when no override is installed (the on-chain committee
+    /// address is in use).
+    pub fn get_highest_priority_source_and_address(
         &self,
         network_pubkey: ConsensusNetworkPublicKey,
-    ) -> Option<Multiaddr> {
+    ) -> Option<(sui_network::endpoint_manager::AddressSource, Multiaddr)> {
         self.map
             .get(&network_pubkey)
             .and_then(|sources| sources.first_key_value())
-            .and_then(|(_, addresses)| addresses.first().cloned())
+            .and_then(|(source, addresses)| {
+                addresses.first().cloned().map(|address| (*source, address))
+            })
     }
 
     pub fn get_all_highest_priority_addresses(
@@ -145,8 +154,8 @@ fn apply_v3_threshold_overrides(committee: Committee) -> Committee {
     )
 }
 
-fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> ConsensusProtocolConfig {
-    let chain_type = match chain {
+fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolConfig {
+    let chain_type = match config.chain() {
         Chain::Mainnet => ChainType::Mainnet,
         Chain::Testnet => ChainType::Testnet,
         Chain::Unknown => ChainType::Unknown,
@@ -250,8 +259,7 @@ impl ConsensusManager {
     ) {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
-        let consensus_protocol_config =
-            to_consensus_protocol_config(protocol_config, epoch_store.get_chain());
+        let consensus_protocol_config = to_consensus_protocol_config(protocol_config);
         let system_state = epoch_store.epoch_start_state();
         let committee = if consensus_protocol_config.enable_v3() {
             apply_v3_threshold_overrides(system_state.get_consensus_committee())
@@ -456,6 +464,15 @@ impl ConsensusManager {
         self.authority.load().as_ref().map(|a| a.0.store())
     }
 
+    pub fn address_overrides_snapshot(
+        &self,
+    ) -> BTreeMap<
+        ConsensusNetworkPublicKey,
+        BTreeMap<sui_network::endpoint_manager::AddressSource, Vec<Multiaddr>>,
+    > {
+        self.address_overrides.lock().map.clone()
+    }
+
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
@@ -474,8 +491,8 @@ impl ConsensusAddressUpdater for ConsensusManager {
         // Convert to consensus network public key once
         let network_pubkey = ConsensusNetworkPublicKey::new(network_pubkey.clone());
 
-        // Determine what address should be used after this update (if any)
-        let address_to_apply = {
+        // Determine which override (if any) should be used after this update.
+        let highest_priority = {
             let mut address_overrides = self.address_overrides.lock();
 
             if addresses.is_empty() {
@@ -484,10 +501,15 @@ impl ConsensusAddressUpdater for ConsensusManager {
                 address_overrides.insert(network_pubkey.clone(), source, addresses.clone());
             }
 
-            address_overrides.get_highest_priority_address(network_pubkey.clone())
+            address_overrides.get_highest_priority_source_and_address(network_pubkey.clone())
         };
+        self.metrics.set_active_address_source(
+            &Hex::encode(network_pubkey.to_bytes()),
+            highest_priority.as_ref().map(|(source, _)| *source),
+        );
 
         // Apply the update to running consensus if it exists
+        let address_to_apply = highest_priority.map(|(_, address)| address);
         if let Some(authority) = self.authority.load_full() {
             authority
                 .0
@@ -606,6 +628,7 @@ impl Clone for ReplayWaiter {
 pub struct ConsensusManagerMetrics {
     start_latency: IntGauge,
     shutdown_latency: IntGauge,
+    active_address_source: IntGaugeVec,
 }
 
 impl ConsensusManagerMetrics {
@@ -623,6 +646,34 @@ impl ConsensusManagerMetrics {
                 registry,
             )
             .unwrap(),
+            active_address_source: register_int_gauge_vec_with_registry!(
+                "consensus_active_address_source",
+                "Active consensus address source per committee peer, encoded as the gauge \
+                 value: 0=committee (no override active; the on-chain committee address is in \
+                 use), 1=admin, 2=config, 3=discovery, 4=seed, 5=chain (override priority \
+                 highest to lowest). One series per peer; `peer_id` is the full hex consensus \
+                 network public key.",
+                &["peer_id"],
+                registry,
+            )
+            .unwrap(),
         }
+    }
+
+    /// Records the active consensus address source for a committee peer as a single
+    /// per-peer gauge whose value is the source's `metric_code`. `active =
+    /// Some(source)` means an override is installed; `None` means no override.
+    fn set_active_address_source(
+        &self,
+        peer_id: &str,
+        active: Option<sui_network::endpoint_manager::AddressSource>,
+    ) {
+        let code = active.map_or(
+            AddressSource::DEFAULT_ADDRESS_SOURCE_CODE,
+            sui_network::endpoint_manager::AddressSource::metric_code,
+        );
+        self.active_address_source
+            .with_label_values(&[peer_id])
+            .set(code);
     }
 }

@@ -16,7 +16,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::proto::TxMetadata as StoredTxMetadata;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 pub const NAME: &str = "tx_metadata_by_seq";
 

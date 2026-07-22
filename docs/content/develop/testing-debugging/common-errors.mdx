@@ -1,7 +1,47 @@
 ---
 title: Troubleshooting Common Errors
-description: Find solutions to common issues with addresses, transactions, and Move packages.
-keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting, RPC errors, SDK errors, MoveAbort, gas coins ]
+description: >-
+  Find solutions to common issues with addresses, transactions, and Move
+  packages.
+keywords:
+  - address errors
+  - package errors
+  - system errors
+  - transaction errors
+  - troubleshooting
+  - RPC errors
+  - SDK errors
+  - MoveAbort
+  - gas coins
+goal:
+  description: >-
+    Reader can identify common Sui errors by their message and apply the
+    documented fix
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - pattern: Solution|Fix|Cause
+      min: 2
+      label: Has problem-solution pairs
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 2
+      label: Has code examples showing fixes
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Troubleshooting Common Errors in Sui?
+  - How do I address errors?
+  - How does troubleshooting common errors work on Sui?
+answer: >-
+  Find solutions to common issues with addresses, transactions, and Move
+  packages.
 ---
 
 <AgentPrompt
@@ -551,3 +591,54 @@ tx.pure.string(name);
 tx.pure.bool(flag);
 tx.pure.vector('u8', bytes);
 ```
+
+---
+
+#### Non-existent object handling changed in SDK v2
+
+In the TypeScript SDK v1, `getObject` returned a `SuiObjectResponse` with `{ data, error }` fields, so a missing object came back as a response with an `error` field rather than throwing. In v2, `getObject` throws directly when the object does not exist.
+
+The same change applies to multi-get methods like `getObjects`. In v1, these returned `SuiObjectResponse[]`, a `{ data, error }` wrapper per item. In v2, they return `(Object | Error)[]`, where a missing object appears as an `Error` entry in the array instead of a response wrapper.
+
+##### Solution
+
+For single-get calls, wrap the call in a `try`/`catch`:
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+
+try {
+  const object = await client.core.getObject({ objectId: '0x123...' });
+  // Use object directly — no .data wrapper
+} catch (error) {
+  // Object does not exist or is pruned
+  console.error('Object not found:', error);
+}
+```
+
+For multi-get calls, guard each element with `instanceof Error`:
+
+```typescript
+const results = await client.core.getObjects({
+  objectIds: ['0xabc...', '0xdef...', '0x999...'],
+});
+
+for (const result of results) {
+  if (result instanceof Error) {
+    // This object does not exist or could not be fetched
+    console.error('Missing object:', result.message);
+  } else {
+    // Use the object directly
+    console.log('Found object:', result.objectId);
+  }
+}
+```
+
+**Resources**
+
+- [TypeScript SDK migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/json-rpc-migration)

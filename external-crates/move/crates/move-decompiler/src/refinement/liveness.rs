@@ -5,7 +5,7 @@
 //!
 //! Three layers, in order of decreasing detail:
 //!
-//!   * [`NameCounts`]: function-wide occurrence tallies — for each local, how many times it is
+//!   * [`NameCounts`]: function-wide occurrence tallies - for each local, how many times it is
 //!     read, assigned, let-bound, declared, or pattern-bound. Cheap; single linear walk.
 //!
 //!   * [`Liveness`]: per-point live-out sets computed by classical backward dataflow over the
@@ -16,7 +16,7 @@
 //!     growth (live sets only expand iteration over iteration), so iteration always
 //!     terminates.
 //!
-//!   * Standalone helpers — [`referenced_names`] (every local touched in a subtree, reads and
+//!   * Standalone helpers - [`referenced_names`] (every local touched in a subtree, reads and
 //!     writes unified) and [`collect_local_names`] (the flat set of locals across an entire
 //!     module, returned as `Symbol`s for the alias picker).
 
@@ -36,7 +36,7 @@ pub struct NameCounts {
     letbinds: BTreeMap<String, usize>,
     declares: BTreeMap<String, usize>,
     unpacks: BTreeMap<String, usize>,
-    /// How many times the slot was mut-borrowed — `Borrow(true, Variable(n))`. A mut borrow
+    /// How many times the slot was mut-borrowed - `Borrow(true, Variable(n))`. A mut borrow
     /// hands out a `&mut` reference *to the slot itself*, through which a downstream
     /// `WriteRef` (or a callee receiving the reference) can reassign the slot's value.
     /// It is, for slot-mutation purposes, equivalent to an `Assign`, but invisible to
@@ -117,6 +117,12 @@ impl NameCounts {
                     self.visit(body);
                 }
             }
+            E::MatchLit(subject, arms) => {
+                self.visit(subject);
+                for (_, body) in arms {
+                    self.visit(body);
+                }
+            }
             E::Switch(subject, _, arms) => {
                 self.visit(subject);
                 for (_, body) in arms {
@@ -173,7 +179,7 @@ impl NameCounts {
 /// Per-point live-out sets for every `Exp` node in a single subtree, plus the [`NameCounts`]
 /// for that subtree. Computed by classical backward dataflow with a fixpoint at each loop.
 /// Live-in is derivable from `live_out` plus the node-local gen/kill at any node that needs
-/// it — only live-out is stored here because the refinement consumer doesn't need live-in.
+/// it - only live-out is stored here because the refinement consumer doesn't need live-in.
 ///
 /// Keys are pointer-identity into the AST passed to [`Liveness::analyze`]; entries remain
 /// valid as long as that AST is not mutated.
@@ -227,7 +233,7 @@ impl Liveness {
     }
 
     /// True when every syntactic read of `name` in `root` is the *only* read on every
-    /// execution path it participates in — equivalently, when `name` is dead immediately
+    /// execution path it participates in - equivalently, when `name` is dead immediately
     /// after every one of its uses. Walks `root` looking for `Variable(name)`; returns
     /// `false` if `root` contains an `Unstructured` region (live sets are unsound there).
     pub fn singly_used(&self, root: &Exp, name: &str) -> bool {
@@ -275,6 +281,9 @@ fn any_use_kept_live(exp: &Exp, name: &str, l: &Liveness) -> bool {
         E::Match(s, _, arms) => {
             any_use_kept_live(s, name, l)
                 || arms.iter().any(|(_, _, b)| any_use_kept_live(b, name, l))
+        }
+        E::MatchLit(s, arms) => {
+            any_use_kept_live(s, name, l) || arms.iter().any(|(_, b)| any_use_kept_live(b, name, l))
         }
         E::Primitive { args, .. } | E::Data { args, .. } => {
             args.iter().any(|a| any_use_kept_live(a, name, l))
@@ -377,6 +386,13 @@ impl Builder {
                 }
                 self.compute(subject, &merged)
             }
+            E::MatchLit(subject, arms) => {
+                let mut merged = BTreeSet::new();
+                for (_, body) in arms {
+                    merged.extend(self.compute(body, live_out));
+                }
+                self.compute(subject, &merged)
+            }
 
             E::Loop(label, body) => self.fixpoint_loop(*label, live_out, None, body),
             E::While(label, cond, body) => self.fixpoint_loop(*label, live_out, Some(cond), body),
@@ -406,7 +422,7 @@ impl Builder {
     }
 
     /// Iterate the loop body (and condition, for `While`) until the loop's live-in set
-    /// stabilizes. Monotone — live sets only grow — so termination is guaranteed. On the final
+    /// stabilizes. Monotone - live sets only grow - so termination is guaranteed. On the final
     /// iteration the converged frame's `continue_live` is the back-edge live-out used to
     /// compute body's table entries, so per-node entries are sound at fixpoint.
     fn fixpoint_loop(
@@ -433,7 +449,7 @@ impl Builder {
             let new_live_in_loop = match cond {
                 Some(c) => {
                     // The condition's "true" branch falls through to body; its "false" branch
-                    // exits to `live_out_outside`. Backward: live_out(cond) = body_live_in ∪
+                    // exits to `live_out_outside`. Backward: live_out(cond) = body_live_in U
                     // live_out_outside.
                     let after: BTreeSet<String> =
                         body_live_in.union(live_out_outside).cloned().collect();
@@ -483,16 +499,16 @@ fn subtract_fields(set: &BTreeSet<String>, fields: &[(Symbol, String)]) -> BTree
 }
 
 // -------------------------------------------------------------------------------------------------
-// referenced_names — subtree query
+// referenced_names - subtree query
 
-/// Every local name mentioned anywhere in `exp` — reads (`Variable`), writes
+/// Every local name mentioned anywhere in `exp` - reads (`Variable`), writes
 /// (`Assign`/`LetBind`/`VecUnpack`/`Unpack` targets), and declarations (`Declare`,
-/// `LetBind`) — unified into one set.
+/// `LetBind`) - unified into one set.
 ///
 /// Intentionally unifies reads and writes so callers that want "did this subtree touch X in
 /// any way" can ask once. Use this when you need an over-approximation of the locals an
 /// expression can read or modify, e.g. to decide whether moving a declaration across it would
-/// change behavior. Sub-expression values of `Unpack` etc. are recursed into, but the
+/// change behavior. Sub-expression values of `Unpack` etc. are recurred into, but the
 /// unpacked struct/enum/variant identifiers are not included (those are types, not locals).
 pub fn referenced_names(exp: &Exp) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
@@ -557,6 +573,12 @@ fn collect_referenced_names(exp: &Exp, out: &mut BTreeSet<String>) {
                 collect_referenced_names(body, out);
             }
         }
+        Exp::MatchLit(cond, arms) => {
+            collect_referenced_names(cond, out);
+            for (_, body) in arms {
+                collect_referenced_names(body, out);
+            }
+        }
         Exp::Loop(_, body) => collect_referenced_names(body, out),
         Exp::While(_, cond, body) => {
             collect_referenced_names(cond, out);
@@ -580,7 +602,7 @@ fn collect_referenced_names(exp: &Exp, out: &mut BTreeSet<String>) {
 }
 
 // -------------------------------------------------------------------------------------------------
-// collect_local_names — module-wide flat set
+// collect_local_names - module-wide flat set
 
 /// Every local name appearing anywhere in `module`'s function bodies, as a flat set of
 /// `Symbol`s. Used as the "taboo" input to module-alias selection (`collect_uses`): an alias
@@ -590,7 +612,7 @@ fn collect_referenced_names(exp: &Exp, out: &mut BTreeSet<String>) {
 /// Differs from [`referenced_names`] in two ways: it walks an entire `Module` (not a single
 /// `Exp`), and it returns `Symbol` (not `String`) because the consumer is `move-symbol-pool`-
 /// based. It also picks up pattern-field bindings introduced by `Match` arms, which
-/// `referenced_names` does not — that asymmetry is preserved to avoid churning the alias
+/// `referenced_names` does not - that asymmetry is preserved to avoid churning the alias
 /// picker's output.
 pub fn collect_local_names(module: &Module) -> BTreeSet<Symbol> {
     let mut out = BTreeSet::new();
@@ -652,6 +674,12 @@ fn collect_local_names_exp(exp: &Exp, out: &mut BTreeSet<Symbol>) {
                 for (_, n) in fields {
                     out.insert(Symbol::from(n.as_str()));
                 }
+                collect_local_names_exp(body, out);
+            }
+        }
+        Exp::MatchLit(c, arms) => {
+            collect_local_names_exp(c, out);
+            for (_, body) in arms {
                 collect_local_names_exp(body, out);
             }
         }
@@ -721,7 +749,7 @@ mod tests {
         assert_eq!(l.counts().letbinds("x"), 1);
         assert_eq!(l.counts().reads("x"), 1);
 
-        // live_out at the leaf use of x — empty, since nothing follows.
+        // live_out at the leaf use of x - empty, since nothing follows.
         let use_node = match &exp {
             Exp::Seq(items) => &items[1],
             _ => unreachable!(),
@@ -735,7 +763,7 @@ mod tests {
 
     #[test]
     fn two_uses_on_one_path_keep_first_live() {
-        // use(x); use(x); — second read keeps x live after first.
+        // use(x); use(x); - second read keeps x live after first.
         let exp = seq(vec![var("x"), var("x")]);
         let l = Liveness::analyze(&exp);
 
@@ -749,7 +777,7 @@ mod tests {
 
     #[test]
     fn branched_uses_are_singly_used() {
-        // if (c) { use(x) } else { use(x) }  — only one runs per path.
+        // if (c) { use(x) } else { use(x) }  - only one runs per path.
         let exp = ifelse(unit(), var("x"), Some(var("x")));
         let l = Liveness::analyze(&exp);
         assert!(l.singly_used(&exp, "x"));
@@ -757,7 +785,7 @@ mod tests {
 
     #[test]
     fn loop_body_reuse_is_not_singly_used() {
-        // loop { use(x) }  — back edge keeps x live across iterations.
+        // loop { use(x) }  - back edge keeps x live across iterations.
         let exp = Exp::Loop(None, Box::new(var("x")));
         let l = Liveness::analyze(&exp);
         // x is still live just after the body (the back edge keeps it live).
@@ -771,7 +799,7 @@ mod tests {
 
     #[test]
     fn assignment_leaves_x_live_outward_to_next_read() {
-        // x = <unit>; use(x);  — after the assign, x is live (the use will read it).
+        // x = <unit>; use(x);  - after the assign, x is live (the use will read it).
         let exp = seq(vec![assign("x", unit()), var("x")]);
         let l = Liveness::analyze(&exp);
         let assign_node = match &exp {

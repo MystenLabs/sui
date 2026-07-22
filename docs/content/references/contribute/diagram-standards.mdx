@@ -1,7 +1,49 @@
 ---
 title: Technical Diagram Standards
-description: Standards and guidelines for creating technical diagrams in Sui documentation, including the C4 model, brand style, tooling, diagram types, and export requirements.
-keywords: [ diagram standards, C4 model, Claude Design, Mermaid, technical diagrams, architecture diagrams, sequence diagrams, flowcharts, brand style ]
+description: >-
+  Standards and guidelines for creating technical diagrams in Sui documentation,
+  including the C4 model, brand style, tooling, diagram types, and export
+  requirements.
+keywords:
+  - diagram standards
+  - C4 model
+  - Claude Design
+  - Mermaid
+  - technical diagrams
+  - architecture diagrams
+  - sequence diagrams
+  - flowcharts
+  - brand style
+goal:
+  description: >-
+    Contributor understands the technical diagram standards requirements for the
+    Sui documentation
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Technical Diagram Standards in Sui?
+  - Where can I find the technical diagram standards reference?
+  - How does technical diagram standards work on Sui?
+answer: >-
+  Standards and guidelines for creating technical diagrams in Sui documentation,
+  including the C4 model, brand style, tooling, diagram types, and export
+  requirements.
 ---
 
 This document defines the technical diagramming standards for Sui documentation. These guidelines ensure consistency, clarity, and brand alignment across all technical documentation, diagrams, and visual aids.

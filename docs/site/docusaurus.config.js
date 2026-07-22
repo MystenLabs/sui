@@ -380,12 +380,6 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: "skills_launch",
-        content:
-          'New: <a href="/skills">Sui Agent Skills</a> — drop pre-built skills into Claude Code, Cursor, Codex, and other AI coding agents.',
-        isCloseable: true,
-      },
       image: "img/sui-doc-og.png",
       mermaid: {
         theme: {
@@ -478,8 +472,7 @@ const config = {
               { type: "doc", docId: "onchain-finance/examples-patterns/index", label: "Example Asset Patterns" },
               { type: "doc", docId: "onchain-finance/closed-loop-token/index", label: "Closed Loop Token" },
               { type: "doc", docId: "onchain-finance/pas/index", label: "Permissioned Asset Standard" },
-              { type: "doc", docId: "onchain-finance/deepbookv3/deepbook", label: "DeepBookV3" },
-              { type: "doc", docId: "onchain-finance/deepbook-margin/deepbook-margin", label: "DeepBook Margin" },
+              { type: "doc", docId: "onchain-finance/deepbook/index", label: "DeepBook" },
               { type: "doc", docId: "onchain-finance/kiosk/index", label: "Kiosk" },
               { type: "doc", docId: "onchain-finance/payment-kit", label: "Payment Kit" },
             ],

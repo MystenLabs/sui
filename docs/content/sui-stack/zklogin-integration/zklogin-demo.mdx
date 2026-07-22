@@ -1,10 +1,22 @@
 ---
 title: zkLogin Authentication
-description: Build a React application that authenticates users with OAuth providers and derives Sui wallet addresses using zero-knowledge proofs, enabling passwordless blockchain access.
-keywords: [example, zklogin, authentication, oauth, zero-knowledge-proof, ephemeral-key-pair, wallet, react, bootcamp]
+description: >-
+  Build a React application that authenticates users with OAuth providers and
+  derives Sui wallet addresses using zero-knowledge proofs, enabling
+  passwordless blockchain access.
+keywords:
+  - example
+  - zklogin
+  - authentication
+  - oauth
+  - zero-knowledge-proof
+  - ephemeral-key-pair
+  - wallet
+  - react
+  - bootcamp
 example_id: zklogin-demo-bootcamp
-last_verified: 2026-04-30
-repo: https://github.com/MystenLabs/sui-move-bootcamp
+last_verified: 2026-04-30T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/sui-move-bootcamp'
 path: /K2
 concepts:
   - zklogin
@@ -14,6 +26,36 @@ concepts:
   - address_derivation
   - grpc_client
   - transaction_signing
+goal:
+  description: >-
+    Reader can build a React application that authenticates users with OAuth
+    providers
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I build a zkLogin demo app on Sui?
+  - What does the zkLogin authentication example demonstrate?
+  - How do I integrate OAuth login with Sui transactions?
+answer: >-
+  Build a React application that authenticates users with OAuth providers and
+  derives Sui wallet addresses using zero-knowledge proofs, enabling
+  passwordless blockchain access.
 ---
 
 This example demonstrates how to integrate [zkLogin](/sui-stack/zklogin-integration/zklogin) into a React application so users can authenticate with familiar OAuth providers (Google, Apple) and interact with the Sui blockchain without managing private keys.
