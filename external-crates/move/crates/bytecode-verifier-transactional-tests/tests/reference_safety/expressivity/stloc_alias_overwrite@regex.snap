@@ -2,14 +2,3 @@
 source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 3 tasks
-
-task 2, lines 37-56:
-//# run
-Error: Function execution failed with VMError: {
-    major_status: ABORTED,
-    sub_status: Some(42),
-    location: 0x4::direct_both,
-    indices: [],
-    offsets: [(FunctionDefinitionIndex(0), 27)],
-    message: "0x0000000000000000000000000000000000000000000000000000000000000004::direct_both::t at offset 27",
-}

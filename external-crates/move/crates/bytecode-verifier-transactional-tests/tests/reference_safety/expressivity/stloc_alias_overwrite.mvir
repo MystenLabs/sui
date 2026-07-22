@@ -48,7 +48,7 @@ label b0:
     a = 1;
     assert(*copy(y) == 1, 42);
     *copy(x) = 2;
-    assert(*move(y) == 1, 42);
+    assert(*move(y) == 2, 42);
     assert(*move(x) == 2, 42);
     return;
 }
