@@ -33,7 +33,7 @@ pub(crate) struct KvMetrics {
     pub kv_bt_flow_control_enabled: IntGaugeVec,
     pub kv_bt_flow_control_target_qps: GaugeVec,
     pub kv_bt_flow_control_demand_qps: GaugeVec,
-    pub kv_bt_flow_control_brake: GaugeVec,
+    pub kv_bt_flow_control_latency_brake: GaugeVec,
     pub kv_bt_flow_control_write_latency_ms: GaugeVec,
     pub kv_bt_flow_control_write_latency_baseline_ms: GaugeVec,
     pub kv_bt_flow_control_throttle_ms: HistogramVec,
@@ -178,7 +178,7 @@ impl KvMetrics {
             .unwrap(),
             kv_bt_flow_control_enabled: register_int_gauge_vec_with_registry!(
                 "kv_bt_flow_control_enabled",
-                "Whether BigTable adaptive batch-write flow control is enabled",
+                "Whether BigTable adaptive batch-write admission throttling is active",
                 &["client"],
                 registry,
             )
@@ -197,8 +197,8 @@ impl KvMetrics {
                 registry,
             )
             .unwrap(),
-            kv_bt_flow_control_brake: register_gauge_vec_with_registry!(
-                "kv_bt_flow_control_brake",
+            kv_bt_flow_control_latency_brake: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_latency_brake",
                 "Latency-brake multiplier applied to the BigTable flow-control target rate (1.0 = fully released)",
                 &["client"],
                 registry,

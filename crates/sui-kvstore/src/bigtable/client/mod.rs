@@ -2266,7 +2266,7 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        assert!(controller.is_enabled());
+        assert!(controller.is_rate_limit_active());
         assert_eq!(controller.current_qps(), 7.0);
 
         client
@@ -2288,7 +2288,7 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        assert!(controller.is_enabled());
+        assert!(controller.is_rate_limit_active());
         assert_eq!(controller.current_qps(), 7.0);
 
         mock.set_mutate_rows_rate_limit_info(None).await;
@@ -2297,7 +2297,7 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        assert!(!controller.is_enabled());
+        assert!(!controller.is_rate_limit_active());
         assert_eq!(controller.current_qps(), 7.0);
 
         let mut default_client =

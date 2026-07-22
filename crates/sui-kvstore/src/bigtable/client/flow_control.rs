@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::Instant;
 use tonic::Code;
 use tonic::Status;
@@ -37,34 +36,54 @@ const IDLE_UTILIZATION_THRESHOLD: f64 = 0.2;
 const IDLE_EVALS_BEFORE_DECAY: u32 = 6;
 const IDLE_DECAY_FACTOR: f64 = 0.7;
 const MIN_UTILIZATION_WINDOW: Duration = Duration::from_secs(1);
-const BRAKE_MIN: f64 = 0.1;
-const BRAKE_CUT_FACTOR: f64 = 0.7;
-const BRAKE_RELEASE_FACTOR: f64 = 1.05;
-const BRAKE_YELLOW_RATIO: f64 = 1.5;
-const BRAKE_RED_RATIO: f64 = 3.0;
-const BRAKE_RED_ABSOLUTE: Duration = Duration::from_secs(1);
+const LATENCY_BRAKE_MIN: f64 = 0.1;
+const LATENCY_BRAKE_CUT_FACTOR: f64 = 0.7;
+const LATENCY_BRAKE_RELEASE_FACTOR: f64 = 1.05;
+const ELEVATED_LATENCY_RATIO: f64 = 1.5;
+const SEVERE_LATENCY_RATIO: f64 = 3.0;
 const BASELINE_EWMA_ALPHA: f64 = 0.2;
 const BASELINE_STALE_EVALS: u32 = 90;
 const BASELINE_STALE_ALPHA: f64 = 0.05;
 const MIN_WINDOW_SAMPLES: u64 = 5;
+
+enum WriteLatencyCondition {
+    Healthy,
+    Elevated,
+    Severe,
+}
+
+fn classify_write_latency(
+    window_avg_micros: f64,
+    baseline_micros: Option<f64>,
+) -> WriteLatencyCondition {
+    if baseline_micros.is_some_and(|baseline| window_avg_micros > SEVERE_LATENCY_RATIO * baseline) {
+        WriteLatencyCondition::Severe
+    } else if baseline_micros
+        .is_some_and(|baseline| window_avg_micros > ELEVATED_LATENCY_RATIO * baseline)
+    {
+        WriteLatencyCondition::Elevated
+    } else {
+        WriteLatencyCondition::Healthy
+    }
+}
 
 struct UpdateState {
     next_update_time: Instant,
     window_started_at: Instant,
     underutilized_evals: u32,
     baseline_write_latency_micros: Option<f64>,
-    non_green_evals: u32,
+    non_healthy_evals: u32,
 }
 
 pub(crate) struct BatchWriteFlowController {
-    enabled: AtomicBool,
+    rate_limit_active: AtomicBool,
     target_qps: AtomicU64,
     update_state: Mutex<UpdateState>,
     window_requests: AtomicU64,
-    brake: AtomicU64,
+    latency_brake: AtomicU64,
     window_latency_total_micros: AtomicU64,
     window_latency_samples: AtomicU64,
-    next_free: AsyncMutex<Instant>,
+    next_permit_at: Mutex<Instant>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
 }
@@ -73,41 +92,46 @@ impl BatchWriteFlowController {
     pub(crate) fn new(client_name: String, metrics: Option<Arc<KvMetrics>>) -> Arc<Self> {
         let now = Instant::now();
         let controller = Arc::new(Self {
-            enabled: AtomicBool::new(false),
+            rate_limit_active: AtomicBool::new(false),
             target_qps: AtomicU64::new(DEFAULT_QPS.to_bits()),
             update_state: Mutex::new(UpdateState {
                 next_update_time: now,
                 window_started_at: now,
                 underutilized_evals: 0,
                 baseline_write_latency_micros: None,
-                non_green_evals: 0,
+                non_healthy_evals: 0,
             }),
             window_requests: AtomicU64::new(0),
-            brake: AtomicU64::new(1.0f64.to_bits()),
+            latency_brake: AtomicU64::new(1.0f64.to_bits()),
             window_latency_total_micros: AtomicU64::new(0),
             window_latency_samples: AtomicU64::new(0),
-            next_free: AsyncMutex::new(now),
+            next_permit_at: Mutex::new(now),
             client_name,
             metrics,
         });
 
-        info!("Batch write flow control: rate limiter initialized (disabled) at {DEFAULT_QPS} QPS");
+        info!(
+            "Batch write flow control: admission throttling initialized inactive at {DEFAULT_QPS} QPS"
+        );
         controller
     }
 
     pub(crate) async fn acquire(&self) {
         self.window_requests.fetch_add(1, Ordering::Relaxed);
-        if !self.enabled.load(Ordering::Relaxed) {
+        if !self.rate_limit_active.load(Ordering::Relaxed) {
             return;
         }
 
-        let qps = (self.current_qps_value() * self.current_brake_value()).max(MIN_QPS);
+        let qps = (self.current_qps_value() * self.current_latency_brake_value()).max(MIN_QPS);
         let permit_interval = Duration::from_secs_f64(1.0 / qps);
         let wait = {
-            let mut next_free = self.next_free.lock().await;
+            let mut next_permit_at = self
+                .next_permit_at
+                .lock()
+                .expect("flow-control admission mutex poisoned");
             let now = Instant::now();
-            let wait = next_free.saturating_duration_since(now);
-            *next_free = (*next_free).max(now) + permit_interval;
+            let wait = next_permit_at.saturating_duration_since(now);
+            *next_permit_at = (*next_permit_at).max(now) + permit_interval;
             wait
         };
 
@@ -129,18 +153,17 @@ impl BatchWriteFlowController {
                     .as_ref()
                     .is_some_and(|period| period.seconds > 0)
         }) else {
-            self.try_disable();
+            self.try_deactivate_rate_limit();
             return;
         };
 
-        self.enable();
         let period = Duration::from_secs(
             info.period
                 .as_ref()
                 .expect("validated rate limit info has a period")
                 .seconds as u64,
         );
-        self.update_qps(info.factor, period);
+        self.update_qps(info.factor, period, true);
     }
 
     pub(crate) fn on_error(&self, status: &Status) {
@@ -152,16 +175,19 @@ impl BatchWriteFlowController {
         }
 
         self.increment_rate_update("error-signal");
-        self.update_qps(MIN_FACTOR, DEFAULT_PERIOD);
+        self.update_qps(MIN_FACTOR, DEFAULT_PERIOD, false);
     }
 
-    fn update_qps(&self, factor: f64, period: Duration) {
+    fn update_qps(&self, factor: f64, period: Duration, from_server_hint: bool) {
         let capped_factor = factor.clamp(MIN_FACTOR, MAX_FACTOR);
         let now = Instant::now();
         let mut state = self
             .update_state
             .lock()
             .expect("flow-control update mutex poisoned");
+        if from_server_hint {
+            self.activate_rate_limit();
+        }
         if now < state.next_update_time {
             self.increment_rate_update("rejected");
             return;
@@ -190,47 +216,52 @@ impl BatchWriteFlowController {
             let samples = self.window_latency_samples.swap(0, Ordering::Relaxed);
             let total_micros = self.window_latency_total_micros.swap(0, Ordering::Relaxed);
             let window_avg_micros = total_micros as f64 / samples as f64;
-            let baseline = state.baseline_write_latency_micros;
-            let red = window_avg_micros >= BRAKE_RED_ABSOLUTE.as_micros() as f64
-                || baseline.is_some_and(|b| window_avg_micros > BRAKE_RED_RATIO * b);
-            let yellow =
-                !red && baseline.is_some_and(|b| window_avg_micros > BRAKE_YELLOW_RATIO * b);
-            let brake = self.current_brake_value();
+            let latency_condition =
+                classify_write_latency(window_avg_micros, state.baseline_write_latency_micros);
+            let latency_brake = self.current_latency_brake_value();
 
-            if red {
-                state.non_green_evals = state.non_green_evals.saturating_add(1);
-                let cut = (brake * BRAKE_CUT_FACTOR).max(BRAKE_MIN);
-                self.brake.store(cut.to_bits(), Ordering::Relaxed);
-                self.increment_rate_update("brake-cut");
-                info!(
-                    window_avg_ms = window_avg_micros / 1_000.0,
-                    brake = cut,
-                    "Batch write flow control: latency brake engaged"
-                );
-            } else if yellow {
-                state.non_green_evals = state.non_green_evals.saturating_add(1);
-                if state.non_green_evals >= BASELINE_STALE_EVALS
-                    && let Some(baseline) = state.baseline_write_latency_micros.as_mut()
-                {
-                    *baseline += BASELINE_STALE_ALPHA * (window_avg_micros - *baseline);
+            match latency_condition {
+                WriteLatencyCondition::Severe => {
+                    state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
+                    let latency_brake_cut =
+                        (latency_brake * LATENCY_BRAKE_CUT_FACTOR).max(LATENCY_BRAKE_MIN);
+                    self.latency_brake
+                        .store(latency_brake_cut.to_bits(), Ordering::Relaxed);
+                    self.increment_rate_update("latency-brake-cut");
+                    info!(
+                        window_avg_ms = window_avg_micros / 1_000.0,
+                        latency_brake = latency_brake_cut,
+                        "Batch write flow control: latency brake engaged"
+                    );
                 }
-            } else {
-                state.non_green_evals = 0;
-                let baseline = state
-                    .baseline_write_latency_micros
-                    .get_or_insert(window_avg_micros);
-                *baseline += BASELINE_EWMA_ALPHA * (window_avg_micros - *baseline);
-                if brake < 1.0 {
-                    let released = (brake * BRAKE_RELEASE_FACTOR).min(1.0);
-                    self.brake.store(released.to_bits(), Ordering::Relaxed);
-                    self.increment_rate_update("brake-release");
+                WriteLatencyCondition::Elevated => {
+                    state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
+                    if state.non_healthy_evals >= BASELINE_STALE_EVALS
+                        && let Some(baseline) = state.baseline_write_latency_micros.as_mut()
+                    {
+                        *baseline += BASELINE_STALE_ALPHA * (window_avg_micros - *baseline);
+                    }
+                }
+                WriteLatencyCondition::Healthy => {
+                    state.non_healthy_evals = 0;
+                    let baseline = state
+                        .baseline_write_latency_micros
+                        .get_or_insert(window_avg_micros);
+                    *baseline += BASELINE_EWMA_ALPHA * (window_avg_micros - *baseline);
+                    if latency_brake < 1.0 {
+                        let released_latency_brake =
+                            (latency_brake * LATENCY_BRAKE_RELEASE_FACTOR).min(1.0);
+                        self.latency_brake
+                            .store(released_latency_brake.to_bits(), Ordering::Relaxed);
+                        self.increment_rate_update("latency-brake-release");
+                    }
                 }
             }
             if let Some(metrics) = &self.metrics {
                 metrics
-                    .kv_bt_flow_control_brake
+                    .kv_bt_flow_control_latency_brake
                     .with_label_values(&[&self.client_name])
-                    .set(self.current_brake_value());
+                    .set(self.current_latency_brake_value());
                 metrics
                     .kv_bt_flow_control_write_latency_ms
                     .with_label_values(&[&self.client_name])
@@ -256,9 +287,9 @@ impl BatchWriteFlowController {
         }
 
         if utilization >= UPWARD_UTILIZATION_THRESHOLD {
-            if self.current_brake_value() < 1.0 {
+            if self.current_latency_brake_value() < 1.0 {
                 state.underutilized_evals = 0;
-                self.increment_rate_update("braked");
+                self.increment_rate_update("latency-braked");
                 info!(
                     factor,
                     "Batch write flow control: upward hint frozen while latency brake engaged"
@@ -315,9 +346,9 @@ impl BatchWriteFlowController {
         self.increment_rate_update(kind);
     }
 
-    fn enable(&self) {
-        if !self.enabled.swap(true, Ordering::Relaxed) {
-            info!("Batch write flow control: rate limiter enabled");
+    fn activate_rate_limit(&self) {
+        if !self.rate_limit_active.swap(true, Ordering::Relaxed) {
+            info!("Batch write flow control: admission throttling activated");
             if let Some(metrics) = &self.metrics {
                 metrics
                     .kv_bt_flow_control_enabled
@@ -327,7 +358,7 @@ impl BatchWriteFlowController {
         }
     }
 
-    fn try_disable(&self) {
+    fn try_deactivate_rate_limit(&self) {
         let now = Instant::now();
         let update_state = self
             .update_state
@@ -337,8 +368,8 @@ impl BatchWriteFlowController {
             return;
         }
 
-        if self.enabled.swap(false, Ordering::Relaxed) {
-            info!("Batch write flow control: rate limiter disabled");
+        if self.rate_limit_active.swap(false, Ordering::Relaxed) {
+            info!("Batch write flow control: admission throttling deactivated");
             if let Some(metrics) = &self.metrics {
                 metrics
                     .kv_bt_flow_control_enabled
@@ -362,8 +393,8 @@ impl BatchWriteFlowController {
         f64::from_bits(self.target_qps.load(Ordering::Relaxed))
     }
 
-    fn current_brake_value(&self) -> f64 {
-        f64::from_bits(self.brake.load(Ordering::Relaxed))
+    fn current_latency_brake_value(&self) -> f64 {
+        f64::from_bits(self.latency_brake.load(Ordering::Relaxed))
     }
 
     pub(crate) fn record_write_latency(&self, elapsed: Duration) {
@@ -373,13 +404,13 @@ impl BatchWriteFlowController {
     }
 
     #[cfg(test)]
-    pub(crate) fn current_brake(&self) -> f64 {
-        self.current_brake_value()
+    pub(crate) fn current_latency_brake(&self) -> f64 {
+        self.current_latency_brake_value()
     }
 
     #[cfg(test)]
-    pub(crate) fn is_enabled(&self) -> bool {
-        self.enabled.load(Ordering::Relaxed)
+    pub(crate) fn is_rate_limit_active(&self) -> bool {
+        self.rate_limit_active.load(Ordering::Relaxed)
     }
 
     #[cfg(test)]
@@ -426,9 +457,9 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn starts_disabled_and_acquire_returns_immediately() {
+    async fn starts_inactive_and_acquire_returns_immediately() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        assert!(!controller.is_enabled());
+        assert!(!controller.is_rate_limit_active());
         assert_qps(&controller, DEFAULT_QPS);
 
         let before = Instant::now();
@@ -440,13 +471,13 @@ mod tests {
     async fn clamps_lower_and_upper_factors() {
         let lower = BatchWriteFlowController::new("lower".to_owned(), None);
         lower.on_response(Some(&rate_limit_info(0.3, DEFAULT_PERIOD)));
-        assert!(lower.is_enabled());
+        assert!(lower.is_rate_limit_active());
         assert_qps(&lower, DEFAULT_QPS * MIN_FACTOR);
 
         let upper = BatchWriteFlowController::new("upper".to_owned(), None);
         seed_demand(&upper, 1_000);
         upper.on_response(Some(&rate_limit_info(2.0, DEFAULT_PERIOD)));
-        assert!(upper.is_enabled());
+        assert!(upper.is_rate_limit_active());
         assert_qps(&upper, DEFAULT_QPS * MAX_FACTOR);
     }
 
@@ -487,7 +518,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn invalid_hints_disable_after_period_and_valid_hint_reenables() {
+    async fn invalid_hints_deactivate_after_period_and_valid_hint_reactivates() {
         let invalid_hints = [
             None,
             Some(rate_limit_info(0.0, DEFAULT_PERIOD)),
@@ -497,26 +528,42 @@ mod tests {
         for invalid_hint in invalid_hints {
             let controller = BatchWriteFlowController::new("test".to_owned(), None);
             controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
-            assert!(controller.is_enabled());
+            assert!(controller.is_rate_limit_active());
             let retained_qps = controller.current_qps();
 
             controller.on_response(invalid_hint.as_ref());
-            assert!(controller.is_enabled());
+            assert!(controller.is_rate_limit_active());
             assert_qps(&controller, retained_qps);
 
             tokio::time::advance(DEFAULT_PERIOD + Duration::from_nanos(1)).await;
             controller.on_response(invalid_hint.as_ref());
-            assert!(!controller.is_enabled());
+            assert!(!controller.is_rate_limit_active());
             assert_qps(&controller, retained_qps);
 
             controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            assert!(controller.is_enabled());
+            assert!(controller.is_rate_limit_active());
             assert_qps(&controller, retained_qps);
         }
     }
 
     #[tokio::test(start_paused = true)]
-    async fn qualifying_errors_cut_rate_without_enabling() {
+    async fn valid_hint_update_reactivates_after_deactivation_wins_lock() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+
+        tokio::time::advance(Duration::from_millis(1)).await;
+        controller.activate_rate_limit();
+        controller.try_deactivate_rate_limit();
+        assert!(!controller.is_rate_limit_active());
+
+        controller.update_qps(0.9, DEFAULT_PERIOD, true);
+        assert!(controller.is_rate_limit_active());
+
+        controller.try_deactivate_rate_limit();
+        assert!(controller.is_rate_limit_active());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn qualifying_errors_cut_rate_without_activating() {
         for code in [
             Code::DeadlineExceeded,
             Code::Unavailable,
@@ -524,7 +571,7 @@ mod tests {
         ] {
             let controller = BatchWriteFlowController::new("test".to_owned(), None);
             controller.on_error(&Status::new(code, "transient"));
-            assert!(!controller.is_enabled());
+            assert!(!controller.is_rate_limit_active());
             assert_qps(&controller, DEFAULT_QPS * MIN_FACTOR);
         }
     }
@@ -533,7 +580,7 @@ mod tests {
     async fn non_qualifying_error_does_not_change_rate() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         controller.on_error(&Status::not_found("missing"));
-        assert!(!controller.is_enabled());
+        assert!(!controller.is_rate_limit_active());
         assert_qps(&controller, DEFAULT_QPS);
     }
 
@@ -542,7 +589,7 @@ mod tests {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
         controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert!(controller.is_enabled());
+        assert!(controller.is_rate_limit_active());
         assert_qps(&controller, DEFAULT_QPS);
 
         tokio::time::advance(DEFAULT_PERIOD).await;
@@ -571,7 +618,7 @@ mod tests {
         controller
             .target_qps
             .store(5_000.0f64.to_bits(), Ordering::Relaxed);
-        controller.enable();
+        controller.activate_rate_limit();
         tokio::time::advance(DEFAULT_PERIOD).await;
 
         for _ in 0..16 {
@@ -592,7 +639,7 @@ mod tests {
         controller
             .target_qps
             .store(100.0f64.to_bits(), Ordering::Relaxed);
-        controller.enable();
+        controller.activate_rate_limit();
         tokio::time::advance(DEFAULT_PERIOD).await;
 
         for _ in 0..12 {
@@ -614,7 +661,7 @@ mod tests {
         controller
             .target_qps
             .store(100.0f64.to_bits(), Ordering::Relaxed);
-        controller.enable();
+        controller.activate_rate_limit();
         tokio::time::advance(DEFAULT_PERIOD).await;
 
         for _ in 0..3 {
@@ -645,7 +692,7 @@ mod tests {
         controller
             .target_qps
             .store(100.0f64.to_bits(), Ordering::Relaxed);
-        controller.enable();
+        controller.activate_rate_limit();
         tokio::time::advance(DEFAULT_PERIOD).await;
 
         controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
@@ -658,7 +705,7 @@ mod tests {
         controller
             .target_qps
             .store(2.0f64.to_bits(), Ordering::Relaxed);
-        controller.enable();
+        controller.activate_rate_limit();
 
         controller.acquire().await;
         let first_permit = Instant::now();
@@ -672,7 +719,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn brake_engages_on_red_window_and_throttles_admission() {
+    async fn latency_brake_engages_on_severe_window_and_throttles_admission() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
         for _ in 0..2 {
@@ -685,7 +732,9 @@ mod tests {
         seed_latency(&controller, 10, Duration::from_millis(200));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!((controller.current_brake() - BRAKE_CUT_FACTOR).abs() < f64::EPSILON);
+        assert!(
+            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
+        );
 
         controller
             .target_qps
@@ -696,7 +745,7 @@ mod tests {
         let second_permit = Instant::now();
 
         let permit_spacing = second_permit.duration_since(first_permit);
-        let expected_spacing = Duration::from_secs_f64(1.0 / (2.0 * BRAKE_CUT_FACTOR));
+        let expected_spacing = Duration::from_secs_f64(1.0 / (2.0 * LATENCY_BRAKE_CUT_FACTOR));
         assert!(
             permit_spacing >= expected_spacing
                 && permit_spacing < expected_spacing + Duration::from_millis(1),
@@ -705,7 +754,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn yellow_window_holds_brake_and_baseline() {
+    async fn elevated_window_holds_latency_brake_and_baseline() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
         for _ in 0..2 {
@@ -718,7 +767,7 @@ mod tests {
         seed_latency(&controller, 10, Duration::from_millis(40));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert_eq!(controller.current_brake(), 1.0);
+        assert_eq!(controller.current_latency_brake(), 1.0);
         assert_eq!(
             controller
                 .update_state
@@ -732,11 +781,13 @@ mod tests {
         seed_latency(&controller, 10, Duration::from_millis(200));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!((controller.current_brake() - BRAKE_CUT_FACTOR).abs() < f64::EPSILON);
+        assert!(
+            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
+        );
     }
 
     #[tokio::test(start_paused = true)]
-    async fn brake_releases_slowly_on_green() {
+    async fn latency_brake_releases_slowly_on_healthy_windows() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
         for _ in 0..2 {
@@ -752,25 +803,28 @@ mod tests {
             tokio::time::advance(DEFAULT_PERIOD).await;
         }
 
-        let mut expected_brake = BRAKE_CUT_FACTOR * BRAKE_CUT_FACTOR;
-        assert!((controller.current_brake() - expected_brake).abs() < f64::EPSILON);
+        let mut expected_latency_brake = LATENCY_BRAKE_CUT_FACTOR * LATENCY_BRAKE_CUT_FACTOR;
+        assert!((controller.current_latency_brake() - expected_latency_brake).abs() < f64::EPSILON);
 
-        for green_eval in 1..=15 {
+        for healthy_eval in 1..=15 {
             seed_latency(&controller, 10, Duration::from_millis(20));
             seed_demand(&controller, 1_000);
             controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            expected_brake = (expected_brake * BRAKE_RELEASE_FACTOR).min(1.0);
-            assert!((controller.current_brake() - expected_brake).abs() < f64::EPSILON);
-            if green_eval < 15 {
-                assert!(controller.current_brake() < 1.0);
+            expected_latency_brake =
+                (expected_latency_brake * LATENCY_BRAKE_RELEASE_FACTOR).min(1.0);
+            assert!(
+                (controller.current_latency_brake() - expected_latency_brake).abs() < f64::EPSILON
+            );
+            if healthy_eval < 15 {
+                assert!(controller.current_latency_brake() < 1.0);
             }
             tokio::time::advance(DEFAULT_PERIOD).await;
         }
-        assert_eq!(controller.current_brake(), 1.0);
+        assert_eq!(controller.current_latency_brake(), 1.0);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn upward_hint_frozen_while_braked() {
+    async fn upward_hint_frozen_while_latency_braked() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
         for _ in 0..2 {
@@ -783,7 +837,7 @@ mod tests {
         seed_latency(&controller, 10, Duration::from_millis(200));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!(controller.current_brake() < 1.0);
+        assert!(controller.current_latency_brake() < 1.0);
 
         tokio::time::advance(DEFAULT_PERIOD).await;
         seed_demand(&controller, 1_000);
@@ -796,7 +850,7 @@ mod tests {
             seed_demand(&controller, 1_000);
             controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
         }
-        assert_eq!(controller.current_brake(), 1.0);
+        assert_eq!(controller.current_latency_brake(), 1.0);
         assert_qps(&controller, DEFAULT_QPS);
 
         tokio::time::advance(DEFAULT_PERIOD).await;
@@ -806,71 +860,56 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn absolute_cap_trips_red_without_baseline() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-
-        seed_latency(&controller, 10, Duration::from_millis(1_500));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!((controller.current_brake() - BRAKE_CUT_FACTOR).abs() < f64::EPSILON);
-        assert!(
-            controller
-                .update_state
-                .lock()
-                .expect("flow-control update mutex poisoned")
-                .baseline_write_latency_micros
-                .is_none()
-        );
-
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_latency(&controller, 10, Duration::from_millis(20));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert_eq!(
-            controller
-                .update_state
-                .lock()
-                .expect("flow-control update mutex poisoned")
-                .baseline_write_latency_micros,
-            Some(20_000.0)
-        );
-    }
-
-    #[tokio::test(start_paused = true)]
     async fn sparse_windows_accumulate_until_sample_floor() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
-        seed_latency(&controller, 3, Duration::from_secs(2));
+        seed_latency(&controller, 10, Duration::from_millis(20));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert_eq!(controller.current_brake(), 1.0);
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        seed_latency(&controller, 3, Duration::from_millis(200));
+        seed_demand(&controller, 1_000);
+        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
+        assert_eq!(controller.current_latency_brake(), 1.0);
         assert_eq!(controller.window_latency_samples.load(Ordering::Relaxed), 3);
 
         tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_latency(&controller, 2, Duration::from_secs(2));
+        seed_latency(&controller, 2, Duration::from_millis(200));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!((controller.current_brake() - BRAKE_CUT_FACTOR).abs() < f64::EPSILON);
+        assert!(
+            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
+        );
         assert_eq!(controller.window_latency_samples.load(Ordering::Relaxed), 0);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn server_decrease_applies_while_braked() {
+    async fn server_decrease_applies_while_latency_braked() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
-        seed_latency(&controller, 10, Duration::from_millis(1_500));
+        seed_latency(&controller, 10, Duration::from_millis(20));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!((controller.current_brake() - BRAKE_CUT_FACTOR).abs() < f64::EPSILON);
+        tokio::time::advance(DEFAULT_PERIOD).await;
+
+        seed_latency(&controller, 10, Duration::from_millis(200));
+        seed_demand(&controller, 1_000);
+        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
+        assert!(
+            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
+        );
 
         tokio::time::advance(DEFAULT_PERIOD).await;
         controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
         assert_qps(&controller, DEFAULT_QPS * MIN_FACTOR);
-        assert!((controller.current_brake() - BRAKE_CUT_FACTOR).abs() < f64::EPSILON);
+        assert!(
+            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
+        );
     }
 
     #[tokio::test(start_paused = true)]
-    async fn stale_yellow_baseline_drifts_until_green() {
+    async fn stale_elevated_baseline_drifts_until_healthy() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
 
         for _ in 0..2 {
@@ -883,23 +922,28 @@ mod tests {
         seed_latency(&controller, 10, Duration::from_millis(200));
         seed_demand(&controller, 1_000);
         controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        let cut_brake = controller.current_brake();
+        let cut_latency_brake = controller.current_latency_brake();
 
-        let mut reached_green = false;
+        let mut reached_healthy = false;
         for _ in 0..BASELINE_STALE_EVALS + 10 {
             tokio::time::advance(DEFAULT_PERIOD).await;
             seed_latency(&controller, 10, Duration::from_millis(40));
             seed_demand(&controller, 1_000);
             controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            if controller.current_brake() > cut_brake {
-                reached_green = true;
+            if controller.current_latency_brake() > cut_latency_brake {
+                reached_healthy = true;
                 break;
             }
         }
 
-        assert!(reached_green, "stale yellow baseline never reached green");
         assert!(
-            (controller.current_brake() - cut_brake * BRAKE_RELEASE_FACTOR).abs() < f64::EPSILON
+            reached_healthy,
+            "stale elevated baseline never reached healthy"
+        );
+        assert!(
+            (controller.current_latency_brake() - cut_latency_brake * LATENCY_BRAKE_RELEASE_FACTOR)
+                .abs()
+                < f64::EPSILON
         );
     }
 }
