@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -274,6 +277,11 @@ pub(crate) struct Synchronizer<
     last_commit_change_time: Instant,
     // When commit is not progressing, commit sync fails over to periodic sync for catchup.
     commit_sync_failover: bool,
+    // Cumulative number of successful periodic sync fetches that contributed no blocks missing
+    // from the local DAG. Such a fetch means periodic sync is no longer helping the node catch
+    // up, and is the signal to end the commit sync failover.
+    periodic_noop_fetches: Arc<AtomicU64>,
+    failover_observed_noop_fetches: u64,
     peers_pool: Arc<PeersPool>,
 }
 
@@ -356,6 +364,8 @@ where
                 last_changed_commit_index: 0,
                 last_commit_change_time: Instant::now(),
                 commit_sync_failover: false,
+                periodic_noop_fetches: Arc::new(AtomicU64::new(0)),
+                failover_observed_noop_fetches: 0,
                 peers_pool,
             };
             s.run().await;
@@ -541,6 +551,7 @@ where
                                 transaction_vote_tracker.clone(),
                                 commit_vote_monitor.clone(),
                                 context.clone(),
+                                dag_state.clone(),
                                 commands_sender.clone(),
                                 round_tracker.clone(),
                                 "live"
@@ -571,6 +582,8 @@ where
 
     /// Processes the requested raw fetched blocks from peer. If no error is returned then
     /// the verified blocks are immediately sent to Core for processing.
+    /// Returns the number of processed blocks that were not already in the local DAG,
+    /// i.e. how many blocks this fetch actually contributed.
     async fn process_fetched_blocks(
         mut serialized_blocks: Vec<Bytes>,
         peer: PeerId,
@@ -580,12 +593,13 @@ where
         transaction_vote_tracker: TransactionVoteTracker,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         sync_method: &str,
-    ) -> ConsensusResult<()> {
+    ) -> ConsensusResult<usize> {
         if serialized_blocks.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         // Limit the number of the returned blocks processed.
@@ -643,6 +657,19 @@ where
             blocks.iter().map(|b| b.reference().to_string()).join(", "),
         );
 
+        // Count blocks not already in the local DAG, before they are sent to Core. Blocks can
+        // already exist locally when they arrived through subscriptions or other fetches while
+        // this request was in flight.
+        let new_blocks = {
+            let block_refs = blocks.iter().map(|b| b.reference()).collect::<Vec<_>>();
+            dag_state
+                .read()
+                .contains_blocks(block_refs)
+                .into_iter()
+                .filter(|exists| !exists)
+                .count()
+        };
+
         // Now send them to core for processing. Ignore the returned missing blocks as we don't want
         // this mechanism to keep feedback looping on fetching more blocks. The periodic synchronization
         // will take care of that.
@@ -669,7 +696,7 @@ where
             .missing_blocks_after_fetch_total
             .inc_by(missing_blocks.len() as u64);
 
-        Ok(())
+        Ok(new_blocks)
     }
 
     fn get_fetch_after_rounds(
@@ -962,6 +989,7 @@ where
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
         let peers_pool = self.peers_pool.clone();
+        let periodic_noop_fetches = self.periodic_noop_fetches.clone();
 
         let mut missing_blocks = self
             .core_dispatcher
@@ -994,7 +1022,7 @@ where
                         context.clone(),
                         blocks_to_fetch.clone(),
                         network_client,
-                        dag_state,
+                        dag_state.clone(),
                         peers_pool,
                     )
                     .await
@@ -1006,7 +1034,7 @@ where
                         blocks_to_fetch.clone(),
                         network_client,
                         missing_blocks,
-                        dag_state,
+                        dag_state.clone(),
                         peers_pool,
                     )
                     .await
@@ -1024,10 +1052,12 @@ where
 
                 // Now process the returned results
                 let mut total_fetched = 0;
+                let mut total_new_blocks = 0;
+                let mut process_failed = false;
                 for (blocks_guard, fetched_blocks, peer) in results {
                     total_fetched += fetched_blocks.len();
 
-                    if let Err(err) = Self::process_fetched_blocks(
+                    match Self::process_fetched_blocks(
                         fetched_blocks,
                         peer.clone(),
                         blocks_guard,
@@ -1036,29 +1066,41 @@ where
                         transaction_vote_tracker.clone(),
                         commit_vote_monitor.clone(),
                         context.clone(),
+                        dag_state.clone(),
                         commands_sender.clone(),
                         round_tracker.clone(),
                         "periodic",
                     )
                     .await
                     {
-                        warn!(
-                            "Error occurred while processing fetched blocks from peer {:?}: {err}",
-                            peer
-                        );
-                        let peer_name = peer.labelname(&context);
-                        context
-                            .metrics
-                            .node_metrics
-                            .synchronizer_process_fetched_failures
-                            .with_label_values(&[peer_name.as_str(), "periodic"])
-                            .inc();
+                        Ok(new_blocks) => total_new_blocks += new_blocks,
+                        Err(err) => {
+                            process_failed = true;
+                            warn!(
+                                "Error occurred while processing fetched blocks from peer {:?}: {err}",
+                                peer
+                            );
+                            let peer_name = peer.labelname(&context);
+                            context
+                                .metrics
+                                .node_metrics
+                                .synchronizer_process_fetched_failures
+                                .with_label_values(&[peer_name.as_str(), "periodic"])
+                                .inc();
+                        }
                     }
                 }
 
+                // A fully successful fetch that contributed no blocks missing from the local DAG
+                // means periodic sync is no longer helping the node catch up, e.g. because blocks
+                // already arrive through subscriptions. This signal ends commit sync failover.
+                if !process_failed && total_new_blocks == 0 {
+                    periodic_noop_fetches.fetch_add(1, Ordering::Relaxed);
+                }
+
                 debug!(
-                    "Total blocks requested to fetch: {}, total fetched: {}",
-                    total_requested, total_fetched
+                    "Total blocks requested to fetch: {}, total fetched: {}, new: {}",
+                    total_requested, total_fetched, total_new_blocks
                 );
             }));
 
@@ -1069,77 +1111,64 @@ where
         let current_commit_index = self.dag_state.read().last_commit_index();
         let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
         let now = Instant::now();
-        let metrics = &self.context.metrics.node_metrics;
-
-        // Commit is not lagging.
-        if !is_commit_lagging(
+        let commit_is_lagging = is_commit_lagging(
             self.context.as_ref(),
             current_commit_index,
             quorum_commit_index,
-        ) {
-            metrics
-                .synchronizer_periodic_sync_decision
-                .with_label_values(&["true", "default"])
-                .inc();
-            // Reset last commit state.
-            self.last_changed_commit_index = current_commit_index;
-            self.last_commit_change_time = now;
-            self.commit_sync_failover = false;
-            // Run periodic sync.
-            return true;
-        }
-        // Commit is lagging.
+        );
 
-        // When in commit sync failover, check if enough progress has been made.
         if self.commit_sync_failover {
-            if current_commit_index
-                < self.last_changed_commit_index + self.context.parameters.commit_sync_batch_size
-            {
-                metrics
-                    .synchronizer_periodic_sync_decision
-                    .with_label_values(&["true", "commit_catchup::run"])
-                    .inc();
-                // Not enough progress has been made yet. Keep running periodic sync.
-                // Do not update last commit state yet.
-                // Run periodic sync.
-                return true;
-            } else {
-                metrics
-                    .synchronizer_periodic_sync_decision
-                    .with_label_values(&["false", "commit_catchup::end"])
-                    .inc();
-                // Enough progress has been made. Disable commit sync failover and reset last commit state.
+            let noop_fetches = self.periodic_noop_fetches.load(Ordering::Relaxed);
+            let fetched_no_new_blocks = noop_fetches != self.failover_observed_noop_fetches;
+            self.failover_observed_noop_fetches = noop_fetches;
+            if current_commit_index > self.last_changed_commit_index {
                 self.last_changed_commit_index = current_commit_index;
                 self.last_commit_change_time = now;
-                self.commit_sync_failover = false;
-                // Skip periodic sync because of commit lag.
-                return false;
             }
+            // Exit the failover when a fetch completed successfully without contributing any
+            // block missing from the local DAG: periodic sync is no longer helping the node
+            // catch up. The signal is computed by the fetch task itself against DagState, so it
+            // does not race with blocks and commits still being processed asynchronously. If
+            // commits remain stalled after exiting, the failover re-arms after another
+            // COMMIT_PROGRESS_TIMEOUT, so periodic sync degrades to one probe per timeout
+            // instead of running every scheduler tick.
+            if fetched_no_new_blocks {
+                self.commit_sync_failover = false;
+                self.last_changed_commit_index = current_commit_index;
+                self.last_commit_change_time = now;
+                return self
+                    .record_periodic_sync_decision(!commit_is_lagging, "commit_catchup::end");
+            }
+            return self.record_periodic_sync_decision(true, "commit_catchup::run");
         }
 
-        // The node is commit lagging and not in commit sync failover yet.
         if current_commit_index == self.last_changed_commit_index {
-            // Enter commit sync failover if not enough progress has been made.
             if now.duration_since(self.last_commit_change_time) >= COMMIT_PROGRESS_TIMEOUT {
-                metrics
-                    .synchronizer_periodic_sync_decision
-                    .with_label_values(&["true", "commit_catchup::start"])
-                    .inc();
                 self.commit_sync_failover = true;
-                // Run periodic sync.
-                return true;
+                self.failover_observed_noop_fetches =
+                    self.periodic_noop_fetches.load(Ordering::Relaxed);
+                return self.record_periodic_sync_decision(true, "commit_catchup::start");
             }
         } else {
-            // IMPORTANT: Only update last commit state when commit index is changing.
             self.last_changed_commit_index = current_commit_index;
             self.last_commit_change_time = now;
         }
 
-        metrics
+        if commit_is_lagging {
+            self.record_periodic_sync_decision(false, "commit_lag")
+        } else {
+            self.record_periodic_sync_decision(true, "default")
+        }
+    }
+
+    fn record_periodic_sync_decision(&self, should_run: bool, reason: &str) -> bool {
+        self.context
+            .metrics
+            .node_metrics
             .synchronizer_periodic_sync_decision
-            .with_label_values(&["false", "commit_lag"])
+            .with_label_values(&[if should_run { "true" } else { "false" }, reason])
             .inc();
-        false
+        should_run
     }
 
     /// Fetches blocks from a random peer using only fetch_after_rounds (no specific missing blocks).
@@ -1157,9 +1186,11 @@ where
         // Get available peers from the PeersPool
         let mut peers = peers_pool.get_known_peers();
 
-        // TODO: in the future it would be possible, temporarily, for an Observer node to not have peers to fetch from.
-        // We should change this assertion to allow for this case.
-        assert!(!peers.is_empty(), "No known peers to fetch blocks from");
+        // Observer nodes can temporarily have no known peers to fetch from.
+        if peers.is_empty() {
+            debug!("No known peers to fetch blocks from, skipping fetch with fetch_after_rounds.");
+            return vec![];
+        }
 
         if cfg!(not(test)) {
             peers.shuffle(&mut ThreadRng::default());
@@ -1510,12 +1541,17 @@ mod tests {
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             let mut lock = self.fetch_blocks_requests.lock().await;
-            let response = lock.remove(&(block_refs.clone(), peer)).unwrap_or_else(|| {
-                panic!(
+            let response = match lock.remove(&(block_refs.clone(), peer)) {
+                Some(response) => response,
+                // fetch_after_rounds requests (empty block_refs) are issued opportunistically on
+                // every scheduler tick during commit sync failover, so unstubbed ones return no
+                // blocks instead of panicking. Requests for specific refs must be stubbed.
+                None if block_refs.is_empty() => (vec![], None),
+                None => panic!(
                     "Unexpected fetch blocks request made: {:?} {}. Current lock: {:?}",
                     block_refs, peer, lock
-                );
-            });
+                ),
+            };
 
             let serialised = response
                 .0
@@ -2208,6 +2244,111 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn synchronizer_recovers_when_commit_quorum_is_pinned_to_local_progress() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+
+        // Two current validators cannot move the quorum commit index of a four-validator
+        // committee past the lagging validator's local index.
+        let high_commit_index =
+            context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;
+        for authority in 1..=2 {
+            let block = TestBlock::new(high_commit_index, authority)
+                .set_commit_votes(vec![CommitVote::new(high_commit_index, CommitDigest::MIN)])
+                .build();
+            commit_vote_monitor.observe_block(&VerifiedBlock::new_for_test(block));
+        }
+        assert_eq!(commit_vote_monitor.quorum_commit_index(), 0);
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
+        // The fallback asks a current peer for stored history across every authority. This can
+        // include causal blocks authored by the validator that is still unavailable.
+        let expected_blocks = (0..4)
+            .map(|authority| VerifiedBlock::new_for_test(TestBlock::new(1, authority).build()))
+            .collect::<Vec<_>>();
+        mock_client
+            .stub_fetch_blocks_for_key(
+                vec![],
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(1),
+                None,
+            )
+            .await;
+
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client),
+        ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let _handle = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor,
+            block_verifier,
+            transaction_vote_tracker,
+            round_tracker,
+            dag_state,
+            peers_pool,
+            false,
+        );
+
+        sleep(COMMIT_PROGRESS_TIMEOUT - Duration::from_millis(100)).await;
+        assert!(core_dispatcher.get_add_blocks().await.is_empty());
+
+        sleep(Duration::from_millis(200)).await;
+        assert_eq!(core_dispatcher.get_add_blocks().await, expected_blocks);
+
+        // The next fetch (only one response was stubbed) succeeds but contributes no new
+        // blocks, which ends the failover instead of polling every scheduler tick.
+        sleep(Duration::from_millis(600)).await;
+        let decision_metric = &context
+            .metrics
+            .node_metrics
+            .synchronizer_periodic_sync_decision;
+        assert!(
+            decision_metric
+                .with_label_values(&["true", "commit_catchup::run"])
+                .get()
+                > 0
+        );
+        assert_eq!(
+            decision_metric
+                .with_label_values(&["true", "commit_catchup::end"])
+                .get(),
+            1,
+            "a successful fetch without new blocks should end the failover"
+        );
+        assert_eq!(
+            decision_metric
+                .with_label_values(&["true", "commit_catchup::start"])
+                .get(),
+            1
+        );
+
+        // AND with commits still stalled, the failover re-arms after another timeout,
+        // so periodic sync degrades to one probe per COMMIT_PROGRESS_TIMEOUT.
+        sleep(COMMIT_PROGRESS_TIMEOUT).await;
+        assert_eq!(
+            decision_metric
+                .with_label_values(&["true", "commit_catchup::start"])
+                .get(),
+            2,
+            "the failover should re-arm while commits remain stalled"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn synchronizer_fetch_own_last_block() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);
@@ -2402,14 +2543,15 @@ mod tests {
             transaction_vote_tracker,
             commit_vote_monitor,
             context.clone(),
+            dag_state.clone(),
             commands_sender,
             round_tracker,
             "test",
         )
         .await;
 
-        // THEN
-        assert!(result.is_ok());
+        // THEN all processed blocks are new to the local DAG.
+        assert_eq!(result.unwrap(), expected_blocks.len());
 
         // Check blocks were sent to core
         let added_blocks = core_dispatcher.get_add_blocks().await;
