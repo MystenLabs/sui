@@ -287,9 +287,3 @@ Move unit tests validate contract logic in isolation. For full application testi
 - **Dry runs:** Use `sui client call --dry-run` or `devInspectTransactionBlock` to simulate a transaction against the current network state without executing it. This catches issues like incorrect object versions or insufficient gas before you submit.
 - **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective.
 
-## Related resources
-
-- [The Move Book — Testing](https://move-book.com/testing/) — Language-level reference for `#[test]`, `#[expected_failure]`, and `#[test_only]` attributes.
-- [Scenario Testing example](/getting-started/examples/scenario-testing) — Complete walkthrough of multi-transaction, multi-sender testing with `test_scenario`.
-- [Move Trace Debugger](/references/ide/debugger) — Step through execution traces in VS Code for both unit tests and onchain transactions.
-- [`sui move` CLI reference](/references/cli/move) — Full CLI reference for building, testing, and measuring coverage.
