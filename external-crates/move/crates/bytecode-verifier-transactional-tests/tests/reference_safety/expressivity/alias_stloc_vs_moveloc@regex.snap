@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 19-33:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::moveloc_alias_invalid'. Got VMError: {
+    major_status: MOVELOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::moveloc_alias_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}

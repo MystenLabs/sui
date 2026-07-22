@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 4-19:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::direct_mut'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::direct_mut,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}
+
+task 1, lines 21-35:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::direct_imm'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x3::direct_imm,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 5)],
+}
+
+task 2, lines 37-56:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::direct_both'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x4::direct_both,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}

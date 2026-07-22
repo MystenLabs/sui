@@ -1,0 +1,71 @@
+// Variant-field refs act like struct fields. Distinct fields can be borrowed
+// mutably at once and written in any order, and the parent enum is blocked
+// while they live.
+
+//# publish
+mvir 0x2::distinct_fields {
+
+public enum E has copy, drop {
+    V { a: u64, b: u64 },
+}
+
+fun t(e: &mut Self::E) {
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+    &mut E::V { a: a, b: b } = copy(e);
+    *move(b) = 0;
+    *move(a) = 0;
+    *move(e) = E::V { a: 1, b: 1 };
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::parent_write_blocked {
+
+public enum E has copy, drop {
+    V { a: u64, b: u64 },
+}
+
+fun t(e: &mut Self::E) {
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+    &mut E::V { a: a, b: b } = copy(e);
+    // a and b still borrow into e, so writing e is rejected
+    *copy(e) = E::V { a: 1, b: 1 };
+    *move(a) = 0;
+    *move(b) = 0;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::freeze_then_unpack_imm {
+
+public enum E has copy, drop {
+    V { a: u64, b: u64 },
+}
+
+fun t(e: &mut Self::E) {
+    let m: &mut u64;
+    let unused: &mut u64;
+    let a: &u64;
+    let b: &u64;
+label b0:
+    &mut E::V { a: m, b: unused } = copy(e);
+    _ = move(unused);
+    // freeze an alias of e while the mutable variant field is outstanding
+    &E::V { a: a, b: b } = freeze(copy(e));
+    _ = *copy(a);
+    _ = *copy(b);
+    *move(m) = 0;
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}
