@@ -1,5 +1,5 @@
 ---
-title: Testing
+title: Testing Move Smart Contracts
 description: >-
   Learn about the available testing tools and frameworks for validating your
   Move smart contracts and Sui applications.
@@ -10,7 +10,9 @@ keywords:
   - Sui testing
   - smart contract testing
   - test framework
-draft: true
+  - test_scenario
+  - expected_failure
+  - test coverage
 goal:
   description: >-
     Reader can learn about the available testing tools and frameworks for
@@ -28,14 +30,259 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - How do I test?
-  - What is Testing in Sui?
-  - Why should I use testing?
+  - How do I test Move smart contracts on Sui?
+  - What testing tools are available for Sui Move?
+  - How do I write unit tests in Move?
+  - How do I test multi-transaction flows with test_scenario?
+  - How do I check test coverage for Move code?
 answer: >-
-  Learn about the available testing tools and frameworks for validating your
-  Move smart contracts and Sui applications.
+  Sui provides built-in testing tools for Move smart contracts. Write unit tests
+  with the #[test] attribute and run them with `sui move test`. Use
+  test_scenario for multi-transaction, multi-sender tests that simulate
+  real-world flows. Measure coverage with `sui move test --coverage` and debug
+  failures with the Move Trace Debugger.
 ---
 
 <AgentPrompt
   prompt={"Add Move unit tests for this package's public functions, including success, unauthorized, and edge cases."}
 />
+
+Sui includes a built-in test framework for Move smart contracts. You write tests directly in your Move source files, run them with the `sui move test` CLI command, and use the `test_scenario` module to simulate multi-transaction flows. No external test runner or framework installation is required.
+
+## Unit tests
+
+A unit test is a Move function annotated with `#[test]`. The test runner executes each test function in isolation. If the function completes without aborting, the test passes.
+
+```move
+#[test]
+fun test_sword_create() {
+    let mut ctx = tx_context::dummy();
+
+    let sword = Sword {
+        id: object::new(&mut ctx),
+        magic: 42,
+        strength: 7,
+    };
+
+    assert!(sword.magic() == 42 && sword.strength() == 7, 1);
+
+    let dummy_address = @0xCAFE;
+    transfer::public_transfer(sword, dummy_address);
+}
+```
+
+Key points:
+
+- Call `tx_context::dummy()` to create a transaction context for testing without a real transaction.
+- Objects with the `key` ability contain a `UID` that must be created with `object::new`. Transfer or destroy every object before the test ends to avoid resource safety errors.
+- Use `assert!` to verify expected values. The second argument is an error code that appears in the test output if the assertion fails.
+
+### Test-only code
+
+Use the `#[test_only]` attribute to define helper functions or imports that exist only during testing. The compiler strips test-only code from production builds.
+
+```move
+#[test_only]
+use sui::test_scenario;
+
+#[test_only]
+fun create_test_sword(ctx: &mut TxContext): Sword {
+    Sword {
+        id: object::new(ctx),
+        magic: 10,
+        strength: 5,
+    }
+}
+```
+
+You can also mark an entire module as test-only. Place test modules in a `tests/` directory inside your package, or define them inline:
+
+```move
+#[test_only]
+module my_package::my_tests;
+
+use my_package::my_module;
+```
+
+### Negative tests
+
+Use `#[expected_failure]` to verify that a function aborts under specific conditions. This is essential for testing access control, input validation, and error handling.
+
+```move
+// Test that a specific abort code is raised
+#[test, expected_failure(abort_code = my_module::ENotAuthorized)]
+fun test_unauthorized_mint() {
+    // Call a function that should abort because the sender lacks permission
+    let mut ctx = tx_context::dummy();
+    my_module::restricted_action(&mut ctx);
+}
+```
+
+The test passes only if the function aborts with the specified error code. If the function succeeds or aborts with a different code, the test fails.
+
+You can also match on other failure types:
+
+- `#[expected_failure(abort_code = 1)]`: Matches a numeric abort code.
+- `#[expected_failure(arithmetic_error, location = my_package::my_module)]`: Matches an arithmetic error in a specific module.
+- `#[expected_failure]` without arguments: Matches any abort (less precise, use sparingly).
+
+## Scenario testing with `test_scenario`
+
+Unit tests execute in a single transaction context. Real Sui transactions involve multiple steps, multiple senders, and objects that move between addresses. The `test_scenario` module simulates this by maintaining a virtual object store and advancing through transactions.
+
+```move
+#[test]
+fun test_sword_transactions() {
+    use sui::test_scenario;
+
+    let initial_owner = @0xCAFE;
+    let final_owner = @0xFACE;
+
+    // First transaction: create a sword
+    let mut scenario = test_scenario::begin(initial_owner);
+    {
+        let sword = sword_create(42, 7, scenario.ctx());
+        transfer::public_transfer(sword, initial_owner);
+    };
+
+    // Second transaction: transfer the sword
+    scenario.next_tx(initial_owner);
+    {
+        let sword = scenario.take_from_sender<Sword>();
+        transfer::public_transfer(sword, final_owner);
+    };
+
+    // Third transaction: verify the sword
+    scenario.next_tx(final_owner);
+    {
+        let sword = scenario.take_from_sender<Sword>();
+        assert!(sword.magic() == 42 && sword.strength() == 7, 1);
+        scenario.return_to_sender(sword);
+    };
+    scenario.end();
+}
+```
+
+Key operations:
+
+| Operation | Purpose |
+|---|---|
+| `test_scenario::begin(sender)` | Start a scenario with the given sender address |
+| `scenario.next_tx(sender)` | Advance to the next transaction with a new sender |
+| `scenario.take_from_sender<T>()` | Take an owned object of type `T` from the current sender |
+| `scenario.return_to_sender(obj)` | Return an object to the current sender |
+| `take_shared<T>(&scenario)` | Take a shared object from the virtual store |
+| `return_shared(obj)` | Return a shared object to the virtual store |
+| `scenario.ctx()` | Get the current transaction context |
+| `scenario.end()` | End the scenario and clean up |
+
+Always pair `take_shared` with `return_shared` within the same transaction block. Owned objects taken with `take_from_sender` can be returned, transferred, or destroyed; they do not need to be returned to the sender.
+
+For a complete walkthrough with access control, cross-module interactions, and transaction effects inspection, see the [Scenario Testing](/getting-started/examples/scenario-testing) example.
+
+## Test utilities
+
+The Sui framework provides several modules that simplify common testing tasks:
+
+| Module | Purpose |
+|---|---|
+| [`std::unit_test`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/unit_test.move) | `destroy` function for cleaning up objects in tests, plus `assert_eq!` and `assert_ref_eq!` macros for better error messages |
+| [`std::debug`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/debug.move) | `print` function for debug output during test runs |
+
+Example using `std::unit_test::destroy` to clean up an object without writing a custom destructor:
+
+```move
+use std::unit_test;
+
+#[test]
+fun test_with_cleanup() {
+    let mut ctx = tx_context::dummy();
+    let obj = my_module::create(&mut ctx);
+
+    // ... test assertions ...
+
+    unit_test::destroy(obj);
+}
+```
+
+## Running tests
+
+Run all tests in your package with:
+
+```bash
+$ sui move test
+```
+
+The output shows each test, its pass/fail status, and a summary:
+
+```
+Running Move unit tests
+[ PASS    ] 0x0::example::test_sword_create
+[ PASS    ] 0x0::example::test_sword_transactions
+Test result: OK. Total tests: 2; passed: 2; failed: 0
+```
+
+### Filter tests
+
+Run a subset of tests by providing a filter string. Only tests whose fully qualified name contains the filter string run:
+
+```bash
+$ sui move test sword
+```
+
+### Detailed output
+
+Use `--statistics` to see gas usage for each test:
+
+```bash
+$ sui move test --statistics
+```
+
+### Test coverage
+
+Measure how much of your code the tests exercise:
+
+```bash
+$ sui move test --coverage
+$ sui move coverage summary --test
+```
+
+```
++-------------------------+
+| Move Coverage Summary   |
++-------------------------+
+Module 0000000000000000000000000000000000000000000000000000000000000000::example
+>>> % Module coverage: 92.81
++-------------------------+
+| % Move Coverage: 92.81  |
++-------------------------+
+```
+
+To see which lines are not covered, run:
+
+```bash
+$ sui move coverage source --module <module_name>
+```
+
+Uncovered lines are highlighted, showing exactly where to add test coverage.
+
+For the full list of CLI options, see the [`sui move` CLI reference](/references/cli/move).
+
+## Debugging test failures
+
+When a test fails, the [Move Trace Debugger](/references/ide/debugger) lets you step through execution line by line in VS Code. Generate a trace and open it in the debugger:
+
+```bash
+$ sui move test --trace
+```
+
+Then open the trace file in VS Code with the Move extension installed. You can set breakpoints, inspect variables, and step through each instruction to find where the logic diverges from your expectations.
+
+## Application-level testing
+
+Move tests validate contract logic in a package-local environment. For full application testing, add checks that exercise transactions, network state, client code, and deployment behavior:
+
+- **Local network testing:** Run a [local Sui network](/getting-started/onboarding/local-network) to test transactions, object interactions, and gas costs against a real execution environment before deploying to Testnet.
+- **Testnet deployment:** Deploy your packages to [Testnet](/getting-started/onboarding/configure-sui-client) to verify behavior with real network conditions, indexing, and RPC queries.
+- **Dry runs:** Use `sui client call --dry-run` or `devInspectTransactionBlock` to simulate a transaction against the current network state without executing it. This catches issues like incorrect object versions or insufficient gas before you submit.
+- **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective. For an example of a full test matrix (Move contract tests, SDK unit/integration tests, and E2E tests), see the [Sui Stack Messaging test suite](/sui-stack/messaging/testing).
