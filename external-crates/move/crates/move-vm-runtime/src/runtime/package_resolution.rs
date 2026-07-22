@@ -12,7 +12,11 @@ use crate::{
     dbg_println, jit,
     natives::functions::NativeFunctions,
     runtime::telemetry::TransactionTelemetryContext,
-    shared::{logging::expect_no_verification_errors, safe_ops::SafeIndex as _, types::VersionId},
+    shared::{
+        logging::expect_no_verification_errors,
+        safe_ops::SafeIndex as _,
+        types::{OriginalId, VersionId},
+    },
     validation::{validate_package, verification},
 };
 use move_binary_format::{
@@ -102,10 +106,11 @@ pub(crate) fn resolve_packages(
 
     // Load and cache anything that wasn't already there.
     // NB: packages can be loaded out of order here (e.g., in parallel) if so desired.
+    let system_packages = cache.system_packages();
     for pkg in load_and_verify_packages(store, telemetry, &cache.vm_config, natives, &pkgs_to_cache)
         .map_err(expect_no_verification_errors)?
     {
-        let pkg = jit_and_cache_package(telemetry, cache, natives, pkg)?;
+        let pkg = jit_and_cache_package(telemetry, cache, natives, system_packages, pkg)?;
         cached_packages.insert(pkg.verified.version_id, pkg);
     }
 
@@ -193,10 +198,14 @@ fn load_packages(
 }
 
 // Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.
+//
+// `system_packages` is the candidate set of pinned packages this translation may direct-call
+// into; see `jit_and_cache_package` for the same contract.
 pub(crate) fn jit_package_for_publish(
     telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
+    system_packages: &BTreeMap<OriginalId, Arc<move_cache::Package>>,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
     let version_id = verified_pkg.version_id;
@@ -204,11 +213,13 @@ pub(crate) fn jit_package_for_publish(
         return Ok(pkg);
     }
 
+    let effective = effective_system_packages_for(system_packages, &verified_pkg);
     let timer = telemetry.make_timer_with_count(crate::runtime::telemetry::TimerKind::JIT, 1);
     let runtime_pkg = jit::translate_package(
         &cache.vm_config,
         &cache.interner,
         natives,
+        &effective,
         verified_pkg.clone(),
     )
     .map_err(|err| err.finish(Location::Package(version_id)));
@@ -220,25 +231,33 @@ pub(crate) fn jit_package_for_publish(
 }
 
 // Retrieve a JIT-compiled package from the cache, or compile and add it to the cache.
+//
+// `system_packages` is the candidate set of pinned packages this translation may direct-call
+// into; the user pkg's own linkage table further restricts that set. Callers from the user-pkg
+// flow pass `cache.system_packages()`; the system-pkg install pipeline passes the in-progress
+// install set so each newly-installed system pkg can direct-call into already-installed
+// siblings.
 pub(crate) fn jit_and_cache_package(
     telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
+    system_packages: &BTreeMap<OriginalId, Arc<move_cache::Package>>,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
     let version_id = verified_pkg.version_id;
-    // If the package is already in the cache, return it.
-    // This is possible since the cache is shared and may be inserted into concurrently by other
-    // VMs working over the same cache.
+    // If the package is already in the cache, return it. The cache is shared and may be
+    // inserted into concurrently by other VMs working over the same cache.
     if let Some(pkg) = cache.cached_package_at(version_id) {
         return Ok(pkg);
     }
 
+    let effective = effective_system_packages_for(system_packages, &verified_pkg);
     let timer = telemetry.make_timer_with_count(crate::runtime::telemetry::TimerKind::JIT, 1);
     let runtime_pkg = jit::translate_package(
         &cache.vm_config,
         &cache.interner,
         natives,
+        &effective,
         verified_pkg.clone(),
     )
     .map_err(|err| err.finish(Location::Package(version_id)));
@@ -260,4 +279,33 @@ pub(crate) fn jit_and_cache_package(
     Ok(cache.cached_package_at(version_id).expect(
         "Package must be in cache after inserting it otherwise cache is irreparably broken",
     ))
+}
+
+/// Filter a set of retained system packages down to those that the user package's linkage table
+/// maps `OriginalId -> our pinned VersionId` exactly. Anything else (no entry, wrong version) is
+/// excluded; the JIT translator only direct-resolves into a system pkg when the user has
+/// explicitly linked to that specific pinned version.
+///
+/// The package being translated is *also* excluded defensively: a package currently being loaded
+/// should not appear as a system package upstream to be linked against. This case may happen
+/// during genesis, but otherwise should not occur.
+fn effective_system_packages_for(
+    system_packages: &BTreeMap<OriginalId, Arc<Package>>,
+    verified_pkg: &verification::ast::Package,
+) -> BTreeMap<OriginalId, Arc<Package>> {
+    if system_packages.is_empty() {
+        return BTreeMap::new();
+    }
+    let self_id = verified_pkg.original_id;
+    let linkage = verified_pkg.linkage_table();
+    system_packages
+        .iter()
+        .filter(|(orig_id, _)| **orig_id != self_id)
+        .filter_map(|(orig_id, sys_pkg)| match linkage.get(orig_id) {
+            Some(linked_version) if *linked_version == sys_pkg.runtime.version_id => {
+                Some((*orig_id, Arc::clone(sys_pkg)))
+            }
+            _ => None,
+        })
+        .collect()
 }

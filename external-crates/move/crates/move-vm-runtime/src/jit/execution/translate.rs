@@ -6,6 +6,7 @@ use crate::{
     cache::{
         arena::{ArenaBox, ArenaBuilder, ArenaVec},
         identifier_interner::{IdentifierInterner, IdentifierKey},
+        move_cache::Package as CachedPackage,
     },
     dbg_println,
     execution::{
@@ -38,7 +39,10 @@ use move_core_types::{
 use indexmap::IndexMap;
 use tracing::instrument;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Translation Context and Definitions
@@ -61,6 +65,12 @@ struct PackageContext<'borrows> {
 
     pub vtable_funs: DefinitionMap<VMPointer<Function>>,
     pub vtable_types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
+
+    /// Effective system packages for direct-call rewriting in this translation. The caller is
+    /// responsible for filtering this to the system packages that the user package's linkage
+    /// table actually maps to (`OriginalId -> our pinned VersionId`); membership here is the
+    /// *only* signal we use to direct-resolve cross-package calls into a system package.
+    pub system_packages: &'borrows BTreeMap<OriginalId, Arc<CachedPackage>>,
 }
 
 struct FunctionContext<'pkg_ctxt, 'natives> {
@@ -114,22 +124,44 @@ impl PackageContext<'_> {
         self.vtable_types.extend(datatypes)
     }
 
-    /// Try to resolve a function call (vtable entry) to a direct call (i.e. a call to a function
-    /// in the same package). If the vtable key represents an inter-package call this function
-    /// will return `None` as the call cannot be resolved to a direct call.
+    /// Try to resolve a function call (vtable entry) to a direct call.
+    ///
+    /// Two cases produce a direct call:
+    ///
+    /// 1. The target is a function in the same package; resolved via the in-progress vtable.
+    /// 2. The target is in a system package that this translation is keyed against; resolved
+    ///    via that system package's already-built vtable.
+    ///
+    /// Otherwise the call remains virtual and will be resolved at runtime through the
+    /// `VMDispatchTables`.
+    ///
+    /// SAFETY: The system-package map handed in here has already been filtered against the user
+    /// package's linkage table by the caller; absence here means "not a direct-call target", not
+    /// "missing dependency".
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
     ) -> PartialVMResult<Option<VMPointer<Function>>> {
-        // We are calling into a different package so we cannot resolve this to a direct call.
-        if vtable_entry.package_key() != self.original_id {
+        let known_fn_opt = if vtable_entry.package_key() == self.original_id {
+            // Same-package call: resolve against the package we're currently building.
+            self.vtable_funs.get(vtable_entry.intra_package_key())
+        } else if let Some(sys_pkg) = self.system_packages.get(&vtable_entry.package_key()) {
+            // System-package call: caller has already filtered `system_packages` to those the
+            // user's linkage maps to our pinned versions, so membership here is sufficient.
+            sys_pkg
+                .runtime
+                .vtable
+                .functions
+                .get(vtable_entry.intra_package_key())
+        } else {
             return Ok(None);
-        }
-        match self.vtable_funs.get(vtable_entry.intra_package_key()) {
+        };
+
+        match known_fn_opt {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
             None => Err(partial_vm_error!(
                 FUNCTION_RESOLUTION_FAILURE,
-                "Function not found in vtable with name: {}::{}",
+                "Could not find function with name: {}::{}",
                 self.version_id,
                 self.interner.resolve_ident(
                     &vtable_entry.intra_package_key().member_name,
@@ -183,6 +215,7 @@ impl FunctionContext<'_, '_> {
 pub fn package(
     natives: &NativeFunctions,
     interner: &IdentifierInterner,
+    system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
     tracing::trace!(
@@ -192,6 +225,13 @@ pub fn package(
     );
     let version_id = verified_package.version_id;
     let original_id = verified_package.original_id;
+    // The package we're translating must not appear in its own direct-call system-package set;
+    // self-calls are resolved via `vtable_funs`, and confusing the two would let a package
+    // "direct-call" a stale/mismatched copy of itself.
+    debug_assert!(
+        !system_packages.contains_key(&original_id),
+        "package being translated ({original_id}) must not appear in its own system_packages set",
+    );
     let (module_ids_in_pkg, package_modules): (BTreeSet<_>, Vec<_>) =
         verified_package.modules.into_iter().unzip();
 
@@ -227,6 +267,7 @@ pub fn package(
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
         type_origin_table,
+        system_packages,
     };
 
     modules(&mut package_context, &module_ids_in_pkg, &package_modules)?;
@@ -241,6 +282,7 @@ pub fn package(
         vtable_funs,
         vtable_types,
         type_origin_table: _,
+        system_packages: _,
     } = package_context;
 
     let vtable = PackageVirtualTable::new(vtable_funs, vtable_types);

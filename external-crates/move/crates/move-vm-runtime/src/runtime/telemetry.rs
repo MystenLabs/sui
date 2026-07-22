@@ -31,6 +31,8 @@ pub struct MoveRuntimeTelemetry {
     // Telemetry Derived from Cache over Execution
     /// Total packges in the cache
     pub package_cache_count: u64,
+    /// Total pinned system packages installed at runtime construction
+    pub system_package_count: u64,
     /// Total size of all packages in the cache
     pub total_arena_size: u64,
     /// Total modules of all packages in the cache
@@ -260,6 +262,8 @@ pub(crate) struct TransactionTelemetryContext {
 pub(crate) struct MoveCacheTelemetry {
     /// Total packages in the cache
     pub package_cache_count: u64,
+    /// Total pinned system packages installed at runtime construction
+    pub system_package_count: u64,
     /// Total size of all packages in the cache
     pub total_arena_size: u64,
     /// Total modules of all packages in the cache
@@ -440,6 +444,7 @@ impl TelemetryContext {
         // Retrieve package cache statistics.
         let MoveCacheTelemetry {
             package_cache_count,
+            system_package_count,
             total_arena_size,
             module_count,
             function_count,
@@ -453,6 +458,7 @@ impl TelemetryContext {
         MoveRuntimeTelemetry {
             // Cache information.
             package_cache_count,
+            system_package_count,
             total_arena_size,
             module_count,
             function_count,
