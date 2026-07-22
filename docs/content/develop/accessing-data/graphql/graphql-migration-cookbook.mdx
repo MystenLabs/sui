@@ -75,7 +75,7 @@ answer: >-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This cookbook gives you side-by-side JSON-RPC and GraphQL code for the most common migration paths. Each recipe shows the old call, its GraphQL replacement, and the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For GraphQL concepts, pagination, and scope, see [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc).
+Each recipe pairs a JSON-RPC call with its GraphQL replacement and explains the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For GraphQL concepts, pagination, and scope, see [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc).
 
 :::info
 
@@ -1228,14 +1228,4 @@ Different queries hit different data sources with different retention. Live obje
 
 ### Public endpoints are not production endpoints
 
-The public URLs at `https://graphql.<network>.sui.io/graphql` are rate-limited and intended for development. Production apps should use a provider endpoint or operate their own [GraphQL and Indexer stack](/operators/data-management/indexer-stack-setup).
-
-## Related resources
-
-- [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration): full method mapping and decision criteria
-- [GraphQL for Sui RPC](/develop/accessing-data/graphql/graphql-rpc): concepts, headers, pagination, scope, and limits
-- [Querying Data with GraphQL RPC](/develop/accessing-data/graphql/query-with-graphql): additional query examples
-- [GraphQL API reference](/references/sui-graphql): complete schema documentation
-- [gRPC Migration Cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook): side-by-side gRPC migration examples
-- [Building PTBs](/develop/transactions/ptbs/building-ptb): transaction construction for the `executeTransaction` path
-- [Emitting Events](/develop/accessing-data/using-events): event struct definitions, querying, and filtering
+The public URLs at `https://graphql.<NETWORK>.sui.io/graphql` are rate-limited and intended for development. Production apps should use a provider endpoint or operate their own [GraphQL and Indexer stack](/operators/data-management/indexer-stack-setup).
