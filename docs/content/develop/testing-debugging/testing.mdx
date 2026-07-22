@@ -122,8 +122,8 @@ The test passes only if the function aborts with the specified error code. If th
 
 You can also match on other failure types:
 
-- `#[expected_failure(abort_code = 1)]` - Matches a numeric abort code.
-- `#[expected_failure(arithmetic_error, location = my_package::my_module)]` - Matches an arithmetic error in a specific module.
+- `#[expected_failure(abort_code = 1)]`: Matches a numeric abort code.
+- `#[expected_failure(arithmetic_error, location = my_package::my_module)]`: Matches an arithmetic error in a specific module.
 - `#[expected_failure]` without arguments - Matches any abort (less precise, use sparingly).
 
 ## Scenario testing with `test_scenario`
@@ -176,7 +176,7 @@ Key operations:
 | `scenario.ctx()` | Get the current transaction context |
 | `scenario.end()` | End the scenario and clean up |
 
-Always pair `take_shared` with `return_shared` within the same transaction block. Owned objects taken with `take_from_sender` can be returned, transferred, or destroyed — they do not need to be returned to the sender.
+Always pair `take_shared` with `return_shared` within the same transaction block. Owned objects taken with `take_from_sender` can be returned, transferred, or destroyed; they do not need to be returned to the sender.
 
 For a complete walkthrough with access control, cross-module interactions, and transaction effects inspection, see the [Scenario Testing](/getting-started/examples/scenario-testing) example.
 
@@ -289,8 +289,8 @@ Move unit tests validate contract logic in isolation. For full application testi
 
 ## Related resources
 
-- [The Move Book — Testing](https://move-book.com/testing/) — Language-level reference for `#[test]`, `#[expected_failure]`, and `#[test_only]` attributes.
-- [Scenario Testing example](/getting-started/examples/scenario-testing) — Complete walkthrough of multi-transaction, multi-sender testing with `test_scenario`.
-- [Move Trace Debugger](/references/ide/debugger) — Step through execution traces in VS Code for both unit tests and onchain transactions.
-- [`sui move` CLI reference](/references/cli/move) — Full CLI reference for building, testing, and measuring coverage.
-- [Sui Stack Messaging test suite](/sui-stack/messaging/testing) — Example of Move contract tests, SDK unit/integration tests, and E2E tests for a production Sui application.
+- [The Move Book: Testing](https://move-book.com/testing/) - Language-level reference for `#[test]`, `#[expected_failure]`, and `#[test_only]` attributes.
+- [Scenario Testing example](/getting-started/examples/scenario-testing) - Complete walkthrough of multi-transaction, multi-sender testing with `test_scenario`.
+- [Move Trace Debugger](/references/ide/debugger) - Step through execution traces in VS Code for both unit tests and onchain transactions.
+- [`sui move` CLI reference](/references/cli/move) - Full CLI reference for building, testing, and measuring coverage.
+- [Sui Stack Messaging test suite](/sui-stack/messaging/testing) - Example of Move contract tests, SDK unit/integration tests, and E2E tests for a production Sui application.
