@@ -11,8 +11,8 @@ Each entry is identified by the pair of its key _type_ and key _value_, hashed t
 The core operations mirror `sui::dynamic_field`, and are exposed as methods on `TxContext`:
 
 - `add(key, value)` inserts an entry. Aborts if the key is already present.
-- `read(key)` returns copy of the value. The entry stays in place.
-- `remove(key)` removes the entry and return its value. Aborts if the key is not present.
+- `read(key)` returns a copy of the value. The entry stays in place.
+- `remove(key)` removes the entry and returns its value. Aborts if the key is not present.
 - `exists_with_type(key)` and `exists(key)` test for presence, with and without checking the type of the value respectively.
 - Additional helper functions and macros will be rolled out over the coming releases.
 
