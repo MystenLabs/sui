@@ -96,7 +96,7 @@ Create a client once and reuse it:
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: '<FULL_NODE_URL>',
   network: 'mainnet',
 });
 ```
@@ -111,7 +111,7 @@ Replace `sui_getObject` with `LedgerService.GetObject`. Use a [field mask](/deve
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -164,7 +164,7 @@ Replace `sui_multiGetObjects` with `LedgerService.BatchGetObjects`. The top-leve
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -225,7 +225,7 @@ Replace `sui_getTransactionBlock` with `LedgerService.GetTransaction`.
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -279,7 +279,7 @@ Replace `sui_multiGetTransactionBlocks` with `LedgerService.BatchGetTransactions
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -337,7 +337,7 @@ If you know the transaction digest, fetch the transaction with events included.
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -372,14 +372,14 @@ if (result.$kind === 'Transaction') {
 
 ### Live event streaming
 
-Replace `sui_subscribeEvent` (WebSocket) with `SubscriptionService.SubscribeEvents`. The server filters events before it sends them, so your client receives only matching events.
+Replace `sui_subscribeEvent` (WebSocket) with `SubscriptionService.SubscribeEvents`. The JSON-RPC WebSocket subscription APIs have been deprecated since mid-2024, so migrate any remaining WebSocket subscriptions to gRPC streaming. The server filters events before it sends them, so your client receives only matching events.
 
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC WebSocket (deprecated)">
 
 ```ts
 // Old WebSocket subscription (no longer supported)
-const ws = new WebSocket('wss://fullnode.mainnet.sui.io/websocket');
+const ws = new WebSocket('wss://<FULL_NODE_URL>/websocket');
 ws.send(JSON.stringify({
   jsonrpc: '2.0',
   id: 1,
@@ -438,7 +438,7 @@ $ buf curl --protocol grpc \
 
 The gRPC subscription differs from the JSON-RPC subscription in the following ways:
 
-- JSON-RPC WebSocket subscriptions filtered events server-side. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client receives only matching events.
+- JSON-RPC WebSocket subscriptions filtered events server-side, and have been deprecated since mid-2024. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client receives only matching events.
 - Subscriptions always begin at the current tip of the chain and do not accept a resume point. To avoid missing data between a backfill and a subscription, open the subscription first, note the first `Watermark` from `SubscribeEvents`, then backfill with `LedgerService.ListEvents` up to that watermark. After the backfill completes, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 - For filtered historical event queries over a range, use `LedgerService.ListEvents` or [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql).
 
@@ -451,7 +451,7 @@ Use `LedgerService.ListEvents` to retrieve events matching an `EventFilter` acro
 
 :::info
 
-The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents`. Use the generated proto client directly until the SDK adds a wrapper. The `grpcurl` example in the next tab works today.
+The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents`. Use the generated proto client directly until the SDK adds a wrapper, or use the Rust SDK, which supports `ListEvents`. The `grpcurl` example in the next tab works today.
 
 :::
 
@@ -506,7 +506,7 @@ Replace `sui_getCheckpoints` polling with `SubscriptionService.SubscribeCheckpoi
 // Old polling pattern (inefficient and deprecated)
 let cursor = null;
 while (true) {
-  const res = await fetch('https://fullnode.mainnet.sui.io:443', {
+  const res = await fetch('<FULL_NODE_URL>', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -576,7 +576,7 @@ A full node serves only checkpoints within its retention window. If you query an
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -627,7 +627,7 @@ Replace `suix_getBalance` and `suix_getAllBalances` with `StateService.GetBalanc
 To query a single coin type, run the following command:
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -640,7 +640,7 @@ $ curl -X POST https://fullnode.mainnet.sui.io:443 \
 To query all coin types, run the following command:
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -705,7 +705,7 @@ Replace `suix_getCoins` and `suix_getAllCoins` with `StateService.ListOwnedObjec
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -768,7 +768,7 @@ Replace `suix_getDynamicFields` with `StateService.ListDynamicFields`.
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -815,7 +815,7 @@ Replace `sui_executeTransactionBlock` with `TransactionExecutionService.ExecuteT
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -867,7 +867,7 @@ Replace `sui_dryRunTransactionBlock` and `sui_devInspectTransactionBlock` with `
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -903,7 +903,7 @@ Replace `suix_getReferenceGasPrice` with `getReferenceGasPrice` on the SDK, or c
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -942,7 +942,7 @@ Replace JSON-RPC name resolution with `NameService.LookupName` and `NameService.
 To resolve a name to an address, run the following command:
 
 ```sh
-$ curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -1043,7 +1043,7 @@ A full node returns `NOT_FOUND` for data outside its retention window. Fall back
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const fullNode = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: '<FULL_NODE_URL>',
   network: 'mainnet',
 });
 

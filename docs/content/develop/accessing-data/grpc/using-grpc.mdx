@@ -207,6 +207,53 @@ Use `LedgerService.ListTransactions` to query transactions over a checkpoint ran
 
 Run the following command:
 
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "sender": { "address": "<ADDRESS>" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListTransactions
+```
+
+### List events matching a filter
+
+Use `LedgerService.ListEvents` to query events over a checkpoint range with an `EventFilter`.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListEvents
+```
+
+### List checkpoints
+
+Use `LedgerService.ListCheckpoints` to query a range of checkpoints.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000010",
+  "read_mask": { "paths": ["digest", "summary"] }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListCheckpoints
+```
 
 ## Access streaming data with Buf
 
@@ -220,13 +267,45 @@ $ buf curl --protocol grpc https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionServic
 
 ### Subscribe to transactions with a filter
 
-### Subscribe to transactions with a filter
-
 Use `SubscriptionService.SubscribeTransactions` to stream transactions that match a `TransactionFilter` from the current tip of the chain.
 
 Run the following command:
 
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "sender": { "address": "<ADDRESS>" }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
+```
 
+### Subscribe to events with a filter
+
+Use `SubscriptionService.SubscribeEvents` to stream events that match an `EventFilter` from the current tip of the chain.
+
+Run the following command:
+
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
+```
 
 
 ## Build gRPC clients
