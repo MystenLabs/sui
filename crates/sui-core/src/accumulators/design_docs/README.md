@@ -16,6 +16,7 @@ If you are touching code under `crates/sui-core/src/accumulators/` or
 | [`address_funds_scheduling.md`](./address_funds_scheduling.md) | Pre-execution withdraw scheduling for **address-owned** accumulator accounts (max amounts known up front). Eager scheduler, naive baseline, determinism. |
 | [`object_funds_checking.md`](./object_funds_checking.md) | Post-execution sufficiency checking for **object-owned** accumulator accounts (amounts known only after the transaction is run). |
 | [`coin_reservations.md`](./coin_reservations.md) | Backward-compat layer that lets pre-address-balance SDKs use address balances by encoding withdrawals as fake `ObjectRef`s. Transitional — expected to be removed once SDK migration is done. |
+| [`implicitly_read_system_objects.md`](./implicitly_read_system_objects.md) | How a transaction reads a system object (today: the accumulator root, for the in-VM funds check) without declaring it as an input: version assignment, availability gating + retry, effects recording, and replay recovery. Includes the invariants and an extension checklist. |
 
 The **read path** (RPC balance queries via `accumulators/balances.rs` and the
 `AccountFundsRead` trait in `accumulators/funds_read.rs`) is small enough that the inline rustdoc
