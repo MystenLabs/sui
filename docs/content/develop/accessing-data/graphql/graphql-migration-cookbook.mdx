@@ -659,9 +659,7 @@ query {
       }
       nodes {
         address
-        asMoveObject {
-          contents { json }
-        }
+        contents { json }
       }
     }
   }
@@ -745,11 +743,9 @@ query {
       nodes {
         address
         digest
-        asMoveObject {
-          contents {
-            type { repr }
-            json
-          }
+        contents {
+          type { repr }
+          json
         }
       }
     }
@@ -1046,9 +1042,7 @@ query {
     ) {
       nodes {
         address
-        asMoveObject {
-          contents { json }
-        }
+        contents { json }
       }
     }
   }
