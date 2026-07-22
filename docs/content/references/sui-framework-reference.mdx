@@ -32,4 +32,15 @@ answer: >-
   Move packages.
 ---
 
-The Sui Framework includes the core onchain libraries for Move developers. You can view the [Sui Framework Reference docs](https://docs.sui.io/references/framework/) or view the Markdown format in the [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs).
+The Sui Framework includes the core onchain libraries for Move developers. These libraries provide the types and functions used to define objects, manage ownership, handle coins, emit events, and interact with other system-level features.
+
+Browse the reference in either of the following formats:
+
+- [Sui Framework Reference docs](https://docs.sui.io/references/framework/) - searchable HTML reference generated from source
+- [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs) - Markdown format in the repository
+
+The framework is organized into several packages:
+
+- **`sui-framework`** - Core types like `object`, `transfer`, `coin`, `event`, `clock`, and `dynamic_field`
+- **`sui-system`** - Validator set, staking, and governance modules
+- **`move-stdlib`** - Standard Move library with `vector`, `option`, `string`, and other foundational types
