@@ -157,6 +157,12 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     }
                 }
             });
+        // Test knob: override the per-stream receive throttle interval (ms).
+        let throttle_interval = std::env::var("CONSENSUS_SUBSCRIPTION_THROTTLE_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(std::time::Duration::from_millis)
+            .unwrap_or(self.context.parameters.min_round_delay / 2);
         let throttle_delay_histogram = self
             .context
             .metrics
@@ -164,10 +170,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .subscription_throttle_delay
             .clone();
         let stamped = stream.map(|b| (std::time::Instant::now(), b));
-        let rate_limited_stream = tokio_stream::StreamExt::throttle(
-            stamped,
-            self.context.parameters.min_round_delay / 2,
-        )
+        let rate_limited_stream = tokio_stream::StreamExt::throttle(stamped, throttle_interval)
         .map(move |(t0, b)| {
             throttle_delay_histogram.observe(t0.elapsed().as_secs_f64());
             b
@@ -277,7 +280,17 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .await
             .map_err(|e| ConsensusError::NetworkRequest(format!("fetch_commits failed: {e:?}")))?;
         let response = response.into_inner();
-        Ok((response.commits, response.certifier_blocks))
+        let commits = response
+            .commits
+            .into_iter()
+            .map(|c| Bytes::from(c.to_vec()))
+            .collect();
+        let certifier_blocks = response
+            .certifier_blocks
+            .into_iter()
+            .map(|b| Bytes::from(b.to_vec()))
+            .collect();
+        Ok((commits, certifier_blocks))
     }
 
     async fn fetch_latest_blocks(
@@ -787,6 +800,10 @@ pub(crate) struct TonicManager {
     observer_client: Arc<TonicObserverClient>,
     server: Option<ServerHandle>,
     observer_server: Option<ServerHandle>,
+    // Test knob: dedicated runtime for the validator server so connection/stream
+    // tasks do not compete with verification and Core for worker threads.
+    // shutdown_background on stop -- never dropped inline (async-context panic).
+    dedicated_runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl TonicManager {
@@ -830,6 +847,7 @@ impl TonicManager {
             observer_client,
             server: None,
             observer_server: None,
+            dedicated_runtime: None,
         }
     }
 
@@ -912,6 +930,9 @@ impl NetworkManager for TonicManager {
         if let Some(server) = self.server.take() {
             server.shutdown().await;
         }
+        if let Some(rt) = self.dedicated_runtime.take() {
+            rt.shutdown_background();
+        }
 
         if let Some(observer_server) = self.observer_server.take() {
             observer_server.shutdown().await;
@@ -950,11 +971,16 @@ impl TonicManager {
                 mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
             });
 
-        let consensus_service_server = ConsensusServiceServer::new(service)
+        let mut consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
             .max_decoding_message_size(config.message_size_limit)
-            .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
+        // Test knob: skip outbound compression of this author's block streams, to
+        // measure per-stream compression's share of send-path dispatch latency.
+        if std::env::var("CONSENSUS_DISABLE_STREAM_COMPRESSION").is_err() {
+            consensus_service_server =
+                consensus_service_server.send_compressed(CompressionEncoding::Zstd);
+        }
 
         let consensus_service = tonic::service::Routes::new(consensus_service_server)
             .into_axum_router()
@@ -985,8 +1011,20 @@ impl TonicManager {
         // that is bound to the TCP port of `own_address` that hasn't finished relinquishing
         // control of the port yet. So instead of crashing when the address is inuse, we will retry
         // for a short/reasonable period of time before giving up.
+        let dedicated_rt = std::env::var("CONSENSUS_DEDICATED_NETWORK_RUNTIME")
+            .ok()
+            .map(|v| {
+                let threads = v.parse::<usize>().ok().filter(|n| *n > 0).unwrap_or(8);
+                tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(threads)
+                    .thread_name("consensus-net")
+                    .enable_all()
+                    .build()
+                    .expect("failed to build dedicated consensus network runtime")
+            });
         let deadline = Instant::now() + Duration::from_secs(20);
         let server = loop {
+            let _rt_guard = dedicated_rt.as_ref().map(|rt| rt.enter());
             match sui_http::Builder::new()
                 .config(http_config.clone())
                 .tls_config(tls_server_config.clone())
@@ -1004,6 +1042,10 @@ impl TonicManager {
         };
 
         info!("Server started at: {}", self.own_address);
+        if dedicated_rt.is_some() {
+            info!("Consensus validator server running on dedicated runtime");
+        }
+        self.dedicated_runtime = dedicated_rt;
         self.server = Some(server);
     }
 
@@ -1124,6 +1166,10 @@ impl Drop for TonicManager {
         }
         if let Some(observer_server) = self.observer_server.as_ref() {
             observer_server.trigger_shutdown();
+        }
+        if let Some(rt) = self.dedicated_runtime.take() {
+            // Runtime cannot be dropped inline within an async context.
+            rt.shutdown_background();
         }
     }
 }
