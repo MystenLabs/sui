@@ -17,6 +17,7 @@ use anyhow::{Result, bail};
 use futures::future::join_all;
 use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
@@ -59,6 +60,8 @@ pub struct WorkloadConfig {
     pub shared_counter_max_tip: u64,
     pub num_contested_objects: u64,
     pub randomized_transaction_concurrency: u64,
+    pub randomized_transaction_max_soft_bundles: NonZeroUsize,
+    pub randomized_transaction_max_soft_bundle_size: NonZeroUsize,
     pub target_qps: u64,
     pub in_flight_ratio: u64,
     pub duration: Interval,
@@ -98,6 +101,9 @@ impl WorkloadConfiguration {
                 num_shared_counters,
                 shared_counter_max_tip,
                 num_contested_objects,
+                randomized_transaction_concurrency,
+                randomized_transaction_max_soft_bundles,
+                randomized_transaction_max_soft_bundle_size,
                 batch_payment_size,
                 adversarial_cfg,
                 expected_failure_type,
@@ -145,6 +151,10 @@ impl WorkloadConfiguration {
                     submission_amplification_by_group
                         .insert(workload_group, submission_amplification);
 
+                    if randomized_transaction_concurrency[i] == 0 {
+                        bail!("randomized_transaction_concurrency must be non-zero");
+                    }
+
                     let config = WorkloadConfig {
                         group: workload_group,
                         num_workers: num_workers[i],
@@ -175,7 +185,15 @@ impl WorkloadConfiguration {
                         num_shared_counters: num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip: shared_counter_max_tip[i],
                         num_contested_objects: num_contested_objects[i],
-                        randomized_transaction_concurrency: 4,
+                        randomized_transaction_concurrency: randomized_transaction_concurrency[i],
+                        randomized_transaction_max_soft_bundles: NonZeroUsize::new(
+                            randomized_transaction_max_soft_bundles[i],
+                        )
+                        .expect("randomized_transaction_max_soft_bundles must be non-zero"),
+                        randomized_transaction_max_soft_bundle_size: NonZeroUsize::new(
+                            randomized_transaction_max_soft_bundle_size[i],
+                        )
+                        .expect("randomized_transaction_max_soft_bundle_size must be non-zero"),
                         target_qps: target_qps[i],
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
@@ -282,6 +300,8 @@ impl WorkloadConfiguration {
             shared_counter_max_tip,
             num_contested_objects: _,
             randomized_transaction_concurrency,
+            randomized_transaction_max_soft_bundles,
+            randomized_transaction_max_soft_bundle_size,
             target_qps,
             in_flight_ratio,
             duration,
@@ -429,6 +449,8 @@ impl WorkloadConfiguration {
             duration,
             group,
             randomized_transaction_concurrency,
+            randomized_transaction_max_soft_bundles,
+            randomized_transaction_max_soft_bundle_size,
         );
         workload_builders.push(randomized_transaction_workload);
         let slow_workload = SlowWorkloadBuilder::from(

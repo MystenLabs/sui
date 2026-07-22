@@ -105,6 +105,10 @@ pub struct Opts {
     /// achieved TPS is below this threshold.
     #[clap(long, global = true)]
     pub min_tps: Option<f64>,
+
+    /// Broadcast each soft bundle submit request to all validators.
+    #[clap(long, action, global = true)]
+    pub soft_bundle_broadcast_all_validators: bool,
 }
 
 #[derive(Debug, Clone, Parser, PartialEq, EnumString)]
@@ -246,6 +250,15 @@ pub enum RunSpec {
         // Each contested object will have PAYLOADS_PER_CONTESTED_OBJECT payloads contending for it.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [2])]
         num_contested_objects: Vec<u64>,
+        // Number of transactions produced by each randomized transaction payload.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [4])]
+        randomized_transaction_concurrency: Vec<u64>,
+        // Maximum number of soft bundles a randomized transaction payload batch can be split into.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [usize::MAX])]
+        randomized_transaction_max_soft_bundles: Vec<usize>,
+        // Maximum number of transactions in each randomized transaction soft bundle.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [5])]
+        randomized_transaction_max_soft_bundle_size: Vec<usize>,
 
         // --- generic options ---
         // Target qps

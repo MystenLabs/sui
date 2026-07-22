@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use mysten_common::ZipDebugEqIteratorExt;
 use rand::Rng;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -57,6 +58,8 @@ pub struct RandomizedTransactionPayload {
     system_state_observer: Arc<SystemStateObserver>,
     /// Number of transactions to submit concurrently (1 = single transaction mode)
     concurrency: u64,
+    max_soft_bundles: NonZeroUsize,
+    max_soft_bundle_size: NonZeroUsize,
 }
 
 impl std::fmt::Display for RandomizedTransactionPayload {
@@ -278,6 +281,14 @@ impl Payload for RandomizedTransactionPayload {
         true
     }
 
+    fn max_soft_bundles(&self) -> NonZeroUsize {
+        self.max_soft_bundles
+    }
+
+    fn max_soft_bundle_size(&self) -> NonZeroUsize {
+        self.max_soft_bundle_size
+    }
+
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
@@ -433,6 +444,8 @@ pub struct RandomizedTransactionWorkloadBuilder {
     num_payloads: u64,
     rgp: u64,
     concurrency: u64,
+    max_soft_bundles: NonZeroUsize,
+    max_soft_bundle_size: NonZeroUsize,
 }
 
 impl RandomizedTransactionWorkloadBuilder {
@@ -445,6 +458,8 @@ impl RandomizedTransactionWorkloadBuilder {
         duration: Interval,
         group: u32,
         concurrency: u64,
+        max_soft_bundles: NonZeroUsize,
+        max_soft_bundle_size: NonZeroUsize,
     ) -> Option<WorkloadBuilderInfo> {
         let worker_target_qps =
             (workload_weight * target_qps as f32 / concurrency as f32).ceil() as u64;
@@ -466,6 +481,8 @@ impl RandomizedTransactionWorkloadBuilder {
                     num_payloads: max_ops,
                     rgp: reference_gas_price,
                     concurrency,
+                    max_soft_bundles,
+                    max_soft_bundle_size,
                 },
             ));
             Some(WorkloadBuilderInfo {
@@ -547,6 +564,8 @@ impl WorkloadBuilder<dyn Payload> for RandomizedTransactionWorkloadBuilder {
             payload_gas,
             randomness_initial_shared_version: None,
             concurrency: self.concurrency,
+            max_soft_bundles: self.max_soft_bundles,
+            max_soft_bundle_size: self.max_soft_bundle_size,
         }))
     }
 }
@@ -562,6 +581,8 @@ pub struct RandomizedTransactionWorkload {
     pub payload_gas: Vec<Gas>,
     pub randomness_initial_shared_version: Option<SequenceNumber>,
     pub concurrency: u64,
+    pub max_soft_bundles: NonZeroUsize,
+    pub max_soft_bundle_size: NonZeroUsize,
 }
 
 #[async_trait]
@@ -754,6 +775,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 gas_objects: gas_chunk.to_vec(),
                 system_state_observer: system_state_observer.clone(),
                 concurrency: self.concurrency,
+                max_soft_bundles: self.max_soft_bundles,
+                max_soft_bundle_size: self.max_soft_bundle_size,
             }));
         }
 

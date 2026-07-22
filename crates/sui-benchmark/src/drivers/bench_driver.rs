@@ -258,6 +258,7 @@ pub struct BenchWorker {
     pub group: u32,
     pub duration: Interval,
     pub submission_amplification: SubmissionAmplification,
+    pub soft_bundle_broadcast_all_validators: bool,
 }
 
 impl Debug for BenchWorker {
@@ -277,6 +278,7 @@ pub struct BenchDriver {
     pub stress_stat_collection: bool,
     pub start_time: Instant,
     pub token: CancellationToken,
+    pub soft_bundle_broadcast_all_validators: bool,
 }
 
 impl BenchDriver {
@@ -286,8 +288,18 @@ impl BenchDriver {
             stress_stat_collection,
             start_time: Instant::now(),
             token: CancellationToken::new(),
+            soft_bundle_broadcast_all_validators: false,
         }
     }
+
+    pub fn with_soft_bundle_broadcast_all_validators(
+        mut self,
+        soft_bundle_broadcast_all_validators: bool,
+    ) -> Self {
+        self.soft_bundle_broadcast_all_validators = soft_bundle_broadcast_all_validators;
+        self
+    }
+
     pub fn terminate(&self) {
         self.token.cancel()
     }
@@ -351,6 +363,7 @@ impl BenchDriver {
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
                     submission_amplification: workload_info.submission_amplification,
+                    soft_bundle_broadcast_all_validators: self.soft_bundle_broadcast_all_validators,
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -1050,6 +1063,8 @@ async fn run_bench_worker(
                         let start = Arc::new(Instant::now());
                         let metrics_clone = Arc::clone(&metrics);
                         let proxy = worker.execution_proxy.clone_new();
+                        let soft_bundle_broadcast_all_validators =
+                            worker.soft_bundle_broadcast_all_validators;
 
                         let max_bundle_size = payload.max_soft_bundle_size().get();
                         // Partition transactions into random bundles
@@ -1088,7 +1103,12 @@ async fn run_bench_worker(
                                                 vec![(digest, BundleItemResponse::DirectEffects(effects.into()))]
                                             })
                                         } else {
-                                            proxy.execute_soft_bundle(bundle_txs).await.map(|results| {
+                                            proxy.execute_soft_bundle(
+                                                bundle_txs,
+                                                soft_bundle_broadcast_all_validators,
+                                            )
+                                            .await
+                                            .map(|results| {
                                                 results
                                                     .into_iter()
                                                     .map(|(d, r)| (d, BundleItemResponse::WaitForEffects(r)))

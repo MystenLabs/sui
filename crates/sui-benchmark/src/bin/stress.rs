@@ -145,7 +145,10 @@ async fn main() -> Result<()> {
             // otherwise summarized benchmark results are
             // published in the end
             let show_progress = interval.is_unbounded();
-            let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
+            let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection)
+                .with_soft_bundle_broadcast_all_validators(
+                    opts.soft_bundle_broadcast_all_validators,
+                );
             driver
                 .run(
                     bench_setup.execution_proxies,

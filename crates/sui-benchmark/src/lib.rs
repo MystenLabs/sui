@@ -18,7 +18,7 @@ use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
     epoch::committee_store::CommitteeStore,
-    safe_client::SafeClientMetricsBase,
+    safe_client::{SafeClient, SafeClientMetricsBase},
     transaction_driver::{
         ReconfigObserver, SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
     },
@@ -42,8 +42,8 @@ use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};
 use sui_types::{
     base_types::TransactionDigest,
     messages_grpc::{
-        RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
-        WaitForEffectsResponse,
+        RawSubmitTxRequest, RawSubmitTxResponse, SubmitTxRequest, SubmitTxResult, SubmitTxType,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
@@ -387,6 +387,7 @@ pub trait ValidatorProxy {
     async fn execute_soft_bundle(
         &self,
         txs: Vec<Transaction>,
+        broadcast_all_validators: bool,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>>;
 
     fn get_chain_identifier(&self) -> ChainIdentifier;
@@ -667,8 +668,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn execute_soft_bundle(
         &self,
         txs: Vec<Transaction>,
+        broadcast_all_validators: bool,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_with_retries(&self.td, &txs).await
+        execute_soft_bundle_with_retries(&self.td, &txs, broadcast_all_validators).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
@@ -703,13 +705,82 @@ async fn warn_and_backoff_for_retry(
     sleep(delay).await;
 }
 
+async fn submit_soft_bundle_to_validator(
+    safe_client: Arc<SafeClient<NetworkAuthorityClient>>,
+    request: RawSubmitTxRequest,
+) -> Result<
+    (Arc<SafeClient<NetworkAuthorityClient>>, RawSubmitTxResponse),
+    sui_types::error::SuiError,
+> {
+    use sui_network::tonic::IntoRequest;
+
+    let mut validator_client = safe_client.authority_client().get_client_for_testing()?;
+    debug!("submitting soft bundle via grpc");
+    validator_client
+        .submit_transaction(request.into_request())
+        .await
+        .map(|response| (safe_client, response.into_inner()))
+        .map_err(Into::into)
+}
+
+async fn submit_soft_bundle_to_all_validators(
+    clients: &BTreeMap<AuthorityName, Arc<SafeClient<NetworkAuthorityClient>>>,
+    request: RawSubmitTxRequest,
+) -> Result<
+    (Arc<SafeClient<NetworkAuthorityClient>>, RawSubmitTxResponse),
+    sui_types::error::SuiError,
+> {
+    let mut submissions = JoinSet::new();
+    for (authority, safe_client) in clients {
+        let authority = *authority;
+        let safe_client = safe_client.clone();
+        let request = request.clone();
+        submissions.spawn(async move {
+            (
+                authority,
+                submit_soft_bundle_to_validator(safe_client, request).await,
+            )
+        });
+    }
+
+    let mut first_success = None;
+    let mut first_retryable_error = None;
+    let mut first_error = None;
+    while let Some(join_result) = submissions.join_next().await {
+        match join_result {
+            Ok((authority, Ok(result))) => {
+                debug!(?authority, "soft bundle accepted by validator");
+                first_success.get_or_insert(result);
+            }
+            Ok((authority, Err(err))) => {
+                debug!(?authority, ?err, "soft bundle submit failed");
+                if err.is_retryable().0 && first_retryable_error.is_none() {
+                    first_retryable_error = Some(err);
+                } else if first_error.is_none() {
+                    first_error = Some(err);
+                }
+            }
+            Err(err) => {
+                warn!(?err, "soft bundle submit task failed");
+            }
+        }
+    }
+
+    if let Some(result) = first_success {
+        return Ok(result);
+    }
+
+    Err(first_retryable_error
+        .or(first_error)
+        .unwrap_or_else(|| "no validator clients available for soft bundle submission".into()))
+}
+
 #[instrument(level = "debug", skip_all, fields(digests = ?txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>()))]
 async fn execute_soft_bundle_with_retries(
     td: &TransactionDriver<NetworkAuthorityClient>,
     txs: &[Transaction],
+    broadcast_all_validators: bool,
 ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-    use sui_network::tonic::IntoRequest;
-
     let digests: Vec<_> = txs.iter().map(|tx| *tx.digest()).collect();
 
     let mut retry_cnt = 0;
@@ -726,58 +797,40 @@ async fn execute_soft_bundle_with_retries(
             submit_type: SubmitTxType::SoftBundle.into(),
         };
 
-        // Get a validator client - use grpc client directly for soft bundle
-        // Re-select on each retry in case the previous validator is halting
+        // Get validator client(s) - use grpc client directly for soft bundles.
+        // Re-select on each retry in case the previous validator is halting.
         let auth_agg = td.authority_aggregator().load();
-        let safe_client = auth_agg
-            .authority_clients
-            .values()
-            .choose(&mut get_rng())
-            .unwrap();
+        let submit_result = if broadcast_all_validators {
+            submit_soft_bundle_to_all_validators(
+                auth_agg.authority_clients.as_ref(),
+                request.clone(),
+            )
+            .await
+        } else {
+            let safe_client = auth_agg
+                .authority_clients
+                .values()
+                .choose(&mut get_rng())
+                .unwrap()
+                .clone();
+            submit_soft_bundle_to_validator(safe_client, request).await
+        };
 
-        let mut validator_client = match safe_client.authority_client().get_client_for_testing() {
-            Ok(client) => client,
+        let (safe_client, result) = match submit_result {
+            Ok(result) => result,
             Err(err) => {
-                // Check if this is a retriable error before retrying
                 if err.is_retryable().0
                     && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
                 {
                     warn_and_backoff_for_retry(
                         &digests,
                         &mut retry_cnt,
-                        format!("get validator client failed: {err:?}"),
+                        format!("soft bundle submission failed: {err:?}"),
                     )
                     .await;
                     continue;
                 }
                 return Err(err.into());
-            }
-        };
-
-        debug!("submitting soft bundle via grpc");
-
-        // Submit the soft bundle via grpc
-        let result = match validator_client
-            .submit_transaction(request.into_request())
-            .await
-        {
-            Ok(response) => response.into_inner(),
-            Err(err) => {
-                debug!("error submitting soft bundle via grpc: {:?}", err);
-                // Convert tonic error to SuiError to check if retriable
-                let sui_error: sui_types::error::SuiError = err.into();
-                if sui_error.is_retryable().0
-                    && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
-                {
-                    warn_and_backoff_for_retry(
-                        &digests,
-                        &mut retry_cnt,
-                        format!("submission failed: {sui_error:?}"),
-                    )
-                    .await;
-                    continue;
-                }
-                return Err(sui_error.into());
             }
         };
 
@@ -1123,8 +1176,9 @@ impl ValidatorProxy for FullNodeProxy {
     async fn execute_soft_bundle(
         &self,
         txs: Vec<Transaction>,
+        broadcast_all_validators: bool,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_with_retries(&self.td, &txs).await
+        execute_soft_bundle_with_retries(&self.td, &txs, broadcast_all_validators).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
