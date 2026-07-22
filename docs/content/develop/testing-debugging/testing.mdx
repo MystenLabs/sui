@@ -1,5 +1,5 @@
 ---
-title: Unit Testing
+title: Testing Move Smart Contracts
 description: >-
   Learn about the available testing tools and frameworks for validating your
   Move smart contracts and Sui applications.
@@ -278,9 +278,9 @@ $ sui move test --trace
 
 Then open the trace file in VS Code with the Move extension installed. You can set breakpoints, inspect variables, and step through each instruction to find where the logic diverges from your expectations.
 
-## Beyond unit tests
+## Application-level testing
 
-Move unit tests validate contract logic in isolation. For full application testing, consider these additional strategies:
+Move tests validate contract logic in a package-local environment. For full application testing, add checks that exercise transactions, network state, client code, and deployment behavior:
 
 - **Local network testing:** Run a [local Sui network](/getting-started/onboarding/local-network) to test transactions, object interactions, and gas costs against a real execution environment before deploying to Testnet.
 - **Testnet deployment:** Deploy your packages to [Testnet](/getting-started/onboarding/configure-sui-client) to verify behavior with real network conditions, indexing, and RPC queries.
