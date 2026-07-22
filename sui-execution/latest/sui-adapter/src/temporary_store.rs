@@ -1161,6 +1161,12 @@ impl Storage for TemporaryStore<'_> {
         TemporaryStore::read_object(self, id)
     }
 
+    fn get_object_including_store(&self, id: &ObjectID) -> Option<Object> {
+        TemporaryStore::read_object(self, id)
+            .cloned()
+            .or_else(|| self.store.get_object(id))
+    }
+
     /// Take execution results v2, and translate it back to be compatible with effects v1.
     fn record_execution_results(
         &mut self,
