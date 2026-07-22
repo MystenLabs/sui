@@ -19,7 +19,7 @@ use crate::{
     jit::execution::ast::{Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
-    shared::type_size_formulae::{TypeAndSize, TypeSize},
+    shared::type_size_formulae::TypeSize,
     shared::{
         gas::{GasMeter, SimpleInstruction},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
@@ -242,8 +242,7 @@ fn step(
                 .vtables
                 .instantiate_generic_function(
                     fun_inst_ptr,
-                    state.call_stack.current_frame.ty_arg_types(),
-                    state.call_stack.current_frame.ty_arg_sizes(),
+                    state.call_stack.current_frame.ty_args(),
                 )
                 .map_err(|e| {
                     set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
@@ -559,7 +558,7 @@ fn op_step_impl(
             let field_count = struct_inst_ptr.field_count;
             run_context.vtables.check_struct_instantiation(
                 struct_inst_ptr,
-                state.call_stack.current_frame.ty_arg_sizes(),
+                state.call_stack.current_frame.ty_args(),
             )?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -737,16 +736,13 @@ fn op_step_impl(
         }
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             // Check value depth via type
-            run_context.vtables.check_instantiated_value_depth(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            run_context
+                .vtables
+                .check_vector_value_depth(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
             let specialization: VectorSpecialization = (&ty).try_into()?;
@@ -755,11 +751,9 @@ fn op_step_impl(
         }
         Bytecode::VecLen(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_len()?;
             let value = vec_ref.len(&ty)?;
             state.push_operand(value)?;
@@ -767,11 +761,9 @@ fn op_step_impl(
         Bytecode::VecImmBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
@@ -779,11 +771,9 @@ fn op_step_impl(
         Bytecode::VecMutBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem(idx, &ty);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
@@ -791,11 +781,9 @@ fn op_step_impl(
         Bytecode::VecPushBack(ty_ptr) => {
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_push_back(&elem)?;
             vec_ref.push_back(
                 elem,
@@ -805,22 +793,18 @@ fn op_step_impl(
         }
         Bytecode::VecPopBack(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.pop(&ty);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr,
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
             let elements = vec_val.unpack(&ty, *num)?;
             for value in elements {
@@ -831,11 +815,9 @@ fn op_step_impl(
             let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context.vtables.subst_type(
-                ty_ptr.to_ref(),
-                state.call_stack.current_frame.ty_arg_types(),
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            let ty = run_context
+                .vtables
+                .subst_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_swap()?;
             vec_ref.swap(idx1, idx2, &ty)?;
         }
@@ -850,10 +832,9 @@ fn op_step_impl(
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
             let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
-            run_context.vtables.check_variant_instantiation(
-                vinst_ptr,
-                state.call_stack.current_frame.ty_arg_sizes(),
-            )?;
+            run_context
+                .vtables
+                .check_variant_instantiation(vinst_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_tag, args))?;
@@ -930,11 +911,10 @@ fn call_function(
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
     function: VMPointer<Function>,
-    ty_args: Vec<TypeAndSize>,
+    ty_args: Vec<(Type, TypeSize)>,
 ) -> VMResult<()> {
-    let (ty_arg_types, ty_arg_sizes): (Vec<Type>, Vec<TypeSize>) = ty_args.into_iter().unzip();
-
     trace!(run_context.tracer, |tracer| {
+        let ty_arg_types: Vec<Type> = ty_args.iter().map(|(ty, _)| ty.clone()).collect();
         tracer.enter_frame(
             run_context.vtables,
             state,
@@ -949,7 +929,7 @@ fn call_function(
         .last_n_operands(function.arg_count())
         .map_err(|e| set_err_info!(run_context.interner(), state.call_stack.current_frame, e))?;
 
-    if ty_arg_types.is_empty() {
+    if ty_args.is_empty() {
         // Charge for a non-generic call
         gas_meter
             .charge_call(last_n_operands, (function.local_count() as u64).into())
@@ -966,6 +946,7 @@ fn call_function(
     }
 
     if function.is_native() {
+        let ty_arg_types: Vec<Type> = ty_args.iter().map(|(ty, _)| ty.clone()).collect();
         let native_result = call_native(state, run_context, gas_meter, &function, &ty_arg_types);
 
         // NB: Pass any error into the tracer before raising it.
@@ -996,8 +977,7 @@ fn call_function(
     } else {
         // Note: the caller will find the callee's return values at the top of the shared
         // operand stack when the new frame returns.
-        push_call_frame(state, run_context, function, ty_arg_types, ty_arg_sizes)
-            .map_err(finalize_execution_error)?;
+        push_call_frame(state, run_context, function, ty_args).map_err(finalize_execution_error)?;
     }
     Ok(())
 }
@@ -1163,14 +1143,13 @@ fn push_call_frame(
     state: &mut MachineState,
     run_context: &mut RunContext,
     function: VMPointer<Function>,
-    ty_arg_types: Vec<Type>,
-    ty_arg_sizes: Vec<TypeSize>,
+    ty_args: Vec<(Type, TypeSize)>,
 ) -> VMResult<()> {
     let fun_ref = function.ptr_clone().to_ref();
     let args = checked_as!(fun_ref.arg_count(), u16)
         .and_then(|arg_count| state.pop_n_operands(arg_count))
         .map_err(|e| set_err_info!(run_context.interner(), &state.call_stack.current_frame, e))?;
-    state.push_call(function, ty_arg_types, ty_arg_sizes, args)
+    state.push_call(function, ty_args, args)
 }
 
 fn partial_error_to_error<T>(
@@ -1196,13 +1175,14 @@ fn partial_error_to_error<T>(
 /// value of it is created (`Pack`/`PackVariant`). Solved from the type's resolved formula — the
 /// type is never walked field by field.
 fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<()> {
-    let value_depth = run_context.vtables.type_size_of(ty)?.value_depth;
-    if let Some(max_depth) = run_context
+    let Some(max_depth) = run_context
         .vm_config
         .runtime_limits_config
         .max_value_nest_depth
-        && value_depth > max_depth
-    {
+    else {
+        return Ok(());
+    };
+    if run_context.vtables.type_size_of(ty)?.value_depth > max_depth {
         return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
     }
     Ok(())

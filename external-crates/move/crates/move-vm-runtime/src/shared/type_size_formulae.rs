@@ -34,7 +34,7 @@
 use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
     execution::dispatch_tables::{VMDispatchTables, VirtualTableKey},
-    jit::execution::ast::{ArenaType, Type},
+    jit::execution::ast::ArenaType,
     shared::{
         constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
         vm_pointer::VMPointer,
@@ -66,9 +66,6 @@ pub struct TypeSize {
     pub value_depth: u64,
     pub layout_size: u64,
 }
-
-/// A type paired with its sizes, computed together and passed around where both are needed.
-pub type TypeAndSize = (Type, TypeSize);
 
 impl TypeSize {
     /// The sizes of a non-composite ("primitive") type: one node, one level, in every measure.
@@ -449,7 +446,7 @@ impl ArenaTypeSizeFormula {
 
     /// op1 — resolve this datatype's formula against a linkage (the vtable is the env), yielding
     /// a flat [`PartialTypeSizeFormula`] over the datatype's parameters. Each application is
-    /// resolved by interpreting its field type against the vtable (`interpret_type`, which hits
+    /// resolved by interpreting its field type against the vtable (`size_formula`, which hits
     /// `partial_type_size` and recurses back here through the cache).
     pub(crate) fn substitute(
         &self,
@@ -459,7 +456,7 @@ impl ArenaTypeSizeFormula {
         let mut value_depth = self.value_depth_local.clone();
         let mut layout_size = self.layout_size_local.clone();
         for apply in self.apps.iter() {
-            let applied = env.interpret_type_visiting(apply.field_type.to_ref(), visiting)?;
+            let applied = env.size_formula_impl(apply.field_type.to_ref(), visiting)?;
             value_depth.absorb(apply.value_depth_offset, &applied.value_depth);
             layout_size.absorb(apply.layout_size_coeff, &applied.layout_size);
         }
