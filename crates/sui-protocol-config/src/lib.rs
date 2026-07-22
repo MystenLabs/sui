@@ -372,6 +372,8 @@ const MAINNET_USDB: &str =
 //              function signatures with `&mut TxContext` + any `&mut _` return
 //              that have no non-`TxContext` `&mut U` parameter.
 // Version 132: Enable defer_owned_object_double_spend on devnet.
+//              Enable the step-by-step gas-charging pipeline (gas_model_version 15),
+//              replacing the monolithic charge_gas with discrete charging steps.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4557,6 +4559,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.framework_tx_context_mut_restrictions = true;
                 }
                 132 => {
+                    cfg.gas_model_version = Some(15);
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                     }
