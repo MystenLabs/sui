@@ -3,10 +3,13 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -31,6 +34,7 @@ use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
@@ -96,6 +100,20 @@ pub struct TemporaryStore<'backing> {
     /// (SUI conservation, balance-accumulator authorization, object ownership). See
     /// [`invariants::InvariantChecker`].
     invariants: InvariantChecker,
+
+    /// Versions of system objects this transaction is allowed to read, keyed by object ID. A
+    /// system object is considered "available" once its latest committed version has reached the
+    /// recorded version; `check_system_object_available` consults this map. Every system object read
+    /// during execution must appear here — querying one that is absent is an invariant violation
+    /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
+    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+
+    /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
+    /// digest) at which they were read. Recorded by `check_system_object_available` and
+    /// emitted into the transaction effects as read-only consensus objects so the read can be
+    /// reproduced on replay. Interior-mutable because reads happen behind `&self`
+    /// (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -108,7 +126,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        _system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -151,7 +169,54 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
         }
+    }
+
+    /// Checks that the system object `object_id` is available at the version this transaction
+    /// requires, i.e. its latest committed version has caught up to that version, and records the
+    /// read so it can be emitted into effects and reproduced on replay.
+    pub fn check_system_object_available(&self, object_id: &ObjectID) -> PartialVMResult<()> {
+        // Every system object read during execution must have an assigned version. Its absence
+        // here means the transaction is reading a system object it was not sequenced against,
+        // which is an invariant violation.
+        let Some(required_version) = self.system_object_versions.get(object_id).copied() else {
+            debug_fatal!("system object {object_id} read without an assigned version");
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("system object {object_id} read without an assigned version"),
+                ),
+            );
+        };
+        // Load the object at exactly the version this transaction was sequenced against.
+        // `required_version` is the freshly-assigned version at the frontier, so it is never pruned:
+        // its absence means the local node has not yet committed that version.
+        let Some(object_at_required) = self
+            .store
+            .get_implicitly_read_system_object_blocking(object_id, required_version)
+        else {
+            debug_fatal!(
+                "system object {object_id} not found at required version {required_version}"
+            );
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "system object {object_id} not found at required version {required_version}"
+                    ),
+                ),
+            );
+        };
+
+        // Available: record the read at `required_version` (which is what the transaction depends
+        // on and reads) so it can be emitted into effects as a read-only consensus object and
+        // reproduced on replay. The version and digest are taken at `required_version` — not the
+        // latest — so the recorded value is deterministic across nodes regardless of how far the
+        // object has since advanced.
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (required_version, object_at_required.digest()));
+        Ok(())
     }
 
     // Helpers to access private fields

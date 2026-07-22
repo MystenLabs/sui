@@ -929,6 +929,16 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
             .inspect(|o| self.track_object(o))
     }
 
+    fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        version: crate::base_types::VersionNumber,
+    ) -> Option<Object> {
+        self.inner
+            .get_implicitly_read_system_object_blocking(object_id, version)
+            .inspect(|o| self.track_object(o))
+    }
+
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,

@@ -13,6 +13,14 @@ pub trait ObjectStore {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
 
+    fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Option<Object> {
+        self.get_object_by_key(object_id, version)
+    }
+
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
         object_ids
             .iter()
@@ -33,6 +41,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
         (*self).get_object(object_id)
     }
 
+    fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Option<Object> {
+        (*self).get_implicitly_read_system_object_blocking(object_id, version)
+    }
+
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         (*self).get_object_by_key(object_id, version)
     }
@@ -51,6 +67,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
         (**self).get_object(object_id)
     }
 
+    fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Option<Object> {
+        (**self).get_implicitly_read_system_object_blocking(object_id, version)
+    }
+
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         (**self).get_object_by_key(object_id, version)
     }
@@ -67,6 +91,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
 impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         (**self).get_object(object_id)
+    }
+
+    fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Option<Object> {
+        (**self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
