@@ -216,7 +216,7 @@ pub(crate) async fn get_service_info(
 }
 
 #[cfg(test)]
-mod test_utils {
+pub(crate) mod test_utils {
     use std::sync::Arc;
 
     use prometheus::Registry;
@@ -225,8 +225,13 @@ mod test_utils {
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
     use sui_package_resolver::Resolver;
+    use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
     use sui_rpc::proto::sui::rpc::v2::Ordering;
     use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+    use sui_types::balance_change::derive_balance_changes_2;
+    use sui_types::full_checkpoint_content::Checkpoint;
+    use sui_types::storage::{ObjectKey, get_transaction_object_set};
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use crate::KvRpcMetrics;
     use crate::LedgerHistoryConfig;
@@ -236,6 +241,106 @@ mod test_utils {
     use crate::bigtable_client::BigTableClient;
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
+
+    pub(crate) fn two_transaction_object_checkpoint() -> Checkpoint {
+        TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(10)
+            .finish_transaction()
+            .start_transaction(0)
+            .create_owned_object(11)
+            .finish_transaction()
+            .build_checkpoint()
+    }
+
+    pub(crate) fn kv_transaction_data(
+        checkpoint: &Checkpoint,
+        index: usize,
+    ) -> sui_kvstore::TransactionData {
+        let transaction = &checkpoint.transactions[index];
+        sui_kvstore::TransactionData {
+            digest: transaction.transaction.digest(),
+            transaction_data: Some(transaction.transaction.clone()),
+            signatures: Some(transaction.signatures.clone()),
+            effects: Some(transaction.effects.clone()),
+            events: transaction.events.clone(),
+            checkpoint_number: checkpoint.summary.sequence_number,
+            timestamp: checkpoint.summary.timestamp_ms,
+            balance_changes: derive_balance_changes_2(&transaction.effects, &checkpoint.object_set),
+            unchanged_loaded_runtime_objects: transaction.unchanged_loaded_runtime_objects.clone(),
+        }
+    }
+
+    pub(crate) fn canonical_transaction_object_keys(
+        checkpoint: &Checkpoint,
+        index: usize,
+    ) -> Vec<ObjectKey> {
+        let transaction = &checkpoint.transactions[index];
+        get_transaction_object_set(
+            &transaction.transaction,
+            &transaction.effects,
+            &transaction.unchanged_loaded_runtime_objects,
+        )
+        .into_iter()
+        .collect()
+    }
+
+    pub(crate) fn response_object_keys(transaction: &ExecutedTransaction) -> Vec<ObjectKey> {
+        let objects = &transaction
+            .objects
+            .as_ref()
+            .expect("objects should be populated when requested")
+            .objects;
+        assert!(
+            !objects.is_empty(),
+            "requested object set should be non-empty"
+        );
+        objects
+            .iter()
+            .map(|object| {
+                ObjectKey(
+                    object
+                        .object_id
+                        .as_deref()
+                        .expect("object_id should be populated when requested")
+                        .parse()
+                        .expect("object_id should be valid"),
+                    object
+                        .version
+                        .expect("version should be populated when requested")
+                        .into(),
+                )
+            })
+            .collect()
+    }
+
+    pub(crate) fn assert_identity_only_object_mask(transaction: &ExecutedTransaction) {
+        let objects = &transaction
+            .objects
+            .as_ref()
+            .expect("objects should be populated when requested")
+            .objects;
+        assert!(
+            !objects.is_empty(),
+            "requested object set should be non-empty"
+        );
+        for object in objects {
+            assert!(object.object_id.is_some());
+            assert!(object.version.is_some());
+            assert!(object.bcs.is_none());
+            assert!(object.digest.is_none());
+            assert!(object.owner.is_none());
+            assert!(object.object_type.is_none());
+            assert!(object.has_public_transfer.is_none());
+            assert!(object.contents.is_none());
+            assert!(object.package.is_none());
+            assert!(object.previous_transaction.is_none());
+            assert!(object.storage_rebate.is_none());
+            assert!(object.json.is_none());
+            assert!(object.balance.is_none());
+            assert!(object.display.is_none());
+        }
+    }
 
     pub(super) const LIST_PIPELINE_METRICS: [&str; 6] = [
         "kv_rpc_response_render_latency_ms",

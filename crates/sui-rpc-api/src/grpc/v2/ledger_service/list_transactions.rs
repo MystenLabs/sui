@@ -707,6 +707,8 @@ mod tests {
         for (mask, expected) in [
             ("digest", "digest"),
             ("transaction", "full"),
+            ("objects", "full_objects"),
+            ("objects.objects.object_id", "full_objects"),
             ("balance_changes", "full_objects"),
             ("effects", "full_objects"),
             ("transaction,effects", "full_objects"),

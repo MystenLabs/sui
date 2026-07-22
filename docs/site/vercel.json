@@ -2012,7 +2012,12 @@
     },
     {
       "source": "/guides/developer/cryptography/zklogin-integration/zklogin-example",
-      "destination": "/sui-stack/zklogin-integration/zklogin-example",
+      "destination": "/sui-stack/zklogin-integration/zklogin-demo",
+      "permanent": true
+    },
+    {
+      "source": "/sui-stack/zklogin-integration/zklogin-example",
+      "destination": "/sui-stack/zklogin-integration/zklogin-demo",
       "permanent": true
     },
     {

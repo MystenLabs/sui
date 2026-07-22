@@ -1,5 +1,5 @@
 ---
-title: Testing
+title: Testing Move Smart Contracts
 description: >-
   Learn about the available testing tools and frameworks for validating your
   Move smart contracts and Sui applications.
@@ -122,9 +122,9 @@ The test passes only if the function aborts with the specified error code. If th
 
 You can also match on other failure types:
 
-- `#[expected_failure(abort_code = 1)]` - Matches a numeric abort code.
-- `#[expected_failure(arithmetic_error, location = my_package::my_module)]` - Matches an arithmetic error in a specific module.
-- `#[expected_failure]` without arguments - Matches any abort (less precise, use sparingly).
+- `#[expected_failure(abort_code = 1)]`: Matches a numeric abort code.
+- `#[expected_failure(arithmetic_error, location = my_package::my_module)]`: Matches an arithmetic error in a specific module.
+- `#[expected_failure]` without arguments: Matches any abort (less precise, use sparingly).
 
 ## Scenario testing with `test_scenario`
 
@@ -176,7 +176,7 @@ Key operations:
 | `scenario.ctx()` | Get the current transaction context |
 | `scenario.end()` | End the scenario and clean up |
 
-Always pair `take_shared` with `return_shared` within the same transaction block. Owned objects taken with `take_from_sender` can be returned, transferred, or destroyed — they do not need to be returned to the sender.
+Always pair `take_shared` with `return_shared` within the same transaction block. Owned objects taken with `take_from_sender` can be returned, transferred, or destroyed; they do not need to be returned to the sender.
 
 For a complete walkthrough with access control, cross-module interactions, and transaction effects inspection, see the [Scenario Testing](/getting-started/examples/scenario-testing) example.
 
@@ -278,11 +278,11 @@ $ sui move test --trace
 
 Then open the trace file in VS Code with the Move extension installed. You can set breakpoints, inspect variables, and step through each instruction to find where the logic diverges from your expectations.
 
-## Beyond unit tests
+## Application-level testing
 
-Move unit tests validate contract logic in isolation. For full application testing, consider these additional strategies:
+Move tests validate contract logic in a package-local environment. For full application testing, add checks that exercise transactions, network state, client code, and deployment behavior:
 
 - **Local network testing:** Run a [local Sui network](/getting-started/onboarding/local-network) to test transactions, object interactions, and gas costs against a real execution environment before deploying to Testnet.
 - **Testnet deployment:** Deploy your packages to [Testnet](/getting-started/onboarding/configure-sui-client) to verify behavior with real network conditions, indexing, and RPC queries.
 - **Dry runs:** Use `sui client call --dry-run` or `devInspectTransactionBlock` to simulate a transaction against the current network state without executing it. This catches issues like incorrect object versions or insufficient gas before you submit.
-- **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective.
+- **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective. For an example of a full test matrix (Move contract tests, SDK unit/integration tests, and E2E tests), see the [Sui Stack Messaging test suite](/sui-stack/messaging/testing).

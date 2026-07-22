@@ -30,6 +30,7 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2::ObjectSet as ProtoObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::SubscribeEventsRequest;
@@ -126,6 +127,7 @@ impl SubscriptionService for RpcService {
         )
         .await?;
 
+        let service = self.clone();
         let options = QueryOptions::subscription();
         let response = Box::pin(async_stream::stream! {
             let mut boundary: Option<u64> = None;
@@ -156,6 +158,7 @@ impl SubscriptionService for RpcService {
                             );
                             let mut response = SubscribeTransactionsResponse::default();
                             response.transaction = Some(render_transaction_message(
+                                &service,
                                 checkpoint,
                                 i as usize,
                                 &read_mask,
@@ -352,17 +355,46 @@ fn render_checkpoint_message(
     checkpoint_message
 }
 
+fn transaction_objects<'a>(
+    transaction: &'a sui_types::full_checkpoint_content::ExecutedTransaction,
+    checkpoint_objects: &'a sui_types::full_checkpoint_content::ObjectSet,
+) -> impl Iterator<Item = &'a sui_types::object::Object> + 'a {
+    sui_types::storage::get_transaction_object_set(
+        &transaction.transaction,
+        &transaction.effects,
+        &transaction.unchanged_loaded_runtime_objects,
+    )
+    .into_iter()
+    .filter_map(move |key| checkpoint_objects.get(&key))
+}
+
 /// Render one `ExecutedTransaction` message from live executed-checkpoint
 /// data. The nested-transaction `merge_from` does not set `checkpoint` /
 /// `timestamp` (the checkpoint-level merge does), so set them here, along
 /// with `balance_changes` which needs the checkpoint's `ObjectSet`.
 fn render_transaction_message(
+    service: &RpcService,
     checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
     index: usize,
     read_mask: &FieldMaskTree,
 ) -> ExecutedTransaction {
     let tx = &checkpoint.transactions[index];
     let mut message = ExecutedTransaction::merge_from(tx, read_mask);
+
+    if let Some(object_mask) = read_mask
+        .subtree(ExecutedTransaction::OBJECTS_FIELD)
+        .and_then(|submask| submask.subtree(ProtoObjectSet::OBJECTS_FIELD))
+    {
+        message.objects = Some(
+            ProtoObjectSet::default().with_objects(
+                transaction_objects(tx, &checkpoint.object_set)
+                    .map(|object| {
+                        service.render_object_to_proto(object, &object_mask, &checkpoint.object_set)
+                    })
+                    .collect(),
+            ),
+        );
+    }
 
     if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD) {
         message.checkpoint = Some(checkpoint.summary.sequence_number);
@@ -423,7 +455,40 @@ async fn register(
     let receiver = handle
         .register_subscription(spec)
         .await
-        .ok_or_else(|| tonic::Status::unavailable("too many existing subscriptions"))?;
+        .ok_or_else(|| tonic::Status::unavailable("subscription service is unavailable"))?;
     let stream_metrics = handle.stream_metrics(kind);
     Ok((receiver, stream_metrics))
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use super::*;
+
+    #[test]
+    fn transaction_objects_exclude_checkpoint_siblings() {
+        let checkpoint = TestCheckpointBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(10)
+            .finish_transaction()
+            .start_transaction(1)
+            .create_owned_object(20)
+            .finish_transaction()
+            .build_checkpoint();
+        let first_object = TestCheckpointBuilder::derive_object_id(10);
+        let second_object = TestCheckpointBuilder::derive_object_id(20);
+
+        let first_ids = transaction_objects(&checkpoint.transactions[0], &checkpoint.object_set)
+            .map(|object| object.id())
+            .collect::<Vec<_>>();
+        let second_ids = transaction_objects(&checkpoint.transactions[1], &checkpoint.object_set)
+            .map(|object| object.id())
+            .collect::<Vec<_>>();
+
+        assert!(first_ids.contains(&first_object));
+        assert!(!first_ids.contains(&second_object));
+        assert!(second_ids.contains(&second_object));
+        assert!(!second_ids.contains(&first_object));
+    }
 }
