@@ -44,8 +44,8 @@ fn test_valid_attestation() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
     let now_secs = NOW_MS / 1000;
 
-    let doc =
-        verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).expect("should verify");
+    let doc = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None)
+        .expect("should verify");
     assert_eq!(doc.iss, EXPECTED_ISSUER.as_bytes());
     assert_eq!(doc.sub, b"test-subject");
     assert_eq!(doc.aud, b"test-audience");
@@ -169,7 +169,8 @@ fn test_invalid_rsa_key() {
 #[test]
 fn test_future_iat() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let err = verify_gcp_attestation(FUTURE_IAT_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err =
+        verify_gcp_attestation(FUTURE_IAT_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::VerifyError("token issued in the future".to_string())
@@ -179,8 +180,8 @@ fn test_future_iat() {
 #[test]
 fn test_real_gcp_payload_claims() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let doc =
-        verify_gcp_attestation(REAL_GCP_TOKEN.as_bytes(), &n, &e, NOW_MS, None).expect("should verify");
+    let doc = verify_gcp_attestation(REAL_GCP_TOKEN.as_bytes(), &n, &e, NOW_MS, None)
+        .expect("should verify");
 
     assert_eq!(doc.iss, b"https://confidentialcomputing.googleapis.com");
     assert_eq!(
@@ -287,8 +288,8 @@ fn test_kid_mismatch() {
 fn test_kid_missing_when_expected() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
     // VALID_TOKEN has no kid in the header.
-    let err =
-        verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, Some("any-kid")).unwrap_err();
+    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, Some("any-kid"))
+        .unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("missing 'kid' in header".to_string())
