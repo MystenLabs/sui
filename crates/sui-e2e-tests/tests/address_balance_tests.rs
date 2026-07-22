@@ -618,6 +618,9 @@ async fn test_address_balance_gas_v3_accumulator_sign() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.set_merge_randomness_into_checkpoint_for_testing(true);
             cfg.set_timestamp_based_epoch_close_for_testing(true);
+            cfg.set_split_checkpoints_in_consensus_handler_for_testing(true);
+            cfg.set_enable_accumulators_for_testing(true);
+            cfg.set_enable_address_balance_gas_payments_for_testing(true);
             cfg
         }))
         .build()
