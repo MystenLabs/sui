@@ -54,7 +54,7 @@ use crate::pipeline::take_items;
 use crate::render::transaction_to_response;
 use crate::resolve;
 use crate::resolve::compute_object_keys;
-use crate::resolve::needs_object_types;
+use crate::resolve::needs_transaction_objects;
 use crate::resolve::transaction_columns;
 use crate::v2::get_transaction::validate_read_mask;
 
@@ -98,7 +98,7 @@ pub(crate) async fn list_transactions(
         checkpoint_hi_exclusive,
     )?;
     let read_mask = validate_read_mask(request.read_mask)?;
-    let needs_objects = needs_object_types(&read_mask);
+    let needs_objects = needs_transaction_objects(&read_mask);
     let render_transaction_contents = should_render_transaction_contents(&read_mask);
     let resolution = transaction_resolution(needs_objects, render_transaction_contents);
     let options = QueryOptions::transactions_from_proto(
@@ -715,17 +715,25 @@ fn range_end_response(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
     use sui_types::digests::TransactionDigest;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
+    use crate::config::StagesConfig;
+    use crate::v2::get_transaction::get_transaction;
     use sui_rpc_cursor::CursorToken;
 
     use crate::v2::test_utils::{
-        ascending_options, assert_list_metric_absent, list_counter, list_histogram,
-        query_context_with_mock_and_registry, query_context_with_registry,
+        ascending_options, assert_identity_only_object_mask, assert_list_metric_absent,
+        canonical_transaction_object_keys, list_counter, list_histogram,
+        query_context_with_mock_and_registry, query_context_with_registry, response_object_keys,
+        two_transaction_object_checkpoint,
     };
 
     #[tokio::test]
@@ -735,16 +743,28 @@ mod tests {
             ["transaction"].as_slice(),
             ["effects.changed_objects"].as_slice(),
             ["transaction", "effects.changed_objects"].as_slice(),
+            ["objects"].as_slice(),
+            ["objects.objects.object_id"].as_slice(),
         ]
         .map(|paths| {
             let mask =
                 validate_read_mask(Some(FieldMask::from_paths(paths.iter().copied()))).unwrap();
             transaction_resolution(
-                needs_object_types(&mask),
+                needs_transaction_objects(&mask),
                 should_render_transaction_contents(&mask),
             )
         });
-        assert_eq!(outputs, ["digest", "full", "full_objects", "full_objects"]);
+        assert_eq!(
+            outputs,
+            [
+                "digest",
+                "full",
+                "full_objects",
+                "full_objects",
+                "full_objects",
+                "full_objects",
+            ]
+        );
         let method = "list_transactions";
         let (ctx, registry, mock, server) = query_context_with_mock_and_registry(method, 1).await;
         let mut builder = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(0);
@@ -804,6 +824,107 @@ mod tests {
             call.table != sui_kvstore::tables::transactions::NAME
                 && call.table != sui_kvstore::tables::objects::NAME
         }));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn list_transaction_objects_match_get_transaction() {
+        let (ctx, _registry, mock, server) =
+            query_context_with_mock_and_registry("list_transactions", 1).await;
+        let checkpoint = two_transaction_object_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let stages = StagesConfig::default();
+
+        for (mask, identity_only) in [
+            (FieldMask::from_paths(["objects"]), false),
+            (
+                FieldMask::from_paths(["objects.objects.object_id", "objects.objects.version"]),
+                true,
+            ),
+        ] {
+            if identity_only {
+                mock.clear_read_rows_calls().await;
+            }
+            let mut list_request = ListTransactionsRequest::default();
+            list_request.start_checkpoint = Some(0);
+            list_request.end_checkpoint = Some(1);
+            list_request.read_mask = Some(mask.clone());
+            list_request.options = Some(ascending_options());
+            let responses = list_transactions(ctx.clone(), list_request)
+                .await
+                .expect("construct ListTransactions stream")
+                .try_collect::<Vec<_>>()
+                .await
+                .expect("collect ListTransactions stream");
+            let listed_transactions = responses
+                .into_iter()
+                .filter_map(|response| response.transaction)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                listed_transactions.len(),
+                checkpoint.transactions.len(),
+                "ListTransactions should emit every checkpoint transaction"
+            );
+
+            if identity_only {
+                let mut actual_object_rows = mock
+                    .read_rows_calls()
+                    .await
+                    .into_iter()
+                    .filter(|call| call.table == sui_kvstore::tables::objects::NAME)
+                    .flat_map(|call| call.row_keys)
+                    .map(|key| key.to_vec())
+                    .collect::<Vec<_>>();
+                actual_object_rows.sort();
+                let mut expected_object_rows = (0..checkpoint.transactions.len())
+                    .flat_map(|index| canonical_transaction_object_keys(&checkpoint, index))
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .map(|key| sui_kvstore::tables::objects::encode_key(&key))
+                    .collect::<Vec<_>>();
+                expected_object_rows.sort();
+                assert_eq!(actual_object_rows, expected_object_rows);
+            }
+
+            for (index, listed_transaction) in listed_transactions.into_iter().enumerate() {
+                let mut get_request = GetTransactionRequest::default();
+                get_request.digest = Some(
+                    checkpoint.transactions[index]
+                        .transaction
+                        .digest()
+                        .to_string(),
+                );
+                get_request.read_mask = Some(mask.clone());
+                let get_transaction = get_transaction(
+                    ctx.client().clone(),
+                    &stages,
+                    get_request,
+                    ctx.package_resolver(),
+                )
+                .await
+                .expect("GetTransaction should succeed")
+                .transaction
+                .expect("GetTransaction should return a transaction");
+
+                assert_eq!(listed_transaction, get_transaction);
+                assert_eq!(
+                    response_object_keys(&listed_transaction),
+                    canonical_transaction_object_keys(&checkpoint, index)
+                );
+                let sibling_created_id =
+                    TestCheckpointBuilder::derive_object_id(if index == 0 { 11 } else { 10 });
+                assert!(
+                    response_object_keys(&listed_transaction)
+                        .iter()
+                        .all(|key| key.0 != sibling_created_id),
+                    "listed transaction object set must exclude its sibling's created object"
+                );
+                if identity_only {
+                    assert_identity_only_object_mask(&listed_transaction);
+                }
+            }
+        }
+
         server.abort();
     }
 
