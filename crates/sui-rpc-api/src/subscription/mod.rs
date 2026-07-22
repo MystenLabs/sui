@@ -21,12 +21,6 @@ use tracing::warn;
 mod matcher;
 
 const CHECKPOINT_MAILBOX_SIZE: usize = 1024;
-/// Pending admissions are only a [`SubscriptionSpec`] and a oneshot sender,
-/// roughly hundreds of bytes each, and have no stream or delivery semantics
-/// until admitted. This deep lane absorbs cold-join bursts for approximately
-/// 1 MiB at capacity. A full lane remains explicit, retryable backpressure to
-/// the caller.
-const ADMISSION_MAILBOX_SIZE: usize = 4096;
 /// Amortizes admission select/receive overhead while bounding how many
 /// requests can delay the next checkpoint poll.
 const ADMISSION_TURN_LIMIT: usize = 128;
@@ -292,6 +286,8 @@ enum SubscriptionServiceEvent {
 #[derive(Clone)]
 pub struct SubscriptionServiceHandle {
     admission_sender: mpsc::Sender<SubscriptionRequest>,
+    counters: Arc<SubscriberCounts>,
+    max_subscribers: usize,
     metrics: SubscriptionMetrics,
 }
 
@@ -300,6 +296,14 @@ impl SubscriptionServiceHandle {
         &self,
         spec: SubscriptionSpec,
     ) -> Option<mpsc::Receiver<SubscriptionUpdate>> {
+        if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
+            trace!(
+                "failed to register new subscriber: hit maximum number of subscribers {}",
+                self.max_subscribers
+            );
+            return None;
+        }
+
         let (response_sender, response_receiver) = oneshot::channel();
         let request = SubscriptionRequest {
             spec,
@@ -433,15 +437,21 @@ impl SubscriptionService {
         SubscriptionServiceHandle,
     ) {
         let metrics = SubscriptionMetrics::new(registry);
+        let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
+        // One pending slot per supported subscriber absorbs a full reconnect burst
+        // without forcing admissible clients to retry. Keep the admission limit
+        // unchanged while clamping the mailbox to Tokio's valid capacity range.
+        let admission_capacity = max_subscribers.clamp(1, tokio::sync::Semaphore::MAX_PERMITS);
         let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
-        let (admission_sender, admission_mailbox) = mpsc::channel(ADMISSION_MAILBOX_SIZE);
+        let (admission_sender, admission_mailbox) = mpsc::channel(admission_capacity);
+        let counters = Arc::new(SubscriberCounts::default());
         let handle = SubscriptionServiceHandle {
             admission_sender,
+            counters: Arc::clone(&counters),
+            max_subscribers,
             metrics: metrics.clone(),
         };
 
-        let counters = Arc::new(SubscriberCounts::default());
-        let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
         let watermark_interval = watermark_interval
             .unwrap_or(DEFAULT_WATERMARK_INTERVAL)
             .max(1);
@@ -1081,6 +1091,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn admission_queue_capacity_tracks_subscriber_limit() {
+        let max_subscribers = 200_000;
+        let (_checkpoint_sender, handle) = SubscriptionService::build(
+            &prometheus::Registry::new(),
+            None,
+            None,
+            Some(max_subscribers),
+            Some(1),
+        );
+        assert_eq!(handle.admission_sender.max_capacity(), max_subscribers);
+
+        let (_disabled_checkpoint_sender, disabled_handle) =
+            SubscriptionService::build(&prometheus::Registry::new(), None, None, Some(0), Some(1));
+        assert_eq!(disabled_handle.admission_sender.max_capacity(), 1);
+        assert!(
+            disabled_handle
+                .register_subscription(unfiltered())
+                .await
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn public_admission_rejects_before_queue_at_limit() {
+        let max_subscribers = 4;
+        let (sender, mut mailbox) = mpsc::channel(max_subscribers);
+        let counters = Arc::new(SubscriberCounts::default());
+        counters.total.store(max_subscribers, Ordering::Relaxed);
+        let handle = SubscriptionServiceHandle {
+            admission_sender: sender,
+            counters,
+            max_subscribers,
+            metrics: SubscriptionMetrics::new(&prometheus::Registry::new()),
+        };
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            handle.register_subscription(unfiltered()),
+        )
+        .await
+        .expect("a saturated service must reject before queueing");
+        assert!(result.is_none());
+        assert!(matches!(
+            mailbox.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[tokio::test]
     async fn full_public_admission_queue_returns_none_promptly() {
         // Occupy the only ingress slot so the next registration must take the
         // public overload path.
@@ -1096,6 +1155,8 @@ mod tests {
         );
         let handle = SubscriptionServiceHandle {
             admission_sender: sender,
+            counters: Arc::new(SubscriberCounts::default()),
+            max_subscribers: DEFAULT_MAX_SUBSCRIBERS,
             metrics: SubscriptionMetrics::new(&prometheus::Registry::new()),
         };
 
