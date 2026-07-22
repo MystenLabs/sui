@@ -288,6 +288,8 @@ export default {
             'getting-started/examples/lootbox-ctf',
             'getting-started/examples/merchant-ctf',
             'getting-started/examples/staking-ctf',
+            'getting-started/examples/consumer-app-zklogin',
+            'getting-started/examples/defi-trading-zklogin',
           ],
         },
         'getting-started/examples/event-indexer',
@@ -651,8 +653,6 @@ suiStackSidebar: [
         },
         'sui-stack/enoki/solitaire',
         'sui-stack/enoki/ticketing-poc',
-        'sui-stack/zklogin-integration/consumer-app-cookbook',
-        'sui-stack/zklogin-integration/defi-trading-guide',
       ],
     },
     {

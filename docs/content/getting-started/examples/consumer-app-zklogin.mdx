@@ -105,7 +105,7 @@ The Enoki sponsorship flow has 3 steps:
 2. **Server** calls `enoki.createSponsoredTransaction()` with the kind bytes, which returns sponsored `bytes` and a `digest`.
 3. **Client** signs the sponsored `bytes` with the wallet and sends the signature back to the server, which calls `enoki.executeSponsoredTransaction({ digest, signature })`.
 
-See the [zkLogin for DeFi](/sui-stack/zklogin-integration/defi-trading-guide) guide for a complete example of this flow with DeepBook swaps.
+See the [zkLogin for DeFi](/getting-started/examples/defi-trading-zklogin) guide for a complete example of this flow with DeepBook swaps.
 
 ## Pattern 3: Gated content with Seal
 
