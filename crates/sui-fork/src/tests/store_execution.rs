@@ -690,8 +690,8 @@ async fn test_rpc_reader_latest_ignores_stale_cached_history() {
     );
 }
 
-#[test]
-fn test_advance_clock_executes_and_persists() {
+#[tokio::test]
+async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp) = test_simulacrum();
     let initial_ts = sim.store().get_clock().timestamp_ms;
 
@@ -721,8 +721,8 @@ fn test_advance_clock_executes_and_persists() {
     assert_eq!(persisted_effects.unwrap(), effects);
 }
 
-#[test]
-fn test_transfer_sui_executes_and_persists() {
+#[tokio::test]
+async fn test_transfer_sui_executes_and_persists() {
     let (mut sim, config, _temp) = test_simulacrum();
 
     // Pick a sender from the genesis keystore and a gas coin owned by the sender.
