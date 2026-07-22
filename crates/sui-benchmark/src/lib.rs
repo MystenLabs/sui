@@ -59,7 +59,7 @@ use sui_types::{
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
 };
 use sui_types::{gas_coin::GAS, sui_system_state::sui_system_state_summary::SuiSystemStateSummary};
-use tokio::task::JoinSet;
+use tokio::{sync::mpsc, task::JoinSet};
 use tokio::time::{sleep, timeout};
 use tracing::{debug, info, instrument, warn};
 
@@ -730,29 +730,32 @@ async fn submit_soft_bundle_to_all_validators(
     (Arc<SafeClient<NetworkAuthorityClient>>, RawSubmitTxResponse),
     sui_types::error::SuiError,
 > {
-    let mut submissions = JoinSet::new();
+    let (tx, mut rx) = mpsc::channel(clients.len().max(1));
     for (authority, safe_client) in clients {
         let authority = *authority;
         let safe_client = safe_client.clone();
         let request = request.clone();
-        submissions.spawn(async move {
-            (
-                authority,
-                submit_soft_bundle_to_validator(safe_client, request).await,
-            )
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            let _ = tx
+                .send((
+                    authority,
+                    submit_soft_bundle_to_validator(safe_client, request).await,
+                ))
+                .await;
         });
     }
+    drop(tx);
 
-    let mut first_success = None;
     let mut first_retryable_error = None;
     let mut first_error = None;
-    while let Some(join_result) = submissions.join_next().await {
-        match join_result {
-            Ok((authority, Ok(result))) => {
+    while let Some((authority, result)) = rx.recv().await {
+        match result {
+            Ok(result) => {
                 debug!(?authority, "soft bundle accepted by validator");
-                first_success.get_or_insert(result);
+                return Ok(result);
             }
-            Ok((authority, Err(err))) => {
+            Err(err) => {
                 debug!(?authority, ?err, "soft bundle submit failed");
                 if err.is_retryable().0 && first_retryable_error.is_none() {
                     first_retryable_error = Some(err);
@@ -760,14 +763,7 @@ async fn submit_soft_bundle_to_all_validators(
                     first_error = Some(err);
                 }
             }
-            Err(err) => {
-                warn!(?err, "soft bundle submit task failed");
-            }
         }
-    }
-
-    if let Some(result) = first_success {
-        return Ok(result);
     }
 
     Err(first_retryable_error
