@@ -61,15 +61,15 @@ At a high level, a zkLogin wallet works as follows:
 
 1. The app generates an [ephemeral key pair](/sui-stack/zklogin-integration/zklogin#how-zklogin-works), valid for a limited number of epochs.
 2. The user authenticates with an OAuth provider. The provider returns a [JSON Web Token (JWT)](/sui-stack/zklogin-integration/zklogin#json-web-token-jwt) that contains a nonce derived from the ephemeral public key.
-3. The app or a proving service uses the JWT to generate a zero-knowledge proof (ZKP). The proof confirms the user holds a valid OAuth credential without revealing the credential onchain.
+3. The app or a proving service uses the JWT to generate a zero-knowledge proof. The proof confirms the user holds a valid OAuth credential without revealing the credential onchain.
 4. The app uses the JWT, a [per-user salt](/sui-stack/zklogin-integration/zklogin#user-salt), and the issuer URL to [derive a stable Sui address](/sui-stack/zklogin-integration/zklogin#address-definition) for the user. The same credential always produces the same address for a given app and salt.
-5. Transactions are signed with the [ephemeral private key](/sui-stack/zklogin-integration/zklogin#ephemeral-private-key) and submitted alongside the ZKP. Validators verify the proof and execute the transaction.
+5. Transactions are signed with the [ephemeral private key](/sui-stack/zklogin-integration/zklogin#ephemeral-private-key) and submitted alongside the zero-knowledge proof. Validators verify the proof and execute the transaction.
 
 Because zkLogin is a two-factor scheme, an attacker who compromises an OAuth account cannot sign transactions unless they also compromise the per-user salt.
 
 :::caution
 
-The per-user salt must be persisted and recoverable: if a user loses their salt, they permanently lose access to the derived address, even with a valid OAuth login. Store and back up salts reliably, and never log or expose JWTs or ZK proofs, as these are sensitive credentials. Manage the ephemeral key pair's max epoch and session lifetime carefully so sessions expire as intended. See [Security Best Practices](/develop/security/best-practices).
+The per-user salt must be persisted and recoverable: if a user loses their salt, they permanently lose access to the derived address, even with a valid OAuth login. Store and back up salts reliably, and never log or expose JWTs or zero-knowledge proofs, as these are sensitive credentials. Manage the ephemeral key pair's max epoch and session lifetime carefully so sessions expire as intended. See [Security Best Practices](/develop/security/best-practices).
 
 :::
 
@@ -90,7 +90,7 @@ Enoki implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wa
 
 ### Wallet Standard account fields
 
-When using Enoki with dApp Kit, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` (the standard fields defined by the Wallet Standard, not OAuth-specific identity fields).
+When using Enoki with `@mystenlabs/dapp-kit`, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` (the standard fields defined by the Wallet Standard, not OAuth-specific identity fields).
 
 ```typescript
 import { useCurrentAccount } from '@mysten/dapp-kit-react';
@@ -113,7 +113,7 @@ function UserProfile() {
 
 :::info
 
-The Wallet Standard account does not expose OAuth identity fields like `email` or `sub`. If your app needs the user's email, read it from the JWT claims during the OAuth login flow (request the `email` scope) and store it in your application. zkLogin does not expose identity information onchain or through the wallet interface. See [Can my app retrieve a user's email?](/sui-stack/zklogin-integration#can-my-app-retrieve-a-users-email-from-a-zklogin-address)
+The Wallet Standard account does not expose OAuth identity fields like `email` or `sub`. If your app needs the user's email, read it from the JWT claims during the OAuth login flow (request the `email` scope) and store it in your application. zkLogin does not expose identity information onchain or through the wallet interface. See [Can my app retrieve a user's email?](/sui-stack/zklogin-integration#can-my-app-retrieve-a-users-email-from-a-zklogin-address).
 
 For server-side identity resolution, refer to the [Enoki documentation](https://docs.enoki.mystenlabs.com/).
 
@@ -194,7 +194,7 @@ All zkLogin utilities are exported from `@mysten/sui/zklogin`.
   noComments
 />
 
-### ZkLoginSigner
+### `ZkLoginSigner`
 
 The `ZkLoginSigner` class wraps an ephemeral signer and automatically transforms every signature into a zkLogin signature. Instead of manually calling `getZkLoginSignature` after each `sign`, you create a `ZkLoginSigner` once and use it like any other signer. It handles the proof wrapping internally.
 
@@ -218,15 +218,15 @@ await client.executeTransaction({ transaction: bytes, signatures: [signature] })
 
 Key behavior:
 
-- **`getKeyScheme()`** returns `'ZkLogin'`, distinguishing it from Ed25519, Secp256k1, and other scheme signers.
-- **`getPublicKey()`** returns a `ZkLoginPublicIdentifier` derived from the proof inputs and issuer.
-- **`legacyAddress`** flag controls which address derivation is used. An early implementation had an inconsistency; if your addresses were derived before the fix, pass `true`. For new integrations, use `false`.
-- **`address`** (optional) validates that the derived address matches what you expect. The constructor throws if there's a mismatch, catching `legacyAddress` flag errors early.
-- **`sign()` throws.** Use `signTransaction()` or `signPersonalMessage()` instead, because zkLogin signatures require intent context.
+- `getKeyScheme()` returns `'ZkLogin'`, distinguishing it from Ed25519, Secp256k1, and other scheme signers.
+- `getPublicKey()` returns a `ZkLoginPublicIdentifier` derived from the proof inputs and issuer.
+- `legacyAddress` flag controls which address derivation is used. An early implementation had an inconsistency; if your addresses were derived before the fix, pass `true`. For new integrations, use `false`.
+- `address` (optional) validates that the derived address matches what you expect. The constructor throws if there's a mismatch, catching `legacyAddress` flag errors early.
+- `sign()` throws. Use `signTransaction()` or `signPersonalMessage()` instead, because zkLogin signatures require intent context.
 
 ### Proof generation
 
-The Sui TypeScript SDK handles address derivation and signature serialization, but it does not generate ZKPs. Proof generation requires a prover service:
+The Sui TypeScript SDK handles address derivation and signature serialization, but it does not generate zero-knowledge proofs. Proof generation requires a prover service:
 
 - **Mysten Labs prover:** A publicly accessible proving service maintained by Mysten Labs. Suitable for Testnet and Devnet development. See the [zkLogin integration guide](/sui-stack/zklogin-integration/integration-guide) for the endpoint and request format.
 - **Self-hosted prover:** You run your own prover for production environments where you need full control over the proving infrastructure.

@@ -651,6 +651,8 @@ suiStackSidebar: [
         },
         'sui-stack/enoki/solitaire',
         'sui-stack/enoki/ticketing-poc',
+        'sui-stack/zklogin-integration/consumer-app-cookbook',
+        'sui-stack/zklogin-integration/defi-trading-guide',
       ],
     },
     {
@@ -696,8 +698,6 @@ suiStackSidebar: [
         'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
-        'sui-stack/zklogin-integration/consumer-app-cookbook',
-        'sui-stack/zklogin-integration/defi-trading-guide',
         'sui-stack/zklogin-integration/zklogin',
       ],
     },

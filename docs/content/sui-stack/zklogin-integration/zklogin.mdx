@@ -110,7 +110,7 @@ The protocol works in three stages:
 
 2. The wallet stores an ephemeral key pair. The ephemeral private key signs transactions for a short session. A Groth16 zero-knowledge proof generated from the JWT conceals sensitive fields.
 
-3. The transaction is submitted onchain with the ephemeral signature and ZK proof. Validators verify both before executing.
+3. The transaction is submitted onchain with the ephemeral signature and zero-knowledge proof. Validators verify both before executing.
 
 4. The zkLogin address is derived from `sub` (user identifier), `iss` (provider), `aud` (application), and `user_salt`, not from a public key.
 
@@ -133,7 +133,7 @@ The protocol works in three stages:
 
 **Step 8:** The application computes the user's address from `iss`, `aud`, `sub`, and `user_salt`.
 
-**Steps 9–10:** The transaction is signed with the ephemeral private key and submitted with the ephemeral signature, ZK proof, and other inputs. Validators verify the proof against the provider's JWKs (stored by consensus) and the ephemeral signature.
+**Steps 9–10:** The transaction is signed with the ephemeral private key and submitted with the ephemeral signature, zero-knowledge proof, and other inputs. Validators verify the proof against the provider's JWKs (stored by consensus) and the ephemeral signature.
 
 ## Address definition
 
@@ -157,7 +157,7 @@ zk_login_address = Blake2b_256(zk_login_flag, iss_L, iss, addr_seed)
 
 The address is permanent. It does not change or expire as long as `sub`, `iss`, `aud`, and `user_salt` remain the same.
 
-The **ephemeral key pair** and `max_epoch` control how long a single login session can authorize transactions. When the epoch passes `max_epoch`, the user logs in again, generates a new ephemeral key pair and ZK proof, and continues using the same address.
+The **ephemeral key pair** and `max_epoch` control how long a single login session can authorize transactions. When the epoch passes `max_epoch`, the user logs in again, generates a new ephemeral key pair and zero-knowledge proof, and continues using the same address.
 
 Logging in with a different OAuth provider or application produces a different address (different `iss` or `aud`). Using a different `user_salt` also produces a different address.
 
@@ -198,15 +198,15 @@ A leaked JWT can compromise user privacy (JWTs often contain usernames and email
 
 ### User salt
 
-The salt is required for both ZK proof generation and address derivation. A leaked salt does not enable fund theft, but it allows an attacker to link the user's `sub` to their Sui address. The impact depends on whether the provider uses pairwise identifiers (for example, Facebook, which is unique per app, low risk) or public reusable identifiers (for example, Google, Twitch, which have a globally unique `sub`, higher privacy risk).
+The salt is required for both zero-knowledge proof generation and address derivation. A leaked salt does not enable fund theft, but it allows an attacker to link the user's `sub` to their Sui address. The impact depends on whether the provider uses pairwise identifiers (for example, Facebook, which is unique per app, low risk) or public reusable identifiers (for example, Google, Twitch, which have a globally unique `sub`, higher privacy risk).
 
 **Losing the salt means permanent loss of access** to that zkLogin address.
 
 ### Ephemeral private key
 
-The ephemeral key's lifespan is tied to `max_epoch`. If lost, generate a new key pair, complete a new OAuth login, and get a new ZK proof. If compromised, an attacker would also need the user salt and a valid ZK proof to move funds.
+The ephemeral key's lifespan is tied to `max_epoch`. If lost, generate a new key pair, complete a new OAuth login, and get a new zero-knowledge proof. If compromised, an attacker would also need the user salt and a valid zero-knowledge proof to move funds.
 
-### ZK proof
+### Zero-knowledge proof
 
 The proof alone cannot create a valid transaction. An ephemeral signature over the transaction is also required.
 
@@ -227,7 +227,7 @@ You can verify a zkLogin signature over transaction data or a personal message u
 3. **Sui Keytool CLI** (debug use):
 
    ```sh
-   sui keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --bytes $BYTES --intent-scope 3 --network devnet --curr-epoch 3
+   sui keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --bytes $BYTES --intent-scope 3 --network Devnet --curr-epoch 3
    ```
 
 4. **Self-hosted verifier:** Use the [`zklogin-verifier`](https://github.com/MystenLabs/zklogin-verifier) for custom logic.
@@ -264,4 +264,4 @@ Yes. You must produce a current JWT to use zkLogin. If recovery from a lost OAut
 
 #### How is zkLogin different from Web3Auth, Magic, or Privy?
 
-Other social login solutions typically require one or more of: trusting a separate network to verify credentials (JWK oracle), trusting parties to manage persistent private keys (MPC, secure enclaves), or verifying JWTs or ZK proofs onchain (expensive). zkLogin avoids all three: validators agree on JWKs by consensus, no persistent private key exists, and ZK proofs are verified natively at the protocol level.
+Other social login solutions typically require one or more of: trusting a separate network to verify credentials (JWK oracle), trusting parties to manage persistent private keys (MPC, secure enclaves), or verifying JWTs or zero-knowledge proofs onchain (expensive). zkLogin avoids all three: validators agree on JWKs by consensus, no persistent private key exists, and zero-knowledge proofs are verified natively at the protocol level.

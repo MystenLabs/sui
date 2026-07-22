@@ -1,13 +1,13 @@
 ---
 title: zkLogin Integration Guide
-description: Step-by-step guide to implement zkLogin in your application, covering ephemeral keys, JWT handling, salt management, ZK proofs, and signature assembly.
+description: Step-by-step guide to implement zkLogin in your application, covering ephemeral keys, JWT handling, salt management, zero-knowledge proofs, and signature assembly.
 keywords:
   - zklogin
   - integration guide
   - ephemeral key pair
   - JWT
   - salt management
-  - ZK proof
+  - zero-knowledge proof
   - zkLogin signature
   - oauth
   - openid
@@ -43,34 +43,21 @@ questions:
   - How do I integrate zkLogin into my app?
   - How do I install and use the zkLogin TypeScript SDK?
   - How do I manage user salts for zkLogin?
-  - How do I generate a ZK proof for zkLogin?
+  - How do I generate a zero-knowledge proof for zkLogin?
   - How do I assemble a zkLogin signature?
 answer: >-
   This guide walks through the complete zkLogin integration flow: installing the SDK,
-  generating ephemeral keys, obtaining JWTs and ZK proofs, managing user salts,
+  generating ephemeral keys, obtaining JWTs and zero-knowledge proofs, managing user salts,
   assembling signatures, and submitting transactions.
 ---
 
-This guide walks you through implementing zkLogin in your application. Before starting, read [What is zkLogin?](/sui-stack/zklogin-integration) to understand the concepts, and [configure at least one OpenID provider](/sui-stack/zklogin-integration/developer-account).
+To implement zkLogin, first read [What is zkLogin?](/sui-stack/zklogin-integration) for the underlying concepts, then [configure at least one OpenID provider](/sui-stack/zklogin-integration/developer-account).
 
-Here is the high-level flow your application must implement:
-
-1. Generate an ephemeral key pair.
-1. Prompt the user to complete an OAuth login flow with a nonce derived from the ephemeral public key.
-1. After receiving the JSON Web Token (JWT), obtain a zero-knowledge proof.
-1. Obtain a unique user salt. Use the OAuth subject identifier and salt to compute the zkLogin Sui address.
-1. Sign transactions with the ephemeral private key.
-1. Submit the transaction with the ephemeral signature and the zero-knowledge proof.
+Your application generates an ephemeral key pair, then prompts the user to complete an OAuth login flow with a nonce derived from the ephemeral public key. When the provider returns the JSON Web Token (JWT), your application obtains a zero-knowledge proof and a unique user salt, then computes the zkLogin Sui address from the OAuth subject identifier and that salt. Your application signs transactions with the ephemeral private key and submits each transaction with both the ephemeral signature and the zero-knowledge proof.
 
 :::caution Production hardening
 
-Before going to production, harden your integration:
-
-- **Run a production salt service** with proper availability and backups. Losing salts means users permanently lose access to their addresses.
-- **Serve all endpoints over HTTPS** and configure CORS correctly so only your origins can reach your salt and proving backends.
-- **Bind the OAuth `nonce`** to both the JWT and the ephemeral public key, and validate it on return to prevent replay and token-substitution attacks.
-- **Never log JWTs, ZK proofs, or salts.** These are sensitive credentials.
-- **Keep separate Testnet and Mainnet configuration** (OAuth clients, salt service, prover) so test credentials never reach production.
+Harden your integration before you move to production. Run a production salt service with proper availability and backups, because a user who loses a salt permanently loses access to that address. Serve all endpoints over HTTPS and configure Cross-Origin Resource Sharing (CORS) so that only your origins reach your salt and proving backends. Bind the OAuth `nonce` to both the JWT and the ephemeral public key, and validate it on return to prevent replay and token-substitution attacks. Never log JWTs, zero-knowledge proofs, or salts, because these values are sensitive credentials. Keep separate Testnet and Mainnet configuration for your OAuth clients, salt service, and prover so that test credentials never reach production.
 
 See [Security Best Practices](/develop/security/best-practices).
 
@@ -110,7 +97,7 @@ const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 ```
 
-The `maxEpoch` controls how long this ephemeral key can authorize transactions. The address itself does not expire; only the session does. When the epoch passes `maxEpoch`, generate a new key pair and ZK proof. See [Does my address expire?](/sui-stack/zklogin-integration/zklogin#address-and-session-lifetime) for details.
+The `maxEpoch` controls how long this ephemeral key can authorize transactions. The address itself does not expire; only the session does. When the epoch passes `maxEpoch`, generate a new key pair and zero-knowledge proof. See [Does my address expire?](/sui-stack/zklogin-integration/zklogin#address-and-session-lifetime) for details.
 
 ## Step 2: Direct the user to the OAuth login
 
@@ -274,12 +261,12 @@ The user salt is a 16-byte value (or integer smaller than `2n**128n`) that, comb
 
 Choose a salt management strategy:
 
-| Strategy | Description | Trade-offs |
+| **Strategy** | **Description** | **Trade-offs** |
 | --- | --- | --- |
-| **User-provided** | Ask the user to enter and remember the salt. | Basic but poor UX; users forget salts. |
-| **Browser/device storage** | Store in `localStorage` or mobile secure storage. | Easy but lost on device/browser change. Email the salt to the user as a backup. |
-| **Database mapping** | Map user identifier (`sub`) to a salt in your backend database. | Reliable; requires a backend service. Salt is unique per user. |
-| **Derived from master seed** | Use `HKDF(ikm = seed, salt = iss \|\| aud, info = sub)` to derive salts deterministically from a master seed. | No per-user storage needed, but the master seed cannot be rotated and the client ID (`aud`) cannot change without deriving a different address. |
+| User-provided | Ask the user to enter and remember the salt. | Basic but poor UX; users forget salts. |
+| Browser/device storage | Store in `localStorage` or mobile secure storage. | Easy but lost on device/browser change. Email the salt to the user as a backup. |
+| Database mapping | Map user identifier (`sub`) to a salt in your backend database. | Reliable; requires a backend service. Salt is unique per user. |
+| Derived from master seed | Use `HKDF(ikm = seed, salt = iss \|\| aud, info = sub)` to derive salts deterministically from a master seed. | No per-user storage needed, but the master seed cannot be rotated and the client ID (`aud`) cannot change without deriving a different address. |
 
 The Mysten Labs [Enoki](https://docs.enoki.mystenlabs.com/) platform provides a managed salt service (using derived salts). Contact Mysten Labs for access. Only JWTs authenticated with allowlisted client IDs are accepted.
 
@@ -309,7 +296,7 @@ The same `sub` + `iss` + `aud` + `user_salt` always produces the same address. S
 
 ## Step 6: Get the zero-knowledge proof
 
-The ZK proof attests that the ephemeral key pair is valid and bound to the user's OAuth identity, without revealing the JWT onchain.
+The zero-knowledge proof attests that the ephemeral key pair is valid and bound to the user's OAuth identity, without revealing the JWT onchain.
 
 First, generate the extended ephemeral public key:
 
@@ -321,9 +308,9 @@ const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(
 );
 ```
 
-You need a new ZK proof whenever the ephemeral key pair expires or is lost. The proof can be reused for multiple transactions within the same session.
+You need a new zero-knowledge proof whenever the ephemeral key pair expires or is lost. The proof can be reused for multiple transactions within the same session.
 
-### Option A: Use the Mysten Labs proving service
+### Option A: use the Mysten Labs proving service
 
 For Mainnet access, refer to the [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact Mysten Labs. For development, use the public prover endpoint.
 
@@ -477,7 +464,7 @@ If you need better performance, compile the prover from the [rapidsnark fork](ht
 
 ## Step 7: Assemble the zkLogin signature and submit
 
-Sign the transaction with the ephemeral private key, then combine it with the ZK proof to create a zkLogin signature.
+Sign the transaction with the ephemeral private key, then combine it with the zero-knowledge proof to create a zkLogin signature.
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -492,7 +479,7 @@ txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
   client,
-  signer: ephemeralKeyPair, // must be the same key pair used for the ZK proof
+  signer: ephemeralKeyPair, // must be the same key pair used for the zero-knowledge proof
 });
 
 // 2. Generate the address seed
@@ -547,15 +534,15 @@ await client.executeTransaction({ transaction: bytes, signatures: [signature] })
 
 See [ZkLoginSigner](/onchain-finance/asset-custody/wallets/zk-login-wallets#zkloginsigner) for the full API reference.
 
-## Caching the ephemeral key and ZK proof
+## Caching the ephemeral key and zero-knowledge proof
 
-Each ZK proof is tied to an ephemeral key pair. You can reuse the proof to sign any number of transactions until the current epoch crosses `maxEpoch`.
+Each zero-knowledge proof is tied to an ephemeral key pair. You can reuse the proof to sign any number of transactions until the current epoch crosses `maxEpoch`.
 
-Cache the ephemeral key pair and ZK proof for the duration of the session. However, treat them as secrets:
+Cache the ephemeral key pair and zero-knowledge proof for the duration of the session. However, treat them as secrets:
 
 - **Use session storage, not local storage** on browsers. Session storage clears automatically when the browser session ends.
 - **Never persist them** in an insecure location on any platform.
-- If both the ephemeral private key and ZK proof are compromised, an attacker can sign transactions on the user's behalf.
+- If both the ephemeral private key and zero-knowledge proof are compromised, an attacker can sign transactions on the user's behalf.
 
 ## Efficiency considerations
 
@@ -567,10 +554,10 @@ The Mysten Labs prover auto-scales for traffic surges. If you expect a spike in 
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
+| **Symptom** | **Cause** | **Fix** |
 | --- | --- | --- |
 | CORS error when calling prover | Frontend calling prover directly | Proxy prover calls through your backend |
-| `InvalidSignature` from network | Ephemeral key expired (epoch > `maxEpoch`) | Generate a new key pair, re-authenticate, get a new ZK proof |
+| `InvalidSignature` from network | Ephemeral key expired (epoch > `maxEpoch`) | Generate a new key pair, re-authenticate, get a new zero-knowledge proof |
 | `InvalidSignature` from network | Nonce mismatch between JWT and signing key | Ensure you sign with the same ephemeral key pair used to compute the nonce |
 | Prover timeout ("took longer than 15s") | Prover machine is underpowered | Use at least 16 cores / 16 GB RAM, or increase `PROVER_TIMEOUT` |
 | Salt service returns different address | `aud` or `iss` changed | The address depends on `sub` + `iss` + `aud` + `salt`. Any change produces a different address. |

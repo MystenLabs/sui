@@ -12,7 +12,6 @@ keywords:
   - deepbook
   - enoki
   - gas sponsorship
-draft: true
 questions:
   - How do I integrate zkLogin into a DeFi trading app?
   - How do I combine zkLogin with sponsored transactions for DeFi?
@@ -184,7 +183,7 @@ The server calls `enoki.executeSponsoredTransaction({ digest, signature })` to s
 
 ## Considerations
 
-- **Session management:** Cache the ephemeral key pair and ZK proof in session storage. Users should not need to re-authenticate for every trade within a session.
+- **Session management:** Cache the ephemeral key pair and zero-knowledge proof in session storage. Users should not need to re-authenticate for every trade within a session.
 - **Gas budget:** Enoki sets the gas budget for sponsored transactions. Monitor costs and configure per-transaction or per-user caps in the Enoki Developer Portal.
 - **Price slippage:** DeFi transactions can fail if prices move between building and execution. Set appropriate `minOut` values in the swap parameters.
 - **Funding the address:** The zkLogin address starts with no tokens. Users need to receive tokens before they can trade (through a fiat on-ramp, transfer from another address, or an airdrop).
