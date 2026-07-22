@@ -535,6 +535,16 @@ pub trait TransactionCacheRead: Send + Sync {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>>;
 
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        digests
+            .iter()
+            .map(|digest| self.get_unchanged_loaded_runtime_objects(digest))
+            .collect()
+    }
+
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>>;
 
     fn notify_read_executed_effects_digests<'a>(
