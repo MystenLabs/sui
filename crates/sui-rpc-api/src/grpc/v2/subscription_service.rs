@@ -423,7 +423,7 @@ async fn register(
     let receiver = handle
         .register_subscription(spec)
         .await
-        .ok_or_else(|| tonic::Status::unavailable("too many existing subscriptions"))?;
+        .ok_or_else(|| tonic::Status::unavailable("subscription service is unavailable"))?;
     let stream_metrics = handle.stream_metrics(kind);
     Ok((receiver, stream_metrics))
 }
