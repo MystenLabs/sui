@@ -28,6 +28,7 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
+use move_binary_format::errors::PartialVMResult;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::resolver::SerializedPackage;
 pub use object_store_trait::ObjectStore;
@@ -224,11 +225,29 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    /// Like [`read_object`], but may also consult a backing store for objects that are not
-    /// transaction inputs (e.g. AuthenticatorState for GCP attestation JwkMap bootstrap).
-    /// Default: clone of [`read_object`].
-    fn get_object_including_store(&self, id: &ObjectID) -> Option<Object> {
-        self.read_object(id).cloned()
+    /// Read a system object at the version assigned to this transaction.
+    ///
+    /// Production execution overrides this to enforce consensus sequencing. Test stores default
+    /// to their current object view.
+    fn read_system_object(
+        &self,
+        id: &ObjectID,
+    ) -> PartialVMResult<Option<(Object, SequenceNumber)>> {
+        Ok(self.read_object(id).map(|object| {
+            let version = object.version();
+            (object.clone(), version)
+        }))
+    }
+
+    /// Read an object at an exact version, including from the backing store when available.
+    fn get_object_by_key_including_store(
+        &self,
+        id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        self.read_object(id)
+            .filter(|object| object.version() == version)
+            .cloned()
     }
 
     fn record_execution_results(&mut self, results: ExecutionResults)
