@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-//! Adaptive Bigtable batch-write flow control. Server decreases remain authoritative, while
-//! increases require measured request demand to approach the current target. Sustained idle
-//! targets decay toward observed demand. This deliberately differs from the upstream Java
-//! `RateLimitingServerStreamingCallable`, which applies every valid rate hint.
-//! A latency brake multiplies the admission rate and freezes upward growth when observed
-//! MutateRows latency degrades against a learned healthy baseline.
+
+//! Adaptive Bigtable batch-write flow control keeps batch traffic within recently exercised
+//! capacity. Bigtable's rate hints regulate write throughput, but demand-backed increases can
+//! outpace node autoscaling and tablet rebalancing, degrading latency for reads that share the
+//! cluster before the server sends a decrease. Decreases apply immediately, while increases
+//! require demand near the current target. When `MutateRows` latency rises above its learned
+//! healthy baseline, a latency brake lowers admission and pauses upward growth until autoscaling
+//! catches up. Sustained idle targets decay toward observed demand so bursts cannot inherit an
+//! untested rate.
 
 use std::sync::Arc;
 use std::sync::Mutex;
