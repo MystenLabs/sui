@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -11,7 +12,12 @@ use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
+use prost_types::FieldMask;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
@@ -354,6 +360,10 @@ impl Checkpoint {
         page: Page<CCheckpoint>,
         filter: CheckpointFilter,
     ) -> Result<CheckpointConnection, RpcError> {
+        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
+            return Self::paginate_grpc(ctx, reader, scope, page, filter).await;
+        }
+
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
@@ -389,6 +399,89 @@ impl Checkpoint {
             |c| Ok(Self::with_sequence_number(scope.clone(), Some(c)).unwrap()),
         )
         .map(Into::into)
+    }
+
+    /// Serve checkpoint pagination by streaming gRPC. Returns pages that may be partially filled,
+    /// with valid cursors if there are more pages to paginate through.
+    async fn paginate_grpc(
+        ctx: &Context<'_>,
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        page: Page<CCheckpoint>,
+        filter: CheckpointFilter,
+    ) -> Result<CheckpointConnection, RpcError> {
+        query_limits::rich::debit(ctx)?;
+
+        if page.limit() == 0 {
+            return Ok(CheckpointConnection::empty());
+        }
+
+        // Consistency upper bound; empty when scope has no checkpoint set.
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(CheckpointConnection::empty());
+        };
+
+        // TODO: LedgerService expose available checkpoint range for `reader_lo`.
+        let reader_lo = 0;
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint.map(u64::from),
+            filter.at_checkpoint.map(u64::from),
+            filter.before_checkpoint.map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(CheckpointConnection::empty());
+        };
+
+        // `atEpoch` has no dimension in the gRPC filter (a DNF over transaction predicates) —
+        // resolve the epoch to its checkpoint range with a point-read and tighten the request's
+        // bounds instead.
+        let cp_bounds = if let Some(epoch) = filter.at_epoch {
+            match epoch_cps(reader, epoch.into()).await? {
+                Some(epoch_bounds) => {
+                    intersect_epoch_bounds(epoch_bounds.0, epoch_bounds.1, &cp_bounds)
+                        .context("Epoch's checkpoint range is disjoint from the requested bounds")?
+                }
+                None => return Ok(CheckpointConnection::empty()),
+            }
+        } else {
+            cp_bounds
+        };
+
+        // Extract the cursor and pass through to grpc. The checkpoint sequence number is the whole
+        // position, so legacy JSON cursors translate losslessly (unlike transactions/events, whose
+        // legacy cursors lack a checkpoint hint).
+        let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
+        let before = page
+            .before()
+            .map(|c| CursorToken::from(&c.token()).encode());
+
+        let mut options = v2::QueryOptions::default();
+        options.limit = Some(page.limit() as u32);
+        options.after = after;
+        options.before = before;
+        options.ordering = Some(if page.is_from_front() {
+            v2::Ordering::Ascending as i32
+        } else {
+            v2::Ordering::Descending as i32
+        });
+
+        let mut request = v2::ListCheckpointsRequest::default();
+        // Sequence number only — checkpoint contents hydrate lazily via `KvLoader` on field
+        // access.
+        request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.options = Some(options);
+
+        let result = reader
+            .list_checkpoints(request)
+            .await
+            .context("Failed to list checkpoints")?;
+
+        build_grpc_connection(scope, &page, result)
     }
 }
 
@@ -539,6 +632,108 @@ impl From<Connection<String, Checkpoint>> for CheckpointConnection {
     }
 }
 
+/// Helper to extract the first and last checkpoint of an epoch.
+async fn epoch_cps(
+    reader: &AlphaLedgerGrpcReader,
+    epoch: u64,
+) -> Result<Option<(u64, Option<u64>)>, RpcError> {
+    let mut request = v2::GetEpochRequest::default();
+    request.epoch = Some(epoch);
+    request.read_mask = Some(FieldMask::from_paths([
+        "epoch",
+        "first_checkpoint",
+        "last_checkpoint",
+    ]));
+
+    let Some(epoch) = reader
+        .get_epoch(request)
+        .await
+        .context("Failed to get epoch")?
+    else {
+        return Ok(None);
+    };
+
+    let first = epoch
+        .first_checkpoint
+        .context("GetEpoch response missing first checkpoint")?;
+
+    Ok(Some((first, epoch.last_checkpoint)))
+}
+
+/// Intersect an epoch's checkpoint range (`first`, and `last` if the epoch has ended) with
+/// `cp_bounds`. `None` when the intersection is empty.
+fn intersect_epoch_bounds(
+    first: u64,
+    last: Option<u64>,
+    cp_bounds: &RangeInclusive<u64>,
+) -> Option<RangeInclusive<u64>> {
+    let lo = first.max(*cp_bounds.start());
+    let hi = last.map_or(*cp_bounds.end(), |last| last.min(*cp_bounds.end()));
+    (lo <= hi).then(|| lo..=hi)
+}
+
+/// Build a `CheckpointConnection` from draining a bitmap-scan page.
+///
+/// Edges are returned in ascending order.
+fn build_grpc_connection(
+    scope: Scope,
+    page: &Page<CCheckpoint>,
+    result: StreamPage<v2::Checkpoint>,
+) -> Result<CheckpointConnection, RpcError> {
+    let more = result.has_more();
+    let start = result.first_cursor().cloned();
+    let end = result.last_cursor().cloned();
+    let mut items = result.items;
+
+    let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
+        (page.after().is_some(), more, start, end)
+    } else {
+        items.reverse();
+        (more, page.before().is_some(), end, start)
+    };
+
+    let mut edges = Vec::with_capacity(items.len());
+    for item in items {
+        let sequence_number = item
+            .payload
+            .sequence_number
+            .context("ListCheckpoints item missing sequence number")?;
+
+        // Constructed directly rather than through `with_sequence_number`: items are bounded by
+        // the request's checkpoint range, which is itself capped at the scope's checkpoint.
+        let checkpoint = Checkpoint {
+            sequence_number,
+            scope: scope.clone(),
+            streamed_data: None,
+        };
+
+        edges.push(Edge::new(encode_grpc_cursor(&item.cursor)?, checkpoint));
+    }
+
+    let start_cursor = start.map(|b| encode_grpc_cursor(&b)).transpose()?;
+    let end_cursor = end.map(|b| encode_grpc_cursor(&b)).transpose()?;
+
+    Ok(CheckpointConnection {
+        edges,
+        page_info: PageInfo {
+            has_previous_page,
+            has_next_page,
+            start_cursor,
+            end_cursor,
+        },
+    })
+}
+
+/// Re-encode a server-minted cursor (raw encoded `CursorToken` bytes from the gRPC stream) as a
+/// GraphQL cursor string.
+fn encode_grpc_cursor(bytes: &[u8]) -> Result<String, RpcError> {
+    let token = CursorToken::decode(bytes).context("Failed to decode ListCheckpoints cursor")?;
+    let token: CheckpointToken = token
+        .try_into()
+        .context("Unexpected position in ListCheckpoints cursor")?;
+    Ok(CCheckpoint::new(OpaqueCursor::new(token)).encode_cursor())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -575,5 +770,43 @@ mod tests {
         });
         let encoded = B64::encode(token.encode());
         assert!(CCheckpoint::decode_cursor(&encoded).is_err());
+    }
+
+    /// Legacy JSON cursors carry the full position (the sequence number), so the coordinate view
+    /// is lossless.
+    #[test]
+    fn legacy_cursor_token_coordinates() {
+        let token = legacy_cursor(42).token();
+        assert_eq!(token.kind, CursorKind::Item);
+        assert_eq!(token.checkpoint, 42);
+    }
+
+    #[test]
+    fn epoch_bounds_closed_epoch_intersects() {
+        assert_eq!(
+            intersect_epoch_bounds(10, Some(20), &(0..=100)),
+            Some(10..=20)
+        );
+        // Bounds tighter than the epoch on both sides.
+        assert_eq!(
+            intersect_epoch_bounds(10, Some(20), &(12..=18)),
+            Some(12..=18)
+        );
+    }
+
+    /// An ongoing epoch has no last checkpoint; the upper bound stays the caller's (already capped
+    /// at the scope's checkpoint).
+    #[test]
+    fn epoch_bounds_ongoing_epoch_clamps_to_caller_hi() {
+        assert_eq!(intersect_epoch_bounds(10, None, &(0..=100)), Some(10..=100));
+    }
+
+    #[test]
+    fn epoch_bounds_disjoint_is_none() {
+        // Epoch entirely below the bounds.
+        assert_eq!(intersect_epoch_bounds(0, Some(5), &(10..=100)), None);
+        // Epoch entirely above the bounds.
+        assert_eq!(intersect_epoch_bounds(200, Some(300), &(10..=100)), None);
+        assert_eq!(intersect_epoch_bounds(200, None, &(10..=100)), None);
     }
 }
