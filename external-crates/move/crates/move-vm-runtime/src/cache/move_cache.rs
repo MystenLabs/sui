@@ -7,7 +7,7 @@
 
 use crate::{
     cache::identifier_interner::IdentifierInterner,
-    execution::dispatch_tables::VMDispatchTables,
+    execution::dispatch_tables::DispatchTables,
     jit,
     runtime::telemetry::MoveCacheTelemetry,
     shared::{
@@ -42,7 +42,7 @@ type PackageCache = DashMap<VersionId, Arc<Package>>;
 pub struct MoveCache {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) package_cache: Arc<PackageCache>,
-    pub(crate) linkage_vtables: Arc<QCache<LinkageHash, VMDispatchTables>>,
+    pub(crate) linkage_vtables: Arc<QCache<LinkageHash, DispatchTables>>,
     pub(crate) interner: Arc<IdentifierInterner>,
     /// Pinned packages whose `Arc<Package>` is held for the lifetime of this cache, keyed by
     /// `OriginalId`. The JIT translator consults this set to rewrite cross-package calls into
@@ -168,14 +168,14 @@ impl MoveCache {
     pub(crate) fn add_linkage_tables_to_cache(
         &self,
         linkage_key: LinkageHash,
-        vtables: VMDispatchTables,
+        tables: DispatchTables,
     ) -> bool {
         let mut inserted = false;
-        let _insert_result: Result<VMDispatchTables, ()> = self
+        let _insert_result: Result<DispatchTables, ()> = self
             .linkage_vtables
             .get_or_insert_with::<_, ()>(&linkage_key, || {
                 inserted = true;
-                Ok(vtables)
+                Ok(tables)
             });
         inserted
     }
@@ -190,9 +190,9 @@ impl MoveCache {
     pub(crate) fn cached_linkage_tables_at(
         &self,
         linkage_key: &LinkageHash,
-    ) -> Option<VMDispatchTables> {
+    ) -> Option<DispatchTables> {
         // NB: QuickCache returns a cloned value. This means we perform a deep clone of the
-        // VMDispatchTables, which is mostly Arc pointers, so this is not too expensive.
+        // DispatchTables, which is only Arc pointers, so this is not too expensive.
         self.linkage_vtables.get(linkage_key)
     }
 
