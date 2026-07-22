@@ -1,5 +1,5 @@
 ---
-title: Testing
+title: Unit Testing
 description: >-
   Learn about the available testing tools and frameworks for validating your
   Move smart contracts and Sui applications.
@@ -124,7 +124,7 @@ You can also match on other failure types:
 
 - `#[expected_failure(abort_code = 1)]`: Matches a numeric abort code.
 - `#[expected_failure(arithmetic_error, location = my_package::my_module)]`: Matches an arithmetic error in a specific module.
-- `#[expected_failure]` without arguments - Matches any abort (less precise, use sparingly).
+- `#[expected_failure]` without arguments: Matches any abort (less precise, use sparingly).
 
 ## Scenario testing with `test_scenario`
 
@@ -286,11 +286,3 @@ Move unit tests validate contract logic in isolation. For full application testi
 - **Testnet deployment:** Deploy your packages to [Testnet](/getting-started/onboarding/configure-sui-client) to verify behavior with real network conditions, indexing, and RPC queries.
 - **Dry runs:** Use `sui client call --dry-run` or `devInspectTransactionBlock` to simulate a transaction against the current network state without executing it. This catches issues like incorrect object versions or insufficient gas before you submit.
 - **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective. For an example of a full test matrix (Move contract tests, SDK unit/integration tests, and E2E tests), see the [Sui Stack Messaging test suite](/sui-stack/messaging/testing).
-
-## Related resources
-
-- [The Move Book: Testing](https://move-book.com/testing/) - Language-level reference for `#[test]`, `#[expected_failure]`, and `#[test_only]` attributes.
-- [Scenario Testing example](/getting-started/examples/scenario-testing) - Complete walkthrough of multi-transaction, multi-sender testing with `test_scenario`.
-- [Move Trace Debugger](/references/ide/debugger) - Step through execution traces in VS Code for both unit tests and onchain transactions.
-- [`sui move` CLI reference](/references/cli/move) - Full CLI reference for building, testing, and measuring coverage.
-- [Sui Stack Messaging test suite](/sui-stack/messaging/testing) - Example of Move contract tests, SDK unit/integration tests, and E2E tests for a production Sui application.
