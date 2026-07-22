@@ -1391,8 +1391,7 @@ impl VMTracer<'_> {
                 let struct_type = vtables
                     .instantiate_struct_type(
                         struct_inst_ptr,
-                        &machine.call_stack.current_frame.ty_arg_types,
-                        &machine.call_stack.current_frame.ty_arg_sizes,
+                        &machine.call_stack.current_frame.ty_args,
                     )
                     .ok()?;
                 let stack_len = self.type_stack.len();
@@ -1586,11 +1585,7 @@ impl VMTracer<'_> {
             }
             B::VecPack(ty_ptr, n) => {
                 let ty = vtables
-                    .subst_type(
-                        ty_ptr,
-                        &machine.call_stack.current_frame.ty_arg_types,
-                        &machine.call_stack.current_frame.ty_arg_sizes,
-                    )
+                    .subst_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
@@ -1751,8 +1746,7 @@ impl VMTracer<'_> {
                         &vtables
                             .instantiate_enum_type(
                                 variant_inst_ptr,
-                                &machine.call_stack.current_frame.ty_arg_types,
-                                &machine.call_stack.current_frame.ty_arg_sizes,
+                                &machine.call_stack.current_frame.ty_args,
                             )
                             .ok()?,
                     )
