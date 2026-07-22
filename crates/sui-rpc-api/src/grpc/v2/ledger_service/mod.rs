@@ -37,6 +37,7 @@ mod ledger_read;
 mod list_checkpoints;
 mod list_events;
 mod list_transactions;
+mod object_set;
 mod query_end;
 mod stream;
 pub use get_epoch::protocol_config_to_proto;
