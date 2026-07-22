@@ -38,6 +38,7 @@ use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::CheckpointConnection;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::move_package::CSysPackage;
 use crate::api::types::move_package::MovePackage;
@@ -108,7 +109,7 @@ impl Epoch {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Option<Result<Connection<String, Checkpoint>, RpcError>> {
+    ) -> Option<Result<CheckpointConnection, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;
@@ -119,7 +120,7 @@ impl Epoch {
                     at_epoch: Some(self.epoch_id.into()),
                     ..Default::default()
                 }) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(CheckpointConnection::empty());
                 };
 
                 Checkpoint::paginate(ctx, self.scope.clone(), page, filter).await
