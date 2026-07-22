@@ -256,10 +256,11 @@ pub(crate) async fn resolve_checkpoint(
     unreachable!("resolve_checkpoints emits exactly one item per input checkpoint")
 }
 
-/// Resolve `digests` into their transactions and (when the mask needs object
-/// types) objects, keyed by digest for request-order reconstruction. Tx rows
-/// stream in by chunk and their objects fetch concurrently, overlapping the tx
-/// fetch. An empty `digests` issues no BigTable read.
+/// Resolve `digests` into transactions and the object data needed to render
+/// complete `ExecutedTransaction.objects` sets or annotate effects object
+/// types, keyed by digest for request-order reconstruction. Transaction rows
+/// stream in by chunk and their object reads overlap the transaction fetch. An
+/// empty `digests` issues no BigTable read.
 pub(crate) async fn resolve_transactions(
     client: BigTableClient,
     digests: Vec<TransactionDigest>,
@@ -271,7 +272,7 @@ pub(crate) async fn resolve_transactions(
         return Ok(HashMap::new());
     }
     let columns: Arc<[&'static str]> = transaction_columns(read_mask).into();
-    let needs_objects = needs_object_types(read_mask);
+    let needs_objects = needs_transaction_objects(read_mask);
 
     let digest_stream = stream::iter(
         digests
@@ -352,8 +353,15 @@ pub(crate) fn needs_object_types(mask: &FieldMaskTree) -> bool {
         })
 }
 
-/// Object keys (id, version) referenced by a transaction's inputs/effects —
-/// i.e. the objects to fetch to annotate its `changed_objects` types.
+/// Whether a transaction read mask needs its canonical object set or object
+/// types embedded in effects.
+pub(crate) fn needs_transaction_objects(mask: &FieldMaskTree) -> bool {
+    mask.contains(ExecutedTransaction::OBJECTS_FIELD.name) || needs_object_types(mask)
+}
+
+/// Canonical object keys referenced by a transaction's inputs and effects.
+/// Callers use these objects for complete transaction object sets and effects
+/// type annotation.
 pub(crate) fn compute_object_keys(source: &TransactionData) -> BTreeSet<ObjectKey> {
     match (&source.transaction_data, &source.effects) {
         (Some(tx_data), Some(effects)) => sui_types::storage::get_transaction_object_set(
@@ -398,8 +406,13 @@ pub(crate) fn list_checkpoint_columns(mask: &FieldMaskTree, needs_full: bool) ->
 
 /// Transaction-table columns needed for `mask`. Always includes `cn`/`ts`
 /// (small metadata); adds `td`, `sg`, `ef`, `ev`, `bc`, `ul` as the mask
-/// requires (and `td`/`ul` when object types must be resolved).
+/// requires, including all object-data columns when complete transaction
+/// objects or effects object types must be resolved.
 pub(crate) fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
+    transaction_columns_for_mask(mask, needs_transaction_objects(mask))
+}
+
+fn transaction_columns_for_mask(mask: &FieldMaskTree, needs_objects: bool) -> Vec<&'static str> {
     use tables::transactions::col;
     let mut columns = vec![col::CHECKPOINT_NUMBER, col::TIMESTAMP];
 
@@ -417,14 +430,9 @@ pub(crate) fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     }
     if let Some(effects_submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
         columns.push(col::EFFECTS);
-        let needs_objects = needs_object_types(mask);
         if effects_submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD.name)
-            || needs_objects
         {
             columns.push(col::UNCHANGED_LOADED);
-        }
-        if needs_objects {
-            columns.push(col::DATA);
         }
     }
     if mask
@@ -435,6 +443,13 @@ pub(crate) fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     }
     if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
         columns.push(col::BALANCE_CHANGES);
+    }
+    if needs_objects {
+        for column in [col::DATA, col::EFFECTS, col::UNCHANGED_LOADED] {
+            if !columns.contains(&column) {
+                columns.push(column);
+            }
+        }
     }
 
     columns
@@ -447,7 +462,7 @@ pub(crate) fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
 pub(crate) fn list_transactions_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     use tables::transactions::col;
     let mut columns = if let Some(submask) = mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
-        transaction_columns(&submask)
+        transaction_columns_for_mask(&submask, needs_object_types(&submask))
     } else {
         // Baseline metadata columns even if the proto `transactions` field
         // isn't requested; we still need the rows to compute object keys.

@@ -205,6 +205,60 @@ async fn transfer_self(cluster: &TestCluster, sender: SuiAddress) -> ExecutedTra
     execute_programmable(cluster, sender, builder).await
 }
 
+fn object_keys(transaction: &ExecutedTransaction) -> Vec<(String, u64)> {
+    let objects = &transaction
+        .objects
+        .as_ref()
+        .expect("objects should be populated when requested")
+        .objects;
+    assert!(
+        !objects.is_empty(),
+        "requested object set should be non-empty"
+    );
+    objects
+        .iter()
+        .map(|object| {
+            (
+                object
+                    .object_id
+                    .clone()
+                    .expect("object_id should be populated when requested"),
+                object
+                    .version
+                    .expect("version should be populated when requested"),
+            )
+        })
+        .collect()
+}
+
+fn assert_identity_only_object_mask(transaction: &ExecutedTransaction) {
+    let objects = &transaction
+        .objects
+        .as_ref()
+        .expect("objects should be populated when requested")
+        .objects;
+    assert!(
+        !objects.is_empty(),
+        "requested object set should be non-empty"
+    );
+    for object in objects {
+        assert!(object.object_id.is_some());
+        assert!(object.version.is_some());
+        assert!(object.bcs.is_none());
+        assert!(object.digest.is_none());
+        assert!(object.owner.is_none());
+        assert!(object.object_type.is_none());
+        assert!(object.has_public_transfer.is_none());
+        assert!(object.contents.is_none());
+        assert!(object.package.is_none());
+        assert!(object.previous_transaction.is_none());
+        assert!(object.storage_rebate.is_none());
+        assert!(object.json.is_none());
+        assert!(object.balance.is_none());
+        assert!(object.display.is_none());
+    }
+}
+
 /// Fold a watermark into the non-decreasing checkpoint tracker, asserting
 /// subscription watermarks never move backwards.
 fn assert_checkpoint_monotone(last: &mut Option<u64>, watermark: &v2::Watermark) {
@@ -251,6 +305,9 @@ async fn subscribe_transactions_sender_filter() {
         "transaction.digest",
         "effects.transaction_digest",
         "transaction_index",
+        "objects.objects.object_id",
+        "objects.objects.version",
+        "balance_changes",
     ]));
     request.filter = Some(sender_tx_filter(sender, false));
     let mut stream = client
@@ -277,6 +334,10 @@ async fn subscribe_transactions_sender_filter() {
         .expect("executed effects have a transaction digest");
     assert_eq!(execution_transaction_digest, execution_digest);
     assert_eq!(execution_effects_digest, execution_digest);
+    assert!(
+        !tx.balance_changes.is_empty(),
+        "execution response should contain balance changes"
+    );
     let expected_digest = execution_digest.to_owned();
 
     let mut last_hi = None;
@@ -293,6 +354,14 @@ async fn subscribe_transactions_sender_filter() {
             continue;
         };
         assert!(transaction.transaction_index.is_some());
+        assert_identity_only_object_mask(transaction);
+        assert_eq!(
+            object_keys(transaction),
+            object_keys(&tx),
+            "subscription objects should match the execution response"
+        );
+        assert!(!transaction.balance_changes.is_empty());
+        assert_eq!(transaction.balance_changes, tx.balance_changes);
         let digest = transaction
             .digest
             .as_deref()
@@ -322,6 +391,42 @@ async fn subscribe_transactions_sender_filter() {
         break;
     }
     assert!(found, "transfer should arrive on the filtered stream");
+    drop(stream);
+
+    let mut request = v2::SubscribeTransactionsRequest::default();
+    request.read_mask = Some(FieldMask::from_paths(["objects"]));
+    request.filter = Some(sender_tx_filter(sender, false));
+    let mut objects_stream = client
+        .subscribe_transactions(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let second_tx = transfer_self(&cluster, sender).await;
+    let objects_transaction = loop {
+        let frame = objects_stream
+            .next()
+            .await
+            .expect("objects-only subscription should remain open")
+            .unwrap();
+        if let Some(transaction) = frame.transaction {
+            break transaction;
+        }
+    };
+
+    assert_eq!(
+        object_keys(&objects_transaction),
+        object_keys(&second_tx),
+        "objects-only subscription should match the execution response"
+    );
+    assert!(objects_transaction.digest.is_none());
+    assert!(objects_transaction.transaction.is_none());
+    assert!(objects_transaction.signatures.is_empty());
+    assert!(objects_transaction.effects.is_none());
+    assert!(objects_transaction.events.is_none());
+    assert!(objects_transaction.checkpoint.is_none());
+    assert!(objects_transaction.timestamp.is_none());
+    assert!(objects_transaction.balance_changes.is_empty());
+    assert!(objects_transaction.transaction_index.is_none());
 }
 
 #[sim_test]

@@ -167,17 +167,23 @@ pub async fn create_tables(host: &str, instance_id: &str) -> Result<()> {
 #[cfg(any(test, feature = "testing"))]
 pub use crate::bigtable::mock_server::{MockBigtableServer, ReadRowsCall, ReadRowsResponseOrder};
 
-/// Inserts checkpoint, transaction sequence, and transaction rows into mock BigTable.
+/// Inserts checkpoint, transaction-sequence, transaction, and object rows into mock BigTable.
 #[cfg(any(test, feature = "testing"))]
 pub async fn insert_checkpoint_rows(mock: &MockBigtableServer, checkpoint: &Checkpoint) {
-    use crate::tables::{checkpoints, transactions, tx_seq_digest};
+    use crate::tables::{checkpoints, objects, transactions, tx_seq_digest};
     use sui_types::balance_change::derive_balance_changes_2;
+    use sui_types::storage::ObjectKey;
     let summary = checkpoint.summary.data();
     let checkpoint_number = summary.sequence_number;
     let row = checkpoints::encode(summary, checkpoint.summary.auth_sig(), &checkpoint.contents)
         .expect("encode checkpoint");
     let key = checkpoints::encode_key(checkpoint_number);
     mock.insert_row(checkpoints::NAME, key, row).await;
+    for object in checkpoint.object_set.iter() {
+        let key = objects::encode_key(&ObjectKey(object.id(), object.version()));
+        let row = objects::encode(object).expect("encode object");
+        mock.insert_row(objects::NAME, key, row).await;
+    }
     let first_transaction_sequence = summary
         .network_total_transactions
         .checked_sub(checkpoint.transactions.len() as u64)
