@@ -66,7 +66,7 @@ answer: >-
 
 Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates.
 
-Move supports activity monitoring through emitting events. Emitting events consists of three steps:
+Move supports activity monitoring through emitting events. Emitting events consists of 3 steps:
 
 1. Defining an event struct in your Move module that captures the data you want to track.
 
@@ -118,7 +118,7 @@ When you process events, each event object contains the following attributes:
 
 ### Querying events with gRPC
 
-gRPC provides three ways to access events:
+gRPC provides 3 ways to access events:
 
 - `LedgerService.ListEvents`: Paginated, filtered queries over a checkpoint range. Use an `EventFilter` to match by event type, sender, or emitting module. This is the direct replacement for `suix_queryEvents`.
 - `SubscriptionService.SubscribeEvents`: Live streaming of events matching an `EventFilter`. Use this for real-time event-driven applications. Subscriptions start at the current tip of the chain.
