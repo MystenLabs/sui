@@ -76,6 +76,7 @@ pub mod metrics;
 pub mod move_package;
 pub mod multisig;
 pub mod multisig_legacy;
+pub mod gcp_attestation;
 pub mod nitro_attestation;
 pub mod node_role;
 pub mod object;
