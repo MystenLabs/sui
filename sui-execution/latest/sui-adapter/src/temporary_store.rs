@@ -7,7 +7,7 @@ use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use std::cell::{OnceCell, RefCell};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -23,8 +23,7 @@ use sui_types::effects::{
     TransactionEffectsV2, TransactionEvents,
 };
 use sui_types::execution::{
-    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
-    SharedInput,
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -122,18 +121,6 @@ pub struct TemporaryStore<'backing> {
     /// provide one (e.g. dev-inspect, genesis, replay), in which case no in-flight withdrawals are
     /// accounted for.
     unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
-
-    /// Recorded when execution determines the transaction must be retried later rather than
-    /// committed. Set only by `check_system_object_available`, in the same expression that returns
-    /// `SystemObjectAvailability::NotYetAvailable` — the variant the object runtime converts into
-    /// the VM unwind — so the two signals cannot drift apart. Execution
-    /// still runs to completion and produces effects; this signal is carried out on
-    /// `InnerTemporaryStore` so the authority can discard those effects and re-enqueue. A
-    /// `OnceCell` rather than a lock: execution is single-threaded, and the condition is detected
-    /// behind `&self` (`RuntimeObjectResolver`), so the field must be interior-mutable; it is
-    /// recorded at most once (the first detection, after which execution unwinds), which
-    /// `OnceCell` enforces.
-    retry_request: OnceCell<ExecutionRetryError>,
 }
 
 /// Availability of a system object at the version the executing transaction requires. All
@@ -141,12 +128,10 @@ pub struct TemporaryStore<'backing> {
 pub enum SystemObjectAvailability {
     /// Present locally at the required version (the read is recorded into effects).
     Available(SequenceNumber),
-    /// Not yet at the required version on this node; the retry request has been recorded and
-    /// execution must unwind.
-    NotYetAvailable,
     /// No assigned version — the transaction was not sequenced against this object. An invariant
     /// violation.
     NoAssignedVersion,
+    NotFound,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -206,16 +191,12 @@ impl<'backing> TemporaryStore<'backing> {
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
-            retry_request: OnceCell::new(),
         }
     }
 
     /// Checks that the system object `object_id` is available at the version this transaction
     /// requires, i.e. its latest committed version has caught up to that version, and records the
-    /// read so it can be emitted into effects and reproduced on replay. Every outcome is a
-    /// [`SystemObjectAvailability`] variant; when the object has not caught up, the retry request
-    /// is recorded in the same expression that returns `NotYetAvailable`, keeping the two signals
-    /// in lockstep.
+    /// read so it can be emitted into effects and reproduced on replay.
     pub fn check_system_object_available(&self, object_id: &ObjectID) -> SystemObjectAvailability {
         // Every system object read during execution must have an assigned version. Its absence
         // here means the transaction is reading a system object it was not sequenced against,
@@ -229,21 +210,10 @@ impl<'backing> TemporaryStore<'backing> {
         // its absence means the local node has not yet committed that version.
         let Some(object_at_required) = self.store.get_object_by_key(object_id, required_version)
         else {
-            // Not yet caught up to the version this transaction requires: record the retry request.
-            // The retry payload is carried out-of-band via this interior-mutable state (the VM
-            // unwind can't hold it) and surfaces as `ExecutionRetryError` on the inner temporary
-            // store. The authority then waits for `object_id` to reach `required_version` and
-            // re-enqueues; it recovers the object's initial shared version from the epoch start
-            // config, so the id and version carried here are enough.
-            // First detection wins; a second would only be recorded if execution continued past the
-            // unwind this variant becomes, which it does not.
-            let _ = self
-                .retry_request
-                .set(ExecutionRetryError::SystemObjectUnavailable {
-                    object_id: *object_id,
-                    version: required_version,
-                });
-            return SystemObjectAvailability::NotYetAvailable;
+            debug_fatal!(
+                "system object {object_id} not found at required version {required_version}"
+            );
+            return SystemObjectAvailability::NotFound;
         };
 
         // Available: record the read at `required_version` (which is what the transaction depends
@@ -262,13 +232,6 @@ impl<'backing> TemporaryStore<'backing> {
     /// discount withdrawals that have executed but not yet settled.
     pub fn unsettled_object_funds(&self) -> Option<&dyn UnsettledObjectFundsRead> {
         self.unsettled_object_funds
-    }
-
-    /// Whether execution has recorded a retry request. Used at the end of execution to enforce
-    /// that the retry request and the `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` unwind error only
-    /// ever appear together (see `debug_check_retry_invariant`).
-    pub fn has_retry_request(&self) -> bool {
-        self.retry_request.get().is_some()
     }
 
     // Helpers to access private fields
@@ -440,7 +403,6 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws,
-            retry_request: self.retry_request.into_inner(),
         }
     }
 
@@ -1143,11 +1105,13 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
         let required_version =
             match self.check_system_object_available(&SUI_ACCUMULATOR_ROOT_OBJECT_ID) {
                 SystemObjectAvailability::Available(version) => version,
-                SystemObjectAvailability::NotYetAvailable => {
-                    return ObjectFundsAvailability::RootNotYetAvailable;
-                }
                 SystemObjectAvailability::NoAssignedVersion => {
                     return ObjectFundsAvailability::RequiredVersionNotAssigned;
+                }
+                SystemObjectAvailability::NotFound => {
+                    return ObjectFundsAvailability::LoadError(
+                        "accumulator root not found at its required version".to_string(),
+                    );
                 }
             };
 

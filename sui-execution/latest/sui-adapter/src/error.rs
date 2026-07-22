@@ -58,14 +58,6 @@ pub(crate) fn convert_vm_error_impl(
             )
         }
         (StatusCode::OUT_OF_GAS, _, _) => ExecutionErrorKind::InsufficientGas,
-        // The unwind of a system-object-unavailable retry request (see
-        // `TemporaryStore::check_system_object_available`). A node-local, transient condition: the
-        // authority discards the produced effects and re-enqueues the transaction, so this kind
-        // never reaches committed effects. Mapped to a dedicated kind so the unwind can be
-        // recognized by `.kind()` without inspecting the source `VMError`.
-        (StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY, _, _) => {
-            ExecutionErrorKind::SystemObjectNotAvailableLocally
-        }
         (_, _, location) => match error.major_status().status_type() {
             StatusType::Execution => {
                 debug_assert!(error.major_status() != StatusCode::ABORTED);

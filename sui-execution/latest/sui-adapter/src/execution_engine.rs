@@ -214,31 +214,6 @@ mod checked {
         )
     }
 
-    /// The temporary store's retry request and the `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` unwind
-    /// (which the object runtime mints when converting `ObjectFundsAvailability::RootNotYetAvailable`)
-    /// must only appear together; observing either one alone means some path fabricated, swallowed,
-    /// or replaced one of them. Detection only, checked after the final execution result is settled
-    /// and before effects are built: `debug_fatal` panics in tests but merely alerts in release,
-    /// where behavior stays keyed off the retry request — the safe direction for both mismatches.
-    fn debug_check_retry_invariant<R, E: ExecutionErrorTrait>(
-        temporary_store: &TemporaryStore<'_>,
-        execution_result: &Result<R, E>,
-    ) {
-        let has_retry_request = temporary_store.has_retry_request();
-        let is_retry_unwind = execution_result.as_ref().err().is_some_and(|e| {
-            matches!(
-                e.kind(),
-                ExecutionErrorKind::SystemObjectNotAvailableLocally
-            )
-        });
-        if has_retry_request != is_retry_unwind {
-            debug_fatal!(
-                "retry request ({has_retry_request}) and system-object-unavailable unwind error \
-                 ({is_retry_unwind}) must only appear together",
-            );
-        }
-    }
-
     fn update_vm_telemetry_metrics(metrics: &ExecutionMetrics, move_vm: &MoveRuntime) {
         metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
             let t = move_vm.get_telemetry_report();
@@ -571,8 +546,6 @@ mod checked {
                 // FIXME: we cannot fail the transaction if this is an epoch change transaction.
                 execution_result = Err(e);
             }
-
-            debug_check_retry_invariant(&temporary_store, &execution_result);
 
             let status = if let Err(error) = &execution_result {
                 ExecutionStatus::new_failure(error.to_execution_failure())

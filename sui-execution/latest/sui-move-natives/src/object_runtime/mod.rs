@@ -263,20 +263,6 @@ impl<'a> ObjectRuntime<'a> {
                 .object_available_balance(owner, type_)
             {
                 ObjectFundsAvailability::Available(balance) => balance,
-                // The accumulator root has not reached the version this transaction requires on
-                // this node. The temporary store has recorded the retry request; this unwinds the
-                // VM so the authority discards the effects and re-enqueues.
-                // `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` is minted nowhere else; the end of
-                // execution (`debug_check_retry_invariant`) checks that it and the retry request
-                // only appear together.
-                ObjectFundsAvailability::RootNotYetAvailable => {
-                    return Err(PartialVMError::new(
-                        StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY,
-                    )
-                    .with_message(
-                        "accumulator root not yet available at its required version".to_owned(),
-                    ));
-                }
                 ObjectFundsAvailability::RequiredVersionNotAssigned => {
                     return Err(
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
