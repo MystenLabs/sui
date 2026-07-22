@@ -106,9 +106,9 @@ The `SubscriptionService` provides real-time streaming updates for onchain activ
 - **`SubscribeTransactions`** streams individual executed transactions matching a `TransactionFilter`. Use this when you only need specific transactions (for example, those calling a particular Move function or affecting a specific address).
 - **`SubscribeEvents`** streams individual events matching an `EventFilter`. Use this when you only need specific events (for example, events of a particular Move type or emitted by a specific module).
 
-All subscriptions begin at the current tip of the chain as seen by the server. They do not support resumption from a prior checkpoint. Each streamed response includes a `Watermark` that indicates the server's progress, so your application can track how far along the chain the stream has reached.
+All subscriptions begin at the current tip of the chain as seen by the server. They do not support resumption from a prior checkpoint. Each streamed response includes a progress marker — a `cursor` for `SubscribeCheckpoints`, or a `Watermark` for `SubscribeTransactions` and `SubscribeEvents` — so your application can track how far along the chain the stream has reached.
 
-To combine historical and real-time data without gaps, open the subscription first, note the first `Watermark` in the stream, then backfill with the corresponding list API (`ListCheckpoints`, `ListTransactions`, or `ListEvents`) up to that watermark. The list APIs accept `start_checkpoint` and `end_checkpoint` bounds and return results as a server-side stream with cursor-based pagination through `QueryOptions`. Once the backfill is complete, begin consuming from the already-open subscription.
+To combine historical and real-time data without gaps, open the subscription first, note the first progress marker (`cursor` or `Watermark`) in the stream, then backfill with the corresponding list API (`ListCheckpoints`, `ListTransactions`, or `ListEvents`) up to that point. The list APIs accept `start_checkpoint` and `end_checkpoint` bounds and return results as a server-side stream with cursor-based pagination through `QueryOptions`. Once the backfill is complete, begin consuming from the already-open subscription.
 
 Streaming APIs are useful for building indexers, dashboards, or bots that need to react to real-time Sui activity with minimal latency.
 

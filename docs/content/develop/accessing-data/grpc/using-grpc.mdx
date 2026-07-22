@@ -262,8 +262,8 @@ $ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionServic
 ### Subscribe to transactions with a filter
 
 ```shell
-$ buf curl --protocol grpc \\
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \\
+$ buf curl --protocol grpc \
+  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \
   -d '{
     "filter": {
       "terms": [{
@@ -272,15 +272,15 @@ $ buf curl --protocol grpc \\
         }]
       }]
     }
-  }' \\
+  }' \
   --timeout 5m
 ```
 
 ### Subscribe to events with a filter
 
 ```shell
-$ buf curl --protocol grpc \\
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \\
+$ buf curl --protocol grpc \
+  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
   -d '{
     "filter": {
       "terms": [{
@@ -289,7 +289,7 @@ $ buf curl --protocol grpc \\
         }]
       }]
     }
-  }' \\
+  }' \
   --timeout 5m
 ```
 

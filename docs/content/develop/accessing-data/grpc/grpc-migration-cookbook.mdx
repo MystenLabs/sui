@@ -407,7 +407,7 @@ buf curl --protocol grpc \
 </Tabs>
 **Key differences:**
 - JSON-RPC WebSocket subscriptions filtered events server-side. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client only receives matching events.
-- Subscriptions always begin at the current tip of the chain and do not accept a resume point. To avoid missing data between a backfill and a subscription, open the subscription first, note the first `Watermark` you receive, then backfill with `LedgerService.ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+- Subscriptions always begin at the current tip of the chain and do not accept a resume point. To avoid missing data between a backfill and a subscription, open the subscription first, note the first `Watermark` from `SubscribeEvents`, then backfill with `LedgerService.ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 - For filtered historical event queries over a range, use `LedgerService.ListEvents` or [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql).
 
 ### Query events over a checkpoint range
@@ -518,7 +518,7 @@ buf curl --protocol grpc \
 **Key differences:**
 - No polling loop needed. The gRPC stream pushes checkpoints as they finalize.
 - Use `LedgerService.ListCheckpoints` to query a historical range of checkpoints, optionally filtered by a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` for live streaming from the current tip.
-- Subscriptions do not support resumption. To avoid gaps, open the subscription first, note the first `Watermark`, then backfill missed checkpoints with `ListCheckpoints` up to that watermark before consuming from the already-open stream.
+- Subscriptions do not support resumption. To avoid gaps, open the subscription first, note the first `cursor` from `SubscribeCheckpoints`, then backfill missed checkpoints with `ListCheckpoints` up to that cursor before consuming from the already-open stream.
 - `grpcurl` supports server-side streaming for the `LedgerService.List*` calls shown above. For `SubscriptionService` subscriptions (which are indefinite streams), the Buf CLI or an SDK client provides better control over timeouts and reconnection.
 ## Look up a single checkpoint
  
