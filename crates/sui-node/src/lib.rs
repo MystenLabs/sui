@@ -2831,8 +2831,7 @@ impl SuiNode {
             }
             body.extend_from_slice(&chunk);
         }
-        let body =
-            String::from_utf8(body).map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        let body = String::from_utf8(body).map_err(|_| SuiErrorKind::JWKRetrievalError)?;
         parse_gcp_jwks(&body, GCP_ISS).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 }

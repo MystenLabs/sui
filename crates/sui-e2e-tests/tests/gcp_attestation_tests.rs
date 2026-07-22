@@ -42,7 +42,10 @@ fn build_verify_ptb(token: &[u8]) -> ProgrammableTransactionBuilder {
     ptb
 }
 
-async fn sign_verify_tx(test_cluster: &TestCluster, token: &[u8]) -> sui_types::transaction::Transaction {
+async fn sign_verify_tx(
+    test_cluster: &TestCluster,
+    token: &[u8],
+) -> sui_types::transaction::Transaction {
     let sender = test_cluster.get_address_0();
     let rgp = test_cluster.get_reference_gas_price().await;
     let gas = test_cluster

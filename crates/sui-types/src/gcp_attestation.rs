@@ -254,9 +254,7 @@ pub fn verify_gcp_attestation(
         match header.kid.as_deref() {
             Some(kid) if kid == expected => {}
             Some(_) => {
-                return Err(GcpAttestationError::VerifyError(
-                    "kid mismatch".to_string(),
-                ));
+                return Err(GcpAttestationError::VerifyError("kid mismatch".to_string()));
             }
             None => {
                 return Err(GcpAttestationError::ParseError(
