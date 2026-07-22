@@ -372,6 +372,8 @@ const MAINNET_USDB: &str =
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
+//              Enable the step-by-step gas-charging pipeline (gas_model_version 15),
+//              replacing the monolithic charge_gas with discrete charging steps.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4550,6 +4552,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.framework_tx_context_mut_restrictions = true;
                 }
                 132 => {
+                    cfg.gas_model_version = Some(15);
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                         cfg.feature_flags.create_forwarding_address_registry = true;
