@@ -339,6 +339,7 @@ where
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
+        needs_gcp_attestation_jwks: bool,
     ) -> Result<Self, Mode::Error>
     where
         'pc: 'state,
@@ -418,36 +419,70 @@ where
         // Build the JwkMap extension for GCP attestation if enabled.
         // Always install (empty default otherwise) so natives never ABRT with
         // "native extension not found".
-        let jwk_map = if env.protocol_config.enable_gcp_attestation() {
+        let jwk_map = if env.protocol_config.enable_gcp_attestation() && needs_gcp_attestation_jwks
+        {
             use sui_move_natives::JwkMap;
+            use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
             use sui_types::authenticator_state::get_authenticator_state;
             use sui_types::storage::ObjectStore;
 
-            // Bridge from ExecutionState to ObjectStore for get_authenticator_state.
-            // Use get_object_including_store: AuthenticatorState is not a user-tx input,
-            // so TemporaryStore::read_object alone cannot see it (or its dynamic fields).
-            struct StateAsObjectStore<'a>(&'a dyn ExecutionState);
+            let Some((authenticator_state, assigned_version)) = env
+                .state_view
+                .read_system_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
+                .map_err(|error| env.convert_vm_error(error.finish(Location::Undefined)))?
+            else {
+                return Err(make_invariant_violation!(
+                    "AuthenticatorState must exist when GCP attestation is enabled"
+                )
+                .into());
+            };
+
+            // The outer object and its dynamic-field child must be read at the exact version
+            // assigned during consensus sequencing.
+            struct StateAsObjectStore<'a> {
+                state: &'a dyn ExecutionState,
+                authenticator_state: sui_types::object::Object,
+                assigned_version: sui_types::base_types::SequenceNumber,
+            }
             impl ObjectStore for StateAsObjectStore<'_> {
                 fn get_object(
                     &self,
                     object_id: &sui_types::base_types::ObjectID,
                 ) -> Option<sui_types::object::Object> {
-                    self.0.get_object_including_store(object_id)
+                    if object_id == &SUI_AUTHENTICATOR_STATE_OBJECT_ID {
+                        Some(self.authenticator_state.clone())
+                    } else {
+                        self.state
+                            .get_object_by_key_including_store(object_id, self.assigned_version)
+                    }
                 }
                 fn get_object_by_key(
                     &self,
                     object_id: &sui_types::base_types::ObjectID,
-                    _version: sui_types::base_types::VersionNumber,
+                    version: sui_types::base_types::VersionNumber,
                 ) -> Option<sui_types::object::Object> {
-                    self.0.get_object_including_store(object_id)
+                    self.state
+                        .get_object_by_key_including_store(object_id, version)
                 }
             }
 
-            let store = StateAsObjectStore(&*env.state_view);
-            match get_authenticator_state(&store) {
-                Ok(Some(inner)) => JwkMap::from_active_jwks(inner.active_jwks),
-                _ => JwkMap::default(),
-            }
+            let store = StateAsObjectStore {
+                state: &*env.state_view,
+                authenticator_state,
+                assigned_version,
+            };
+            let inner = get_authenticator_state(&store)
+                .map_err(|error| {
+                    Mode::Error::from(make_invariant_violation!(
+                        "failed to load AuthenticatorState: {error}"
+                    ))
+                })?
+                .ok_or_else(|| {
+                    Mode::Error::from(make_invariant_violation!(
+                        "AuthenticatorState must exist when GCP attestation is enabled"
+                    ))
+                })?;
+            JwkMap::from_active_jwks(inner.active_jwks)
         } else {
             sui_move_natives::JwkMap::default()
         };

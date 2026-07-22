@@ -26,6 +26,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sui_types::{
+    SUI_FRAMEWORK_ADDRESS,
     base_types::TxContext,
     error::ExecutionErrorTrait,
     execution::{ExecutionTiming, ResultWithTimings},
@@ -99,6 +100,15 @@ where
         original_command_len: _,
         commands,
     } = ast;
+    let needs_gcp_attestation_jwks = commands.iter().any(|command| {
+        matches!(
+            &command.value.command,
+            T::Command__::MoveCall(call)
+                if call.function.original_mid.address() == &SUI_FRAMEWORK_ADDRESS
+                    && call.function.original_mid.name().as_str() == "gcp_attestation"
+                    && call.function.name.as_str() == "verify_gcp_attestation"
+        )
+    });
     let mut context = Context::new(
         env,
         metrics,
@@ -110,6 +120,7 @@ where
         withdrawals,
         pure,
         receiving,
+        needs_gcp_attestation_jwks,
     )?;
 
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
