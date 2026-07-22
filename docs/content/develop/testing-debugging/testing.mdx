@@ -285,7 +285,7 @@ Move unit tests validate contract logic in isolation. For full application testi
 - **Local network testing:** Run a [local Sui network](/getting-started/onboarding/local-network) to test transactions, object interactions, and gas costs against a real execution environment before deploying to Testnet.
 - **Testnet deployment:** Deploy your packages to [Testnet](/getting-started/onboarding/configure-sui-client) to verify behavior with real network conditions, indexing, and RPC queries.
 - **Dry runs:** Use `sui client call --dry-run` or `devInspectTransactionBlock` to simulate a transaction against the current network state without executing it. This catches issues like incorrect object versions or insufficient gas before you submit.
-- **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective.
+- **SDK integration tests:** Use the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) to write integration tests that submit transactions, query state, and verify end-to-end flows from a client perspective. For an example of a full test matrix (Move contract tests, SDK unit/integration tests, and E2E tests), see the [Sui Stack Messaging test suite](/sui-stack/messaging/testing).
 
 ## Related resources
 
@@ -293,3 +293,4 @@ Move unit tests validate contract logic in isolation. For full application testi
 - [Scenario Testing example](/getting-started/examples/scenario-testing) — Complete walkthrough of multi-transaction, multi-sender testing with `test_scenario`.
 - [Move Trace Debugger](/references/ide/debugger) — Step through execution traces in VS Code for both unit tests and onchain transactions.
 - [`sui move` CLI reference](/references/cli/move) — Full CLI reference for building, testing, and measuring coverage.
+- [Sui Stack Messaging test suite](/sui-stack/messaging/testing) — Example of Move contract tests, SDK unit/integration tests, and E2E tests for a production Sui application.
