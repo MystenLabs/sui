@@ -22,6 +22,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
+    task::join_and_propagate_panic,
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -32,16 +33,31 @@ pub(crate) const INDIRECT_REJECT_DEPTH: Round = 3;
 
 /// Handle to CommitFinalizer, for sending CommittedSubDag.
 pub(crate) struct CommitFinalizerHandle {
-    sender: UnboundedSender<CommittedSubDag>,
+    sender: Option<UnboundedSender<CommittedSubDag>>,
+    task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl CommitFinalizerHandle {
     // Sends a CommittedSubDag to CommitFinalizer, which will finalize it before sending it to execution.
     pub(crate) fn send(&self, commit: CommittedSubDag) -> ConsensusResult<()> {
-        self.sender.send(commit).map_err(|e| {
-            tracing::warn!("Failed to send to commit finalizer, probably due to shutdown: {e:?}");
-            ConsensusError::Shutdown
-        })
+        self.sender
+            .as_ref()
+            .ok_or(ConsensusError::Shutdown)?
+            .send(commit)
+            .map_err(|e| {
+                tracing::warn!(
+                    "Failed to send to commit finalizer, probably due to shutdown: {e:?}"
+                );
+                ConsensusError::Shutdown
+            })
+    }
+
+    pub(crate) async fn stop(&mut self) {
+        // Closing the channel allows CommitFinalizer to drain accepted commits before exiting.
+        self.sender.take();
+        if let Some(task) = self.task.take() {
+            join_and_propagate_panic(task).await;
+        }
     }
 }
 
@@ -106,9 +122,12 @@ impl CommitFinalizer {
     ) -> CommitFinalizerHandle {
         let processor = Self::new(context, dag_state, transaction_vote_tracker, commit_sender);
         let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
-        let _handle =
+        let task =
             spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
-        CommitFinalizerHandle { sender }
+        CommitFinalizerHandle {
+            sender: Some(sender),
+            task: Some(task),
+        }
     }
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {

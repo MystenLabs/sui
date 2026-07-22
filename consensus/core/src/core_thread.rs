@@ -22,6 +22,7 @@ use crate::{
     core_thread::CoreError::Shutdown,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    task::join_and_propagate_panic,
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
@@ -86,7 +87,7 @@ impl CoreThreadHandle {
     pub async fn stop(self) {
         // drop the sender, that will force all the other weak senders to not able to upgrade.
         drop(self.sender);
-        self.join_handle.await.ok();
+        join_and_propagate_panic(self.join_handle).await;
     }
 }
 
@@ -100,6 +101,12 @@ struct CoreThread {
 
 impl CoreThread {
     pub async fn run(mut self) -> ConsensusResult<()> {
+        let result = self.run_inner().await;
+        self.core.stop().await;
+        result
+    }
+
+    async fn run_inner(&mut self) -> ConsensusResult<()> {
         tracing::debug!("Started core thread");
 
         loop {
