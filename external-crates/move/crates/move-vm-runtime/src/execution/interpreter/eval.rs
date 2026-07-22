@@ -736,77 +736,84 @@ fn op_step_impl(
         }
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            // Check value depth via type
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
+            // A vector value of this element type is created here; validate the element type's
+            // limits and the created value's depth.
             run_context
                 .vtables
-                .check_vector_value_depth(ty_ptr, state.call_stack.current_frame.ty_args())?;
+                .check_vector_element(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
-            let specialization: VectorSpecialization = (&ty).try_into()?;
             let value = Vector::pack(specialization, elements)?;
             state.push_operand(value)?;
         }
         Bytecode::VecLen(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_len()?;
-            let value = vec_ref.len(&ty)?;
+            let value = vec_ref.len_internal(specialization)?;
             state.push_operand(value)?;
         }
         Bytecode::VecImmBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            let res = vec_ref.borrow_elem(idx, &ty);
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
+            let res = vec_ref.borrow_elem_internal(idx, specialization);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecMutBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            let res = vec_ref.borrow_elem(idx, &ty);
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
+            let res = vec_ref.borrow_elem_internal(idx, specialization);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecPushBack(ty_ptr) => {
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_push_back(&elem)?;
-            vec_ref.push_back(
+            vec_ref.push_back_internal(
                 elem,
-                &ty,
+                specialization,
                 run_context.vm_config.runtime_limits_config.vector_len_max,
             )?;
         }
         Bytecode::VecPopBack(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            let res = vec_ref.pop(&ty);
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
+            let res = vec_ref.pop_internal(specialization);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
-            let elements = vec_val.unpack(&ty, *num)?;
+            let elements = vec_val.unpack_internal(specialization, *num)?;
             for value in elements {
                 state.push_operand(value)?;
             }
@@ -815,11 +822,12 @@ fn op_step_impl(
             let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = run_context
-                .vtables
-                .subst_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
+            let specialization = VectorSpecialization::from_element(
+                ty_ptr.to_ref(),
+                state.call_stack.current_frame.ty_args(),
+            )?;
             gas_meter.charge_vec_swap()?;
-            vec_ref.swap(idx1, idx2, &ty)?;
+            vec_ref.swap_internal(idx1, idx2, specialization)?;
         }
         Bytecode::PackVariant(variant_def_ptr) => {
             let enum_type = variant_def_ptr.datatype();
