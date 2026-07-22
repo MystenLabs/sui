@@ -146,7 +146,7 @@ struct GcpContainer {
 ///
 /// Compares the big-endian encoding against `65537u64.to_be_bytes()` with left-padding.
 /// Rejects weak exponents such as `e = 3` even when padded to three bytes (`[0, 0, 3]`).
-fn rsa_exponent_ok(e: &[u8]) -> bool {
+pub fn rsa_exponent_ok(e: &[u8]) -> bool {
     if e.is_empty() || e.len() > MAX_RSA_EXPONENT_SIZE {
         return false;
     }
