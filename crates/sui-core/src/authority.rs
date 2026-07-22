@@ -74,7 +74,6 @@ use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
-use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -163,7 +162,8 @@ use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
+    BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
+    ParentSync, WriteKind,
 };
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -281,13 +281,8 @@ pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
     total_effects: IntCounter,
-    /// Number of times a transaction was re-enqueued because a system object it read during
-    /// execution had not yet caught up locally to the version it was sequenced against, keyed by
-    /// the unavailable system object's ID.
-    system_object_unavailable_retries: IntCounterVec,
-    /// Wall-clock seconds a retried transaction waited for the required system object to catch up
-    /// locally before it was re-enqueued for execution, keyed by the system object's ID.
-    system_object_unavailable_retry_wait_latency: HistogramVec,
+    system_object_unavailable_waits: IntCounterVec,
+    system_object_unavailable_wait_latency: HistogramVec,
     // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
     sponsored_tx: IntCounter,
@@ -442,18 +437,18 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            system_object_unavailable_retries: register_int_counter_vec_with_registry!(
-                "system_object_unavailable_retries",
-                "Number of transaction executions retried because a system object read during \
+            system_object_unavailable_waits: register_int_counter_vec_with_registry!(
+                "system_object_unavailable_waits",
+                "Number of times execution blocked because a system object read during \
                  execution had not yet caught up locally to the required version",
                 &["object_id"],
                 registry,
             )
             .unwrap(),
-            system_object_unavailable_retry_wait_latency: register_histogram_vec_with_registry!(
-                "system_object_unavailable_retry_wait_latency",
-                "Seconds a retried transaction waited for a system object to catch up locally \
-                 before being re-enqueued for execution",
+            system_object_unavailable_wait_latency: register_histogram_vec_with_registry!(
+                "system_object_unavailable_wait_latency",
+                "Seconds execution blocked waiting for a system object to catch up locally \
+                 to the required version",
                 &["object_id"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -919,6 +914,90 @@ impl ForkRecoveryState {
 }
 
 pub type PostProcessingOutput = (StagedBatch, IndexStoreCacheUpdates);
+
+struct SystemObjectWaitingStore<'a> {
+    inner: &'a (dyn BackingStore + Send + Sync),
+    cache: &'a dyn ObjectCacheRead,
+    epoch_store: &'a AuthorityPerEpochStore,
+    metrics: &'a AuthorityMetrics,
+}
+
+impl BackingPackageStore for SystemObjectWaitingStore<'_> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        self.inner.get_package_object(package_id)
+    }
+}
+
+impl RuntimeObjectResolver for SystemObjectWaitingStore<'_> {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        self.inner
+            .read_child_object(parent, child, child_version_upper_bound)
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        self.inner.get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
+}
+
+impl ObjectStore for SystemObjectWaitingStore<'_> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.inner.get_object(object_id)
+    }
+
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
+        if let Some(object) = self.inner.get_object_by_key(object_id, version) {
+            return Some(object);
+        }
+        if !IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id) {
+            return None;
+        }
+        let init_shared_version = self
+            .epoch_store
+            .epoch_start_config()
+            .system_object_initial_shared_version(*object_id)
+            .expect("system object must be registered in the epoch start config");
+        self.metrics
+            .system_object_unavailable_waits
+            .with_label_values(&[object_id.to_string().as_str()])
+            .inc();
+        let wait_start = Instant::now();
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(
+                self.cache.notify_read_system_object_at_version(
+                    FullObjectID::Consensus((*object_id, init_shared_version)),
+                    version,
+                ),
+            )
+        });
+        self.metrics
+            .system_object_unavailable_wait_latency
+            .with_label_values(&[object_id.to_string().as_str()])
+            .observe(wait_start.elapsed().as_secs_f64());
+        self.inner.get_object_by_key(object_id, version)
+    }
+}
+
+impl ParentSync for SystemObjectWaitingStore<'_> {
+    fn get_latest_parent_entry_ref_deprecated(&self, object_id: ObjectID) -> Option<ObjectRef> {
+        self.inner.get_latest_parent_entry_ref_deprecated(object_id)
+    }
+}
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -1957,59 +2036,6 @@ impl AuthorityState {
         )
     }
 
-    /// Spawns a task that waits until `object_id` reaches `version` (the version this transaction
-    /// requires), then re-enqueues `certificate` for execution. Used by the retry-on-not-ready path
-    /// when execution reports that a required system object had not yet caught up to the version
-    /// this transaction was sequenced against.
-    fn wait_for_system_object_and_reenqueue(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        object_id: ObjectID,
-        version: SequenceNumber,
-        execution_env: &ExecutionEnv,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        self.metrics
-            .system_object_unavailable_retries
-            .with_label_values(&[object_id.to_string().as_str()])
-            .inc();
-        // Recover the object's initial shared version from the epoch start config (every system
-        // object is registered there) to form the full key the object cache waits on.
-        let init_shared_version = epoch_store
-            .epoch_start_config()
-            .system_object_initial_shared_version(object_id)
-            .expect("system object must be registered in the epoch start config");
-        let full_object_id = FullObjectID::Consensus((object_id, init_shared_version));
-        let cache_reader = self.get_object_cache_reader().clone();
-        let scheduler = self.execution_scheduler.clone();
-        let cert = certificate.clone();
-        let execution_env = execution_env.clone();
-        let epoch_store = epoch_store.clone();
-        let metrics = self.metrics.clone();
-        tokio::task::spawn(async move {
-            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
-            let _ = epoch_store
-                .within_alive_epoch(async move {
-                    let wait_start = Instant::now();
-                    cache_reader
-                        .notify_read_system_object_at_version(full_object_id, version)
-                        .await;
-                    // Observe only after the read resolves, so a wait cut short by epoch change
-                    // (which cancels this future) is not recorded as a completed wait.
-                    metrics
-                        .system_object_unavailable_retry_wait_latency
-                        .with_label_values(&[object_id.to_string().as_str()])
-                        .observe(wait_start.elapsed().as_secs_f64());
-                    scheduler.send_transaction_for_execution(
-                        &cert,
-                        execution_env,
-                        tokio::time::Instant::now(),
-                    );
-                })
-                .await;
-        });
-    }
-
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -2099,7 +2125,13 @@ impl AuthorityState {
             None
         };
 
-        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+        let waiting_store = SystemObjectWaitingStore {
+            inner: self.get_backing_store().as_ref(),
+            cache: self.get_object_cache_reader().as_ref(),
+            epoch_store,
+            metrics: &self.metrics,
+        };
+        let tracking_store = TrackingBackingStore::new(&waiting_store);
 
         // Lets the in-execution object-funds check read unsettled withdrawals from the current
         // consensus commit.
@@ -2133,39 +2165,6 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
-
-        // Execution recorded that a system object it read had not yet caught up to the version this
-        // transaction requires. The effects it produced are not usable; discard them, wait for that
-        // object to reach the required version, then re-enqueue so execution runs again against the
-        // caught-up state.
-        if let Some(ExecutionRetryError::SystemObjectUnavailable { object_id, version }) =
-            inner_temp_store.retry_request.as_ref()
-        {
-            assert_reachable!("retry on unavailable system object");
-            self.wait_for_system_object_and_reenqueue(
-                certificate,
-                *object_id,
-                *version,
-                &execution_env,
-                epoch_store,
-            );
-            return ExecutionOutput::RetryLater;
-        }
-
-        // Reaching here means no retry request was recorded, so the system-object-unavailable
-        // unwind must not have happened either: the two are minted together, and this transient,
-        // node-local condition must never reach committed effects — doing so would fork this node
-        // from validators that have caught up.
-        if let Err(err) = &execution_error_opt {
-            assert!(
-                !matches!(
-                    err.kind(),
-                    ExecutionErrorKind::SystemObjectNotAvailableLocally
-                ),
-                "transaction {tx_digest} unwound with SystemObjectNotAvailableLocally but \
-                 recorded no retry request",
-            );
-        }
 
         if protocol_config.check_object_funds_withdraw_in_execution()
             && let ExecutionStatus::Failure(failure) = effects.status()

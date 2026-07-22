@@ -207,10 +207,6 @@ pub enum ObjectFundsAvailability {
     /// accumulator version, minus unsettled withdrawals from earlier transactions in the same
     /// consensus commit.
     Available(u128),
-    /// The accumulator root has not reached the transaction's required version on this node. The
-    /// retry request has been recorded; execution must unwind so the authority can discard the
-    /// effects and re-enqueue. Never a committed outcome.
-    RootNotYetAvailable,
     /// The accumulator root has no assigned version — the transaction is reading a system object
     /// it was not sequenced against. An invariant violation.
     RequiredVersionNotAssigned,
