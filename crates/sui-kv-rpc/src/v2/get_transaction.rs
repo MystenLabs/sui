@@ -125,6 +125,7 @@ pub async fn batch_get_transactions(
 
 #[cfg(test)]
 mod tests {
+    use mysten_common::ZipDebugEqIteratorExt;
     use std::collections::BTreeSet;
 
     use sui_kvstore::testing::insert_checkpoint_rows;
@@ -157,7 +158,7 @@ mod tests {
             response
                 .transactions
                 .into_iter()
-                .zip([Some(1), None, Some(0)])
+                .zip_debug_eq([Some(1), None, Some(0)])
         {
             let Some(index) = expected_index else {
                 let status = result
