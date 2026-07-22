@@ -666,8 +666,6 @@ ExecutionErrorKind:
         STRUCT:
           - id:
               TYPENAME: ObjectID
-    42:
-      SystemObjectNotAvailableLocally: UNIT
 ExecutionFailure:
   STRUCT:
     - error:

@@ -8,6 +8,7 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
+use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{Semaphore, mpsc::UnboundedReceiver, oneshot};
 use tracing::{Instrument, error_span, info, trace, warn};
 
@@ -31,6 +32,7 @@ pub async fn execution_process(
 
     // Rate limit concurrent executions to # of cpus.
     let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    let system_object_writer_limit = Arc::new(Semaphore::new(num_cpus::get()));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -86,7 +88,19 @@ pub async fn execution_process(
             continue;
         }
 
-        let limit = limit.clone();
+        // Transactions that mutate an implicitly-read system object draw from a dedicated
+        // permit pool: executions can block waiting for such an object to reach its required
+        // version, and the transaction that writes that version must never queue behind them.
+        let limit = if certificate
+            .data()
+            .transaction_data()
+            .kind()
+            .mutates_implicitly_read_system_object()
+        {
+            system_object_writer_limit.clone()
+        } else {
+            limit.clone()
+        };
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
         let permit = limit.acquire_owned().await.unwrap();

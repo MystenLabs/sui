@@ -64,6 +64,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Instant;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
@@ -495,6 +496,51 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
+    pub(crate) fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
+            return Some(object);
+        }
+        let Some(object) = ObjectCacheRead::get_object(self, object_id) else {
+            debug_fatal!("system object {object_id} does not exist locally");
+            return None;
+        };
+        let Some(initial_shared_version) = object.owner().start_version() else {
+            debug_fatal!("system object {object_id} is not a consensus object");
+            return None;
+        };
+        self.metrics
+            .implicit_system_object_read_waits
+            .with_label_values(&[object_id.to_string().as_str()])
+            .inc();
+        let wait_start = Instant::now();
+        let key = InputKey::VersionedObject {
+            id: FullObjectID::Consensus((*object_id, initial_shared_version)),
+            version,
+        };
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
+                "get_implicitly_read_system_object_blocking",
+                &[key],
+                move |_keys| {
+                    vec![if self.object_exists_by_key(object_id, version) {
+                        Some(())
+                    } else {
+                        None
+                    }]
+                },
+            ))
+        });
+        self.metrics
+            .implicit_system_object_read_wait_latency
+            .with_label_values(&[object_id.to_string().as_str()])
+            .observe(wait_start.elapsed().as_secs_f64());
+        ObjectCacheRead::get_object_by_key(self, object_id, version)
+    }
+
     pub fn new(
         config: &ExecutionCacheConfig,
         store: Arc<AuthorityStore>,
@@ -1957,38 +2003,6 @@ impl ObjectCacheRead for WritebackCache {
             )
             .map(|_| ())
             .boxed()
-    }
-
-    fn notify_read_system_object_at_version<'a>(
-        &'a self,
-        full_object_id: FullObjectID,
-        version: SequenceNumber,
-    ) -> BoxFuture<'a, ()> {
-        // Object writes notify on `InputKey::VersionedObject { full_id, version }`. The caller passes
-        // the full id (with the consensus object's stable initial shared version), so the registered
-        // key matches the key the write at `version` will notify on without re-reading the object.
-        let object_id = full_object_id.id();
-        let key = InputKey::VersionedObject {
-            id: full_object_id,
-            version,
-        };
-        async move {
-            let keys = [key];
-            self.object_notify_read
-                .read(
-                    "notify_read_system_object_at_version",
-                    &keys,
-                    move |_keys| {
-                        vec![if self.object_exists_by_key(&object_id, version) {
-                            Some(())
-                        } else {
-                            None
-                        }]
-                    },
-                )
-                .await;
-        }
-        .boxed()
     }
 }
 

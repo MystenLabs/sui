@@ -307,64 +307,52 @@ async fn test_receiving_object_higher_version() {
         .unwrap();
 }
 
-#[tokio::test]
-async fn test_notify_read_system_object_at_version() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_get_implicitly_read_system_object_blocking() {
     let cache = create_writeback_cache().await;
 
     let object_id = ObjectID::random();
     let init_version = SequenceNumber::from(1);
-    let full_object_id = FullObjectID::Consensus((object_id, init_version));
     let target_version = SequenceNumber::from(3);
 
-    // Object not written at all: the wait must block.
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_system_object_at_version(full_object_id, target_version),
-    )
-    .await;
-    assert!(result.is_err());
-
-    // A write below the target version must not resolve the wait.
-    let object = Object::with_id_owner_version_for_testing(
+    let below_target = Object::with_id_owner_version_for_testing(
         object_id,
         SequenceNumber::from(2),
         Owner::Shared {
             initial_shared_version: init_version,
         },
     );
-    cache.write_object_entry_for_test(object);
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_system_object_at_version(full_object_id, target_version),
-    )
-    .await;
-    assert!(result.is_err());
+    cache.write_object_entry_for_test(below_target);
 
-    // The write at the target version resolves a pending wait.
-    tokio::spawn({
+    let blocked = tokio::spawn({
         let cache = cache.clone();
         async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let object = Object::with_id_owner_version_for_testing(
-                object_id,
-                target_version,
-                Owner::Shared {
-                    initial_shared_version: init_version,
-                },
-            );
-            cache.write_object_entry_for_test(object);
+            cache
+                .as_ref()
+                .get_implicitly_read_system_object_blocking(&object_id, target_version)
+                .unwrap()
         }
     });
-    timeout(
-        Duration::from_secs(3),
-        cache.notify_read_system_object_at_version(full_object_id, target_version),
-    )
-    .await
-    .unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!blocked.is_finished());
 
-    // Target version already committed: resolves immediately.
-    cache
-        .notify_read_system_object_at_version(full_object_id, target_version)
-        .now_or_never()
+    let at_target = Object::with_id_owner_version_for_testing(
+        object_id,
+        target_version,
+        Owner::Shared {
+            initial_shared_version: init_version,
+        },
+    );
+    cache.write_object_entry_for_test(at_target);
+    let object = timeout(Duration::from_secs(3), blocked)
+        .await
+        .unwrap()
         .unwrap();
+    assert_eq!(object.version(), target_version);
+
+    let object = cache
+        .as_ref()
+        .get_implicitly_read_system_object_blocking(&object_id, target_version)
+        .unwrap();
+    assert_eq!(object.version(), target_version);
 }
