@@ -25,6 +25,7 @@ num_enum.workspace = true
 im.workspace = true
 itertools.workspace = true
 nonempty.workspace = true
+sui-types-verified.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
 prost.workspace = true
