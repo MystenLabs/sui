@@ -809,4 +809,279 @@ mod tests {
         assert_eq!(intersect_epoch_bounds(200, Some(300), &(10..=100)), None);
         assert_eq!(intersect_epoch_bounds(200, None, &(10..=100)), None);
     }
+
+    mod grpc_connection {
+        use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
+
+        use super::*;
+        use crate::pagination::PageLimits;
+
+        fn cp_position(checkpoint: u64) -> Position {
+            Position::Checkpoints { checkpoint }
+        }
+
+        /// Build a synthetic `PageItem` for the checkpoint at `sequence_number`, with the provided
+        /// resume cursor.
+        fn cp_item(sequence_number: u64, cursor: CursorToken) -> PageItem<v2::Checkpoint> {
+            let mut payload = v2::Checkpoint::default();
+            payload.sequence_number = Some(sequence_number);
+            PageItem {
+                payload,
+                cursor: cursor.encode(),
+            }
+        }
+
+        /// The GraphQL cursor string that `build_grpc_connection` mints for raw server cursor
+        /// bytes.
+        fn graphql_cursor(token: CursorToken) -> String {
+            let token: CheckpointToken = token.try_into().expect("checkpoints cursor");
+            CCheckpoint::new(OpaqueCursor::new(token)).encode_cursor()
+        }
+
+        fn page_limits(limit: u64) -> PageLimits {
+            PageLimits {
+                default: limit as u32,
+                max: limit as u32,
+            }
+        }
+
+        /// Build a `Page<CCheckpoint>` going forwards (`first: N`, no `after`/`before`).
+        fn forward_page(limit: u64) -> Page<CCheckpoint> {
+            Page::from_params(&page_limits(limit), Some(limit), None, None, None)
+                .expect("constructing forward Page<CCheckpoint>")
+        }
+
+        /// Build a `Page<CCheckpoint>` going backwards (`last: N`, no `after`/`before`).
+        fn backward_page(limit: u64) -> Page<CCheckpoint> {
+            Page::from_params(&page_limits(limit), None, None, Some(limit), None)
+                .expect("constructing backward Page<CCheckpoint>")
+        }
+
+        /// Forward page opened from an `after` cursor (`first: N, after: <cursor>`).
+        fn forward_page_after(limit: u64, after: CCheckpoint) -> Page<CCheckpoint> {
+            Page::from_params(&page_limits(limit), Some(limit), Some(after), None, None)
+                .expect("constructing forward Page with after")
+        }
+
+        /// Backward page opened from a `before` cursor (`last: N, before: <cursor>`).
+        fn backward_page_before(limit: u64, before: CCheckpoint) -> Page<CCheckpoint> {
+            Page::from_params(&page_limits(limit), None, None, Some(limit), Some(before))
+                .expect("constructing backward Page with before")
+        }
+
+        /// Empty connection surfaces cursors if provided by the streamed page.
+        #[test]
+        fn empty_page_surfaces_boundary_cursors() {
+            let scope = Scope::for_tests();
+            let page = forward_page(10);
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                Vec::new(),
+                Some(CursorToken::boundary(cp_position(10)).encode()),
+                Some(CursorToken::boundary(cp_position(20)).encode()),
+                None,
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert!(conn.edges.is_empty());
+            assert!(!conn.page_info.has_previous_page);
+            assert!(conn.page_info.has_next_page);
+
+            let start = conn.page_info.start_cursor.expect("start cursor set");
+            let end = conn.page_info.end_cursor.expect("end cursor set");
+            assert_ne!(start, end, "start and end cursors should be different");
+        }
+
+        /// Order of cursors on connection should be swapped from streamed page.
+        #[test]
+        fn empty_page_backward_correct_cursors() {
+            let scope = Scope::for_tests();
+            let page = backward_page(10);
+            // Descending stream: the first watermark the stream reports is the high end.
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                Vec::new(),
+                Some(CursorToken::boundary(cp_position(20)).encode()),
+                Some(CursorToken::boundary(cp_position(10)).encode()),
+                None,
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert!(conn.edges.is_empty());
+            assert!(conn.page_info.has_previous_page);
+            assert!(!conn.page_info.has_next_page);
+
+            let start = conn.page_info.start_cursor.expect("start cursor set");
+            let end = conn.page_info.end_cursor.expect("end cursor set");
+            assert_eq!(
+                start,
+                graphql_cursor(CursorToken::boundary(cp_position(10)))
+            );
+            assert_eq!(end, graphql_cursor(CursorToken::boundary(cp_position(20))));
+        }
+
+        #[test]
+        fn non_empty_page_uses_edge_cursors() {
+            let scope = Scope::for_tests();
+            let page = forward_page(10);
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                vec![
+                    cp_item(1, CursorToken::item(cp_position(1))),
+                    cp_item(2, CursorToken::item(cp_position(2))),
+                    cp_item(3, CursorToken::item(cp_position(3))),
+                ],
+                None,
+                None,
+                Some(v2::QueryEndReason::CheckpointBound),
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert_eq!(conn.edges.len(), 3);
+            // `CheckpointBound` means the range was exhausted — no forward continuation.
+            assert!(!conn.page_info.has_next_page);
+
+            let start = conn.page_info.start_cursor.expect("start set");
+            let end = conn.page_info.end_cursor.expect("end set");
+            assert_eq!(
+                start, conn.edges[0].cursor,
+                "non-empty page should anchor start_cursor on first edge, not stream watermark"
+            );
+            assert_eq!(
+                end, conn.edges[2].cursor,
+                "non-empty page should anchor end_cursor on last edge, not stream watermark"
+            );
+
+            for (edge, sequence_number) in conn.edges.iter().zip([1u64, 2, 3]) {
+                assert_eq!(edge.node.sequence_number, sequence_number);
+            }
+        }
+
+        #[test]
+        fn full_page_at_item_limit_signals_more() {
+            let scope = Scope::for_tests();
+            let page = forward_page(2);
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                vec![
+                    cp_item(1, CursorToken::item(cp_position(1))),
+                    cp_item(2, CursorToken::item(cp_position(2))),
+                ],
+                None,
+                None,
+                Some(v2::QueryEndReason::ItemLimit),
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert_eq!(conn.edges.len(), 2);
+            assert!(
+                conn.page_info.has_next_page,
+                "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
+            );
+        }
+
+        #[test]
+        fn descending_page_reverses_to_ascending_edges() {
+            let scope = Scope::for_tests();
+            let page = backward_page(10);
+            // Descending stream order: checkpoints 3, 2, 1 (highest position first).
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                vec![
+                    cp_item(3, CursorToken::item(cp_position(3))),
+                    cp_item(2, CursorToken::item(cp_position(2))),
+                    cp_item(1, CursorToken::item(cp_position(1))),
+                ],
+                None,
+                None,
+                Some(v2::QueryEndReason::CheckpointBound),
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert_eq!(conn.edges.len(), 3);
+            // After reversal, the *first* edge corresponds to the *lowest* position from the
+            // stream — i.e. the last item the stream emitted (checkpoint 1).
+            let start = conn.page_info.start_cursor.expect("start set");
+            let end = conn.page_info.end_cursor.expect("end set");
+            assert_eq!(start, conn.edges[0].cursor);
+            assert_eq!(start, graphql_cursor(CursorToken::item(cp_position(1))));
+            assert_eq!(end, conn.edges[2].cursor);
+            assert_eq!(end, graphql_cursor(CursorToken::item(cp_position(3))));
+            assert_eq!(
+                conn.edges
+                    .iter()
+                    .map(|e| e.node.sequence_number)
+                    .collect::<Vec<_>>(),
+                [1, 2, 3],
+            );
+        }
+
+        /// A forward page opened from an `after` cursor reports `hasPreviousPage: true`
+        /// (`page.after().is_some()`). `CheckpointBound` makes `has_more()` false, so the only
+        /// source of a `true` flag is the input cursor — not the stream.
+        #[test]
+        fn forward_after_signals_previous_page() {
+            let scope = Scope::for_tests();
+            let page = forward_page_after(10, CheckpointToken::cursor(1));
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                vec![cp_item(2, CursorToken::item(cp_position(2)))],
+                None,
+                None,
+                Some(v2::QueryEndReason::CheckpointBound),
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert!(
+                conn.page_info.has_previous_page,
+                "after cursor set → hasPreviousPage"
+            );
+            assert!(
+                !conn.page_info.has_next_page,
+                "CheckpointBound → no hasNextPage"
+            );
+        }
+
+        /// A backward page opened from a `before` cursor reports `hasNextPage: true`
+        /// (`page.before().is_some()`). `CheckpointBound` makes `has_more()` false, so the only
+        /// source of a `true` flag is the input cursor — not the stream.
+        #[test]
+        fn backward_before_signals_next_page() {
+            let scope = Scope::for_tests();
+            let page = backward_page_before(10, CheckpointToken::cursor(3));
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                vec![
+                    cp_item(2, CursorToken::item(cp_position(2))),
+                    cp_item(1, CursorToken::item(cp_position(1))),
+                ],
+                None,
+                None,
+                Some(v2::QueryEndReason::CheckpointBound),
+            );
+
+            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+            assert!(
+                conn.page_info.has_next_page,
+                "before cursor set → hasNextPage"
+            );
+            assert!(
+                !conn.page_info.has_previous_page,
+                "CheckpointBound → no hasPreviousPage"
+            );
+        }
+
+        /// An item without a sequence number is an internal inconsistency, not an empty result.
+        #[test]
+        fn missing_sequence_number_errors() {
+            let scope = Scope::for_tests();
+            let page = forward_page(10);
+            let result = StreamPage::<v2::Checkpoint>::for_test(
+                vec![PageItem {
+                    payload: v2::Checkpoint::default(),
+                    cursor: CursorToken::item(cp_position(1)).encode(),
+                }],
+                None,
+                None,
+                Some(v2::QueryEndReason::CheckpointBound),
+            );
+            assert!(
+                build_grpc_connection(scope, &page, result).is_err(),
+                "missing sequence number should error"
+            );
+        }
+    }
 }
