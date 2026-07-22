@@ -6,8 +6,7 @@ module sui::gcp_attestation_tests;
 
 use sui::gcp_attestation;
 
-// A minimal valid JWT structure with RS256 header but an invalid signature,
-// producing EVerifyError.
+// A minimal valid JWT structure with RS256 header but an invalid signature.
 // header:  base64url({"alg":"RS256","typ":"JWT"})
 // payload: base64url({"iss":"https://confidentialcomputing.googleapis.com","exp":9999999999,"iat":1700000000})
 // sig:     342 base64url chars encoding 256 zero bytes (invalid RS256 signature for any key)
@@ -16,35 +15,9 @@ const WELL_FORMED_INVALID_SIG_TOKEN: vector<u8> =
 
 const TEST_KID: vector<u8> = b"test-kid-001";
 
-#[test]
-#[expected_failure(abort_code = gcp_attestation::EParseError)]
-fun test_gcp_attestation_invalid_token_bytes() {
-    let mut ctx = tx_context::dummy();
-    let mut clock = sui::clock::create_for_testing(&mut ctx);
-    clock.set_for_testing(1_700_000_000_000);
-
-    // Non-UTF8 bytes cannot be parsed as a JWT.
-    gcp_attestation::verify_gcp_attestation(x"fffe", TEST_KID, &clock);
-
-    clock.destroy_for_testing();
-}
-
-#[test]
-#[expected_failure(abort_code = gcp_attestation::EParseError)]
-fun test_gcp_attestation_not_three_parts() {
-    let mut ctx = tx_context::dummy();
-    let mut clock = sui::clock::create_for_testing(&mut ctx);
-    clock.set_for_testing(1_700_000_000_000);
-
-    // Valid UTF-8 but not "header.payload.signature" format.
-    gcp_attestation::verify_gcp_attestation(
-        b"not_a_valid_jwt_token",
-        TEST_KID,
-        &clock,
-    );
-
-    clock.destroy_for_testing();
-}
+// Parse/verify abort paths need a trusted JWK present before the native parses the
+// token. The Move unit-test harness installs an empty JwkMap, so those paths are
+// covered by crates/sui-types unit tests and msim e2e instead.
 
 #[test]
 #[expected_failure(abort_code = gcp_attestation::EKidNotFoundError)]
