@@ -21,9 +21,7 @@ use crate::{
             VALUE_DEPTH_MAX,
         },
         linkage_context::LinkageContext,
-        type_size_formulae::{
-            PartialTypeSizeFormula, TypeAndSize, TypeSize, Visiting, check_syntactic_limits,
-        },
+        type_size_formulae::{PartialTypeSizeFormula, TypeSize, Visiting, check_syntactic_limits},
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
@@ -42,34 +40,59 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMConfig;
 
-use quick_cache::sync::Cache as SizeFormulaCache;
+use quick_cache::unsync::Cache as QCache;
 
 use tracing::instrument;
 
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap},
+    ops::Deref,
     sync::Arc,
 };
+
+/// A per-execution cache of datatypes' resolved size formulae, keyed by datatype under the
+/// enclosing resolver's linkage view.
+///
+/// This is deliberately an *unsynchronized* cache. It lives only on a [`VMDispatchTables`]
+/// resolver, which is constructed per transaction and never shared across threads (only the
+/// `Sync` [`DispatchTables`] it wraps is cached and shared). The interpreter and the natives are
+/// therefore free to fill it in place through `&self`.
+pub(crate) struct TypeCache(RefCell<QCache<VirtualTableKey, PartialTypeSizeFormula>>);
+
+impl std::fmt::Debug for TypeCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TypeCache({} entries)", self.0.borrow().len())
+    }
+}
+
+impl TypeCache {
+    fn new() -> Self {
+        Self(RefCell::new(QCache::new(TYPE_DEPTH_LRU_SIZE)))
+    }
+
+    fn get(&self, key: &VirtualTableKey) -> Option<PartialTypeSizeFormula> {
+        self.0.borrow().get(key).cloned()
+    }
+
+    fn insert(&self, key: VirtualTableKey, formula: PartialTypeSizeFormula) {
+        self.0.borrow_mut().insert(key, formula);
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 
-/// The data structure that the VM uses to resolve all packages. Packages are loaded into this at
-/// before the beginning of execution, and based on the static call graph of the package that
-/// contains the root package id.
+/// The shared, `Sync` resolution tables: everything the VM needs to resolve packages, functions,
+/// and datatypes under a fixed linkage. Built once per linkage and cached (and cloned) across
+/// transactions — the fields are all `Arc`s, so cloning is cheap.
 ///
-/// This is a transient (transaction-scoped) data structure that is created at the beginning of the
-/// transaction, is immutable for the execution of the transaction, and is dropped at the end of
-/// the transaction.
-///
-/// This structure may be cached and reused across transactions with identical linkages, so we add
-/// an Arc<> around the inner data structures to facilitate more-efficient sharing.
-///
-/// FUTURE(vm-rewrite): The representation can be optimized to use a more efficient data structure
-/// for vtable/cross-package function resolution but we will keep it simple for now.
-#[derive(Debug)]
-pub struct VMDispatchTables {
+/// This holds no per-execution state, which is what keeps it `Sync` and safe to share across the
+/// worker threads that read the package cache. Per-execution state (the size-formula cache) lives
+/// on the [`VMDispatchTables`] resolver that wraps this.
+#[derive(Debug, Clone)]
+pub struct DispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) interner: Arc<IdentifierInterner>,
     pub(crate) loaded_packages: Arc<BTreeMap<OriginalId, Arc<Package>>>,
@@ -77,18 +100,27 @@ pub struct VMDispatchTables {
     /// [SAFETY] Ordering is not guaranteed
     pub(crate) defining_id_origins: Arc<BTreeMap<DefiningTypeId, OriginalId>>,
     pub(crate) link_context: Arc<LinkageContext>,
-    /// Resolved size formulae of datatypes (over their own type parameters) under this table's
-    /// linkage view, memoized per datatype key — the environment `partial_type_size` resolves
-    /// against. A resolved formula is a property of (datatype, linkage), not of the datatype
-    /// alone (type upgrades can change a dependency's shape), so it lives here rather than on
-    /// the shared packages, and each VM instance gets its own.
-    ///
-    /// A concurrent `&self` cache so both the interpreter and shared-borrow callers (natives,
-    /// building layouts) can read and warm it; the interpreter warms it while manufacturing
-    /// types, so the natives that follow ride the warm cache. It stays `Sync` (the tables live
-    /// in a cross-thread linkage cache), and its contents affect only performance, never
-    /// correctness — so a clone starts empty and refills on demand.
-    pub(crate) size_formulas: SizeFormulaCache<VirtualTableKey, PartialTypeSizeFormula>,
+}
+
+/// The per-execution dispatch resolver: the shared [`DispatchTables`] plus a transaction-local
+/// [`TypeCache`] of resolved size formulae.
+///
+/// This is a transient (transaction-scoped) value: it is created at the beginning of a transaction
+/// from the (cached) `Sync` tables and dropped at the end. Because it is never shared across
+/// threads, its size cache can be unsynchronized. It derefs to [`DispatchTables`], so all the
+/// resolution methods read the shared tables directly.
+#[derive(Debug)]
+pub struct VMDispatchTables {
+    pub(crate) tables: DispatchTables,
+    pub(crate) size_formulas: TypeCache,
+}
+
+impl Deref for VMDispatchTables {
+    type Target = DispatchTables;
+
+    fn deref(&self) -> &DispatchTables {
+        &self.tables
+    }
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -139,27 +171,8 @@ pub enum DatatypeTagType {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl Clone for VMDispatchTables {
-    fn clone(&self) -> Self {
-        Self {
-            vm_config: Arc::clone(&self.vm_config),
-            interner: Arc::clone(&self.interner),
-            loaded_packages: Arc::clone(&self.loaded_packages),
-            defining_id_origins: Arc::clone(&self.defining_id_origins),
-            link_context: Arc::clone(&self.link_context),
-            // The size cache is a pure memo; a clone starts empty and refills on demand.
-            size_formulas: SizeFormulaCache::new(TYPE_DEPTH_LRU_SIZE),
-        }
-    }
-}
-
-// ------------------------------------------------------------------------
-// The VM API that it will use to resolve packages and functions during execution of the
-// transaction.
-// ------------------------------------------------------------------------
-
-impl VMDispatchTables {
-    /// Create a new RuntimeVTables instance.
+impl DispatchTables {
+    /// Create the shared resolution tables for a linkage.
     /// NOTE: This assumes linkage has already occured.
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn new(
@@ -188,18 +201,28 @@ impl VMDispatchTables {
             defining_id_map
         };
 
-        let loaded_packages = Arc::new(loaded_packages);
-        let defining_id_origins = Arc::new(defining_id_origins);
-        let link_context = Arc::new(link_context);
-
         Ok(Self {
             vm_config,
             interner,
-            loaded_packages,
-            defining_id_origins,
-            link_context,
-            size_formulas: SizeFormulaCache::new(TYPE_DEPTH_LRU_SIZE),
+            loaded_packages: Arc::new(loaded_packages),
+            defining_id_origins: Arc::new(defining_id_origins),
+            link_context: Arc::new(link_context),
         })
+    }
+}
+
+// ------------------------------------------------------------------------
+// The VM API that it will use to resolve packages and functions during execution of the
+// transaction.
+// ------------------------------------------------------------------------
+
+impl VMDispatchTables {
+    /// Wrap shared resolution tables in a fresh per-execution resolver (with an empty size cache).
+    pub(crate) fn new(tables: DispatchTables) -> Self {
+        Self {
+            tables,
+            size_formulas: TypeCache::new(),
+        }
     }
 
     pub fn get_package(&self, id: &OriginalId) -> PartialVMResult<Arc<Package>> {
@@ -342,9 +365,9 @@ impl VMDispatchTables {
     fn load_type_impl(
         &self,
         type_tag: &TypeTag,
-        type_size: &mut TraversalBudget,
+        type_size_budget: &mut TraversalBudget,
     ) -> PartialVMResult<Type> {
-        type_size.enter_type(|type_size| {
+        type_size_budget.enter_type(|type_size_budget| {
             Ok(match type_tag {
                 TypeTag::Bool => Type::Bool,
                 TypeTag::U8 => Type::U8,
@@ -356,7 +379,7 @@ impl VMDispatchTables {
                 TypeTag::Address => Type::Address,
                 TypeTag::Signer => Type::Signer,
                 TypeTag::Vector(tt) => {
-                    Type::Vector(Box::new(self.load_type_impl(tt, type_size)?))
+                    Type::Vector(Box::new(self.load_type_impl(tt, type_size_budget)?))
                 }
                 // NB: Note that this tag is slightly misnamed and used for all Datatypes.
                 TypeTag::Struct(struct_tag) => {
@@ -404,7 +427,7 @@ impl VMDispatchTables {
                     } else {
                         let mut type_params = vec![];
                         for ty_param in &struct_tag.type_params {
-                            type_params.push(self.load_type_impl(ty_param, type_size)?);
+                            type_params.push(self.load_type_impl(ty_param, type_size_budget)?);
                         }
                         self.verify_ty_args(datatype.type_param_constraints(), &type_params)?;
                         Type::DatatypeInstantiation(Box::new((key, type_params)))
@@ -440,9 +463,9 @@ impl VMDispatchTables {
     fn abilities_impl(
         &self,
         ty: &Type,
-        type_size: &mut TraversalBudget,
+        type_size_budget: &mut TraversalBudget,
     ) -> PartialVMResult<AbilitySet> {
-        type_size.enter_type(|type_size| {
+        type_size_budget.enter_type(|type_size_budget| {
             match ty {
                 Type::Bool
                 | Type::U8
@@ -465,7 +488,7 @@ impl VMDispatchTables {
                 Type::Vector(ty) => AbilitySet::polymorphic_abilities(
                     AbilitySet::VECTOR,
                     vec![false],
-                    vec![self.abilities_impl(ty, type_size)?],
+                    vec![self.abilities_impl(ty, type_size_budget)?],
                 ),
                 Type::Datatype(idx) => Ok(*self.resolve_type(idx)?.to_ref().abilities()),
                 Type::DatatypeInstantiation(inst) => {
@@ -477,7 +500,7 @@ impl VMDispatchTables {
                         .map(|param| param.is_phantom);
                     let type_argument_abilities = type_args
                         .iter()
-                        .map(|arg| self.abilities_impl(arg, type_size))
+                        .map(|arg| self.abilities_impl(arg, type_size_budget))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     AbilitySet::polymorphic_abilities(
                         *datatype_type.abilities(),
@@ -527,21 +550,18 @@ impl VMDispatchTables {
     }
 
     // -------------------------------------------
-    // Type sizing (the partial-evaluating interpreter)
+    // Type sizing
     // -------------------------------------------
-    // The vtable is the environment. `partial_type_size` resolves a datatype's JIT-built
-    // `ArenaTypeSizeFormula` against this linkage into a flat `PartialTypeSizeFormula` over the
-    // datatype's parameters, memoized per key in `size_formulas`; `substitute` recurses back
-    // through it, so every datatype boundary re-enters the cache. `interpret_type` walks an
-    // arena term (a signature type) into a partial over the ambient function parameters, and
-    // `type_size_of` walks a concrete runtime type straight to a `TypeSize`. All are `&self`:
-    // the interpreter warms the cache while manufacturing types, and the natives that follow
-    // read it for a walk-free size check.
+    // Type sizing works via partial evaluation / application. The vtable is our translation's
+    // `env`, and `partial_type_size` translates a datatype's JIT-built `ArenaTypeSizeFormula`
+    // against this linkage into a flat `PartialTypeSizeFormula` over the datatype's parameters,
+    // memoized per key in `size_formulas`. `substitute` recurs back through it, so every datatype
+    // boundary re-enters the cache, optimizing this approach. Finally, `type_size_of` walks a
+    // concrete runtime type straight to a `TypeSize` from this information.
 
-    /// The resolved formula of a datatype under this linkage, over the datatype's own
-    /// parameters — cache hit, or resolve-and-cache on a miss. `visiting` turns a cyclic
-    /// (corrupt/adversarial) datatype graph into an invariant violation.
-    fn partial_type_size_visiting(
+    /// The resolved formula of a datatype under this linkage, over the datatype's own parameters.
+    /// `visiting` turns a cyclic (corrupt/adversarial) datatype graph into an invariant violation.
+    fn partial_type_size_impl(
         &self,
         key: &VirtualTableKey,
         visiting: &mut Visiting,
@@ -567,8 +587,7 @@ impl VMDispatchTables {
         Ok(formula)
     }
 
-    /// The resolved formula of a datatype under this linkage. Reads (and warms) the cache
-    /// through `&self` — the interpreter and the natives share it.
+    /// The resolved formula of a datatype under this linkage.
     pub(crate) fn partial_type_size(
         &self,
         key: &VirtualTableKey,
@@ -576,12 +595,10 @@ impl VMDispatchTables {
         if let Some(hit) = self.size_formulas.get(key) {
             return Ok(hit);
         }
-        self.partial_type_size_visiting(key, &mut Visiting::new())
+        self.partial_type_size_impl(key, &mut Visiting::new())
     }
 
-    /// Interpret an arena type term into its size formula over the ambient (function)
-    /// parameters — op1 for terms. Datatype nodes resolve through the cache.
-    pub(crate) fn interpret_type_visiting(
+    pub(crate) fn size_formula_impl(
         &self,
         ty: &ArenaType,
         visiting: &mut Visiting,
@@ -590,30 +607,38 @@ impl VMDispatchTables {
             ArenaType::TyParam(idx) => PartialTypeSizeFormula::parameter(*idx),
             ArenaType::Vector(inner)
             | ArenaType::Reference(inner)
-            | ArenaType::MutableReference(inner) => {
-                self.interpret_type_visiting(inner, visiting)?.wrap()
-            }
-            ArenaType::Datatype(key) => self.partial_type_size_visiting(key, visiting)?,
+            | ArenaType::MutableReference(inner) => self.size_formula_impl(inner, visiting)?.wrap(),
+            ArenaType::Datatype(key) => self.partial_type_size_impl(key, visiting)?,
             ArenaType::DatatypeInstantiation(inst) => {
                 let (key, args) = &**inst;
                 let arg_forms = args
                     .iter()
-                    .map(|arg| self.interpret_type_visiting(arg, visiting))
+                    .map(|arg| self.size_formula_impl(arg, visiting))
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                self.partial_type_size_visiting(key, visiting)?
+                self.partial_type_size_impl(key, visiting)?
                     .substitute(&arg_forms)?
             }
-            _ => PartialTypeSizeFormula::primitive(),
+            ArenaType::Bool
+            | ArenaType::U8
+            | ArenaType::U16
+            | ArenaType::U32
+            | ArenaType::U64
+            | ArenaType::U128
+            | ArenaType::U256
+            | ArenaType::Address
+            | ArenaType::Signer => PartialTypeSizeFormula::primitive(),
         })
     }
 
-    /// Interpret an arena type term into its size formula over the ambient parameters.
-    pub(crate) fn interpret_type(&self, ty: &ArenaType) -> PartialVMResult<PartialTypeSizeFormula> {
-        self.interpret_type_visiting(ty, &mut Visiting::new())
+    /// Interpret an arena type term into its size formula over the ambient (function)
+    /// parameters.
+    /// Note: datatype nodes resolve through the cache.
+    pub(crate) fn size_formula(&self, ty: &ArenaType) -> PartialVMResult<PartialTypeSizeFormula> {
+        self.size_formula_impl(ty, &mut Visiting::new())
     }
 
-    /// The four sizes of a concrete runtime type — op1 followed by op2 in one pass, since a
-    /// concrete type has no free parameters. Datatype nodes resolve through the cache.
+    /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
+    /// resolve through the cache.
     pub(crate) fn type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
         Ok(match ty {
             Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -634,7 +659,15 @@ impl VMDispatchTables {
                     "Type parameter should be fully resolved"
                 ));
             }
-            _ => TypeSize::PRIMITIVE,
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer => TypeSize::PRIMITIVE,
         })
     }
 
@@ -648,14 +681,15 @@ impl VMDispatchTables {
         Ok(())
     }
 
-    /// Check the `value_depth` of a `vector<elem>` value about to be created at `VecPack`,
-    /// without building the type: the element term is interpreted against the frame and solved.
-    pub(crate) fn check_instantiated_value_depth(
+    /// Check the `value_depth` of a `vector<elem>` value about to be created at `VecPack`, without
+    /// building the type. The `+ 1` accounts for the vector wrapping the element value.
+    pub(crate) fn check_vector_value_depth(
         &self,
         elem: &ArenaType,
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<()> {
-        let elem_size = self.interpret_type(elem)?.solve(arg_sizes)?;
+        let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
+        let elem_size = self.size_formula(elem)?.solve(&arg_sizes)?;
         self.check_value_depth(elem_size.value_depth.saturating_add(1))
     }
 
@@ -668,12 +702,12 @@ impl VMDispatchTables {
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
         tag_type: DatatypeTagType,
-        type_size: &mut TraversalBudget,
+        type_size_budget: &mut TraversalBudget,
     ) -> PartialVMResult<StructTag> {
-        type_size.check()?;
+        type_size_budget.check()?;
         let type_params = ty_args
             .iter()
-            .map(|ty| self.type_to_type_tag_impl(ty, tag_type, type_size))
+            .map(|ty| self.type_to_type_tag_impl(ty, tag_type, type_size_budget))
             .collect::<PartialVMResult<Vec<_>>>()?;
         let datatype = self.resolve_type(datatype_name)?.to_ref();
 
@@ -696,7 +730,7 @@ impl VMDispatchTables {
             name,
             type_params,
         };
-        type_size.check()?;
+        type_size_budget.check()?;
         Ok(tag)
     }
 
@@ -704,9 +738,9 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
         tag_type: DatatypeTagType,
-        type_size: &mut TraversalBudget,
+        type_size_budget: &mut TraversalBudget,
     ) -> PartialVMResult<TypeTag> {
-        type_size.enter_type(|type_size| {
+        type_size_budget.enter_type(|type_size_budget| {
             Ok(match ty {
                 Type::Bool => TypeTag::Bool,
                 Type::U8 => TypeTag::U8,
@@ -717,20 +751,25 @@ impl VMDispatchTables {
                 Type::U256 => TypeTag::U256,
                 Type::Address => TypeTag::Address,
                 Type::Signer => TypeTag::Signer,
-                Type::Vector(ty) => TypeTag::Vector(Box::new(
-                    self.type_to_type_tag_impl(ty, tag_type, type_size)?,
-                )),
+                Type::Vector(ty) => TypeTag::Vector(Box::new(self.type_to_type_tag_impl(
+                    ty,
+                    tag_type,
+                    type_size_budget,
+                )?)),
                 Type::Datatype(gidx) => TypeTag::Struct(Box::new(self.datatype_to_type_tag_impl(
                     gidx,
                     &[],
                     tag_type,
-                    type_size,
+                    type_size_budget,
                 )?)),
                 Type::DatatypeInstantiation(struct_inst) => {
                     let (gidx, ty_args) = &**struct_inst;
-                    TypeTag::Struct(Box::new(
-                        self.datatype_to_type_tag_impl(gidx, ty_args, tag_type, type_size)?,
-                    ))
+                    TypeTag::Struct(Box::new(self.datatype_to_type_tag_impl(
+                        gidx,
+                        ty_args,
+                        tag_type,
+                        type_size_budget,
+                    )?))
                 }
                 Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                     return Err(partial_vm_error!(
@@ -1024,6 +1063,21 @@ impl VMDispatchTables {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
+    /// The one checked substitution primitive: realize `term` against `ty_args` and return both
+    /// the built type and its size, having first checked the size against the syntactic limits.
+    /// Every route to a substituted type goes through here.
+    fn realize_type(
+        &self,
+        term: &ArenaType,
+        ty_args: &[(Type, TypeSize)],
+    ) -> PartialVMResult<(Type, TypeSize)> {
+        let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
+        let size = self.size_formula(term)?.solve(&arg_sizes)?;
+        check_syntactic_limits(size.type_size, size.type_depth)?;
+        let arg_types: Vec<Type> = ty_args.iter().map(|(ty, _)| ty.clone()).collect();
+        Ok((term.subst_unchecked(&arg_types)?, size))
+    }
+
     /// Realize a generic function's callee type arguments and measure each one, producing the
     /// `(Type, TypeSize)` pairs the callee frame is built from. Every size is solved from the
     /// term's formula against the caller frame's argument sizes — the realized type is never
@@ -1032,16 +1086,15 @@ impl VMDispatchTables {
     pub(crate) fn instantiate_generic_function(
         &self,
         fun_inst: &FunctionInstantiation,
-        arg_types: &[Type],
-        arg_sizes: &[TypeSize],
-    ) -> PartialVMResult<Vec<TypeAndSize>> {
+        ty_args: &[(Type, TypeSize)],
+    ) -> PartialVMResult<Vec<(Type, TypeSize)>> {
         let terms = fun_inst.instantiation.to_ref();
         let mut result = Vec::with_capacity(terms.len());
 
         // The whole instantiation — caller arguments plus the callee arguments realized below —
         // must fit within the instantiation-node budget. Pure arithmetic over the sizes.
         let mut sum_nodes = 1u64;
-        for size in arg_sizes.iter() {
+        for (_, size) in ty_args.iter() {
             sum_nodes = sum_nodes.saturating_add(size.type_size);
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
@@ -1049,37 +1102,24 @@ impl VMDispatchTables {
         }
 
         for term in terms.iter() {
-            let size = self.interpret_type(term)?.solve(arg_sizes)?;
-            check_syntactic_limits(size.type_size, size.type_depth)?;
+            let (ty, size) = self.realize_type(term, ty_args)?;
             sum_nodes = sum_nodes.saturating_add(size.type_size);
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
             }
-            let ty = if arg_types.is_empty() {
-                term.to_type_unchecked()
-            } else {
-                term.subst_unchecked(arg_types)?
-            };
             result.push((ty, size));
         }
         Ok(result)
     }
 
-    /// Realize a single term with `arg_types` substituted for its parameters, checking its
-    /// predicted syntactic sizes against the limits first — the type is built only if it fits.
+    /// Realize a single term with `ty_args`, checking its predicted syntactic sizes against the
+    /// limits first — the type is built only if it fits.
     pub(crate) fn subst_type(
         &self,
         term: &ArenaType,
-        arg_types: &[Type],
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<Type> {
-        let size = self.interpret_type(term)?.solve(arg_sizes)?;
-        check_syntactic_limits(size.type_size, size.type_depth)?;
-        if arg_types.is_empty() {
-            Ok(term.to_type_unchecked())
-        } else {
-            term.subst_unchecked(arg_types)
-        }
+        Ok(self.realize_type(term, ty_args)?.0)
     }
 
     /// Check a struct instantiation (the `Pack` family of instructions) against the limits
@@ -1087,12 +1127,12 @@ impl VMDispatchTables {
     pub(crate) fn check_struct_instantiation(
         &self,
         struct_inst: &StructInstantiation,
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<()> {
         self.check_instantiation(
             &struct_inst.def_vtable_key,
             struct_inst.type_params.to_ref(),
-            arg_sizes,
+            ty_args,
         )
     }
 
@@ -1101,48 +1141,44 @@ impl VMDispatchTables {
     pub(crate) fn check_variant_instantiation(
         &self,
         variant_inst: &VariantInstantiation,
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<()> {
         let enum_inst = variant_inst.enum_inst.to_ref();
         self.check_instantiation(
             &enum_inst.def_vtable_key,
             enum_inst.type_params.to_ref(),
-            arg_sizes,
+            ty_args,
         )
     }
 
-    /// Realize a struct instantiation's runtime type. Observational (the tracer): execution
-    /// itself only *checks* instantiations (`check_struct_instantiation`) and never builds
-    /// them.
+    /// Realize a struct instantiation's runtime type, checking the instantiation as a value of it
+    /// is about to exist. Observational (the tracer).
     pub(crate) fn instantiate_struct_type(
         &self,
         struct_inst: &StructInstantiation,
-        arg_types: &[Type],
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<Type> {
+        self.check_struct_instantiation(struct_inst, ty_args)?;
         self.instantiate_datatype_type(
             &struct_inst.def_vtable_key,
             struct_inst.type_params.to_ref(),
-            arg_types,
-            arg_sizes,
+            ty_args,
         )
     }
 
-    /// Realize an enum instantiation's runtime type. Observational (the tracer): execution
-    /// itself only *checks* instantiations (`check_variant_instantiation`) and never builds
-    /// them.
+    /// Realize an enum instantiation's runtime type, checking the instantiation as a value of it
+    /// is about to exist. Observational (the tracer).
     pub(crate) fn instantiate_enum_type(
         &self,
         variant_inst: &VariantInstantiation,
-        arg_types: &[Type],
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<Type> {
+        self.check_variant_instantiation(variant_inst, ty_args)?;
         let enum_inst = variant_inst.enum_inst.to_ref();
         self.instantiate_datatype_type(
             &enum_inst.def_vtable_key,
             enum_inst.type_params.to_ref(),
-            arg_types,
-            arg_sizes,
+            ty_args,
         )
     }
 
@@ -1150,12 +1186,11 @@ impl VMDispatchTables {
         &self,
         datatype_key: &VirtualTableKey,
         type_params: &[ArenaType],
-        arg_types: &[Type],
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<Type> {
         let instantiation = type_params
             .iter()
-            .map(|term| self.subst_type(term, arg_types, arg_sizes))
+            .map(|term| self.subst_type(term, ty_args))
             .collect::<PartialVMResult<Vec<_>>>()?;
         Ok(Type::DatatypeInstantiation(Box::new((
             datatype_key.clone(),
@@ -1171,13 +1206,14 @@ impl VMDispatchTables {
         &self,
         datatype_key: &VirtualTableKey,
         type_params: &[ArenaType],
-        arg_sizes: &[TypeSize],
+        ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<()> {
+        let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
         // Realize each type-parameter term's size against the frame's argument sizes, checking
         // each against the syntactic limits as it is computed. Nothing is built.
         let mut param_sizes = Vec::with_capacity(type_params.len());
         for term in type_params.iter() {
-            let size = self.interpret_type(term)?.solve(arg_sizes)?;
+            let size = self.size_formula(term)?.solve(&arg_sizes)?;
             check_syntactic_limits(size.type_size, size.type_depth)?;
             param_sizes.push(size);
         }

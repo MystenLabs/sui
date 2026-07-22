@@ -992,9 +992,11 @@ impl ArenaType {
         Ok(self.to_type_unchecked())
     }
 
-    /// Deep-copy into a runtime type. The traversal (and recursion depth) is bounded by the
-    /// size of `self`, which was already bounded when the arena type was built at translation
-    /// time.
+    /// Deep-copy into a runtime type without checking limits. The traversal (and recursion
+    /// depth) is bounded by the size of `self`, which was already bounded when the arena type
+    /// was built at translation time. Crate-private by design: the checked routes
+    /// ([`ArenaType::to_type`], the dispatch tables' `subst_type`) verify the term's sizes
+    /// against the limits first.
     pub(crate) fn to_type_unchecked(&self) -> Type {
         match self {
             ArenaType::TyParam(idx) => Type::TyParam(*idx),
@@ -1184,10 +1186,9 @@ impl DatatypeDescriptor {
 
 impl Type {
     /// The syntactic `(type_size, type_depth)` of this term, counting every node (datatype
-    /// heads are single nodes; fields are not traversed). Crate-private by design: measurement
-    /// is the dispatch tables' concern — external callers go through them (e.g.
-    /// `VMDispatchTables::sizes_of_type`), so every size and limit decision flows through one
-    /// place.
+    /// heads are single nodes; fields are not traversed). Kept only for legacy gas metering via
+    /// [`Type::size`]; new size and limit decisions flow through the dispatch tables
+    /// (`VMDispatchTables::type_size_of`).
     pub(crate) fn syntactic_sizes(&self) -> (u64, u64) {
         match self {
             Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
@@ -1205,16 +1206,26 @@ impl Type {
                 }
                 (size, depth)
             }
-            _ => (1, 1),
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer
+            | Type::Datatype(_)
+            | Type::TyParam(_) => (1, 1),
         }
     }
 }
 
 impl ArenaType {
-    /// Substitute `ty_args` into this term. The traversal is bounded by the size of `self`
-    /// (fixed at translation time); size/limit checking against the substituted result is the
-    /// dispatch tables' concern (the interpreter over types), performed before this is called
-    /// on any hot path.
+    /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits.
+    /// Crate-private by design: every route to a substituted type (the dispatch tables'
+    /// `subst_type` and `instantiate_generic_function`) checks a predicted size against the
+    /// limits before calling this.
     pub(crate) fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
         Ok(match self {
             ArenaType::TyParam(idx) => match ty_args.get(*idx as usize) {

@@ -424,15 +424,15 @@ impl<'extensions> MoveVM<'extensions> {
             .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
-        // Substitution is limit-checked: each instantiated type's predicted size is checked
-        // against the type-traversal limits before it is built.
-        let instantiate = |ty: &ArenaType| {
-            if ty_args.is_empty() {
-                ty.to_type()
-            } else {
-                ty.subst_unchecked(ty_args)
-            }
-        };
+        // Pair the type arguments with their sizes so substitution goes through the checked
+        // dispatch-table path, which bounds each realized type against the traversal limits
+        // before building it.
+        let ty_args = ty_args
+            .iter()
+            .map(|ty| Ok((ty.clone(), self.virtual_tables.type_size_of(ty)?)))
+            .collect::<PartialVMResult<Vec<_>>>()
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+        let instantiate = |ty: &ArenaType| self.virtual_tables.subst_type(ty, &ty_args);
 
         let parameters = fun_ref
             .parameters

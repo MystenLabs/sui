@@ -73,11 +73,14 @@ pub(crate) fn run(
             });
             return_result.map(|values| values.into_iter().collect())
         } else {
-            // Compute the size of every entry-point type argument once; every limit check
-            // against them during execution is pure arithmetic from here on.
-            let ty_arg_sizes = ty_args
-                .iter()
-                .map(|ty| vtables.type_size_of(ty))
+            // Pair every entry-point type argument with its size once, keeping the two together;
+            // every limit check against them during execution is pure arithmetic from here on.
+            let ty_args = ty_args
+                .into_iter()
+                .map(|ty| {
+                    let size = vtables.type_size_of(&ty)?;
+                    Ok((ty, size))
+                })
                 .collect::<PartialVMResult<Vec<_>>>()
                 .map_err(|e| {
                     e.at_code_offset(fun_ref.index(), 0)
@@ -85,7 +88,7 @@ pub(crate) fn run(
                             fun_ref.module_id(&vtables.interner).clone(),
                         ))
                 })?;
-            let call_stack = CallStack::new(function, ty_args, ty_arg_sizes, args).map_err(|e| {
+            let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
                     .finish(Location::Module(
                         fun_ref.module_id(&vtables.interner).clone(),
