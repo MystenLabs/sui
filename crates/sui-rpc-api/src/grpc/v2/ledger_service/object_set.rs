@@ -16,6 +16,7 @@ use crate::reader::{StateReader, TransactionRead};
 pub(crate) fn mask_requests_object_set(mask: &FieldMaskTree) -> bool {
     mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
         || mask.contains(ExecutedTransaction::EFFECTS_FIELD)
+        || mask.contains(ExecutedTransaction::OBJECTS_FIELD)
 }
 
 /// Object keys read or written by this transaction, in the same order returned
