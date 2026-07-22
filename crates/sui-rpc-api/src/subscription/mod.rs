@@ -98,7 +98,7 @@ impl SubscriptionTerminationReason {
 pub(crate) struct SubscriptionLifecycleGuard {
     kind: SubscriptionKind,
     filtered: bool,
-    counters: Arc<SubscriberCounts>,
+    reservation: SubscriberReservation,
     inflight_subscribers: prometheus::IntGauge,
     terminations_total: prometheus::IntCounterVec,
     termination_reason: SubscriptionTerminationReason,
@@ -108,20 +108,10 @@ impl SubscriptionLifecycleGuard {
     pub(crate) fn new(
         kind: SubscriptionKind,
         filtered: bool,
-        counters: Arc<SubscriberCounts>,
+        reservation: SubscriberReservation,
         metrics: &SubscriptionMetrics,
     ) -> Self {
-        counters.total.fetch_add(1, Ordering::Relaxed);
-        if filtered {
-            match kind {
-                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
-                    counters.filtered_tx.fetch_add(1, Ordering::Relaxed);
-                }
-                SubscriptionKind::Events => {
-                    counters.filtered_event.fetch_add(1, Ordering::Relaxed);
-                }
-            }
-        }
+        reservation.increment_resident_counts(kind, filtered);
         let inflight_subscribers = metrics
             .inflight_subscribers
             .with_label_values(&[kind.metric_label(), if filtered { "true" } else { "false" }]);
@@ -130,7 +120,7 @@ impl SubscriptionLifecycleGuard {
         Self {
             kind,
             filtered,
-            counters,
+            reservation,
             inflight_subscribers,
             terminations_total: metrics.terminations_total.clone(),
             termination_reason: SubscriptionTerminationReason::ServiceShutdown,
@@ -147,17 +137,8 @@ impl SubscriptionLifecycleGuard {
 
 impl Drop for SubscriptionLifecycleGuard {
     fn drop(&mut self) {
-        self.counters.total.fetch_sub(1, Ordering::Relaxed);
-        if self.filtered {
-            match self.kind {
-                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
-                    self.counters.filtered_tx.fetch_sub(1, Ordering::Relaxed);
-                }
-                SubscriptionKind::Events => {
-                    self.counters.filtered_event.fetch_sub(1, Ordering::Relaxed);
-                }
-            }
-        }
+        self.reservation
+            .decrement_resident_counts(self.kind, self.filtered);
         self.inflight_subscribers.dec();
         self.terminations_total
             .with_label_values(&[
@@ -264,6 +245,17 @@ impl SubscriptionMatches {
 struct SubscriptionRequest {
     spec: SubscriptionSpec,
     response_sender: oneshot::Sender<mpsc::Receiver<SubscriptionUpdate>>,
+    reservation: SubscriberReservation,
+}
+
+/// Every request owns a reservation, so pending plus resident subscriptions
+/// remain bounded by the configured subscriber limit without a transport bound.
+#[allow(clippy::disallowed_methods)]
+fn subscription_admission_channel() -> (
+    mpsc::UnboundedSender<SubscriptionRequest>,
+    mpsc::UnboundedReceiver<SubscriptionRequest>,
+) {
+    mpsc::unbounded_channel()
 }
 
 enum AdmissionState {
@@ -285,9 +277,8 @@ enum SubscriptionServiceEvent {
 
 #[derive(Clone)]
 pub struct SubscriptionServiceHandle {
-    admission_sender: mpsc::Sender<SubscriptionRequest>,
+    admission_sender: mpsc::UnboundedSender<SubscriptionRequest>,
     counters: Arc<SubscriberCounts>,
-    max_subscribers: usize,
     metrics: SubscriptionMetrics,
 }
 
@@ -296,20 +287,24 @@ impl SubscriptionServiceHandle {
         &self,
         spec: SubscriptionSpec,
     ) -> Option<mpsc::Receiver<SubscriptionUpdate>> {
-        if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
-            trace!(
-                "failed to register new subscriber: hit maximum number of subscribers {}",
-                self.max_subscribers
-            );
-            return None;
-        }
+        let reservation = match self.counters.try_reserve() {
+            Some(reservation) => reservation,
+            None => {
+                trace!(
+                    "failed to register new subscriber: hit maximum number of subscribers {}",
+                    self.counters.limit
+                );
+                return None;
+            }
+        };
 
         let (response_sender, response_receiver) = oneshot::channel();
         let request = SubscriptionRequest {
             spec,
             response_sender,
+            reservation,
         };
-        self.admission_sender.try_send(request).ok()?;
+        self.admission_sender.send(request).ok()?;
 
         response_receiver.await.ok()
     }
@@ -322,15 +317,86 @@ impl SubscriptionServiceHandle {
     }
 }
 
-/// Live subscriber counts shared dispatcher-to-shards, and the source of
-/// truth for admission control (`total` vs [`MAX_SUBSCRIBERS`]) and for
-/// gating expensive per-checkpoint key extraction (the per-space filtered
-/// counts).
-#[derive(Default)]
+/// Shared subscription admission and lifecycle accounting.
+///
+/// `reserved` is the admission authority and counts pending, in-flight, and
+/// resident subscriptions. `total` and the filtered counters track resident
+/// subscriptions through their lifecycle.
 pub(crate) struct SubscriberCounts {
+    limit: usize,
+    reserved: AtomicUsize,
     total: AtomicUsize,
     filtered_tx: AtomicUsize,
     filtered_event: AtomicUsize,
+}
+
+impl SubscriberCounts {
+    fn new(limit: usize) -> Self {
+        Self {
+            limit,
+            reserved: AtomicUsize::new(0),
+            total: AtomicUsize::new(0),
+            filtered_tx: AtomicUsize::new(0),
+            filtered_event: AtomicUsize::new(0),
+        }
+    }
+
+    fn try_reserve(self: &Arc<Self>) -> Option<SubscriberReservation> {
+        self.reserved
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |reserved| {
+                (reserved < self.limit).then_some(reserved + 1)
+            })
+            .ok()?;
+        Some(SubscriberReservation {
+            counters: Arc::clone(self),
+        })
+    }
+
+    #[cfg(test)]
+    fn reserved(&self) -> usize {
+        self.reserved.load(Ordering::Relaxed)
+    }
+}
+
+pub(crate) struct SubscriberReservation {
+    counters: Arc<SubscriberCounts>,
+}
+
+impl SubscriberReservation {
+    fn increment_resident_counts(&self, kind: SubscriptionKind, filtered: bool) {
+        self.counters.total.fetch_add(1, Ordering::Relaxed);
+        if filtered {
+            match kind {
+                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
+                    self.counters.filtered_tx.fetch_add(1, Ordering::Relaxed);
+                }
+                SubscriptionKind::Events => {
+                    self.counters.filtered_event.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+
+    fn decrement_resident_counts(&self, kind: SubscriptionKind, filtered: bool) {
+        self.counters.total.fetch_sub(1, Ordering::Relaxed);
+        if filtered {
+            match kind {
+                SubscriptionKind::Checkpoints | SubscriptionKind::Transactions => {
+                    self.counters.filtered_tx.fetch_sub(1, Ordering::Relaxed);
+                }
+                SubscriptionKind::Events => {
+                    self.counters.filtered_event.fetch_sub(1, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+}
+
+impl Drop for SubscriberReservation {
+    fn drop(&mut self) {
+        let previous = self.counters.reserved.fetch_sub(1, Ordering::Relaxed);
+        debug_assert!(previous > 0, "subscriber reservation count underflow");
+    }
 }
 
 enum ShardMsg {
@@ -402,7 +468,7 @@ pub struct SubscriptionService {
     // and observe `RecvError::Lagged`; checkpoints delivered between lags arrive
     // in-order.
     checkpoint_mailbox: broadcast::Receiver<Arc<Checkpoint>>,
-    admission_mailbox: mpsc::Receiver<SubscriptionRequest>,
+    admission_mailbox: mpsc::UnboundedReceiver<SubscriptionRequest>,
     /// Registration targets: one mailbox per shard task, each owning a
     /// partition of the subscribers.
     shards: Vec<mpsc::Sender<ShardMsg>>,
@@ -411,8 +477,6 @@ pub struct SubscriptionService {
     /// Filtered-subscriber counts per key space, shared with the shards;
     /// gates per-checkpoint key extraction.
     counters: Arc<SubscriberCounts>,
-    /// Global admission limit across all shards.
-    max_subscribers: usize,
 
     // When set, delivery of a checkpoint waits until the index has committed
     // it (see [`IndexedCheckpointFn`]). `None` preserves the immediate-delivery
@@ -438,17 +502,12 @@ impl SubscriptionService {
     ) {
         let metrics = SubscriptionMetrics::new(registry);
         let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
-        // One pending slot per supported subscriber absorbs a full reconnect burst
-        // without forcing admissible clients to retry. Keep the admission limit
-        // unchanged while clamping the mailbox to Tokio's valid capacity range.
-        let admission_capacity = max_subscribers.clamp(1, tokio::sync::Semaphore::MAX_PERMITS);
         let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
-        let (admission_sender, admission_mailbox) = mpsc::channel(admission_capacity);
-        let counters = Arc::new(SubscriberCounts::default());
+        let (admission_sender, admission_mailbox) = subscription_admission_channel();
+        let counters = Arc::new(SubscriberCounts::new(max_subscribers));
         let handle = SubscriptionServiceHandle {
             admission_sender,
             counters: Arc::clone(&counters),
-            max_subscribers,
             metrics: metrics.clone(),
         };
 
@@ -477,7 +536,6 @@ impl SubscriptionService {
                 shards: shard_senders,
                 next_shard: 0,
                 counters,
-                max_subscribers,
                 indexed_checkpoint,
                 metrics,
             }
@@ -772,14 +830,6 @@ impl SubscriptionService {
             return;
         }
 
-        if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
-            trace!(
-                "failed to register new subscriber: hit maximum number of subscribers {}",
-                self.max_subscribers
-            );
-            return;
-        }
-
         let (sender, receiver) = mpsc::channel(SUBSCRIPTION_CHANNEL_SIZE);
         if request.response_sender.send(receiver).is_err() {
             trace!("failed to register new subscriber: request was cancelled");
@@ -789,12 +839,8 @@ impl SubscriptionService {
         trace!("successfully registered new subscriber");
         let kind = request.spec.kind;
         let filtered = request.spec.query.is_some();
-        let guard = SubscriptionLifecycleGuard::new(
-            kind,
-            filtered,
-            Arc::clone(&self.counters),
-            &self.metrics,
-        );
+        let guard =
+            SubscriptionLifecycleGuard::new(kind, filtered, request.reservation, &self.metrics);
         permit.send(ShardMsg::Register {
             spec: request.spec,
             sender,
@@ -806,14 +852,6 @@ impl SubscriptionService {
     fn try_admit(&mut self, request: SubscriptionRequest) -> AdmissionState {
         if request.response_sender.is_closed() {
             trace!("failed to register new subscriber: request was cancelled");
-            return AdmissionState::Accepting;
-        }
-
-        if self.counters.total.load(Ordering::Relaxed) >= self.max_subscribers {
-            trace!(
-                "failed to register new subscriber: hit maximum number of subscribers {}",
-                self.max_subscribers
-            );
             return AdmissionState::Accepting;
         }
 
@@ -883,8 +921,13 @@ mod tests {
         watermark_interval: u32,
         indexed_checkpoint: Option<IndexedCheckpointFn>,
     ) -> (SubscriptionService, Vec<SubscriptionShard>) {
-        let (service, _checkpoint_sender, _request_sender, shards) =
-            actor_service_with(shard_count, watermark_interval, indexed_checkpoint, 16, 16);
+        let (service, _checkpoint_sender, _request_sender, shards) = actor_service_with(
+            shard_count,
+            watermark_interval,
+            indexed_checkpoint,
+            16,
+            DEFAULT_MAX_SUBSCRIBERS,
+        );
         (service, shards)
     }
 
@@ -893,17 +936,17 @@ mod tests {
         watermark_interval: u32,
         indexed_checkpoint: Option<IndexedCheckpointFn>,
         checkpoint_capacity: usize,
-        admission_capacity: usize,
+        max_subscribers: usize,
     ) -> (
         SubscriptionService,
         broadcast::Sender<Arc<Checkpoint>>,
-        mpsc::Sender<SubscriptionRequest>,
+        mpsc::UnboundedSender<SubscriptionRequest>,
         Vec<SubscriptionShard>,
     ) {
         let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(checkpoint_capacity);
-        let (request_sender, admission_mailbox) = mpsc::channel(admission_capacity);
+        let (request_sender, admission_mailbox) = subscription_admission_channel();
         let metrics = SubscriptionMetrics::new(&prometheus::Registry::new());
-        let counters = Arc::new(SubscriberCounts::default());
+        let counters = Arc::new(SubscriberCounts::new(max_subscribers));
 
         let mut shard_senders = Vec::with_capacity(shard_count);
         let mut shards = Vec::with_capacity(shard_count);
@@ -923,7 +966,6 @@ mod tests {
             shards: shard_senders,
             next_shard: 0,
             counters,
-            max_subscribers: DEFAULT_MAX_SUBSCRIBERS,
             indexed_checkpoint,
             metrics,
         };
@@ -1003,6 +1045,21 @@ mod tests {
         }
     }
 
+    fn subscription_request(
+        counters: &Arc<SubscriberCounts>,
+        spec: SubscriptionSpec,
+        response_sender: oneshot::Sender<mpsc::Receiver<SubscriptionUpdate>>,
+    ) -> SubscriptionRequest {
+        let reservation = counters
+            .try_reserve()
+            .expect("test request requires subscriber capacity");
+        SubscriptionRequest {
+            spec,
+            response_sender,
+            reservation,
+        }
+    }
+
     /// Register a subscriber through the real admission path (cap check,
     /// gauge/space-counter increments, shard selection, and Register enqueue),
     /// returning the receiving half a client would hold, or `None` when the
@@ -1011,11 +1068,13 @@ mod tests {
         service: &mut SubscriptionService,
         spec: SubscriptionSpec,
     ) -> Option<mpsc::Receiver<SubscriptionUpdate>> {
+        let reservation = service.counters.try_reserve()?;
         let (response_sender, response_receiver) = oneshot::channel();
         assert!(matches!(
             service.try_admit(SubscriptionRequest {
                 spec,
                 response_sender,
+                reservation,
             }),
             AdmissionState::Accepting
         ));
@@ -1053,19 +1112,6 @@ mod tests {
         }
     }
 
-    async fn wait_for_admission_capacity(
-        sender: &mpsc::Sender<SubscriptionRequest>,
-        expected: usize,
-    ) {
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while sender.capacity() != expected {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("admission sender did not reach expected capacity");
-    }
-
     fn matched_sequence_number(update: SubscriptionUpdate) -> u64 {
         match update {
             SubscriptionUpdate::Matched(matched) => {
@@ -1090,39 +1136,101 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn admission_queue_capacity_tracks_subscriber_limit() {
-        let max_subscribers = 200_000;
-        let (_checkpoint_sender, handle) = SubscriptionService::build(
-            &prometheus::Registry::new(),
-            None,
-            None,
-            Some(max_subscribers),
-            Some(1),
-        );
-        assert_eq!(handle.admission_sender.max_capacity(), max_subscribers);
+    #[test]
+    fn subscriber_reservations_are_bounded_and_released() {
+        let counters = Arc::new(SubscriberCounts::new(8));
+        let attempted = Arc::new(std::sync::Barrier::new(65));
+        let release = Arc::new(std::sync::Barrier::new(65));
 
-        let (_disabled_checkpoint_sender, disabled_handle) =
+        std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(64);
+            for _ in 0..64 {
+                let counters = Arc::clone(&counters);
+                let attempted = Arc::clone(&attempted);
+                let release = Arc::clone(&release);
+                handles.push(scope.spawn(move || {
+                    let reservation = counters.try_reserve();
+                    attempted.wait();
+                    release.wait();
+                    reservation.is_some()
+                }));
+            }
+
+            attempted.wait();
+            assert_eq!(counters.reserved(), 8);
+            release.wait();
+
+            let successful_reservations = handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .filter(|success| *success)
+                .count();
+            assert_eq!(successful_reservations, 8);
+        });
+
+        assert_eq!(counters.reserved(), 0);
+    }
+
+    #[tokio::test]
+    async fn pending_request_reserves_final_subscriber_slot() {
+        let counters = Arc::new(SubscriberCounts::new(3));
+        let active_reservations = [
+            counters.try_reserve().unwrap(),
+            counters.try_reserve().unwrap(),
+        ];
+        let (admission_sender, mailbox) = subscription_admission_channel();
+        let handle = SubscriptionServiceHandle {
+            admission_sender,
+            counters: Arc::clone(&counters),
+            metrics: SubscriptionMetrics::new(&prometheus::Registry::new()),
+        };
+
+        let pending_handle = handle.clone();
+        let pending_registration =
+            tokio::spawn(async move { pending_handle.register_subscription(unfiltered()).await });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while mailbox.len() != 1 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("pending registration did not enter admission");
+
+        assert_eq!(counters.reserved(), 3);
+        let rejected = tokio::time::timeout(
+            Duration::from_secs(1),
+            handle.register_subscription(unfiltered()),
+        )
+        .await
+        .expect("the final subscriber slot is already reserved");
+        assert!(rejected.is_none());
+        assert_eq!(mailbox.len(), 1);
+
+        drop(mailbox);
+        assert!(pending_registration.await.unwrap().is_none());
+        assert_eq!(counters.reserved(), 2);
+
+        drop(active_reservations);
+        assert_eq!(counters.reserved(), 0);
+    }
+
+    #[tokio::test]
+    async fn zero_subscriber_limit_rejects_before_ingress() {
+        let (_checkpoint_sender, handle) =
             SubscriptionService::build(&prometheus::Registry::new(), None, None, Some(0), Some(1));
-        assert_eq!(disabled_handle.admission_sender.max_capacity(), 1);
-        assert!(
-            disabled_handle
-                .register_subscription(unfiltered())
-                .await
-                .is_none()
-        );
+        assert!(handle.counters.try_reserve().is_none());
+        assert!(handle.register_subscription(unfiltered()).await.is_none());
+        assert_eq!(handle.counters.reserved(), 0);
     }
 
     #[tokio::test]
     async fn public_admission_rejects_before_queue_at_limit() {
-        let max_subscribers = 4;
-        let (sender, mut mailbox) = mpsc::channel(max_subscribers);
-        let counters = Arc::new(SubscriberCounts::default());
-        counters.total.store(max_subscribers, Ordering::Relaxed);
+        let counters = Arc::new(SubscriberCounts::new(1));
+        let held_reservation = counters.try_reserve().unwrap();
+        let (admission_sender, mut mailbox) = subscription_admission_channel();
         let handle = SubscriptionServiceHandle {
-            admission_sender: sender,
-            counters,
-            max_subscribers,
+            admission_sender,
+            counters: Arc::clone(&counters),
             metrics: SubscriptionMetrics::new(&prometheus::Registry::new()),
         };
 
@@ -1137,54 +1245,42 @@ mod tests {
             mailbox.try_recv(),
             Err(mpsc::error::TryRecvError::Empty)
         ));
+
+        drop(held_reservation);
+        assert_eq!(counters.reserved(), 0);
     }
 
     #[tokio::test]
-    async fn full_public_admission_queue_returns_none_promptly() {
-        // Occupy the only ingress slot so the next registration must take the
-        // public overload path.
-        let (sender, _mailbox) = mpsc::channel(1);
-        let (occupied_sender, _occupied_receiver) = oneshot::channel();
-        assert!(
-            sender
-                .try_send(SubscriptionRequest {
-                    spec: unfiltered(),
-                    response_sender: occupied_sender,
-                })
-                .is_ok()
-        );
+    async fn closed_public_admission_queue_releases_reservation() {
+        let counters = Arc::new(SubscriberCounts::new(1));
+        let (admission_sender, mailbox) = subscription_admission_channel();
+        drop(mailbox);
         let handle = SubscriptionServiceHandle {
-            admission_sender: sender,
-            counters: Arc::new(SubscriberCounts::default()),
-            max_subscribers: DEFAULT_MAX_SUBSCRIBERS,
+            admission_sender,
+            counters: Arc::clone(&counters),
             metrics: SubscriptionMetrics::new(&prometheus::Registry::new()),
         };
 
-        // The timeout guards against regressing from immediate rejection to
-        // waiting for admission capacity.
-        let result = tokio::time::timeout(
-            Duration::from_secs(1),
-            handle.register_subscription(unfiltered()),
-        )
-        .await
-        .expect("a full admission queue must not make the caller wait");
+        let result = handle.register_subscription(unfiltered()).await;
         assert!(result.is_none());
+        assert_eq!(counters.reserved(), 0);
     }
 
     #[test]
     fn admission_turn_is_bounded_and_drains_ready_requests() {
         let (mut service, _checkpoint_sender, request_sender, _shards) =
-            actor_service_with(3, 25, None, 4, ADMISSION_TURN_LIMIT + 1);
+            actor_service_with(3, 25, None, 4, DEFAULT_MAX_SUBSCRIBERS);
         let mut response_receivers = Vec::with_capacity(ADMISSION_TURN_LIMIT + 1);
 
         for _ in 0..=ADMISSION_TURN_LIMIT {
             let (response_sender, response_receiver) = oneshot::channel();
             assert!(
                 request_sender
-                    .try_send(SubscriptionRequest {
-                        spec: unfiltered(),
+                    .send(subscription_request(
+                        &service.counters,
+                        unfiltered(),
                         response_sender,
-                    })
+                    ))
                     .is_ok()
             );
             response_receivers.push(response_receiver);
@@ -1219,20 +1315,37 @@ mod tests {
             .expect("final request should be admitted");
     }
 
+    #[test]
+    fn canceled_ready_admission_releases_reservation() {
+        let (mut service, _checkpoint_sender, _request_sender, _shards) =
+            actor_service_with(1, 25, None, 4, 1);
+        let (response_sender, response_receiver) = oneshot::channel();
+        let request = subscription_request(&service.counters, unfiltered(), response_sender);
+        assert_eq!(service.counters.reserved(), 1);
+
+        drop(response_receiver);
+        assert!(matches!(
+            service.try_admit(request),
+            AdmissionState::Accepting
+        ));
+        assert_eq!(service.counters.reserved(), 0);
+    }
+
     #[tokio::test]
     async fn checkpoint_backlog_drains_before_registration() {
         // Queue one admission and two checkpoints before starting the actor,
         // making both select branches ready on its first poll.
         let (service, checkpoint_sender, request_sender, mut shards) =
-            actor_service_with(1, 25, None, 4, 4);
+            actor_service_with(1, 25, None, 4, DEFAULT_MAX_SUBSCRIBERS);
         let metrics = service.metrics.clone();
         let (reply_sender, reply_receiver) = oneshot::channel();
         assert!(
             request_sender
-                .try_send(SubscriptionRequest {
-                    spec: unfiltered(),
-                    response_sender: reply_sender,
-                })
+                .send(subscription_request(
+                    &service.counters,
+                    unfiltered(),
+                    reply_sender,
+                ))
                 .is_ok()
         );
         assert_eq!(checkpoint_sender.send(checkpoint(1)).unwrap(), 1);
@@ -1256,6 +1369,30 @@ mod tests {
         drain(&mut shards);
         assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 3);
         assert!(receiver.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn queued_admission_releases_reservation_when_actor_shuts_down() {
+        let (service, checkpoint_sender, request_sender, _shards) =
+            actor_service_with(1, 25, None, 4, 1);
+        let counters = Arc::clone(&service.counters);
+        let (response_sender, response_receiver) = oneshot::channel();
+        assert!(
+            request_sender
+                .send(subscription_request(
+                    &counters,
+                    unfiltered(),
+                    response_sender,
+                ))
+                .is_ok()
+        );
+        assert_eq!(counters.reserved(), 1);
+
+        drop(checkpoint_sender);
+        service.start().await;
+
+        assert!(response_receiver.await.is_err());
+        assert_eq!(counters.reserved(), 0);
     }
 
     #[tokio::test]
@@ -1296,7 +1433,7 @@ mod tests {
         // Fill every shard mailbox so the request enters WaitingForShard rather
         // than taking the immediate admission path.
         let (service, _checkpoint_sender, request_sender, mut shards) =
-            actor_service_with(2, 25, None, 4, 4);
+            actor_service_with(2, 25, None, 4, DEFAULT_MAX_SUBSCRIBERS);
         for shard in &service.shards {
             for _ in 0..SHARD_MAILBOX_SIZE {
                 assert!(
@@ -1309,19 +1446,21 @@ mod tests {
             }
         }
 
-        // Wait until the actor has removed the request from ingress and is
-        // blocked on shard permits.
+        // Polling once consumes the request and reaches the pending
+        // shard-capacity wait before a mailbox slot is released.
         let (reply_sender, reply_receiver) = oneshot::channel();
         assert!(
             request_sender
-                .try_send(SubscriptionRequest {
-                    spec: unfiltered(),
-                    response_sender: reply_sender,
-                })
+                .send(subscription_request(
+                    &service.counters,
+                    unfiltered(),
+                    reply_sender,
+                ))
                 .is_ok()
         );
-        let actor = tokio::spawn(service.start());
-        wait_for_admission_capacity(&request_sender, 4).await;
+        let mut actor = Box::pin(service.start());
+        assert!(futures::poll!(&mut actor).is_pending());
+        let actor = tokio::spawn(actor);
 
         // Free only shard 1. Waiting on all shard permits must wake and route
         // the registration there even though the cursor starts at shard 0.
@@ -1356,7 +1495,8 @@ mod tests {
     async fn saturated_head_blocks_newer_request_until_canceled() {
         // Fill every shard, then queue a head request followed by a newer one.
         let (service, _checkpoint_sender, request_sender, mut shards) =
-            actor_service_with(2, 25, None, 4, 4);
+            actor_service_with(2, 25, None, 4, DEFAULT_MAX_SUBSCRIBERS);
+        let counters = Arc::clone(&service.counters);
         for shard in &service.shards {
             for _ in 0..SHARD_MAILBOX_SIZE {
                 assert!(
@@ -1373,29 +1513,35 @@ mod tests {
         let (second_sender, second_reply) = oneshot::channel();
         assert!(
             request_sender
-                .try_send(SubscriptionRequest {
-                    spec: unfiltered(),
-                    response_sender: first_sender,
-                })
+                .send(subscription_request(
+                    &service.counters,
+                    unfiltered(),
+                    first_sender,
+                ))
                 .is_ok()
         );
         assert!(
             request_sender
-                .try_send(SubscriptionRequest {
-                    spec: unfiltered(),
-                    response_sender: second_sender,
-                })
+                .send(subscription_request(
+                    &service.counters,
+                    unfiltered(),
+                    second_sender,
+                ))
                 .is_ok()
         );
+        assert_eq!(counters.reserved(), 2);
 
-        // Capacity 3 means only the head left the four-slot admission lane; the
-        // newer request remains queued while the head waits for a shard.
-        let actor = tokio::spawn(service.start());
-        wait_for_admission_capacity(&request_sender, 3).await;
-        // Canceling the head returns the actor to Accepting. Capacity 4 proves
-        // it then received the newer request, which becomes the saturated head.
+        // One poll consumes only the FIFO head and reaches the pending
+        // shard-capacity wait, leaving the newer request queued.
+        let mut actor = Box::pin(service.start());
+        assert!(futures::poll!(&mut actor).is_pending());
+
         drop(first_reply);
-        wait_for_admission_capacity(&request_sender, 4).await;
+        // The next poll drops the canceled head and moves the newer request
+        // into the shard-capacity wait.
+        assert!(futures::poll!(&mut actor).is_pending());
+        assert_eq!(counters.reserved(), 1);
+        let actor = tokio::spawn(actor);
 
         // Free one shard slot so the newer request can complete admission.
         assert!(matches!(
@@ -1406,9 +1552,12 @@ mod tests {
             .await
             .expect("newer admission remained blocked after canceling the waiting request")
             .unwrap();
+        assert_eq!(counters.reserved(), 1);
 
         actor.abort();
         let _ = actor.await;
+        drop(shards);
+        assert_eq!(counters.reserved(), 0);
     }
 
     #[tokio::test]
@@ -1416,7 +1565,7 @@ mod tests {
         // Register a subscriber, then overflow a one-slot checkpoint broadcast.
         // The actor first observes Lagged and then the retained checkpoint 2.
         let (mut service, checkpoint_sender, _request_sender, mut shards) =
-            actor_service_with(1, 25, None, 1, 4);
+            actor_service_with(1, 25, None, 1, DEFAULT_MAX_SUBSCRIBERS);
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
         let counters = Arc::clone(&service.counters);
         let metrics = service.metrics.clone();
@@ -1658,6 +1807,7 @@ mod tests {
         drain(&mut shards);
         let metrics = service.metrics.clone();
         let counters = Arc::clone(&service.counters);
+        assert_eq!(counters.reserved(), 2);
 
         service.shards[0]
             .send(ShardMsg::Clear(
@@ -1667,6 +1817,7 @@ mod tests {
             .unwrap();
         shards[0].drain();
         assert_eq!(terminations(&metrics, "checkpoint", "service_shutdown"), 1);
+        assert_eq!(counters.reserved(), 1);
 
         let fallback_shard = shards.pop().unwrap();
         drop(service);
@@ -1675,6 +1826,7 @@ mod tests {
         assert!(receiver_fallback.is_closed());
         assert_eq!(inflight_subscribers(&metrics), 0);
         assert_eq!(counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(counters.reserved(), 0);
         assert_eq!(counters.filtered_tx.load(Ordering::Relaxed), 0);
         assert_eq!(counters.filtered_event.load(Ordering::Relaxed), 0);
         assert_eq!(terminations(&metrics, "checkpoint", "service_shutdown"), 2);
@@ -1762,9 +1914,8 @@ mod tests {
 
     #[tokio::test]
     async fn configured_cap_is_enforced_globally_across_shards() {
-        let (mut service, mut shards) = test_service(2);
         let max_subscribers = 3;
-        service.max_subscribers = max_subscribers;
+        let (mut service, _, _, mut shards) = actor_service_with(2, 25, None, 16, max_subscribers);
         let mut receivers = Vec::with_capacity(max_subscribers);
         for _ in 0..max_subscribers {
             receivers.push(register(&mut service, unfiltered()).await.unwrap());
@@ -1774,7 +1925,7 @@ mod tests {
             service.counters.total.load(Ordering::Relaxed),
             max_subscribers
         );
-        // The gauge mirrors the admission count for observability.
+        assert_eq!(service.counters.reserved(), max_subscribers);
         assert_eq!(
             inflight_subscribers(&service.metrics),
             max_subscribers as i64
@@ -1782,14 +1933,14 @@ mod tests {
         assert!(!shards[0].matcher.is_empty());
         assert!(!shards[1].matcher.is_empty());
 
-        // The cap is global across shards: the next registration is rejected
-        // (the dispatcher drops the reply oneshot). Rejection creates no
-        // guard, so lifecycle accounting is untouched.
+        // Reservation failure occurs before constructing an admission request,
+        // so the cap cannot add queued work or lifecycle accounting.
         assert!(register(&mut service, unfiltered()).await.is_none());
         assert_eq!(
             service.counters.total.load(Ordering::Relaxed),
             max_subscribers
         );
+        assert_eq!(service.counters.reserved(), max_subscribers);
         assert_eq!(
             inflight_subscribers(&service.metrics),
             max_subscribers as i64
@@ -1798,6 +1949,24 @@ mod tests {
             terminations(&service.metrics, "checkpoint", "service_shutdown"),
             0
         );
+
+        drop(receivers);
+        service.handle_checkpoint(checkpoint(1)).await;
+        drain(&mut shards);
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(service.counters.reserved(), 0);
+        assert_eq!(inflight_subscribers(&service.metrics), 0);
+
+        let replacement = register(&mut service, unfiltered()).await.unwrap();
+        drain(&mut shards);
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 1);
+        assert_eq!(service.counters.reserved(), 1);
+
+        drop(replacement);
+        service.handle_checkpoint(checkpoint(2)).await;
+        drain(&mut shards);
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(service.counters.reserved(), 0);
     }
 
     #[tokio::test]
@@ -1806,6 +1975,7 @@ mod tests {
         let _receiver = register(&mut service, unfiltered()).await.unwrap();
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 1);
         assert_eq!(inflight_subscribers(&service.metrics), 1);
+        assert_eq!(service.counters.reserved(), 1);
 
         // Drop the shard with the Register message still queued in its
         // mailbox: the guard travelling inside the message must finalize
@@ -1813,6 +1983,7 @@ mod tests {
         // counts and gauge exactly once.
         drop(shards);
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(service.counters.reserved(), 0);
         assert_eq!(inflight_subscribers(&service.metrics), 0);
         assert_eq!(
             terminations(&service.metrics, "checkpoint", "service_shutdown"),
