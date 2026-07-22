@@ -214,7 +214,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             result
         })
         .await
-        .expect("verify_and_vote blocking task panicked")
+        .map_err(|e| {
+            if e.is_cancelled() {
+                ConsensusError::Shutdown
+            } else {
+                std::panic::resume_unwind(e.into_panic())
+            }
+        })?
         .tap_err(|e| {
             self.context
                 .metrics
