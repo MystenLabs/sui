@@ -25,7 +25,7 @@ answer: >-
 
 This guide shows how to build a DeFi trading interface where users authenticate with zkLogin through Enoki, execute DeepBook swaps, and never manage keys or pay gas directly.
 
-## Overview
+## How zkLogin and Enoki work together in DeFi
 
 DeFi applications on Sui can use zkLogin to onboard users who do not have a Sui wallet. Combined with Enoki's sponsored transactions, this creates a trading experience where the user signs in with Google, swaps tokens, and the application covers gas fees, eliminating the cold-start problem of needing SUI before you can trade.
 
@@ -74,7 +74,7 @@ import { ConnectButton } from '@mysten/dapp-kit-react/ui';
 
 ## Step 2: Build the swap transaction (client)
 
-Build a DeepBook swap PTB client-side, then serialize the transaction kind bytes for the sponsor.
+Build a DeepBook swap [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) client-side, then serialize the transaction kind bytes for the sponsor.
 
 ```typescript
 import { deepbook } from '@mysten/deepbook-v3';
@@ -194,5 +194,5 @@ The server calls `enoki.executeSponsoredTransaction({ digest, signature })` to s
 - [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide): implement zkLogin from scratch
 - [Enoki documentation](https://docs.enoki.mystenlabs.com/): managed zkLogin and sponsored transactions
 - [Sponsored Transactions](/develop/transaction-payment/sponsor-txn): how gas sponsorship works on Sui
-- [DeepBook](/onchain-finance/deepbookv3/design): Sui's native orderbook
+- [DeepBook](/onchain-finance/deepbook/deepbookv3/design): Sui's native orderbook
 - [Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb): compose multiple operations into one transaction
