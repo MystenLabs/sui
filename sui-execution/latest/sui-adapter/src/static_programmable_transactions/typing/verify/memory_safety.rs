@@ -22,11 +22,26 @@ use sui_types::{
     execution_status::{CommandArgumentError, ExecutionErrorKind},
 };
 
+/// The root a borrow extends from, used as the label in the borrow graph. Non-`TxContext`
+/// locations root at the location itself. `TxContext` borrows instead root at the position (in
+/// the command list) of the borrowing command when references are allowed in PTBs: borrows from
+/// different commands then root disjointly, allowing them to co-exist without interfering with
+/// each other. Borrows within a single command share a root and are subject to the usual
+/// exclusivity rules (at most one `&mut TxContext`, and no `&TxContext` alongside it). When
+/// references are not allowed, the position is always 0, giving every `TxContext` borrow a
+/// single shared root exactly as before the flag existed.
+///
+/// A `TxContext` root is minted only while its command is the current one, and positions
+/// strictly increase, so a live reference rooted in `TxContext` at some position can never have
+/// that root re-borrowed by a later command.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct Location(T::Location);
+enum BorrowRoot {
+    TxContext(u16),
+    Loc(T::Location),
+}
 
-type Graph = move_regex_borrow_graph::collections::Graph<(), Location>;
-type Paths = move_regex_borrow_graph::collections::Paths<(), Location>;
+type Graph = move_regex_borrow_graph::collections::Graph<(), BorrowRoot>;
+type Paths = move_regex_borrow_graph::collections::Paths<(), BorrowRoot>;
 
 #[must_use]
 enum Value {
@@ -35,6 +50,7 @@ enum Value {
 }
 
 struct Context {
+    allow_references_in_ptbs: bool,
     graph: Graph,
     local_root: Ref,
     tx_context: Option<Value>,
@@ -71,7 +87,7 @@ impl Value {
 
 impl Context {
     fn new<Mode: ExecutionMode>(
-        _env: &Env<Mode>,
+        env: &Env<Mode>,
         ast: &T::Transaction,
     ) -> Result<Self, Mode::Error> {
         let gas_coin = if ast.gas_payment.is_none() {
@@ -112,6 +128,7 @@ impl Context {
             )
             .map_err(graph_meter_err::<Mode::Error>)?;
         Ok(Self {
+            allow_references_in_ptbs: env.protocol_config.allow_references_in_ptbs(),
             graph,
             local_root,
             tx_context: Some(Value::NonRef),
@@ -152,13 +169,38 @@ impl Context {
             .map_err(graph_meter_err::<E>)
     }
 
+    /// The root for a borrow of `l` by the command at `position` in the command list. Note the
+    /// position is different from `Command::idx`, because a single input command may be split
+    /// into multiple actual commands. See `BorrowRoot`.
+    fn borrow_root(&self, position: u16, l: T::Location) -> BorrowRoot {
+        match l {
+            T::Location::TxContext => {
+                let key = if self.allow_references_in_ptbs {
+                    position
+                } else {
+                    0
+                };
+                BorrowRoot::TxContext(key)
+            }
+            _ => BorrowRoot::Loc(l),
+        }
+    }
+
     /// Used for checking if a location is borrowed
     /// Used for updating the borrowed marker in Copy, and for correctness of Move
     fn is_location_borrowed<E: ExecutionErrorTrait>(&self, l: T::Location) -> Result<bool, E> {
+        // `TxContext` cannot be moved or copied, so this check--used only by move and copy--never
+        // needs to consider the per-command `TxContext` labels
+        assert_invariant!(
+            !matches!(l, T::Location::TxContext),
+            "TxContext is never moved or copied"
+        );
         let borrowed_by = self.borrowed_by::<E>(self.local_root)?;
-        Ok(borrowed_by
-            .iter()
-            .any(|(_, paths)| paths.iter().any(|path| path.starts_with(&Location(l)))))
+        Ok(borrowed_by.iter().any(|(_, paths)| {
+            paths
+                .iter()
+                .any(|path| path.starts_with(&BorrowRoot::Loc(l)))
+        }))
     }
 
     fn release<E: ExecutionErrorTrait>(&mut self, r: Ref) -> Result<(), E> {
@@ -183,17 +225,11 @@ impl Context {
         &mut self,
         r: Ref,
         is_mut: bool,
-        extension: T::Location,
+        extension: BorrowRoot,
     ) -> Result<Ref, E> {
         let new_r = self
             .graph
-            .extend_by_label(
-                (),
-                std::iter::once(r),
-                is_mut,
-                Location(extension),
-                &mut DummyMeter,
-            )
+            .extend_by_label((), std::iter::once(r), is_mut, extension, &mut DummyMeter)
             .map_err(graph_meter_err::<E>)?;
         Ok(new_r)
     }
@@ -274,8 +310,9 @@ pub fn verify<Mode: ExecutionMode>(
 ) -> Result<(), Mode::Error> {
     let mut context = Context::new(env, ast)?;
     let commands = &ast.commands;
-    for c in commands {
-        let result = command::<Mode::Error>(&mut context, c)
+    for (position, c) in commands.iter().enumerate() {
+        let position = checked_as!(position, u16)?;
+        let result = command::<Mode::Error>(&mut context, position, c)
             .map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
             result.len() == c.value.result_type.len(),
@@ -342,6 +379,7 @@ pub fn verify<Mode: ExecutionMode>(
 
 fn command<E: ExecutionErrorTrait>(
     context: &mut Context,
+    position: u16,
     sp!(_, c): &T::Command,
 ) -> Result<Vec<Value>, E> {
     let result_tys = &c.result_type;
@@ -351,38 +389,38 @@ fn command<E: ExecutionErrorTrait>(
                 function,
                 arguments: args,
             } = &**mc;
-            let arg_values = arguments::<E>(context, args)?;
+            let arg_values = arguments::<E>(context, position, args)?;
             call::<E>(context, arg_values, &function.signature)?
         }
         T::Command__::TransferObjects(objects, recipient) => {
-            let object_values = arguments::<E>(context, objects)?;
-            let recipient_value = argument::<E>(context, recipient)?;
+            let object_values = arguments::<E>(context, position, objects)?;
+            let recipient_value = argument::<E>(context, position, recipient)?;
             consume_values::<E>(context, object_values)?;
             consume_value::<E>(context, recipient_value)?;
             vec![]
         }
         T::Command__::SplitCoins(_, coin, amounts) => {
-            let coin_value = argument::<E>(context, coin)?;
-            let amount_values = arguments::<E>(context, amounts)?;
+            let coin_value = argument::<E>(context, position, coin)?;
+            let amount_values = arguments::<E>(context, position, amounts)?;
             consume_values::<E>(context, amount_values)?;
             write_ref::<E>(context, 0, coin_value)?;
             (0..amounts.len()).map(|_| Value::NonRef).collect()
         }
         T::Command__::MergeCoins(_, target, coins) => {
-            let target_value = argument::<E>(context, target)?;
-            let coin_values = arguments::<E>(context, coins)?;
+            let target_value = argument::<E>(context, position, target)?;
+            let coin_values = arguments::<E>(context, position, coins)?;
             consume_values::<E>(context, coin_values)?;
             write_ref::<E>(context, 0, target_value)?;
             vec![]
         }
         T::Command__::MakeMoveVec(_, xs) => {
-            let vs = arguments::<E>(context, xs)?;
+            let vs = arguments::<E>(context, position, xs)?;
             consume_values::<E>(context, vs)?;
             vec![Value::NonRef]
         }
         T::Command__::Publish(_, _, _) => result_tys.iter().map(|_| Value::NonRef).collect(),
         T::Command__::Upgrade(_, _, _, x, _) => {
-            let v = argument::<E>(context, x)?;
+            let v = argument::<E>(context, position, x)?;
             consume_value::<E>(context, v)?;
             vec![Value::NonRef]
         }
@@ -425,19 +463,26 @@ fn consume_value<E: ExecutionErrorTrait>(context: &mut Context, value: Value) ->
 
 fn arguments<E: ExecutionErrorTrait>(
     context: &mut Context,
+    position: u16,
     xs: &[T::Argument],
 ) -> Result<Vec<Value>, E> {
-    xs.iter().map(|x| argument::<E>(context, x)).collect()
+    xs.iter()
+        .map(|x| argument::<E>(context, position, x))
+        .collect()
 }
 
-fn argument<E: ExecutionErrorTrait>(context: &mut Context, x: &T::Argument) -> Result<Value, E> {
+fn argument<E: ExecutionErrorTrait>(
+    context: &mut Context,
+    position: u16,
+    x: &T::Argument,
+) -> Result<Value, E> {
     match &x.value.0 {
         T::Argument__::Use(T::Usage::Move(location)) => move_value::<E>(context, x.idx, *location),
         T::Argument__::Use(T::Usage::Copy { location, borrowed }) => {
             copy_value::<E>(context, x.idx, *location, borrowed)
         }
         T::Argument__::Borrow(is_mut, location) => {
-            borrow_location::<E>(context, x.idx, *is_mut, *location)
+            borrow_location::<E>(context, position, x.idx, *is_mut, *location)
         }
         T::Argument__::Read(usage) => read_ref::<E>(context, x.idx, usage),
         T::Argument__::Freeze(usage) => freeze_ref::<E>(context, x.idx, usage),
@@ -496,6 +541,7 @@ fn copy_value<E: ExecutionErrorTrait>(
 
 fn borrow_location<E: ExecutionErrorTrait>(
     context: &mut Context,
+    position: u16,
     arg_idx: u16,
     is_mut: bool,
     l: T::Location,
@@ -512,7 +558,8 @@ fn borrow_location<E: ExecutionErrorTrait>(
         value.is_non_ref(),
         "type checking should guarantee no borrowing of references"
     );
-    let new_r = context.extend_by_label::<E>(context.local_root, is_mut, l)?;
+    let root = context.borrow_root(position, l);
+    let new_r = context.extend_by_label::<E>(context.local_root, is_mut, root)?;
     Ok(Value::Ref(new_r))
 }
 
@@ -657,16 +704,19 @@ fn graph_err<E: ExecutionErrorTrait>(e: move_regex_borrow_graph::InvariantViolat
     make_invariant_violation!("Borrow graph invariant violation: {}", e.0).into()
 }
 
-impl fmt::Display for Location {
+impl fmt::Display for BorrowRoot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            T::Location::TxContext => write!(f, "TxContext"),
-            T::Location::GasCoin => write!(f, "GasCoin"),
-            T::Location::ObjectInput(idx) => write!(f, "ObjectInput({idx})"),
-            T::Location::WithdrawalInput(idx) => write!(f, "WithdrawalInput({idx})"),
-            T::Location::PureInput(idx) => write!(f, "PureInput({idx})"),
-            T::Location::ReceivingInput(idx) => write!(f, "ReceivingInput({idx})"),
-            T::Location::Result(i, j) => write!(f, "Result({i}, {j})"),
+        match self {
+            BorrowRoot::TxContext(command) => write!(f, "TxContext@{command}"),
+            BorrowRoot::Loc(T::Location::TxContext) => write!(f, "TxContext"),
+            BorrowRoot::Loc(T::Location::GasCoin) => write!(f, "GasCoin"),
+            BorrowRoot::Loc(T::Location::ObjectInput(idx)) => write!(f, "ObjectInput({idx})"),
+            BorrowRoot::Loc(T::Location::WithdrawalInput(idx)) => {
+                write!(f, "WithdrawalInput({idx})")
+            }
+            BorrowRoot::Loc(T::Location::PureInput(idx)) => write!(f, "PureInput({idx})"),
+            BorrowRoot::Loc(T::Location::ReceivingInput(idx)) => write!(f, "ReceivingInput({idx})"),
+            BorrowRoot::Loc(T::Location::Result(i, j)) => write!(f, "Result({i}, {j})"),
         }
     }
 }

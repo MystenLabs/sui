@@ -29,7 +29,23 @@ enum RootLocation {
     Unknown {
         command: u16,
     },
+    /// The root for `TxContext` borrows made by the command at this position in the command list.
+    /// When references are allowed in PTBs, each command's borrows get their own root--so borrows
+    /// from different commands coexist while borrows within one command share a root and are
+    /// subject to the usual exclusivity rules. When references are not allowed, the position is
+    /// always 0, giving every `TxContext` borrow a single shared root as before the flag existed.
+    /// Note this is different from `Command::idx`, because a single input command may be split
+    /// into multiple actual commands.
+    TxContext {
+        command: u16,
+    },
     Known(T::Location),
+}
+
+impl From<T::Location> for RootLocation {
+    fn from(location: T::Location) -> Self {
+        RootLocation::Known(location)
+    }
 }
 
 /// A path points to an abstract memory location, rooted in an input or command result. Any
@@ -58,7 +74,10 @@ struct Location {
 
 #[derive(Debug)]
 struct Context {
-    tx_context: Location,
+    allow_references_in_ptbs: bool,
+    // One `TxContext` location per command position when references are allowed in PTBs, a single
+    // shared location otherwise. See `RootLocation::TxContext`.
+    tx_contexts: Vec<Location>,
     gas: Location,
     object_inputs: Vec<Location>,
     withdrawal_inputs: Vec<Location>,
@@ -84,9 +103,9 @@ enum PathComparison {
 }
 
 impl Path {
-    fn initial(location: T::Location) -> Self {
+    fn initial(root: impl Into<RootLocation>) -> Self {
         Self {
-            root: RootLocation::Known(location),
+            root: root.into(),
             extensions: vec![],
         }
     }
@@ -137,8 +156,8 @@ impl PathSet {
         Self(IndexSet::new())
     }
 
-    fn initial(location: T::Location) -> Self {
-        Self(IndexSet::from([Path::initial(location)]))
+    fn initial(root: impl Into<RootLocation>) -> Self {
+        Self(IndexSet::from([Path::initial(root)]))
     }
 
     fn unknown_root(command: u16) -> Self {
@@ -240,9 +259,9 @@ impl Value {
 }
 
 impl Location {
-    fn non_ref(location: T::Location) -> Self {
+    fn non_ref(root: impl Into<RootLocation>) -> Self {
         Self {
-            self_path: Rc::new(PathSet::initial(location)),
+            self_path: Rc::new(PathSet::initial(root)),
             value: Some(Value::NonRef),
         }
     }
@@ -292,7 +311,7 @@ impl Location {
 }
 
 impl Context {
-    fn new<Mode: ExecutionMode>(_env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<Self> {
+    fn new<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
             gas_payment,
             bytes: _,
@@ -302,9 +321,19 @@ impl Context {
             receiving,
             withdrawal_compatibility_conversions: _,
             original_command_len: _,
-            commands: _,
+            commands,
         } = txn;
-        let tx_context = Location::non_ref(T::Location::TxContext);
+        let allow_references_in_ptbs = env.protocol_config.allow_references_in_ptbs();
+        // One root per command -- each command roots its `TxContext` borrows at its own position
+        // (see `RootLocation::TxContext`). When references are not enabled, only the root at
+        // position 0 is ever used. Unused roots are inert.
+        let tx_contexts = (0..commands.len())
+            .map(|command| {
+                Ok(Location::non_ref(RootLocation::TxContext {
+                    command: checked_as!(command, u16)?,
+                }))
+            })
+            .collect::<Result<_, ExecutionError>>()?;
         let mut gas = Location::non_ref(T::Location::GasCoin);
         if gas_payment.is_none() {
             gas.move_value()
@@ -339,7 +368,8 @@ impl Context {
             })
             .collect::<Result<_, ExecutionError>>()?;
         Ok(Self {
-            tx_context,
+            allow_references_in_ptbs,
+            tx_contexts,
             gas,
             object_inputs,
             withdrawal_inputs,
@@ -352,6 +382,16 @@ impl Context {
 
     fn current_command(&self) -> anyhow::Result<u16> {
         Ok(checked_as!(self.results.len(), u16)?)
+    }
+
+    /// The index into `tx_contexts` for `TxContext` borrows made by the current command.
+    /// Always `0` if references in PTBs are not enabled.
+    fn tx_context_index(&self) -> anyhow::Result<u16> {
+        Ok(if self.allow_references_in_ptbs {
+            self.current_command()?
+        } else {
+            0
+        })
     }
 
     fn add_result_values(
@@ -379,7 +419,12 @@ impl Context {
 
     fn location(&self, loc: T::Location) -> anyhow::Result<&Location> {
         Ok(match loc {
-            T::Location::TxContext => &self.tx_context,
+            T::Location::TxContext => {
+                let i = self.tx_context_index()?;
+                self.tx_contexts
+                    .get(i as usize)
+                    .ok_or_else(|| anyhow::anyhow!("TxContext index out of bounds {i}"))?
+            }
             T::Location::GasCoin => &self.gas,
             T::Location::ObjectInput(i) => self
                 .object_inputs
@@ -407,7 +452,12 @@ impl Context {
 
     fn location_mut(&mut self, loc: T::Location) -> anyhow::Result<&mut Location> {
         Ok(match loc {
-            T::Location::TxContext => &mut self.tx_context,
+            T::Location::TxContext => {
+                let i = self.tx_context_index()?;
+                self.tx_contexts
+                    .get_mut(i as usize)
+                    .ok_or_else(|| anyhow::anyhow!("TxContext index out of bounds {i}"))?
+            }
             T::Location::GasCoin => &mut self.gas,
             T::Location::ObjectInput(i) => self
                 .object_inputs
@@ -480,6 +530,9 @@ impl Context {
             for p in &paths.0 {
                 match p.root {
                     RootLocation::Unknown { .. } => (),
+                    // `arg_roots` guards move/copy of borrowed locations, and `TxContext` is
+                    // never moved or copied
+                    RootLocation::TxContext { .. } => (),
                     RootLocation::Known(location) => {
                         self.arg_roots.insert(location);
                     }
@@ -497,7 +550,8 @@ impl Context {
 
     fn all_references(&self) -> impl Iterator<Item = Rc<PathSet>> {
         let Self {
-            tx_context,
+            allow_references_in_ptbs: _,
+            tx_contexts,
             gas,
             object_inputs,
             withdrawal_inputs,
@@ -506,7 +560,8 @@ impl Context {
             results,
             arg_roots: _,
         } = self;
-        std::iter::once(tx_context)
+        tx_contexts
+            .iter()
             .chain(std::iter::once(gas))
             .chain(object_inputs)
             .chain(withdrawal_inputs)
@@ -544,6 +599,10 @@ impl Context {
 /// not be expressive enough in the presence of control flow. Luckily, PTBs do not have control flow
 /// so we can use this approach as a safety net for the Regex based implementation until that
 /// code is sufficiently. tested and hardened.
+/// Like the Regex based implementation, this implementation roots `TxContext` borrows per
+/// borrowing command (see `RootLocation::TxContext`): borrows from different commands coexist,
+/// while borrows within a single command share a root and are subject to the usual exclusivity
+/// rules.
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
@@ -816,8 +875,11 @@ impl Context {
     #[allow(unused)]
     fn print(&self) {
         println!("Context {{");
-        println!("  tx_context: ");
-        self.tx_context.print();
+        println!("  tx_contexts: [");
+        for tx_context in &self.tx_contexts {
+            tx_context.print();
+        }
+        println!("  ],");
         println!("  gas: ");
         self.gas.print();
         println!("  object_inputs: [");

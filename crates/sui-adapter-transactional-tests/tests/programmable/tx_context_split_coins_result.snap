@@ -1,0 +1,25 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 11-22:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4453600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 24-30:
+//# programmable --sender A --inputs 100 10 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::m::id_mut(Result(0));
+//> 2: test::m::mut_tx();
+//> 3: SplitCoins(Result(1), [Input(1)]);
+//> 4: MergeCoins(Result(1), [Result(3)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
