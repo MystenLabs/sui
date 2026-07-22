@@ -140,7 +140,7 @@ const stream = client.ledgerService.listEvents({
   filter: {
     terms: [{
       literals: [{
-        eventType: { eventType: '0xPACKAGE::module::MyEvent' },
+        eventType: { eventType: '<PACKAGE>::module::MyEvent' },
       }],
     }],
   },
@@ -352,7 +352,7 @@ Use the GraphQL `EventFilter` to narrow event queries. The available filter fiel
 {
   events(
     filter: {
-      type: "0xPACKAGE::swap::SwapEvent"
+      type: "<PACKAGE>::swap::SwapEvent"
     }
     after: null
     first: 50

@@ -202,7 +202,7 @@ Each pattern below links to the canonical worked example and includes an inline 
 Look up a transaction over gRPC with `grpcurl`:
 
 ```sh
-$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
+$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetTransaction
 ```
 
 The equivalent GraphQL query:
@@ -243,7 +243,7 @@ query {
 Read a balance over gRPC with the Buf CLI:
 
 ```sh
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.StateService/GetBalance -d '{ "owner": "<ADDRESS>", "coin_type": "0x2::sui::SUI" }'
+$ buf curl --protocol grpc https://<FULL_NODE_URL>/sui.rpc.v2.StateService/GetBalance -d '{ "owner": "<ADDRESS>", "coin_type": "0x2::sui::SUI" }'
 ```
 
 The equivalent GraphQL query:
@@ -278,7 +278,7 @@ query {
 List owned objects over gRPC with `grpcurl`:
 
 ```sh
-$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
+$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <FULL_NODE_URL> sui.rpc.v2.StateService/ListOwnedObjects
 ```
 
 Filter for a coin type in GraphQL. Pass the page size in `first` and the pagination cursor in `after`:
@@ -351,13 +351,13 @@ query {
 Look up a checkpoint over gRPC with `grpcurl`:
 
 ```sh
-$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
+$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetCheckpoint
 ```
 
 Subscribe to the checkpoint stream over gRPC with the Buf CLI:
 
 ```sh
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }' --timeout 1m
+$ buf curl --protocol grpc https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }' --timeout 1m
 ```
 
 Look up a checkpoint in GraphQL:
