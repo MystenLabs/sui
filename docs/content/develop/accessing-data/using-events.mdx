@@ -120,9 +120,9 @@ When you process events, each event object contains the following attributes:
 
 gRPC provides three ways to access events:
 
-- **`LedgerService.ListEvents`**: Paginated, filtered queries over a checkpoint range. Use an `EventFilter` to match by event type, sender, or emitting module. This is the direct replacement for `suix_queryEvents`.
-- **`SubscriptionService.SubscribeEvents`**: Live streaming of events matching an `EventFilter`. Use this for real-time event-driven applications. Subscriptions start at the current tip of the chain.
-- **`LedgerService.GetTransaction`**: Retrieve events for a specific transaction by digest.
+- `LedgerService.ListEvents`: Paginated, filtered queries over a checkpoint range. Use an `EventFilter` to match by event type, sender, or emitting module. This is the direct replacement for `suix_queryEvents`.
+- `SubscriptionService.SubscribeEvents`: Live streaming of events matching an `EventFilter`. Use this for real-time event-driven applications. Subscriptions start at the current tip of the chain.
+- `LedgerService.GetTransaction`: Retrieve events for a specific transaction by digest.
 
 To combine historical and real-time data, open a `SubscribeEvents` stream first, note the first `Watermark` you receive, then backfill with `ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. This avoids missing data between the final list response and the subscription start. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
 

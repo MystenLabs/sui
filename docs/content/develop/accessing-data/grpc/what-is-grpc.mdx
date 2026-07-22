@@ -102,9 +102,9 @@ If you were using the `v2beta2` `.proto` files previously, the latest definition
 
 The `SubscriptionService` provides real-time streaming updates for onchain activity through gRPC server-side streaming APIs. Three subscription RPCs are available:
 
-- **`SubscribeCheckpoints`** streams finalized checkpoints, optionally filtered by a `TransactionFilter`. Use this when you need the full checkpoint structure, including all transactions and their events.
-- **`SubscribeTransactions`** streams individual executed transactions matching a `TransactionFilter`. Use this when you only need specific transactions (for example, those calling a particular Move function or affecting a specific address).
-- **`SubscribeEvents`** streams individual events matching an `EventFilter`. Use this when you only need specific events (for example, events of a particular Move type or emitted by a specific module).
+- `SubscribeCheckpoints` streams finalized checkpoints, optionally filtered by a `TransactionFilter`. Use this when you need the full checkpoint structure, including all transactions and their events.
+- `SubscribeTransactions` streams individual executed transactions matching a `TransactionFilter`. Use this when you only need specific transactions (for example, those calling a particular Move function or affecting a specific address).
+- `SubscribeEvents` streams individual events matching an `EventFilter`. Use this when you only need specific events (for example, events of a particular Move type or emitted by a specific module).
 
 All subscriptions begin at the current tip of the chain as seen by the server. They do not support resumption from a prior checkpoint. Each streamed response includes a progress marker — a `cursor` for `SubscribeCheckpoints`, or a `Watermark` for `SubscribeTransactions` and `SubscribeEvents` — so your application can track how far along the chain the stream has reached.
 
