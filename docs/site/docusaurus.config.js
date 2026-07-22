@@ -242,6 +242,12 @@ const config = {
                         "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
+                    {
+                      loader: path.resolve(
+                        __dirname,
+                        "./src/shared/plugins/inject-code/includeSectionLoader.js",
+                      ),
+                    },
                   ],
                 },
               ],

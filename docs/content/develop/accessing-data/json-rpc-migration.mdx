@@ -60,6 +60,9 @@ answer: >-
   migration gotchas.
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
 
 JSON-RPC is deprecated and is being decommissioned on the following timeline:
@@ -189,189 +192,161 @@ Each pattern below links to the canonical worked example and includes an inline 
 
 ### Transaction lookup
 
-- **GraphQL:** [Example 2 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) shows the JSON-RPC `sui_getTransactionBlock` call and the GraphQL `Query.transaction` equivalent side by side.
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
-- **gRPC:** Use `LedgerService.GetTransaction` with a `FieldMask` that selects the response fields you need (effects, events, object changes). See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
+{@include ./graphql/graphql-migration-cookbook.mdx#get-a-transaction@json-rpc}
 
-<details>
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
 
-<summary>gRPC and GraphQL examples</summary>
+{@include ./graphql/graphql-migration-cookbook.mdx#get-a-transaction@graphql}
 
-Look up a transaction over gRPC with `grpcurl`:
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
-```sh
-$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#get-a-transaction@grpc-sdk}
 
-The equivalent GraphQL query:
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
 
-```graphql
-query {
-  transaction(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
-    gasInput {
-      gasSponsor {
-        address
-      }
-      gasPrice
-      gasBudget
-    }
-    effects {
-      status
-      timestamp
-      checkpoint {
-        sequenceNumber
-      }
-    }
-  }
-}
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#get-a-transaction@grpcurl}
 
-</details>
+</TabItem>
+</Tabs>
 
 ### Balances
 
-- **GraphQL:** Query `Address.balance` for a single coin type or `Address.balances` for all balances, both reached from `Query.address`. Read `Balance.totalBalance`, `Balance.coinBalance`, and `Balance.addressBalance` together to reconcile. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for a verified example.
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
-- **gRPC:** Use `StateService.GetBalance` or `StateService.ListBalances`. See the [`GetBalance` request reference](/references/fullnode-protocol-messages) and the worked example in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances).
+{@include ./graphql/graphql-migration-cookbook.mdx#get-balances@json-rpc}
 
-<details>
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
 
-<summary>gRPC and GraphQL examples</summary>
+{@include ./graphql/graphql-migration-cookbook.mdx#get-balances@graphql}
 
-Read a balance over gRPC with the Buf CLI:
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
-```sh
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.StateService/GetBalance -d '{ "owner": "<ADDRESS>", "coin_type": "0x2::sui::SUI" }'
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#get-balances@grpc-sdk}
 
-The equivalent GraphQL query:
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
 
-```graphql
-query {
-  address(address: "0xe4ee9c157b5eb185c2df885bd7dcb4be493630a913f4b0e0c7e8ecf77930a878") {
-    balance(coinType: "0x2::sui::SUI") {
-      coinType {
-        repr
-      }
-      addressBalance
-      coinBalance
-      totalBalance
-    }
-  }
-}
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#get-balances@grpcurl}
 
-</details>
+</TabItem>
+</Tabs>
 
 ### Coins
 
-- **GraphQL:** [Example 3 in Migrating to GraphQL from JSON-RPC](/develop/accessing-data/graphql/query-with-graphql#migrating-to-graphql-from-json-rpc) maps `suix_getCoins` to `Address.objects` with `filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }`, including how cursor pagination changes.
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
-- **gRPC:** Read coin objects through `StateService.ListOwnedObjects` with a `Coin<T>` type filter.
+{@include ./graphql/graphql-migration-cookbook.mdx#list-owned-coins@json-rpc}
 
-<details>
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
 
-<summary>gRPC and GraphQL examples</summary>
+{@include ./graphql/graphql-migration-cookbook.mdx#list-owned-coins@graphql}
 
-List owned objects over gRPC with `grpcurl`:
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
-```sh
-$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#list-owned-coins@grpc-sdk}
 
-Filter for a coin type in GraphQL. Pass the page size in `first` and the pagination cursor in `after`:
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
 
-```graphql
-query {
-  address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
-    objects(
-      first: 3,
-      after: "vBIzCwAAAADMAQBQlGUkKZV2Gebvp5pASmcU0RJuY/VR9LbH+3ZED4EYyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAARjb2luAAAAAAAAAARDb2luAAAAAAAAAAEAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAA3N1aQAAAAAAAAADU1VJAAAAAAAAAAAB/////XBZUf9feyhb9cW+AOBraL10O9t0D9JAr+tIq2wXDJdl5/zP5w==",
-      filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
-    ) {
-      nodes {
-        address
-      }
-    }
-  }
-}
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#list-owned-coins@grpcurl}
 
-Omit `after` to fetch the first page. The cursor is opaque, so use one returned by a previous query rather than constructing it by hand.
-
-</details>
+</TabItem>
+</Tabs>
 
 ### Events
 
-- **GraphQL:** See [Querying events with GraphQL](/develop/accessing-data/using-events#querying-events-with-graphql) for the `events(filter:)` field and the filtering reference.
+#### Filtered event queries (GraphQL only)
 
-- **gRPC:** Events arrive as part of transaction data in `LedgerService.GetTransaction` responses, and live updates arrive in each checkpoint streamed by `SubscriptionService.SubscribeCheckpoints`. See [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
+GraphQL supports server-side filtered event queries. gRPC does not have a direct equivalent — use checkpoint streaming with client-side filtering instead. See [Querying events with GraphQL](/develop/accessing-data/using-events#querying-events-with-graphql) and [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
 
-<details>
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
-<summary>GraphQL example</summary>
+{@include ./graphql/graphql-migration-cookbook.mdx#query-events@json-rpc}
 
-Query events with a type filter:
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
 
-```graphql
-query {
-  events(
-    filter: { type: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>" }
-  ) {
-    nodes {
-      sender {
-        address
-      }
-      timestamp
-      contents {
-        type {
-          repr
-        }
-        json
-      }
-    }
-  }
-}
-```
+{@include ./graphql/graphql-migration-cookbook.mdx#query-events@graphql}
 
-</details>
+</TabItem>
+</Tabs>
+
+#### Events from a known transaction
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#events-from-a-known-transaction@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#events-from-a-known-transaction@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#events-from-a-known-transaction@grpc-sdk}
+
+</TabItem>
+</Tabs>
 
 ### Checkpoints
 
-- **gRPC:** Subscribe with `SubscriptionService.SubscribeCheckpoints` for an ordered, gapless stream of finalized checkpoints. Use `LedgerService.GetCheckpoint` for point lookups. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
 
-- **GraphQL:** Query `Query.checkpoint` for a specific checkpoint, or paginate `Query.checkpoints` for a range. Use `Checkpoint.query` to scope a multi-resource read to a specific checkpoint.
+{@include ./graphql/graphql-migration-cookbook.mdx#look-up-a-single-checkpoint@json-rpc}
 
-<details>
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
 
-<summary>gRPC and GraphQL examples</summary>
+{@include ./graphql/graphql-migration-cookbook.mdx#look-up-a-single-checkpoint@graphql}
 
-Look up a checkpoint over gRPC with `grpcurl`:
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
-```sh
-$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#look-up-a-single-checkpoint@grpc-sdk}
 
-Subscribe to the checkpoint stream over gRPC with the Buf CLI:
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
 
-```sh
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }' --timeout 1m
-```
+{@include ./grpc/grpc-migration-cookbook.mdx#look-up-a-single-checkpoint@grpcurl}
 
-Look up a checkpoint in GraphQL:
+</TabItem>
+</Tabs>
 
-```graphql
-query {
-  checkpoint(sequenceNumber: 164329987) {
-    digest
-    networkTotalTransactions
-    timestamp
-  }
-}
-```
-
-</details>
+For real-time checkpoint streaming, use gRPC `SubscriptionService.SubscribeCheckpoints`. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data) and the [gRPC migration cookbook](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints).
 
 ### Submit a transaction
 
-Build the transaction with a PTB through the SDK, sign it, and execute it through `TransactionExecutionService.ExecuteTransaction` (gRPC) or the `Mutation.executeTransaction` mutation (GraphQL). See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the construction steps and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview) for the signature requirements.
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#execute-a-transaction@json-rpc}
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+{@include ./graphql/graphql-migration-cookbook.mdx#execute-a-transaction@graphql}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#execute-a-transaction@grpc-sdk}
+
+</TabItem>
+</Tabs>
