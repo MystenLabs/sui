@@ -558,7 +558,7 @@ query ($after: String) {
 **Key differences:**
 - GraphQL uses cursor-based pagination. Pass `pageInfo.endCursor` as the `$after` variable for the next page.
 - For reverse order, use `last` and `before` instead of `first` and `after`.
-- For real-time streaming, use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) instead. GraphQL has subscription infrastructure but gRPC is the production streaming path today.
+- For real-time streaming, use gRPC [`SubscribeEvents`](/develop/accessing-data/grpc/grpc-migration-cookbook#live-event-streaming) or [`SubscribeTransactions`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-transactions) instead. GraphQL has subscription infrastructure but gRPC is the production streaming path today.
 
 ## Get balances
 
@@ -1216,7 +1216,7 @@ query {
 
 ### Use gRPC for production streaming
 
-The GraphQL service has subscription infrastructure but it is not yet generally available for production use. For real-time streaming of events and transactions (`sui_subscribeEvent`, `sui_subscribeTransaction`), use [gRPC `SubscriptionService.SubscribeCheckpoints`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-checkpoints) today. For historical event queries over a range, use `Query.events` with an `EventFilter`.
+The GraphQL service has subscription infrastructure but it is not yet generally available for production use. For real-time streaming, use gRPC: [`SubscribeEvents`](/develop/accessing-data/grpc/grpc-migration-cookbook#live-event-streaming) for events and [`SubscribeTransactions`](/develop/accessing-data/grpc/grpc-migration-cookbook#stream-transactions) for transactions. Both support server-side filtering so your client only receives matching data. For historical event queries over a range, use `Query.events` with an `EventFilter`.
 
 ### Pagination uses typed cursors
 
