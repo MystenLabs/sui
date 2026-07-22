@@ -10,23 +10,19 @@ use bytes::Bytes;
 use futures::Stream;
 use futures::StreamExt;
 use prometheus::Registry;
+use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use tonic::transport::Channel;
-use tonic::transport::ClientTlsConfig;
 use tonic::transport::Uri;
-use tower::Layer;
 use tracing::warn;
 
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::metrics::GrpcMetricsLayer;
-use crate::metrics::GrpcMetricsService;
 
 /// A reader backed by the gRPC LedgerService's streaming list APIs.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
-    client: LedgerServiceClient<GrpcMetricsService<Channel>>,
+    client: Client,
     timeout: Option<Duration>,
 }
 
@@ -65,23 +61,17 @@ impl AlphaLedgerGrpcReader {
         prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
-        let mut endpoint = Channel::builder(uri.clone());
-        if let Some(timeout) = args.statement_timeout() {
-            endpoint = endpoint.timeout(timeout);
-        }
-
-        if uri.scheme_str() == Some("https") {
-            let tls_config = ClientTlsConfig::new().with_native_roots();
-            endpoint = endpoint.tls_config(tls_config)?;
-        }
-
-        let channel = endpoint.connect_lazy();
-        let layered =
-            GrpcMetricsLayer::new(prefix.unwrap_or("ledger_grpc"), registry).layer(channel);
-
         let timeout = args.statement_timeout();
-        let client = LedgerServiceClient::new(layered.clone())
-            .max_decoding_message_size(args.ledger_grpc_max_decoding_message_size);
+        let mut client = Client::new(uri)?
+            .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
+            .request_layer(GrpcMetricsLayer::new(
+                prefix.unwrap_or("ledger_grpc"),
+                registry,
+            ));
+
+        if let Some(timeout) = timeout {
+            client = client.with_response_headers_timeout(timeout);
+        }
 
         Ok(Self { client, timeout })
     }
@@ -90,8 +80,10 @@ impl AlphaLedgerGrpcReader {
         &self,
         request: proto::ListTransactionsRequest,
     ) -> anyhow::Result<StreamPage<ExecutedTransaction>> {
-        let mut client = self.client.clone();
-        let stream = client
+        let stream = self
+            .client
+            .clone()
+            .ledger_client()
             .list_transactions(self.request(request))
             .await
             .context("ListTransactions stream open failed")?
