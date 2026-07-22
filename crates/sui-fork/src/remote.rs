@@ -13,7 +13,7 @@ use anyhow::Context as _;
 use anyhow::anyhow;
 use anyhow::bail;
 use itertools::Itertools as _;
-use tracing::info;
+use tracing::debug;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -119,7 +119,7 @@ impl RemoteSource {
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
         if sequence > self.forked_at_checkpoint {
-            info!(
+            debug!(
                 "Checkpoint requested for sequence {sequence} > forked_at_checkpoint {}, returning None",
                 self.forked_at_checkpoint
             );
