@@ -681,15 +681,20 @@ impl VMDispatchTables {
         Ok(())
     }
 
-    /// Check the `value_depth` of a `vector<elem>` value about to be created at `VecPack`, without
-    /// building the type. The `+ 1` accounts for the vector wrapping the element value.
-    pub(crate) fn check_vector_value_depth(
+    /// Check the limits of a `vector<elem>` value about to be created at `VecPack`, without
+    /// building the type. As at any creation site, the element type's syntactic size and depth
+    /// are checked (this is the only place the interpreter validates a vector's element type;
+    /// the other vector ops operate on already-validated vectors), along with the created value's
+    /// nesting depth — the `+ 1` accounts for the vector wrapping the element value. All three
+    /// come from the one formula solve.
+    pub(crate) fn check_vector_element(
         &self,
         elem: &ArenaType,
         ty_args: &[(Type, TypeSize)],
     ) -> PartialVMResult<()> {
         let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
         let elem_size = self.size_formula(elem)?.solve(&arg_sizes)?;
+        check_syntactic_limits(elem_size.type_size, elem_size.type_depth)?;
         self.check_value_depth(elem_size.value_depth.saturating_add(1))
     }
 
