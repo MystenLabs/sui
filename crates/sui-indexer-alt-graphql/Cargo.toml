@@ -65,6 +65,7 @@ move-ir-types.workspace = true
 bin-version.workspace = true
 sui-display.workspace = true
 sui-futures.workspace = true
+sui-indexer-alt-graphql-macros.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-indexer-alt-schema.workspace = true
