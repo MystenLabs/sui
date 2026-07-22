@@ -34,7 +34,9 @@ use crate::context::Context;
 /// forked network's Simulacrum. Empty-signature transactions explicitly
 /// request sender impersonation; signed transactions keep Simulacrum's normal
 /// user-signature verification. Each accepted execution is sealed into a fresh
-/// Simulacrum checkpoint and published to checkpoint subscribers.
+/// Simulacrum checkpoint and published to checkpoint subscribers, while
+/// simulations (dry-run / dev-inspect) run read-only and are never
+/// checkpointed.
 pub(crate) struct ForkedTransactionExecutor {
     context: Arc<Context>,
 }
@@ -136,14 +138,23 @@ impl TransactionExecutor for ForkedTransactionExecutor {
 
     fn simulate_transaction(
         &self,
-        _transaction: TransactionData,
-        _checks: TransactionChecks,
-        _allow_mock_gas_coin: bool,
+        transaction: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> Result<SimulateTransactionResult, SuiError> {
-        Err(SuiErrorKind::Unknown(
-            "simulate_transaction is not supported by the forked network yet".to_string(),
-        )
-        .into())
+        // Simulation (dry-run / dev-inspect) is read-only: it deliberately
+        // bypasses `Context::try_run_with_new_checkpoint`, so nothing is
+        // written to the store, no checkpoint is created, and nothing is
+        // published to subscribers. The read lock lets simulations run
+        // concurrently with each other while staying serialized against
+        // executions, which take the write lock.
+        //
+        // `blocking_read` is safe here because the gRPC
+        // `TransactionExecutionService` invokes this trait method from a
+        // `spawn_blocking` task, never from an async context; other callers
+        // must do the same.
+        let sim = self.context.simulacrum().blocking_read();
+        sim.simulate_transaction(transaction, checks, allow_mock_gas_coin)
     }
 }
 
