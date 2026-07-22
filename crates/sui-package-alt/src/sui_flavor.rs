@@ -161,7 +161,8 @@ impl SuiFlavor {
             .collect();
 
         for default_env in [SuiEnv::testnet(), SuiEnv::mainnet()] {
-            if serves_chain(&default_env) && !candidates.iter().any(|env| env.rpc == default_env.rpc)
+            if serves_chain(&default_env)
+                && !candidates.iter().any(|env| env.rpc == default_env.rpc)
             {
                 candidates.push(default_env);
             }
