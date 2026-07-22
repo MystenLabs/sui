@@ -57,7 +57,7 @@ use self::store::in_mem_store::KeyStore;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::sui_system_state::SuiSystemState;
-pub use sui_types::transaction_executor::TransactionChecks;
+pub use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -318,6 +318,28 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = VerifiedTransaction::new_unchecked(transaction);
         self.execute_transaction_impl(transaction)
+    }
+
+    /// Simulate a transaction without committing it.
+    ///
+    /// Unlike [`Self::execute_transaction`], the store is not mutated and nothing is enqueued
+    /// for the next checkpoint; signatures are not required. This mirrors the fullnode's
+    /// `AuthorityState::simulate_transaction` (dry-run / dev-inspect) semantics — see
+    /// [`EpochState::simulate_transaction`] for details and the unification TODO.
+    pub fn simulate_transaction(
+        &self,
+        transaction: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
+    ) -> SuiResult<SimulateTransactionResult> {
+        self.epoch_state.simulate_transaction(
+            &self.store,
+            &self.deny_config,
+            &self.verifier_signing_config,
+            transaction,
+            checks,
+            allow_mock_gas_coin,
+        )
     }
 
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
@@ -1046,5 +1068,117 @@ mod tests {
         } else {
             assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 user txn
         };
+    }
+
+    #[test]
+    fn simulate_does_not_commit() {
+        let mut sim = Simulacrum::new();
+        let recipient = SuiAddress::random_for_testing_only();
+        let (tx, _) = sim.transfer_txn(recipient);
+        let tx_data = tx.data().transaction_data().clone();
+        let tx_digest = tx_data.digest();
+
+        let result = sim
+            .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+            .unwrap();
+
+        assert!(result.effects.status().is_ok());
+        // Explicit gas payment was provided, so no mock gas is injected.
+        assert!(result.mock_gas_id.is_none());
+        assert!(result.suggested_gas_price.is_none());
+        // Nothing was committed: the recipient owns nothing and the transaction is not in the
+        // store.
+        assert_eq!(sim.store().owned_objects(recipient).count(), 0);
+        assert!(sim.store().get_transaction(&tx_digest).is_none());
+
+        // Executing the same transaction against the unchanged state produces the same effects.
+        let (effects, err) = sim.execute_transaction(tx).unwrap();
+        assert!(err.is_none());
+        assert_eq!(result.effects, effects);
+    }
+
+    #[test]
+    fn simulate_with_mock_gas() {
+        let sim = Simulacrum::new();
+        let (sender, _) = sim.keystore().accounts().next().unwrap();
+        let sender = *sender;
+        let recipient = SuiAddress::random_for_testing_only();
+
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(recipient, Some(1));
+            builder.finish()
+        };
+        let tx_data = TransactionData::new_with_gas_data(
+            TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            GasData {
+                payment: vec![],
+                owner: sender,
+                price: sim.reference_gas_price(),
+                budget: 1_000_000_000,
+            },
+        );
+
+        let result = sim
+            .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+            .unwrap();
+        assert!(result.effects.status().is_ok());
+        assert_eq!(result.mock_gas_id, Some(ObjectID::MAX));
+
+        // Without mock gas injection, the same transaction fails validity checks.
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(recipient, Some(1));
+            builder.finish()
+        };
+        let tx_data = TransactionData::new_with_gas_data(
+            TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            GasData {
+                payment: vec![],
+                owner: sender,
+                price: sim.reference_gas_price(),
+                budget: 1_000_000_000,
+            },
+        );
+        assert!(
+            sim.simulate_transaction(tx_data, TransactionChecks::Enabled, false)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn simulate_with_checks_disabled() {
+        let mut sim = Simulacrum::new();
+        let recipient = SuiAddress::random_for_testing_only();
+        let (tx, _) = sim.transfer_txn(recipient);
+        let tx_data = tx.data().transaction_data().clone();
+
+        let result = sim
+            .simulate_transaction(tx_data, TransactionChecks::Disabled, true)
+            .unwrap();
+        assert!(result.effects.status().is_ok());
+        // Dev-inspect mode returns per-command execution results.
+        assert!(!result.execution_result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn simulate_rejects_system_transactions() {
+        let sim = Simulacrum::new();
+        let tx = VerifiedTransaction::new_consensus_commit_prologue_v3(
+            0,
+            0,
+            1,
+            ConsensusCommitDigest::default(),
+            ConsensusDeterminedVersionAssignments::empty_for_testing(),
+        );
+        let tx_data = tx.data().intent_message().value.clone();
+
+        let err = sim
+            .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("system transactions"));
     }
 }
