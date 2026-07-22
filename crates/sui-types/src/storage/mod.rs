@@ -224,6 +224,13 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
+    /// Like [`read_object`], but may also consult a backing store for objects that are not
+    /// transaction inputs (e.g. AuthenticatorState for GCP attestation JwkMap bootstrap).
+    /// Default: clone of [`read_object`].
+    fn get_object_including_store(&self, id: &ObjectID) -> Option<Object> {
+        self.read_object(id).cloned()
+    }
+
     fn record_execution_results(&mut self, results: ExecutionResults)
     -> Result<(), ExecutionError>;
 

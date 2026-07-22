@@ -424,20 +424,22 @@ where
             use sui_types::storage::ObjectStore;
 
             // Bridge from ExecutionState to ObjectStore for get_authenticator_state.
+            // Use get_object_including_store: AuthenticatorState is not a user-tx input,
+            // so TemporaryStore::read_object alone cannot see it (or its dynamic fields).
             struct StateAsObjectStore<'a>(&'a dyn ExecutionState);
             impl ObjectStore for StateAsObjectStore<'_> {
                 fn get_object(
                     &self,
                     object_id: &sui_types::base_types::ObjectID,
                 ) -> Option<sui_types::object::Object> {
-                    self.0.read_object(object_id).cloned()
+                    self.0.get_object_including_store(object_id)
                 }
                 fn get_object_by_key(
                     &self,
                     object_id: &sui_types::base_types::ObjectID,
                     _version: sui_types::base_types::VersionNumber,
                 ) -> Option<sui_types::object::Object> {
-                    self.0.read_object(object_id).cloned()
+                    self.0.get_object_including_store(object_id)
                 }
             }
 
