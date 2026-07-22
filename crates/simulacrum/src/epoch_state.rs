@@ -26,6 +26,8 @@ use sui_types::{
 
 use crate::SimulatorStore;
 
+mod simulate;
+
 pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
     committee: Committee,
