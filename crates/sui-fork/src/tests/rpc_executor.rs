@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rand::rngs::OsRng;
+use wiremock::MockServer;
 
 use move_core_types::identifier::Identifier;
 use prometheus::Registry;
@@ -55,6 +56,7 @@ use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::reader::ForkRpcReader;
 use crate::runtime::ForkRuntime;
 use crate::store::ForkStore;
+use crate::test_support::absent_objects_gql_server;
 
 /// Test harness that sets up a Simulacrum and a transaction executor to run transactions. Each test
 /// creates a new harness to ensure isolation and a fresh state.
@@ -68,10 +70,11 @@ struct TestHarness {
     checkpoint_receiver: tokio::sync::broadcast::Receiver<Arc<Checkpoint>>,
     temp: tempfile::TempDir,
     _runtime: Option<ForkRuntime>,
+    _gql_server: MockServer,
 }
 
 impl TestHarness {
-    fn new() -> Self {
+    async fn new() -> Self {
         let temp = tempfile::tempdir().expect("failed to create tempdir");
         let mut rng = OsRng;
         let config = ConfigBuilder::new_with_temp_dir()
@@ -91,8 +94,13 @@ impl TestHarness {
         )
         .expect("runtime should open");
         // Initialize a ForkStore with the genesis objects, so the Simulacrum can read them.
-        let mut store =
-            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        let gql_server = absent_objects_gql_server().await;
+        let mut store = ForkStore::new_for_testing_with_remote(
+            temp.path().to_path_buf(),
+            gql_server.uri(),
+            forked_at_checkpoint,
+            runtime.local_store(),
+        );
         store
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
             .expect("genesis checkpoint should be saved");
@@ -141,6 +149,7 @@ impl TestHarness {
             checkpoint_receiver,
             temp,
             _runtime: Some(runtime),
+            _gql_server: gql_server,
         }
     }
 
@@ -163,8 +172,13 @@ impl TestHarness {
             chain_identifier,
         )
         .expect("runtime should open");
-        let mut store =
-            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        let gql_server = absent_objects_gql_server().await;
+        let mut store = ForkStore::new_for_testing_with_remote(
+            temp.path().to_path_buf(),
+            gql_server.uri(),
+            forked_at_checkpoint,
+            runtime.local_store(),
+        );
         store
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
             .expect("genesis checkpoint should be saved");
@@ -216,6 +230,7 @@ impl TestHarness {
             checkpoint_receiver,
             temp,
             _runtime: None,
+            _gql_server: gql_server,
         }
     }
 
@@ -288,7 +303,7 @@ impl TestHarness {
 
 #[tokio::test]
 async fn test_tx_execution_publishes_checkpoint() {
-    let mut harness = TestHarness::new();
+    let mut harness = TestHarness::new().await;
     let signed_tx = harness.build_transfer_tx(1_000);
 
     let request = ExecuteTransactionRequestV3::new_v2(signed_tx);
@@ -317,7 +332,7 @@ async fn test_tx_execution_publishes_checkpoint() {
 #[ignore = "simulate_transaction not yet supported by the forked network"]
 #[tokio::test]
 async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
-    let mut harness = TestHarness::new();
+    let mut harness = TestHarness::new().await;
     let tx_data = harness.build_transfer_tx_data(1_000);
     let gas_id = harness.gas_object.id();
     let before = {
@@ -352,7 +367,7 @@ async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
 #[ignore = "simulate_transaction not yet supported by the forked network"]
 #[tokio::test]
 async fn test_simulate_transaction_supports_mock_gas() {
-    let harness = TestHarness::new();
+    let harness = TestHarness::new().await;
     let mut tx_data = harness.build_transfer_tx_data(1_000);
     tx_data.gas_data_mut().payment = Vec::new();
 
@@ -463,7 +478,7 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
         harness.temp.path().join("empty-rpc-reader-store"),
         harness.context.runtime().unwrap().local_store(),
     );
-    let reader = ForkRpcReader::new(harness.context.runtime().unwrap().reader(), empty_store);
+    let reader = ForkRpcReader::new(empty_store);
 
     assert!(
         reader
@@ -547,7 +562,7 @@ async fn test_indexer_populates_derived_indexes_for_local_execution() {
 
 #[tokio::test]
 async fn test_send_gas_funds_publishes_checkpoint() {
-    let mut harness = TestHarness::new();
+    let mut harness = TestHarness::new().await;
     let signed_tx = harness.build_send_gas_funds_tx(SuiAddress::random_for_testing_only());
 
     let request = ExecuteTransactionRequestV3::new_v2(signed_tx);
@@ -579,7 +594,7 @@ async fn test_send_gas_funds_publishes_checkpoint() {
 
 #[tokio::test]
 async fn test_tx_execution() {
-    let harness = TestHarness::new();
+    let harness = TestHarness::new().await;
     let signed_tx = harness.build_transfer_tx(1_000);
     let expected_digest = *signed_tx.digest();
 
@@ -603,7 +618,7 @@ async fn test_tx_execution() {
 
 #[tokio::test]
 async fn test_empty_signature_transaction_impersonates_sender() {
-    let mut harness = TestHarness::new();
+    let mut harness = TestHarness::new().await;
     let tx_data = harness.build_transfer_tx_data(1_000);
     let transaction = Transaction::from_generic_sig_data(tx_data, vec![]);
     let expected_digest = *transaction.digest();
@@ -633,7 +648,7 @@ async fn test_empty_signature_transaction_impersonates_sender() {
 
 #[tokio::test]
 async fn test_insufficient_coin_balance() {
-    let harness = TestHarness::new();
+    let harness = TestHarness::new().await;
 
     let balance = GasCoin::try_from(&harness.gas_object).unwrap().value();
     let signed_tx = harness.build_transfer_tx(balance + 1);
@@ -659,7 +674,7 @@ async fn test_insufficient_coin_balance() {
 
 #[tokio::test]
 async fn test_bad_signature_returns_submission_error() {
-    let mut harness = TestHarness::new();
+    let mut harness = TestHarness::new().await;
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -699,7 +714,7 @@ async fn test_bad_signature_returns_submission_error() {
 
 #[tokio::test]
 async fn test_include_input_and_output_objects() {
-    let harness = TestHarness::new();
+    let harness = TestHarness::new().await;
     let transaction = harness.build_transfer_tx(1_000);
 
     let request = ExecuteTransactionRequestV3 {

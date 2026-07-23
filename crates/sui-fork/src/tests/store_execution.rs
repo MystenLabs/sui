@@ -61,10 +61,11 @@ use crate::runtime::ForkRuntime;
 ///
 /// Returns the simulacrum, the underlying NetworkConfig (so tests can find
 /// genesis objects and account keys), and the tempdir guarding the local store.
-fn test_simulacrum() -> (
+async fn test_simulacrum() -> (
     Simulacrum<OsRng, ForkStore>,
     NetworkConfig,
     tempfile::TempDir,
+    MockServer,
 ) {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let mut rng = OsRng;
@@ -74,7 +75,13 @@ fn test_simulacrum() -> (
         .build();
 
     let runtime = open_test_runtime(temp.path(), 0);
-    let mut store = ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+    let gql_server = crate::test_support::absent_objects_gql_server().await;
+    let mut store = ForkStore::new_for_testing_with_remote(
+        temp.path().to_path_buf(),
+        gql_server.uri(),
+        0,
+        runtime.local_store(),
+    );
     let written: BTreeMap<ObjectID, Object> = config
         .genesis
         .objects()
@@ -92,7 +99,7 @@ fn test_simulacrum() -> (
         store,
         rng,
     );
-    (sim, config, temp)
+    (sim, config, temp, gql_server)
 }
 
 /// Find the first gas coin in the genesis object set owned by `owner`.
@@ -114,7 +121,7 @@ fn test_data_store() -> (tempfile::TempDir, ForkStore) {
 }
 
 fn fork_rpc_reader(store: &ForkStore) -> ForkRpcReader {
-    ForkRpcReader::new(store.local_store().reader().clone(), store.clone())
+    ForkRpcReader::new(store.clone())
 }
 
 fn test_data_store_with_remote(
@@ -692,7 +699,7 @@ async fn test_rpc_reader_latest_ignores_stale_cached_history() {
 
 #[tokio::test]
 async fn test_advance_clock_executes_and_persists() {
-    let (mut sim, _config, _temp) = test_simulacrum();
+    let (mut sim, _config, _temp, _gql_server) = test_simulacrum().await;
     let initial_ts = sim.store().get_clock().timestamp_ms;
 
     let effects = sim.advance_clock(Duration::from_secs(60));
@@ -723,7 +730,7 @@ async fn test_advance_clock_executes_and_persists() {
 
 #[tokio::test]
 async fn test_transfer_sui_executes_and_persists() {
-    let (mut sim, config, _temp) = test_simulacrum();
+    let (mut sim, config, _temp, _gql_server) = test_simulacrum().await;
 
     // Pick a sender from the genesis keystore and a gas coin owned by the sender.
     let (sender, sender_key) = {
@@ -1285,4 +1292,26 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
             .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
+}
+
+/// A store or remote failure during a child read must surface as an error:
+/// swallowed into `Ok(None)`, it would reach Move execution as "child not
+/// found" and be durably committed as a wrong result.
+#[test]
+fn test_read_child_object_propagates_store_errors() {
+    let (_temp, store) = test_data_store();
+    let parent = ObjectID::random();
+    let child = ObjectID::random();
+
+    let err = RuntimeObjectResolver::read_child_object(
+        &store,
+        &parent,
+        &child,
+        SequenceNumber::from_u64(5),
+    )
+    .expect_err("an unreachable remote must surface as an error, not as a missing child");
+    assert!(
+        err.to_string().contains(&child.to_string()),
+        "error should name the child object: {err}",
+    );
 }

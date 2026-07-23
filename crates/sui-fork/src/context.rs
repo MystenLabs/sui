@@ -92,6 +92,9 @@ impl Context {
         &self.simulacrum
     }
 
+    /// Only tests need direct runtime access; production reads go through the
+    /// store handles created at startup.
+    #[cfg(test)]
     pub(crate) fn runtime(&self) -> Option<&ForkRuntime> {
         self.runtime.as_ref()
     }

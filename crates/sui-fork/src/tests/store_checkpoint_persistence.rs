@@ -268,8 +268,11 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
     // Session 2: resume from the reopened store. The production base-checkpoint
     // selection must pick the local tip, not the fork point — re-seeding from
     // the fork point would rebuild an already-persisted sequence number and
-    // panic the seal.
-    let (store, _runtime) = test_data_store(temp.path());
+    // panic the seal. Sealing executes system transactions whose dynamic-field
+    // probes reach the remote, so the store needs a reachable mock that
+    // reports the objects absent.
+    let gql_server = crate::test_support::absent_objects_gql_server().await;
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), gql_server.uri(), 0);
     let base = crate::startup::resume_base_checkpoint(&store)
         .expect("resume base checkpoint should resolve");
     assert_eq!(base.data().sequence_number, tip.data().sequence_number);
