@@ -59,21 +59,12 @@ The pattern has four steps:
 3. **Verify:** the agent checks the effects: correct recipient, correct amount, correct coin type, success status.
 4. **Settle:** only after verification passes does the agent release the goods, service, or next operation.
 
-```
-┌────────┐          ┌──────────┐          ┌────────────┐
-│ Submit │─────────>│  Wait    │─────────>│  Verify    │
-│  tx    │          │ finality │          │  effects   │
-└────────┘          └──────────┘          └─────┬──────┘
-                                                │
-                                    ┌───────────┴──────────┐
-                                    │                      │
-                               ✓ Valid                ✗ Invalid
-                                    │                      │
-                              ┌─────▼─────┐         ┌─────▼──────┐
-                              │  Settle   │         │  Reject    │
-                              │ (release) │         │ (log, alert│
-                              └───────────┘         │  retry?)   │
-                                                    └────────────┘
+```mermaid
+flowchart LR
+    A[Submit tx] --> B[Wait for finality]
+    B --> C{Verify effects}
+    C -->|Valid| D[Settle: release goods or service]
+    C -->|Invalid| E[Reject: log, alert, retry?]
 ```
 
 ## Waiting for finality
