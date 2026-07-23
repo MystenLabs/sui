@@ -2832,6 +2832,18 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    /// Returns a guard witnessing that the epoch is still alive. While the guard is held,
+    /// `epoch_terminated()` cannot complete. Returns `None` if the epoch has already ended.
+    ///
+    /// This is the companion to `within_alive_epoch` for work that cannot be driven as a
+    /// cancellable future (e.g. a `spawn_blocking` task): hold the guard across the blocking
+    /// call and await it unconditionally, so the work always runs to completion within the
+    /// epoch rather than being detached at epoch end.
+    pub async fn enter_alive_epoch(&self) -> Option<tokio::sync::RwLockReadGuard<'_, bool>> {
+        let guard = self.epoch_alive.read().await;
+        if *guard { Some(guard) } else { None }
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub fn verify_transaction_with_current_aliases(
         &self,
