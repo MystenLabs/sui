@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::PackageStore,
+    data_store::VerifiedPackageStore,
     static_programmable_transactions::{
         linkage::{
             analysis::LinkageAnalyzer,
@@ -16,7 +16,7 @@ use crate::{
 };
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -44,12 +44,12 @@ use sui_verifier::INIT_FN_NAME;
 pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
     txn: &mut Transaction,
     linkage_analysis: &LinkageAnalyzer,
-    package_store: &dyn PackageStore,
+    package_store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
     let mut base_linkage = linkage_analysis
         .config()
-        .resolution_table_with_native_packages::<E>(package_store)?;
+        .resolution_table_with_native_packages::<E, _>(package_store)?;
 
     for (i, command) in txn.commands.iter().enumerate() {
         analyze_command::<E>(command, &mut base_linkage, package_store, protocol_config)
@@ -70,7 +70,7 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
 fn analyze_command<E: ExecutionErrorTrait>(
     command: &Command,
     resolution_table: &mut ResolutionTable,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
     match command {
@@ -219,7 +219,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
     current_package_id: &ObjectID,
     resolved_linkage: &ResolvedLinkage,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
 ) -> Result<(), E> {
     let current_pkg = get_package(current_package_id, store)?;
     let pkg_original_id: ObjectID = current_pkg.original_id().into();
@@ -272,7 +272,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
 fn add_call_to_table<E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
     function: &LoadedFunction,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
 ) -> Result<(), E> {
     let dep_resolution_fn = match function.visibility {
         Visibility::Public => VersionConstraint::at_least,
@@ -294,7 +294,7 @@ fn add_call_to_table<E: ExecutionErrorTrait>(
 fn add_type_packages<'a, E: ExecutionErrorTrait>(
     resolution_table: &mut ResolutionTable,
     types: impl IntoIterator<Item = &'a Type>,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
 ) -> Result<(), E> {
     for type_defining_id in types.into_iter().flat_map(|ty| ty.all_addresses()) {
         add_package::<E>(
@@ -313,10 +313,10 @@ fn add_type_packages<'a, E: ExecutionErrorTrait>(
 /// table) gets `dep_resolution_fn`'s constraint.
 fn add_package<E: ExecutionErrorTrait>(
     object_id: &ObjectID,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
     resolution_table: &mut ResolutionTable,
-    self_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
-    dep_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
+    self_resolution_fn: fn(&Arc<VerifiedPackage>) -> Option<VersionConstraint>,
+    dep_resolution_fn: fn(&Arc<VerifiedPackage>) -> Option<VersionConstraint>,
 ) -> Result<(), E> {
     let pkg = get_package(object_id, store)?;
     let transitive_deps = resolution_table

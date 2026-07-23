@@ -8,7 +8,7 @@ pub mod resolved_linkage;
 pub mod single_linkage;
 
 use crate::{
-    data_store::PackageStore,
+    data_store::VerifiedPackageStore,
     execution_mode::ExecutionMode,
     static_programmable_transactions::{
         linkage::analysis::LinkageAnalyzer, loading::ast as loading,
@@ -21,7 +21,7 @@ use sui_protocol_config::ProtocolConfig;
 pub fn refine_linkage<Mode: ExecutionMode>(
     mut txn: loading::Transaction,
     linkage_analysis: &LinkageAnalyzer,
-    package_store: &dyn PackageStore,
+    package_store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
 ) -> Result<loading::Transaction, Mode::Error> {
     if !protocol_config.enable_unified_linkage() {
