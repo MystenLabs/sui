@@ -35,6 +35,7 @@ pub(crate) struct AdaptiveBlockCap {
     target_ms: f64,
     floor_bytes: u64,
     ceiling_bytes: u64,
+    recovery_step_bytes: u64,
     ewma_ms_bits: AtomicU64,
     cap_bytes: AtomicU64,
 }
@@ -56,7 +57,7 @@ impl AdaptiveBlockCap {
             let scale = (self.target_ms / ewma).max(0.5);
             ((cap as f64 * scale) as u64).max(self.floor_bytes)
         } else if ewma < self.target_ms * 0.8 {
-            (cap + 8 * 1024).min(self.ceiling_bytes)
+            (cap + self.recovery_step_bytes).min(self.ceiling_bytes)
         } else {
             cap
         };
@@ -77,14 +78,21 @@ pub(crate) fn adaptive_block_cap() -> Option<&'static AdaptiveBlockCap> {
         .get_or_init(|| {
             let v = std::env::var("CONSENSUS_ADAPTIVE_BLOCK_CAP").ok()?;
             let target_ms = v.parse::<f64>().ok().filter(|t| *t > 1.0).unwrap_or(150.0);
-            let ceiling_bytes = std::env::var("CONSENSUS_ADAPTIVE_BLOCK_CAP_CEILING")
-                .ok()
-                .and_then(|c| c.parse().ok())
-                .unwrap_or(512 * 1024);
+            let env_u64 = |name: &str, default: u64| {
+                std::env::var(name)
+                    .ok()
+                    .and_then(|c| c.parse().ok())
+                    .unwrap_or(default)
+            };
+            let ceiling_bytes = env_u64("CONSENSUS_ADAPTIVE_BLOCK_CAP_CEILING", 512 * 1024);
+            let floor_bytes =
+                env_u64("CONSENSUS_ADAPTIVE_BLOCK_CAP_FLOOR", 64 * 1024).min(ceiling_bytes);
+            let recovery_step_bytes = env_u64("CONSENSUS_ADAPTIVE_BLOCK_CAP_STEP", 8 * 1024);
             Some(AdaptiveBlockCap {
                 target_ms,
-                floor_bytes: 64 * 1024,
+                floor_bytes,
                 ceiling_bytes,
+                recovery_step_bytes,
                 ewma_ms_bits: AtomicU64::new(0),
                 cap_bytes: AtomicU64::new(ceiling_bytes),
             })
