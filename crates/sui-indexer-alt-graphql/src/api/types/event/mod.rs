@@ -503,8 +503,8 @@ impl From<Connection<String, Event>> for EventConnection {
 }
 
 /// Hydrate an `Event` node from a `ListEvents` stream item. The read mask requests everything the
-/// node needs — the event envelope and its position — so no KV lookup is required; a missing
-/// field is an internal inconsistency.
+/// node needs — the event envelope and its position — so no KV lookup is required; a missing field
+/// is an internal inconsistency.
 fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
     // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
     let transaction_digest = payload
