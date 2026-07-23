@@ -33,6 +33,8 @@ use tonic::metadata::AsciiMetadataValue;
 use tracing::debug;
 use tracing::warn;
 
+use crate::config::PipelineAvailability;
+use crate::config::PipelineConfig;
 use crate::config::WatermarkConfig;
 use crate::metrics::RpcMetrics;
 
@@ -135,7 +137,7 @@ pub(crate) type WatermarksLock = Arc<RwLock<Arc<Watermarks>>>;
 impl WatermarkTask {
     pub(crate) fn new(
         config: WatermarkConfig,
-        pg_pipelines: Vec<String>,
+        pipeline: PipelineConfig,
         pg_reader: PgReader,
         bigtable_reader: Option<BigtableReader>,
         ledger_grpc_reader: Option<LedgerGrpcReader>,
@@ -145,6 +147,13 @@ impl WatermarkTask {
         let WatermarkConfig {
             watermark_polling_interval,
         } = config;
+
+        let pg_pipelines = pipeline
+            .availability
+            .into_iter()
+            .filter(|(_, status)| matches!(status, PipelineAvailability::Enabled))
+            .map(|(name, _)| name)
+            .collect();
 
         let (watermarks_tx, _) = watch::channel(Arc::new(Watermarks::default()));
         Self {

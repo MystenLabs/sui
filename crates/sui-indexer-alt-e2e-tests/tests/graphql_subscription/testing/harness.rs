@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -17,6 +18,8 @@ use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
+use sui_indexer_alt_graphql::config::PipelineAvailability;
+use sui_indexer_alt_graphql::config::PipelineConfig;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
@@ -146,8 +149,16 @@ impl SubscriptionTestCluster {
                 checkpoint_stream_url: Some(stream_url.parse().unwrap()),
             },
             "0.0.0",
-            GraphQlConfig::default(),
-            vec!["kv_packages".to_string()],
+            GraphQlConfig {
+                pipeline: PipelineConfig {
+                    availability: BTreeMap::from([(
+                        "kv_packages".to_string(),
+                        PipelineAvailability::Enabled,
+                    )]),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             &Registry::new(),
         )
         .await

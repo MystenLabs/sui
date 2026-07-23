@@ -184,7 +184,20 @@ impl GraphQlTestCluster {
         .await
         .expect("Failed to setup indexer");
 
-        let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
+        let pipelines: Vec<_> = indexer.pipelines().collect();
+
+        // GraphQL only tracks watermarks for pipelines explicitly named in its own config, so
+        // make sure every pipeline this indexer actually populates is represented.
+        let mut graphql_config = GraphQlConfig::default();
+        let default_availability = graphql_config.pipeline.default_availability;
+        for &pipeline in &pipelines {
+            graphql_config
+                .pipeline
+                .availability
+                .entry(pipeline.to_string())
+                .or_insert(default_availability);
+        }
+
         let s_indexer = indexer.run().await.expect("Failed to start indexer");
 
         let s_graphql = start_graphql(
@@ -200,8 +213,7 @@ impl GraphQlTestCluster {
             SystemPackageTaskArgs::default(),
             SubscriptionArgs::default(),
             "0.0.0",
-            GraphQlConfig::default(),
-            pipelines,
+            graphql_config,
             &Registry::new(),
         )
         .await

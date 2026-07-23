@@ -7,7 +7,6 @@ use prometheus::Registry;
 use sui_futures::service::Error;
 use sui_indexer_alt_graphql::args::Args;
 use sui_indexer_alt_graphql::args::Command;
-use sui_indexer_alt_graphql::config::IndexerConfig;
 use sui_indexer_alt_graphql::config::RpcLayer;
 use sui_indexer_alt_graphql::start_rpc;
 use sui_indexer_alt_metrics::MetricsService;
@@ -55,7 +54,6 @@ async fn main() -> anyhow::Result<()> {
             system_package_task_args,
             metrics_args,
             config,
-            indexer_config,
             subscription_args,
         } => {
             let rpc_config = if let Some(path) = config {
@@ -68,21 +66,6 @@ async fn main() -> anyhow::Result<()> {
                 RpcLayer::default()
             }
             .finish();
-
-            let mut pg_pipelines = vec![];
-            for path in indexer_config {
-                let contents = fs::read_to_string(&path).await.with_context(|| {
-                    format!(
-                        "Failed to read indexer configuration TOML file: {}",
-                        path.display()
-                    )
-                })?;
-
-                let config: IndexerConfig = toml::from_str(&contents)
-                    .context("Failed to parse indexer configuration TOML file")?;
-
-                pg_pipelines.extend(config.pipelines().map(|p| p.to_owned()));
-            }
 
             let registry = Registry::new_custom(Some("graphql_alt".into()), None)
                 .context("Failed to create Prometheus registry.")?;
@@ -105,7 +88,6 @@ async fn main() -> anyhow::Result<()> {
                 subscription_args,
                 VERSION,
                 rpc_config,
-                pg_pipelines,
                 metrics.registry(),
             )
             .await?;
