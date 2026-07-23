@@ -1,0 +1,268 @@
+---
+title: Recurring and Streaming Payments
+description: >-
+  Implement recurring payment schedules and streaming payment flows on Sui
+  using off-chain schedulers and onchain streaming objects.
+keywords:
+  - recurring payments
+  - streaming payments
+  - subscriptions
+  - scheduled payments
+  - payment automation
+goal:
+  description: >-
+    Reader can implement recurring or streaming payment patterns on Sui
+    using off-chain schedulers or onchain streaming objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Recurring payments
+    stage: Patterns
+questions:
+  - How do I implement recurring payments on Sui?
+  - What is a streaming payment on Sui?
+  - How do I build a subscription payment system on Sui?
+answer: >-
+  Sui has no native recurring payments. Use an off-chain scheduler with a
+  spending mandate for periodic payments, or lock funds in a shared
+  StreamPayment object with a linear unlock schedule.
+---
+
+Sui does not have native recurring payments — there is no cron system or auto-debit mechanism that pulls funds from an account on a schedule. Instead, you implement recurring payments using an off-chain scheduler that triggers onchain transactions, or a prepaid streaming object that the recipient claims from over time.
+
+## Pattern 1: Scheduled agent payments
+
+An off-chain agent or cron job executes a payment transaction at each interval. The agent operates under a [spending mandate](/onchain-finance/agentic-payments/spending-policies) that authorizes periodic withdrawals up to a cap.
+
+```mermaid
+sequenceDiagram
+    participant Owner
+    participant Agent
+    participant Sui
+
+    Owner->>Sui: Create spending mandate (monthly cap, expiry)
+    loop Every month
+        Agent->>Sui: Execute spend (mandate, amount, recipient)
+        Sui-->>Agent: Transaction confirmed
+    end
+    Owner->>Sui: Revoke mandate (if needed)
+```
+
+### Implementation
+
+The agent runs a simple loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge):
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+const agentKeypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
+
+async function executeRecurringPayment(
+  mandateId: string,
+  recipientAddress: string,
+  amountMist: bigint,
+) {
+  const tx = new Transaction();
+  tx.setSender(agentKeypair.toSuiAddress());
+
+  tx.moveCall({
+    target: '0xPACKAGE::spending_mandate::execute_spend',
+    arguments: [
+      tx.object(mandateId),
+      tx.pure.u64(amountMist),
+      tx.pure.address(recipientAddress),
+      tx.object('0x6'), // Clock
+    ],
+  });
+
+  const result = await client.core.signAndExecuteTransaction({
+    transaction: tx,
+    signer: agentKeypair,
+  });
+
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(`Recurring payment failed: ${result.FailedTransaction.error}`);
+  }
+
+  return result.Transaction!.digest;
+}
+```
+
+:::tip Use idempotency keys
+
+If the scheduler might fire twice (at-least-once delivery), track each payment period in a database and skip execution if the period was already paid. See [Production Hardening](/onchain-finance/agentic-payments/production-hardening#idempotency-keys) for the pattern.
+
+:::
+
+### Advantages and tradeoffs
+
+- **Advantages:** Full control over scheduling logic, easy to pause/resume, works with any payment amount or recipient.
+- **Tradeoffs:** Requires an always-on agent or scheduler. The agent holds (or is delegated) spending authority. If the agent goes down, payments stop until it recovers.
+
+## Pattern 2: Prepaid streaming
+
+Lock funds in a shared onchain object with a linear unlock schedule. The recipient claims the unlocked portion at any time. No off-chain agent is needed after the initial deposit.
+
+### Move module
+
+```move
+module example::stream;
+
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+
+const EStreamNotStarted: u64 = 0;
+const ENotRecipient: u64 = 1;
+const ENothingToClaim: u64 = 2;
+
+public struct StreamPayment has key {
+    id: UID,
+    sender: address,
+    recipient: address,
+    total_amount: u64,
+    claimed_amount: u64,
+    start_time_ms: u64,
+    end_time_ms: u64,
+    balance: Balance<SUI>,
+}
+
+const EInvalidDuration: u64 = 3;
+
+/// Create a new stream. Funds are locked until the recipient claims them.
+public fun create(
+    coin: Coin<SUI>,
+    recipient: address,
+    start_time_ms: u64,
+    end_time_ms: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(end_time_ms > start_time_ms, EInvalidDuration);
+    let total = coin.value();
+    let stream = StreamPayment {
+        id: object::new(ctx),
+        sender: ctx.sender(),
+        recipient,
+        total_amount: total,
+        claimed_amount: 0,
+        start_time_ms,
+        end_time_ms,
+        balance: coin.into_balance(),
+    };
+    transfer::share_object(stream);
+}
+
+/// Claim the unlocked portion of the stream.
+public fun claim(
+    stream: &mut StreamPayment,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<SUI> {
+    assert!(ctx.sender() == stream.recipient, ENotRecipient);
+
+    let now = clock.timestamp_ms();
+    assert!(now >= stream.start_time_ms, EStreamNotStarted);
+
+    let elapsed = if (now >= stream.end_time_ms) {
+        stream.end_time_ms - stream.start_time_ms
+    } else {
+        now - stream.start_time_ms
+    };
+
+    let total_duration = stream.end_time_ms - stream.start_time_ms;
+    let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
+    let claimable = (vested as u64) - stream.claimed_amount;
+
+    assert!(claimable > 0, ENothingToClaim);
+
+    stream.claimed_amount = stream.claimed_amount + claimable;
+    coin::from_balance(stream.balance.split(claimable), ctx)
+}
+
+/// Cancel the stream. Vested-but-unclaimed funds go to the recipient;
+/// unvested funds are returned to the sender.
+public fun cancel(
+    stream: StreamPayment,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == stream.sender, ENotRecipient);
+
+    let now = clock.timestamp_ms();
+    let elapsed = if (now >= stream.end_time_ms) {
+        stream.end_time_ms - stream.start_time_ms
+    } else if (now > stream.start_time_ms) {
+        now - stream.start_time_ms
+    } else {
+        0
+    };
+
+    let total_duration = stream.end_time_ms - stream.start_time_ms;
+    let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
+    let owed_to_recipient = (vested as u64) - stream.claimed_amount;
+
+    let StreamPayment {
+        id,
+        sender,
+        recipient,
+        total_amount: _,
+        claimed_amount: _,
+        start_time_ms: _,
+        end_time_ms: _,
+        mut balance,
+    } = stream;
+
+    // Transfer vested-but-unclaimed funds to recipient
+    if (owed_to_recipient > 0) {
+        let recipient_coin = coin::from_balance(balance.split(owed_to_recipient), ctx);
+        transfer::public_transfer(recipient_coin, recipient);
+    };
+
+    // Return unvested remainder to sender
+    if (balance.value() > 0) {
+        let sender_coin = coin::from_balance(balance, ctx);
+        transfer::public_transfer(sender_coin, sender);
+    } else {
+        balance.destroy_zero();
+    };
+
+    id.delete();
+}
+```
+
+### Advantages and tradeoffs
+
+- **Advantages:** No off-chain infrastructure needed after creation. The recipient claims on their own schedule. On cancellation, vested-but-unclaimed funds go to the recipient and only unvested funds return to the sender.
+- **Tradeoffs:** Requires upfront capital to fund the entire stream. The sender cannot change the rate after creation (cancel and recreate instead). Uses a shared object, which adds consensus overhead.
+
+## Choosing between patterns
+
+| Criteria | Scheduled agent | Prepaid stream |
+|---|---|---|
+| Upfront capital | Pay-as-you-go | Full amount locked |
+| Infrastructure | Agent or cron required | None after creation |
+| Flexibility | Change amount/recipient anytime | Fixed rate and recipient |
+| Cancellation | Stop the agent | Onchain cancel returns remainder |
+| Best for | Subscriptions, variable amounts | Salary, vesting, escrow |

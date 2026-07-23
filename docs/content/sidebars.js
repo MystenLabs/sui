@@ -328,6 +328,7 @@ export default {
               'onchain-finance/asset-custody/wallets/slush',
               'onchain-finance/asset-custody/wallets/self-custody',
               'onchain-finance/asset-custody/wallets/zk-login-wallets',
+        'onchain-finance/asset-custody/address-aliases',
               'onchain-finance/asset-custody/wallets/suilink',
             ],
           },
@@ -547,6 +548,32 @@ export default {
         'onchain-finance/kiosk/kiosk-apps',
       ],
     },
+    {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/gas-station',
+        'onchain-finance/p2p-reference-app',
+        'onchain-finance/payment-security',
+        {
+          type: 'category',
+          label: 'Agentic Payments',
+          link: { type: 'doc', id: 'onchain-finance/agentic-payments/index' },
+          items: [
+            'onchain-finance/agentic-payments/agent-wallet-setup',
+            'onchain-finance/agentic-payments/spending-policies',
+            'onchain-finance/agentic-payments/settlement-verification',
+            'onchain-finance/agentic-payments/production-hardening',
+            'onchain-finance/agentic-payments/recurring-payments',
+            'onchain-finance/agentic-payments/payment-reconciliation',
+          ],
+        },
+      ],
+    },
   ],
 
 suiStackSidebar: [
@@ -764,7 +791,7 @@ suiStackSidebar: [
 		label: 'Validators',
 		link: { type: 'doc', id: 'operators/validator/index', },
 		items: [
-      'operators/validator/validator-config',
+        'operators/validator/validator-config',
       'operators/validator/validator-tasks',
       'operators/validator/node-tools',
       'operators/validator/validator-rewards',
