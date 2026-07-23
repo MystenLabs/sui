@@ -20,10 +20,10 @@ async function fetchWithPayment(url: string): Promise<Response> {
 		return response;
 	}
 
-	// Parse payment instructions (includes a server-issued challenge)
+	// Parse payment instructions (includes server-issued challenge and exact amount)
 	const { amount, recipient, coinType, challenge } = await response.json();
 
-	// Build and submit payment
+	// Build and submit payment for the exact challenge amount
 	const tx = new Transaction();
 	tx.setSender(keypair.toSuiAddress());
 
@@ -32,11 +32,11 @@ async function fetchWithPayment(url: string): Promise<Response> {
 		tx.transferObjects([coin], recipient);
 	} else {
 		// For non-SUI coins, select a coin object of the right type
-		const coins = await client.getCoins({
+		const coins = await client.listCoins({
 			owner: keypair.toSuiAddress(),
 			coinType,
 		});
-		const [coin] = tx.splitCoins(tx.object(coins.data[0].coinObjectId), [BigInt(amount)]);
+		const [coin] = tx.splitCoins(tx.object(coins.objects[0].objectId), [BigInt(amount)]);
 		tx.transferObjects([coin], recipient);
 	}
 

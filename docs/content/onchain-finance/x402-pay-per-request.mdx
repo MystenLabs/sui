@@ -23,24 +23,26 @@ sequenceDiagram
     participant Sui
 
     Client->>Server: GET /api/resource
-    Server-->>Client: 402 Payment Required<br/>(amount, recipient, coin type, challenge)
-    Client->>Sui: Submit payment transaction
+    Server-->>Client: 402 Payment Required<br/>(exact nonce amount, recipient, challenge)
+    Client->>Sui: Pay exact nonce amount
     Sui-->>Client: Transaction digest
     Client->>Server: GET /api/resource<br/>X-Payment-Digest + X-Payment-Challenge
-    Server->>Sui: Verify payment onchain
+    Server->>Sui: Verify exact amount matches challenge
     Sui-->>Server: Transaction confirmed
     Server-->>Client: 200 OK + resource
 ```
 
 1. The client requests a resource from the server.
-2. The server responds with HTTP 402 and a JSON body containing payment details: amount, recipient address, coin type, and a unique challenge token.
-3. The client builds a PTB that transfers the requested amount to the server's address, signs, and submits it.
-4. The client retries the original request with the transaction digest and challenge token in headers.
-5. The server verifies the challenge was issued by itself, checks the payment onchain, and serves the resource.
+2. The server responds with HTTP 402 and a JSON body containing: a unique challenge ID, a nonce amount (base price + random offset), recipient address, and coin type.
+3. The client builds a PTB that transfers the **exact nonce amount** to the server's address, signs, and submits it.
+4. The client retries the original request with the transaction digest and challenge ID in headers.
+5. The server verifies the challenge was issued by itself, checks that the onchain payment matches the challenge's exact nonce amount, and serves the resource.
+
+The nonce amount binds the onchain payment to a specific challenge. An attacker who observes a payment cannot reuse it with a different challenge because the amounts won't match.
 
 ## Server implementation
 
-The server middleware checks for a valid payment digest on protected routes. If missing, it returns 402 with payment instructions. A per-request challenge prevents attackers from reusing observed payment digests.
+The server middleware checks for a valid payment digest on protected routes. If missing, it returns 402 with payment instructions.
 
 ### Configuration
 
@@ -64,13 +66,13 @@ The server middleware checks for a valid payment digest on protected routes. If 
 
 :::tip Production replay prevention
 
-The in-memory `Map` and `Set` work for a single server instance. For production, store pending challenges and used digests in a database with a TTL (for example, 5 minutes for challenges, 24 hours for digests).
+The in-memory `Map` and `Set` work for a single server instance. For production, store pending challenges and used digests in a database with a TTL (5 minutes for challenges, 24 hours for digests).
 
 :::
 
 ## Client implementation
 
-The client handles 402 responses by constructing a payment transaction and retrying with the server-issued challenge.
+The client handles 402 responses by paying the exact challenge amount and retrying.
 
 <ImportContent source="examples/onchain-finance/x402-pay-per-request/src/client.ts" mode="code" tag="fetch-with-payment" />
 
@@ -80,8 +82,8 @@ For autonomous agents, combine x402 with the [agent wallet setup](/onchain-finan
 
 ## Security considerations
 
-- **Challenge binding.** The server issues a unique challenge per request. Without this, an attacker who observes any payment to the server's address can replay the digest to access resources they didn't pay for. The challenge ties a specific payment to a specific access request.
-- **Replay prevention.** The server must track used digests. Without this, an attacker can reuse a single payment to access the resource multiple times.
+- **Nonce-amount binding.** Each challenge includes a unique nonce amount (base price + random offset). The server verifies the onchain payment matches this exact amount. An attacker who observes a payment digest cannot pair it with a different challenge because the amounts won't match.
+- **Replay prevention.** The server tracks used digests. A digest accepted for one challenge cannot be reused.
 - **Amount validation.** Always verify the exact amount received onchain. Do not trust the client's claim about payment amount.
-- **Timeout window.** Set a maximum age for accepted challenges (for example, 5 minutes) to prevent stale payment reuse. Expire pending challenges that are not fulfilled.
+- **Timeout window.** Expire pending challenges after 5 minutes. This bounds the window in which a challenge can be fulfilled and limits how long nonce amounts remain valid.
 - **Recipient verification.** The client should verify the 402 response's recipient address matches the expected server address to prevent payment redirection attacks.
