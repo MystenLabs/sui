@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod backing_package_metadata_store;
 pub mod cached_package_store;
 pub mod transaction_package_store;
 

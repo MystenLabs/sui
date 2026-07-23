@@ -34,11 +34,10 @@ use sui_adapter_latest::execution_engine::{
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingPackageStore, BackingStore};
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
-use crate::executor;
-use crate::verifier;
+use crate::{UnificationInformation, executor, verifier};
 use sui_adapter_latest::execution_mode;
 
 pub(crate) struct Executor(Arc<MoveRuntime>);
@@ -61,6 +60,18 @@ impl<'m> Verifier<'m> {
     pub(crate) fn new(config: VerifierConfig, metrics: &'m Arc<BytecodeVerifierMetrics>) -> Self {
         Verifier { config, metrics }
     }
+}
+
+pub(crate) fn collect_unification_information_for_signing(
+    protocol_config: &ProtocolConfig,
+    pt: &ProgrammableTransaction,
+    package_store: &dyn BackingPackageStore,
+) -> SuiResult<UnificationInformation> {
+    sui_adapter_latest::static_programmable_transactions::linkage::collect_unification_information_for_signing(
+        protocol_config,
+        pt,
+        package_store,
+    )
 }
 
 impl executor::Executor for Executor {

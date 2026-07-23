@@ -4,18 +4,68 @@
 pub mod analysis;
 pub mod config;
 pub(crate) mod facts;
+pub(crate) mod raw_facts;
 pub mod resolution;
 pub mod resolved_linkage;
 pub mod single_linkage;
 
 use crate::{
-    data_store::VerifiedPackageStore,
-    execution_mode::ExecutionMode,
+    data_store::{
+        VerifiedPackageStore, backing_package_metadata_store::BackingPackageMetadataStore,
+    },
+    execution_mode::{ExecutionMode, Normal},
     static_programmable_transactions::{
-        linkage::analysis::LinkageAnalyzer, loading::ast as loading,
+        linkage::{
+            analysis::LinkageAnalyzer, raw_facts::linkage_facts_from_programmable_transaction,
+        },
+        loading::ast as loading,
     },
 };
+use move_vm_runtime::shared::types::{OriginalId, VersionId};
+use std::collections::{BTreeMap, BTreeSet};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::{
+    error::{ExecutionError, SuiResult},
+    storage::BackingPackageStore,
+    transaction::ProgrammableTransaction,
+};
+
+#[allow(clippy::type_complexity)]
+pub fn collect_unification_information_for_signing(
+    protocol_config: &ProtocolConfig,
+    pt: &ProgrammableTransaction,
+    backing_package_store: &dyn BackingPackageStore,
+) -> SuiResult<(BTreeSet<OriginalId>, BTreeMap<OriginalId, (VersionId, u64)>)> {
+    let backing_package_metadata_store =
+        BackingPackageMetadataStore::new(protocol_config, backing_package_store);
+    let facts = linkage_facts_from_programmable_transaction(pt, &backing_package_metadata_store)?;
+    let linkage_analyzer = LinkageAnalyzer::new::<Normal<ExecutionError>>(protocol_config)
+        .map_err(|error| sui_types::error::SuiError::from(error.to_string()))?;
+
+    let mut execution_original_ids = BTreeSet::new();
+    let linkage = single_linkage::compute_unified_linkage::<ExecutionError, _>(
+        facts,
+        &linkage_analyzer,
+        &backing_package_metadata_store,
+        protocol_config,
+        Some(&mut execution_original_ids),
+    )
+    .map_err(sui_types::error::SuiError::from)?;
+
+    Ok((
+        execution_original_ids.into_iter().map(Into::into).collect(),
+        linkage
+            .resolution_table
+            .iter()
+            .map(|(original_id, resolution)| {
+                (
+                    (*original_id).into(),
+                    (resolution.object_id().into(), resolution.version()),
+                )
+            })
+            .collect(),
+    ))
+}
 
 /// Refine the transaction's per-call linkages into a single, unified linkage for the whole
 /// transaction (when enabled by the protocol config).
