@@ -34,25 +34,3 @@ watermark-polling-interval-ms = 500
 [zklogin]
 env = "Prod"
 max-epoch-upper-bound-delta = 30
-
-[pipeline-defaults]
-# Enable every pipeline listed below by default; set `enabled = false` on a specific entry to opt
-# back out despite the default.
-enabled = true
-
-[pipeline.cp_sequence_numbers]
-[pipeline.ev_emit_mod]
-[pipeline.ev_struct_inst]
-[pipeline.kv_epoch_ends]
-[pipeline.kv_epoch_starts]
-[pipeline.kv_feature_flags]
-[pipeline.kv_packages]
-[pipeline.kv_protocol_configs]
-[pipeline.obj_versions]
-[pipeline.sum_displays]
-[pipeline.tx_affected_addresses]
-[pipeline.tx_affected_objects]
-[pipeline.tx_balance_changes]
-[pipeline.tx_calls]
-[pipeline.tx_digests]
-[pipeline.tx_kinds]

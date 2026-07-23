@@ -15452,6 +15452,7 @@ dependencies = [
  "const-str",
  "dashmap 5.5.3",
  "diesel",
+ "diesel-async",
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
