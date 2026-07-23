@@ -72,6 +72,23 @@ pub(crate) enum GlobalLocation {
     StackOffset(usize),
 }
 
+impl GlobalLocation {
+    fn is_local(&self, frame_identifier: TraceIndex, local_index: usize) -> bool {
+        matches!(self, Self::Local(fidx, lidx) if *fidx == frame_identifier && *lidx == local_index)
+    }
+
+    fn is_in_frame(&self, frame_identifier: TraceIndex) -> bool {
+        matches!(self, Self::Local(fidx, _) if *fidx == frame_identifier)
+    }
+
+    fn runtime_location(&self) -> RuntimeLocation {
+        match self {
+            Self::Local(fidx, lidx) => RuntimeLocation::Local(*fidx, *lidx),
+            Self::StackOffset(idx) => RuntimeLocation::Stack(*idx),
+        }
+    }
+}
+
 impl GlobalValue {
     // Start with a stable snapshot of the loaded global value.
     fn new(snapshot: TraceValue) -> Self {
@@ -84,7 +101,10 @@ impl GlobalValue {
     // Record that the current active copy of this global is held by a local.
     // Track each same-frame local separately; moving one local must not hide another live alias.
     fn push_local(&mut self, frame_identifier: TraceIndex, local_index: usize) {
-        if matches!(self.locations.last(), Some(GlobalLocation::Local(fidx, lidx)) if *fidx == frame_identifier && *lidx == local_index)
+        if self
+            .locations
+            .last()
+            .is_some_and(|location| location.is_local(frame_identifier, local_index))
         {
             return;
         }
@@ -94,7 +114,10 @@ impl GlobalValue {
 
     // Drop locations owned by an exiting frame so older caller locations or the snapshot become active.
     fn remove_frame_locations(&mut self, frame_identifier: TraceIndex) {
-        while matches!(self.locations.last(), Some(GlobalLocation::Local(fidx, _)) if *fidx == frame_identifier)
+        while self
+            .locations
+            .last()
+            .is_some_and(|location| location.is_in_frame(frame_identifier))
         {
             self.locations.pop();
         }
@@ -102,14 +125,13 @@ impl GlobalValue {
 
     // Drop locations for a local that is being moved from or overwritten.
     fn remove_local_locations(&mut self, frame_identifier: TraceIndex, local_index: usize) {
-        self.locations.retain(|location| {
-            !matches!(location, GlobalLocation::Local(fidx, lidx) if *fidx == frame_identifier && *lidx == local_index)
-        });
+        self.locations
+            .retain(|location| !location.is_local(frame_identifier, local_index));
     }
 
     // The newest live location is active; otherwise the fallback snapshot is used.
-    fn last_location(&self) -> Option<GlobalLocation> {
-        self.locations.last().cloned()
+    fn last_location(&self) -> Option<&GlobalLocation> {
+        self.locations.last()
     }
 }
 
@@ -383,9 +405,7 @@ impl VMTracer<'_> {
             .get(idx)?
             .locations
             .iter()
-            .rposition(|location| {
-                matches!(location, GlobalLocation::Local(fidx, lidx) if *fidx == current_frame_identifier && *lidx == local_index)
-            });
+            .rposition(|location| location.is_local(current_frame_identifier, local_index));
         let Some(location_index) = location_index else {
             return Some(());
         };
@@ -501,12 +521,7 @@ impl VMTracer<'_> {
     ) -> Option<TraceValue> {
         let global = self.loaded_data.get(&id)?;
         match global.last_location() {
-            Some(GlobalLocation::Local(fidx, lidx)) => {
-                self.resolve_location(vtables, machine, &RuntimeLocation::Local(fidx, lidx))
-            }
-            Some(GlobalLocation::StackOffset(idx)) => {
-                self.resolve_location(vtables, machine, &RuntimeLocation::Stack(idx))
-            }
+            Some(location) => self.resolve_location(vtables, machine, &location.runtime_location()),
             None => Some(global.snapshot.clone()),
         }
     }
@@ -519,11 +534,8 @@ impl VMTracer<'_> {
     ) -> Option<SerializableMoveValue> {
         let global = self.loaded_data.get(&id)?;
         match global.last_location() {
-            Some(GlobalLocation::Local(fidx, lidx)) => {
-                self.root_location_snapshot(vtables, machine, &RuntimeLocation::Local(fidx, lidx))
-            }
-            Some(GlobalLocation::StackOffset(idx)) => {
-                self.root_location_snapshot(vtables, machine, &RuntimeLocation::Stack(idx))
+            Some(location) => {
+                self.root_location_snapshot(vtables, machine, &location.runtime_location())
             }
             None => Some(global.snapshot.snapshot().clone()),
         }
@@ -868,6 +880,10 @@ impl VMTracer<'_> {
             .collect::<Option<Vec<_>>>();
 
         let call_args_types = self.type_stack.split_off(arg_start);
+        // Split argument types off the tracer stack before any fallible return from resolving the
+        // call arguments. At this point the VM has already moved the arguments off its operand
+        // stack; returning with the types still present would leave `type_stack` longer than the VM
+        // operand stack and corrupt subsequent tracing callbacks.
         let call_args = call_args?;
         let function_type_info = FunctionTypeInfo::new(vtables, function, ty_args)?;
 
