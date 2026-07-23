@@ -190,24 +190,10 @@ impl<'backing> TemporaryStore<'backing> {
             );
         };
         // Load the object at exactly the version this transaction was sequenced against.
-        // `required_version` is the freshly-assigned version at the frontier, so it is never pruned:
-        // its absence means the local node has not yet committed that version.
         let required_version = consensus_version.version;
-        let Some(object_at_required) = self
+        let object_at_required = self
             .store
-            .get_implicitly_read_system_object_blocking(object_id, consensus_version)
-        else {
-            debug_fatal!(
-                "system object {object_id} not found at required version {required_version}"
-            );
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "system object {object_id} not found at required version {required_version}"
-                    ),
-                ),
-            );
-        };
+            .get_implicitly_read_system_object_blocking(object_id, consensus_version);
 
         // Available: record the read at `required_version` (which is what the transaction depends
         // on and reads) so it can be emitted into effects as a read-only consensus object and
