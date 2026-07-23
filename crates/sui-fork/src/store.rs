@@ -879,35 +879,47 @@ impl RuntimeObjectResolver for ForkStore {
 /// past a failed persist would silently diverge the executor's in-memory view
 /// from durable fork state. Crashing is strictly safer than continuing on top
 /// of unpersisted state.
+// The `SimulatorStore` getters are infallible (`Option`-returning), while the
+// underlying `ForkStore` reads can fail (local store I/O, remote GraphQL).
+// Log failures before mapping them to `None` — otherwise a transient error is
+// indistinguishable from a genuine miss, and downstream execution reports a
+// misleading "object not found".
 impl SimulatorStore for ForkStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        ForkStore::get_checkpoint_by_sequence_number(self, sequence_number)
-            .ok()
-            .flatten()
+        ForkStore::get_checkpoint_by_sequence_number(self, sequence_number).unwrap_or_else(|err| {
+            tracing::error!(
+                sequence_number,
+                "ForkStore::get_checkpoint_by_sequence_number failed: {err:#}"
+            );
+            None
+        })
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        ForkStore::get_checkpoint_by_digest(self, digest)
-            .ok()
-            .flatten()
+        ForkStore::get_checkpoint_by_digest(self, digest).unwrap_or_else(|err| {
+            tracing::error!(%digest, "ForkStore::get_checkpoint_by_digest failed: {err:#}");
+            None
+        })
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        ForkStore::get_highest_verified_checkpoint(self)
-            .ok()
-            .flatten()
+        ForkStore::get_highest_verified_checkpoint(self).unwrap_or_else(|err| {
+            tracing::error!("ForkStore::get_highest_verified_checkpoint failed: {err:#}");
+            None
+        })
     }
 
     fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        ForkStore::get_checkpoint_contents_by_digest(self, digest)
-            .ok()
-            .flatten()
+        ForkStore::get_checkpoint_contents_by_digest(self, digest).unwrap_or_else(|err| {
+            tracing::error!(%digest, "ForkStore::get_checkpoint_contents_by_digest failed: {err:#}");
+            None
+        })
     }
 
     fn get_committee_by_epoch(&self, _epoch: EpochId) -> Option<Committee> {
@@ -915,13 +927,17 @@ impl SimulatorStore for ForkStore {
     }
 
     fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        ForkStore::get_transaction(self, digest).ok().flatten()
+        ForkStore::get_transaction(self, digest).unwrap_or_else(|err| {
+            tracing::error!(%digest, "ForkStore::get_transaction failed: {err:#}");
+            None
+        })
     }
 
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
-        ForkStore::get_transaction_effects(self, digest)
-            .ok()
-            .flatten()
+        ForkStore::get_transaction_effects(self, digest).unwrap_or_else(|err| {
+            tracing::error!(%digest, "ForkStore::get_transaction_effects failed: {err:#}");
+            None
+        })
     }
 
     fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
@@ -930,13 +946,22 @@ impl SimulatorStore for ForkStore {
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
-        self.get_object(id).ok().flatten()
+        self.get_object(id).unwrap_or_else(|err| {
+            tracing::error!(%id, "ForkStore::get_object failed: {err:#}");
+            None
+        })
     }
 
     fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         self.get_object_at_version(id, version.value())
-            .ok()
-            .flatten()
+            .unwrap_or_else(|err| {
+                tracing::error!(
+                    %id,
+                    version = version.value(),
+                    "ForkStore::get_object_at_version failed: {err:#}"
+                );
+                None
+            })
     }
 
     fn get_system_state(&self) -> SuiSystemState {
@@ -945,8 +970,7 @@ impl SimulatorStore for ForkStore {
 
     fn get_clock(&self) -> Clock {
         self.get_object(&sui_types::SUI_CLOCK_OBJECT_ID)
-            .ok()
-            .flatten()
+            .unwrap_or_else(|err| panic!("failed to read clock object: {err:#}"))
             .expect("clock should exist")
             .to_rust()
             .expect("clock object should deserialize")

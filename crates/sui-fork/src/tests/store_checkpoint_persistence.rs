@@ -279,6 +279,7 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
         keystore,
         base.clone(),
         config.genesis.sui_system_object(),
+        (*config.genesis.checkpoint().digest()).into(),
         &config,
         store,
         rng,

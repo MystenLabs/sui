@@ -28,6 +28,7 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::get_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::SuiError;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::gas_coin::GAS;
@@ -47,6 +48,7 @@ use sui_types::transaction::TransactionKind;
 use sui_types::transaction_driver_types::EffectsFinalityInfo;
 use sui_types::transaction_driver_types::ExecuteTransactionRequestV3;
 use sui_types::transaction_driver_types::TransactionSubmissionError;
+use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
 use sui_types::transaction_executor::TransactionExecutor;
 
@@ -110,6 +112,7 @@ impl TestHarness {
             keystore,
             config.genesis.checkpoint(),
             config.genesis.sui_system_object(),
+            chain_identifier,
             &config,
             store.clone(),
             rng,
@@ -181,6 +184,7 @@ impl TestHarness {
             keystore,
             genesis_checkpoint,
             config.genesis.sui_system_object(),
+            chain_identifier,
             &config,
             store.clone(),
             rng,
@@ -259,6 +263,24 @@ impl TestHarness {
         Transaction::from_data_and_signer(tx_data, vec![&self.sender_key])
     }
 
+    /// Run a simulation through the executor from a `spawn_blocking` task,
+    /// mirroring how the gRPC `TransactionExecutionService` invokes it (the
+    /// executor's `simulate_transaction` uses `blocking_read` and must not be
+    /// called from an async context).
+    async fn simulate(
+        &self,
+        tx_data: TransactionData,
+        checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
+    ) -> Result<SimulateTransactionResult, SuiError> {
+        let executor = ForkedTransactionExecutor::new(self.context.clone());
+        tokio::task::spawn_blocking(move || {
+            executor.simulate_transaction(tx_data, checks, allow_mock_gas_coin)
+        })
+        .await
+        .expect("simulate task should not panic")
+    }
+
     fn build_send_gas_funds_tx(&self, recipient: SuiAddress) -> Transaction {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -312,24 +334,28 @@ async fn test_tx_execution_publishes_checkpoint() {
     assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
 }
 
-// `simulate_transaction` is not yet supported by the forked executor (the
-// current Simulacrum has no simulate entrypoint); re-enable once it lands.
-#[ignore = "simulate_transaction not yet supported by the forked network"]
 #[tokio::test]
 async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
     let mut harness = TestHarness::new();
     let tx_data = harness.build_transfer_tx_data(1_000);
+    let tx_digest = tx_data.digest();
     let gas_id = harness.gas_object.id();
-    let before = {
+    let (before, checkpoint_before) = {
         let sim = harness.context.simulacrum().read().await;
-        SimulatorStore::get_object(sim.store(), &gas_id)
+        let gas_ref = SimulatorStore::get_object(sim.store(), &gas_id)
             .expect("gas object should exist before simulation")
-            .compute_object_reference()
+            .compute_object_reference();
+        let checkpoint = sim
+            .store()
+            .get_highest_checkpint()
+            .expect("store should have a checkpoint")
+            .sequence_number;
+        (gas_ref, checkpoint)
     };
 
     let result = harness
-        .executor
-        .simulate_transaction(tx_data, TransactionChecks::Enabled, false)
+        .simulate(tx_data.clone(), TransactionChecks::Enabled, false)
+        .await
         .expect("simulate_transaction should succeed");
 
     assert!(result.effects.status().is_ok());
@@ -340,16 +366,44 @@ async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
         "simulation must not publish a checkpoint",
     );
 
-    let after = {
+    {
         let sim = harness.context.simulacrum().read().await;
-        SimulatorStore::get_object(sim.store(), &gas_id)
+        let after = SimulatorStore::get_object(sim.store(), &gas_id)
             .expect("gas object should still exist after simulation")
-            .compute_object_reference()
-    };
-    assert_eq!(after, before, "simulation must not mutate stored objects");
+            .compute_object_reference();
+        assert_eq!(after, before, "simulation must not mutate stored objects");
+        // Check the local store directly: the store-level `get_transaction`
+        // falls back to the (absent) remote on a local miss.
+        assert!(
+            ReadStore::get_transaction(sim.store().local_store().reader(), &tx_digest).is_none(),
+            "simulation must not persist the transaction",
+        );
+        let checkpoint_after = sim
+            .store()
+            .get_highest_checkpint()
+            .expect("store should have a checkpoint")
+            .sequence_number;
+        assert_eq!(
+            checkpoint_after, checkpoint_before,
+            "simulation must not create a checkpoint",
+        );
+    }
+
+    // Executing the same transaction against the untouched state produces the
+    // effects the simulation predicted.
+    let signed_tx = Transaction::from_data_and_signer(tx_data, vec![&harness.sender_key]);
+    let request = ExecuteTransactionRequestV3::new_v2(signed_tx);
+    let response = harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("execute_transaction should succeed");
+    assert_eq!(
+        result.effects, response.effects.effects,
+        "simulated effects should match executed effects",
+    );
 }
 
-#[ignore = "simulate_transaction not yet supported by the forked network"]
 #[tokio::test]
 async fn test_simulate_transaction_supports_mock_gas() {
     let harness = TestHarness::new();
@@ -357,12 +411,31 @@ async fn test_simulate_transaction_supports_mock_gas() {
     tx_data.gas_data_mut().payment = Vec::new();
 
     let result = harness
-        .executor
-        .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+        .simulate(tx_data, TransactionChecks::Enabled, true)
+        .await
         .expect("simulate_transaction with mock gas should succeed");
 
     assert!(result.effects.status().is_ok());
     assert_eq!(result.mock_gas_id, Some(ObjectID::MAX));
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_with_checks_disabled() {
+    let harness = TestHarness::new();
+    let tx_data = harness.build_transfer_tx_data(1_000);
+
+    let result = harness
+        .simulate(tx_data, TransactionChecks::Disabled, true)
+        .await
+        .expect("dev-inspect style simulation should succeed");
+
+    assert!(result.effects.status().is_ok());
+    assert!(
+        !result
+            .execution_result
+            .expect("dev-inspect should return command outputs")
+            .is_empty()
+    );
 }
 
 #[tokio::test]

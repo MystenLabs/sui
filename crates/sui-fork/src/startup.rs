@@ -179,11 +179,14 @@ pub async fn initialize(
     // 6. Build KeyStore.
     let keystore = KeyStore::from_network_config(&config);
 
-    // 7. Create Simulacrum from custom state.
+    // 7. Create Simulacrum from custom state. Pass the same chain identifier
+    //    the RPC surface advertises, so transactions clients build against the
+    //    reported chain ID (e.g. ValidDuring expirations) pass validity checks.
     let simulacrum = Simulacrum::new_from_custom_state(
         keystore,
         base_checkpoint,
         system_state,
+        rpc_chain_identifier,
         &config,
         store,
         rng,
