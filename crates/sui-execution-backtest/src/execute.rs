@@ -216,7 +216,7 @@ pub(crate) fn execute_one_transaction(
     // no live version and are excluded above, so only mutated/read-only entries remain.
     let system_object_versions = executed
         .effects
-        .input_consensus_objects()
+        .accessed_consensus_objects()
         .into_iter()
         .filter_map(|ico| match ico {
             InputConsensusObject::Mutate((id, v, _))
@@ -543,7 +543,7 @@ fn log_divergence(
         .collect();
     let missing_consensus: Vec<String> = executed
         .effects
-        .input_consensus_objects()
+        .accessed_consensus_objects()
         .into_iter()
         .filter_map(|ico| match ico {
             InputConsensusObject::Mutate((id, v, _))

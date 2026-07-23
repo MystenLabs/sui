@@ -668,11 +668,12 @@ impl TransactionEffectsV2 {
                     // against. `None` means the entry's kind carries no version to compare
                     // (e.g. a created object or a per-epoch-config read), which no implicitly
                     // readable system object should ever coincide with.
-                    debug_assert_eq!(
-                        *recorded,
-                        Some(version_digest),
-                        "system object {id} read at a version different from its recorded entry"
-                    );
+                    if *recorded != Some(version_digest) {
+                        mysten_common::debug_fatal!(
+                            "system object {id} read at version {version_digest:?} but its \
+                             effects entry records {recorded:?}"
+                        );
+                    }
                 }
             }
         }

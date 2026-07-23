@@ -436,7 +436,7 @@ pub fn resolve_input_objects(
     effects: &TransactionEffects,
     store: &ScanStore,
 ) -> anyhow::Result<InputObjects> {
-    let consensus_inputs = effects.input_consensus_objects();
+    let consensus_inputs = effects.accessed_consensus_objects();
     // Per-tx version for the inputs we resolve against — only plain mutate/read-only consensus
     // inputs are materialized at a specific version in the checkpoint. Other kinds (cancelled,
     // ended consensus streams) carry no live version and fall through to the latest-version lookup,
