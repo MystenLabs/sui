@@ -6,7 +6,7 @@
 //! the `Env` provides consistent access to shared components such as the VM or the protocol config.
 
 use crate::{
-    data_store::{PackageStore, cached_package_store::CachedPackageStore},
+    data_store::{VerifiedPackageStore, cached_package_store::CachedPackageStore},
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     static_programmable_transactions::{
@@ -646,7 +646,7 @@ fn to_identifier<E: ExecutionErrorTrait>(name: String) -> Result<Identifier, E> 
 
 fn convert_vm_error<E: ExecutionErrorTrait>(
     error: VMError,
-    store: &dyn PackageStore,
+    store: &VerifiedPackageStore<'_>,
     linkage: Option<&ExecutableLinkage>,
     _protocol_config: &ProtocolConfig,
 ) -> E {
