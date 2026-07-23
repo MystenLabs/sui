@@ -146,22 +146,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .filter_map(move |b| async move {
                 match b {
                     Ok(response) => {
-                        // zstd frame magic: sender used compress-once mode.
-                        // Decompression yields an owned buffer (also unpins the
-                        // network chunk); otherwise copy out explicitly.
-                        let block = if response.block.len() >= 4
-                            && response.block[..4] == [0x28, 0xB5, 0x2F, 0xFD]
-                        {
-                            match zstd::stream::decode_all(response.block.as_ref()) {
-                                Ok(decompressed) => Bytes::from(decompressed),
-                                Err(e) => {
-                                    debug!("Failed to decompress block from {}: {e:?}", peer);
-                                    return None;
-                                }
-                            }
-                        } else {
-                            Bytes::from(response.block.to_vec())
-                        };
+                        let block = decompress_if_zstd(&response.block, "subscribed block")?;
                         Some(ExtendedSerializedBlock {
                             block,
                             excluded_ancestors: response.excluded_ancestors,
@@ -245,8 +230,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     blocks.extend(
                         response
                             .blocks
-                            .into_iter()
-                            .map(|b| Bytes::from(b.to_vec())),
+                            .iter()
+                            .filter_map(|b| decompress_if_zstd(b, "fetched block")),
                     );
                     if total_fetched_bytes > max_allowed_bytes {
                         info!(
@@ -298,13 +283,13 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         let response = response.into_inner();
         let commits = response
             .commits
-            .into_iter()
-            .map(|c| Bytes::from(c.to_vec()))
+            .iter()
+            .filter_map(|c| decompress_if_zstd(c, "fetched commit"))
             .collect();
         let certifier_blocks = response
             .certifier_blocks
-            .into_iter()
-            .map(|b| Bytes::from(b.to_vec()))
+            .iter()
+            .filter_map(|b| decompress_if_zstd(b, "certifier block"))
             .collect();
         Ok((commits, certifier_blocks))
     }
@@ -356,8 +341,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     blocks.extend(
                         response
                             .blocks
-                            .into_iter()
-                            .map(|b| Bytes::from(b.to_vec())),
+                            .iter()
+                            .filter_map(|b| decompress_if_zstd(b, "fetched block")),
                     );
                     if total_fetched_bytes > max_allowed_bytes {
                         info!(
@@ -694,7 +679,11 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
             chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
                 .into_iter()
-                .map(|blocks| Ok(FetchBlocksResponse { blocks }))
+                .map(|blocks| {
+                    Ok(FetchBlocksResponse {
+                        blocks: blocks.into_iter().map(maybe_compress_payload).collect(),
+                    })
+                })
                 .collect::<Vec<_>>()
                 .into_iter();
         let stream = iter(responses);
@@ -725,6 +714,11 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let certifier_blocks = certifier_blocks
             .into_iter()
             .map(|b| b.serialized().clone())
+            .collect();
+        let commits: Vec<Bytes> = commits.into_iter().map(maybe_compress_payload).collect();
+        let certifier_blocks: Vec<Bytes> = certifier_blocks
+            .into_iter()
+            .map(maybe_compress_payload)
             .collect();
         Ok(Response::new(FetchCommitsResponse {
             commits,
@@ -771,7 +765,11 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let responses: std::vec::IntoIter<Result<FetchLatestBlocksResponse, tonic::Status>> =
             chunk_blocks(blocks, MAX_FETCH_RESPONSE_BYTES)
                 .into_iter()
-                .map(|blocks| Ok(FetchLatestBlocksResponse { blocks }))
+                .map(|blocks| {
+                    Ok(FetchLatestBlocksResponse {
+                        blocks: blocks.into_iter().map(maybe_compress_payload).collect(),
+                    })
+                })
                 .collect::<Vec<_>>()
                 .into_iter();
         let stream = iter(responses);
@@ -1409,6 +1407,40 @@ impl ResponseHandler for MetricsResponseCallback {
 
     fn on_error<E>(&mut self, err: &E) {
         MetricsResponseCallback::on_error(self, err)
+    }
+}
+
+
+// Test knob (CONSENSUS_COMPRESS_ONCE): payloads are pre-compressed once by the
+// sender; receivers detect the zstd frame magic and decompress. When active,
+// per-stream tonic compression is disabled.
+fn compress_once_active() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("CONSENSUS_COMPRESS_ONCE").is_ok())
+}
+
+fn maybe_compress_payload(b: Bytes) -> Bytes {
+    if compress_once_active() {
+        Bytes::from(
+            zstd::stream::encode_all(b.as_ref(), 1)
+                .expect("zstd compression cannot fail on in-memory data"),
+        )
+    } else {
+        b
+    }
+}
+
+fn decompress_if_zstd(b: &Bytes, what: &str) -> Option<Bytes> {
+    if b.len() >= 4 && b[..4] == [0x28, 0xB5, 0x2F, 0xFD] {
+        match zstd::stream::decode_all(b.as_ref()) {
+            Ok(d) => Some(Bytes::from(d)),
+            Err(e) => {
+                tracing::debug!("Failed to decompress {what}: {e:?}");
+                None
+            }
+        }
+    } else {
+        Some(Bytes::from(b.to_vec()))
     }
 }
 
