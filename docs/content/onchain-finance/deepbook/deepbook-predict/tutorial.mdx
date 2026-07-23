@@ -1,0 +1,436 @@
+---
+title: DeepBook Predict Testnet Tutorial
+sidebar_label: Testnet Tutorial
+description: >-
+  End-to-end DeepBook Predict walkthrough on Sui Testnet: oracle context,
+  PredictManager setup, minting binary and vertical range positions, redemption
+  and settlement, and the liquidity provider vault flow.
+keywords:
+  - deepbook predict tutorial
+  - predict
+  - oraclesvi
+  - predictmanager
+  - binary position
+  - vertical range
+  - settlement
+  - plp
+  - vault
+  - liquidity provider
+last_verified: 2025-04-16T00:00:00.000Z
+verified_against: predict-testnet-4-16
+goal:
+  description: >-
+    Reader can complete a full DeepBook Predict flow on Testnet: set up a
+    manager, mint binary and range positions, redeem after settlement, and
+    supply and withdraw vault liquidity.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I mint a vertical range position on DeepBook Predict?
+  - How does settlement and redemption work on DeepBook Predict?
+  - How do I supply liquidity to the DeepBook Predict vault?
+  - How do I read a live oracle from the Predict server?
+answer: >-
+  This tutorial walks through a full DeepBook Predict flow on Sui Testnet:
+  reading a live oracle, creating a PredictManager, minting binary and vertical
+  range positions, redeeming before and after settlement, and supplying and
+  withdrawing vault liquidity for PLP shares.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+A complete DeepBook Predict flow on Sui Testnet covers reading a live oracle, minting binary and vertical range positions, redeeming before and after settlement, and running the liquidity provider vault flow. It continues from the [DeepBook Predict quickstart](/onchain-finance/deepbook/deepbook-predict#quickstart-mint-a-binary-position), which covers install, funding, and your first mint.
+
+There is no dedicated Predict TypeScript SDK. You build every transaction with the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) against the protocol's Move entry points. The transaction samples pass compile checks against `@mysten/sui` version 2.22.1 and `typescript` version 6.0.3. This document does not execute them against Testnet. The oracle-list response shape matches the live Testnet server. Run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
+
+:::caution
+
+DeepBook Predict smart contracts might change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets. All package IDs and source references on these pages are pinned to the `predict-testnet-4-16` branch and change at Mainnet launch.
+
+:::
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) installed (`npm install @mysten/sui`).
+- [x] A Testnet address funded with SUI for gas from a [Sui Testnet faucet](/getting-started/onboarding/get-coins).
+- [x] DUSDC from the [Predict token request form](https://tally.so/r/Xx102L).
+- [x] A `PredictManager`, created in the [quickstart](/onchain-finance/deepbook/deepbook-predict#4-create-a-predictmanager).
+</TabItem>
+</Tabs>
+
+## Config and client
+
+Keep every Testnet-only ID in one config block. These values come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page and change at Mainnet launch.
+
+```ts title='config.ts'
+// Testnet-only DeepBook Predict IDs, pinned to the `predict-testnet-4-16` branch.
+export const PREDICT = {
+	network: 'testnet' as const,
+	packageId: '0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138',
+	predictObjectId: '0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a',
+	quoteType:
+		'0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC',
+	serverUrl: 'https://predict-server.testnet.mystenlabs.com',
+};
+
+// App-level oracle selection. The trader picks a strike from the oracle's grid.
+export type ActiveOracle = { oracleId: string; expiry: number; strike: number };
+```
+
+The samples reuse the `client` from the quickstart:
+
+```ts title='client.ts'
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { PREDICT } from './config.js';
+
+export const client = new SuiGrpcClient({
+	network: PREDICT.network,
+	baseUrl: 'https://fullnode.testnet.sui.io:443',
+});
+```
+
+## Understand the oracle
+
+Each market is an `OracleSVI` object for one underlying asset and one expiry. It holds spot, forward, SVI parameters, a lifecycle status, and, after expiry, a settlement price. Each oracle constrains strikes to a grid rather than free-form values: `min_strike` plus multiples of `tick_size`. You trade a binary position at one grid strike, or a vertical range between two grid strikes.
+
+An oracle moves through 4 lifecycle states:
+
+- **Inactive:** exists but not yet activated.
+- **Active:** accepts live price and SVI updates. Minting requires this state.
+- **Pending settlement:** reached expiry, awaiting the first post-expiry price.
+- **Settled:** the first post-expiry price freezes the settlement price. No further live updates.
+
+Minting requires a live (active) oracle. Redeeming works against a live or settled oracle.
+
+### Read a live oracle from the server
+
+Read the current oracle list from the public Predict server, then select an active oracle and a strike from its grid. The server returns snake_case fields and the strike grid rather than a single strike.
+
+```ts title='oracle.ts'
+import { PREDICT, type ActiveOracle } from './config.js';
+
+type ServerOracle = {
+	oracle_id: string;
+	expiry: number;
+	min_strike: number;
+	tick_size: number;
+	status: string; // "inactive" | "active" | "pending_settlement" | "settled"
+};
+
+// Picks the first active oracle and a strike `tickIndex` ticks up the grid.
+export async function getActiveOracle(
+	predictObjectId: string,
+	tickIndex = 0,
+): Promise<ActiveOracle> {
+	const res = await fetch(`${PREDICT.serverUrl}/predicts/${predictObjectId}/oracles`);
+	if (!res.ok) throw new Error(`oracle fetch failed: ${res.status}`);
+	const oracles = (await res.json()) as ServerOracle[];
+	const live = oracles.find((o) => o.status === 'active');
+	if (!live) throw new Error('no active oracle available');
+	return {
+		oracleId: live.oracle_id,
+		expiry: live.expiry,
+		strike: live.min_strike + tickIndex * live.tick_size,
+	};
+}
+```
+
+## Set up the PredictManager
+
+Each user creates one `PredictManager` and reuses it. See the [quickstart](/onchain-finance/deepbook/deepbook-predict#4-create-a-predictmanager) for `create_manager` and reading the new ID from effects. Because the manager is shared during creation, deposit into it and mint from it in later transactions.
+
+The manager stores your deposited quote balance, binary position quantities keyed by `MarketKey`, and range quantities keyed by `RangeKey`. Read them with `predict_manager::balance`, `predict_manager::position`, and `predict_manager::range_position`. The manager does not store positions as separate objects.
+
+## Deposit and mint a binary position
+
+A binary position pays out when settlement lands above the strike (an up position) or at or below it (a down position). Deposit DUSDC into the manager and mint one up position in a single transaction. Build the `MarketKey` with `market_key::up`.
+
+```ts title='mint-binary.ts'
+import { Transaction } from '@mysten/sui/transactions';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { client } from './client.js';
+import { PREDICT, type ActiveOracle } from './config.js';
+
+export async function mintBinaryUp(params: {
+	signer: Ed25519Keypair;
+	managerId: string;
+	oracle: ActiveOracle;
+	dusdcCoinId: string;
+	depositAmount: bigint; // DUSDC base units (6 decimals)
+	quantity: bigint;
+}) {
+	const { signer, managerId, oracle, dusdcCoinId, depositAmount, quantity } = params;
+	const tx = new Transaction();
+
+	const [deposit] = tx.splitCoins(tx.object(dusdcCoinId), [depositAmount]);
+	tx.moveCall({
+		target: `${PREDICT.packageId}::predict_manager::deposit`,
+		typeArguments: [PREDICT.quoteType],
+		arguments: [tx.object(managerId), deposit],
+	});
+
+	const key = tx.moveCall({
+		target: `${PREDICT.packageId}::market_key::up`,
+		arguments: [
+			tx.pure.id(oracle.oracleId),
+			tx.pure.u64(oracle.expiry),
+			tx.pure.u64(oracle.strike),
+		],
+	});
+
+	tx.moveCall({
+		target: `${PREDICT.packageId}::predict::mint`,
+		typeArguments: [PREDICT.quoteType],
+		arguments: [
+			tx.object(PREDICT.predictObjectId),
+			tx.object(managerId),
+			tx.object(oracle.oracleId),
+			key,
+			tx.pure.u64(quantity),
+			tx.object.clock(),
+		],
+	});
+
+	const result = await client.core.signAndExecuteTransaction({
+		transaction: tx,
+		signer,
+		include: { effects: true },
+	});
+	if (result.$kind === 'FailedTransaction') throw new Error('mint failed');
+	return result.Transaction;
+}
+```
+
+For a down position, use `market_key::down` with the same oracle, expiry, and strike.
+
+### Preview mint cost
+
+Before minting, preview the cost. The `predict::get_trade_amounts` read function returns `(mint_cost, redeem_payout)` per the requested quantity, priced from oracle fair value plus protocol spread. For rendering, the public server also exposes oracle state and resolved ask bounds through `GET /oracles/:oracle_id/state` and `GET /oracles/:oracle_id/ask-bounds`. Deposit at least the previewed `mint_cost` before you mint.
+
+## Mint a vertical range position
+
+A vertical range pays out when settlement lands in the half-open band `(lower_strike, higher_strike]`. Build the key with `range_key::new`, which aborts if `lower_strike` is not less than `higher_strike`. This example assumes the manager already holds enough DUSDC.
+
+```ts title='mint-range.ts'
+import { Transaction } from '@mysten/sui/transactions';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { client } from './client.js';
+import { PREDICT, type ActiveOracle } from './config.js';
+
+export async function mintRange(params: {
+	signer: Ed25519Keypair;
+	managerId: string;
+	oracle: ActiveOracle;
+	lowerStrike: bigint;
+	higherStrike: bigint;
+	quantity: bigint;
+}) {
+	const { signer, managerId, oracle, lowerStrike, higherStrike, quantity } = params;
+	const tx = new Transaction();
+
+	const key = tx.moveCall({
+		target: `${PREDICT.packageId}::range_key::new`,
+		arguments: [
+			tx.pure.id(oracle.oracleId),
+			tx.pure.u64(oracle.expiry),
+			tx.pure.u64(lowerStrike),
+			tx.pure.u64(higherStrike),
+		],
+	});
+
+	tx.moveCall({
+		target: `${PREDICT.packageId}::predict::mint_range`,
+		typeArguments: [PREDICT.quoteType],
+		arguments: [
+			tx.object(PREDICT.predictObjectId),
+			tx.object(managerId),
+			tx.object(oracle.oracleId),
+			key,
+			tx.pure.u64(quantity),
+			tx.object.clock(),
+		],
+	});
+
+	const result = await client.core.signAndExecuteTransaction({
+		transaction: tx,
+		signer,
+		include: { effects: true },
+	});
+	if (result.$kind === 'FailedTransaction') throw new Error('mint_range failed');
+	return result.Transaction;
+}
+```
+
+Preview range amounts with `predict::get_range_trade_amounts`, which mirrors `get_trade_amounts` for a `RangeKey`.
+
+## Redeem and settlement
+
+Redeeming sells a position back to the vault and deposits the payout into the owner's manager. The payout depends on the oracle lifecycle:
+
+- **Before settlement:** the payout is the post-trade bid value at current oracle prices.
+- **After settlement:** a binary position pays its settled fair value, and a vertical range pays its full value when settlement landed in the band, or zero otherwise.
+
+The owner redeems a position with `predict::redeem`.
+
+```ts title='redeem.ts'
+import { Transaction } from '@mysten/sui/transactions';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { client } from './client.js';
+import { PREDICT, type ActiveOracle } from './config.js';
+
+export async function redeemBinaryUp(params: {
+	signer: Ed25519Keypair;
+	managerId: string;
+	oracle: ActiveOracle;
+	quantity: bigint;
+	permissionless?: boolean; // for settled positions redeemed by anyone
+}) {
+	const { signer, managerId, oracle, quantity, permissionless } = params;
+	const tx = new Transaction();
+
+	const key = tx.moveCall({
+		target: `${PREDICT.packageId}::market_key::up`,
+		arguments: [
+			tx.pure.id(oracle.oracleId),
+			tx.pure.u64(oracle.expiry),
+			tx.pure.u64(oracle.strike),
+		],
+	});
+
+	tx.moveCall({
+		target: `${PREDICT.packageId}::predict::${permissionless ? 'redeem_permissionless' : 'redeem'}`,
+		typeArguments: [PREDICT.quoteType],
+		arguments: [
+			tx.object(PREDICT.predictObjectId),
+			tx.object(managerId),
+			tx.object(oracle.oracleId),
+			key,
+			tx.pure.u64(quantity),
+			tx.object.clock(),
+		],
+	});
+
+	const result = await client.core.signAndExecuteTransaction({
+		transaction: tx,
+		signer,
+		include: { effects: true },
+	});
+	if (result.$kind === 'FailedTransaction') throw new Error('redeem failed');
+	return result.Transaction;
+}
+```
+
+After an oracle settles, anyone can redeem a settled position on the owner's behalf with `predict::redeem_permissionless`. The payout still lands in the owner's manager. Use this to close out settled positions for users without requiring their signature. Redeem a vertical range with `predict::redeem_range`.
+
+## Liquidity provider flow
+
+Liquidity providers supply an accepted quote asset into the shared vault and receive `PLP` shares. The vault takes the opposite side of every Predict trade, so LP returns track vault profit and loss. The first supplier receives shares one-to-one with the amount they supply. Later suppliers receive shares proportional to their deposit relative to current vault value.
+
+### Supply liquidity
+
+`predict::supply` returns a `Coin<PLP>`. Transfer it to the supplier to keep it.
+
+```ts title='supply.ts'
+import { Transaction } from '@mysten/sui/transactions';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { client } from './client.js';
+import { PREDICT } from './config.js';
+
+export async function supplyLiquidity(params: {
+	signer: Ed25519Keypair;
+	dusdcCoinId: string;
+	amount: bigint;
+}) {
+	const { signer, dusdcCoinId, amount } = params;
+	const tx = new Transaction();
+
+	const [supply] = tx.splitCoins(tx.object(dusdcCoinId), [amount]);
+	const plp = tx.moveCall({
+		target: `${PREDICT.packageId}::predict::supply`,
+		typeArguments: [PREDICT.quoteType],
+		arguments: [tx.object(PREDICT.predictObjectId), supply, tx.object.clock()],
+	});
+	tx.transferObjects([plp], signer.toSuiAddress());
+
+	const result = await client.core.signAndExecuteTransaction({
+		transaction: tx,
+		signer,
+		include: { effects: true },
+	});
+	if (result.$kind === 'FailedTransaction') throw new Error('supply failed');
+	return result.Transaction;
+}
+```
+
+### Withdraw liquidity
+
+`predict::withdraw` burns a `Coin<PLP>` and returns the selected quote asset. The withdrawal succeeds only when enough funds remain after the vault covers its current maximum payout and the withdrawal limiter allows the amount.
+
+```ts title='withdraw.ts'
+import { Transaction } from '@mysten/sui/transactions';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { client } from './client.js';
+import { PREDICT } from './config.js';
+
+export async function withdrawLiquidity(params: {
+	signer: Ed25519Keypair;
+	plpCoinId: string;
+}) {
+	const { signer, plpCoinId } = params;
+	const tx = new Transaction();
+
+	const quote = tx.moveCall({
+		target: `${PREDICT.packageId}::predict::withdraw`,
+		typeArguments: [PREDICT.quoteType],
+		arguments: [tx.object(PREDICT.predictObjectId), tx.object(plpCoinId), tx.object.clock()],
+	});
+	tx.transferObjects([quote], signer.toSuiAddress());
+
+	const result = await client.core.signAndExecuteTransaction({
+		transaction: tx,
+		signer,
+		include: { effects: true },
+	});
+	if (result.$kind === 'FailedTransaction') throw new Error('withdraw failed');
+	return result.Transaction;
+}
+```
+
+## Vault strategy considerations
+
+These points follow directly from the protocol's documented mechanics. They are not investment advice.
+
+- **Withdrawals can be capped by liability.** `predict::withdraw` only releases funds available after the vault reserves its current total maximum payout. When open positions carry large payout coverage, less is withdrawable. Read the current withdrawable amount with `predict::available_withdrawal`.
+- **A rate limiter can throttle outflows.** The vault includes a withdrawal limiter with a configured capacity and refill rate. Large withdrawals can be limited even when funds are otherwise available.
+- **LP value tracks vault profit and loss.** Because the vault is the counterparty to every trade, `PLP` share value rises and falls with trader outcomes, not with a fixed yield.
+- **Minting is bounded by an exposure cap.** After each mint, the vault asserts that total mark-to-market liability stays within a configured percentage of vault value, which protects existing LPs.
+
+For the accounting model behind these limits, see [Design](/onchain-finance/deepbook/deepbook-predict/design#vault-and-plp).
+
+## Verify on Testnet {#verify-on-testnet}
+
+The write paths above pass compile checks but do not execute. To confirm them end to end:
+
+1. Fund a Testnet address with SUI, then confirm with `sui client gas`.
+2. Request DUSDC, then confirm you own a DUSDC coin with `sui client objects`.
+3. Fetch a live oracle with `getActiveOracle`. Confirm the JSON includes an oracle with `"status": "active"`.
+4. Create a `PredictManager` (see the quickstart) and confirm the ID resolves with `sui client object MANAGER_ID`.
+5. Run `mintBinaryUp` with a `depositAmount` at or above the previewed mint cost. Confirm a success status and a `PositionMinted` event.
+6. Run `mintRange` with two grid strikes where `lowerStrike < higherStrike`. Confirm a `RangeMinted` event.
+7. Run `redeemBinaryUp`. Confirm a `PositionRedeemed` event and that the payout lands in the manager balance (`predict_manager::balance`).
+8. Run `supplyLiquidity`, then confirm you hold a `PLP` coin with `sui client objects`.
+9. Run `withdrawLiquidity` with that `PLP` coin. Confirm a `Withdrawn` event.
