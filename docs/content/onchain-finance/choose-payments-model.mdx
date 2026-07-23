@@ -1,14 +1,14 @@
 ---
 title: Choose Your Payments Model
 description: >-
-  Decide between simple transfers, Payment Kit, and custom Move modules for
+  Decide between basic transfers, Payment Kit, and custom Move modules for
   your Sui payment integration, with guidance on address balances versus coin
   objects and gas strategies.
 sidebar_label: Choose a Payments Model
 keywords:
   - payments decision guide
   - payment model
-  - simple transfer
+  - basic transfer
   - payment kit
   - custom move payments
   - address balances
@@ -45,10 +45,10 @@ builder_paths:
     stage: Money Movement
 questions:
   - How do I choose a payment model on Sui?
-  - What is the difference between simple transfer, Payment Kit, and custom Move payments?
+  - What is the difference between basic transfer, Payment Kit, and custom Move payments?
   - Should I use address balances or coin objects for payments?
 answer: >-
-  Sui offers three payment models: simple transfers for direct sends, Payment
+  Sui offers three payment models: basic transfers for direct sends, Payment
   Kit for structured receipts with duplicate prevention, and custom Move modules
   for full control over spending policies and settlement logic.
 ---
@@ -57,7 +57,7 @@ Sui offers three payment models. The right choice depends on whether you need re
 
 ## Decision matrix
 
-| | Simple transfer | Payment Kit | Custom Move |
+| | Basic transfer | Payment Kit | Custom Move |
 |---|---|---|---|
 | **Complexity** | Low | Medium | High |
 | **Best for** | Wallets, P2P sends, treasury moves | Merchant checkout, invoicing, subscriptions | Agent mandates, regulated payments, complex settlement |
@@ -66,7 +66,7 @@ Sui offers three payment models. The right choice depends on whether you need re
 | **Gas sponsorship** | Yes | Yes | Yes |
 | **Onchain audit trail** | Transfer events only | Receipt objects + events | You define it |
 
-## Simple transfer
+## Basic transfer
 
 Use `transferObjects` or address balance `send_funds` to move coins directly. No onchain receipts or duplicate prevention. This is the best choice when your backend or wallet already tracks payments.
 

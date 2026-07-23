@@ -119,7 +119,7 @@ await client.signAndExecuteTransaction({ transaction: tx, signer: sponsor });
 
 ### Pool management
 
-Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. Gas is always charged (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
+Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. The network always charges gas (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
 
 ```typescript
 interface GasCoin {
