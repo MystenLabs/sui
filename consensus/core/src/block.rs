@@ -884,3 +884,28 @@ mod tests {
         }
     }
 }
+#[cfg(test)]
+mod layout_census_tests {
+    use super::*;
+    use consensus_types::block::BlockRef;
+    use std::mem::{offset_of, size_of};
+
+    #[test]
+    fn layout_census() {
+        eprintln!("(BlockRef, Vec<Transaction>): size={}", size_of::<(BlockRef, Vec<Transaction>)>());
+        eprintln!("  .0 (BlockRef) offset={}", offset_of!((BlockRef, Vec<Transaction>), 0));
+        eprintln!("  .1 (Vec) offset={}", offset_of!((BlockRef, Vec<Transaction>), 1));
+        eprintln!("BlockRef: size={} round@{} author@{} digest@{}",
+            size_of::<BlockRef>(),
+            offset_of!(BlockRef, round),
+            offset_of!(BlockRef, author),
+            offset_of!(BlockRef, digest));
+        eprintln!("Vec<Transaction>: size={}", size_of::<Vec<Transaction>>());
+        eprintln!("Transaction: size={}", size_of::<Transaction>());
+        eprintln!("VerifiedBlock: size={}", size_of::<VerifiedBlock>());
+        eprintln!("SignedBlock: size={}", size_of::<SignedBlock>());
+        eprintln!("Block: size={}", size_of::<Block>());
+        eprintln!("BlockV3: size={}", size_of::<BlockV3>());
+        eprintln!("(VerifiedBlock, Vec<u32>): size={}", size_of::<(VerifiedBlock, Vec<u32>)>());
+    }
+}
