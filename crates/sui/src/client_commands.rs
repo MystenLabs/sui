@@ -733,6 +733,13 @@ pub struct TxProcessingArgs {
     /// support sender impersonation.
     #[arg(long)]
     pub skip_signing: bool,
+    /// When used with --dry-run, execute the transaction locally against the latest chain
+    /// state and save a Move trace and replay artifacts for the Move trace debugger,
+    /// instead of calling the dry-run RPC. Requires a binary built with the `tracing`
+    /// feature. Only exposed by `sui client ptb` (experimental); hidden from other
+    /// commands via `arg(skip)`.
+    #[arg(skip)]
+    pub trace: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -3370,6 +3377,56 @@ pub async fn execute_dry_run(
     Ok(SuiClientCommandResult::DryRun(response))
 }
 
+/// Dry run the transaction locally via the replay tool's dry-run support, saving a
+/// Move trace and replay artifacts for use with the Move trace debugger. The dry-run
+/// RPC is skipped entirely: execution happens in-process against the latest chain
+/// state fetched from the network's GraphQL endpoint, so the printed effects always
+/// match the generated trace.
+pub async fn execute_dry_run_with_trace(
+    context: &mut WalletContext,
+    signer: SuiAddress,
+    kind: TransactionKind,
+    gas_budget: Option<u64>,
+    gas_price: u64,
+    gas_payment: Vec<ObjectRef>,
+    sponsor: Option<SuiAddress>,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
+    let client = context.grpc_client()?;
+    // Same gas defaulting as `execute_dry_run`: with no budget provided, use the
+    // protocol maximum (gas is not committed in a dry-run). An empty gas payment is
+    // fine too -- a mock gas coin is injected during the local dry-run, mirroring
+    // what the fullnode does for the dry-run RPC.
+    let gas_budget = match gas_budget {
+        Some(gas_budget) => gas_budget,
+        None => max_gas_budget(&client).await?,
+    };
+    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+        kind,
+        signer,
+        gas_payment,
+        gas_budget,
+        gas_price,
+        sponsor.unwrap_or(signer),
+    );
+    let node = crate::sui_commands::get_replay_node(context).await?;
+    debug!("Executing local dry run with tracing");
+    // Prints the computed effects, gas report, and artifact location to stdout.
+    sui_replay_2::dry_run::dry_run_transaction(
+        tx_data,
+        node,
+        USER_AGENT,
+        sui_replay_2::dry_run::DryRunOptions {
+            trace: true,
+            output_dir: None,
+            show_effects: true,
+            overwrite: true,
+        },
+    )
+    .context("Dry run with tracing failed")?;
+    debug!("Finished local dry run with tracing");
+    Ok(SuiClientCommandResult::NoOutput)
+}
+
 /// Call a dry run with the transaction data to estimate the gas budget.
 /// The estimated gas budget is computed as following:
 /// * the maximum between A and B, where:
@@ -3629,11 +3686,16 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         serialize_signed_transaction,
         sender,
         skip_signing,
+        trace,
     } = processing;
 
     ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
         "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
+    );
+    ensure!(
+        !trace || dry_run,
+        "--trace can only be used together with --dry-run."
     );
 
     let gas_price = if let Some(gas_price) = gas_price {
@@ -3661,6 +3723,18 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     }
 
     if dry_run {
+        if trace {
+            return execute_dry_run_with_trace(
+                context,
+                signer,
+                tx_kind,
+                gas_budget,
+                gas_price,
+                gas_payment.clone(),
+                None,
+            )
+            .await;
+        }
         return execute_dry_run(
             context,
             signer,

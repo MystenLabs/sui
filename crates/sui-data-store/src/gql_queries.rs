@@ -55,20 +55,22 @@ pub(crate) mod epoch_query {
         protocol_version: u64,
     }
 
+    /// Query epoch data for the given epoch, or for the latest epoch if `epoch_id` is `None`.
     pub(crate) async fn query(
-        epoch_id: u64,
+        epoch_id: Option<u64>,
         data_store: &DataStore,
     ) -> Result<Option<EpochData>, Error> {
-        let query = Query::build(EpochDataArgs {
-            epoch: Some(epoch_id),
-        });
+        let query = Query::build(EpochDataArgs { epoch: epoch_id });
         let response = data_store.run_query(&query).await?;
 
         let Some(epoch) = response.data.and_then(|epoch| epoch.epoch) else {
             return Ok(None);
         };
+        // Use the epoch id from the response in error messages: for latest-epoch
+        // queries the requested id is unknown.
+        let epoch_id = epoch.epoch_id;
         Ok(Some(EpochData {
-            epoch_id: epoch.epoch_id,
+            epoch_id,
             protocol_version: epoch
                 .protocol_configs
                 .map(|config| config.protocol_version)
@@ -321,6 +323,35 @@ pub(crate) mod object_query {
                 },
             }
         }
+    }
+}
+
+pub(crate) mod checkpoint_query {
+    use super::*;
+
+    // `Query.checkpoint` returns the latest checkpoint when no sequence number
+    // or digest argument is provided.
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Query {
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+    }
+
+    /// Query the sequence number of the latest checkpoint known to the RPC.
+    pub(crate) async fn query(data_store: &DataStore) -> Result<u64, Error> {
+        let query = Query::build(());
+        let response = data_store.run_query(&query).await?;
+        let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
+            return Err(anyhow!(
+                "Missing latest checkpoint in query response. Errors: {:?}",
+                response.errors,
+            ));
+        };
+        Ok(checkpoint.sequence_number)
     }
 }
 

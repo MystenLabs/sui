@@ -31,13 +31,14 @@ use ::tracing::{Instrument, debug, error, info_span, warn};
 
 pub mod artifacts;
 pub mod displays;
+pub mod dry_run;
 pub mod execution;
 pub mod package_tools;
 pub mod replay_txn;
 pub mod summary_metrics;
 pub mod tracing;
 
-const DEFAULT_OUTPUT_DIR: &str = ".replay";
+pub(crate) const DEFAULT_OUTPUT_DIR: &str = ".replay";
 const CONFIG_FILE_NAME: &str = "replay.toml";
 
 // Arguments to the replay tool.

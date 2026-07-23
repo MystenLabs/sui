@@ -42,6 +42,7 @@ pub fn save_trace_output(
         gas_status: _,
         object_cache,
         inner_store: tmp_store,
+        epoch: _,
         checkpoint: _,
         protocol_version: _,
     } = context_and_effects;
