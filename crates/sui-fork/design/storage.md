@@ -46,19 +46,24 @@ validation of the references a response carries.
 
 ## Where reads resolve
 
-`ForkRpcReader` implements the upstream RPC storage traits and routes each method by what
-its key means. A read keyed immutably — an exact object version, a
-checkpoint or transaction by digest or sequence number — goes to the stock reader first
-and falls back to `ForkStore` on a miss. A cached row under an immutable key cannot be
-wrong, so serving it directly is always sound; the cost is a double point-get on the miss
-path, accepted for the simpler layering.
+`ForkRpcReader` implements the upstream RPC storage traits and is deliberately thin:
+every read the fork has policy for resolves through `ForkStore`, which is already
+local-first — it checks the rpc-store rows before consulting the remote — so a second
+routing layer in the reader would only repeat the same point-get. The reader touches the
+stock reader directly only for surfaces the fork keeps no policy for at all — events,
+full checkpoint contents, committees, epoch info, struct layouts, and the ledger and
+bitmap indexes, all written by the embedded indexer and correct to serve as-is — plus two
+genuinely hybrid reads: the chain identifier (the framework table seeded at open, derived
+from the fork checkpoint when absent) and the highest indexed checkpoint (the indexer
+watermark, with the highest persisted checkpoint standing in before the first watermark
+is written).
 
-A read with latest semantics — `get_object` without a version — must not take that
-shortcut. The stock reader answers it with a reverse scan over the `objects` column
-family, and a reverse scan is only correct when the version history is complete. The
-fork's history is sparse: a historical version is present only because something once
-fetched it. Serving the highest cached row as "current" would be silently stale, so latest
-reads go through `ForkStore` alone.
+Latest-semantics reads are why the routing must go through `ForkStore`. The stock reader
+answers `get_object` without a version by reverse-scanning the `objects` column family,
+which is only correct when the version history is complete. The fork's history is sparse:
+a historical version is present only because something once fetched it. Serving the
+highest cached row as "current" would be silently stale, so latest reads consult the
+`LiveState` pointer instead.
 
 ## `LiveState`: the current-version authority
 
@@ -155,7 +160,11 @@ written object pointer-less, and a later read would re-resolve it from pre-fork 
 
 The rpc-store and `live_state` are separate RocksDB instances. Each commit is atomic
 within its own database but nothing is atomic across the two; the write orderings above
-are what make the inconsistency windows fail-safe rather than fail-open.
+are what make the inconsistency windows fail-safe rather than fail-open. The split is
+historical rather than forced: `sui-consistent-store`'s `Schema` trait composes publicly,
+so a fork-owned schema could host the live-state column family in the main database and
+make row and pointer commits atomic — a candidate follow-up that would retire both the
+orderings and the reconciliation gap above.
 
 Address balances held in the accumulator, as opposed to in coin objects, are neither
 seeded nor served. The balance index reflects only coin objects materialized pre-fork plus

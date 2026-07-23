@@ -52,6 +52,7 @@ use sui_types::storage::ReadStore;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::error::Error as StorageError;
+use sui_types::storage::error::Kind as StorageErrorKind;
 use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
@@ -214,13 +215,17 @@ impl ForkStore {
     /// Return the highest checkpoint summary persisted in the RPC store. This never
     /// consults the remote endpoint — the local executor is the source of
     /// truth for "latest" in a forked network.
+    ///
+    /// Only a `Missing` read maps to `Ok(None)`; other storage errors
+    /// propagate so a store failure cannot masquerade as "no checkpoint yet".
     pub(crate) fn get_highest_verified_checkpoint(
         &self,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
         let reader = self.local_store().reader();
         match ReadStore::get_highest_verified_checkpoint(reader) {
             Ok(checkpoint) => Ok(Some(checkpoint)),
-            Err(_) => Ok(None),
+            Err(err) if err.kind() == StorageErrorKind::Missing => Ok(None),
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -806,17 +811,22 @@ fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<ObjectRemov
 // ============================================================================
 
 /// Object reads delegate to the inherent `ForkStore::get_object` / `get_object_at_version`,
-/// which provide local-first lookups with remote fallback. Errors are swallowed and surfaced
-/// as `None` because the trait signature does not allow propagating them.
+/// which provide local-first lookups with remote fallback. The trait signature cannot
+/// propagate errors, so failures are logged before being surfaced as `None`.
 impl ObjectStore for ForkStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.get_object(object_id).ok().flatten()
+        self.get_object(object_id).unwrap_or_else(|err| {
+            tracing::warn!(%object_id, "latest-object read failed: {err:#}");
+            None
+        })
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         self.get_object_at_version(object_id, version.value())
-            .ok()
-            .flatten()
+            .unwrap_or_else(|err| {
+                tracing::warn!(%object_id, ?version, "versioned object read failed: {err:#}");
+                None
+            })
     }
 }
 
@@ -836,6 +846,9 @@ impl ParentSync for ForkStore {
     }
 }
 
+/// Both methods go through the fallible helpers: a store or remote failure
+/// must surface as an error rather than read as "object not found", which
+/// execution would otherwise durably commit as a wrong result.
 impl RuntimeObjectResolver for ForkStore {
     fn read_child_object(
         &self,
@@ -843,14 +856,7 @@ impl RuntimeObjectResolver for ForkStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let Some(child_object) = self
-            .get_object_lt_or_eq_version(child, child_version_upper_bound)
-            .ok()
-            .flatten()
-        else {
-            return Ok(None);
-        };
-        check_child_object_owner(parent, child, child_object).map(Some)
+        self.read_child_object_fallible(parent, child, child_version_upper_bound)
     }
 
     fn get_object_received_at_version(
@@ -860,14 +866,11 @@ impl RuntimeObjectResolver for ForkStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        let Some(recv_object) = self.get_object(receiving_object_id).ok().flatten() else {
-            return Ok(None);
-        };
-        Ok(check_received_object(
+        self.get_object_received_at_version_fallible(
             owner,
+            receiving_object_id,
             receive_object_at_version,
-            recv_object,
-        ))
+        )
     }
 }
 

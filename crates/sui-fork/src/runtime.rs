@@ -48,6 +48,7 @@ use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::PipelineLayer;
+#[cfg(test)]
 use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::Store;
@@ -240,6 +241,9 @@ impl ForkRuntime {
         Ok(())
     }
 
+    /// Bare stock reader over the fork's rpc-store, used by tests to assert on
+    /// raw rows; production reads flow through [`LocalStore`] and `ForkStore`.
+    #[cfg(test)]
     pub(crate) fn reader(&self) -> RpcStoreReader {
         RpcStoreReader::new(self.db.clone(), self.schema.clone())
     }

@@ -20,9 +20,10 @@
 //!
 //! It is backed by its own single-column-family [`sui_consistent_store::Db`]
 //! (opened synchronously) under `{data_dir}/live_state/`, separate from the
-//! `sui-rpc-store` database, because that database is opened with the fixed
-//! `RpcStoreSchema` and cannot host an extra column family without modifying
-//! `sui-rpc-store`.
+//! `sui-rpc-store` database. The split is historical rather than forced:
+//! `Schema` composes publicly, so a fork-owned schema could host this column
+//! family in the main database — making row and pointer commits atomic —
+//! without modifying `sui-rpc-store`. See design/storage.md § "Known gaps".
 
 use std::path::Path;
 

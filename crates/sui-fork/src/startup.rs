@@ -7,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::anyhow;
 use prometheus::Registry;
@@ -233,10 +232,7 @@ pub async fn run(
         let sim = context.simulacrum().read().await;
         sim.store().clone()
     };
-    let runtime = context
-        .runtime()
-        .context("fork runtime is not initialized")?;
-    let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(runtime.reader(), store));
+    let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(store));
 
     // Serve through `sui-rpc-api`'s `RpcService` directly (the fork does not
     // depend on `sui-rpc-node`). The rpc-store-backed `ForkRpcReader` is the

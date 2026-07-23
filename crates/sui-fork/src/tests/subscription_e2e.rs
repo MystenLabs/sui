@@ -51,6 +51,8 @@ struct ServerHarness {
     _runtime: ForkRuntime,
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
+    // Held so remote object probes keep resolving to "not found".
+    _gql_server: wiremock::MockServer,
 }
 
 impl ServerHarness {
@@ -72,8 +74,13 @@ impl ServerHarness {
             forked_at_checkpoint,
             chain_identifier,
         )?;
-        let mut store =
-            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        let gql_server = crate::test_support::absent_objects_gql_server().await;
+        let mut store = ForkStore::new_for_testing_with_remote(
+            temp.path().to_path_buf(),
+            gql_server.uri(),
+            forked_at_checkpoint,
+            runtime.local_store(),
+        );
         store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
@@ -99,7 +106,7 @@ impl ServerHarness {
 
         let context = Arc::new(Context::new(sim, checkpoint_sender));
 
-        let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(runtime.reader(), store));
+        let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(store));
         let mut service = RpcService::new(reader);
         service.with_server_version(ServerVersion::new("sui-fork", "test"));
         service.with_subscription_service(subscription_handle);
@@ -131,6 +138,7 @@ impl ServerHarness {
                     grpc_endpoint,
                     _runtime: runtime,
                     _temp: temp,
+                    _gql_server: gql_server,
                 });
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
