@@ -50,7 +50,7 @@ public fun do_thing(ctx: &mut TxContext /* ... */) {
 }
 ```
 
-## A note on access control
+## A Note on Access Control
 
 Scratch entries are namespaced by their key type, and only the module that defines the key type `K` can access the entries keyed by it. Within the defining module, the `scratch_internal_*` macros used above handle the access control for you: under the hood they issue a `sui::scratch::Permit<K>` from a `std::internal::Permit<K>`, which can only be constructed by `K`'s defining module.
 For more granular control or for accessing entries outside of the defining module, you will need to pass the `sui::scratch::Permit<K>` explicitly. The non-macro forms (`scratch_add`, `scratch_read`, and so on) take a `Permit<K>` as an argument.
