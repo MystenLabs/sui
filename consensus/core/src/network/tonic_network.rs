@@ -147,10 +147,28 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .take_while(|b| futures::future::ready(b.is_ok()))
             .filter_map(move |b| async move {
                 match b {
-                    Ok(response) => Some(ExtendedSerializedBlock {
-                        block: response.block,
-                        excluded_ancestors: response.excluded_ancestors,
-                    }),
+                    Ok(response) => {
+                        // zstd frame magic: sender used compress-once mode.
+                        // Decompression yields an owned buffer (also unpins the
+                        // network chunk); otherwise copy out explicitly.
+                        let block = if response.block.len() >= 4
+                            && response.block[..4] == [0x28, 0xB5, 0x2F, 0xFD]
+                        {
+                            match zstd::stream::decode_all(response.block.as_ref()) {
+                                Ok(decompressed) => Bytes::from(decompressed),
+                                Err(e) => {
+                                    debug!("Failed to decompress block from {}: {e:?}", peer);
+                                    return None;
+                                }
+                            }
+                        } else {
+                            Bytes::from(response.block.to_vec())
+                        };
+                        Some(ExtendedSerializedBlock {
+                            block,
+                            excluded_ancestors: response.excluded_ancestors,
+                        })
+                    }
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
                         None
@@ -969,11 +987,18 @@ impl TonicManager {
             )
             .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
-        let consensus_service_server = ConsensusServiceServer::new(service)
+        let mut consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
             .max_decoding_message_size(config.message_size_limit)
-            .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
+        // Test knob: skip per-stream outbound compression when compress-once mode
+        // pre-compresses payloads (or when compression is explicitly disabled).
+        if std::env::var("CONSENSUS_DISABLE_STREAM_COMPRESSION").is_err()
+            && std::env::var("CONSENSUS_COMPRESS_ONCE").is_err()
+        {
+            consensus_service_server =
+                consensus_service_server.send_compressed(CompressionEncoding::Zstd);
+        }
 
         let consensus_service = tonic::service::Routes::new(consensus_service_server)
             .into_axum_router()

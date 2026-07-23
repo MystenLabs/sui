@@ -281,6 +281,7 @@ impl Core {
                 .new_block(ExtendedBlock {
                     block: last_proposed_block.clone(),
                     excluded_ancestors: vec![],
+                compressed_once: Default::default(),
                 })
                 .unwrap();
             last_proposed_block

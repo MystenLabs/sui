@@ -619,6 +619,7 @@ where
                 tracker.update_from_verified_block(&ExtendedBlock {
                     block: block.clone(),
                     excluded_ancestors: vec![],
+                compressed_once: Default::default(),
                 });
             }
         }

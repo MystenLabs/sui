@@ -376,10 +376,35 @@ pub(crate) struct ExtendedSerializedBlock {
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
 }
 
+fn compress_once_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("CONSENSUS_COMPRESS_ONCE").is_ok())
+}
+
 impl From<ExtendedBlock> for ExtendedSerializedBlock {
     fn from(extended_block: ExtendedBlock) -> Self {
+        let block = if compress_once_enabled() {
+            // Compress at most once per block (shared across all subscriber
+            // streams via the broadcast-channel clone); receivers detect the
+            // zstd magic and decompress.
+            extended_block
+                .compressed_once
+                .0
+                .get_or_init(|| {
+                    Bytes::from(
+                        zstd::stream::encode_all(
+                            extended_block.block.serialized().as_ref(),
+                            1,
+                        )
+                        .expect("zstd compression cannot fail on in-memory data"),
+                    )
+                })
+                .clone()
+        } else {
+            extended_block.block.serialized().clone()
+        };
         Self {
-            block: extended_block.block.serialized().clone(),
+            block,
             excluded_ancestors: extended_block
                 .excluded_ancestors
                 .iter()
