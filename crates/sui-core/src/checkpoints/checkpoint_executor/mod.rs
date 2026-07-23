@@ -485,6 +485,11 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, UpdateRpcIndex);
 
         self.global_state_hasher
+            .wait_for_previous_running_root(&self.epoch_store, seq)
+            .await
+            .expect("Failed to wait for previous running root");
+
+        self.global_state_hasher
             .accumulate_running_root(&self.epoch_store, seq, ckpt_state.state_hasher)
             .expect("Failed to accumulate running root");
 
