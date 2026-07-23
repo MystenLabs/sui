@@ -45,16 +45,16 @@ questions:
 answer: >-
   A P2P payments app on Sui combines zkLogin for wallet-free authentication,
   sponsored transactions for gasless UX, address balance transfers for the
-  actual payment, and gRPC queries for transaction history — all composable
+  actual payment, and gRPC queries for transaction history, all composable
   within a single programmable transaction block.
 ---
 
 This walkthrough builds a peer-to-peer payments flow that lets users send stablecoins to each other without holding SUI or managing private keys. It stitches together four primitives:
 
-1. **Authentication** — zkLogin or wallet connection
-2. **Gas sponsorship** — a gas station pays the fee
-3. **Transfer** — address balance `send_funds` for the actual payment
-4. **Transaction history** — gRPC query for past payments
+1. **Authentication:** zkLogin or wallet connection
+2. **Gas sponsorship:** a gas station pays the fee
+3. **Transfer:** address balance `send_funds` for the actual payment
+4. **Transaction history:** gRPC query for past payments
 
 Each section is self-contained. You can adopt individual pieces or wire the full flow.
 
@@ -86,7 +86,7 @@ Each section is self-contained. You can adopt individual pieces or wire the full
 
 Users authenticate with [zkLogin](/sui-stack/zklogin-integration/zklogin) for a wallet-free experience, or connect an existing wallet with [dApp Kit](/getting-started/onboarding/app-frontends).
 
-With zkLogin, the user signs in with their Google (or other OAuth provider) account. The app derives a Sui address from the OAuth JWT — no seed phrase, no wallet extension.
+With zkLogin, the user signs in with their Google (or other OAuth provider) account. The app derives a Sui address from the OAuth JWT. No seed phrase or wallet extension is required.
 
 ```typescript
 // After OAuth redirect, you have a JWT.
@@ -96,7 +96,7 @@ With zkLogin, the user signs in with their Google (or other OAuth provider) acco
 // See: https://docs.sui.io/sui-stack/zklogin-integration/zklogin
 ```
 
-The key outcome of this step is a `signer` (keypair or ZkLoginSigner) and the user's Sui address.
+The key outcome of this step is a `signer` (key pair or ZkLoginSigner) and the user's Sui address.
 
 ## Step 2: Read the sender's balance
 
@@ -145,7 +145,7 @@ tx.moveCall({
 
 :::tip Gasless stablecoin transfers
 
-If the transfer uses an [eligible stablecoin](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) and the `SuiGrpcClient` detects eligibility, the SDK automatically sets `gasPrice = 0`. In this case, you do not need a gas station at all. The gasless path is the simplest integration.
+If the transfer uses an [eligible stablecoin](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) and the `SuiGrpcClient` detects eligibility, the SDK automatically sets `gasPrice = 0`. In this case, you do not need a gas station at all. The gasless path is the most basic integration.
 
 :::
 
@@ -322,8 +322,8 @@ async function sendPayment(
 
 ## Next steps
 
-- [Choose Your Payments Model](/onchain-finance/choose-payments-model) — decide between simple transfers, Payment Kit, or custom Move
-- [Self-Hosted Gas Station](/onchain-finance/gas-station) — deploy your own gas station service
-- [Payment Intents](/onchain-finance/payment-intents) — compose multiple operations into a single atomic transaction
-- [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) — eligible stablecoins and how gasless works
-- [zkLogin](/sui-stack/zklogin-integration/zklogin) — wallet-free authentication for your users
+- [Choose Your Payments Model](/onchain-finance/choose-payments-model): decide between basic transfers, Payment Kit, or custom Move
+- [Self-Hosted Gas Station](/onchain-finance/gas-station): deploy your own gas station service
+- [Payment Intents](/onchain-finance/payment-intents): compose multiple operations into a single atomic transaction
+- [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers): eligible stablecoins and how gasless works
+- [zkLogin](/sui-stack/zklogin-integration/zklogin): wallet-free authentication for your users

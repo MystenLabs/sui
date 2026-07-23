@@ -53,9 +53,9 @@ An agent that can sign transactions needs guardrails. A **spending mandate** is 
 
 ## Why a custom module
 
-Sui does not ship a built-in spending delegation module. The [closed-loop Token](/onchain-finance/closed-loop-token/spending) system enforces policies on `Token` types, but most payment agents work with `Coin<SUI>` or `Coin<USDC>` — standard coins that are not subject to `TokenPolicy` rules.
+Sui does not ship a built-in spending delegation module. The [closed-loop Token](/onchain-finance/closed-loop-token/spending) system enforces policies on `Token` types, but most payment agents work with `Coin<SUI>` or `Coin<USDC>` (standard coins that are not subject to `TokenPolicy` rules).
 
-In Sui's object model, delegation works differently than ERC-20 allowances. Instead of granting a spender permission on your balance, you create a **capability object** — a `SpendingMandate` — and transfer it to the agent. The agent presents this object when executing payments. The Move module validates the mandate's constraints before allowing the transfer.
+In Sui's object model, delegation works differently than ERC-20 allowances. Instead of granting a spender permission on your balance, you create a **capability object** (a `SpendingMandate`) and transfer it to the agent. The agent presents this object when executing payments. The Move module validates the mandate's constraints before allowing the transfer.
 
 ## Move module
 
@@ -349,7 +349,7 @@ For an emergency stop that does not require the agent to cooperate, use a shared
 
 ### Renewing a mandate
 
-To extend a mandate, the owner calls `update_cap` to increase the total cap or creates a new mandate with a later expiry. There is no `extend_expiry` function by design — creating a new mandate with a fresh expiry is safer because it forces the owner to consciously re-authorize the agent.
+To extend a mandate, the owner calls `update_cap` to increase the total cap or creates a new mandate with a later expiry. There is no `extend_expiry` function by design. Creating a new mandate with a fresh expiry is safer because it forces the owner to consciously re-authorize the agent.
 
 ## Comparison with TokenPolicy
 

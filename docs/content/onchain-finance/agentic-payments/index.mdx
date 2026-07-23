@@ -41,11 +41,11 @@ answer: >-
   sponsored gas, and settlement verification for safe, bounded operation.
 ---
 
-Agentic payments let autonomous backend services sign and submit payment transactions on Sui without human interaction. An agent holds its own keypair, operates within spending policies set by the owner, and uses sponsored gas so it never needs to hold SUI for fees.
+Agentic payments let autonomous backend services sign and submit payment transactions on Sui without human interaction. An agent holds its own key pair, operates within spending policies set by the owner, and uses sponsored gas so it never needs to hold SUI for fees.
 
 Building a payment agent requires four capabilities:
 
-1. **A wallet the agent can use.** The agent needs a keypair it can access programmatically, stored securely and rotatable without downtime.
+1. **A wallet the agent can use.** The agent needs a key pair it can access programmatically, stored securely and rotatable without downtime.
 
 2. **Spending boundaries.** The agent's owner defines what the agent can spend, to whom, and for how long. These boundaries are enforced onchain so the agent cannot exceed them even if compromised.
 
@@ -60,7 +60,7 @@ import DocCardList from '@theme/DocCardList';
 type: 'link',
 label: 'Agent Wallet and Signer Setup',
 href: '/onchain-finance/agentic-payments/agent-wallet-setup',
-description: 'Create and manage a headless keypair for backend agents.',
+description: 'Create and manage a headless key pair for backend agents.',
 },
 {
 type: 'link',
