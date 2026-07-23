@@ -254,6 +254,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .update_from_verified_block(&ExtendedBlock {
                 block: verified_block.clone(),
                 excluded_ancestors: excluded_ancestors.clone(),
+                compressed_once: Default::default(),
             });
 
         // Reject blocks when local commit index is lagging too far from quorum commit index,

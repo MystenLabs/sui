@@ -696,10 +696,16 @@ impl fmt::Debug for VerifiedBlock {
 /// Block with extended additional information, such as
 /// local blocks that are excluded from the block's ancestors.
 /// The extended information do not need to be certified or forwarded to other authorities.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct CompressedOnce(pub std::sync::Arc<std::sync::OnceLock<bytes::Bytes>>);
+
 #[derive(Clone, Debug)]
 pub(crate) struct ExtendedBlock {
     pub block: VerifiedBlock,
     pub excluded_ancestors: Vec<BlockRef>,
+    // Shared across broadcast-channel clones so the serialized block is
+    // zstd-compressed at most once per block regardless of subscriber count.
+    pub compressed_once: CompressedOnce,
 }
 
 /// Generates the genesis blocks for the current Committee.
