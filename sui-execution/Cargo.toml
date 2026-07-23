@@ -83,3 +83,4 @@ tracing = [
 #   "move-vm-runtime-$CUT/tracing",
     "move-vm-config/tracing",
 ]
+custom-natives = []
