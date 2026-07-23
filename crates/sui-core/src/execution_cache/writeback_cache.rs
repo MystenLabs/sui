@@ -497,6 +497,10 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
+    /// Reads an implicitly read system object at the given version.
+    /// If it's not available yet, it will block until it is.
+    /// In normal execution, this function should always return a Some(object).
+    /// In the case of dry-run/simulate, it is possible, though unlikely, that it can return None.
     pub(crate) fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
@@ -527,9 +531,11 @@ impl WritebackCache {
                 "get_implicitly_read_system_object_blocking",
                 &[key],
                 move |_keys| {
-                    let resolved = self.object_exists_by_key(object_id, version)
-                        || ObjectCacheRead::get_object(self, object_id)
-                            .is_some_and(|latest| latest.version() >= version);
+                    // In the case of dry-run/simulate, it is theoretically possible that the object's
+                    // required version gets pruned by the time we get here.
+                    // To ensure liveness, we use >= for the version comparison to ensure that we always return.
+                    let resolved = ObjectCacheRead::get_object(self, object_id)
+                        .is_some_and(|latest| latest.version() >= version);
                     vec![if resolved { Some(()) } else { None }]
                 },
             ))
