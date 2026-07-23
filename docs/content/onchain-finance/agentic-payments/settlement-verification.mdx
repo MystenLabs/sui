@@ -54,10 +54,10 @@ An agent should never release a service before verifying that payment is final. 
 
 The pattern has four steps:
 
-1. **Submit** — the agent (or a user) submits the payment transaction.
-2. **Wait** — the agent waits for the transaction to reach finality, not just submission acknowledgment.
-3. **Verify** — the agent checks the effects: correct recipient, correct amount, correct coin type, success status.
-4. **Settle** — only after verification passes does the agent release the goods, service, or next operation.
+1. **Submit:** the agent (or a user) submits the payment transaction.
+2. **Wait:** the agent waits for the transaction to reach finality, not just submission acknowledgment.
+3. **Verify:** the agent checks the effects: correct recipient, correct amount, correct coin type, success status.
+4. **Settle:** only after verification passes does the agent release the goods, service, or next operation.
 
 ```
 ┌────────┐          ┌──────────┐          ┌────────────┐
@@ -78,7 +78,7 @@ The pattern has four steps:
 
 ## Waiting for finality
 
-After submitting a transaction, use `waitForTransaction` to block until the transaction is finalized. Do not treat a successful submission response as proof of settlement — submission means the transaction was received, not that it succeeded.
+After submitting a transaction, use `waitForTransaction` to block until the transaction is finalized. Do not treat a successful submission response as proof of settlement. Submission means the transaction was received, not that it succeeded.
 
 ```typescript
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -110,7 +110,7 @@ const confirmed = await client.getTransaction({
 
 ## Verifying transaction effects
 
-After the transaction is confirmed, inspect the effects to verify the payment. The result from `getTransaction` uses a `$kind` discriminator — `'Transaction'` on success, `'FailedTransaction'` on failure.
+After the transaction is confirmed, inspect the effects to verify the payment. The result from `getTransaction` uses a `$kind` discriminator (`'Transaction'` on success, `'FailedTransaction'` on failure).
 
 ### Check status
 
@@ -249,7 +249,7 @@ Log the error, alert the operator, and decide whether to retry (with a corrected
 
 ## Onchain settlement verification
 
-For high-value flows, move the verification logic onchain using a Move module. The hot potato pattern ensures the settlement check happens within the same transaction as the payment — the caller cannot skip verification.
+For high-value flows, move the verification logic onchain using a Move module. The hot potato pattern ensures the settlement check happens within the same transaction as the payment. The caller cannot skip verification.
 
 ```move
 module example::settlement;
@@ -332,7 +332,7 @@ Choose based on your agent architecture:
 
 | | Polling | Event subscription |
 |---|---|---|
-| **How** | Call `waitForTransaction` or `getTransaction` per digest | Subscribe to events via gRPC streaming |
+| **How** | Call `waitForTransaction` or `getTransaction` per digest | Subscribe to events through gRPC streaming |
 | **Best for** | Request-response agents that process one transaction at a time | High-throughput agents that process many transactions concurrently |
 | **Complexity** | Low | Medium (manage stream lifecycle, reconnection) |
 | **Latency** | Low for individual transactions | Lowest for bulk monitoring |

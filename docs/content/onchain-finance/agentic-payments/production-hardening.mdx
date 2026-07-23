@@ -42,7 +42,7 @@ questions:
   - How do I handle idempotent retries for agent transactions on Sui?
   - What production safety patterns should I use for payment agents on Sui?
 answer: >-
-  Production payment agents need a kill-switch (both off-chain and on-chain),
+  Production payment agents need a kill-switch (both offchain and onchain),
   idempotent retries that prevent double-spends, circuit breakers that halt on
   repeated failures, and structured monitoring to detect anomalies.
 ---
@@ -51,9 +51,9 @@ An agent that moves money in production needs safety mechanisms beyond correct b
 
 ## Kill-switch
 
-A kill-switch lets you halt all agent operations immediately. Implement two layers: one off-chain for instant response, and one onchain as a final safeguard.
+A kill-switch lets you halt all agent operations immediately. Implement two layers: one offchain for instant response, and one onchain as a final safeguard.
 
-### Off-chain kill-switch
+### Offchain kill-switch
 
 The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction.
 
@@ -73,7 +73,7 @@ For teams using feature flag services (LaunchDarkly, Unleash, or similar), check
 
 ### Onchain kill-switch
 
-An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the off-chain kill-switch fails (agent ignoring the flag, stale config), the onchain check prevents execution.
+An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the offchain kill-switch fails (agent ignoring the flag, stale config), the onchain check prevents execution.
 
 ```move
 module example::admin_config;
@@ -132,7 +132,7 @@ public fun execute_spend<T>(
 
 ## Retry safety
 
-Sui transactions are atomic — they either fully succeed or fully revert. But network issues can make the outcome ambiguous: the transaction might have been submitted but you did not receive the response. Retrying blindly risks double-spending.
+Sui transactions are atomic. They either fully succeed or fully revert. But network issues can make the outcome ambiguous: the transaction might have been submitted but you did not receive the response. Retrying blindly risks double-spending.
 
 ### The safe retry pattern
 
@@ -140,7 +140,7 @@ Sui transactions are atomic — they either fully succeed or fully revert. But n
 
 2. **Wait for confirmation.** Use `waitForTransaction` with the digest to confirm the outcome.
 
-3. **If the wait times out, query before retrying.** If `waitForTransaction` times out, query the digest directly. If the transaction exists onchain, inspect `$kind`: a `Transaction` means it succeeded; a `FailedTransaction` means it executed but reverted (gas was still charged). In either case, do not retry — the transaction is final.
+3. **If the wait times out, query before retrying.** If `waitForTransaction` times out, query the digest directly. If the transaction exists onchain, inspect `$kind`: a `Transaction` means it succeeded; a `FailedTransaction` means it executed but reverted (gas was still charged). In either case, do not retry. The transaction is final.
 
 4. **Only retry if the transaction was never submitted.** If the digest does not exist onchain and you received a network error during submission, it is safe to retry.
 
@@ -321,8 +321,8 @@ Before deploying an agent to production:
 - [ ] Agent key is stored in a secrets manager or cloud KMS, not in source code or environment files committed to version control
 - [ ] Spending mandate has a short expiry window (hours or days, not months)
 - [ ] Recipient allowlist contains only verified addresses
-- [ ] Off-chain kill-switch is tested and accessible to on-call operators
-- [ ] Onchain kill-switch (`AdminConfig.paused`) is deployed and the `AdminCap` is secured
+  - [ ] Offchain kill-switch is tested and accessible to on-call operators
+  - [ ] Onchain kill-switch (`AdminConfig.paused`) is deployed and the `AdminCap` is secured
 - [ ] Idempotency store is durable (survives process restarts)
 - [ ] Circuit breaker is configured with sensible thresholds
 - [ ] Rate limiter prevents more than N transactions per minute

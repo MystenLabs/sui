@@ -54,7 +54,7 @@ answer: >-
   the client submits the dual-signed transaction.
 ---
 
-A gas station is a backend service that pays gas on behalf of users or agents. There is no official `sui-gas-station` crate — you build a gas station using the [TypeScript SDK](/develop/transactions/ptbs/building-ptb) and the [sponsored transaction protocol](/develop/transaction-payment/sponsor-txn).
+A gas station is a backend service that pays gas on behalf of users or agents. There is no official `sui-gas-station` crate. Build your gas station using the [TypeScript SDK](/develop/transactions/ptbs/building-ptb) and the [sponsored transaction protocol](/develop/transaction-payment/sponsor-txn).
 
 ## How it works
 
@@ -66,7 +66,7 @@ The sponsor handshake has five steps:
 
 3. **Gas station validates the transaction.** The service inspects the transaction kind, checks it against allowlists and budget caps, and rejects anything outside policy.
 
-4. **Gas station adds gas payment and signs.** The service sets `gasOwner`, `gasBudget`, and `gasPayment` (a coin from its pool), builds the final bytes, and signs them with the sponsor keypair.
+4. **Gas station adds gas payment and signs.** The service sets `gasOwner`, `gasBudget`, and `gasPayment` (a coin from its pool), builds the final bytes, and signs them with the sponsor key pair.
 
 5. **Client adds its own signature and submits.** The client signs the same bytes and submits the dual-signed transaction to a full node.
 
@@ -86,7 +86,7 @@ The sponsor handshake has five steps:
 
 ## Gas coin pool
 
-The sponsor address needs a pool of SUI coins to fund transactions. A single coin cannot be used by two inflight transactions simultaneously — if it is, one transaction fails due to an object version conflict.
+The sponsor address needs a pool of SUI coins to fund transactions. A single coin cannot be used by two inflight transactions simultaneously. If it is, one transaction fails due to an object version conflict.
 
 ### Pre-splitting coins
 
@@ -119,7 +119,7 @@ await client.signAndExecuteTransaction({ transaction: tx, signer: sponsor });
 
 ### Pool management
 
-Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. Gas is always charged — even when a transaction fails — so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
+Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. Gas is always charged (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
 
 ```typescript
 interface GasCoin {
