@@ -1106,6 +1106,7 @@ impl AuthorityState {
             .load();
         sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
+            protocol_config,
             tx_signatures,
             input_object_kinds,
             receiving_objects_refs,

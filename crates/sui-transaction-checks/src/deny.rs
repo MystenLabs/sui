@@ -6,12 +6,13 @@ use sui_config::{
     dynamic_transaction_signing_checks::DynamicCheckRunnerError,
     transaction_deny_config::TransactionDenyConfig,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     signature::GenericSignature,
     storage::BackingPackageStore,
-    transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
+    transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI, TransactionKind},
 };
 use tracing::{error, warn};
 macro_rules! deny_if_true {
@@ -30,6 +31,7 @@ macro_rules! deny_if_true {
 /// deny config.
 pub fn check_transaction_for_signing(
     tx_data: &TransactionData,
+    protocol_config: &ProtocolConfig,
     tx_signatures: &[GenericSignature],
     input_object_kinds: &[InputObjectKind],
     receiving_objects: &[ObjectRef],
@@ -41,6 +43,18 @@ pub fn check_transaction_for_signing(
     check_signers(filter_config, tx_data, tx_signatures)?;
 
     check_input_objects(filter_config, input_object_kinds)?;
+
+    if let TransactionKind::ProgrammableTransaction(pt) = tx_data.kind() {
+        // Linkage validity is enforced during execution. Signing-time callers will eventually use
+        // the resolved linkage and the execution-linkage for forbid-list checks. But we shouldn't
+        // reject a transaction solely because this best-effort analysis fails to find a valid
+        // linkage (we should let the transaction through to fail with an invalid linkage error).
+        let _ = sui_execution::collect_unification_information_for_signing(
+            protocol_config,
+            pt,
+            package_store,
+        );
+    }
 
     check_package_dependencies(filter_config, tx_data, package_store)?;
 

@@ -100,7 +100,6 @@ fn loaded_command_facts<E: ExecutionErrorTrait>(
         }),
         Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) => {
             let current_pkg = get_package::<E, _>(current_package_id, package_store)?;
-            // Whether each module already present in the current package defines an `init`.
             let current_module_inits = current_pkg
                 .modules()
                 .iter()
@@ -201,8 +200,6 @@ pub(crate) fn collect_non_type_original_ids<E: ExecutionErrorTrait, S: PackageSt
     Ok(())
 }
 
-/// Fold a command's linkage facts into the shared `resolution_table` (pass 1). Only commands
-/// that pull packages into the runtime linkage contribute; the rest are no-ops.
 fn analyze_command_facts<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     facts: LinkageCommandFacts,
     resolution_table: &mut ResolutionTable,
@@ -224,16 +221,6 @@ fn analyze_command_facts<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
             )?;
         }
         LinkageCommandFacts::Publish { has_init, linkage } => {
-            // A publish only affects the transaction's linkage if the package has an `init`
-            // function: `init` runs as part of the publish, so its dependencies must be resolvable
-            // in this transaction. Without an `init` the freshly published package is not called
-            // and contributes nothing.
-            //
-            // NB: We presuppose here that if a published module has a function named `init`, then
-            // it is the package's init function. If it does not conform to the required `init`
-            // signature, entry-point verification rejects the transaction later.
-            //
-            // Published modules are guaranteed non-empty by package deserialization.
             if has_init {
                 add_exact_linkage_facts_to_table::<E, S>(resolution_table, &linkage, store)?;
             }
@@ -253,10 +240,8 @@ fn analyze_command_facts<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
                 "Unified linkage must be enabled before init on upgrade is supported"
             );
 
-            // Reject upgrades where an existing module adds an `init`.
             reject_existing_module_added_init_facts::<E>(&current_module_inits, &new_modules)?;
 
-            // Only newly-introduced modules with an `init` contribute to the linkage.
             if has_new_module_init_facts(&current_module_inits, &new_modules) {
                 add_upgrade_init_linkage_facts_to_table::<E, S>(
                     resolution_table,
@@ -292,8 +277,6 @@ fn add_exact_linkage_facts_to_table<E: ExecutionErrorTrait, S: PackageStore + ?S
     Ok(())
 }
 
-/// Reject an upgrade in which a module that already exists in the current package (and did not
-/// previously define an `init`) introduces one.
 fn reject_existing_module_added_init_facts<E: ExecutionErrorTrait>(
     current_module_inits: &ModuleInitFacts,
     new_modules: &[CompiledModule],
@@ -311,9 +294,6 @@ fn reject_existing_module_added_init_facts<E: ExecutionErrorTrait>(
     Ok(())
 }
 
-/// Return true if the upgrade introduces at least one new module (absent from the current package)
-/// that defines an `init` function. Existing modules never count because adding an `init` to an
-/// existing module is rejected by `reject_existing_module_added_init_facts`.
 fn has_new_module_init_facts(
     current_module_inits: &ModuleInitFacts,
     new_modules: &[CompiledModule],
@@ -326,20 +306,6 @@ fn has_new_module_init_facts(
     })
 }
 
-/// Add the linkage constraints introduced by an upgrade with a new-module `init`.
-///
-/// There are two cases based on whether the upgraded package already participates in the
-/// transaction-wide (Lumpy) linkage:
-///
-/// - If the upgraded package's original ID is not already in the resolution table, the upgrade is
-///   treated like a fresh publish-with-init: every entry of its linkage is added as an `exact`
-///   constraint.
-/// - If the upgraded package's original ID is in the resolution table, then for every
-///   `(original_id, version_id)` in the upgrade linkage either:
-///   a. `original_id` is not in the existing Lumpy linkage, so an
-///      `original_id -> exact(version_id)` constraint is introduced; or
-///   b. it is in the existing Lumpy linkage, in which case the resolved package ID must equal
-///      `version_id`.
 fn add_upgrade_init_linkage_facts_to_table<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     resolution_table: &mut ResolutionTable,
     current_package_id: &ObjectID,
@@ -384,12 +350,6 @@ fn add_upgrade_init_linkage_facts_to_table<E: ExecutionErrorTrait, S: PackageSto
     Ok(())
 }
 
-/// Add a `MoveCall`'s target package and type-argument packages to the resolution table.
-///
-/// The called package is pinned `exact`. Its dependencies are `at_least` for a public entrypoint,
-/// but `exact` for a private or friend entrypoint. Type-argument packages are always `at_least`,
-/// since types resolve upwards to later versions. This mirrors
-/// `LinkageAnalyzer::compute_call_linkage_`.
 fn add_call_facts_to_table<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     resolution_table: &mut ResolutionTable,
     package: &ObjectID,
@@ -411,8 +371,6 @@ fn add_call_facts_to_table<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     add_type_package_ids::<E, S>(resolution_table, type_defining_ids, store)
 }
 
-/// Add every type-defining package to the resolution table. Types resolve upwards to later
-/// versions, so the package and its dependencies are both `at_least`.
 fn add_type_package_ids<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     resolution_table: &mut ResolutionTable,
     type_defining_ids: impl IntoIterator<Item = ObjectID>,

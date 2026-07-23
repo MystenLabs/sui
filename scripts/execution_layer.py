@@ -494,6 +494,18 @@ def generate_lib(output_file: TextIO):
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
                 for (version, feature, cut) in cuts
             )
+        elif var == "COLLECT_UNIFICATION_INFORMATION_FOR_SIGNING_CUTS":
+            return "\n".join(
+                f"{spc}{feature or version} => "
+                + (
+                    "latest::collect_unification_information_for_signing(\n"
+                    f"{spc}    protocol_config, pt, package_store,\n"
+                    f"{spc}),"
+                    if cut == "latest"
+                    else "Ok((BTreeSet::new(), BTreeMap::new())),"
+                )
+                for (version, feature, cut) in cuts
+            )
         else:
             raise Exception(f"Don't know how to substitute {var}")
 

@@ -567,6 +567,7 @@ async fn test_actual_signer_denied_via_alias() {
     let tx_data = tx.data().transaction_data();
     let result = sui_transaction_checks::deny::check_transaction_for_signing(
         tx_data,
+        state.epoch_store_for_testing().protocol_config(),
         tx.data().tx_signatures(),
         &tx_data.input_objects().unwrap(),
         &tx_data.receiving_objects(),
@@ -608,6 +609,7 @@ async fn test_non_denied_actual_signer_allowed() {
     let tx_data = tx.data().transaction_data();
     let result = sui_transaction_checks::deny::check_transaction_for_signing(
         tx_data,
+        state.epoch_store_for_testing().protocol_config(),
         tx.data().tx_signatures(),
         &tx_data.input_objects().unwrap(),
         &tx_data.receiving_objects(),

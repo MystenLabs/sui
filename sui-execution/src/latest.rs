@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
+use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
@@ -34,7 +35,7 @@ use sui_adapter_latest::execution_engine::{
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingPackageStore, BackingStore};
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
@@ -61,6 +62,21 @@ impl<'m> Verifier<'m> {
     pub(crate) fn new(config: VerifierConfig, metrics: &'m Arc<BytecodeVerifierMetrics>) -> Self {
         Verifier { config, metrics }
     }
+}
+
+pub(crate) fn collect_unification_information_for_signing(
+    protocol_config: &ProtocolConfig,
+    pt: &ProgrammableTransaction,
+    package_store: &dyn BackingPackageStore,
+) -> SuiResult<(
+    BTreeSet<AccountAddress>,
+    BTreeMap<AccountAddress, AccountAddress>,
+)> {
+    sui_adapter_latest::static_programmable_transactions::linkage::collect_unification_information_for_signing(
+        protocol_config,
+        pt,
+        package_store,
+    )
 }
 
 impl executor::Executor for Executor {
