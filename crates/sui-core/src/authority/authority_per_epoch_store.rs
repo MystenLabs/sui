@@ -168,6 +168,18 @@ impl CertLockGuard {
 
 type JwkAggregator = GenericMultiStakeAggregator<(JwkId, JWK), true>;
 
+/// Outcome of grouping and deterministically capping the GCP-issuer JWKs that reached quorum
+/// within a single activation batch. See `AuthorityPerEpochStore::activate_gcp_jwks`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GcpJwkActivationOutcome {
+    /// Number of distinct GCP `(iss, kid)` ids for which more than one distinct JWK reached
+    /// quorum within this batch; none of the competing keys for those ids were activated.
+    pub conflicting_ids: u64,
+    /// Number of GCP JWKs that reached quorum, did not conflict with another key in the same
+    /// batch, but were not activated because doing so would exceed `max_gcp_active_jwks`.
+    pub cap_exceeded: u64,
+}
+
 type LocalExecutionTimeData = (
     ProgrammableTransaction,
     Vec<ExecutionTiming>,
@@ -2613,6 +2625,16 @@ impl AuthorityPerEpochStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    /// Records a single authority's vote for `(id, jwk)`. If this vote causes the key to newly
+    /// reach quorum:
+    /// - For non-GCP (generic zkLogin) issuers, and for GCP issuers when
+    ///   `enable_gcp_consensus_validation` is off, this immediately activates the key (exact
+    ///   pre-existing behavior, unchanged).
+    /// - For GCP issuers when `enable_gcp_consensus_validation` is on, activation is deferred:
+    ///   the newly-quorate `(id, jwk)` pair is returned to the caller instead, which must batch
+    ///   it with the other votes processed in the same activation batch (one consensus commit)
+    ///   and pass them to `activate_gcp_jwks` so that same-batch key conflicts and the
+    ///   `max_gcp_active_jwks` cap can be enforced deterministically. See `activate_gcp_jwks`.
     pub(crate) fn record_jwk_vote(
         &self,
         output: &mut ConsensusCommitOutput,
@@ -2620,7 +2642,7 @@ impl AuthorityPerEpochStore {
         authority: AuthorityName,
         id: &JwkId,
         jwk: &JWK,
-    ) {
+    ) -> Option<(JwkId, JWK)> {
         info!(
             ?round,
             "received jwk vote from {:?} for jwk ({:?}, {:?})",
@@ -2634,7 +2656,7 @@ impl AuthorityPerEpochStore {
                 "ignoring vote because authenticator state object does exist yet
                 (it will be created at the end of this epoch)"
             );
-            return;
+            return None;
         }
 
         let mut jwk_aggregator = self.jwk_aggregator.lock();
@@ -2649,7 +2671,7 @@ impl AuthorityPerEpochStore {
                 "validator {:?} has already voted {} times this epoch, ignoring vote",
                 authority, votes,
             );
-            return;
+            return None;
         }
 
         output.insert_pending_jwk(authority, id.clone(), jwk.clone());
@@ -2659,9 +2681,97 @@ impl AuthorityPerEpochStore {
         let insert_result = jwk_aggregator.insert(authority, key.clone());
 
         if !previously_active && insert_result.is_quorum_reached() {
+            if self.protocol_config().enable_gcp_consensus_validation()
+                && id.iss == sui_types::gcp_attestation::GCP_ISSUER
+            {
+                info!(epoch = ?self.epoch(), ?round, jwk = ?key, "GCP jwk reached quorum, deferring to batch activation");
+                return Some(key);
+            }
             info!(epoch = ?self.epoch(), ?round, jwk = ?key, "jwk became active");
             output.insert_active_jwk(round, key);
         }
+        None
+    }
+
+    /// Number of GCP-issuer `(JwkId, JWK)` pairs that have already reached quorum this epoch
+    /// (whether or not they were ultimately activated; a same-batch conflict or cap decision
+    /// permanently resolves that key for the rest of the epoch since it will never reach
+    /// quorum "for the first time" again).
+    ///
+    /// Callers that are about to record new votes (which can themselves cause GCP keys to
+    /// reach quorum) must call this *before* recording those votes, since `record_jwk_vote`
+    /// mutates the same underlying aggregator this reads from; see `activate_gcp_jwks`.
+    pub(crate) fn count_active_gcp_jwks(&self) -> u64 {
+        self.jwk_aggregator
+            .lock()
+            .quorate_keys()
+            .filter(|(id, _)| id.iss == sui_types::gcp_attestation::GCP_ISSUER)
+            .count() as u64
+    }
+
+    /// Groups GCP-issuer `(JwkId, JWK)` pairs that newly reached quorum within a single
+    /// activation batch (the votes processed from one consensus commit) by `JwkId`.
+    ///
+    /// If two or more distinct JWKs reached quorum for the same `(iss, kid)` within this batch,
+    /// none of them are activated for that id, and `GcpJwkActivationOutcome::conflicting_ids` is
+    /// incremented by one for each such id. Remaining, non-conflicting candidates are activated
+    /// (in deterministic ascending `(JwkId, JWK)` order) up to the `max_gcp_active_jwks` cap;
+    /// any candidates beyond the cap are not activated, and
+    /// `GcpJwkActivationOutcome::cap_exceeded` is incremented once per dropped candidate.
+    ///
+    /// `active_before_batch` must be `count_active_gcp_jwks()` sampled *before* any of this
+    /// batch's votes were recorded (the caller's `record_jwk_vote` calls already mutated the
+    /// aggregator that function reads from, so it can't be safely recomputed in here).
+    ///
+    /// Only ever called with candidates returned by `record_jwk_vote` for GCP issuers under
+    /// `enable_gcp_consensus_validation`; generic (non-GCP) JWK activation happens immediately in
+    /// `record_jwk_vote` and is unaffected by this function.
+    pub(crate) fn activate_gcp_jwks(
+        &self,
+        output: &mut ConsensusCommitOutput,
+        round: u64,
+        candidates: Vec<(JwkId, JWK)>,
+        active_before_batch: u64,
+    ) -> GcpJwkActivationOutcome {
+        let mut outcome = GcpJwkActivationOutcome::default();
+        if candidates.is_empty() {
+            return outcome;
+        }
+
+        let mut by_id: BTreeMap<JwkId, BTreeSet<JWK>> = BTreeMap::new();
+        for (id, jwk) in candidates {
+            by_id.entry(id).or_default().insert(jwk);
+        }
+
+        let cap = self.protocol_config().max_gcp_active_jwks();
+        let mut active_count = active_before_batch;
+
+        for (id, jwks) in by_id {
+            if jwks.len() > 1 {
+                outcome.conflicting_ids += 1;
+                warn!(
+                    ?id,
+                    count = jwks.len(),
+                    "GCP JWK activation conflict: multiple distinct keys reached quorum for \
+                     the same id in one batch; activating none"
+                );
+                continue;
+            }
+            let jwk = jwks.into_iter().next().expect("non-empty by construction");
+            if active_count >= cap {
+                outcome.cap_exceeded += 1;
+                warn!(
+                    ?id,
+                    cap, "GCP JWK reached quorum but max_gcp_active_jwks cap was reached"
+                );
+                continue;
+            }
+            info!(epoch = ?self.epoch(), ?round, ?id, ?jwk, "GCP jwk became active");
+            output.insert_active_jwk(round, (id, jwk));
+            active_count += 1;
+        }
+
+        outcome
     }
 
     pub(crate) fn get_new_jwks(&self, round: u64) -> SuiResult<Vec<ActiveJwk>> {
@@ -2945,6 +3055,24 @@ impl AuthorityPerEpochStore {
                     warn!(
                         "{:?} sent jwk that exceeded max size",
                         transaction.sender_authority().concise()
+                    );
+                    return None;
+                }
+                // GCP-issuer JWKs get the same protocol-gated structural validation here as in
+                // the live consensus validator (`consensus_validator.rs`,
+                // `enable_gcp_consensus_validation`). This function is the single code path
+                // used both while live-processing a freshly sequenced commit and while
+                // catching up/replaying commits sequenced while this node was behind, so the
+                // gating is automatically identical for both. Non-GCP (e.g. zkLogin OIDC)
+                // issuers are never touched.
+                if self.protocol_config().enable_gcp_consensus_validation()
+                    && id.iss == sui_types::gcp_attestation::GCP_ISSUER
+                    && let Err(err) = sui_types::gcp_attestation::validate_gcp_jwk(id, jwk)
+                {
+                    warn!(
+                        ?id,
+                        %err,
+                        "rejecting invalid GCP JWK in catch-up/replay verification"
                     );
                     return None;
                 }

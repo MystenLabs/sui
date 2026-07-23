@@ -330,6 +330,13 @@ pub struct AuthorityMetrics {
     post_processing_total_tx_had_event_processed: IntCounter,
     post_processing_total_failures: IntCounter,
 
+    /// Number of GCP `(iss, kid)` ids for which two or more distinct JWKs reached quorum
+    /// within the same activation batch; none of the conflicting keys are activated.
+    pub gcp_jwk_activation_conflicts: IntCounter,
+    /// Number of GCP JWKs that reached quorum but were not activated because activating them
+    /// would have exceeded the configured `max_gcp_active_jwks` cap.
+    pub gcp_jwk_activation_cap_exceeded: IntCounter,
+
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_processed_user_transactions: IntCounterVec,
@@ -679,6 +686,18 @@ impl AuthorityMetrics {
                 &["class", "outcome"],
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
+            ).unwrap(),
+            gcp_jwk_activation_conflicts: register_int_counter_with_registry!(
+                "gcp_jwk_activation_conflicts",
+                "Number of GCP (iss, kid) ids for which multiple distinct JWKs reached quorum \
+                 in the same activation batch, so none of them were activated",
+                registry,
+            ).unwrap(),
+            gcp_jwk_activation_cap_exceeded: register_int_counter_with_registry!(
+                "gcp_jwk_activation_cap_exceeded",
+                "Number of GCP JWKs that reached quorum but were not activated because doing so \
+                 would have exceeded the configured max_gcp_active_jwks cap",
+                registry,
             ).unwrap(),
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",

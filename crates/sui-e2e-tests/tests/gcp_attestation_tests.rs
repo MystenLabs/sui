@@ -140,6 +140,59 @@ async fn test_gcp_attestation_rejects_unknown_kid() {
     );
 }
 
+// A structurally invalid GCP JWK (wrong `kty`) injected via msim must never become active,
+// with or without `enable_gcp_consensus_validation`: node-side fetch ingestion
+// (`fetch_gcp_jwks`) and live/replay consensus validation both reuse the same
+// `validate_gcp_jwk` policy, so msim test injection cannot bypass production validation at
+// either layer. Exercises requirement that msim-injected keys share production validation.
+#[cfg(msim)]
+#[sim_test]
+async fn test_gcp_attestation_rejects_malformed_injected_jwk_end_to_end() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_gcp_consensus_validation_for_testing(true);
+        config
+    });
+
+    sui_node::set_gcp_jwk_injector(vec![(
+        JwkId {
+            iss: GCP_ISS.to_string(),
+            kid: TEST_KID.to_string(),
+        },
+        JWK {
+            kty: "EC".to_string(), // structurally invalid: GCP attestation requires RSA.
+            e: KEY_E_B64.to_string(),
+            n: KEY_N_B64.to_string(),
+            alg: "RS256".to_string(),
+        },
+    )]);
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_jwk_fetch_interval(std::time::Duration::from_secs(1))
+        .build()
+        .await;
+
+    // Give the fetch/consensus pipeline several cycles to (fail to) activate the key. There is
+    // no "activated" signal to wait on here since the key must never become active; a bounded
+    // sleep across several fetch intervals is the practical way to exercise this negatively.
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    let tx = sign_verify_tx(&test_cluster, E2E_TOKEN).await;
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(tx)
+        .await
+        .expect("execution transport error");
+    assert!(
+        effects.status().is_err(),
+        "malformed GCP JWK must never be activated, so the token's kid must remain unknown"
+    );
+
+    clear_gcp_jwk_injector();
+}
+
 #[sim_test]
 async fn test_gcp_attestation_rejected_when_disabled() {
     if sui_simulator::has_mainnet_protocol_config_override() {
