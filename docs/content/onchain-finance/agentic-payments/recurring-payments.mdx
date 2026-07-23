@@ -117,6 +117,8 @@ public struct StreamPayment has key {
     balance: Balance<SUI>,
 }
 
+const EInvalidDuration: u64 = 3;
+
 /// Create a new stream. Funds are locked until the recipient claims them.
 public fun create(
     coin: Coin<SUI>,
@@ -125,6 +127,7 @@ public fun create(
     end_time_ms: u64,
     ctx: &mut TxContext,
 ) {
+    assert!(end_time_ms > start_time_ms, EInvalidDuration);
     let total = coin.value();
     let stream = StreamPayment {
         id: object::new(ctx),
@@ -166,14 +169,27 @@ public fun claim(
     coin::from_balance(stream.balance.split(claimable), ctx)
 }
 
-/// Cancel the stream and return remaining funds to the sender.
-/// Only the sender can cancel.
+/// Cancel the stream. Vested-but-unclaimed funds go to the recipient;
+/// unvested funds are returned to the sender.
 public fun cancel(
     stream: StreamPayment,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert!(ctx.sender() == stream.sender, ENotRecipient);
+
+    let now = clock.timestamp_ms();
+    let elapsed = if (now >= stream.end_time_ms) {
+        stream.end_time_ms - stream.start_time_ms
+    } else if (now > stream.start_time_ms) {
+        now - stream.start_time_ms
+    } else {
+        0
+    };
+
+    let total_duration = stream.end_time_ms - stream.start_time_ms;
+    let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
+    let owed_to_recipient = (vested as u64) - stream.claimed_amount;
 
     let StreamPayment {
         id,
@@ -183,13 +199,19 @@ public fun cancel(
         claimed_amount: _,
         start_time_ms: _,
         end_time_ms: _,
-        balance,
+        mut balance,
     } = stream;
 
-    // Return remaining balance to sender
+    // Transfer vested-but-unclaimed funds to recipient
+    if (owed_to_recipient > 0) {
+        let recipient_coin = coin::from_balance(balance.split(owed_to_recipient), ctx);
+        transfer::public_transfer(recipient_coin, recipient);
+    };
+
+    // Return unvested remainder to sender
     if (balance.value() > 0) {
-        let remaining = coin::from_balance(balance, ctx);
-        transfer::public_transfer(remaining, sender);
+        let sender_coin = coin::from_balance(balance, ctx);
+        transfer::public_transfer(sender_coin, sender);
     } else {
         balance.destroy_zero();
     };
@@ -200,7 +222,7 @@ public fun cancel(
 
 ### Advantages and tradeoffs
 
-- **Advantages:** No off-chain infrastructure needed after creation. The recipient claims on their own schedule. Funds are locked onchain so neither party can renege.
+- **Advantages:** No off-chain infrastructure needed after creation. The recipient claims on their own schedule. On cancellation, vested-but-unclaimed funds go to the recipient and only unvested funds return to the sender.
 - **Tradeoffs:** Requires upfront capital to fund the entire stream. The sender cannot change the rate after creation (cancel and recreate instead). Uses a shared object, which adds consensus overhead.
 
 ## Choosing between patterns

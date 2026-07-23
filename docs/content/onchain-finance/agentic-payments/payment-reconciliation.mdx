@@ -16,7 +16,40 @@ Autonomous agents can lose track of payments due to crashes, network timeouts, o
 
 ## Querying transaction history
 
-Use gRPC `ListTransactions` to retrieve all transactions sent by the agent's address:
+The gRPC API does not provide a "list transactions by sender" endpoint. Instead, use one of these approaches to build a payment history.
+
+### GraphQL query
+
+Query transactions by sender address using GraphQL:
+
+```graphql
+query AgentTransactions($sender: SuiAddress!, $cursor: String) {
+  address(address: $sender) {
+    transactionBlocks(first: 50, after: $cursor) {
+      nodes {
+        digest
+        effects {
+          balanceChanges {
+            nodes {
+              owner { address }
+              amount
+              coinType { repr }
+            }
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+```
+
+### Inspecting individual transactions
+
+When you have a list of transaction digests (from your local database or a GraphQL query), use the gRPC client to inspect each one:
 
 ```typescript
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -26,30 +59,6 @@ const client = new SuiGrpcClient({
   network: 'mainnet',
 });
 
-async function getAgentTransactions(agentAddress: string) {
-  const transactions = [];
-  let cursor: string | undefined;
-
-  while (true) {
-    const page = await client.listTransactions({
-      filter: { sentAddress: agentAddress },
-      limit: 50,
-      cursor,
-    });
-
-    transactions.push(...page.transactions);
-
-    if (!page.nextCursor) break;
-    cursor = page.nextCursor;
-  }
-
-  return transactions;
-}
-```
-
-For each transaction, inspect the balance changes to determine the payment amount and recipient:
-
-```typescript
 async function extractPaymentDetails(digest: string) {
   const result = await client.getTransaction({
     digest,
@@ -64,7 +73,7 @@ async function extractPaymentDetails(digest: string) {
   const payments = (tx.balanceChanges ?? [])
     .filter((change) => BigInt(change.amount) > 0n)
     .map((change) => ({
-      recipient: change.owner,
+      recipient: change.address,
       amount: change.amount,
       coinType: change.coinType,
     }));
@@ -73,25 +82,24 @@ async function extractPaymentDetails(digest: string) {
 }
 ```
 
-## Real-time monitoring with event subscriptions
+## Real-time monitoring with checkpoint subscriptions
 
-For real-time payment tracking, subscribe to events emitted by your payment module:
+The gRPC `SubscriptionService.SubscribeCheckpoints` streams new checkpoints as they are finalized. Process each checkpoint's transactions to detect payments in real time:
 
 ```typescript
-const subscription = await client.subscribeEvent({
-  filter: {
-    MoveEventType: '0xPACKAGE::payment::PaymentExecuted',
-  },
-  onMessage: (event) => {
-    console.log('Payment event:', event.parsedJson);
-    // Update local database
-  },
-});
+const stream = client.subscriptionService.subscribeCheckpoints({});
+
+for await (const checkpoint of stream.responses) {
+  // Each checkpoint contains transaction digests.
+  // Fetch and inspect transactions relevant to your agent.
+}
 ```
+
+For event-level filtering, use a [custom indexer pipeline](/develop/accessing-data/custom-indexer) built on the `sui-indexer-alt` framework. The indexer processes checkpoints and writes matching events to your database.
 
 :::tip Choose the right approach
 
-Use transaction queries for batch reconciliation (hourly or daily). Use event subscriptions for real-time monitoring and alerting. For production systems at scale, combine both with a [custom indexer pipeline](/develop/accessing-data/custom-indexer).
+Use GraphQL queries for batch reconciliation (hourly or daily). Use checkpoint subscriptions for near-real-time monitoring. For production systems at scale, use a [custom indexer pipeline](/develop/accessing-data/custom-indexer).
 
 :::
 
