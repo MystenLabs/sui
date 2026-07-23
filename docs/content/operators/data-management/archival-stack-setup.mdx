@@ -149,11 +149,11 @@ The storage footprint estimations below are based on the network as of early Mar
 | `checkpoints_by_digest` | 15 GB |
 | `watermark_alt` | 1.5 GB |
 | `epochs` | 83 MB |
-| `packages` | TBD (not yet backfilled) |
-| `packages_by_id` | TBD (not yet backfilled) |
-| `packages_by_checkpoint` | TBD (not yet backfilled) |
-| `protocol_configs` | TBD (not yet backfilled) |
-| `system_packages` | TBD (not yet backfilled) |
+| `packages` | Pending backfill |
+| `packages_by_id` | Pending backfill |
+| `packages_by_checkpoint` | Pending backfill |
+| `protocol_configs` | Pending backfill |
+| `system_packages` | Pending backfill |
 | **Total** | **~13.3 TB** |
 
 **Testnet (full history from genesis):**
@@ -166,11 +166,11 @@ The storage footprint estimations below are based on the network as of early Mar
 | `checkpoints_by_digest` | 18 GB |
 | `watermark_alt` | 12 MB |
 | `epochs` | 97 MB |
-| `packages` | TBD (not yet backfilled) |
-| `packages_by_id` | TBD (not yet backfilled) |
-| `packages_by_checkpoint` | TBD (not yet backfilled) |
-| `protocol_configs` | TBD (not yet backfilled) |
-| `system_packages` | TBD (not yet backfilled) |
+| `packages` | Pending backfill |
+| `packages_by_id` | Pending backfill |
+| `packages_by_checkpoint` | Pending backfill |
+| `protocol_configs` | Pending backfill |
+| `system_packages` | Pending backfill |
 | **Total** | **~4.3 TB** |
 
 The `transactions` and `objects` tables dominate storage. The `packages`, `packages_by_id`, `packages_by_checkpoint`, `protocol_configs`, and `system_packages` pipelines are new and have not yet been backfilled. Their storage contribution increases once backfill is completed. Growth rate scales with network transaction volume.
