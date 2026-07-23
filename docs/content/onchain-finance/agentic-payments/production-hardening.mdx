@@ -314,6 +314,18 @@ console.log(JSON.stringify({
 }));
 ```
 
+## Testnet to Mainnet checklist
+
+Before switching from Testnet to Mainnet, verify each item. Testnet and Mainnet are independent networks — nothing carries over automatically.
+
+- [ ] **Package addresses.** Republish all Move packages on Mainnet. Update every hardcoded package ID in your application configuration and SDK calls.
+- [ ] **RPC endpoint.** Switch from `https://fullnode.testnet.sui.io:443` to your Mainnet RPC provider. Do not use the public Mainnet endpoint for production traffic — use a dedicated provider.
+- [ ] **Shared object IDs.** Any shared objects your application depends on (`AdminConfig`, `SpendingMandate`, `Registry`) must be redeployed on Mainnet. Update their object IDs in your configuration.
+- [ ] **Coin type addresses.** Token type addresses differ between networks. For example, USDC has a different package address on Mainnet than Testnet. Verify all coin type strings.
+- [ ] **Gas budgets.** Mainnet gas prices can differ from Testnet. Simulate your transaction on Mainnet before submitting — use `dryRunTransactionBlock`, GraphQL `simulateTransaction`, or gRPC `TransactionExecutionService.SimulateTransaction` to verify gas budgets are adequate.
+- [ ] **Event monitoring.** Set up gRPC event subscriptions or an indexer pipeline to monitor production transactions. At minimum, alert on failed transactions and unexpected balance changes.
+- [ ] **Spending mandate expiry.** Set shorter expiry windows for Mainnet mandates than you used during Testnet development.
+
 ## Security checklist
 
 Before deploying an agent to production:
