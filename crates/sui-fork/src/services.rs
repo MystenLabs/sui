@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Runtime state for a local Sui fork.
+//! Initialization and ownership of the fork's underlying services.
 //!
-//! `ForkRuntime` owns the durable RPC-store state under the fork data
+//! `ServiceManager` owns the durable RPC-store state under the fork data
 //! directory. Opening it validates or creates fork metadata, opens the local
 //! `sui-rpc-store` RocksDB instance, records the fork chain identifier, and
 //! refreshes RPC-store pruning metadata before any readers are handed out.
@@ -73,36 +73,36 @@ const INDEXED_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
 
 type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
-/// Opened fork runtime state backed by `sui-rpc-store`.
+/// Opened fork services backed by `sui-rpc-store`.
 ///
-/// The runtime owns the local RPC store and, once started, keeps the embedded
+/// The manager owns the local RPC store and, once started, keeps the embedded
 /// `sui-rpc-store` indexer alive for local Simulacrum checkpoints.
-pub(crate) struct ForkRuntime {
+pub(crate) struct ServiceManager {
     db: Db,
     schema: Arc<RpcStoreSchema>,
     /// Fork-owned `ObjectID -> current live version` pointer table, kept in its
     /// own store beside the rpc-store; stock `sui-rpc-store` has no `ObjectID`-keyed
     /// current-version pointer. See [`crate::live_state`] and [`LocalStore`].
     live_state: Arc<LiveState>,
-    metadata: ForkMetadata,
+    metadata: Metadata,
     indexer_pipelines: Vec<&'static str>,
     /// Handle to the running indexer. Holding it keeps the indexer alive
     /// (dropping the `Service` stops the background tasks), and
     /// [`Self::indexer_stopped`] joins it to observe failures. Behind an async
-    /// mutex because `Service::join` needs exclusive access while the runtime
+    /// mutex because `Service::join` needs exclusive access while the manager
     /// is shared behind the `Context`.
     indexer_service: Option<tokio::sync::Mutex<Service>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct ForkMetadata {
+struct Metadata {
     format_version: u32,
     network: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
     chain_identifier: [u8; 32],
 }
 
-impl ForkRuntime {
+impl ServiceManager {
     pub(crate) fn open(
         root: &Path,
         network: String,
@@ -112,7 +112,7 @@ impl ForkRuntime {
         fs::create_dir_all(root)
             .with_context(|| format!("failed to create fork data directory {}", root.display()))?;
 
-        let metadata = ForkMetadata {
+        let metadata = Metadata {
             format_version: FORK_METADATA_FORMAT_VERSION,
             network,
             forked_at_checkpoint,
@@ -158,7 +158,7 @@ impl ForkRuntime {
         if !path.exists() {
             return Ok(None);
         }
-        let stored: ForkMetadata = serde_json::from_slice(
+        let stored: Metadata = serde_json::from_slice(
             &fs::read(&path)
                 .with_context(|| format!("failed to read fork metadata {}", path.display()))?,
         )
@@ -324,10 +324,10 @@ impl ForkRuntime {
         root.join(FORK_METADATA_FILE)
     }
 
-    fn load_or_write_metadata(root: &Path, expected: &ForkMetadata) -> anyhow::Result<()> {
+    fn load_or_write_metadata(root: &Path, expected: &Metadata) -> anyhow::Result<()> {
         let path = Self::metadata_path(root);
         if path.exists() {
-            let stored: ForkMetadata = serde_json::from_slice(
+            let stored: Metadata = serde_json::from_slice(
                 &fs::read(&path)
                     .with_context(|| format!("failed to read fork metadata {}", path.display()))?,
             )
@@ -386,22 +386,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let chain_identifier = get_mainnet_chain_identifier();
 
-        let runtime =
-            ForkRuntime::open(dir.path(), "mainnet".to_owned(), 42, chain_identifier).unwrap();
+        let services =
+            ServiceManager::open(dir.path(), "mainnet".to_owned(), 42, chain_identifier).unwrap();
 
         assert_eq!(
-            runtime.metadata,
-            ForkMetadata {
+            services.metadata,
+            Metadata {
                 format_version: FORK_METADATA_FORMAT_VERSION,
                 network: "mainnet".to_owned(),
                 forked_at_checkpoint: 42,
                 chain_identifier: *chain_identifier.as_bytes(),
             },
         );
-        assert!(ForkRuntime::metadata_path(dir.path()).exists());
-        assert!(ForkRuntime::rpc_store_path(dir.path()).exists());
+        assert!(ServiceManager::metadata_path(dir.path()).exists());
+        assert!(ServiceManager::rpc_store_path(dir.path()).exists());
 
-        let framework = FrameworkSchema::new(runtime.db.clone());
+        let framework = FrameworkSchema::new(services.db.clone());
         assert_eq!(
             framework
                 .chain_ids
@@ -415,14 +415,14 @@ mod tests {
     fn open_rejects_mismatched_metadata() {
         let dir = tempfile::tempdir().unwrap();
         let chain_identifier = get_mainnet_chain_identifier();
-        drop(ForkRuntime::open(
+        drop(ServiceManager::open(
             dir.path(),
             "mainnet".to_owned(),
             42,
             chain_identifier,
         ));
 
-        let err = ForkRuntime::open(dir.path(), "mainnet".to_owned(), 43, chain_identifier)
+        let err = ServiceManager::open(dir.path(), "mainnet".to_owned(), 43, chain_identifier)
             .err()
             .expect("metadata mismatch should fail");
 

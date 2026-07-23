@@ -53,8 +53,8 @@ use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
 use crate::rpc::executor::ForkedTransactionExecutor;
-use crate::rpc::reader::ForkRpcReader;
-use crate::runtime::ForkRuntime;
+use crate::rpc::reader::RpcReader;
+use crate::services::ServiceManager;
 use crate::store::ForkStore;
 use crate::test_support::absent_objects_gql_server;
 
@@ -69,7 +69,7 @@ struct TestHarness {
     reference_gas_price: u64,
     checkpoint_receiver: tokio::sync::broadcast::Receiver<Arc<Checkpoint>>,
     temp: tempfile::TempDir,
-    _runtime: Option<ForkRuntime>,
+    _services: Option<ServiceManager>,
     _gql_server: MockServer,
 }
 
@@ -86,20 +86,20 @@ impl TestHarness {
         let genesis_contents = config.genesis.checkpoint_contents().clone();
         let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
         let chain_identifier = (*genesis_checkpoint.digest()).into();
-        let runtime = ForkRuntime::open(
+        let services = ServiceManager::open(
             temp.path(),
             "localnet".to_owned(),
             forked_at_checkpoint,
             chain_identifier,
         )
-        .expect("runtime should open");
+        .expect("service manager should open");
         // Initialize a ForkStore with the genesis objects, so the Simulacrum can read them.
         let gql_server = absent_objects_gql_server().await;
         let mut store = ForkStore::new_for_testing_with_remote(
             temp.path().to_path_buf(),
             gql_server.uri(),
             forked_at_checkpoint,
-            runtime.local_store(),
+            services.local_store(),
         );
         store
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
@@ -148,12 +148,12 @@ impl TestHarness {
             reference_gas_price,
             checkpoint_receiver,
             temp,
-            _runtime: Some(runtime),
+            _services: Some(services),
             _gql_server: gql_server,
         }
     }
 
-    async fn new_with_runtime() -> Self {
+    async fn new_with_services() -> Self {
         let temp = tempfile::tempdir().expect("failed to create tempdir");
         let mut rng = OsRng;
         let config = ConfigBuilder::new_with_temp_dir()
@@ -165,19 +165,19 @@ impl TestHarness {
         let genesis_contents = config.genesis.checkpoint_contents().clone();
         let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
         let chain_identifier = (*genesis_checkpoint.digest()).into();
-        let runtime = ForkRuntime::open(
+        let services = ServiceManager::open(
             temp.path(),
             "localnet".to_owned(),
             forked_at_checkpoint,
             chain_identifier,
         )
-        .expect("runtime should open");
+        .expect("service manager should open");
         let gql_server = absent_objects_gql_server().await;
         let mut store = ForkStore::new_for_testing_with_remote(
             temp.path().to_path_buf(),
             gql_server.uri(),
             forked_at_checkpoint,
-            runtime.local_store(),
+            services.local_store(),
         );
         store
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
@@ -214,9 +214,9 @@ impl TestHarness {
         let registry = Registry::new();
         let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
         let context = Arc::new(
-            Context::new_with_runtime(sim, runtime, checkpoint_sender, &registry)
+            Context::new_with_services(sim, services, checkpoint_sender, &registry)
                 .await
-                .expect("runtime-backed context should initialize"),
+                .expect("service-backed context should initialize"),
         );
         let executor = ForkedTransactionExecutor::new(context.clone());
 
@@ -229,7 +229,7 @@ impl TestHarness {
             reference_gas_price,
             checkpoint_receiver,
             temp,
-            _runtime: None,
+            _services: None,
             _gql_server: gql_server,
         }
     }
@@ -382,7 +382,7 @@ async fn test_simulate_transaction_supports_mock_gas() {
 
 #[tokio::test]
 async fn test_tx_execution_indexes_checkpoint_in_rpc_store() {
-    let mut harness = TestHarness::new_with_runtime().await;
+    let mut harness = TestHarness::new_with_services().await;
     let signed_tx = harness.build_transfer_tx(1_000);
     let expected_digest = *signed_tx.digest();
 
@@ -411,7 +411,7 @@ async fn test_tx_execution_indexes_checkpoint_in_rpc_store() {
             .expect("checkpoint channel closed");
     assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
 
-    let reader = harness.context.runtime().unwrap().reader();
+    let reader = harness.context.services().unwrap().reader();
     assert!(
         reader
             .get_checkpoint_by_sequence_number(checkpoint_seq)
@@ -447,7 +447,7 @@ async fn test_tx_execution_indexes_checkpoint_in_rpc_store() {
 
 #[tokio::test]
 async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
-    let mut harness = TestHarness::new_with_runtime().await;
+    let mut harness = TestHarness::new_with_services().await;
     let signed_tx = harness.build_transfer_tx(1_000);
     let expected_digest = *signed_tx.digest();
 
@@ -476,9 +476,9 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
 
     let empty_store = ForkStore::new_for_testing(
         harness.temp.path().join("empty-rpc-reader-store"),
-        harness.context.runtime().unwrap().local_store(),
+        harness.context.services().unwrap().local_store(),
     );
-    let reader = ForkRpcReader::new(empty_store);
+    let reader = RpcReader::new(empty_store);
 
     assert!(
         reader
@@ -500,7 +500,7 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
     {
         assert!(
             reader.get_object(&object.id()).is_some(),
-            "output object {} should be readable through ForkRpcReader",
+            "output object {} should be readable through RpcReader",
             object.id(),
         );
     }
@@ -513,7 +513,7 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
 /// through the stock rpc-store reader.
 #[tokio::test]
 async fn test_indexer_populates_derived_indexes_for_local_execution() {
-    let mut harness = TestHarness::new_with_runtime().await;
+    let mut harness = TestHarness::new_with_services().await;
     let recipient = SuiAddress::random_for_testing_only();
     let transfer_amount = 1_000;
     let tx_data = harness.build_transfer_tx_data_to(recipient, transfer_amount);
@@ -531,7 +531,7 @@ async fn test_indexer_populates_derived_indexes_for_local_execution() {
         .expect("timed out waiting for indexed checkpoint broadcast")
         .expect("checkpoint channel closed");
 
-    let reader = harness.context.runtime().unwrap().reader();
+    let reader = harness.context.services().unwrap().reader();
 
     // Recipient: the transferred coin appears in the owner index...
     let recipient_infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, recipient, None, None)

@@ -56,11 +56,11 @@ struct InventoryMetadata {
 
 /// Fork-local metadata and data-dir layout.
 #[derive(Clone)]
-pub(crate) struct ForkMetadataStore {
+pub(crate) struct MetadataStore {
     root: PathBuf,
 }
 
-impl ForkMetadataStore {
+impl MetadataStore {
     /// Create a new fork metadata store. Explicit data directories are used as the exact
     /// root; otherwise the root is `{base_path}/{network_name}/forked_at_{checkpoint}`.
     pub(crate) fn new(

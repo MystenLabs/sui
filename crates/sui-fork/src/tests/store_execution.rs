@@ -50,8 +50,8 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 
 use super::*;
-use crate::rpc::reader::ForkRpcReader;
-use crate::runtime::ForkRuntime;
+use crate::rpc::reader::RpcReader;
+use crate::services::ServiceManager;
 
 /// Build a `Simulacrum<OsRng, ForkStore>` from a fresh genesis NetworkConfig.
 /// The ForkStore's local metadata and RPC store live in the returned tempdir;
@@ -74,13 +74,13 @@ async fn test_simulacrum() -> (
         .deterministic_committee_size(NonZeroUsize::MIN)
         .build();
 
-    let runtime = open_test_runtime(temp.path(), 0);
+    let services = open_test_services(temp.path(), 0);
     let gql_server = crate::test_support::absent_objects_gql_server().await;
     let mut store = ForkStore::new_for_testing_with_remote(
         temp.path().to_path_buf(),
         gql_server.uri(),
         0,
-        runtime.local_store(),
+        services.local_store(),
     );
     let written: BTreeMap<ObjectID, Object> = config
         .genesis
@@ -115,38 +115,41 @@ fn find_gas_coin(config: &NetworkConfig, owner: SuiAddress) -> Object {
 
 fn test_data_store() -> (tempfile::TempDir, ForkStore) {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let runtime = open_test_runtime(temp.path(), 0);
-    let store = ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+    let services = open_test_services(temp.path(), 0);
+    let store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
     (temp, store)
 }
 
-fn fork_rpc_reader(store: &ForkStore) -> ForkRpcReader {
-    ForkRpcReader::new(store.clone())
+fn fork_rpc_reader(store: &ForkStore) -> RpcReader {
+    RpcReader::new(store.clone())
 }
 
 fn test_data_store_with_remote(
     root: &Path,
     gql_url: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
-) -> (ForkStore, ForkRuntime) {
-    let runtime = open_test_runtime(root, forked_at_checkpoint);
+) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, forked_at_checkpoint);
     let store = ForkStore::new_for_testing_with_remote(
         root.to_path_buf(),
         gql_url,
         forked_at_checkpoint,
-        runtime.local_store(),
+        services.local_store(),
     );
-    (store, runtime)
+    (store, services)
 }
 
-fn open_test_runtime(root: &Path, forked_at_checkpoint: CheckpointSequenceNumber) -> ForkRuntime {
-    ForkRuntime::open(
+fn open_test_services(
+    root: &Path,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+) -> ServiceManager {
+    ServiceManager::open(
         root,
         "custom".to_owned(),
         forked_at_checkpoint,
         CheckpointDigest::new([9; 32]).into(),
     )
-    .expect("fork runtime should open")
+    .expect("service manager should open")
 }
 
 fn make_gas_object(id: ObjectID, version: u64, owner: Owner) -> Object {
@@ -375,14 +378,14 @@ async fn test_current_object_read_saves_into_rpc_store_when_attached() {
         .mount(&server)
         .await;
 
-    let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
     let read = ForkStore::get_object(&store, &object_id)
         .expect("current object read should not error")
         .expect("remote object should be found");
     assert_eq!(read, object);
 
-    let reader = runtime.reader();
+    let reader = services.reader();
     assert_eq!(
         sui_types::storage::ObjectStore::get_object(&reader, &object_id),
         Some(object),
@@ -437,7 +440,7 @@ async fn test_rpc_owned_objects_initializes_address_inventory_from_graphql() {
     let server = MockServer::start().await;
     mock_address_owner_inventory(&server, checkpoint, owner, &[&object]).await;
 
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
     let reader = fork_rpc_reader(&store);
     let infos: Vec<_> =
@@ -480,7 +483,7 @@ async fn test_seed_save_survives_restart_without_remote() {
     let object_ref = object.compute_object_reference();
 
     {
-        let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+        let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
         store
             .save_address_owned_seed_objects(&[object_ref])
             .expect("seed object should be saved");
@@ -495,10 +498,10 @@ async fn test_seed_save_survives_restart_without_remote() {
             .expect("balance lookup should use saved seed")
             .expect("gas balance should exist");
         assert_eq!(balance.coin_balance, 1_000_000);
-        drop(runtime);
+        drop(services);
     }
 
-    let (store, _runtime) =
+    let (store, _services) =
         test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
     store
         .save_address_owned_seed_objects(&[object_ref])
@@ -525,7 +528,7 @@ async fn test_rpc_dynamic_field_iter_initializes_object_owner_inventory_from_gra
     let server = MockServer::start().await;
     mock_object_owner_inventory(&server, checkpoint, parent, &[&child]).await;
 
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
     let reader = fork_rpc_reader(&store);
     let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None)
@@ -580,7 +583,7 @@ async fn test_rpc_get_coin_info_initializes_type_inventory_from_graphql() {
     )
     .await;
 
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
     let reader = fork_rpc_reader(&store);
     let info = RpcIndexes::get_coin_info(&reader, &coin_type)
@@ -605,7 +608,7 @@ async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
     mock_address_owner_inventory(&server, checkpoint, owner, &[&remote_object]).await;
     mock_address_owner_inventory(&server, checkpoint, recipient, &[]).await;
 
-    let (mut store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (mut store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
     store.update_objects(BTreeMap::from([(first_id, transferred)]), vec![]);
 
     let reader = fork_rpc_reader(&store);
@@ -672,7 +675,7 @@ async fn test_rpc_reader_latest_ignores_stale_cached_history() {
         .mount(&server)
         .await;
 
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
     store
         .local_store()
         .save_object_version_only(&stale)
@@ -953,7 +956,7 @@ async fn test_read_child_object_falls_back_to_remote_root_version() {
         .mount(&server)
         .await;
 
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
     let read = sui_types::storage::RuntimeObjectResolver::read_child_object(
         &store,
         &parent,

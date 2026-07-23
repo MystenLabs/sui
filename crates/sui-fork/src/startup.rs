@@ -36,15 +36,15 @@ use crate::CheckpointRead;
 use crate::GraphQLClient;
 use crate::Node;
 use crate::context::Context;
-use crate::metadata::ForkMetadataStore;
+use crate::metadata::MetadataStore;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
-use crate::rpc::reader::ForkRpcReader;
-use crate::runtime::ForkRuntime;
+use crate::rpc::reader::RpcReader;
 use crate::seed::SeedInput;
 use crate::seed::ensure_seed_manifest_matches;
 use crate::seed::save_seed_manifest_objects;
+use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
 /// Checkpoint selected for startup, plus whether existing local fork state was found.
@@ -65,8 +65,8 @@ pub(crate) fn resolve_start_checkpoint_from_local(
     data_dir: Option<&Path>,
 ) -> Result<ResolvedStartCheckpoint> {
     let local = match (data_dir, requested_checkpoint) {
-        (Some(data_dir), _) => Some(ForkMetadataStore::new_with_root(data_dir.to_path_buf())),
-        (None, Some(checkpoint)) => Some(ForkMetadataStore::new(node, checkpoint, None)?),
+        (Some(data_dir), _) => Some(MetadataStore::new_with_root(data_dir.to_path_buf())),
+        (None, Some(checkpoint)) => Some(MetadataStore::new(node, checkpoint, None)?),
         (None, None) => None,
     };
 
@@ -86,7 +86,7 @@ pub(crate) fn resolve_start_checkpoint_from_local(
         });
     }
 
-    if let Some(checkpoint) = ForkRuntime::existing_forked_checkpoint(
+    if let Some(checkpoint) = ServiceManager::existing_forked_checkpoint(
         local.root(),
         &node.network_name(),
         requested_checkpoint,
@@ -110,7 +110,7 @@ pub(crate) fn resolve_start_checkpoint_from_local(
 /// [`run`] so the gRPC server exposes the streaming RPC.
 ///
 /// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
-/// used. See the `[ForkMetadataStore]` docs for details.
+/// used. See the `[MetadataStore]` docs for details.
 pub async fn initialize(
     node: Node,
     forked_at_checkpoint: CheckpointSequenceNumber,
@@ -121,7 +121,7 @@ pub async fn initialize(
     // 1. Prepare metadata and GraphQL, then open the RPC store before constructing ForkStore.
     let gql = GraphQLClient::new(node.clone(), version)?;
     let chain_identifier = gql.chain();
-    let local = ForkMetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
+    let local = MetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
     let network_name = node.network_name();
     crate::seed::ensure_seed_policy(&local, &seed_input)?;
 
@@ -131,13 +131,13 @@ pub async fn initialize(
         .get_checkpoint(Some(forked_at_checkpoint))?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
     let rpc_chain_identifier = fork_chain_identifier(chain_identifier, &checkpoint);
-    let fork_runtime = ForkRuntime::open(
+    let services = ServiceManager::open(
         local.root(),
         network_name.clone(),
         forked_at_checkpoint,
         rpc_chain_identifier,
     )?;
-    let store = ForkStore::from_parts(forked_at_checkpoint, gql, local, fork_runtime.local_store());
+    let store = ForkStore::from_parts(forked_at_checkpoint, gql, local, services.local_store());
     store.save_checkpoint(&checkpoint, &checkpoint_contents)?;
     let seed_manifest =
         crate::seed::prepare_seed_manifest(&store, network_name, &seed_input).await?;
@@ -196,7 +196,7 @@ pub async fn initialize(
         SubscriptionService::build(&registry, None, None, None, None);
 
     let context =
-        Context::new_with_runtime(simulacrum, fork_runtime, checkpoint_sender, &registry).await?;
+        Context::new_with_services(simulacrum, services, checkpoint_sender, &registry).await?;
 
     Ok((context, subscription_handle))
 }
@@ -221,7 +221,7 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
 }
 
 /// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to
-/// `rpc_addr`, backed by `ForkRpcReader`, then blocks on Ctrl+C.
+/// `rpc_addr`, backed by `RpcReader`, then blocks on Ctrl+C.
 pub async fn run(
     context: Context,
     subscription_handle: SubscriptionServiceHandle,
@@ -232,10 +232,10 @@ pub async fn run(
         let sim = context.simulacrum().read().await;
         sim.store().clone()
     };
-    let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(store));
+    let reader: Arc<dyn RpcStateReader> = Arc::new(RpcReader::new(store));
 
     // Serve through `sui-rpc-api`'s `RpcService` directly (the fork does not
-    // depend on `sui-rpc-node`). The rpc-store-backed `ForkRpcReader` is the
+    // depend on `sui-rpc-node`). The rpc-store-backed `RpcReader` is the
     // `RpcStateReader`, with the fork admin service and executor attached.
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-fork", version));
@@ -310,7 +310,7 @@ mod tests {
     use super::*;
 
     fn write_manifest(root: &Path, network: &str, checkpoint: CheckpointSequenceNumber) {
-        ForkMetadataStore::new_with_root(root.to_path_buf())
+        MetadataStore::new_with_root(root.to_path_buf())
             .write_seed_manifest(&SeedManifest {
                 network: network.to_owned(),
                 checkpoint,
@@ -363,15 +363,15 @@ mod tests {
     }
 
     #[test]
-    fn resolve_start_checkpoint_uses_runtime_metadata() {
+    fn resolve_start_checkpoint_uses_persisted_metadata() {
         let temp = tempfile::tempdir().expect("tempdir");
-        ForkRuntime::open(
+        ServiceManager::open(
             temp.path(),
             "mainnet".to_owned(),
             17,
             get_mainnet_chain_identifier(),
         )
-        .expect("runtime metadata should write");
+        .expect("fork metadata should write");
 
         let resolved = resolve_start_checkpoint_from_local(&Node::Mainnet, None, Some(temp.path()))
             .expect("checkpoint resolution should not fail");

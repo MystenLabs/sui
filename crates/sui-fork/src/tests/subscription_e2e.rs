@@ -36,8 +36,8 @@ use crate::context::Context;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
-use crate::rpc::reader::ForkRpcReader;
-use crate::runtime::ForkRuntime;
+use crate::rpc::reader::RpcReader;
+use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
 /// In-process gRPC harness: builds a fresh Simulacrum from a genesis
@@ -48,7 +48,7 @@ struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
     // Held to keep the RPC store alive for the lifetime of the server.
-    _runtime: ForkRuntime,
+    _services: ServiceManager,
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
     // Held so remote object probes keep resolving to "not found".
@@ -68,7 +68,7 @@ impl ServerHarness {
         let genesis_contents = config.genesis.checkpoint_contents().clone();
         let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
         let chain_identifier = (*genesis_checkpoint.digest()).into();
-        let runtime = ForkRuntime::open(
+        let services = ServiceManager::open(
             temp.path(),
             "localnet".to_owned(),
             forked_at_checkpoint,
@@ -79,7 +79,7 @@ impl ServerHarness {
             temp.path().to_path_buf(),
             gql_server.uri(),
             forked_at_checkpoint,
-            runtime.local_store(),
+            services.local_store(),
         );
         store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
@@ -106,7 +106,7 @@ impl ServerHarness {
 
         let context = Arc::new(Context::new(sim, checkpoint_sender));
 
-        let reader: Arc<dyn RpcStateReader> = Arc::new(ForkRpcReader::new(store));
+        let reader: Arc<dyn RpcStateReader> = Arc::new(RpcReader::new(store));
         let mut service = RpcService::new(reader);
         service.with_server_version(ServerVersion::new("sui-fork", "test"));
         service.with_subscription_service(subscription_handle);
@@ -136,7 +136,7 @@ impl ServerHarness {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
-                    _runtime: runtime,
+                    _services: services,
                     _temp: temp,
                     _gql_server: gql_server,
                 });
