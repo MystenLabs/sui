@@ -3,6 +3,7 @@
 
 pub mod analysis;
 pub mod config;
+pub(crate) mod facts;
 pub mod resolution;
 pub mod resolved_linkage;
 pub mod single_linkage;
