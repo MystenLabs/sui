@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::PackageStore,
+    data_store::VerifiedPackageStore,
     static_programmable_transactions::linkage::{
         config::ResolutionConfig,
         resolution::{ResolutionTable, VersionConstraint},
@@ -26,7 +26,7 @@ impl ExecutableLinkage {
     pub fn type_linkage<I, E>(
         config: ResolutionConfig,
         ids: I,
-        store: &dyn PackageStore,
+        store: &VerifiedPackageStore<'_>,
     ) -> Result<Self, E>
     where
         E: ExecutionErrorTrait,
