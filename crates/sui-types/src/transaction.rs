@@ -1881,8 +1881,11 @@ impl TransactionKind {
 
     pub fn mutates_implicitly_read_system_object(&self) -> bool {
         self.shared_input_objects().any(|obj| {
-            !matches!(obj.mutability, SharedObjectMutability::Immutable)
-                && crate::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(&obj.id)
+            let mutates = match obj.mutability {
+                SharedObjectMutability::Immutable => false,
+                SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => true,
+            };
+            mutates && crate::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(&obj.id)
         })
     }
 

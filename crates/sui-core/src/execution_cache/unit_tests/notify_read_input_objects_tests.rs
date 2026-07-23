@@ -311,7 +311,9 @@ async fn test_receiving_object_higher_version() {
 async fn test_get_implicitly_read_system_object_blocking() {
     let cache = create_writeback_cache().await;
 
-    let object_id = ObjectID::random();
+    // Must be an implicitly read system object to pass the ID check in
+    // get_implicitly_read_system_object_blocking.
+    let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
     let init_version = SequenceNumber::from(1);
     let target_version = SequenceNumber::from(3);
 
