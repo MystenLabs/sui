@@ -231,6 +231,11 @@ impl VoteTrackerState {
         for (voted_block, reject_txn_votes) in voted_blocks {
             self.add_voted_block(voted_block, reject_txn_votes);
         }
+        self.context
+            .metrics
+            .node_metrics
+            .certifier_votes_entries
+            .set(self.votes.len() as i64);
     }
 
     fn add_voted_block(
@@ -264,6 +269,11 @@ impl VoteTrackerState {
         }
         vote_info.block = Some(voted_block.clone());
         vote_info.own_reject_txn_votes = reject_txn_votes;
+        self.context
+            .metrics
+            .node_metrics
+            .certifier_votes_bytes
+            .add(voted_block.serialized().len() as i64);
 
         // Update reject votes from the input block.
         for block_votes in voted_block.transaction_votes() {
@@ -287,11 +297,24 @@ impl VoteTrackerState {
         self.gc_round = gc_round;
         while let Some((block_ref, _)) = self.votes.first_key_value() {
             if block_ref.round <= self.gc_round {
-                self.votes.pop_first();
+                if let Some((_, vote_info)) = self.votes.pop_first() {
+                    if let Some(block) = vote_info.block {
+                        self.context
+                            .metrics
+                            .node_metrics
+                            .certifier_votes_bytes
+                            .sub(block.serialized().len() as i64);
+                    }
+                }
             } else {
                 break;
             }
         }
+        self.context
+            .metrics
+            .node_metrics
+            .certifier_votes_entries
+            .set(self.votes.len() as i64);
 
         self.context
             .metrics
