@@ -204,7 +204,7 @@ Rotating an agent's key pair changes its Sui address. Plan the rotation carefull
 
 ```typescript
 // Step 2: Transfer all owned objects to the new address
-const ownedObjects = await client.listOwnedObjects({
+const ownedObjects = await client.stateService.listOwnedObjects({
   owner: oldAddress,
 });
 

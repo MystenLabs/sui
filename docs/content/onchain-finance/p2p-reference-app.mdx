@@ -169,7 +169,7 @@ const txKindBytes = await tx.build({ client, onlyTransactionKind: true });
 const sponsorResponse = await fetch('https://your-gas-station.com/sponsor', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ txBytes: toBase64(txKindBytes) }),
+  body: JSON.stringify({ txBytes: toBase64(txKindBytes), sender: signer.toSuiAddress() }),
 });
 
 const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await sponsorResponse.json();

@@ -133,13 +133,14 @@ class GasCoinPool {
   private coins: Map<string, GasCoin> = new Map();
 
   async initialize(client: SuiGrpcClient, sponsorAddress: string) {
-    const ownedCoins = await client.core.listCoins({
+    const ownedCoins = await client.core.listOwnedObjects({
       owner: sponsorAddress,
-      coinType: '0x2::sui::SUI',
+      filter: { type: '0x2::coin::Coin<0x2::sui::SUI>' },
     });
     for (const coin of ownedCoins.objects) {
-      this.coins.set(coin.objectId, {
-        objectId: coin.objectId,
+      const id = coin.objectId;
+      this.coins.set(id, {
+        objectId: id,
         version: coin.version,
         digest: coin.digest,
         reserved: false,
@@ -238,12 +239,10 @@ const GAS_BUDGET = 10_000_000; // 0.01 SUI
 
 app.post('/sponsor', async (req, res) => {
   try {
-    const { txBytes } = req.body; // Base64-encoded transaction bytes
-
     // 1. Deserialize the client's transaction kind bytes.
     // The client sends kind-only bytes (built with onlyTransactionKind: true),
     // so use Transaction.fromKind() — not Transaction.from() — to reconstruct them.
-    const { txBytes, sender } = req.body; // sender is the user's Sui address
+    const { txBytes, sender } = req.body; // txBytes: Base64-encoded kind bytes; sender: user's Sui address
     const tx = Transaction.fromKind(fromBase64(txBytes));
     tx.setSender(sender);
 
