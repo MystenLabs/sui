@@ -257,6 +257,10 @@ pub(crate) struct NodeMetrics {
     pub(crate) certifier_gc_round: IntGauge,
     pub(crate) certifier_own_reject_votes: IntCounterVec,
     pub(crate) finalizer_buffered_commits: IntGauge,
+    pub(crate) finalizer_blocks_entries: IntGauge,
+    pub(crate) finalizer_blocks_bytes: IntGauge,
+    pub(crate) certifier_votes_entries: IntGauge,
+    pub(crate) certifier_votes_bytes: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
     pub(crate) finalizer_reject_votes: IntCounterVec,
@@ -1025,6 +1029,26 @@ impl NodeMetrics {
             finalizer_buffered_commits: register_int_gauge_with_registry!(
                 "finalizer_buffered_commits",
                 "The number of commits buffered in the finalizer",
+                registry,
+            ).unwrap(),
+            finalizer_blocks_entries: register_int_gauge_with_registry!(
+                "finalizer_blocks_entries",
+                "The number of blocks retained in the finalizer blocks map",
+                registry,
+            ).unwrap(),
+            finalizer_blocks_bytes: register_int_gauge_with_registry!(
+                "finalizer_blocks_bytes",
+                "Total serialized bytes of blocks retained in the finalizer blocks map",
+                registry,
+            ).unwrap(),
+            certifier_votes_entries: register_int_gauge_with_registry!(
+                "certifier_votes_entries",
+                "The number of entries in the transaction vote tracker",
+                registry,
+            ).unwrap(),
+            certifier_votes_bytes: register_int_gauge_with_registry!(
+                "certifier_votes_bytes",
+                "Total serialized bytes of blocks retained in the transaction vote tracker",
                 registry,
             ).unwrap(),
             finalizer_round_delay: register_histogram_with_registry!(
