@@ -13,19 +13,21 @@ const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
 
 // docs::#fetch-with-payment
 async function fetchWithPayment(url: string): Promise<Response> {
-	const senderAddress = keypair.toSuiAddress();
-
-	// First attempt — include sender address so the server can bind the challenge
-	const response = await fetch(url, {
-		headers: { 'X-Payment-Sender': senderAddress },
-	});
+	// First attempt
+	const response = await fetch(url);
 
 	if (response.status !== 402) {
 		return response;
 	}
 
-	// Parse payment instructions (includes server-issued challenge bound to our address)
+	// Parse payment instructions (includes server-issued challenge)
 	const { amount, recipient, coinType, challenge } = await response.json();
+
+	// Sign the challenge to prove we control the keypair.
+	// The server will verify this signature and check that the onchain
+	// transaction sender matches the recovered address.
+	const challengeBytes = new TextEncoder().encode(challenge);
+	const { signature: challengeSignature } = await keypair.signPersonalMessage(challengeBytes);
 
 	// Build and submit payment
 	const tx = new Transaction();
@@ -35,7 +37,6 @@ async function fetchWithPayment(url: string): Promise<Response> {
 		const [coin] = tx.splitCoins(tx.gas, [BigInt(amount)]);
 		tx.transferObjects([coin], recipient);
 	} else {
-		// For non-SUI coins, select a coin object of the right type
 		const coins = await client.listCoins({
 			owner: keypair.toSuiAddress(),
 			coinType,
@@ -44,7 +45,7 @@ async function fetchWithPayment(url: string): Promise<Response> {
 		tx.transferObjects([coin], recipient);
 	}
 
-	const result = await client.signAndExecuteTransaction({
+	const result = await client.core.signAndExecuteTransaction({
 		transaction: tx,
 		signer: keypair,
 	});
@@ -55,11 +56,12 @@ async function fetchWithPayment(url: string): Promise<Response> {
 
 	const digest = result.Transaction!.digest;
 
-	// Retry with payment proof and the server-issued challenge
+	// Retry with payment proof, challenge ID, and signed challenge
 	return fetch(url, {
 		headers: {
 			'X-Payment-Digest': digest,
 			'X-Payment-Challenge': challenge,
+			'X-Payment-Signature': challengeSignature,
 		},
 	});
 }

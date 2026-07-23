@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 
 // docs::#config
 const PAYMENT_RECIPIENT = '0xYOUR_SERVER_ADDRESS';
@@ -17,12 +18,11 @@ const client = new SuiGrpcClient({
 // docs::/#config
 
 // docs::#challenge-store
-// Each challenge binds a payment to a specific sender address.
-// On verification, the server checks that the transaction's sender
-// matches the address that requested the challenge. This prevents
-// an attacker from redeeming another payer's digest.
+// Each challenge is a random token the client must sign with their keypair.
+// The signature proves the requester controls the private key that sent
+// the onchain payment. Without this, an attacker who observes a public
+// digest could declare the real payer's address and steal the resource.
 interface PendingChallenge {
-	sender: string; // Sui address of the requester
 	expiry: number;
 }
 
@@ -38,20 +38,11 @@ function generateChallengeId(): string {
 const paymentRequired: express.RequestHandler = (req, res, next) => {
 	const digest = req.headers['x-payment-digest'] as string;
 	const challengeId = req.headers['x-payment-challenge'] as string;
+	const challengeSignature = req.headers['x-payment-signature'] as string;
 
-	if (!digest || !challengeId) {
-		// The client must identify itself so the challenge is bound to its address
-		const sender = req.headers['x-payment-sender'] as string;
-		if (!sender) {
-			res.status(400).json({
-				error: 'X-Payment-Sender header required (your Sui address)',
-			});
-			return;
-		}
-
+	if (!digest || !challengeId || !challengeSignature) {
 		const id = generateChallengeId();
 		pendingChallenges.set(id, {
-			sender,
 			expiry: Date.now() + 5 * 60 * 1000, // 5 minute window
 		});
 
@@ -61,7 +52,7 @@ const paymentRequired: express.RequestHandler = (req, res, next) => {
 			coinType: COIN_TYPE,
 			challenge: id,
 			message:
-				'Payment required. Pay the amount from the declared sender address, then retry with X-Payment-Digest and X-Payment-Challenge headers.',
+				'Payment required. Sign the challenge with your keypair, pay the amount, then retry with X-Payment-Digest, X-Payment-Challenge, and X-Payment-Signature headers.',
 		});
 		return;
 	}
@@ -74,6 +65,7 @@ const paymentRequired: express.RequestHandler = (req, res, next) => {
 const verifyPayment: express.RequestHandler = async (req, res, next) => {
 	const digest = req.headers['x-payment-digest'] as string;
 	const challengeId = req.headers['x-payment-challenge'] as string;
+	const challengeSignature = req.headers['x-payment-signature'] as string;
 
 	// 1. Verify the challenge was issued by this server and hasn't expired
 	const pending = pendingChallenges.get(challengeId);
@@ -89,6 +81,15 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 	}
 
 	try {
+		// 3. Verify the challenge signature to recover the signer's address.
+		//    This proves the requester controls the private key.
+		const challengeBytes = new TextEncoder().encode(challengeId);
+		const signerAddress = await verifyPersonalMessageSignature(
+			challengeBytes,
+			challengeSignature,
+		);
+
+		// 4. Fetch the transaction and verify the sender matches the signer
 		const result = await client.core.getTransaction({
 			digest,
 			include: { balanceChanges: true, transaction: true },
@@ -101,15 +102,14 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 
 		const tx = result.Transaction!;
 
-		// 3. Verify the transaction sender matches the challenge's bound address
-		if (tx.transaction?.sender !== pending.sender) {
+		if (tx.transaction?.sender !== signerAddress) {
 			res.status(403).json({
-				error: 'Transaction sender does not match the address that requested this challenge',
+				error: 'Transaction sender does not match challenge signer',
 			});
 			return;
 		}
 
-		// 4. Verify the server received the expected amount
+		// 5. Verify the server received the expected amount
 		const balanceChanges = tx.balanceChanges ?? [];
 		const received = balanceChanges.find(
 			(change) =>
@@ -123,7 +123,7 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 			return;
 		}
 
-		// 5. Consume challenge and mark digest as used
+		// 6. Consume challenge and mark digest as used
 		usedDigests.add(digest);
 		pendingChallenges.delete(challengeId);
 		next();
