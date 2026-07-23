@@ -445,6 +445,21 @@ where
         metrics
             .commit_sync_highest_synced_index
             .set(self.synced_commit_index as i64);
+        let fetched_ranges_bytes: usize = self
+            .fetched_ranges
+            .values()
+            .map(|certified| {
+                certified
+                    .commits()
+                    .iter()
+                    .flat_map(|c| c.blocks())
+                    .map(|b| b.serialized().len())
+                    .sum::<usize>()
+            })
+            .sum();
+        metrics
+            .commit_sync_fetched_ranges_bytes
+            .set(fetched_ranges_bytes as i64);
     }
 
     // Retries fetching commits and blocks from available authorities, until a request succeeds
