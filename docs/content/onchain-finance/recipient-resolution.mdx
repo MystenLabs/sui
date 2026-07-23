@@ -10,6 +10,39 @@ keywords:
   - recipient lookup
   - .sui names
   - address resolution
+goal:
+  description: >-
+    Reader can resolve human-readable names to Sui addresses for
+    payments using SuiNS or custom directory patterns
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Recipient resolution
+    stage: Payments
+questions:
+  - How do I resolve a .sui name to an address?
+  - How do I implement pay-by-username on Sui?
+  - How do I do reverse name lookup on Sui?
+answer: >-
+  Use the gRPC NameService.LookupName method to resolve SuiNS .sui
+  names to Sui addresses. For reverse lookup, use
+  defaultNameServiceName. For custom identifiers, build an off-chain
+  lookup service or an onchain registry.
 ---
 
 Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resolution maps human-readable identifiers — SuiNS `.sui` names, email addresses, or application handles — to Sui addresses so users can pay by name.

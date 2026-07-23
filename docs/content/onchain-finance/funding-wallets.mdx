@@ -11,6 +11,39 @@ keywords:
   - exchange
   - faucet
   - wallet funding
+goal:
+  description: >-
+    Reader can choose a method to fund user or agent wallets with SUI
+    and tokens
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Funding wallets
+    stage: Onboarding
+questions:
+  - How do I get SUI into a wallet?
+  - What fiat on-ramp providers support Sui?
+  - How do I bridge tokens from Ethereum to Sui?
+answer: >-
+  Fund wallets through fiat on-ramps (MoonPay, Transak, Ramp Network),
+  exchange withdrawals, cross-chain bridges (Wormhole, Sui Bridge), or
+  Testnet faucets. For agents, use a gas station to sponsor transactions
+  instead of direct funding.
 ---
 
 Before users or agents can transact on Sui, their wallets need tokens. This page covers the main paths for getting SUI and other tokens into a Sui address.

@@ -10,6 +10,39 @@ keywords:
   - micropayments
   - agent payments
   - API monetization
+goal:
+  description: >-
+    Reader can implement the x402 pay-per-request protocol to gate API
+    access behind onchain micropayments on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: x402 pay-per-request
+    stage: Patterns
+questions:
+  - How do I implement pay-per-request on Sui?
+  - What is the x402 payment protocol?
+  - How do I verify onchain payments in an Express.js server?
+answer: >-
+  The x402 protocol uses HTTP 402 responses to gate API access behind
+  onchain payments. The server issues a challenge with a unique nonce
+  amount, the client pays that exact amount, and the server verifies the
+  payment onchain before serving the resource.
 ---
 
 The x402 protocol uses HTTP `402 Payment Required` responses to gate API access behind onchain payments. A client requests a resource, receives payment instructions, submits a Sui transaction, and retries with proof of payment. This pattern is especially useful for agent-to-agent interactions where one service charges another per request.
