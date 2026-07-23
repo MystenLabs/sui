@@ -828,87 +828,145 @@ async fn test_authority_txn_validation_pushback() {
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
-    use crate::execution_driver::execution_process_with_limits;
+#[cfg(msim)]
+#[sui_macros::sim_test]
+async fn test_system_object_writer_not_starved_by_parked_user_executions() {
+    use crate::authority::authority_test_utils::init_state_with_ids;
+    use crate::authority::shared_object_version_manager::AssignedVersions;
+    use crate::execution_driver::execution_process;
     use crate::execution_scheduler::{PendingCertificate, PendingCertificateStats};
-    use crate::transaction_outputs::TransactionOutputs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use sui_macros::register_fail_point_async;
     use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
-    use sui_types::base_types::random_object_ref;
-    use sui_types::effects::TransactionEffects as EffectsForTest;
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{ObjectArg, SharedObjectMutability, TransactionData};
+    use sui_types::base_types::ConsensusObjectVersion;
+    use sui_types::transaction::{ObjectArg, SharedObjectMutability};
     use tokio::sync::{Semaphore, mpsc::unbounded_channel, oneshot};
     use tokio::time::{Instant, timeout};
 
-    let authority = crate::authority::test_authority_builder::TestAuthorityBuilder::new()
-        .build()
-        .await;
+    telemetry_subscribers::init_for_testing();
+    let num_parked = num_cpus::get();
+    let num_user_txs = num_parked + 1;
+
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
+    let gas_ids: Vec<_> = (0..num_user_txs + 1).map(|_| ObjectID::random()).collect();
+    let authority = init_state_with_ids(gas_ids.iter().map(|id| (sender, *id))).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
 
-    let make_executed_cert = |with_accumulator_input: bool| {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        if with_accumulator_input {
-            builder
-                .obj(ObjectArg::SharedObject {
-                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                    initial_shared_version: 1.into(),
-                    mutability: SharedObjectMutability::Mutable,
-                })
-                .unwrap();
+    let parked = Arc::new(AtomicUsize::new(0));
+    let gate = Arc::new(Semaphore::new(0));
+    register_fail_point_async("transaction_execution_delay", {
+        let parked = parked.clone();
+        let gate = gate.clone();
+        move || {
+            let parked = parked.clone();
+            let gate = gate.clone();
+            async move {
+                if parked.fetch_add(1, Ordering::SeqCst) < num_parked {
+                    gate.acquire().await.unwrap().forget();
+                }
+            }
         }
-        let data = TransactionData::new_programmable(
-            sender,
-            vec![random_object_ref()],
-            builder.finish(),
-            1_000_000,
-            1_000,
-        );
-        let tx = VerifiedTransaction::new_unchecked(to_sender_signed_transaction(data, &keypair));
-        let outputs = TransactionOutputs::new_for_testing(tx.clone(), EffectsForTest::default());
-        authority
-            .get_cache_writer()
-            .write_transaction_outputs(0, outputs.into());
-        VerifiedExecutableTransaction::new_from_consensus(tx, 0)
-    };
-    let pending = |certificate: VerifiedExecutableTransaction| PendingCertificate {
-        certificate,
-        execution_env: ExecutionEnv::new(),
-        stats: PendingCertificateStats {
-            enqueue_time: Instant::now(),
-            ready_time: Some(Instant::now()),
-        },
-        executing_guard: None,
-    };
-
-    let user_limit = Arc::new(Semaphore::new(1));
-    let writer_limit = Arc::new(Semaphore::new(1));
-    let _held_user_permit = user_limit.clone().acquire_owned().await.unwrap();
+    });
 
     #[allow(clippy::disallowed_methods)]
     let (tx_ready, rx_ready) = unbounded_channel();
     let (_tx_shutdown, rx_shutdown) = oneshot::channel();
-    tokio::spawn(execution_process_with_limits(
+    tokio::spawn(execution_process(
         Arc::downgrade(&authority),
         rx_ready,
         rx_shutdown,
-        user_limit.clone(),
-        writer_limit.clone(),
     ));
 
-    tx_ready.send(pending(make_executed_cert(false))).unwrap();
-    tx_ready.send(pending(make_executed_cert(true))).unwrap();
+    let pending =
+        |certificate: VerifiedExecutableTransaction, env: ExecutionEnv| PendingCertificate {
+            certificate,
+            execution_env: env,
+            stats: PendingCertificateStats {
+                enqueue_time: Instant::now(),
+                ready_time: Some(Instant::now()),
+            },
+            executing_guard: None,
+        };
 
-    timeout(Duration::from_secs(10), async {
-        while authority.metrics.execution_driver_dispatch_queue.get() > -2 {
+    let mut user_digests = vec![];
+    for gas_id in &gas_ids[..num_user_txs] {
+        let gas_ref = authority
+            .get_object(gas_id)
+            .await
+            .unwrap()
+            .compute_object_reference();
+        let data = TestTransactionBuilder::new(sender, gas_ref, rgp)
+            .transfer_sui(None, sender)
+            .build();
+        let cert = VerifiedExecutableTransaction::new_for_testing(data, &keypair);
+        user_digests.push(*cert.digest());
+        tx_ready.send(pending(cert, ExecutionEnv::new())).unwrap();
+    }
+
+    timeout(Duration::from_secs(30), async {
+        while parked.load(Ordering::SeqCst) < num_parked {
             sleep(Duration::from_millis(10)).await;
         }
     })
     .await
-    .expect("system-object writer was never dispatched: dispatch loop starved by user pool");
+    .expect("user executions never saturated the permit pool");
 
-    let _writer_permit = timeout(Duration::from_secs(10), writer_limit.acquire_owned())
+    let acc_obj = authority
+        .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         .await
-        .expect("system-object writer never released its permit")
         .unwrap();
+    let acc_initial = acc_obj.owner().start_version().unwrap();
+    let acc_version = acc_obj.version();
+    let writer_gas_ref = authority
+        .get_object(&gas_ids[num_user_txs])
+        .await
+        .unwrap()
+        .compute_object_reference();
+    let mut builder = TestTransactionBuilder::new(sender, writer_gas_ref, rgp);
+    builder
+        .ptb_builder_mut()
+        .obj(ObjectArg::SharedObject {
+            id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            initial_shared_version: acc_initial,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let writer = VerifiedExecutableTransaction::new_for_testing(builder.build(), &keypair);
+    let writer_digest = *writer.digest();
+    let writer_env = ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+        vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_initial), acc_version)],
+        [(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            ConsensusObjectVersion {
+                initial_shared_version: acc_initial,
+                version: acc_version,
+            },
+        )]
+        .into_iter()
+        .collect(),
+    ));
+    tx_ready.send(pending(writer, writer_env)).unwrap();
+
+    timeout(Duration::from_secs(30), async {
+        while !authority.is_tx_already_executed(&writer_digest) {
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("system-object writer starved by parked user executions");
+
+    for digest in &user_digests {
+        assert!(!authority.is_tx_already_executed(digest));
+    }
+
+    gate.add_permits(usize::MAX >> 3);
+    timeout(Duration::from_secs(30), async {
+        for digest in &user_digests {
+            while !authority.is_tx_already_executed(digest) {
+                sleep(Duration::from_millis(10)).await;
+            }
+        }
+    })
+    .await
+    .expect("user executions did not complete after release");
 }

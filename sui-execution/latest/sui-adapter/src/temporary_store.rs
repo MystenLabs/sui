@@ -181,11 +181,7 @@ impl<'backing> TemporaryStore<'backing> {
         // Every system object read during execution must have an assigned version. Its absence
         // here means the transaction is reading a system object it was not sequenced against,
         // which is an invariant violation.
-        let Some(ConsensusObjectVersion {
-            initial_shared_version,
-            version: required_version,
-        }) = self.system_object_versions.get(object_id).copied()
-        else {
+        let Some(consensus_version) = self.system_object_versions.get(object_id).copied() else {
             debug_fatal!("system object {object_id} read without an assigned version");
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
@@ -196,11 +192,11 @@ impl<'backing> TemporaryStore<'backing> {
         // Load the object at exactly the version this transaction was sequenced against.
         // `required_version` is the freshly-assigned version at the frontier, so it is never pruned:
         // its absence means the local node has not yet committed that version.
-        let Some(object_at_required) = self.store.get_implicitly_read_system_object_blocking(
-            object_id,
-            initial_shared_version,
-            required_version,
-        ) else {
+        let required_version = consensus_version.version;
+        let Some(object_at_required) = self
+            .store
+            .get_implicitly_read_system_object_blocking(object_id, consensus_version)
+        else {
             debug_fatal!(
                 "system object {object_id} not found at required version {required_version}"
             );
