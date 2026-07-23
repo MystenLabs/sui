@@ -96,11 +96,6 @@ fi
 TMPDIR="$(mktemp -d)"
 export TMPDIR
 
-# Set the example move package for the simtest static initializer
-# https://github.com/MystenLabs/sui/blob/7bc276d534c6c758ac2cfefe96431c2b1318ca01/crates/sui-proc-macros/src/lib.rs#L52
-root_dir=$(git rev-parse --show-toplevel)
-export SIMTEST_STATIC_INIT_MOVE=$root_dir"/examples/move/basics"
-
 # Apply msim cfg flags via RUSTFLAGS env var rather than `--config build.rustflags`.
 # Cargo's RUSTFLAGS env var has *higher* priority than `--config build.rustflags`,
 # so when CI has already exported RUSTFLAGS (e.g. via .github/actions/setup-sccache

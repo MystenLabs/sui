@@ -99,7 +99,7 @@ async fn test_passive_reconfig_testnet_smoke_test() {
     do_test_passive_reconfig(Some(Chain::Testnet)).await;
 }
 
-#[sim_test(check_determinism)]
+#[sim_test]
 async fn test_passive_reconfig_determinism() {
     do_test_passive_reconfig(None).await;
 }

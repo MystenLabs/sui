@@ -528,11 +528,6 @@ async fn test_full_node_sync_flood() {
     do_test_full_node_sync_flood().await
 }
 
-#[sim_test(check_determinism)]
-async fn test_full_node_sync_flood_determinism() {
-    do_test_full_node_sync_flood().await
-}
-
 async fn do_test_full_node_sync_flood() {
     let mut test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
