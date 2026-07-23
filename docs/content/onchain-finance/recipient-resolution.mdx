@@ -20,25 +20,7 @@ Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resoluti
 
 ### Resolve a name with the TypeScript SDK
 
-```typescript
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
-
-// Resolve a .sui name to an address
-const address = await client.resolveNameServiceAddress({
-  name: 'alice.sui',
-});
-
-if (!address) {
-  throw new Error('Name not found or expired');
-}
-
-console.log('Resolved address:', address);
-```
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="resolve-name" />
 
 :::danger Always verify name validity
 
@@ -50,36 +32,17 @@ A `.sui` name can expire and be re-registered by a different user. The `resolveN
 
 To display a human-readable name in transaction history or receipts, look up the default name for an address:
 
-```typescript
-const names = await client.resolveNameServiceNames({
-  address: '0x...',
-});
-// Returns: { data: ['alice.sui'], hasNextPage: false, nextCursor: null }
-```
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="reverse-resolve" />
 
 ### Resolve via GraphQL
 
 Use `address(name:)` to resolve a name, or `nameRecord(name:)` to get full record details:
 
-```graphql
-query ResolveName {
-  address(name: "alice.sui") {
-    address
-  }
-}
-```
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/queries.graphql" mode="code" tag="resolve-graphql" />
 
 For reverse lookup, query the `defaultNameRecord` field on an address:
 
-```graphql
-query ReverseLookup {
-  address(address: "0x...") {
-    defaultNameRecord {
-      domain
-    }
-  }
-}
-```
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/queries.graphql" mode="code" tag="reverse-graphql" />
 
 ## Custom directory patterns
 
@@ -113,27 +76,12 @@ public struct Directory has key {
 }
 ```
 
-Clients query the registry onchain via a `devInspectTransactionBlock` call before building the payment transaction. This avoids trusting a centralized service but requires onchain storage costs for each registration.
+Clients query the registry onchain before building the payment transaction. This avoids trusting a centralized service but requires onchain storage costs for each registration.
 
 ## Combining with payments
 
 When building a payment flow, resolve the recipient before constructing the PTB:
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-async function payByName(name: string, amountMist: bigint) {
-  const recipient = await resolveRecipient(name);
-
-  const tx = new Transaction();
-  const [coin] = tx.splitCoins(tx.gas, [amountMist]);
-  tx.transferObjects([coin], recipient);
-
-  return client.signAndExecuteTransaction({
-    transaction: tx,
-    signer: keypair,
-  });
-}
-```
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="pay-by-name" />
 
 For the full payment flow including gas sponsorship and settlement verification, see the [P2P Reference App](/onchain-finance/p2p-reference-app).
