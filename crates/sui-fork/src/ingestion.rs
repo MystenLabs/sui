@@ -47,6 +47,18 @@ impl IngestionClientTrait for SimulacrumIngestion {
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
         let sim = self.simulacrum.read().await;
+
+        // The ingestion service polls past the local tip until the next
+        // checkpoint is sealed; answer those polls locally instead of routing
+        // them through the ForkStore remote-fallback path every retry.
+        let local_tip = sim
+            .store()
+            .get_highest_checkpint()
+            .map(|checkpoint| checkpoint.data().sequence_number);
+        if local_tip.is_some_and(|tip| checkpoint > tip) {
+            return Err(CheckpointError::NotFound);
+        }
+
         let verified = sim
             .store()
             .get_checkpoint_by_sequence_number(checkpoint)
