@@ -2,12 +2,13 @@
   "name": "recipient-resolution",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "description": "Recipient resolution examples for Sui docs",
   "scripts": {
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@mysten/sui": "^1.18.0"
+    "@mysten/sui": "^2.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

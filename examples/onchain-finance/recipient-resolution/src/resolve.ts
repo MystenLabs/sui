@@ -12,7 +12,8 @@ const client = new SuiGrpcClient({
 
 // docs::#resolve-name
 async function resolveRecipient(name: string): Promise<string> {
-	const address = await client.resolveNameServiceAddress({ name });
+	const { response } = await client.nameService.lookupName({ name });
+	const address = response.record?.targetAddress;
 
 	if (!address) {
 		throw new Error(`Name "${name}" not found or expired`);
@@ -24,8 +25,8 @@ async function resolveRecipient(name: string): Promise<string> {
 
 // docs::#reverse-resolve
 async function reverseResolve(address: string): Promise<string | null> {
-	const names = await client.resolveNameServiceNames({ address });
-	return names.data.length > 0 ? names.data[0] : null;
+	const result = await client.defaultNameServiceName({ address });
+	return result.data.name;
 }
 // docs::/#reverse-resolve
 
