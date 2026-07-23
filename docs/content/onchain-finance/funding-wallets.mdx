@@ -5,7 +5,6 @@ description: >-
   bridges, and faucets.
 keywords:
   - funding
-  - on-ramp
   - fiat
   - bridge
   - exchange
@@ -37,40 +36,15 @@ builder_paths:
     stage: Onboarding
 questions:
   - How do I get SUI into a wallet?
-  - What fiat on-ramp providers support Sui?
   - How do I bridge tokens from Ethereum to Sui?
 answer: >-
-  Fund wallets through fiat on-ramps (MoonPay, Transak, Ramp Network),
-  exchange withdrawals, cross-chain bridges (Wormhole, Sui Bridge), or
+  Fund wallets through exchange withdrawals, cross-chain bridges 
+  (Wormhole, Sui Bridge), or
   Testnet faucets. For agents, use a gas station to sponsor transactions
   instead of direct funding.
 ---
 
-Before users or agents can transact on Sui, their wallets need tokens. This page covers the main paths for getting SUI and other tokens into a Sui address.
-
-## Fiat on-ramps
-
-Fiat on-ramp providers let users purchase SUI directly with credit cards, bank transfers, or other fiat payment methods. These services handle KYC, payment processing, and token delivery.
-
-Providers that support Sui include:
-
-| Provider | Payment methods | Integration type |
-|---|---|---|
-| [MoonPay](https://www.moonpay.com/) | Card, bank transfer, Apple Pay | Widget, API |
-| [Transak](https://transak.com/) | Card, bank transfer | Widget, API |
-| [Ramp Network](https://ramp.network/) | Card, bank transfer, Apple Pay | Widget, API |
-
-:::info
-
-The providers listed above are third-party services. Sui does not endorse any specific on-ramp provider. Evaluate each provider's fee structure, geographic availability, and compliance requirements for your use case.
-
-:::
-
-To integrate an on-ramp, embed the provider's widget in your frontend or use their API to generate a purchase URL. The provider delivers SUI directly to the user's Sui address after payment completes.
-
-## Exchange transfers
-
-Users who already hold SUI on a centralized exchange can withdraw to their Sui wallet address:
+Before users or agents can transact on Sui, their wallets need tokens. Users who already hold SUI on a centralized exchange can withdraw to their Sui wallet address:
 
 1. Copy the Sui address from the wallet.
 2. In the exchange, initiate a withdrawal for SUI on the **Sui network** (not ERC-20 or other wrapped versions).
