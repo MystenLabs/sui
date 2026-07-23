@@ -68,7 +68,7 @@ impl ValueFrame {
         // concrete here — no second substitution is needed.
         let arg_types = fun.parameters;
         debug_assert!(
-            !arg_types.iter().any(has_free_type_parameter),
+            !arg_types.iter().any(Self::has_free_type_parameter),
             "parameter types must be fully substituted before deserialization"
         );
         frame
@@ -140,6 +140,28 @@ impl ValueFrame {
         self.values.extend(deserialized_args);
         Ok(())
     }
+
+    /// Whether a runtime type still mentions a type parameter — used only to assert that types
+    /// have been fully substituted before deserialization.
+    fn has_free_type_parameter(ty: &Type) -> bool {
+        match ty {
+            Type::TyParam(_) => true,
+            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::has_free_type_parameter(inner)
+            }
+            Type::DatatypeInstantiation(inst) => inst.1.iter().any(Self::has_free_type_parameter),
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer
+            | Type::Datatype(_) => false,
+        }
+    }
 }
 
 fn deserialize_value(
@@ -161,27 +183,5 @@ fn deserialize_value(
             warn!("[VM] failed to deserialize argument");
             Err(partial_vm_error!(FAILED_TO_DESERIALIZE_ARGUMENT))
         }
-    }
-}
-
-/// Whether a runtime type still mentions a type parameter — used only to assert that types have
-/// been fully substituted before deserialization.
-fn has_free_type_parameter(ty: &Type) -> bool {
-    match ty {
-        Type::TyParam(_) => true,
-        Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
-            has_free_type_parameter(inner)
-        }
-        Type::DatatypeInstantiation(inst) => inst.1.iter().any(has_free_type_parameter),
-        Type::Bool
-        | Type::U8
-        | Type::U16
-        | Type::U32
-        | Type::U64
-        | Type::U128
-        | Type::U256
-        | Type::Address
-        | Type::Signer
-        | Type::Datatype(_) => false,
     }
 }

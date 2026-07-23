@@ -16,20 +16,24 @@
 //!
 //! Each quantity lives in one of two algebras — additive ([`LinearForm`], for `type_size` and
 //! `layout_size`) and max-plus ([`MaxPlusForm`], for `type_depth` and `value_depth`) — both flat
-//! and closed under substitution. The pipeline is a two-stage partial evaluator:
+//! and closed under substitution. The pipeline is a two-stage partial evaluator over three
+//! operations: **resolve**, **substitute**, and **solve**.
 //!
 //! 1. **JIT** builds an [`ArenaTypeSizeFormula`] per datatype: the four forms over the
 //!    datatype's own type parameters. `type_size`/`type_depth` are closed; `value_depth`/
 //!    `layout_size` additionally carry the datatype's field *applications*, whose resolution
 //!    needs a linkage.
-//! 2. [`ArenaTypeSizeFormula::substitute`] (op1) resolves those applications against a linkage —
-//!    the vtable is the environment — into a flat [`PartialTypeSizeFormula`], memoized per
-//!    datatype key on the vtable (`VMDispatchTables::partial_type_size`).
-//! 3. [`PartialTypeSizeFormula::solve`] (op2) evaluates a partial against concrete argument
-//!    [`TypeSize`]s, yielding a concrete [`TypeSize`].
+//! 2. **Resolve** ([`ArenaTypeSizeFormula::resolve`]) closes the applications against a linkage
+//!    (the vtable) into a flat [`PartialTypeSizeFormula`], using the vtable for recursive key
+//!    resolution. Resolving a non-datatype ([`VMDispatchTables::arena_type_size_formula`])
+//!    performs a recursive walk, and **substitute** ([`PartialTypeSizeFormula::substitute`])
+//!    composes flat formulae into each other to model datatype instantiation.
+//! 3. **Solve** ([`PartialTypeSizeFormula::solve`]) evaluates a flat form against concrete
+//!    argument [`TypeSize`]s, yielding a concrete [`TypeSize`].
 //!
-//! All arithmetic saturates: every quantity exists only to be compared against a limit, and a
-//! saturated value exceeds any limit — the correct verdict.
+//! All four forms are used for various safety checks across VM execution. All arithmetic
+//! saturates: every quantity exists only to be compared against a limit, and a saturated value
+//! exceeds any limit — the correct verdict.
 
 use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
@@ -49,8 +53,9 @@ use std::collections::HashSet;
 /// Index of a type parameter.
 pub(crate) type TyParamIndex = u16;
 
-/// The set of datatypes currently being resolved, guarding op1 against a cyclic (corrupt or
-/// adversarial) datatype graph — the verifier guarantees an acyclic DAG on well-formed state.
+/// Tracks the datatypes currently being resolved, to guard against cyclic datatype graphs.
+/// A `HashSet` is fine (and never a determinism hazard): it is only ever probed for membership
+/// (`insert`/`remove`/`contains`) and never iterated, so its ordering never affects a result.
 pub(crate) type Visiting = HashSet<VirtualTableKey>;
 
 // -------------------------------------------------------------------------------------------------
@@ -160,7 +165,11 @@ impl LinearForm {
         }
     }
 
-    /// Add `multiplicity` copies of `other` into this form.
+    /// Add `multiplicity` copies of `other` into this form: `self += multiplicity * other`,
+    /// summing coefficients on shared parameters.
+    ///
+    /// Example: `self = 2 + 3·x0`, `other = 1 + x1`, `multiplicity = 2` gives
+    /// `2 + 2·1 + 3·x0 + 2·x1 = 4 + 3·x0 + 2·x1`.
     pub(crate) fn absorb(&mut self, multiplicity: u64, other: &LinearForm) {
         self.constant = self
             .constant
@@ -179,8 +188,10 @@ impl LinearForm {
         }
     }
 
-    /// Substitute a form for each parameter (indexed positionally). Closed: the result is again
-    /// a flat linear form.
+    /// Substitute a form for each parameter (positionally): replace every `xi` with `args[i]`,
+    /// yielding another flat linear form (the algebra is closed under substitution).
+    ///
+    /// Example: `self = 1 + 2·x0`, `args = [3 + x1]` gives `1 + 2·(3 + x1) = 7 + 2·x1`.
     pub(crate) fn substitute(&self, args: &[LinearForm]) -> PartialVMResult<LinearForm> {
         let mut result = LinearForm::constant(self.constant);
         for term in &self.terms {
@@ -193,7 +204,10 @@ impl LinearForm {
         Ok(result)
     }
 
-    /// Evaluate with a concrete value per parameter.
+    /// Evaluate with a concrete value per parameter: substitute each `xi` with `args[i]` and add
+    /// it all up.
+    ///
+    /// Example: `self = 1 + 2·x0 + x1`, `args = [4, 5]` gives `1 + 2·4 + 5 = 14`.
     pub(crate) fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
         let mut acc = self.constant;
         for term in &self.terms {
@@ -226,7 +240,12 @@ impl MaxPlusForm {
         }
     }
 
-    /// Max `other`, shifted up by `offset`, into this form.
+    /// Fold `other`, shifted up by `offset`, into this form under max-plus: `self = max(self,
+    /// offset + other)`, keeping the larger offset on shared parameters. (This is the max-plus
+    /// analogue of [`LinearForm::absorb`]: `max` replaces `+`, `+` replaces `*`.)
+    ///
+    /// Example: `self = max(2, 1+x0)`, `other = max(1, x1)`, `offset = 3` gives
+    /// `max(2, 3+1, 1+x0, 3+x1) = max(4, 1+x0, 3+x1)`.
     pub(crate) fn absorb(&mut self, offset: u64, other: &MaxPlusForm) {
         self.constant = self.constant.max(offset.saturating_add(other.constant));
         for term in &other.terms {
@@ -241,8 +260,11 @@ impl MaxPlusForm {
         }
     }
 
-    /// Substitute a form for each parameter (indexed positionally). Closed: the result is again
-    /// a flat max-plus form.
+    /// Substitute a form for each parameter (positionally): replace every `xi` with `args[i]`,
+    /// yielding another flat max-plus form (the algebra is closed under substitution).
+    ///
+    /// Example: `self = max(1, 2+x0)`, `args = [max(0, x1)]` gives
+    /// `max(1, 2 + max(0, x1)) = max(2, 2+x1)`.
     pub(crate) fn substitute(&self, args: &[MaxPlusForm]) -> PartialVMResult<MaxPlusForm> {
         let mut result = MaxPlusForm::constant(self.constant);
         for term in &self.terms {
@@ -255,7 +277,10 @@ impl MaxPlusForm {
         Ok(result)
     }
 
-    /// Evaluate with a concrete value per parameter.
+    /// Evaluate with a concrete value per parameter: substitute each `xi` with `args[i]` and take
+    /// the max.
+    ///
+    /// Example: `self = max(1, 2+x0, x1)`, `args = [3, 5]` gives `max(1, 2+3, 5) = 5`.
     pub(crate) fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
         let mut acc = self.constant;
         for term in &self.terms {
@@ -327,7 +352,17 @@ impl PartialTypeSizeFormula {
         }
     }
 
-    /// op2 — evaluate against concrete argument sizes, one `TypeSize` per parameter.
+    /// Solve a parameterless (fully concrete) formula against no arguments.
+    pub(crate) fn solved(&self) -> PartialVMResult<TypeSize> {
+        self.solve(&[])
+    }
+
+    /// Solve against concrete argument sizes: run each measure's flat-form [`solve`](LinearForm::solve)
+    /// against the matching measure of the arguments, giving a concrete [`TypeSize`].
+    ///
+    /// Example: for a `vector<T>` (so every measure is `1 + x0`, and depths `max(1, 1+x0)`) with
+    /// `args = [T's size]` where `T = u64` (all measures `1`), each measure solves to `2` — i.e.
+    /// `TypeSize` all-`2`, the size of `vector<u64>`.
     pub(crate) fn solve(&self, args: &[TypeSize]) -> PartialVMResult<TypeSize> {
         Ok(TypeSize {
             type_size: self.type_size.solve(&project(args, |s| s.type_size))?,
@@ -337,7 +372,12 @@ impl PartialTypeSizeFormula {
         })
     }
 
-    /// Substitute a form for each parameter (indexed positionally) — compose closed forms.
+    /// Substitute a formula for each parameter (positionally): run each measure's flat-form
+    /// [`substitute`](LinearForm::substitute) against the matching measure of the arguments. This
+    /// is how a datatype instantiation `D<A0, A1, ..>` folds its argument formulae into `D`'s.
+    ///
+    /// Example: `D`'s `type_size` is `1 + x0`; instantiating with `A0` whose `type_size` is
+    /// `1 + x1` yields `1 + (1 + x1) = 2 + x1` — a formula over the *ambient* parameters.
     pub(crate) fn substitute(
         &self,
         args: &[PartialTypeSizeFormula],
@@ -444,11 +484,11 @@ impl ArenaTypeSizeFormula {
         })
     }
 
-    /// op1 — resolve this datatype's formula against a linkage (the vtable is the env), yielding
-    /// a flat [`PartialTypeSizeFormula`] over the datatype's parameters. Each application is
-    /// resolved by interpreting its field type against the vtable (`size_formula`, which hits
-    /// `partial_type_size` and recurses back here through the cache).
-    pub(crate) fn substitute(
+    /// Resolve this datatype's formula against a linkage (the vtable is the env), yielding a flat
+    /// [`PartialTypeSizeFormula`] over the datatype's parameters. Each application is resolved by
+    /// interpreting its field type against the vtable (`arena_type_size_formula`, which hits
+    /// `virtual_key_size_formula` and recurs back here through the cache).
+    pub(crate) fn resolve(
         &self,
         env: &VMDispatchTables,
         visiting: &mut Visiting,
@@ -456,7 +496,7 @@ impl ArenaTypeSizeFormula {
         let mut value_depth = self.value_depth_local.clone();
         let mut layout_size = self.layout_size_local.clone();
         for apply in self.apps.iter() {
-            let applied = env.size_formula_impl(apply.field_type.to_ref(), visiting)?;
+            let applied = env.arena_type_size_formula_impl(apply.field_type.to_ref(), visiting)?;
             value_depth.absorb(apply.value_depth_offset, &applied.value_depth);
             layout_size.absorb(apply.layout_size_coeff, &applied.layout_size);
         }
