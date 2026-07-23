@@ -3,6 +3,7 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use move_core_types::account_address::AccountAddress;
 
 use crate::SUI_FRAMEWORK_ADDRESS;
@@ -29,6 +30,19 @@ pub const GCP_ISSUER: &str = "https://confidentialcomputing.googleapis.com";
 pub const RS256_ALG: &str = "RS256";
 pub const GCP_ATTESTATION_MODULE_NAME: &str = "gcp_attestation";
 pub const VERIFY_GCP_ATTESTATION_FUNCTION_NAME: &str = "verify_gcp_attestation";
+
+/// Maximum size of a GCP-issuer JWK's `kid`, in UTF-8 bytes.
+///
+/// This is tighter than [`MAX_KID_SIZE`] (which bounds the possibly-adversarial `kid`
+/// embedded in an attestation token's JWT header): this bound instead applies to the
+/// trusted keyset itself, i.e. the `kid` values a validator is willing to vote to activate
+/// via consensus. GCP Confidential Space key ids are short fixed-format strings, so 256
+/// bytes is generous headroom while still bounding consensus/storage costs.
+pub const MAX_GCP_JWK_KID_SIZE: usize = 256;
+/// Minimum accepted RSA modulus size, in bits, for a GCP-issuer JWK.
+pub const MIN_GCP_RSA_MODULUS_BITS: u32 = 2048;
+/// Maximum accepted RSA modulus size, in bits, for a GCP-issuer JWK.
+pub const MAX_GCP_RSA_MODULUS_BITS: u32 = 4096;
 
 /// Returns true only for the public GCP attestation entry point in the Sui framework.
 pub fn is_gcp_attestation_call(package: AccountAddress, module: &str, function: &str) -> bool {
@@ -200,6 +214,146 @@ fn decode_b64(segment: &str, what: &str) -> Result<Vec<u8>, GcpAttestationError>
     URL_SAFE_NO_PAD
         .decode(segment)
         .map_err(|e| GcpAttestationError::ParseError(format!("{what} base64: {e}")))
+}
+
+/// Decode `s` as base64url (no padding) and require that it round-trips: re-encoding the
+/// decoded bytes must reproduce `s` exactly. This rejects any input that is not the unique
+/// canonical encoding of its bytes (e.g. padding characters, or non-zero unused trailing
+/// bits in the final group), independent of the underlying decoder's own strictness.
+fn decode_canonical_base64url(s: &str) -> Result<Vec<u8>, ()> {
+    let bytes = URL_SAFE_NO_PAD.decode(s).map_err(|_| ())?;
+    if URL_SAFE_NO_PAD.encode(&bytes) != s {
+        return Err(());
+    }
+    Ok(bytes)
+}
+
+/// The numeric bit length of a non-empty big-endian byte string with no leading zero byte.
+fn numeric_bit_length(bytes: &[u8]) -> u32 {
+    debug_assert!(!bytes.is_empty() && bytes[0] != 0);
+    (bytes.len() as u32 - 1) * 8 + (8 - bytes[0].leading_zeros())
+}
+
+/// Structured, deterministic validation error for a candidate GCP-issuer JWK.
+///
+/// Every variant depends only on the `(JwkId, JWK)` values themselves (no clock, no
+/// network I/O), so every validator reaches the same verdict for the same input at any
+/// time. The `Display` impl never echoes attacker-controlled string content, so it is safe
+/// to log directly (e.g. in consensus validation warnings or test assertions).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum GcpJwkValidationError {
+    #[error("issuer is not the GCP Confidential Space attestation issuer")]
+    WrongIssuer,
+    #[error("kid is empty")]
+    EmptyKid,
+    #[error("kid exceeds {MAX_GCP_JWK_KID_SIZE} bytes")]
+    KidTooLarge,
+    #[error("kty is not RSA")]
+    WrongKty,
+    #[error("alg is not RS256")]
+    WrongAlg,
+    #[error("modulus (n) is not canonical unpadded base64url")]
+    ModulusNotCanonicalBase64,
+    #[error("exponent (e) is not canonical unpadded base64url")]
+    ExponentNotCanonicalBase64,
+    #[error("modulus has a leading zero byte")]
+    ModulusLeadingZero,
+    #[error("modulus is even")]
+    ModulusEven,
+    #[error(
+        "modulus bit length is out of the accepted {MIN_GCP_RSA_MODULUS_BITS}-{MAX_GCP_RSA_MODULUS_BITS} bit range"
+    )]
+    ModulusBitLengthOutOfBounds,
+    #[error("exponent is empty")]
+    ExponentEmpty,
+    #[error("exponent has a leading zero byte")]
+    ExponentLeadingZero,
+    #[error("exponent exceeds {MAX_RSA_EXPONENT_SIZE} bytes")]
+    ExponentTooLarge,
+    #[error("exponent is even")]
+    ExponentEven,
+    #[error("exponent is below the minimum accepted value ({MIN_RSA_EXPONENT})")]
+    ExponentTooSmall,
+}
+
+/// Deterministic, issuer-scoped validation for a candidate GCP Confidential Space JWK.
+///
+/// Unlike [`validate_rsa_public_key`] (which only bounds already-decoded RSA key material
+/// at native verification time, independent of issuer), this function validates a full
+/// `(JwkId, JWK)` candidate exactly as it would appear on the wire (JWKS ingestion) or in
+/// consensus (`NewJWKFetched`, [`ActiveJwk`](crate::authenticator_state::ActiveJwk)):
+///
+/// - `id.iss` must be exactly [`GCP_ISSUER`] (byte-for-byte; no normalization).
+/// - `id.kid` must be non-empty and at most [`MAX_GCP_JWK_KID_SIZE`] UTF-8 bytes.
+/// - `jwk.kty` must be exactly `"RSA"` and `jwk.alg` must be exactly [`RS256_ALG`].
+/// - `jwk.n` and `jwk.e` must be strict canonical, unpadded base64url (decoded via a strict
+///   round-trip check): non-canonical encodings are rejected outright rather than silently
+///   accepted, so a given key has exactly one valid wire representation.
+/// - The decoded modulus must have no leading zero byte, must be numerically odd, and its
+///   true numeric bit length must fall within
+///   [`MIN_GCP_RSA_MODULUS_BITS`]..=[`MAX_GCP_RSA_MODULUS_BITS`] (2048-4096 bits inclusive).
+/// - The decoded exponent must be non-empty, have no leading zero byte, be at most
+///   `MAX_RSA_EXPONENT_SIZE` bytes, be numerically odd, and be numerically
+///   >= `MIN_RSA_EXPONENT` (65537).
+///
+/// This function has no side effects and performs no I/O; it is safe to call from
+/// consensus validation (live or replay), node-side JWKS ingestion, and tests alike, so
+/// that all of those call sites enforce exactly the same policy.
+pub fn validate_gcp_jwk(id: &JwkId, jwk: &JWK) -> Result<(), GcpJwkValidationError> {
+    if id.iss != GCP_ISSUER {
+        return Err(GcpJwkValidationError::WrongIssuer);
+    }
+    if id.kid.is_empty() {
+        return Err(GcpJwkValidationError::EmptyKid);
+    }
+    if id.kid.len() > MAX_GCP_JWK_KID_SIZE {
+        return Err(GcpJwkValidationError::KidTooLarge);
+    }
+    if jwk.kty != "RSA" {
+        return Err(GcpJwkValidationError::WrongKty);
+    }
+    if jwk.alg != RS256_ALG {
+        return Err(GcpJwkValidationError::WrongAlg);
+    }
+
+    let n_bytes = decode_canonical_base64url(&jwk.n)
+        .map_err(|_| GcpJwkValidationError::ModulusNotCanonicalBase64)?;
+    let e_bytes = decode_canonical_base64url(&jwk.e)
+        .map_err(|_| GcpJwkValidationError::ExponentNotCanonicalBase64)?;
+
+    if n_bytes.first() == Some(&0) {
+        return Err(GcpJwkValidationError::ModulusLeadingZero);
+    }
+    if n_bytes.is_empty() {
+        return Err(GcpJwkValidationError::ModulusBitLengthOutOfBounds);
+    }
+    if n_bytes[n_bytes.len() - 1] & 1 == 0 {
+        return Err(GcpJwkValidationError::ModulusEven);
+    }
+    let modulus_bits = numeric_bit_length(&n_bytes);
+    if !(MIN_GCP_RSA_MODULUS_BITS..=MAX_GCP_RSA_MODULUS_BITS).contains(&modulus_bits) {
+        return Err(GcpJwkValidationError::ModulusBitLengthOutOfBounds);
+    }
+
+    if e_bytes.is_empty() {
+        return Err(GcpJwkValidationError::ExponentEmpty);
+    }
+    if e_bytes[0] == 0 {
+        return Err(GcpJwkValidationError::ExponentLeadingZero);
+    }
+    if e_bytes.len() > MAX_RSA_EXPONENT_SIZE {
+        return Err(GcpJwkValidationError::ExponentTooLarge);
+    }
+    if e_bytes[e_bytes.len() - 1] & 1 == 0 {
+        return Err(GcpJwkValidationError::ExponentEven);
+    }
+    let mut padded = [0u8; 8];
+    padded[8 - e_bytes.len()..].copy_from_slice(&e_bytes);
+    if padded < MIN_RSA_EXPONENT.to_be_bytes() {
+        return Err(GcpJwkValidationError::ExponentTooSmall);
+    }
+
+    Ok(())
 }
 
 /// A structurally-validated GCP Confidential Spaces attestation JWT.

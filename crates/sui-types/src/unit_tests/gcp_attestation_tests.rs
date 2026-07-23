@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gcp_attestation::{
-    GCP_ISSUER, GcpAttestationError, MAX_RSA_MODULUS_SIZE, MIN_RSA_MODULUS_SIZE, ParsedGcpJwt,
-    RS256_ALG, is_gcp_attestation_call, rsa_exponent_ok, validate_rsa_public_key,
-    verify_gcp_attestation,
+    GCP_ISSUER, GcpAttestationError, GcpJwkValidationError, MAX_GCP_JWK_KID_SIZE,
+    MAX_RSA_MODULUS_SIZE, MIN_RSA_MODULUS_SIZE, ParsedGcpJwt, RS256_ALG, is_gcp_attestation_call,
+    rsa_exponent_ok, validate_gcp_jwk, validate_rsa_public_key, verify_gcp_attestation,
 };
 use crate::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 
 // Pre-generated RSA-2048 test keys and pre-signed JWTs, all containing a `kid` header claim.
 // Generated once via a throwaway Python `cryptography` script (not checked in).
@@ -377,4 +378,269 @@ fn test_is_gcp_attestation_call_matches_only_framework_entrypoint() {
 fn test_gcp_issuer_and_alg_constants() {
     assert_eq!(GCP_ISSUER, "https://confidentialcomputing.googleapis.com");
     assert_eq!(RS256_ALG, "RS256");
+}
+
+// ---------------------------------------------------------------------------
+// validate_gcp_jwk: deterministic, issuer-scoped JWK validation.
+// ---------------------------------------------------------------------------
+
+/// Builds a big-endian byte string of exactly `byte_len` bytes whose numeric bit length is
+/// exactly `byte_len * 8 - leading_zero_bits`, with the low bit forced odd (valid RSA moduli
+/// are always odd since they are a product of two odd primes).
+fn bits(byte_len: usize, leading_zero_bits: u32) -> Vec<u8> {
+    assert!(leading_zero_bits < 8);
+    let mut v = vec![0xFFu8; byte_len];
+    v[0] = 0xFFu8 >> leading_zero_bits;
+    if v[0] == 0 {
+        // exactly 8 leading zero bits was disallowed above; nothing to do otherwise.
+    }
+    let last = v.len() - 1;
+    v[last] |= 1; // force odd
+    v
+}
+
+fn b64(bytes: &[u8]) -> String {
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn valid_gcp_jwk() -> (JwkId, JWK) {
+    (
+        JwkId {
+            iss: GCP_ISSUER.to_string(),
+            kid: "test-kid-001".to_string(),
+        },
+        JWK {
+            kty: "RSA".to_string(),
+            e: KEY_A_E.to_string(),
+            n: KEY_A_N.to_string(),
+            alg: RS256_ALG.to_string(),
+        },
+    )
+}
+
+#[test]
+fn test_validate_gcp_jwk_accepts_valid_key() {
+    let (id, jwk) = valid_gcp_jwk();
+    validate_gcp_jwk(&id, &jwk).expect("well-formed GCP JWK should validate");
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_wrong_issuer() {
+    let (mut id, jwk) = valid_gcp_jwk();
+    id.iss = "https://accounts.google.com".to_string();
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::WrongIssuer
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_empty_kid() {
+    let (mut id, jwk) = valid_gcp_jwk();
+    id.kid = String::new();
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::EmptyKid
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_oversized_kid() {
+    let (mut id, jwk) = valid_gcp_jwk();
+    id.kid = "k".repeat(MAX_GCP_JWK_KID_SIZE + 1);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::KidTooLarge
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_accepts_max_size_kid() {
+    let (mut id, jwk) = valid_gcp_jwk();
+    id.kid = "k".repeat(MAX_GCP_JWK_KID_SIZE);
+    validate_gcp_jwk(&id, &jwk).expect("256-byte kid should be accepted");
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_wrong_kty() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.kty = "EC".to_string();
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::WrongKty
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_wrong_alg() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.alg = "RS384".to_string();
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::WrongAlg
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_non_canonical_modulus_padding() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    // Append standard base64 padding, which URL_SAFE_NO_PAD does not accept as canonical.
+    jwk.n = format!("{}=", jwk.n);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ModulusNotCanonicalBase64
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_non_canonical_exponent_encoding() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    // Non-alphabet character makes this an invalid/non-canonical base64url string.
+    jwk.e = "AQ@B".to_string();
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ExponentNotCanonicalBase64
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_modulus_leading_zero_byte() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    let mut n = bits(256, 1); // 2047 numeric bits, but let's force an explicit leading zero byte
+    n[0] = 0x00;
+    jwk.n = b64(&n);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ModulusLeadingZero
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_even_modulus() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    let mut n = bits(256, 0); // exactly 2048 bits
+    let last = n.len() - 1;
+    n[last] &= !1; // force even
+    jwk.n = b64(&n);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ModulusEven
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_modulus_below_2048_bits() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.n = b64(&bits(256, 1)); // 2047 bits: one leading zero bit inside the top byte
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ModulusBitLengthOutOfBounds
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_accepts_modulus_at_2048_bits() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.n = b64(&bits(256, 0)); // exactly 2048 bits
+    validate_gcp_jwk(&id, &jwk).expect("2048-bit modulus is the accepted floor");
+}
+
+#[test]
+fn test_validate_gcp_jwk_accepts_modulus_at_4096_bits() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.n = b64(&bits(512, 0)); // exactly 4096 bits
+    validate_gcp_jwk(&id, &jwk).expect("4096-bit modulus is the accepted ceiling");
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_modulus_above_4096_bits() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    // 513 bytes with a single significant bit in the top byte: 512*8 + 1 = 4097 numeric bits.
+    let mut n = vec![0xFFu8; 513];
+    n[0] = 0x01;
+    let last = n.len() - 1;
+    n[last] |= 1;
+    jwk.n = b64(&n);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ModulusBitLengthOutOfBounds
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_exponent_leading_zero_byte() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.e = b64(&[0x00, 0x01, 0x00, 0x01]);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ExponentLeadingZero
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_oversized_exponent() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    // 9 bytes, no leading zero, odd, numerically far above the minimum: rejected on size alone.
+    jwk.e = b64(&[0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ExponentTooLarge
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_accepts_max_size_exponent() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    // 8 bytes, no leading zero, odd, numerically far above the minimum.
+    jwk.e = b64(&[0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+    validate_gcp_jwk(&id, &jwk).expect("8-byte exponent should be accepted");
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_even_exponent() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.e = b64(&[0x01, 0x00, 0x02]); // 65538, even
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ExponentEven
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_rejects_exponent_below_65537() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.e = b64(&[0xFF, 0xFF]); // 65535: odd, but below the 65537 floor
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::ExponentTooSmall
+    );
+}
+
+#[test]
+fn test_validate_gcp_jwk_accepts_exponent_at_65537() {
+    let (id, mut jwk) = valid_gcp_jwk();
+    jwk.e = b64(&[0x01, 0x00, 0x01]); // exactly 65537
+    validate_gcp_jwk(&id, &jwk).expect("65537 is the accepted floor");
+}
+
+#[test]
+fn test_validate_gcp_jwk_does_not_affect_non_gcp_generic_zklogin_jwks() {
+    // validate_gcp_jwk is issuer-scoped: a well-formed generic OIDC (non-GCP) JWK is
+    // deterministically rejected as WrongIssuer rather than crashing or being silently
+    // accepted, so callers gating on the GCP issuer cannot be tricked into treating a
+    // zkLogin provider's JWK as a GCP one.
+    let id = JwkId {
+        iss: "https://accounts.google.com".to_string(),
+        kid: "generic-oidc-kid".to_string(),
+    };
+    let jwk = JWK {
+        kty: "RSA".to_string(),
+        e: KEY_A_E.to_string(),
+        n: KEY_A_N.to_string(),
+        alg: RS256_ALG.to_string(),
+    };
+    assert_eq!(
+        validate_gcp_jwk(&id, &jwk).unwrap_err(),
+        GcpJwkValidationError::WrongIssuer
+    );
 }

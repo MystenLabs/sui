@@ -387,6 +387,14 @@ where
             .copied()
             .unwrap_or_default()
     }
+
+    /// Returns all keys that have reached quorum so far.
+    pub fn quorate_keys(&self) -> impl Iterator<Item = &K> {
+        self.stake_maps
+            .iter()
+            .filter(|(_, agg)| agg.has_quorum())
+            .map(|(k, _)| k)
+    }
 }
 
 #[test]

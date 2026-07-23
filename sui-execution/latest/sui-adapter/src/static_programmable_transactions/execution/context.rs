@@ -482,7 +482,9 @@ where
                         "AuthenticatorState must exist when GCP attestation is enabled"
                     ))
                 })?;
-            JwkMap::from_active_jwks(inner.active_jwks)
+            let current_epoch = tx_context.borrow().epoch();
+            let max_age_epochs = env.protocol_config.max_age_of_gcp_jwk_in_epochs();
+            JwkMap::from_active_jwks(inner.active_jwks, current_epoch, max_age_epochs)
         } else {
             sui_move_natives::JwkMap::default()
         };

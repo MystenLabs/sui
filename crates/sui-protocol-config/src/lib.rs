@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 133;
+const MAX_PROTOCOL_VERSION: u64 = 134;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -376,6 +376,10 @@ const MAINNET_USDB: &str =
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 // Version 133: Enable GCP Confidential Spaces attestation verification on
 //              Unknown/devnet only. Gas costs set on all chains.
+// Version 134: Add enable_gcp_consensus_validation (GCP-issuer JWK validation in consensus
+//              block validation, activation, and catch-up/replay), enabled on Unknown/devnet
+//              only. Add max_gcp_active_jwks (256) and max_age_of_gcp_jwk_in_epochs (1),
+//              set on all chains.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -680,6 +684,12 @@ struct FeatureFlags {
     // Enable GCP Confidential Spaces attestation verification.
     #[serde(skip_serializing_if = "is_false")]
     enable_gcp_attestation: bool,
+
+    // Enable GCP-issuer JWK validation in consensus (live block validation, activation, and
+    // catch-up/replay). Gated separately from `enable_gcp_attestation` so the two rollouts
+    // (native verification vs. consensus hardening) can proceed independently.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_gcp_consensus_validation: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1991,6 +2001,16 @@ pub struct ProtocolConfig {
     // will cause the new epoch to start with JWKs from the previous epoch still valid.
     max_age_of_jwk_in_epochs: Option<u64>,
 
+    // The maximum number of distinct GCP-issuer JwkIds (i.e. distinct `kid`s) that may be
+    // active in the AuthenticatorState object at once. Enforced deterministically during
+    // consensus activation; a batch that would exceed the cap simply does not activate the
+    // excess entries (see `enable_gcp_consensus_validation`).
+    max_gcp_active_jwks: Option<u64>,
+    // The maximum age, in epochs, of a GCP-issuer ActiveJwk before the execution-time JwkMap
+    // treats it as stale and excludes it, even if it has not yet been pruned from the
+    // AuthenticatorState object. Analogous to `max_age_of_jwk_in_epochs` but GCP-specific.
+    max_age_of_gcp_jwk_in_epochs: Option<u64>,
+
     // === random beacon ===
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
@@ -2920,6 +2940,10 @@ impl ProtocolConfig {
             max_jwk_votes_per_validator_per_epoch: None,
 
             max_age_of_jwk_in_epochs: None,
+
+            max_gcp_active_jwks: None,
+
+            max_age_of_gcp_jwk_in_epochs: None,
 
             random_beacon_reduction_allowed_delta: None,
 
@@ -4594,6 +4618,19 @@ impl ProtocolConfig {
                     // Phase-1 merge: Unknown/devnet only
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_gcp_attestation = true;
+                    }
+                }
+                134 => {
+                    // Protocol-level bounds for GCP-issuer JWKs, set on all chains regardless
+                    // of whether consensus validation is enabled yet (matches how gas costs
+                    // were introduced ahead of the feature in version 133).
+                    cfg.max_gcp_active_jwks = Some(256);
+                    cfg.max_age_of_gcp_jwk_in_epochs = Some(1);
+
+                    // Phase-1 merge: Unknown/devnet only, matching enable_gcp_attestation's
+                    // rollout in version 133.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_gcp_consensus_validation = true;
                     }
                 }
                 // Use this template when making changes:
