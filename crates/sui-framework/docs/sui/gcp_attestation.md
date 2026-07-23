@@ -198,8 +198,11 @@ Error that the kid is not found in the trusted JWK set.
 
 Verify a GCP Confidential Spaces attestation JWT and return the extracted claims.
 
-The RSA public key is looked up internally from the consensus-validated JWK set
-using the GCP issuer and the supplied <code>kid</code>. No AuthenticatorState input is needed.
+Like Nitro attestation, the <code>kid</code> needed to look up the trusted RSA public key is read
+directly from the JWT header rather than supplied by the caller: the native implementation
+parses the header once, extracts <code>kid</code>, looks up the consensus-validated JWK set using the
+GCP issuer and that <code>kid</code>, and verifies the signature and claims. No AuthenticatorState
+input is needed.
 
 This verifies token authenticity and time validity, but it does not authorize a workload.
 Callers MUST compare <code><a href="../sui/gcp_attestation.md#sui_gcp_attestation_aud">aud</a>()</code> with their expected audience and enforce their workload policy
@@ -209,17 +212,17 @@ Like Nitro attestation, replay protection is caller-enforced. Callers MUST requi
 freshly generated value in <code><a href="../sui/gcp_attestation.md#sui_gcp_attestation_eat_nonce">eat_nonce</a>()</code> and consume it after successful verification. Reusing
 an unexpired token succeeds unless the caller tracks nonce use.
 
-@param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature).
-@param kid: The key ID from the JWT header, identifying which trusted key to use.
+@param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature). The header
+must contain a non-empty <code>kid</code> claim identifying which trusted key to use.
 @param clock: The clock object used to check token expiry.
 
 Aborts with ENotSupportedError if the feature is disabled,
-EParseError if the token cannot be parsed,
-EKidNotFoundError if <code>kid</code> is not found in the trusted JWK set,
+EParseError if the token cannot be parsed or its header <code>kid</code> is missing, empty, or oversized,
+EKidNotFoundError if the header <code>kid</code> is not found in the trusted JWK set,
 EVerifyError if the signature or claims are invalid.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(<a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;, kid: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(<a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
 </code></pre>
 
 
@@ -228,14 +231,9 @@ EVerifyError if the signature or claims are invalid.
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(
-    <a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;,
-    kid: vector&lt;u8&gt;,
-    <a href="../sui/clock.md#sui_clock">clock</a>: &Clock,
-): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">GcpAttestationDocument</a> {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation">verify_gcp_attestation</a>(<a href="../sui/token.md#sui_token">token</a>: vector&lt;u8&gt;, <a href="../sui/clock.md#sui_clock">clock</a>: &Clock): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">GcpAttestationDocument</a> {
     <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(
         &<a href="../sui/token.md#sui_token">token</a>,
-        &kid,
         <a href="../sui/clock.md#sui_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>),
     )
 }
@@ -591,10 +589,11 @@ must assert this value is <code><b>true</b></code> rather than treating absence 
 
 ## Function `verify_gcp_attestation_internal`
 
-Internal native function.
+Internal native function. The trusted key is looked up by the <code>kid</code> read from the JWT
+header inside <code><a href="../sui/token.md#sui_token">token</a></code>; no separate <code>kid</code> argument is needed.
 
 
-<pre><code><b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(<a href="../sui/token.md#sui_token">token</a>: &vector&lt;u8&gt;, kid: &vector&lt;u8&gt;, current_timestamp_ms: u64): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
+<pre><code><b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(<a href="../sui/token.md#sui_token">token</a>: &vector&lt;u8&gt;, current_timestamp_ms: u64): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">sui::gcp_attestation::GcpAttestationDocument</a>
 </code></pre>
 
 
@@ -605,7 +604,6 @@ Internal native function.
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/gcp_attestation.md#sui_gcp_attestation_verify_gcp_attestation_internal">verify_gcp_attestation_internal</a>(
     <a href="../sui/token.md#sui_token">token</a>: &vector&lt;u8&gt;,
-    kid: &vector&lt;u8&gt;,
     current_timestamp_ms: u64,
 ): <a href="../sui/gcp_attestation.md#sui_gcp_attestation_GcpAttestationDocument">GcpAttestationDocument</a>;
 </code></pre>

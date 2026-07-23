@@ -14,6 +14,7 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[cfg(msim)]
 const GCP_ISS: &str = "https://confidentialcomputing.googleapis.com";
+#[cfg(msim)]
 const TEST_KID: &str = "gcp-test-key-001";
 
 // Pre-generated RSA-2048 test key (base64url-encoded n and e).
@@ -30,14 +31,13 @@ const E2E_TOKEN: &[u8] = b"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImdjcC10Z
 fn build_verify_ptb(token: &[u8]) -> ProgrammableTransactionBuilder {
     let mut ptb = ProgrammableTransactionBuilder::new();
     let token_arg = ptb.pure(token.to_vec()).unwrap();
-    let kid_arg = ptb.pure(TEST_KID.as_bytes().to_vec()).unwrap();
     let clock_arg = ptb.input(CallArg::CLOCK_IMM).unwrap();
     ptb.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("gcp_attestation").unwrap(),
         Identifier::new("verify_gcp_attestation").unwrap(),
         vec![],
-        vec![token_arg, kid_arg, clock_arg],
+        vec![token_arg, clock_arg],
     );
     ptb
 }
