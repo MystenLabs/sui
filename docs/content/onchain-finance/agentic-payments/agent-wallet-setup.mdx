@@ -1,22 +1,22 @@
 ---
 title: Agent Wallet and Signer Setup
 description: >-
-  Create and manage a headless keypair for autonomous backend agents that sign
+  Create and manage a headless key pair for autonomous backend agents that sign
   Sui transactions without human interaction, with patterns for key storage,
   rotation, and cloud KMS.
 sidebar_label: Agent Wallet Setup
 keywords:
   - agent wallet
   - headless signer
-  - keypair management
+  - key pair management
   - Ed25519
   - cloud KMS
   - key rotation
-  - agent keypair
+  - agent key pair
   - backend signing
 goal:
   description: >-
-    Reader can set up a headless agent keypair and sign Sui transactions from a
+    Reader can set up a headless agent key pair and sign Sui transactions from a
     backend service
   requires:
     - has_frontmatter:
@@ -39,23 +39,23 @@ builder_paths:
     step: Agent wallet setup
     stage: Authorization
 questions:
-  - How do I create a keypair for a backend agent on Sui?
+  - How do I create a key pair for a backend agent on Sui?
   - How do I store agent keys securely for production?
-  - How do I rotate an agent's keypair without downtime?
+  - How do I rotate an agent's key pair without downtime?
 answer: >-
-  An agent wallet is a headless keypair that signs Sui transactions without
-  human interaction. Generate a keypair with the TypeScript SDK, store the
+  An agent wallet is a headless key pair that signs Sui transactions without
+  human interaction. Generate a key pair with the TypeScript SDK, store the
   secret in a cloud KMS or secrets manager, derive the agent's Sui address, and
   sign transactions programmatically.
 ---
 
-An agent is a backend process that signs Sui transactions without human interaction. It needs a keypair, not a wallet UI. This page covers keypair generation, secure storage, signing, and key rotation for headless agents.
+An agent is a backend process that signs Sui transactions without human interaction. It needs a key pair, not a wallet UI. This page covers key pair generation, secure storage, signing, and key rotation for headless agents.
 
-## Keypair generation
+## Key pair generation
 
-The TypeScript SDK supports three ways to create a keypair.
+The TypeScript SDK supports three ways to create a key pair.
 
-### Generate a new keypair
+### Generate a new key pair
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -78,7 +78,7 @@ const mnemonic = 'word1 word2 word3 ... word12';
 const keypair = Ed25519Keypair.deriveKeypair(mnemonic);
 ```
 
-Use a mnemonic when you need to recover the keypair from a backup. Store the mnemonic with the same security as a private key.
+Use a mnemonic when you need to recover the key pair from a backup. Store the mnemonic with the same security as a private key.
 
 ### From a private key
 
@@ -95,9 +95,9 @@ This is the most common pattern for production agents: load the key from an envi
 
 Never store private keys in source code, config files committed to version control, or unencrypted environment files.
 
-### Environment variables (simple)
+### Environment variables (basic)
 
-Set the key as an environment variable on the host. This is acceptable for development and simple deployments.
+Set the key as an environment variable on the host. This is acceptable for development and basic deployments.
 
 ```bash
 export AGENT_SECRET_KEY="suiprivkey1..."
@@ -137,11 +137,11 @@ See [Signers](https://sdk.mystenlabs.com/sui/cryptography/signers) for the full 
 
 ### Secrets managers
 
-If you do not use KMS-based signing, store the raw key in a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler) and load it at startup. The key is decrypted in memory — never written to disk.
+If you do not use KMS-based signing, store the raw key in a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler) and load it at startup. The key is decrypted in memory and never written to disk.
 
 ## Deriving the agent address
 
-Every keypair maps to a Sui address. This address is where the agent receives objects, holds coins, and is identified onchain.
+Every key pair maps to a Sui address. This address is where the agent receives objects, holds coins, and is identified onchain.
 
 ```typescript
 const agentAddress = keypair.toSuiAddress();
@@ -188,23 +188,23 @@ See [Offline Signing](/develop/transactions/transaction-auth/offline-signing) fo
 
 ## Key rotation
 
-Rotating an agent's keypair changes its Sui address. Plan the rotation carefully to avoid disrupting operations.
+Rotating an agent's key pair changes its Sui address. Plan the rotation carefully to avoid disrupting operations.
 
 ### Rotation procedure
 
-1. **Generate a new keypair.** Create the new keypair and derive its address.
+1. **Generate a new key pair.** Create the new key pair and derive its address.
 
 2. **Transfer objects.** Move any objects the agent owns (spending mandates, coins, capability objects) from the old address to the new address.
 
-3. **Update configuration.** Update the gas station's allowlist, any onchain mandates, and the agent's environment variables to use the new keypair.
+3. **Update configuration.** Update the gas station's allowlist, any onchain mandates, and the agent's environment variables to use the new key pair.
 
-4. **Verify.** Submit a test transaction with the new keypair to confirm everything works.
+4. **Verify.** Submit a test transaction with the new key pair to confirm everything works.
 
 5. **Destroy old key material.** Delete the old secret key from the secrets manager. If using KMS, schedule key deletion.
 
 ```typescript
 // Step 2: Transfer all owned objects to the new address
-const ownedObjects = await client.listOwnedObjects({
+const ownedObjects = await client.core.listOwnedObjects({
   owner: oldAddress,
 });
 
@@ -222,17 +222,17 @@ await oldKeypair.signAndExecuteTransaction({ transaction: tx, client });
 
 ### Zero-downtime rotation
 
-For zero-downtime rotation, run both old and new keypairs simultaneously during a transition window:
+For zero-downtime rotation, run both old and new key pairs simultaneously during a transition window:
 
-1. Deploy the new keypair alongside the old one.
+1. Deploy the new key pair alongside the old one.
 2. Grant the new address the same permissions (mandates, gas station access).
-3. Switch traffic to the new keypair.
-4. Wait for all inflight transactions from the old keypair to confirm.
-5. Revoke the old keypair's permissions and destroy the key.
+3. Switch traffic to the new key pair.
+4. Wait for all inflight transactions from the old key pair to confirm.
+5. Revoke the old key pair's permissions and destroy the key.
 
 ## Multisig for agent security
 
-When a single agent key is too risky — for example, an agent that manages large balances — use a [multisig](/develop/transactions/transaction-auth/multisig) setup where the agent holds one key and a human operator holds an override key.
+When a single agent key is too risky (for example, an agent that manages large balances), use a [multisig](/develop/transactions/transaction-auth/multisig) setup where the agent holds one key and a human operator holds an override key.
 
 A 1-of-2 multisig lets the agent operate autonomously (it can sign alone), but the operator can also sign transactions from the same address to revoke mandates or transfer objects in an emergency.
 
@@ -240,6 +240,6 @@ For higher security, use a 2-of-3 multisig where both the agent and an operator 
 
 ## Next steps
 
-- [Spending Policies and Mandates](/onchain-finance/agentic-payments/spending-policies) — limit what the agent can spend
-- [Self-Hosted Gas Station](/onchain-finance/gas-station) — sponsor the agent's transactions
-- [Production Hardening](/onchain-finance/agentic-payments/production-hardening) — kill-switches, retries, and monitoring
+- [Spending Policies and Mandates](/onchain-finance/agentic-payments/spending-policies): limit what the agent can spend
+- [Self-Hosted Gas Station](/onchain-finance/gas-station): sponsor the agent's transactions
+- [Production Hardening](/onchain-finance/agentic-payments/production-hardening): kill-switches, retries, and monitoring

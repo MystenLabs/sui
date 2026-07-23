@@ -45,48 +45,54 @@ questions:
 answer: >-
   A P2P payments app on Sui combines zkLogin for wallet-free authentication,
   sponsored transactions for gasless UX, address balance transfers for the
-  actual payment, and gRPC queries for transaction history — all composable
+  actual payment, and gRPC queries for transaction history, all composable
   within a single programmable transaction block.
 ---
 
 This walkthrough builds a peer-to-peer payments flow that lets users send stablecoins to each other without holding SUI or managing private keys. It stitches together four primitives:
 
-1. **Authentication** — zkLogin or wallet connection
-2. **Gas sponsorship** — a gas station pays the fee
-3. **Transfer** — address balance `send_funds` for the actual payment
-4. **Transaction history** — gRPC query for past payments
+1. **Authentication:** zkLogin or wallet connection
+2. **Gas sponsorship:** a gas station pays the fee
+3. **Transfer:** address balance `send_funds` for the actual payment
+4. **Transaction history:** gRPC query for past payments
 
 Each section is self-contained. You can adopt individual pieces or wire the full flow.
 
 ## Architecture
 
-```
-┌──────────┐     ┌──────────┐     ┌─────────────┐     ┌──────────┐
-│  User    │────>│ Frontend │────>│ Gas Station  │     │ Sui Node │
-│ (browser)│     │ (React)  │     │ (Express.js) │     │ (gRPC)   │
-└──────────┘     └─────┬────┘     └──────┬───────┘     └────┬─────┘
-                       │                 │                   │
-                  1. zkLogin auth        │                   │
-                  2. Build PTB ──────────┼──────────────────>│
-                  3. Request gas ───────>│                   │
-                  4. Sponsor signs       │                   │
-                  5. User signs ─────────┼──────────────────>│
-                  6. Submit dual-signed  │              Execute tx
-                  7. Query history ──────┼──────────────────>│
+```mermaid
+sequenceDiagram
+    participant U as User (browser)
+    participant F as Frontend (React)
+    participant G as Gas Station (Express.js)
+    participant N as Sui Node (gRPC)
+    U->>F: 1. zkLogin auth
+    F->>N: 2. Build PTB
+    F->>G: 3. Request gas
+    G-->>F: 4. Sponsor signs
+    F->>N: 5. User signs and submits dual-signed tx
+    N-->>F: Execute tx
+    F->>N: 7. Query history
 ```
 
 ## Prerequisites
 
-- Node.js 18+
-- `@mysten/sui` SDK installed (`npm install @mysten/sui`)
-- A [testnet faucet](/getting-started/onboarding/get-coins) SUI balance for the gas station sponsor address
-- An OAuth client ID (Google) for zkLogin, or use wallet connection instead
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Node.js 18 or later installed.
+- [x] `@mysten/sui` SDK installed (`npm install @mysten/sui`).
+- [x] A [Testnet SUI balance](/getting-started/onboarding/get-coins) for the gas station sponsor address.
+- [x] An OAuth client ID (Google) for [zkLogin](/sui-stack/zklogin-integration/zklogin), or an existing wallet for connection.
+
+</TabItem>
+</Tabs>
 
 ## Step 1: Authentication
 
 Users authenticate with [zkLogin](/sui-stack/zklogin-integration/zklogin) for a wallet-free experience, or connect an existing wallet with [dApp Kit](/getting-started/onboarding/app-frontends).
 
-With zkLogin, the user signs in with their Google (or other OAuth provider) account. The app derives a Sui address from the OAuth JWT — no seed phrase, no wallet extension.
+With zkLogin, the user signs in with their Google (or other OAuth provider) account. The app derives a Sui address from the OAuth JWT. No seed phrase or wallet extension is required.
 
 ```typescript
 // After OAuth redirect, you have a JWT.
@@ -96,7 +102,7 @@ With zkLogin, the user signs in with their Google (or other OAuth provider) acco
 // See: https://docs.sui.io/sui-stack/zklogin-integration/zklogin
 ```
 
-The key outcome of this step is a `signer` (keypair or ZkLoginSigner) and the user's Sui address.
+The key outcome of this step is a `signer` (key pair or ZkLoginSigner) and the user's Sui address.
 
 ## Step 2: Read the sender's balance
 
@@ -145,7 +151,7 @@ tx.moveCall({
 
 :::tip Gasless stablecoin transfers
 
-If the transfer uses an [eligible stablecoin](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) and the `SuiGrpcClient` detects eligibility, the SDK automatically sets `gasPrice = 0`. In this case, you do not need a gas station at all. The gasless path is the simplest integration.
+If the transfer uses an [eligible stablecoin](/develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins) and the `SuiGrpcClient` detects eligibility, the SDK automatically sets `gasPrice = 0`. In this case, you do not need a gas station at all. The gasless path is the most basic integration.
 
 :::
 
@@ -163,7 +169,7 @@ const txKindBytes = await tx.build({ client, onlyTransactionKind: true });
 const sponsorResponse = await fetch('https://your-gas-station.com/sponsor', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ txBytes: toBase64(txKindBytes) }),
+  body: JSON.stringify({ txBytes: toBase64(txKindBytes), sender: signer.toSuiAddress() }),
 });
 
 const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await sponsorResponse.json();
@@ -322,8 +328,8 @@ async function sendPayment(
 
 ## Next steps
 
-- [Choose Your Payments Model](/onchain-finance/choose-payments-model) — decide between simple transfers, Payment Kit, or custom Move
-- [Self-Hosted Gas Station](/onchain-finance/gas-station) — deploy your own gas station service
-- [Payment Intents](/onchain-finance/payment-intents) — compose multiple operations into a single atomic transaction
-- [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) — eligible stablecoins and how gasless works
-- [zkLogin](/sui-stack/zklogin-integration/zklogin) — wallet-free authentication for your users
+- [Choose Your Payments Model](/onchain-finance/choose-payments-model): decide between basic transfers, Payment Kit, or custom Move
+- [Self-Hosted Gas Station](/onchain-finance/gas-station): deploy your own gas station service
+- [Payment Intents](/onchain-finance/payment-intents): compose multiple operations into a single atomic transaction
+- [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers): eligible stablecoins and how gasless works
+- [zkLogin](/sui-stack/zklogin-integration/zklogin): wallet-free authentication for your users

@@ -54,7 +54,7 @@ answer: >-
   the client submits the dual-signed transaction.
 ---
 
-A gas station is a backend service that pays gas on behalf of users or agents. There is no official `sui-gas-station` crate — you build a gas station using the [TypeScript SDK](/develop/transactions/ptbs/building-ptb) and the [sponsored transaction protocol](/develop/transaction-payment/sponsor-txn).
+A gas station is a backend service that pays gas on behalf of users or agents. There is no official `sui-gas-station` crate. Build your gas station using the [TypeScript SDK](/develop/transactions/ptbs/building-ptb) and the [sponsored transaction protocol](/develop/transaction-payment/sponsor-txn).
 
 ## How it works
 
@@ -66,27 +66,27 @@ The sponsor handshake has five steps:
 
 3. **Gas station validates the transaction.** The service inspects the transaction kind, checks it against allowlists and budget caps, and rejects anything outside policy.
 
-4. **Gas station adds gas payment and signs.** The service sets `gasOwner`, `gasBudget`, and `gasPayment` (a coin from its pool), builds the final bytes, and signs them with the sponsor keypair.
+4. **Gas station adds gas payment and signs.** The service sets `gasOwner`, `gasBudget`, and `gasPayment` (a coin from its pool), builds the final bytes, and signs them with the sponsor key pair.
 
 5. **Client adds its own signature and submits.** The client signs the same bytes and submits the dual-signed transaction to a full node.
 
-```
-┌────────┐                       ┌─────────────┐                    ┌──────────┐
-│ Client │                       │ Gas Station │                    │ Full Node│
-└───┬────┘                       └──────┬──────┘                    └────┬─────┘
-    │  1. Build tx (no gas)             │                                │
-    │  2. POST /sponsor ───────────────>│                                │
-    │                                   │  3. Validate tx                │
-    │                                   │  4. Add gas coin, sign         │
-    │  <─────────── sponsorSig, txBytes │                                │
-    │  5. Sign txBytes                  │                                │
-    │  6. Submit dual-signed tx ────────┼───────────────────────────────>│
-    │                                   │                                │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant G as Gas Station
+    participant N as Full Node
+    C->>C: 1. Build tx (no gas)
+    C->>G: 2. POST /sponsor (kind bytes + sender)
+    G->>G: 3. Validate tx
+    G->>G: 4. Add gas coin, sign
+    G-->>C: sponsorSig, txBytes
+    C->>C: 5. Sign txBytes
+    C->>N: 6. Submit dual-signed tx
 ```
 
 ## Gas coin pool
 
-The sponsor address needs a pool of SUI coins to fund transactions. A single coin cannot be used by two inflight transactions simultaneously — if it is, one transaction fails due to an object version conflict.
+The sponsor address needs a pool of SUI coins to fund transactions. A single coin cannot be used by two inflight transactions simultaneously. If it is, one transaction fails due to an object version conflict.
 
 ### Pre-splitting coins
 
@@ -119,7 +119,7 @@ await client.signAndExecuteTransaction({ transaction: tx, signer: sponsor });
 
 ### Pool management
 
-Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. Gas is always charged — even when a transaction fails — so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
+Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. The network always charges gas (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
 
 ```typescript
 interface GasCoin {
@@ -133,13 +133,15 @@ class GasCoinPool {
   private coins: Map<string, GasCoin> = new Map();
 
   async initialize(client: SuiGrpcClient, sponsorAddress: string) {
-    const ownedCoins = await client.listCoins({
+    const ownedCoins = await client.core.listOwnedObjects({
       owner: sponsorAddress,
-      coinType: '0x2::sui::SUI',
+      type: '0x2::coin::Coin<0x2::sui::SUI>',
+      limit: 50,
     });
     for (const coin of ownedCoins.objects) {
-      this.coins.set(coin.objectId, {
-        objectId: coin.objectId,
+      const id = coin.objectId;
+      this.coins.set(id, {
+        objectId: id,
         version: coin.version,
         digest: coin.digest,
         reserved: false,
@@ -238,10 +240,12 @@ const GAS_BUDGET = 10_000_000; // 0.01 SUI
 
 app.post('/sponsor', async (req, res) => {
   try {
-    const { txBytes } = req.body; // Base64-encoded transaction bytes
-
-    // 1. Deserialize the client's transaction
-    const tx = Transaction.from(fromBase64(txBytes));
+    // 1. Deserialize the client's transaction kind bytes.
+    // The client sends kind-only bytes (built with onlyTransactionKind: true),
+    // so use Transaction.fromKind() — not Transaction.from() — to reconstruct them.
+    const { txBytes, sender } = req.body; // txBytes: Base64-encoded kind bytes; sender: user's Sui address
+    const tx = Transaction.fromKind(fromBase64(txBytes));
+    tx.setSender(sender);
 
     // 2. Acquire a gas coin from the pool
     const gasCoin = pool.acquire();
@@ -335,7 +339,6 @@ const user = new Ed25519Keypair();
 
 // 1. Build the transaction without gas
 const tx = new Transaction();
-tx.setSender(user.toSuiAddress());
 tx.moveCall({ target: '0xPACKAGE::module::function' });
 
 // 2. Serialize and send to gas station
@@ -343,7 +346,7 @@ const txBytes = await tx.build({ client, onlyTransactionKind: true });
 const response = await fetch('http://localhost:3001/sponsor', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ txBytes: toBase64(txBytes) }),
+  body: JSON.stringify({ txBytes: toBase64(txBytes), sender: user.toSuiAddress() }),
 });
 
 const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await response.json();
