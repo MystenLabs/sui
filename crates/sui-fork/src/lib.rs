@@ -20,6 +20,9 @@ pub(crate) mod runtime;
 pub(crate) mod seed;
 pub mod startup;
 pub mod store;
+#[cfg(test)]
+#[path = "tests/support.rs"]
+mod test_support;
 
 pub use gql::GraphQLClient;
 pub use node::Node;

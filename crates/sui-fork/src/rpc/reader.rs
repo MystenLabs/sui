@@ -52,60 +52,47 @@ use crate::store::ForkStore;
 /// [`crate::startup`]. The fork serves RPC directly through `sui-rpc-api`; it
 /// does not use `sui-rpc-node`.
 ///
-/// This is the only adapter that implements the upstream RPC storage traits:
-/// post-fork indexed data is read from `sui-rpc-store` first, while pre-fork
-/// sparse reads are delegated to [`ForkStore`].
+/// This is the only adapter that implements the upstream RPC storage traits.
+/// Every read the fork has policy for resolves through [`ForkStore`], which is
+/// already local-first with a checkpoint-pinned remote fallback. The stock
+/// `sui-rpc-store` reader is consulted directly only for surfaces the fork
+/// keeps no policy for: events, full checkpoint contents, committees, epoch
+/// info, struct layouts, and the ledger/bitmap indexes, all written by the
+/// embedded indexer and correct to serve as-is.
 pub(crate) struct ForkRpcReader {
-    rpc_store: RpcStoreReader,
     store: ForkStore,
 }
 
 impl ForkRpcReader {
-    /// Creates an RPC reader over committed `sui-rpc-store` data and fork state.
-    ///
-    /// `rpc_store` handles native RPC-store reads. `store` owns fork-specific
-    /// misses, including checkpoint-scoped remote fetches and index initialization.
-    pub(crate) fn new(rpc_store: RpcStoreReader, store: ForkStore) -> Self {
-        Self { rpc_store, store }
+    /// Creates an RPC reader over fork state. `store` owns all read policy,
+    /// including checkpoint-scoped remote fetches and index initialization.
+    pub(crate) fn new(store: ForkStore) -> Self {
+        Self { store }
+    }
+
+    /// The stock reader over the fork's local `sui-rpc-store`, for reads the
+    /// fork has no policy for.
+    fn stock_reader(&self) -> &RpcStoreReader {
+        self.store.local_store().reader()
     }
 }
 
 impl ObjectStore for ForkRpcReader {
-    /// Reads the current object through fork state only.
+    /// Reads the current object through fork state.
     ///
     /// Latest-semantics reads must consult the fork's currency authority
-    /// (`live_state`, with a checkpoint-pinned remote fallback): the stock
-    /// reader's reverse scan assumes a complete version history, but the
-    /// fork's sparse `objects` CF may hold a cached *historical* row as its
-    /// highest entry, which the scan would wrongly serve as current.
-    /// Stock-first delegation remains correct only for immutably-keyed reads
-    /// (exact versions, digests, sequence numbers), such as
-    /// [`Self::get_object_by_key`] below.
-    ///
-    /// Store errors are logged and converted to `None` because the
-    /// `ObjectStore` trait has no error channel.
+    /// (`live_state`, with a checkpoint-pinned remote fallback): a stock
+    /// reverse scan assumes a complete version history, but the fork's sparse
+    /// `objects` CF may hold a cached *historical* row as its highest entry,
+    /// which the scan would wrongly serve as current.
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        optional_store_read(
-            "object lookup",
-            ForkStore::get_object(&self.store, object_id).map_err(to_storage_error),
-        )
+        ObjectStore::get_object(&self.store, object_id)
     }
 
-    /// Reads one object version from `sui-rpc-store`, then asks fork state on a miss.
-    ///
-    /// The store may fetch and persist a pre-fork object version before
-    /// returning it.
+    /// Reads one object version through fork state, which may fetch and
+    /// persist a pre-fork object version before returning it.
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
-        self.rpc_store
-            .get_object_by_key(object_id, version)
-            .or_else(|| {
-                optional_store_read(
-                    "versioned object lookup",
-                    self.store
-                        .get_object_at_version(object_id, version.value())
-                        .map_err(to_storage_error),
-                )
-            })
+        ObjectStore::get_object_by_key(&self.store, object_id, version)
     }
 }
 
@@ -121,7 +108,7 @@ impl RuntimeObjectResolver for ForkRpcReader {
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         self.store
-            .read_child_object_fallible(parent, child, child_version_upper_bound)
+            .read_child_object(parent, child, child_version_upper_bound)
     }
 
     /// Resolves a received object through fork state.
@@ -133,12 +120,13 @@ impl RuntimeObjectResolver for ForkRpcReader {
         owner: &ObjectID,
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
-        _epoch_id: EpochId,
+        epoch_id: EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.store.get_object_received_at_version_fallible(
+        self.store.get_object_received_at_version(
             owner,
             receiving_object_id,
             receive_object_at_version,
+            epoch_id,
         )
     }
 }
@@ -146,28 +134,23 @@ impl RuntimeObjectResolver for ForkRpcReader {
 impl ReadStore for ForkRpcReader {
     /// Reads committee information from committed `sui-rpc-store` data.
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
-        self.rpc_store.get_committee(epoch)
+        self.stock_reader().get_committee(epoch)
     }
 
-    /// Reads the latest checkpoint, using fork state only when the local store reports it missing.
+    /// Reads the latest checkpoint from fork state; the local store is the
+    /// source of truth for "latest" in a forked network.
     fn get_latest_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        use_store_on_missing(self.rpc_store.get_latest_checkpoint(), || {
-            self.store.latest_checkpoint_for_rpc()
-        })
+        self.store.latest_checkpoint_for_rpc()
     }
 
-    /// Reads the highest verified checkpoint, using fork state only for a missing local row.
+    /// Reads the highest verified checkpoint from fork state.
     fn get_highest_verified_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        use_store_on_missing(self.rpc_store.get_highest_verified_checkpoint(), || {
-            self.store.latest_checkpoint_for_rpc()
-        })
+        self.store.latest_checkpoint_for_rpc()
     }
 
-    /// Reads the highest synced checkpoint, using fork state only for a missing local row.
+    /// Reads the highest synced checkpoint from fork state.
     fn get_highest_synced_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        use_store_on_missing(self.rpc_store.get_highest_synced_checkpoint(), || {
-            self.store.highest_synced_checkpoint_for_rpc()
-        })
+        self.store.highest_synced_checkpoint_for_rpc()
     }
 
     /// Returns the remote chain's lowest available checkpoint through fork state.
@@ -177,98 +160,71 @@ impl ReadStore for ForkRpcReader {
         ForkStore::get_lowest_available_checkpoint(&self.store).map_err(to_storage_error)
     }
 
-    /// Reads a checkpoint summary by checkpoint digest with optional fork-state lookup.
+    /// Reads a checkpoint summary by checkpoint digest through fork state.
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        self.rpc_store.get_checkpoint_by_digest(digest).or_else(|| {
-            optional_store_read(
-                "checkpoint digest lookup",
-                ForkStore::get_checkpoint_by_digest(&self.store, digest).map_err(to_storage_error),
-            )
-        })
+        optional_store_read(
+            "checkpoint digest lookup",
+            ForkStore::get_checkpoint_by_digest(&self.store, digest),
+        )
     }
 
-    /// Reads a checkpoint summary by sequence number with optional fork-state lookup.
+    /// Reads a checkpoint summary by sequence number through fork state.
     ///
     /// The store can persist pre-fork checkpoint rows into `sui-rpc-store`.
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        self.rpc_store
-            .get_checkpoint_by_sequence_number(sequence_number)
-            .or_else(|| {
-                optional_store_read(
-                    "checkpoint sequence lookup",
-                    ForkStore::get_checkpoint_by_sequence_number(&self.store, sequence_number)
-                        .map_err(to_storage_error),
-                )
-            })
+        optional_store_read(
+            "checkpoint sequence lookup",
+            ForkStore::get_checkpoint_by_sequence_number(&self.store, sequence_number),
+        )
     }
 
-    /// Reads checkpoint contents by content digest with optional fork-state lookup.
+    /// Reads checkpoint contents by content digest through fork state.
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        self.rpc_store
-            .get_checkpoint_contents_by_digest(digest)
-            .or_else(|| {
-                optional_store_read(
-                    "checkpoint contents digest lookup",
-                    ForkStore::get_checkpoint_contents_by_digest(&self.store, digest)
-                        .map_err(to_storage_error),
-                )
-            })
+        optional_store_read(
+            "checkpoint contents digest lookup",
+            ForkStore::get_checkpoint_contents_by_digest(&self.store, digest),
+        )
     }
 
-    /// Reads checkpoint contents by sequence number with optional fork-state lookup.
+    /// Reads checkpoint contents by sequence number through fork state.
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<CheckpointContents> {
-        self.rpc_store
-            .get_checkpoint_contents_by_sequence_number(sequence_number)
-            .or_else(|| {
-                optional_store_read(
-                    "checkpoint contents sequence lookup",
-                    ForkStore::get_checkpoint_contents_by_sequence_number(
-                        &self.store,
-                        sequence_number,
-                    )
-                    .map_err(to_storage_error),
-                )
-            })
+        optional_store_read(
+            "checkpoint contents sequence lookup",
+            ForkStore::get_checkpoint_contents_by_sequence_number(&self.store, sequence_number),
+        )
     }
 
-    /// Reads a transaction by digest, returning the fork-state transaction in an `Arc` on a miss.
+    /// Reads a transaction by digest through fork state.
     fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
-        self.rpc_store.get_transaction(tx_digest).or_else(|| {
-            optional_store_read(
-                "transaction lookup",
-                ForkStore::get_transaction(&self.store, tx_digest).map_err(to_storage_error),
-            )
-            .map(Arc::new)
-        })
+        optional_store_read(
+            "transaction lookup",
+            ForkStore::get_transaction(&self.store, tx_digest),
+        )
+        .map(Arc::new)
     }
 
-    /// Reads transaction effects by digest with optional fork-state lookup.
+    /// Reads transaction effects by digest through fork state.
     fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
-        self.rpc_store
-            .get_transaction_effects(tx_digest)
-            .or_else(|| {
-                optional_store_read(
-                    "transaction effects lookup",
-                    ForkStore::get_transaction_effects(&self.store, tx_digest)
-                        .map_err(to_storage_error),
-                )
-            })
+        optional_store_read(
+            "transaction effects lookup",
+            ForkStore::get_transaction_effects(&self.store, tx_digest),
+        )
     }
 
     /// Reads transaction events from the rpc-store only. Events are saved
     /// with their transaction rows and fork state keeps no separate copy, so
     /// a fork-side fallback would just repeat the same lookup.
     fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
-        self.rpc_store.get_events(event_digest)
+        self.stock_reader().get_events(event_digest)
     }
 
     /// Reads unchanged runtime-loaded objects from committed `sui-rpc-store` data only.
@@ -279,23 +235,19 @@ impl ReadStore for ForkRpcReader {
         &self,
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
-        self.rpc_store.get_unchanged_loaded_runtime_objects(digest)
+        self.stock_reader()
+            .get_unchanged_loaded_runtime_objects(digest)
     }
 
-    /// Reads the checkpoint sequence that contains a transaction with optional fork-state lookup.
+    /// Reads the checkpoint sequence that contains a transaction through fork state.
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
-        self.rpc_store
-            .get_transaction_checkpoint(digest)
-            .or_else(|| {
-                optional_store_read(
-                    "transaction checkpoint lookup",
-                    ForkStore::get_transaction_checkpoint(&self.store, digest)
-                        .map_err(to_storage_error),
-                )
-            })
+        optional_store_read(
+            "transaction checkpoint lookup",
+            ForkStore::get_transaction_checkpoint(&self.store, digest),
+        )
     }
 
     /// Reads full checkpoint contents from committed `sui-rpc-store` data only.
@@ -307,7 +259,7 @@ impl ReadStore for ForkRpcReader {
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<VersionedFullCheckpointContents> {
-        self.rpc_store
+        self.stock_reader()
             .get_full_checkpoint_contents(sequence_number, digest)
     }
 }
@@ -321,8 +273,12 @@ impl RpcStateReader for ForkRpcReader {
     }
 
     /// Reads the chain identifier, deriving it from fork state when it is missing locally.
+    ///
+    /// Genuinely hybrid: the stock read serves the framework `chain_ids` table
+    /// seeded at open, while the fork fallback derives the identifier from the
+    /// fork checkpoint for custom networks.
     fn get_chain_identifier(&self) -> StorageResult<ChainIdentifier> {
-        use_store_on_missing(self.rpc_store.get_chain_identifier(), || {
+        use_store_on_missing(self.stock_reader().get_chain_identifier(), || {
             self.store.chain_identifier()
         })
     }
@@ -338,23 +294,15 @@ impl RpcStateReader for ForkRpcReader {
         struct_tag: &StructTag,
         overlay: &ObjectSet,
     ) -> StorageResult<Option<MoveTypeLayout>> {
-        match self
-            .rpc_store
-            .get_struct_layout_with_overlay(struct_tag, overlay)?
-        {
-            Some(layout) => Ok(Some(layout)),
-            None => Ok(None),
-        }
+        self.stock_reader()
+            .get_struct_layout_with_overlay(struct_tag, overlay)
     }
 }
 
 impl RpcIndexes for ForkRpcReader {
     /// Reads epoch index metadata from `sui-rpc-store`.
     fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
-        match self.rpc_store.get_epoch_info(epoch)? {
-            Some(info) => Ok(Some(info)),
-            None => Ok(None),
-        }
+        RpcIndexes::get_epoch_info(self.stock_reader(), epoch)
     }
 
     /// Iterates owned objects from fork-managed RPC-store indexes.
@@ -416,14 +364,18 @@ impl RpcIndexes for ForkRpcReader {
         cursor: Option<u64>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
     {
-        RpcIndexes::package_versions_iter(&self.rpc_store, original_id, cursor)
+        RpcIndexes::package_versions_iter(self.stock_reader(), original_id, cursor)
     }
 
     /// Returns the highest indexed checkpoint from `sui-rpc-store` or fork state.
+    ///
+    /// Genuinely hybrid: the stock read serves the indexer watermark, while
+    /// the fork fallback reports the highest persisted checkpoint before the
+    /// indexer has written its first watermark.
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
-        match self.rpc_store.get_highest_indexed_checkpoint_seq_number()? {
+        match RpcIndexes::get_highest_indexed_checkpoint_seq_number(self.stock_reader())? {
             Some(sequence) => Ok(Some(sequence)),
             None => self.store.highest_indexed_checkpoint_seq_number(),
         }
@@ -431,7 +383,7 @@ impl RpcIndexes for ForkRpcReader {
 
     /// Reads the transaction sequence-to-digest index from `sui-rpc-store`.
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
-        RpcIndexes::ledger_tx_seq_digest(&self.rpc_store, tx_seq)
+        RpcIndexes::ledger_tx_seq_digest(self.stock_reader(), tx_seq)
     }
 
     /// Iterates transaction sequence-to-digest rows from `sui-rpc-store`.
@@ -441,7 +393,7 @@ impl RpcIndexes for ForkRpcReader {
         end_exclusive: u64,
         descending: bool,
     ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
-        RpcIndexes::ledger_tx_seq_digest_iter(&self.rpc_store, start, end_exclusive, descending)
+        RpcIndexes::ledger_tx_seq_digest_iter(self.stock_reader(), start, end_exclusive, descending)
     }
 
     /// Iterates transaction bitmap buckets from `sui-rpc-store`.
@@ -453,7 +405,7 @@ impl RpcIndexes for ForkRpcReader {
         descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
         RpcIndexes::transaction_bitmap_bucket_iter(
-            &self.rpc_store,
+            self.stock_reader(),
             dimension_key,
             start_bucket,
             end_bucket_exclusive,
@@ -470,7 +422,7 @@ impl RpcIndexes for ForkRpcReader {
         descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
         RpcIndexes::event_bitmap_bucket_iter(
-            &self.rpc_store,
+            self.stock_reader(),
             dimension_key,
             start_bucket,
             end_bucket_exclusive,
@@ -495,7 +447,7 @@ fn use_store_on_missing<T>(
 ///
 /// The storage traits using this helper return `Option`, so store errors are
 /// logged and treated as absent data.
-fn optional_store_read<T>(context: &'static str, result: StorageResult<Option<T>>) -> Option<T> {
+fn optional_store_read<T>(context: &'static str, result: anyhow::Result<Option<T>>) -> Option<T> {
     match result {
         Ok(value) => value,
         Err(err) => {
@@ -614,7 +566,7 @@ mod tests {
             )
             .expect("transaction should persist");
 
-        let reader = ForkRpcReader::new(runtime.reader(), store);
+        let reader = ForkRpcReader::new(store);
         let row = RpcIndexes::ledger_tx_seq_digest(&reader, tx_sequence_number)
             .expect("ledger lookup should read rpc store")
             .expect("ledger row should exist");
