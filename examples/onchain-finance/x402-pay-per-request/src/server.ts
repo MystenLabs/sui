@@ -7,7 +7,7 @@ import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 // docs::#config
 const PAYMENT_RECIPIENT = '0xYOUR_SERVER_ADDRESS';
-const BASE_PRICE_MIST = 1_000_000n; // 0.001 SUI
+const PRICE_MIST = 1_000_000n; // 0.001 SUI
 const COIN_TYPE = '0x2::sui::SUI';
 
 const client = new SuiGrpcClient({
@@ -17,25 +17,19 @@ const client = new SuiGrpcClient({
 // docs::/#config
 
 // docs::#challenge-store
-// Each challenge binds a payment to a specific request via a unique nonce amount.
-// The server picks BASE_PRICE + random offset; the client must pay that exact amount.
-// This prevents an attacker from stealing an observed digest — the amount won't match
-// a different challenge's nonce.
+// Replay prevention uses two mechanisms:
+// 1. Each challenge ID is single-use — deleted after successful verification.
+// 2. Each transaction digest is tracked globally — a digest accepted once
+//    cannot be reused for any future challenge.
 interface PendingChallenge {
-	exactAmount: bigint;
 	expiry: number;
 }
 
 const pendingChallenges = new Map<string, PendingChallenge>();
 const usedDigests = new Set<string>();
 
-function generateChallenge(): { id: string; exactAmount: bigint } {
-	const id = crypto.randomUUID();
-	// Add a random offset of 1–999 MIST to the base price.
-	// This makes each challenge's expected amount unique, binding
-	// the onchain payment to this specific challenge.
-	const offset = BigInt(Math.floor(Math.random() * 999) + 1);
-	return { id, exactAmount: BASE_PRICE_MIST + offset };
+function generateChallengeId(): string {
+	return crypto.randomUUID();
 }
 // docs::/#challenge-store
 
@@ -45,19 +39,18 @@ const paymentRequired: express.RequestHandler = (req, res, next) => {
 	const challengeId = req.headers['x-payment-challenge'] as string;
 
 	if (!digest || !challengeId) {
-		const { id, exactAmount } = generateChallenge();
+		const id = generateChallengeId();
 		pendingChallenges.set(id, {
-			exactAmount,
 			expiry: Date.now() + 5 * 60 * 1000, // 5 minute window
 		});
 
 		res.status(402).json({
-			amount: exactAmount.toString(),
+			amount: PRICE_MIST.toString(),
 			recipient: PAYMENT_RECIPIENT,
 			coinType: COIN_TYPE,
 			challenge: id,
 			message:
-				'Payment required. Pay the exact amount, then retry with X-Payment-Digest and X-Payment-Challenge headers.',
+				'Payment required. Pay the amount, then retry with X-Payment-Digest and X-Payment-Challenge headers.',
 		});
 		return;
 	}
@@ -71,14 +64,14 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 	const digest = req.headers['x-payment-digest'] as string;
 	const challengeId = req.headers['x-payment-challenge'] as string;
 
-	// Verify the challenge was issued by this server and hasn't expired
+	// 1. Verify the challenge was issued by this server and hasn't expired
 	const pending = pendingChallenges.get(challengeId);
 	if (!pending || Date.now() > pending.expiry) {
 		res.status(400).json({ error: 'Invalid or expired challenge' });
 		return;
 	}
 
-	// Prevent digest reuse
+	// 2. Prevent digest reuse across all challenges
 	if (usedDigests.has(digest)) {
 		res.status(400).json({ error: 'Payment digest already used' });
 		return;
@@ -98,20 +91,20 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 		const tx = result.Transaction!;
 		const balanceChanges = tx.balanceChanges ?? [];
 
-		// Verify the server received the exact nonce amount.
-		// The exact amount ties this payment to this specific challenge.
+		// 3. Verify the server received the expected amount
 		const received = balanceChanges.find(
 			(change) =>
 				change.address === PAYMENT_RECIPIENT &&
 				change.coinType === COIN_TYPE &&
-				BigInt(change.amount) === pending.exactAmount,
+				BigInt(change.amount) >= PRICE_MIST,
 		);
 
 		if (!received) {
-			res.status(402).json({ error: 'Payment not found or amount does not match challenge' });
+			res.status(402).json({ error: 'Payment not found or insufficient amount' });
 			return;
 		}
 
+		// 4. Consume challenge and mark digest as used
 		usedDigests.add(digest);
 		pendingChallenges.delete(challengeId);
 		next();
