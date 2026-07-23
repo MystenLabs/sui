@@ -13,14 +13,18 @@ const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
 
 // docs::#fetch-with-payment
 async function fetchWithPayment(url: string): Promise<Response> {
-	// First attempt
-	const response = await fetch(url);
+	const senderAddress = keypair.toSuiAddress();
+
+	// First attempt — include sender address so the server can bind the challenge
+	const response = await fetch(url, {
+		headers: { 'X-Payment-Sender': senderAddress },
+	});
 
 	if (response.status !== 402) {
 		return response;
 	}
 
-	// Parse payment instructions (includes server-issued challenge)
+	// Parse payment instructions (includes server-issued challenge bound to our address)
 	const { amount, recipient, coinType, challenge } = await response.json();
 
 	// Build and submit payment
