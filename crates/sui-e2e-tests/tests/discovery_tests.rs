@@ -25,7 +25,7 @@ mod test {
     async fn test_network_resilience_with_incorrect_discovery_addresses() {
         let test_cluster = TestClusterBuilder::new()
             .with_num_validators(4)
-            .with_epoch_duration_ms(30000)
+            .with_epoch_duration_ms(600_000)
             .build()
             .await;
 
@@ -49,6 +49,12 @@ mod test {
                 .discovery
                 .get_or_insert_with(Default::default);
             disc.use_get_known_peers_v3 = Some(true);
+            // Use a short failed-probe interval so the prober cycles quickly within the wait below
+            // (the production default is 1 minute).
+            config.address_prober = Some(sui_config::AddressProberConfig {
+                failed_interval: Some(Duration::from_secs(2)),
+                ..Default::default()
+            });
         }
         for name in &validator_names[1..] {
             let node = test_cluster.swarm.node(name).unwrap();
@@ -117,6 +123,83 @@ mod test {
                  but is connected to {connected_bad_validators:?}"
             );
         }
+
+        // Verify the address prober flags exactly the bad-address validators. The differential we
+        // expect, from the good validator's prober, for every bad-address validator: its on-chain
+        // (chain) P2P address probes as reachable, but its gossiped (discovery) address — the bad
+        // one — never does. We assert on the cumulative `attempts` counters rather than the smoothed
+        // `connectable` boolean, so the assertion doesn't depend on exactly when the smoothing window
+        // crosses its failure threshold.
+        info!("Waiting for address prober cycles...");
+        sleep(Duration::from_secs(60)).await;
+
+        let good_metrics = test_cluster
+            .swarm
+            .node(&validator_names[0])
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|n| n.address_prober_metrics_for_testing());
+
+        for bad_peer_id in &bad_peer_ids {
+            let peer = bad_peer_id.to_string();
+            assert!(
+                good_metrics.attempts_value_for_testing(&peer, "p2p", "chain", "reachable") > 0,
+                "good validator should reach bad validator {peer} via its chain P2P address"
+            );
+            assert_eq!(
+                good_metrics.attempts_value_for_testing(&peer, "p2p", "discovery", "reachable"),
+                0,
+                "bad validator {peer}'s discovery P2P address must never probe as reachable"
+            );
+            let discovery_failures =
+                good_metrics.attempts_value_for_testing(&peer, "p2p", "discovery", "timeout")
+                    + good_metrics.attempts_value_for_testing(
+                        &peer,
+                        "p2p",
+                        "discovery",
+                        "unreachable",
+                    );
+            assert!(
+                discovery_failures > 0,
+                "bad validator {peer}'s discovery P2P address should fail probing"
+            );
+        }
+
+        // The good validator must NOT be flagged: from a bad validator's prober, the good
+        // validator's gossiped (discovery) address is the correct, reachable one and never fails.
+        let bad_validator_metrics = test_cluster
+            .swarm
+            .node(&validator_names[1])
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|n| n.address_prober_metrics_for_testing());
+        let good_peer = good_peer_id.to_string();
+        assert!(
+            bad_validator_metrics.attempts_value_for_testing(
+                &good_peer,
+                "p2p",
+                "discovery",
+                "reachable"
+            ) > 0,
+            "good validator's discovery P2P address should probe as reachable (not flagged)"
+        );
+        assert_eq!(
+            bad_validator_metrics.attempts_value_for_testing(
+                &good_peer,
+                "p2p",
+                "discovery",
+                "timeout"
+            ) + bad_validator_metrics.attempts_value_for_testing(
+                &good_peer,
+                "p2p",
+                "discovery",
+                "unreachable"
+            ),
+            0,
+            "good validator's discovery P2P address should never fail probing"
+        );
 
         // Publish the "basics" example package (needed for randomness tx).
         info!("Publishing basics package...");
@@ -245,6 +328,183 @@ mod test {
                 Some(ConnectionStatus::Disconnected),
                 "remaining validator should be disconnected from removed validator after reconfig"
             );
+        }
+    }
+
+    /// A validator that advertises a bad *consensus* address via discovery is flagged by the prober
+    /// on its consensus `discovery` override, while its on-chain (`chain`) consensus address stays
+    /// reachable. This exercises the consensus-probe path end-to-end.
+    #[sim_test]
+    async fn test_prober_detects_bad_consensus_address() {
+        let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
+            .with_epoch_duration_ms(600_000)
+            .build()
+            .await;
+
+        let validator_names: Vec<_> = test_cluster.get_validator_pubkeys();
+
+        test_cluster.stop_all_validators().await;
+        let bad_consensus_addr: sui_types::multiaddr::Multiaddr =
+            "/ip4/1.1.1.1/udp/9998".parse().unwrap();
+        for name in &validator_names {
+            let node = test_cluster.swarm.node(name).unwrap();
+            let mut config = node.config();
+            config.p2p_config.seed_peers.clear();
+            config
+                .p2p_config
+                .discovery
+                .get_or_insert_with(Default::default)
+                .use_get_known_peers_v3 = Some(true);
+            // Use a short failed-probe interval so the bad consensus address flips the
+            // connectability gauge to 0 quickly (the production default is 1 minute).
+            config.address_prober = Some(sui_config::AddressProberConfig {
+                failed_interval: Some(Duration::from_secs(2)),
+                ..Default::default()
+            });
+        }
+        // Validator 1 advertises a bad consensus external address; it propagates as a consensus
+        // `Discovery` override on the other validators.
+        {
+            let node = test_cluster.swarm.node(&validator_names[1]).unwrap();
+            let mut config = node.config();
+            if let Some(consensus_config) = config.consensus_config.as_mut() {
+                consensus_config.external_address = Some(bad_consensus_addr.clone());
+            }
+        }
+        test_cluster.start_all_validators().await;
+
+        // Let discovery propagate the override and the prober run several cycles (the gauge flips
+        // after 3 consecutive failures at the 2s failed-probe interval set above).
+        info!("Waiting for consensus override propagation and prober cycles...");
+        sleep(Duration::from_secs(30)).await;
+
+        // The prober labels consensus endpoints by the hex of the peer's network public key.
+        let bad_consensus_label = test_cluster
+            .swarm
+            .node(&validator_names[1])
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|n| {
+                sui_node::address_prober::consensus_peer_label_for_testing(
+                    n.get_config().network_key_pair().public().0.to_bytes(),
+                )
+            });
+
+        // From validator 0's prober.
+        let metrics = test_cluster
+            .swarm
+            .node(&validator_names[0])
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|n| n.address_prober_metrics_for_testing());
+
+        // The on-chain consensus address is reachable.
+        assert!(
+            metrics.attempts_value_for_testing(
+                &bad_consensus_label,
+                "consensus",
+                "chain",
+                "reachable"
+            ) > 0,
+            "validator 1's chain consensus address should be reachable"
+        );
+        // The gossiped (discovery) consensus override — the bad one — is never reachable and fails.
+        assert_eq!(
+            metrics.attempts_value_for_testing(
+                &bad_consensus_label,
+                "consensus",
+                "discovery",
+                "reachable"
+            ),
+            0,
+            "validator 1's bad discovery consensus address must never be reachable"
+        );
+        assert!(
+            metrics.total_attempts_for_testing(&bad_consensus_label, "consensus", "discovery") > 0,
+            "validator 1's discovery consensus override should have been probed"
+        );
+        // With a stable (long) epoch the smoothed differential holds.
+        assert_eq!(
+            metrics.connectable_for_testing(&bad_consensus_label, "consensus", "chain"),
+            1,
+            "chain consensus address should be marked connectable"
+        );
+        assert_eq!(
+            metrics.connectable_for_testing(&bad_consensus_label, "consensus", "discovery"),
+            0,
+            "bad discovery consensus address should be flagged unconnectable"
+        );
+    }
+
+    /// An all-correct cluster (V3 enabled, no bad addresses) — the prober flags nothing. Guards
+    /// against false positives / alert fatigue.
+    #[sim_test]
+    async fn test_prober_no_false_positives_when_all_correct() {
+        let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(4)
+            .with_epoch_duration_ms(600_000)
+            .build()
+            .await;
+
+        let validator_names: Vec<_> = test_cluster.get_validator_pubkeys();
+
+        test_cluster.stop_all_validators().await;
+        for name in &validator_names {
+            let node = test_cluster.swarm.node(name).unwrap();
+            let mut config = node.config();
+            config.p2p_config.seed_peers.clear();
+            config
+                .p2p_config
+                .discovery
+                .get_or_insert_with(Default::default)
+                .use_get_known_peers_v3 = Some(true);
+        }
+        test_cluster.start_all_validators().await;
+
+        // Let discovery propagate and the prober run several cycles.
+        info!("Waiting for prober cycles in all-correct cluster...");
+        sleep(Duration::from_secs(80)).await;
+
+        let validator_peer_ids: Vec<_> = validator_names
+            .iter()
+            .map(|name| {
+                let node = test_cluster.swarm.node(name).unwrap();
+                anemo::PeerId(node.config().network_key_pair().public().0.to_bytes())
+            })
+            .collect();
+
+        // From validator 0's prober, no probed P2P address (any source, any other validator) failed,
+        // and nothing is flagged unconnectable.
+        let metrics = test_cluster
+            .swarm
+            .node(&validator_names[0])
+            .unwrap()
+            .get_node_handle()
+            .unwrap()
+            .with(|n| n.address_prober_metrics_for_testing());
+
+        for peer_id in &validator_peer_ids[1..] {
+            let peer = peer_id.to_string();
+            for source in ["chain", "discovery"] {
+                let total = metrics.total_attempts_for_testing(&peer, "p2p", source);
+                if total == 0 {
+                    continue; // this source was not advertised for this peer
+                }
+                let failures =
+                    total - metrics.attempts_value_for_testing(&peer, "p2p", source, "reachable");
+                assert_eq!(
+                    failures, 0,
+                    "no probe failures expected for {peer}/{source} in an all-correct cluster"
+                );
+                assert_ne!(
+                    metrics.connectable_for_testing(&peer, "p2p", source),
+                    0,
+                    "no peer should be flagged unconnectable in an all-correct cluster ({peer}/{source})"
+                );
+            }
         }
     }
 

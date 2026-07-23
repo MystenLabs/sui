@@ -1,14 +1,67 @@
 ---
 title: Encryption with Seal
-description: Learn how to encrypt Walrus blobs and enforce onchain access control using Seal, by walking through OnlyFins.
-keywords: [seal, encryption, access control, walrus, OnlyFins, Sui Stack, threshold encryption, SealClient]
+description: >-
+  Learn how to encrypt Walrus blobs and enforce onchain access control using
+  Seal, by walking through OnlyFins.
+keywords:
+  - seal
+  - encryption
+  - access control
+  - walrus
+  - OnlyFins
+  - Sui Stack
+  - threshold encryption
+  - SealClient
 verified_against:
-  sui_ts_sdk: "^1.x"
-  walrus_sdk: "^0.x"
-  seal_sdk: "^0.x"
-  move_edition: "2024.beta"
-  last_verified: 2026-04-15
-  owner: "@sui-docs/stack-guides"
+  sui_ts_sdk: ^1.x
+  walrus_sdk: ^0.x
+  seal_sdk: ^0.x
+  move_edition: 2024.beta
+  last_verified: 2026-04-15T00:00:00.000Z
+  owner: '@sui-docs/stack-guides'
+goal:
+  description: >-
+    Reader can encrypt Walrus blobs and enforce onchain access control using
+    Seal, by walking through OnlyFins
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Store sensitive data (Seal)
+    stage: Read & Verify
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Encrypt agent state (Seal)
+    stage: Verify & Secure
+    eval: covered
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is Encryption with Seal in Sui?
+  - How does encryption with seal work on Sui?
+  - Why should I use encryption with seal?
+answer: >-
+  Learn how to encrypt Walrus blobs and enforce onchain access control using
+  Seal, by walking through OnlyFins.
 ---
 
 This guide continues from [Data Storage Using Walrus](/sui-stack/walrus/sui-stack-walrus) and builds on the same [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) app. The Walrus guide covers how OnlyFins stores and reads images. This guide covers how it protects them: encrypting images before upload and enforcing onchain access control so only authorized users can decrypt them.

@@ -40,6 +40,7 @@ mod stake_aggregator;
 pub mod storage;
 mod subscriber;
 mod synchronizer;
+mod task;
 mod threshold_clock;
 mod transaction;
 mod transaction_vote_tracker;
@@ -72,7 +73,7 @@ pub use context::Clock;
 pub use metrics::Metrics;
 pub use network::RandomnessSignatureHandler;
 pub use transaction::{
-    BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
+    BlockStatus, ClientError, Priority, TransactionClient, TransactionVerifier, ValidationError,
 };
 
 // Exported API for benchmarking

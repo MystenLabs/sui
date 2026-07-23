@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use consensus_core::BlockStatus;
 use consensus_types::block::BlockRef;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sui_types::digests::{Digest, TransactionDigest};
@@ -45,6 +46,7 @@ pub struct TestConsensusCommit {
     pub sub_dag_index: u64,
     /// Indices into `transactions` reported as rejected by consensus voting.
     rejected_indices: HashSet<usize>,
+    transaction_authors: Option<Vec<consensus_config::AuthorityIndex>>,
 }
 
 impl TestConsensusCommit {
@@ -60,6 +62,7 @@ impl TestConsensusCommit {
             timestamp_ms,
             sub_dag_index,
             rejected_indices: HashSet::new(),
+            transaction_authors: None,
         }
     }
 
@@ -69,6 +72,16 @@ impl TestConsensusCommit {
 
     pub fn with_rejected_indices(mut self, indices: impl IntoIterator<Item = usize>) -> Self {
         self.rejected_indices = indices.into_iter().collect();
+        self
+    }
+
+    pub fn with_transaction_authors(mut self, authors: impl IntoIterator<Item = u32>) -> Self {
+        self.transaction_authors = Some(
+            authors
+                .into_iter()
+                .map(consensus_config::AuthorityIndex::new_for_test)
+                .collect(),
+        );
         self
     }
 }
@@ -105,6 +118,28 @@ impl ConsensusCommitAPI for TestConsensusCommit {
     }
 
     fn transactions(&self) -> Vec<(BlockRef, Vec<ParsedTransaction>)> {
+        if let Some(authors) = &self.transaction_authors {
+            return self
+                .transactions
+                .iter()
+                .zip_eq(authors)
+                .enumerate()
+                .map(|(i, (tx, author))| {
+                    let block_ref = BlockRef {
+                        author: *author,
+                        round: self.round as u32,
+                        digest: Default::default(),
+                    };
+                    let parsed_tx = ParsedTransaction {
+                        transaction: tx.clone(),
+                        rejected: self.rejected_indices.contains(&i),
+                        serialized_len: 0,
+                    };
+                    (block_ref, vec![parsed_tx])
+                })
+                .collect();
+        }
+
         let block_ref = BlockRef {
             author: consensus_config::AuthorityIndex::ZERO,
             round: self.round as u32,
@@ -137,6 +172,7 @@ impl ConsensusCommitAPI for TestConsensusCommit {
 pub struct TestConsensusHandlerSetup<C> {
     pub consensus_handler: ConsensusHandler<C>,
     pub captured_transactions: CapturedTransactions,
+    pub metrics: Arc<AuthorityMetrics>,
 }
 
 /// Makes a consensus adapter with the standard test wiring (limits, metrics), backed by the
@@ -330,9 +366,6 @@ where
     let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
     let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
     let backpressure_manager = BackpressureManager::new_for_tests();
-    let consensus_adapter =
-        make_consensus_adapter_for_test(authority.clone(), HashSet::new(), false, vec![]);
-
     let last_consensus_stats = ExecutionIndicesWithStatsV2 {
         stats: crate::authority::authority_per_epoch_store::ConsensusStats::new(
             consensus_committee.size(),
@@ -358,19 +391,20 @@ where
         epoch_store.clone(),
         checkpoint_service,
         execution_scheduler_sender,
-        consensus_adapter,
         authority.get_object_cache_reader().clone(),
         consensus_committee,
-        metrics,
+        metrics.clone(),
         Arc::new(throughput_calculator),
         backpressure_manager.subscribe(),
         authority.traffic_controller.clone(),
+        authority.transaction_deny_config_manager().clone(),
         last_consensus_stats,
     );
 
     TestConsensusHandlerSetup {
         consensus_handler,
         captured_transactions,
+        metrics,
     }
 }
 

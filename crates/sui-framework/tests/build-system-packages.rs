@@ -329,6 +329,13 @@ fn serialize_modules_to_file<'a>(
                 Visibility::Friend => "public(package) ",
                 Visibility::Private => "",
             };
+
+            // Disallow init functions in system packages
+            if def.visibility == Visibility::Private && fn_.as_str() == "init" {
+                anyhow::bail!(
+                    "Module {module_name} has a private init function. This is not allowed in system pacakges."
+                );
+            }
             let entry = if def.is_entry { "entry " } else { "" };
             members.push(format!("{fn_}\n\t{viz}{entry}fun\n\t{module_name}"));
         }

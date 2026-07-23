@@ -5,7 +5,7 @@ use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
-use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::transaction_deny_config::{PeerDenySyncConfig, TransactionDenyConfig};
 use crate::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use crate::verifier_signing_config::VerifierSigningConfig;
 use anyhow::Result;
@@ -171,6 +171,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
 
+    /// Configuration for sharing recommended `TransactionDenyConfig` settings with allowlisted
+    /// peers via consensus. Off by default; the empty allowlist + both flags = false means
+    /// no behavior change versus prior versions.
+    #[serde(default)]
+    pub peer_deny_sync_config: PeerDenySyncConfig,
+
     /// Whether dev-inspect transaction execution is disabled on this node.
     #[serde(default)]
     pub dev_inspect_disabled: bool,
@@ -280,6 +286,10 @@ pub struct NodeConfig {
     /// When set, enables per-commit binary logs of congestion tracker state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub congestion_log: Option<CongestionLogConfig>,
+
+    /// Configuration for the trusted peer address prober.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address_prober: Option<AddressProberConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -334,10 +344,24 @@ fn default_congestion_log_max_files() -> u32 {
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ForkCrashBehavior {
-    #[serde(rename = "await-fork-recovery")]
+    /// On a detected fork, clear the local fork state and re-execute against the canonical
+    /// certified checkpoint. Recovery only proceeds when (1) the fork was recorded by a
+    /// different binary version than the one now running — the binary that forked would
+    /// deterministically fork again, so the node halts until a corrected binary is deployed —
+    /// and (2) a certified checkpoint covering the forked checkpoint or transaction is verified
+    /// in the local store — proof that the network already sealed the canonical outcome, so
+    /// re-deriving cannot equivocate on an undecided result. Forks failing either condition
+    /// halt the node awaiting a new binary or operator intervention.
+    #[serde(rename = "recover-once-per-version")]
     #[default]
+    RecoverOncePerVersion,
+
+    /// Halt at startup awaiting operator intervention (e.g. supplying
+    /// canonical checkpoint digests).
+    #[serde(rename = "await-fork-recovery")]
     AwaitForkRecovery,
-    /// Return an error instead of blocking forever. This is primarily for testing.
+
+    /// Return an error instead of halting. This is primarily for testing.
     #[serde(rename = "return-error")]
     ReturnError,
 }
@@ -359,6 +383,82 @@ pub struct ForkRecoveryConfig {
     /// Behavior when a fork is detected after recovery attempts
     #[serde(default)]
     pub fork_crash_behavior: ForkCrashBehavior,
+}
+
+/// Configuration for the address prober: a background task on validators that periodically
+/// checks whether trusted peers' advertised P2P and consensus addresses are connectable
+/// and reports the results as Prometheus metrics.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct AddressProberConfig {
+    /// Whether the prober runs.
+    ///
+    /// If unspecified, this defaults to `true`.
+    pub enabled: Option<bool>,
+
+    /// How often to re-probe an address that was reachable on its last probe.
+    ///
+    /// If unspecified, this defaults to 1 hour.
+    pub good_interval: Option<Duration>,
+
+    /// How often to re-probe an address that failed its last probe — should be frequently enough
+    /// to confirm a sustained failure and to promptly notice a fix.
+    ///
+    /// If unspecified, this defaults to 1 minute.
+    pub failed_interval: Option<Duration>,
+
+    /// Number of consecutive failed probes before a peer/endpoint/source's connectability gauge
+    /// flips to 0 (smooths out transient blips).
+    ///
+    /// If unspecified, this defaults to `3`.
+    pub failure_threshold: Option<u32>,
+
+    /// Maximum number of address probes in flight at once.
+    ///
+    /// If unspecified, this defaults to `16`.
+    pub concurrency: Option<usize>,
+
+    /// Per-probe timeout for the consensus connect (the P2P probe uses anemo's connect timeout).
+    ///
+    /// If unspecified, this defaults to 10 seconds.
+    pub consensus_probe_timeout: Option<Duration>,
+}
+
+impl AddressProberConfig {
+    pub fn enabled(&self) -> bool {
+        self.enabled.unwrap_or(true)
+    }
+
+    pub fn good_interval(&self) -> Duration {
+        self.good_interval.unwrap_or(Duration::from_secs(60 * 60))
+    }
+
+    pub fn failed_interval(&self) -> Duration {
+        self.failed_interval.unwrap_or(Duration::from_secs(60))
+    }
+
+    pub fn failure_threshold(&self) -> u32 {
+        self.failure_threshold.unwrap_or(3)
+    }
+
+    pub fn concurrency(&self) -> usize {
+        self.concurrency.unwrap_or(16)
+    }
+
+    pub fn consensus_probe_timeout(&self) -> Duration {
+        self.consensus_probe_timeout
+            .unwrap_or(Duration::from_secs(10))
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.failed_interval() <= self.good_interval(),
+            "address prober failed_interval ({:?}) must be <= good_interval ({:?})",
+            self.failed_interval(),
+            self.good_interval(),
+        );
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -767,6 +867,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Apple".to_string(),
         "Slack".to_string(),
         "TestIssuer".to_string(),
+        "TestIssuerKey8192".to_string(),
         "Microsoft".to_string(),
         "KarrierOne".to_string(),
         "Credenza3".to_string(),
@@ -1446,12 +1547,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_admission_queue_capacity_fraction")]
     pub admission_queue_capacity_fraction: f64,
 
-    // Fraction of max_pending_transactions below which the admission queue is
-    // bypassed (transactions are submitted directly to consensus). Above this
-    // threshold, transactions go through the priority queue.
-    #[serde(default = "default_admission_queue_bypass_fraction")]
-    pub admission_queue_bypass_fraction: f64,
-
     // Enables use of a gas-price-based priority queue for load shedding of
     // transactions at admission time. If false, when consensus is saturated, transactions
     // are rejected with TooManyTransactionsPendingConsensus.
@@ -1510,10 +1605,6 @@ fn default_admission_queue_capacity_fraction() -> f64 {
     0.5
 }
 
-fn default_admission_queue_bypass_fraction() -> f64 {
-    0.9
-}
-
 fn default_admission_queue_enabled() -> bool {
     true
 }
@@ -1538,7 +1629,6 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
             admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
-            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
             admission_queue_enabled: default_admission_queue_enabled(),
             admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
         }

@@ -95,7 +95,7 @@ pretty_simple = "0.1.1"
 pretty_assertions = "1.4.1"
 primitive-types = { version = "0.10.1", features = ["impl-serde"] }
 proptest = "1.6.0"
-proptest-derive = "0.5"
+proptest-derive = { version = "0.5", features = ["boxed_union"] }
 quick_cache = { version = "0.6.18", features = ["stats"] }
 quote = "1.0.9"
 rand = "0.8.0"
@@ -168,14 +168,12 @@ move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
 move-ir-types = { path = "crates/move-ir-types" }
-move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-package-alt = { path = "crates/move-package-alt" }
 move-package-alt-compilation = { path = "crates/move-package-alt-compilation" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
-move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stackless-bytecode-2 = { path = "crates/move-stackless-bytecode-2" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
@@ -185,7 +183,6 @@ move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
-prover_bytecode = { path = "crates/move-stackless-bytecode", package = "move-stackless-bytecode" }
 
 [profile.bench]
 debug = true

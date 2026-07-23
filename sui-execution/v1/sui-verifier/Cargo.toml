@@ -7,6 +7,9 @@ description = "Move framework for Sui platform"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

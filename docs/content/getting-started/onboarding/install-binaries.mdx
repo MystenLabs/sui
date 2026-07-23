@@ -1,7 +1,39 @@
 ---
 title: Install from Binaries
-description: Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
-keywords: [ install sui, install sui binaries, binaries ]
+description: >-
+  Each Sui release provides a set of binaries for several operating systems. You
+  can download these binaries from GitHub and use them to install Sui.
+keywords:
+  - install sui
+  - install sui binaries
+  - binaries
+goal:
+  description: Reader can install prebuilt Sui binaries for their platform
+  requires:
+    - pattern: '```'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - min_words: 300
+      label: Needs more walkthrough depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I install Sui from prebuilt binaries?
+  - What platforms have prebuilt Sui binaries?
+  - How do I verify my Sui binary installation?
+answer: >-
+  Each Sui release provides a set of binaries for several operating systems. You
+  can download these binaries from GitHub and use them to install Sui.
 ---
 
 <ImportContent source="info-easy-install" mode="snippet" />
@@ -81,16 +113,20 @@ Each Sui release provides a set of binaries for several operating systems. You c
 You can download the Sui repo and build the binaries locally. The binaries are exported to the `target/release` directory.
     
 ```sh
-$ cargo build --profile release --bin sui
+$ cargo build --profile release --bin sui --features tracing
 ```
 
-Include other packages as needed.
+The `--features tracing` flag enables Move test coverage and debugger support. Include other packages as needed.
 
 <ImportContent source="lists/binaries-file-list" mode="snippet" />
 
 ## Upgrade from Cargo
 
-If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch):
+:::info
+Consider switching to [`suiup`](/getting-started/onboarding/sui-install) for upgrades. It handles version pinning and network-specific builds without long compile times.
+:::
+
+If you previously installed the Sui binaries with Cargo, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch). Always include `--features tracing`:
 
 ```sh
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
@@ -98,11 +134,21 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch te
 
 :::info
 
-The `tracing` feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you enable tracing.
+The `tracing` feature enables Move test coverage and debugger support in the Sui CLI. These features are not available unless you include `--features tracing`.
 
 :::
 
 ## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
 
 <ImportContent source="install-sui-node" mode="snippet" />
+
+## Verify the installation
+
+After installing, open a new terminal and run:
+
+```sh
+$ sui --version
+```
+
+If the installation succeeded, the command prints the installed Sui version.
 

@@ -223,7 +223,7 @@ impl ValidatorProposer {
 
         // Sort scores descending so we can include the best of the pending excluded
         // ancestors first until we reach the threshold.
-        score_and_pending_excluded_ancestors.sort_by(|a, b| b.0.cmp(&a.0));
+        score_and_pending_excluded_ancestors.sort_by_key(|a| std::cmp::Reverse(a.0));
 
         let mut ancestors_to_propose = included_ancestors;
         let mut excluded_ancestors = Vec::new();
@@ -518,6 +518,16 @@ impl Proposer for ValidatorProposer {
             .node_metrics
             .proposed_block_transactions
             .observe(transactions.len() as f64);
+        self.context
+            .metrics
+            .node_metrics
+            .proposed_block_transaction_bytes
+            .observe(
+                transactions
+                    .iter()
+                    .map(|transaction| transaction.data().len())
+                    .sum::<usize>() as f64,
+            );
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -533,8 +543,25 @@ impl Proposer for ValidatorProposer {
                     .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
                     .collect()
             };
-            self.transaction_vote_tracker
-                .get_own_votes(new_causal_history)
+            let transaction_votes = self
+                .transaction_vote_tracker
+                .get_own_votes(new_causal_history);
+            self.context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_blocks
+                .observe(transaction_votes.len() as f64);
+            self.context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_entries
+                .observe(
+                    transaction_votes
+                        .iter()
+                        .map(|votes| votes.rejects.len())
+                        .sum::<usize>() as f64,
+                );
+            transaction_votes
         } else {
             vec![]
         };

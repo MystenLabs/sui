@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module nonexistent::nonexistent {
-    public entry fun main() {}
+module nonexistent::nonexistent;
 
-    public fun nonexistent() {}
-}
+public fun main() {}
+
+public fun nonexistent() {}

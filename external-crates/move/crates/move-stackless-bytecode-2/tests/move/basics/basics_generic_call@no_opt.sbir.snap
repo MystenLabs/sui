@@ -1,0 +1,39 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: generic_call
+    Function: do_it (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Call 0x0::generic_call::phantom_ty<bool>()
+        reg_1 : u64 = Call 0x0::generic_call::id<u64>(reg_0 : u64)
+        Return(reg_1 : u64)
+
+
+    Function: do_more (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Call 0x0::generic_call::phantom_ty<vector<vector<u64>>>()
+        reg_1 : u64 = Call 0x0::generic_call::phantom_ty<0x0::generic_call::Wrapper<vector<bool>>>()
+        reg_2 : u64 = Add(reg_0 : u64, reg_1 : u64)
+        reg_3 : u64 = Call 0x0::generic_call::phantom_ty2<bool, 0x0::generic_call::Wrapper<u64>>()
+        reg_4 : u64 = Add(reg_2 : u64, reg_3 : u64)
+        reg_5 : u64 = Call 0x0::generic_call::phantom_ty<0x0::generic_call::Either<u64, address>>()
+        reg_6 : u64 = Add(reg_4 : u64, reg_5 : u64)
+        Return(reg_6 : u64)
+
+
+    Function: id (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : T0 = Move(lcl_0)
+        Return(reg_0 : T0)
+
+
+    Function: phantom_ty (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(42u64)
+        Return(reg_0 : u64)
+
+
+    Function: phantom_ty2 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(43u64)
+        Return(reg_0 : u64)

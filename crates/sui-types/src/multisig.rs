@@ -130,7 +130,7 @@ impl AuthenticatorTrait for MultiSig {
             .into());
         }
 
-        if !self.get_zklogin_sigs()?.is_empty() && !verify_params.accept_zklogin_in_multisig {
+        if self.has_zklogin_sigs() && !verify_params.accept_zklogin_in_multisig {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "zkLogin sig not supported inside multisig".to_string(),
             }
@@ -442,6 +442,12 @@ impl MultiSig {
         self.sigs
             .iter()
             .any(|s| matches!(s, CompressedSignature::Passkey(_)))
+    }
+
+    pub fn has_zklogin_sigs(&self) -> bool {
+        self.sigs
+            .iter()
+            .any(|s| matches!(s, CompressedSignature::ZkLogin(_)))
     }
 }
 

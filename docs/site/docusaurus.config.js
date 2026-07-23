@@ -11,6 +11,7 @@ const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
+const graphqlFrontmatterPlugin = require("./src/plugins/graphql-frontmatter");
 
 const lightCodeTheme = require("prism-react-renderer").themes.github;
 const darkCodeTheme = require("prism-react-renderer").themes.nightOwl;
@@ -241,6 +242,12 @@ const config = {
                         "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
+                    {
+                      loader: path.resolve(
+                        __dirname,
+                        "./src/shared/plugins/inject-code/includeSectionLoader.js",
+                      ),
+                    },
                   ],
                 },
               ],
@@ -319,6 +326,7 @@ const config = {
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
+            graphqlFrontmatterPlugin,
             [remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }],
           ],
           rehypePlugins: [katex],
@@ -380,14 +388,6 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: "json_rpc_deprecation",
-        content:
-          'JSON-RPC public endpoints shutting down: Testnet week of July 6, Mainnet week of July 20. <a href="/develop/accessing-data/json-rpc-migration">Migrate now</a>.',
-        backgroundColor: '#FFF3CD',
-        textColor: '#664D03',
-        isCloseable: true,
-      },
       image: "img/sui-doc-og.png",
       mermaid: {
         theme: {
@@ -480,8 +480,7 @@ const config = {
               { type: "doc", docId: "onchain-finance/examples-patterns/index", label: "Example Asset Patterns" },
               { type: "doc", docId: "onchain-finance/closed-loop-token/index", label: "Closed Loop Token" },
               { type: "doc", docId: "onchain-finance/pas/index", label: "Permissioned Asset Standard" },
-              { type: "doc", docId: "onchain-finance/deepbookv3/deepbook", label: "DeepBookV3" },
-              { type: "doc", docId: "onchain-finance/deepbook-margin/deepbook-margin", label: "DeepBook Margin" },
+              { type: "doc", docId: "onchain-finance/deepbook/index", label: "DeepBook" },
               { type: "doc", docId: "onchain-finance/kiosk/index", label: "Kiosk" },
               { type: "doc", docId: "onchain-finance/payment-kit", label: "Payment Kit" },
             ],

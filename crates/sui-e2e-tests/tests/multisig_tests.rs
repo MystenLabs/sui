@@ -297,7 +297,7 @@ impl UserValidationMethod for MyUserValidationMethod {
 #[sim_test]
 async fn test_upgraded_multisig_feature_deny() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_upgraded_multisig_for_testing(false);
+        config.set_upgraded_multisig_supported_for_testing(false);
         config
     });
 
@@ -314,7 +314,7 @@ async fn test_upgraded_multisig_feature_deny() {
 #[sim_test]
 async fn test_upgraded_multisig_feature_allow() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_upgraded_multisig_for_testing(true);
+        config.set_upgraded_multisig_supported_for_testing(true);
         config
     });
 

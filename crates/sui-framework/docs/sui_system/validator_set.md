@@ -879,8 +879,8 @@ return (min, low, very low voting power) thresholds
 <pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_voting_power_thresholds">get_voting_power_thresholds</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &TxContext): (u64, u64, u64) {
     <b>let</b> start_epoch = {
         <b>let</b> key = <a href="../sui_system/validator_set.md#sui_system_validator_set_VotingPowerAdmissionStartEpochKey">VotingPowerAdmissionStartEpochKey</a>();
-        <b>if</b> (self.extra_fields.contains(key)) self.extra_fields[key]
-        <b>else</b> ctx.epoch() + 1 // will give us the phase 1 values
+        <b>if</b> (self.extra_fields.contains(key)) self.extra_fields[key] // will give us the phase 1 values
+        <b>else</b> ctx.epoch() + 1
     };
     // these numbers come from SIP-39: https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md
     <b>let</b> curr_epoch = ctx.epoch();

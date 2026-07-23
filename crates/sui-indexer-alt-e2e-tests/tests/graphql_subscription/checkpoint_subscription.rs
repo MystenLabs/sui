@@ -8,7 +8,7 @@
 
 use async_graphql::connection::CursorType;
 use serde_json::json;
-use sui_indexer_alt_graphql::CCheckpoint;
+use sui_indexer_alt_graphql::CheckpointToken;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
@@ -50,7 +50,7 @@ async fn test_subscription_cursor() {
         let edge = &item["data"]["checkpoints"];
         let cursor = edge["cursor"].as_str().unwrap();
         let seq = edge["node"]["sequenceNumber"].as_u64().unwrap();
-        assert_eq!(cursor, CCheckpoint::new(seq).encode_cursor());
+        assert_eq!(cursor, CheckpointToken::cursor(seq).encode_cursor());
     }
 }
 
@@ -480,7 +480,7 @@ async fn test_subscription_resume_with_after_cursor() {
     let cluster = SubscriptionTestCluster::new().await;
 
     let resume_seq = cluster.validator_checkpoint_tip();
-    let cursor = CCheckpoint::new(resume_seq).encode_cursor();
+    let cursor = CheckpointToken::cursor(resume_seq).encode_cursor();
     let query = format!(
         r#"subscription {{ checkpoints(after: "{cursor}") {{ node {{ sequenceNumber }} }} }}"#,
     );
@@ -546,7 +546,7 @@ async fn test_subscription_resume_with_both_args_uses_max() {
     assert_eq!(higher, lower + 1);
 
     // Resume must pick the higher of `after` (lower) and `afterCheckpoint` (higher).
-    let cursor = CCheckpoint::new(lower).encode_cursor();
+    let cursor = CheckpointToken::cursor(lower).encode_cursor();
     let query = format!(
         r#"subscription {{ checkpoints(after: "{cursor}", afterCheckpoint: {higher}) {{ node {{ sequenceNumber }} }} }}"#,
     );

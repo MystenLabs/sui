@@ -1,7 +1,47 @@
 ---
 title: Troubleshooting Common Errors
-description: Find solutions to common issues with addresses, transactions, and Move packages.
-keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting, RPC errors, SDK errors, MoveAbort, gas coins ]
+description: >-
+  Find solutions to common issues with addresses, transactions, and Move
+  packages.
+keywords:
+  - address errors
+  - package errors
+  - system errors
+  - transaction errors
+  - troubleshooting
+  - RPC errors
+  - SDK errors
+  - MoveAbort
+  - gas coins
+goal:
+  description: >-
+    Reader can identify common Sui errors by their message and apply the
+    documented fix
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - pattern: Solution|Fix|Cause
+      min: 2
+      label: Has problem-solution pairs
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 2
+      label: Has code examples showing fixes
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Troubleshooting Common Errors in Sui?
+  - How do I address errors?
+  - How does troubleshooting common errors work on Sui?
+answer: >-
+  Find solutions to common issues with addresses, transactions, and Move
+  packages.
 ---
 
 <AgentPrompt

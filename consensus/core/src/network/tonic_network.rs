@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Weak},
     time::{Duration, Instant},
 };
 
@@ -15,13 +15,15 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use fastcrypto::{encoding::Encoding, traits::ToFromBytes};
 use futures::{Stream, StreamExt as _, stream};
-use mysten_network::{
-    Multiaddr,
-    callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
-    multiaddr::Protocol,
-};
+use mysten_network::{Multiaddr, multiaddr::Protocol};
 use parking_lot::RwLock;
-use sui_http::ServerHandle;
+use sui_http::{
+    ServerHandle,
+    middleware::{
+        callback::{CallbackLayer, MakeCallbackHandler, RequestBody, ResponseHandler},
+        grpc_timeout::GrpcTimeout,
+    },
+};
 use sui_tls::AllowPublicKeys;
 use tokio_stream::{Iter, iter};
 use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
@@ -372,13 +374,30 @@ impl ValidatorNetworkClient for TonicValidatorClient {
 }
 
 // Tonic channel wrapped with layers.
-pub(crate) type Channel = mysten_network::callback::Callback<
-    tower_http::trace::Trace<
-        tonic_rustls::Channel,
-        tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+pub(crate) type Channel = sui_http::middleware::callback::Callback<
+    tower::util::MapRequest<
+        tower_http::trace::Trace<
+            tonic_rustls::Channel,
+            tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
+        >,
+        ReboxRequestFn,
     >,
     MetricsCallbackMaker,
 >;
+
+/// The callback middleware hands the wrapped service a request body of type
+/// `RequestBody`, but `tonic_rustls::Channel` is monomorphic on
+/// `tonic::body::Body`, so the body must be reboxed before it reaches the
+/// channel. A fn pointer (rather than a closure) keeps `Channel` nameable as a
+/// type alias.
+pub(crate) type ReboxRequestFn =
+    fn(http::Request<RequestBody<tonic::body::Body, ()>>) -> http::Request<tonic::body::Body>;
+
+pub(crate) fn rebox_request(
+    request: http::Request<RequestBody<tonic::body::Body, ()>>,
+) -> http::Request<tonic::body::Body> {
+    request.map(tonic::body::Body::new)
+}
 
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
@@ -504,6 +523,7 @@ impl ChannelPool {
                 self.context.metrics.network_metrics.outbound.clone(),
                 self.context.parameters.tonic.excessive_message_size,
             )))
+            .map_request(rebox_request as ReboxRequestFn)
             .layer(
                 TraceLayer::new_for_grpc()
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
@@ -521,12 +541,26 @@ impl ChannelPool {
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: ValidatorNetworkService> {
     context: Arc<Context>,
-    service: Arc<S>,
+    // TonicServiceProxy is cloned into per-connection server tasks, which complete on the
+    // network's schedule during graceful shutdown, and can briefly outlive the node if it is
+    // dropped without stop(). Hold the service weakly so lingering connections cannot extend
+    // the life of the authority service and its state; requests racing shutdown fail with
+    // `unavailable` instead.
+    service: Weak<S>,
 }
 
 impl<S: ValidatorNetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self { context, service }
+        Self {
+            context,
+            service: Arc::downgrade(&service),
+        }
+    }
+
+    fn service(&self) -> Result<Arc<S>, tonic::Status> {
+        self.service
+            .upgrade()
+            .ok_or_else(|| tonic::Status::unavailable("Consensus authority is shutting down"))
     }
 }
 
@@ -548,7 +582,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             block,
             excluded_ancestors: vec![],
         };
-        self.service
+        self.service()?
             .handle_send_block(peer_index, block)
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
@@ -584,7 +618,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             }
         };
         let stream = self
-            .service
+            .service()?
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
@@ -628,7 +662,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let fetch_after_rounds = inner.fetch_after_rounds;
         let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_blocks(
                 peer_index,
                 block_refs,
@@ -660,7 +694,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         };
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
-            .service
+            .service()?
             .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -710,7 +744,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         }
 
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_latest_blocks(peer_index, authorities)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -736,7 +770,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let (highest_received, highest_accepted) = self
-            .service
+            .service()?
             .handle_get_latest_rounds(peer_index)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -920,9 +954,7 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
-            });
+            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
         let consensus_service_server = ConsensusServiceServer::new(service)
             .max_encoding_message_size(config.message_size_limit)
@@ -1051,9 +1083,7 @@ impl TonicManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
             )
-            .layer_fn(|service| {
-                mysten_network::grpc_timeout::GrpcTimeout::new(service, DEFAULT_GRPC_SERVER_TIMEOUT)
-            });
+            .layer_fn(|service| GrpcTimeout::new(service, Some(DEFAULT_GRPC_SERVER_TIMEOUT)));
 
         let observer_service = tonic::service::Routes::new(observer_service_server)
             .into_axum_router()
@@ -1301,10 +1331,14 @@ impl SizedResponse for http::response::Parts {
 }
 
 impl MakeCallbackHandler for MetricsCallbackMaker {
-    type Handler = MetricsResponseCallback;
+    type RequestHandler = ();
+    type ResponseHandler = MetricsResponseCallback;
 
-    fn make_handler(&self, request: &http::request::Parts) -> Self::Handler {
-        self.handle_request(request)
+    fn make_handler(
+        &self,
+        request: &http::request::Parts,
+    ) -> (Self::RequestHandler, Self::ResponseHandler) {
+        ((), self.handle_request(request))
     }
 }
 
@@ -1313,7 +1347,10 @@ impl ResponseHandler for MetricsResponseCallback {
         MetricsResponseCallback::on_response(self, response)
     }
 
-    fn on_error<E>(&mut self, err: &E) {
+    fn on_service_error<E>(&mut self, err: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
         MetricsResponseCallback::on_error(self, err)
     }
 }

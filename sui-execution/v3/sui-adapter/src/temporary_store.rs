@@ -32,7 +32,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
+    storage::{BackingPackageStore, ParentSync, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -232,6 +232,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws,
+            retry_request: None,
         }
     }
 
@@ -1110,7 +1111,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

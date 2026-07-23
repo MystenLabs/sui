@@ -79,9 +79,11 @@ sui-sql-macro.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
+bytes.workspace = true
 insta.workspace = true
 reqwest.workspace = true
 regex.workspace = true
+sui-indexer-alt-reader = { workspace = true, features = ["testing"] }
 sui-package-resolver = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber.workspace = true

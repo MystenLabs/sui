@@ -31,7 +31,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, TransactionIndex};
 use futures::{StreamExt as _, stream::FuturesOrdered};
 use itertools::Itertools as _;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -63,6 +63,7 @@ use crate::{
     peers_pool::PeersPool,
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
+    task::{join_and_propagate_panic, shutdown_join_set},
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -76,11 +77,7 @@ impl CommitSyncerHandle {
     pub(crate) async fn stop(self) {
         let _ = self.tx_shutdown.send(());
         // Do not abort schedule task, which waits for fetches to shut down.
-        if let Err(e) = self.schedule_task.await
-            && e.is_panic()
-        {
-            std::panic::resume_unwind(e.into_panic());
-        }
+        join_and_propagate_panic(self.schedule_task).await;
     }
 }
 
@@ -177,7 +174,7 @@ where
                         }
                         warn!("Fetch cancelled. CommitSyncer shutting down: {}", e);
                         // If any fetch is cancelled or panicked, try to shutdown and exit the loop.
-                        self.inflight_fetches.shutdown().await;
+                        shutdown_join_set(&mut self.inflight_fetches).await;
                         return;
                     }
                     let (target_end, commits) = result.unwrap();
@@ -186,7 +183,7 @@ where
                 _ = &mut rx_shutdown => {
                     // Shutdown requested.
                     info!("CommitSyncer shutting down ...");
-                    self.inflight_fetches.shutdown().await;
+                    shutdown_join_set(&mut self.inflight_fetches).await;
                     return;
                 }
             }
@@ -573,16 +570,36 @@ where
         // 2. Verify the response contains blocks that can certify the last returned commit,
         // and the returned commits are chained by digests, so earlier commits are certified
         // as well.
-        let (commits, vote_blocks) = Handle::current()
+        let (commits, commit_certifying_blocks_and_votes) = Handle::current()
             .spawn_blocking({
-                let inner = inner.clone();
+                let context = inner.context.clone();
+                let block_verifier = inner.block_verifier.clone();
                 let peer = target_peer.clone();
                 move || {
-                    inner.verify_commits(peer, commit_range, serialized_commits, serialized_blocks)
+                    Inner::<VC, OC>::verify_commits(
+                        &context,
+                        block_verifier.as_ref(),
+                        peer,
+                        commit_range,
+                        serialized_commits,
+                        serialized_blocks,
+                    )
                 }
             })
             .await
             .expect("Spawn blocking should not fail")?;
+
+        // Only the vote tracker needs the reject votes, so move them into it without cloning.
+        // Cheap clones of the blocks are enough for the rest of the fetch handling.
+        let commit_certifying_blocks: Vec<_> = commit_certifying_blocks_and_votes
+            .iter()
+            .map(|(block, _)| block.clone())
+            .collect();
+        if inner.context.protocol_config.transaction_voting_enabled() {
+            inner
+                .transaction_vote_tracker
+                .add_voted_blocks(commit_certifying_blocks_and_votes);
+        }
 
         // 3. Fetch blocks referenced by the commits, from the same peer where commits are fetched.
         let mut block_refs: Vec<_> = commits.iter().flat_map(|c| c.blocks()).cloned().collect();
@@ -633,8 +650,8 @@ where
                     let mut blocks = Vec::new();
                     for ((requested_block_ref, signed_block), serialized) in request_block_refs
                         .iter()
-                        .zip_debug_eq(signed_blocks.into_iter())
-                        .zip_debug_eq(serialized_blocks.into_iter())
+                        .zip_debug_eq(signed_blocks)
+                        .zip_debug_eq(serialized_blocks)
                     {
                         let signed_block_digest = VerifiedBlock::compute_digest(&serialized);
                         let received_block_ref = BlockRef::new(
@@ -664,7 +681,10 @@ where
         }
 
         // 8. Check if the block timestamps are lower than current time - this is for metrics only.
-        for block in fetched_blocks.values().chain(vote_blocks.iter()) {
+        for block in fetched_blocks
+            .values()
+            .chain(commit_certifying_blocks.iter())
+        {
             let now_ms = inner.context.clock.timestamp_utc_ms();
             let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
             if forward_drift == 0 {
@@ -718,7 +738,7 @@ where
                 inner.commit_vote_monitor.observe_block(block);
             }
         }
-        for block in &vote_blocks {
+        for block in &commit_certifying_blocks {
             inner.commit_vote_monitor.observe_block(block);
         }
 
@@ -736,7 +756,7 @@ where
                 }
             }
             // Update from vote blocks
-            for block in &vote_blocks {
+            for block in &commit_certifying_blocks {
                 tracker.update_from_verified_block(&ExtendedBlock {
                     block: block.clone(),
                     excluded_ancestors: vec![],
@@ -744,7 +764,10 @@ where
             }
         }
 
-        Ok(CertifiedCommits::new(certified_commits, vote_blocks))
+        Ok(CertifiedCommits::new(
+            certified_commits,
+            commit_certifying_blocks,
+        ))
     }
 
     fn unhandled_commits_threshold(&self) -> CommitIndex {
@@ -792,15 +815,22 @@ struct Inner<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> {
 }
 
 impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
-    /// Verifies the commits and also certifies them using the provided vote blocks for the last commit. The
-    /// method returns the trusted commits and the votes as verified blocks.
+    /// Verifies the commits and certifies them using the provided vote blocks for the last commit.
+    /// Returns, in order:
+    /// - the verified commit chain as trusted commits;
+    /// - the verified blocks that certify the last commit, paired with locally rejected
+    ///   transaction indices for transaction vote tracking.
     fn verify_commits(
-        &self,
+        context: &Context,
+        block_verifier: &dyn BlockVerifier,
         peer: PeerId,
         commit_range: CommitRange,
         serialized_commits: Vec<Bytes>,
         serialized_vote_blocks: Vec<Bytes>,
-    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+    ) -> ConsensusResult<(
+        Vec<TrustedCommit>,
+        Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
+    )> {
         // Parse and verify commits.
         let mut commits = Vec::new();
         for serialized in &serialized_commits {
@@ -843,28 +873,24 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
         // Parse and verify blocks. Then accumulate votes on the end commit.
         let end_commit_ref = CommitRef::new(end_commit.index(), *end_commit_digest);
         let mut stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-        let mut vote_blocks = Vec::new();
+        let mut commit_certifying_blocks = Vec::new();
         for serialized in serialized_vote_blocks {
             let block: SignedBlock =
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
             // Only block signatures need to be verified, to verify commit votes.
             // But the blocks will be sent to Core, so they need to be fully verified.
             let (block, reject_transaction_votes) =
-                self.block_verifier.verify_and_vote(block, serialized)?;
-            if self.context.protocol_config.transaction_voting_enabled() {
-                self.transaction_vote_tracker
-                    .add_voted_blocks(vec![(block.clone(), reject_transaction_votes)]);
-            }
+                block_verifier.verify_and_vote(block, serialized)?;
             for vote in block.commit_votes() {
                 if *vote == end_commit_ref {
-                    stake_aggregator.add(block.author(), &self.context.committee);
+                    stake_aggregator.add(block.author(), &context.committee);
                 }
             }
-            vote_blocks.push(block);
+            commit_certifying_blocks.push((block, reject_transaction_votes));
         }
 
         // Check if the end commit has enough votes.
-        if !stake_aggregator.reached_threshold(&self.context.committee) {
+        if !stake_aggregator.reached_threshold(&context.committee) {
             return Err(ConsensusError::NotEnoughCommitVotes {
                 stake: stake_aggregator.stake(),
                 peer,
@@ -877,7 +903,7 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
             .zip_debug_eq(serialized_commits)
             .map(|((_d, c), s)| TrustedCommit::new_trusted(c, s))
             .collect();
-        Ok((trusted_commits, vote_blocks))
+        Ok((trusted_commits, commit_certifying_blocks))
     }
 }
 

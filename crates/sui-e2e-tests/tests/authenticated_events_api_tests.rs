@@ -15,15 +15,15 @@ use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2::{GetCheckpointRequest, GetEpochRequest};
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient as V2AlphaLedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::{
+    AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
+    GetCheckpointRequest, GetEpochRequest, ListEventsRequest, ListTransactionsRequest,
+    QueryEndReason, QueryOptions, TransactionFilter, TransactionLiteral, TransactionTerm,
+};
 use sui_rpc::proto::sui::rpc::v2alpha::proof_service_client::ProofServiceClient;
 use sui_rpc::proto::sui::rpc::v2alpha::{
-    AffectedObjectFilter, EventFilter, EventLiteral, EventStreamHeadFilter, EventTerm,
-    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse, ListEventsRequest,
-    ListTransactionsRequest, QueryEndReason, QueryOptions, TransactionFilter, TransactionLiteral,
-    TransactionTerm, get_checkpoint_object_proof_response, list_events_response,
-    list_transactions_response,
+    GetCheckpointObjectProofRequest, GetCheckpointObjectProofResponse,
+    get_checkpoint_object_proof_response,
 };
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk_types::ValidatorCommittee;
@@ -39,7 +39,7 @@ use sui_types::{MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRA
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 /// Test cluster config that enables ledger history indexing, which is what
-/// backs the v2alpha ListEvents and ProofService endpoints.
+/// backs the ListEvents and ProofService endpoints.
 fn create_rpc_config_with_ledger_history() -> sui_config::RpcConfig {
     sui_config::RpcConfig {
         enable_indexing: Some(true),
@@ -156,7 +156,7 @@ where
     for attempt in 0..MAX_RETRIES {
         match tokio::time::timeout(CONNECT_TIMEOUT, connect_fn()).await {
             Ok(Ok(client)) => return client,
-            Ok(Err(e)) if attempt + 1 < MAX_RETRIES => {
+            Ok(Err(_e)) if attempt + 1 < MAX_RETRIES => {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
             Ok(Err(e)) => panic!("failed to connect after {MAX_RETRIES} attempts: {e}"),
@@ -191,7 +191,7 @@ fn build_affected_object_filter(object_id: ObjectID) -> TransactionFilter {
 /// per-stream settlement boundaries. Returns ascending
 /// `(checkpoint, transaction_offset)` pairs.
 async fn fetch_settlements_for_range(
-    client: &mut V2AlphaLedgerServiceClient<tonic::transport::Channel>,
+    client: &mut LedgerServiceClient<tonic::transport::Channel>,
     stream_head_object_id: ObjectID,
     start_checkpoint: u64,
     end_checkpoint_exclusive: u64,
@@ -223,36 +223,20 @@ async fn fetch_settlements_for_range(
 
         while let Some(frame) = response.next().await {
             let frame = frame?;
-            match frame.response {
-                Some(list_transactions_response::Response::Item(item)) => {
-                    if let Some(c) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                        last_cursor = Some(c.to_vec());
-                    }
-                    let checkpoint = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.checkpoint)
-                        .ok_or_else(|| {
-                            tonic::Status::internal("settlement tx missing checkpoint")
-                        })?;
-                    let tx_offset = item
-                        .transaction
-                        .as_ref()
-                        .and_then(|tx| tx.transaction_index)
-                        .ok_or_else(|| {
-                            tonic::Status::internal("settlement tx missing transaction_index")
-                        })?;
-                    all.push((checkpoint, tx_offset));
-                }
-                Some(list_transactions_response::Response::Watermark(w)) => {
-                    if let Some(c) = w.cursor.as_ref() {
-                        last_cursor = Some(c.to_vec());
-                    }
-                }
-                Some(list_transactions_response::Response::End(end)) => {
-                    end_reason = Some(end.reason());
-                }
-                Some(_) | None => {}
+            if let Some(c) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+                last_cursor = Some(c.to_vec());
+            }
+            if let Some(tx) = frame.transaction {
+                let checkpoint = tx
+                    .checkpoint
+                    .ok_or_else(|| tonic::Status::internal("settlement tx missing checkpoint"))?;
+                let tx_offset = tx.transaction_index.ok_or_else(|| {
+                    tonic::Status::internal("settlement tx missing transaction_index")
+                })?;
+                all.push((checkpoint, tx_offset));
+            }
+            if let Some(end) = frame.end {
+                end_reason = Some(end.reason());
             }
         }
 
@@ -330,9 +314,9 @@ fn bucket_events_by_settlement(
 }
 
 /// Drive a single `ListEvents` server-streaming request, accumulating every
-/// emitted `EventItem` into `AuthenticatedEvent`s.
+/// emitted event payload into `AuthenticatedEvent`s.
 async fn fetch_list_events_page(
-    client: &mut V2AlphaLedgerServiceClient<tonic::transport::Channel>,
+    client: &mut LedgerServiceClient<tonic::transport::Channel>,
     request: ListEventsRequest,
 ) -> Result<(Vec<AuthenticatedEvent>, Option<Vec<u8>>), tonic::Status> {
     use futures::StreamExt;
@@ -343,22 +327,13 @@ async fn fetch_list_events_page(
 
     while let Some(frame) = stream.next().await {
         let frame = frame?;
-        match frame.response {
-            Some(list_events_response::Response::Item(item)) => {
-                if let Some(cursor) = item.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
-                    last_cursor = Some(cursor.to_vec());
-                }
-                let event = AuthenticatedEvent::try_from(item).map_err(|e| {
-                    tonic::Status::internal(format!("failed to convert event: {e}"))
-                })?;
-                events.push(event);
-            }
-            Some(list_events_response::Response::Watermark(w)) => {
-                if let Some(cursor) = w.cursor.as_ref() {
-                    last_cursor = Some(cursor.to_vec());
-                }
-            }
-            Some(list_events_response::Response::End(_)) | Some(_) | None => {}
+        if let Some(cursor) = frame.watermark.as_ref().and_then(|w| w.cursor.as_ref()) {
+            last_cursor = Some(cursor.to_vec());
+        }
+        if let Some(event) = frame.event {
+            let event = AuthenticatedEvent::try_from(event)
+                .map_err(|e| tonic::Status::internal(format!("failed to convert event: {e}")))?;
+            events.push(event);
         }
     }
 
@@ -366,7 +341,7 @@ async fn fetch_list_events_page(
 }
 
 /// Read mask covering everything the in-tree `AuthenticatedEvent` converter
-/// needs from a v2alpha `EventItem`: the event body plus its ledger-position
+/// needs from a list event payload: the event body plus its ledger-position
 /// fields (`checkpoint`, `transaction_index`, `event_index`), which the list
 /// endpoint only populates when requested.
 fn full_event_read_mask() -> FieldMask {
@@ -390,8 +365,7 @@ async fn query_authenticated_events(
     start_checkpoint: u64,
     page_size: Option<u32>,
 ) -> Result<Vec<AuthenticatedEvent>, tonic::Status> {
-    let mut client =
-        connect_with_retry(|| V2AlphaLedgerServiceClient::connect(rpc_url.to_owned())).await;
+    let mut client = connect_with_retry(|| LedgerServiceClient::connect(rpc_url.to_owned())).await;
 
     let mut options = QueryOptions::default();
     if let Some(size) = page_size {
@@ -416,8 +390,7 @@ async fn list_authenticated_events(
     start_checkpoint: u64,
     page_size: Option<u32>,
 ) -> Vec<AuthenticatedEvent> {
-    let mut client =
-        connect_with_retry(|| V2AlphaLedgerServiceClient::connect(rpc_url.to_owned())).await;
+    let mut client = connect_with_retry(|| LedgerServiceClient::connect(rpc_url.to_owned())).await;
 
     let filter = build_event_stream_head_filter(stream_id);
     let mut all_events = Vec::new();
@@ -524,11 +497,11 @@ async fn verify_events_with_stream_head(
     // the same `checkpoint_seq`. We need the corresponding settlement
     // boundaries to reconstruct each fold separately — fetch them via
     // `ListTransactions` filtered to the stream's `EventStreamHead`.
-    let mut ledger_v2alpha = V2AlphaLedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+    let mut ledger_service = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
-        .expect("connect v2alpha ledger");
+        .expect("connect ledger service");
     let settlements = fetch_settlements_for_range(
-        &mut ledger_v2alpha,
+        &mut ledger_service,
         event_stream_head_id,
         first_event_checkpoint,
         last_event_checkpoint.saturating_add(1),
@@ -1236,7 +1209,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
             cfg.enable_authenticated_event_streams_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg.set_min_checkpoint_interval_ms_for_testing(1000);
-            cfg.disable_randomize_checkpoint_tx_limit_for_testing();
+            cfg.set_randomize_checkpoint_tx_limit_in_tests_for_testing(false);
             cfg
         });
 
@@ -1385,7 +1358,7 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
     );
 
     // Events must be ordered (checkpoint asc, transaction_offset asc,
-    // event_index asc) — this is what the v2alpha contract guarantees and
+    // event_index asc) — this is what the List API contract guarantees and
     // what downstream MMR consumers depend on.
     for window in all_events.windows(2) {
         let prev = (

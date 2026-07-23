@@ -20,6 +20,7 @@ feature_flags:
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
   zklogin_auth: true
+  zklogin_circuit_mode: 1
   consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
@@ -131,6 +132,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  enable_init_on_upgrade: true
   include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
@@ -296,6 +298,14 @@ dynamic_field_has_child_object_cost_base: 52
 dynamic_field_has_child_object_with_ty_cost_base: 52
 dynamic_field_has_child_object_with_ty_type_cost_per_byte: 2
 dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: 2
+scratch_add_cost_base: 13
+scratch_read_cost_base: 13
+scratch_read_value_cost: 1
+scratch_remove_cost_base: 13
+scratch_exists_cost_base: 13
+scratch_exists_with_type_cost_base: 13
+scratch_exists_with_type_type_cost: 1
+max_scratch_pad_size: 16384
 event_emit_cost_base: 52
 event_emit_value_size_derivation_cost_per_byte: 2
 event_emit_tag_size_derivation_cost_per_byte: 5
@@ -483,6 +493,7 @@ consensus_max_num_transactions_in_block: 512
 consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
+epoch_close_deadline_ms: 120000
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
 allowed_txn_cost_overage_burst_per_object_in_commit: 370000000
 min_checkpoint_interval_ms: 200

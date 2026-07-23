@@ -1,0 +1,84 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+task 0, lines 1-5:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::a'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::a,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 1, lines 7-11:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::b'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::b,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 2, lines 13-17:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::c'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::c,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 3, lines 19-23:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::d'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::d,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 4, lines 25-29:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::e'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::e,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 5, lines 31-35:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::f'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::f,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 6, lines 37-41:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::g'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::g,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}
+
+task 7, lines 43-47:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::h'. Got VMError: {
+    major_status: MALFORMED_CONSTANT_DATA,
+    sub_status: None,
+    location: 0x42::h,
+    indices: [(ConstantPool, 0)],
+    offsets: [],
+}

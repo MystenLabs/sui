@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 sui-macros.workspace = true
 sui-config.workspace = true

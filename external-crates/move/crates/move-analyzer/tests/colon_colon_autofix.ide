@@ -24,6 +24,38 @@
           "err_col": 29,
           "err_msg": "Could not resolve the name 'another_dep'"
         }
+      ],
+      "function_import_convention.move": [
+        // functions are fixed by importing the module and qualifying the call
+        {
+          "err_line": 5,
+          "err_col": 9,
+          "err_msg": "Unbound function 'create_struct' in current scope"
+        },
+        // types are fixed by importing the type directly
+        {
+          "err_line": 9,
+          "err_col": 28,
+          "err_msg": "Unbound type 'PubStruct' in current scope"
+        },
+        // existing module aliases are used to qualify function calls
+        {
+          "err_line": 16,
+          "err_col": 9,
+          "err_msg": "Unbound function 'create_struct' in current scope"
+        },
+        // conflicting module names prevent module-import quick fixes
+        {
+          "err_line": 23,
+          "err_col": 9,
+          "err_msg": "Unbound function 'create_struct' in current scope"
+        },
+        // member aliases taking the module's name also prevent module-import quick fixes
+        {
+          "err_line": 31,
+          "err_col": 9,
+          "err_msg": "Unbound function 'create_upper' in current scope"
+        }
       ]
     }
   }

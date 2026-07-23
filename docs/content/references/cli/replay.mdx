@@ -1,6 +1,37 @@
 ---
 title: Sui Replay CLI
 description: Use the Sui CLI to replay a given transaction to view its effects.
+keywords:
+  - sui cli
+  - replay
+  - transaction effects
+  - debugging
+  - execution traces
+goal:
+  description: 'Reader can look up replay cli command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Replay CLI in Sui?
+  - What are the available sui replay cli commands?
+  - What flags does sui replay cli support?
+answer: >-
+  Replay is a tool that allows you to replay a given transaction to check and
+  analyze the transaction effects. The replay tool locally executes the
+  transaction and compares its effects to the effects that exist on chain.
 ---
 
 Replay is a tool that allows you to replay a given transaction to check and analyze the transaction effects. The replay tool locally executes the transaction and compares its effects to the effects that exist on chain.

@@ -90,6 +90,16 @@ pub trait ReadStore: ObjectStore {
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint>;
 
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        sequence_numbers
+            .iter()
+            .map(|sequence_number| self.get_checkpoint_by_sequence_number(*sequence_number))
+            .collect()
+    }
+
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -144,6 +154,16 @@ pub trait ReadStore: ObjectStore {
         &self,
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>>;
+
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        digests
+            .iter()
+            .map(|digest| self.get_unchanged_loaded_runtime_objects(digest))
+            .collect()
+    }
 
     fn get_transaction_checkpoint(
         &self,
@@ -305,6 +325,13 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).get_checkpoint_by_sequence_number(sequence_number)
     }
 
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        (*self).multi_get_checkpoint_by_sequence_number(sequence_numbers)
+    }
+
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -357,6 +384,13 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
         (*self).get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        (*self).multi_get_unchanged_loaded_runtime_objects(digests)
     }
 
     fn get_transaction_checkpoint(
@@ -423,6 +457,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).get_checkpoint_by_sequence_number(sequence_number)
     }
 
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        (**self).multi_get_checkpoint_by_sequence_number(sequence_numbers)
+    }
+
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -475,6 +516,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>> {
         (**self).get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        (**self).multi_get_unchanged_loaded_runtime_objects(digests)
     }
 
     fn get_transaction_checkpoint(
@@ -541,6 +589,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         (**self).get_checkpoint_by_sequence_number(sequence_number)
     }
 
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        (**self).multi_get_checkpoint_by_sequence_number(sequence_numbers)
+    }
+
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -595,6 +650,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         (**self).get_unchanged_loaded_runtime_objects(digest)
     }
 
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        (**self).multi_get_unchanged_loaded_runtime_objects(digests)
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -624,7 +686,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
 pub trait RpcStateReader:
-    ObjectStore + ReadStore + super::ChildObjectResolver + Send + Sync
+    ObjectStore + ReadStore + super::RuntimeObjectResolver + Send + Sync
 {
     /// Lowest available checkpoint for which object data can be requested.
     ///
@@ -683,8 +745,17 @@ pub trait RpcStateReader:
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
-pub type LedgerBitmapBucketIterator<'a> =
-    Box<dyn Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>> + 'a>;
+/// Iterator over ledger bitmap buckets that can skip directly to a bucket.
+pub trait LedgerBitmapBucketIter:
+    Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>>
+{
+    /// Reposition so the next row is the first bucket at or past `bucket_id`
+    /// in the iterator's direction. Implementations never move backward.
+    fn seek_bucket(&mut self, bucket_id: u64);
+}
+
+/// Boxed seekable iterator over ledger bitmap buckets.
+pub type LedgerBitmapBucketIterator<'a> = Box<dyn LedgerBitmapBucketIter + 'a>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LedgerTxSeqDigest {

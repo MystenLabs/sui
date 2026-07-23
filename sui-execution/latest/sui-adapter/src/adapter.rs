@@ -27,14 +27,16 @@ mod checked {
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
-    use sui_move_natives::{NativesCostTable, object_runtime::ObjectRuntime};
+    use sui_move_natives::{
+        NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,
+    };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
         error::{ExecutionError, SuiError},
         execution_status::ExecutionErrorKind,
         metrics::ExecutionMetrics,
-        storage::ChildObjectResolver,
+        storage::RuntimeObjectResolver,
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
@@ -77,7 +79,7 @@ mod checked {
     }
 
     pub fn new_native_extensions<'r>(
-        child_resolver: &'r dyn ChildObjectResolver,
+        child_resolver: &'r dyn RuntimeObjectResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &'r ProtocolConfig,
@@ -100,6 +102,7 @@ mod checked {
             current_epoch_id,
         ));
         exts.add(NativesCostTable::from_protocol_config(protocol_config));
+        exts.add(ScratchRuntime::new(protocol_config));
         exts.add(TransactionContext::new(tx_context));
         drop(exts);
         Ok(extensions)

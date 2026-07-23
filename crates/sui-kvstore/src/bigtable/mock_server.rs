@@ -11,7 +11,8 @@
 //!   the column filters this crate builds (`None`, `CellsPerColumnLimitFilter(1)`,
 //!   `ColumnQualifierRegexFilter`, and `Chain`s of those plus an optional
 //!   `FamilyNameRegexFilter`), records each call for assertions, and can emit
-//!   rows in reverse request order. Row ranges and reverse scans are unsupported.
+//!   rows in reverse request order and ascending row-range scans.
+//!   Reverse scans are unsupported.
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
@@ -67,6 +68,7 @@ use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowSta
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::value_range::EndValue;
 use crate::bigtable::proto::bigtable::v2::value_range::StartValue;
+use crate::bigtable::proto::bigtable::v2::{RowRange, row_range};
 use crate::bigtable::proto::rpc::Status as RpcStatus;
 
 /// Expected call: which row keys should arrive, and which entry indices should fail.
@@ -79,7 +81,7 @@ pub struct ExpectedCall {
 }
 
 /// A single recorded `ReadRows` call: the resolved table name (suffix after
-/// `/tables/`) and the explicit row keys requested, in request order.
+/// `/tables/`) and the row keys selected by the request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadRowsCall {
     pub table: String,
@@ -452,6 +454,18 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<Option<HashSet<Vec<u8>>>,
     }
 }
 
+fn row_key_in_range(row_key: &Bytes, range: &RowRange) -> bool {
+    (match &range.start_key {
+        Some(row_range::StartKey::StartKeyClosed(start)) => row_key >= start,
+        Some(row_range::StartKey::StartKeyOpen(start)) => row_key > start,
+        None => true,
+    }) && match &range.end_key {
+        Some(row_range::EndKey::EndKeyClosed(end)) => row_key <= end,
+        Some(row_range::EndKey::EndKeyOpen(end)) => row_key < end,
+        None => true,
+    }
+}
+
 /// Evaluate a ValueRangeFilter against a raw cell value. Unbounded sides are treated
 /// as open-ended. Handles both closed and open range endpoints.
 fn value_in_range(value: &Bytes, vr: &crate::bigtable::proto::bigtable::v2::ValueRange) -> bool {
@@ -646,21 +660,31 @@ impl Bigtable for MockBigtableServer {
         };
         let Some(row_set) = req.rows else {
             return Err(Status::unimplemented(
-                "mock ReadRows requires explicit row_keys",
+                "mock ReadRows requires row_keys or row_ranges",
             ));
         };
-        if !row_set.row_ranges.is_empty() {
+        if !row_set.row_keys.is_empty() && !row_set.row_ranges.is_empty() {
             return Err(Status::unimplemented(
-                "mock ReadRows only supports explicit row_keys, not row_ranges",
+                "mock ReadRows does not support mixing row_keys and row_ranges",
             ));
         }
-        let limit = if req.rows_limit == 0 {
-            row_set.row_keys.len()
-        } else {
-            req.rows_limit as usize
-        };
 
-        let mut requested_keys: Vec<Bytes> = row_set.row_keys.into_iter().take(limit).collect();
+        let ranges = &row_set.row_ranges;
+        let mut requested_keys = row_set.row_keys;
+        if !ranges.is_empty() {
+            requested_keys = state
+                .rows
+                .keys()
+                .filter(|(t, key)| {
+                    t == &table && ranges.iter().any(|range| row_key_in_range(key, range))
+                })
+                .map(|(_, row_key)| row_key.clone())
+                .collect();
+            requested_keys.sort_unstable();
+        }
+        if req.rows_limit != 0 {
+            requested_keys.truncate(req.rows_limit as usize);
+        }
         state.read_rows_calls.push(ReadRowsCall {
             table: table.clone(),
             row_keys: requested_keys.clone(),

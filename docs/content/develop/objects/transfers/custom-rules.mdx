@@ -1,8 +1,52 @@
 ---
 title: Custom Object Transfer Rules
 sidebar_label: Custom Transfer Rules
-description: Custom transfer rules enable you to define a set of rules that must be met before Sui considers a transfer operation valid.
-keywords: [ custom transfer rules, transfer rules, store ability, key ability, transfer restrictions, public transfer, custom transfer function, object transfer, transfer conditions, locked objects, unlocked objects, transfer policy, object abilities ]
+description: >-
+  Custom transfer rules enable you to define a set of rules that must be met
+  before Sui considers a transfer operation valid.
+keywords:
+  - custom transfer rules
+  - transfer rules
+  - store ability
+  - key ability
+  - transfer restrictions
+  - public transfer
+  - custom transfer function
+  - object transfer
+  - transfer conditions
+  - locked objects
+  - unlocked objects
+  - transfer policy
+  - object abilities
+goal:
+  description: >-
+    Reader can define custom transfer rules that must be satisfied before Sui
+    considers a transfer valid
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Custom Object Transfer Rules in Sui?
+  - How does custom object transfer rules work on Sui?
+  - Why should I use custom object transfer rules?
+answer: >-
+  Custom transfer rules enable you to define a set of rules that must be met
+  before Sui considers a transfer operation valid.
 ---
 
 Every Sui [object](/develop/sui-architecture/object-model) must have the `key` ability. The `store` ability, on the other hand, is an optional ability you can add to Sui objects. Objects with the `store` ability are transferable by anyone using the [`transfer::public_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_transfer) function and can be [wrapped](/develop/objects/object-ownership/wrapped) in other objects.

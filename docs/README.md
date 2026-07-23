@@ -1,140 +1,263 @@
 # Sui Documentation
 
-This directory contains the assets required to build and update the [Sui documentation](https://docs.sui.io). The directory is split between `content` and `site`.
+This directory contains the source for [docs.sui.io](https://docs.sui.io). It is split between `content/` (documentation pages) and `site/` (Docusaurus configuration, plugins, and scripts).
 
-## For AI agents and LLMs
-
-If you are an AI agent, coding assistant, or LLM parsing this repository, start here.
-
-### `llms.txt`
-
-The Sui documentation build generates an `llms.txt` file at `https://docs.sui.io/llms.txt`. Use it as your entry point for understanding the documentation structure and locating specific topics. 
-
-### Style guide skill file
-
-A condensed, machine-readable version of the Sui Documentation Style Guide is available as a skill file at `SUI_STYLE_GUIDE_SKILL.md`. This file contains all style rules from the [full style guide](https://docs.sui.io/references/contribute/style-guide) in a format optimized for agent ingestion. Use it when writing or revising any documentation for this repository.
-
-### Repository layout for documentation
+## Repository layout
 
 ```
 docs/
-├── content/              # All documentation source files (.mdx)
-│   ├── concepts/         # Sui architecture, objects, transactions, cryptography
-│   ├── guides/           # Developer guides, tutorials, app examples
-│   ├── references/       # API references, framework docs, CLI reference, contribution guides
-│   ├── standards/        # Sui standards (Closed-Loop Token, DeepBook, Kiosk, Wallet)
-│   └── sidebars.js       # Navigation structure / page hierarchy
-├── site/                 # Docusaurus site configuration, plugins, and build output
-│   ├── src/              # Custom components, plugins, utilities
+├── content/                    # All documentation source files (.mdx)
+│   ├── getting-started/        # Onboarding, examples, migration guides
+│   ├── develop/                # Move, objects, transactions, data access, testing
+│   ├── onchain-finance/        # Tokens, DeepBook, kiosk, payments, asset custody
+│   ├── operators/              # Full nodes, validators, data management
+│   ├── references/             # CLI, APIs, framework, SDKs, contributing
+│   ├── sui-stack/              # Walrus, Seal, zkLogin, Nautilus, SuiNS, Enoki
+│   ├── snippets/               # Reusable content referenced by <ImportContent>
+│   └── sidebars.js             # Navigation structure / page hierarchy
+├── site/                       # Docusaurus site
+│   ├── src/                    # Custom components, plugins, utilities
+│   ├── scripts/                # Build, audit, and goal generation scripts
 │   ├── docusaurus.config.js
-├── snippets/             # Reusable code snippets referenced by ImportContent
+│   └── package.json
+├── concept-map.yaml            # Concept coverage definitions for audit pipeline
+└── README.md
 ```
 
-### Key files for agents
+## Page frontmatter
 
-- **`docs/content/sidebars.js`**: Defines the full navigation tree. Parse this to understand page hierarchy and relationships.
-- **`docs/SUI_STYLE_GUIDE_SKILL.md`**: Condensed style guide rules. Ingest before writing or editing documentation.
-- **`docs/content/references/contribute/style-guide.mdx`**: The full human-readable style guide source.
-- **`docs/content/references/contribute/mdx-components.mdx`**: Reference for all custom MDX components and Docusaurus plugins.
+Every `.mdx` page has YAML frontmatter. Required fields:
 
-### What not to edit
-
-Several sections are auto-generated during the build and must not be edited directly:
-
-- **Framework reference** (`/references/framework`): Generated from `cargo-doc` Markdown in `/sui/crates`.
-- **GraphQL reference** (`/references/sui-api/sui-graphql`): Generated from the GraphQL schema.
-- **OpenRPC and gRPC specifications**: Downloaded during build by utility scripts.
-
-### Documentation content conventions
-
-- All documentation pages are `.mdx` files with YAML frontmatter (`title`, `description`, `keywords`).
-- Pages use Docusaurus admonitions (`:::info`, `:::tip`, `:::caution`, `:::danger`) for callouts.
-- Code samples should be sourced from GitHub using the `<ImportContent>` component when possible, rather than copied inline. See the [MDX Components page](https://docs.sui.io/references/contribute/mdx-components) for component reference.
-- Every sidebar category must have a corresponding `index.mdx` page using `link.type: 'doc'`
-
+```yaml
 ---
+title: Page Title
+description: One-sentence summary of what this page covers.
+keywords: [keyword1, keyword2, keyword3]
+---
+```
+
+### Goal frontmatter
+
+Pages also have a `goal:` block that defines what the page should achieve for the reader and a set of mechanically verifiable checks:
+
+```yaml
+goal:
+  description: Reader can build, publish, and call a Move package
+  requires:
+    - pattern: 'sui move build'
+      min: 1
+      label: Shows build command
+    - pattern: '```move'
+      min: 1
+      label: Has Move source code
+    - headings:
+        - pattern: Build
+        - pattern: Publish
+      label: Has build and publish sections
+    - min_words: 300
+      label: Needs more walkthrough depth
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+```
+
+**Available check types:**
+
+| Check | Parameters | What it verifies |
+|-------|-----------|-----------------|
+| `pattern` | `pattern` (regex), `min` (count) | Body text matches the pattern at least `min` times |
+| `headings` | Array of `{ pattern }` | Page has headings matching each pattern |
+| `links_to` | Array of paths | Page contains links to specific internal paths |
+| `has_tables` | `min` (count) | Page has at least `min` markdown tables |
+| `has_images` | boolean | Page has (or doesn't have) images |
+| `has_frontmatter` | Array of field names | Specified frontmatter fields are present |
+| `min_words` | number | Page has at least this many words (outside code blocks) |
+| `has_questions` | boolean | Page has `questions:` frontmatter for AI search |
+| `has_answer` | boolean | Page has `answer:` frontmatter for AI citation |
+| `answer_in_intro` | number (min words) | First paragraph has enough words to serve as a direct answer |
+| `question_headings` | number (min count) | Headings use question format (What/How/Why) |
+| `steps_present` | number (min count) | Page has numbered steps for procedural content |
+| `code_explanation_ratio` | number (min ratio) | Ratio of explanation to code is above threshold |
+
+Goals are evaluated by the audit pipeline. The label appears in failure reports, so write it to describe what's wrong (e.g., "Needs more content depth" not "Sufficient content depth").
+
+### GEO/AEO frontmatter
+
+Pages have `questions:` and `answer:` fields for Generative Engine Optimization (GEO) and Answer Engine Optimization (AEO). These help AI-powered search engines (Perplexity, ChatGPT, Google AI Overviews) surface and cite the page correctly.
+
+```yaml
+questions:
+  - How do I install the Sui CLI?
+  - What is suiup?
+  - How do I verify my Sui installation?
+answer: >-
+  Run `curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh`
+  to install suiup, then `suiup install sui@testnet` for the Testnet toolchain.
+  Verify with `sui --version`.
+```
+
+- **`questions`**: 2-5 questions this page answers. AI engines match user queries against these.
+- **`answer`**: 1-2 sentence direct answer to the page's primary question. This is what an AI would cite verbatim.
+
+Generate these for new pages:
+
+```sh
+cd docs/site && node scripts/generate-geo.mjs --apply
+```
+
+### Builder path frontmatter
+
+Pages that belong to a builder path (DeFi, Payments, Walrus, etc.) are tagged with `builder_paths:`:
+
+```yaml
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Custom coin creation
+    stage: Move Contract
+    eval: covered            # covered | partial | missing (from evals dashboard)
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Stablecoin integration
+    stage: Tokens
+    # no eval = not yet evaluated
+```
+
+Pages with `eval:` have been scored in the [evals dashboard](https://docs-analytics-dashboard.vercel.app/evals). Pages without `eval` are identified as belonging to a path but haven't been scored yet.
+
+## Audit pipeline
+
+The docs audit runs deterministic checks across all pages. Three layers:
+
+1. **Base checks** -- frontmatter completeness, staleness (git log), broken internal links, broken imports, unclosed code fences, TODO/FIXME markers, word count, missing images, duplicate titles.
+2. **Goal checklist** -- evaluates each page's `goal.requires` checks.
+3. **Concept coverage** -- cross-references pages against `concept-map.yaml` to find coverage gaps and orphan pages.
+
+### Running the audit
+
+```sh
+cd docs/site
+pnpm docs:audit              # JSON to stdout
+pnpm docs:audit:summary      # human-readable summary to stderr
+pnpm docs:audit:failures     # only failing pages + summary
+```
+
+### Generating goals for new pages
+
+When you add new `.mdx` pages, generate goal frontmatter:
+
+```sh
+cd docs/site
+node scripts/generate-goals.mjs --apply
+```
+
+This detects each page's archetype (onboarding, example, guide, reference, operator, SDK, index) and generates appropriate checks. Review and adjust the generated goals before committing.
+
+### Frontmatter schema
+
+The full frontmatter contract is defined as a JSON Schema at [`docs/site/frontmatter.schema.json`](site/frontmatter.schema.json). It is the canonical, machine-readable source of truth for every field above (`title`, `description`, `keywords`, `goal`, `questions`, `answer`, `builder_paths`, and the optional metadata fields). Downstream tooling — the [evals harness](https://github.com/jessiemongeon1/sui-docs-automation) and the evals dashboard — relies on this shape.
+
+Validate pages locally before pushing:
+
+```sh
+cd docs/site
+pnpm docs:validate-frontmatter          # all pages
+node scripts/validate-frontmatter.mjs ../content/getting-started/tooling.mdx   # specific pages
+```
+
+The validator checks changed pages against the schema and exits non-zero on: wrong types, invalid `builder_paths[].eval` values (must be `covered`/`partial`/`missing`), goal checks missing a `label` or not matching exactly one check type, and missing required fields. Snippets and the generated `sui-graphql` reference are excluded. Unknown top-level frontmatter keys are permitted (to allow Docusaurus-native fields); the nested `goal` and `builder_paths` objects are validated strictly.
+
+### CI
+
+A GitHub Actions workflow (`docs-frontmatter-check.yml`) runs on every PR that touches `docs/content/**/*.mdx` and writes a job summary listing any pages missing `title`, `description`, `keywords`, `goal`, `questions`, or `answer` frontmatter, with instructions to auto-generate. Check the workflow's summary tab for results.
+
+> **Note:** wiring `validate-frontmatter.mjs` into this workflow as a required, failing check is a follow-up (it edits the workflow file, which needs elevated permissions to land). Until then, schema validation runs locally only via `pnpm docs:validate-frontmatter`; the CI workflow does not yet fail on schema violations.
 
 ## Build the site locally
 
-To run `docs.sui.io` locally, open the `site` directory in a terminal or console. Use a package manager to install the required modules:
-
-```shell
+```sh
+cd docs/site
 pnpm install
 ```
 
 ### Full build
 
-Run a full build to generate all required assets and compile the static site:
-
-```shell
+```sh
 pnpm build
 ```
 
-A full build is necessary after a fresh clone because it downloads specification files and generates content that the site depends on. The build script performs the following steps before compiling:
+A full build downloads spec files, generates reference docs, and compiles the static site. Required after a fresh clone. The build fails on broken links and missing imports.
 
-1. Generates the import context (`generate-import-context.js`).
-1. Downloads gRPC specification files (`grpc-download.js`).
-1. Generates GraphQL reference documentation (`graphql-to-doc`), then removes entries without descriptions.
-1. Downloads OpenRPC specification files (`getopenrpcspecs.js`).
-1. Post-processes GraphQL output (`massagegraphql.js`).
-1. Runs `docusaurus build` to compile the static site into `site/build`.
-1. Copies Markdown files and generates `llms.txt` for LLM consumption.
-1. Runs internal link checking against the `content` directory.
-
-The build fails on errors like bad internal links or missing imports, and displays the cause of the error in the console.
-
-If you get an error about missing `open-rpc` specs when running the site locally, run `pnpm build` first. It downloads and prepares the required files.
+Build steps:
+1. Fetch external docs and generate import context
+2. Download gRPC specs, generate GraphQL reference docs
+3. Download OpenRPC specs, post-process GraphQL output
+4. Run `docusaurus build` into `site/build`
+5. Generate `llms.txt` and `llms-full.txt` for LLM consumption
+6. Run internal link checking
 
 ### Development preview
 
-After a successful build, use the following command to start a development preview at `localhost:3000`:
-
-```shell
+```sh
 pnpm start
 ```
 
-The development server watches for changes to files in the `content` directory and site source files, and updates the UI to match any saves you make. The development preview ignores some errors (like broken internal links) to provide a faster feedback loop.
-
-Run `pnpm build` again before submitting your changes for review, as the full build catches errors that the development preview does not.
+Starts a dev server at `localhost:3000` with hot reload. Run `pnpm build` before submitting -- the full build catches errors the dev preview skips.
 
 ## Auto-generated content
 
-Several sections of the documentation are auto-generated during the build and should not be edited directly.
+Do not edit these sections directly:
 
-**Framework reference** (`/references/framework`): Generated by the `framework` plugin, which imports `cargo-doc` Markdown from `/sui/crates` and transforms it into documentation pages. The build script removes this directory before each build and regenerates it from source. See the [components documentation](https://docs.sui.io/references/contribute/mdx-components) for details.
+- **Framework reference** (`/references/framework`) -- generated from `cargo-doc` Markdown in `/sui/crates`.
+- **GraphQL reference** (`/references/sui-api/sui-graphql`) -- generated from the GraphQL schema.
+- **OpenRPC and gRPC specs** -- downloaded during build.
 
-**GraphQL reference** (`/references/sui-api/sui-graphql`): Generated by the `graphql-to-doc` Docusaurus plugin, then cleaned by `remove-no-desc.mjs`. These pages are generated from the GraphQL schema and should not be manually edited.
+## Scripts
 
-**OpenRPC and gRPC specifications**: Downloaded during the build by utility scripts in `src/utils/`.
+Key scripts in `docs/site/scripts/`:
+
+| Script | Purpose |
+|--------|---------|
+| `audit-docs.mjs` | Deterministic docs audit pipeline |
+| `validate-frontmatter.mjs` | Validate page frontmatter against `frontmatter.schema.json` |
+| `generate-goals.mjs` | Generate goal frontmatter by page archetype |
+| `generate-geo.mjs` | Generate questions + answer frontmatter for GEO/AEO |
+| `add-builder-paths.mjs` | Map pages to builder paths with eval status |
+| `refine-goals.mjs` | Batch refinement of goal descriptions and checks |
+| `build-and-check.sh` | Full build + link checking (called by `pnpm build`) |
+| `generate-import-context.js` | Resolve `<ImportContent>` source paths |
+| `fetch-external-docs.js` | Download docs from external repos |
+
+## For AI agents and LLMs
+
+- **`llms.txt`**: Generated at `https://docs.sui.io/llms.txt`. Use as entry point for documentation structure.
+- **Style guide skill**: Machine-readable style rules at `docs/sui-documentation-style-guide.skill`.
+- **`sidebars.js`**: Full navigation tree at `docs/content/sidebars.js`.
+- **`mdx-components.mdx`**: Custom component reference at `docs/content/references/contribute/mdx-components.mdx`.
 
 ## Pull requests
 
-Sui uses Vercel to host its documentation site. Vercel builds a preview of the documentation for every pull request submitted to the Sui repo. You can find a link to this preview in the PR comment section from the Vercel bot. Click the **Visit Preview** link for the **sui-core** project to verify your changes behave as you expect.
+Vercel builds a preview for every PR. Find the **Visit Preview** link in the PR comments from the Vercel bot.
 
-To view the Vercel preview before your changes are ready for review, [mark your PR as a draft](https://github.blog/2019-02-14-introducing-draft-pull-requests/).
+To preview before your changes are ready for review, [mark your PR as a draft](https://github.blog/2019-02-14-introducing-draft-pull-requests/).
 
 ## Style guide
 
-All documentation contributions must follow the [Sui Documentation Style Guide](https://docs.sui.io/references/contribute/style-guide). A machine-readable version is available in `SKILL.md` at the root of this directory. Key requirements include:
+All contributions must follow the [Sui Documentation Style Guide](https://docs.sui.io/references/contribute/style-guide):
 
-- Use US English spelling and active voice.
-- Use second person ("you") instead of first or third person.
-- Use present tense. Avoid future tense unless describing a scheduled event.
-- Do not use Latin abbreviations (for example, use "for example" instead of "e.g.").
-- Use serial (Oxford) commas.
-- Capitalize product names and proper nouns consistently. See the style guide for the full terminology list.
-- Use sentence case for section headings.
-
-## Components and plugins
-
-The Sui documentation uses shared components from the [ML Shared Docusaurus repo](https://github.com/MystenLabs/ML-Shared-Docusaurus/blob/master/README.md) and Sui-specific components. For a complete reference of all custom components and plugins, see the [MDX Components page](https://docs.sui.io/references/contribute/mdx-components).
+- US English, active voice, present tense, second person ("you")
+- No Latin abbreviations (use "for example" not "e.g.")
+- Serial (Oxford) commas
+- Sentence case for headings
 
 ## Contributing
 
-- [Docs contributing guidelines](https://docs.sui.io/references/contribute/contribution-process)
+- [Contribution process](https://docs.sui.io/references/contribute/contribution-process)
 - [Repo contributing guidelines](https://docs.sui.io/references/contribute/contribute-to-sui-repos)
 - [Style guide](https://docs.sui.io/references/contribute/style-guide)
-- [Localization](https://docs.sui.io/references/contribute/localize-sui-docs)
+- [MDX components](https://docs.sui.io/references/contribute/mdx-components)
 - [Code of conduct](https://docs.sui.io/references/contribute/code-of-conduct)
 
 ## License

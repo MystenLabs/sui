@@ -742,7 +742,7 @@ type.
 May abort with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EBCSSerializationFailure">EBCSSerializationFailure</a></code>.
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b>, drop, store&gt;(parent: <b>address</b>, k: K): <b>address</b>
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b>, drop&gt;(parent: <b>address</b>, k: K): <b>address</b>
 </code></pre>
 
 
@@ -751,10 +751,7 @@ May abort with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EBCSSeri
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop + store&gt;(
-    parent: <b>address</b>,
-    k: K,
-): <b>address</b>;
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>&lt;K: <b>copy</b> + drop&gt;(parent: <b>address</b>, k: K): <b>address</b>;
 </code></pre>
 
 

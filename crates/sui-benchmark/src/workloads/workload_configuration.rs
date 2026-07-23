@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::bank::BenchmarkBank;
-use crate::drivers::Interval;
+use crate::drivers::{Interval, SubmissionAmplification};
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
@@ -13,7 +13,7 @@ use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::slow::SlowWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use futures::future::join_all;
 use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::BTreeMap;
@@ -75,6 +75,7 @@ impl WorkloadConfiguration {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         let mut workload_builders = vec![];
+        let mut submission_amplification_by_group = BTreeMap::new();
 
         // Create the workload builders for each Run spec
         match opts.run_spec.clone() {
@@ -103,6 +104,11 @@ impl WorkloadConfiguration {
                 target_qps,
                 num_workers,
                 in_flight_ratio,
+                amplification_probability,
+                amplification_validators_per_tx,
+                duplicate_probability,
+                duplicate_copies_per_validator,
+                validator_selection,
                 duration,
                 deposit_target_address,
                 deposit_seed_sui,
@@ -116,6 +122,29 @@ impl WorkloadConfiguration {
                 // benchmark group will run in the same time for the same duration.
                 for workload_group in 0..num_of_benchmark_groups {
                     let i = workload_group as usize;
+                    let submission_amplification = SubmissionAmplification::new(
+                        amplification_probability[i],
+                        amplification_validators_per_tx[i],
+                        duplicate_probability[i],
+                        duplicate_copies_per_validator[i],
+                        validator_selection[i],
+                    )?;
+                    if opts.use_fullnode_for_execution && submission_amplification.is_enabled() {
+                        bail!(
+                            "duplicate/amplified validator submissions are only supported with local validator execution; set --use-fullnode-for-execution false"
+                        );
+                    }
+                    if submission_amplification.is_enabled() {
+                        info!(
+                            "Benchmark group {} submission amplification: {:?}, expected validator submission multiplier {:.2}",
+                            workload_group,
+                            submission_amplification,
+                            submission_amplification.expected_submission_multiplier()
+                        );
+                    }
+                    submission_amplification_by_group
+                        .insert(workload_group, submission_amplification);
+
                     let config = WorkloadConfig {
                         group: workload_group,
                         num_workers: num_workers[i],
@@ -179,6 +208,7 @@ impl WorkloadConfiguration {
                     bank,
                     system_state_observer,
                     opts.gas_request_chunk_size,
+                    submission_amplification_by_group,
                 )
                 .await
             }
@@ -190,6 +220,7 @@ impl WorkloadConfiguration {
         mut bank: BenchmarkBank,
         system_state_observer: Arc<SystemStateObserver>,
         gas_request_chunk_size: u64,
+        submission_amplification_by_group: BTreeMap<GroupID, SubmissionAmplification>,
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         // Generate the workloads and init them
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
@@ -221,6 +252,10 @@ impl WorkloadConfiguration {
             BTreeMap::<GroupID, Vec<WorkloadInfo>>::new(),
             |mut acc, (workload, workload_params)| {
                 let w = WorkloadInfo {
+                    submission_amplification: submission_amplification_by_group
+                        .get(&workload_params.group)
+                        .copied()
+                        .unwrap_or_default(),
                     workload,
                     workload_params,
                 };

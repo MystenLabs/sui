@@ -3,10 +3,13 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -20,7 +23,8 @@ use sui_types::effects::{
     TransactionEffectsV2, TransactionEvents,
 };
 use sui_types::execution::{
-    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
+    SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -31,12 +35,13 @@ use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, ChildObjectResolver, Storage},
+    storage::{BackingPackageStore, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -96,6 +101,31 @@ pub struct TemporaryStore<'backing> {
     /// (SUI conservation, balance-accumulator authorization, object ownership). See
     /// [`invariants::InvariantChecker`].
     invariants: InvariantChecker,
+
+    /// Versions of system objects this transaction is allowed to read, keyed by object ID. A
+    /// system object is considered "available" once its latest committed version has reached the
+    /// recorded version; `check_system_object_available` consults this map. Every system object read
+    /// during execution must appear here — querying one that is absent is an invariant violation
+    /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
+    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+
+    /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
+    /// digest) at which they were read. Recorded by `check_system_object_available` and
+    /// emitted into the transaction effects as read-only consensus objects so the read can be
+    /// reproduced on replay. Interior-mutable because reads happen behind `&self`
+    /// (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
+
+    /// Recorded when execution determines the transaction must be retried later rather than
+    /// committed. Set only by `check_system_object_available`, in the same expression that returns
+    /// the `PartialVMError` unwinding the VM, so the two signals cannot drift apart. Execution
+    /// still runs to completion and produces effects; this signal is carried out on
+    /// `InnerTemporaryStore` so the authority can discard those effects and re-enqueue. A
+    /// `OnceCell` rather than a lock: execution is single-threaded, and the condition is detected
+    /// behind `&self` (`RuntimeObjectResolver`), so the field must be interior-mutable; it is
+    /// recorded at most once (the first detection, after which execution unwinds), which
+    /// `OnceCell` enforces.
+    retry_request: OnceCell<ExecutionRetryError>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -108,6 +138,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -150,7 +181,68 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
+            retry_request: OnceCell::new(),
         }
+    }
+
+    /// Checks that the system object `object_id` is available at the version this transaction
+    /// requires, i.e. its latest committed version has caught up to that version, and records the
+    /// read so it can be emitted into effects and reproduced on replay. When the object has not
+    /// caught up, this method records the retry request on the store and returns the
+    /// `PartialVMError` that unwinds the VM as one atomic act: callers must propagate the error
+    /// (`?`) unmodified rather than observe unavailability as data. This is the only place allowed
+    /// to construct that error, which is what keeps the error and `retry_request` in lockstep —
+    /// neither can appear without the other.
+    pub fn check_system_object_available(&self, object_id: &ObjectID) -> PartialVMResult<()> {
+        // Every system object read during execution must have an assigned version. Its absence
+        // here means the transaction is reading a system object it was not sequenced against,
+        // which is an invariant violation.
+        let Some(required_version) = self.system_object_versions.get(object_id).copied() else {
+            debug_fatal!("system object {object_id} read without an assigned version");
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("system object {object_id} read without an assigned version"),
+                ),
+            );
+        };
+        // Load the object at exactly the version this transaction was sequenced against.
+        // `required_version` is the freshly-assigned version at the frontier, so it is never pruned:
+        // its absence means the local node has not yet committed that version.
+        let Some(object_at_required) = self.store.get_object_by_key(object_id, required_version)
+        else {
+            // Not yet caught up to the version this transaction requires: record the retry request
+            // and return the error that unwinds the VM, together. The retry payload is carried
+            // out-of-band via this interior-mutable state (the Move error can't hold it) and
+            // surfaces as `ExecutionRetryError` on the inner temporary store. The authority then
+            // waits for `object_id` to reach `required_version` and re-enqueues; it recovers the
+            // object's initial shared version from the epoch start config, so the id and version
+            // carried here are enough.
+            // First detection wins; a second would only be recorded if execution continued past the
+            // returned error, which it does not.
+            let retry = ExecutionRetryError::SystemObjectUnavailable {
+                object_id: *object_id,
+                version: required_version,
+            };
+            let message = retry.to_string();
+            let _ = self.retry_request.set(retry);
+            // `SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY` is minted nowhere else.
+            return Err(
+                PartialVMError::new(StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY)
+                    .with_message(message),
+            );
+        };
+
+        // Available: record the read at `required_version` (which is what the transaction depends
+        // on and reads) so it can be emitted into effects as a read-only consensus object and
+        // reproduced on replay. The version and digest are taken at `required_version` — not the
+        // latest — so the recorded value is deterministic across nodes regardless of how far the
+        // object has since advanced.
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (required_version, object_at_required.digest()));
+        Ok(())
     }
 
     // Helpers to access private fields
@@ -322,6 +414,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws,
+            retry_request: self.retry_request.into_inner(),
         }
     }
 
@@ -965,7 +1058,7 @@ impl TemporaryStore<'_> {
     }
 }
 
-impl ChildObjectResolver for TemporaryStore<'_> {
+impl RuntimeObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,

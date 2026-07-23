@@ -1,0 +1,8 @@
+//# print-bytecode
+// Loading a constant that was never declared is a compilation error.
+mvir 0x42::M {
+    public fun f(): u64 {
+    label b0:
+        return copy(MISSING);
+    }
+}

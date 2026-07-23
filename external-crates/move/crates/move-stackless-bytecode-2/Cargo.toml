@@ -14,7 +14,6 @@ move-command-line-common.workspace = true
 move-model-2.workspace = true
 move-package-alt.workspace = true
 move-package-alt-compilation.workspace = true
-move-stackless-bytecode.workspace = true
 move-symbol-pool.workspace = true
 move-core-types.workspace = true
 

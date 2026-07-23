@@ -59,7 +59,7 @@ fun f() {
         Enum if (x == 1) => 1,
         1 if (false) => 1,
         Wrapper(y) if (y == x) => Wrapper(y),
-        x @ 1 | 2 | 3 => x + 1,
+        x @ (1 | 2 | 3) => x + 1,
         z => z + 3,
         _ => 3,
     };

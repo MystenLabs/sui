@@ -126,7 +126,7 @@ pub fn to_sender_signed_transaction_with_multi_signers(
 }
 
 mod zk_login {
-    use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
+    use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, ZkLoginInputs};
     use shared_crypto::intent::PersonalMessage;
 
     use crate::{crypto::PublicKey, zk_login_util::get_zklogin_inputs};
@@ -136,6 +136,36 @@ mod zk_login {
         "20794788559620669596206457022966176986688727876128223628113916380927502737911";
     pub static SHORT_ADDRESS_SEED: &str =
         "380704556853533152350240698167704405529973457670972223618755249929828551006";
+
+    // Fixed v1 proof (from prover-dev, over a TestIssuer JWT) and a v2 proof (from
+    // prover-dev-v2, over a TestIssuerKey8192 JWT to also cover 8192-bit keys), both with
+    // ephemeral key seed [0; 32], max_epoch 10, and the same address seed. The JWKs they
+    // verify against are pinned alongside, as (JwkId, JWK) JSON pairs.
+    pub const PINNED_V1_PROOF_JSON: &str = r#"{"proofPoints":{"a":["3010136044534492475575413496484577590932720513683681989179363462925612714982","5652552440722407852175866026012563042753395701135168680885840271325003476209","1"],"b":[["4134651808856881772397689190468686413285935393238712522589459332601848471034","20925849764837854473271908435319609501643424506601952398791677633465938999818"],["16706593113195287380129955552431425955520047611810267551522210853347280177225","8975261226848675342214968602342036744422056685641356205140655491003281432470"],["1","0"]],"c":["14516934896859103165306714687867025901326990259356520077875194067697843674675","12419034695817580775970400081639888434145575090674091981609146109263143679873","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9vYXV0aC5zdWkuaW8iLC","indexMod4":2},"headerBase64":"eyJraWQiOiJzdWkta2V5LWlkIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ"}"#;
+    pub const PINNED_V2_PROOF_JSON: &str = r#"{"proofPoints":{"a":["10290383706848897825088985381697541801790334043318488983431378625753497718833","17591517929249273401895310772015184603780222740894596527224318218206984537104","1"],"b":[["3918033264923917639046061736301179481793021691718139448529347745111416321846","18123684393181543832037347354416686302931880789657446564169805732802329293676"],["5501473627788010270179873817591115039637415124881199561215844494127224527091","5357636725999458520558358539710311237463411851594252917784356338840007452395"],["1","0"]],"c":["14357495699847490388821026099380711662414404327434223254697278410014042621999","18065473806655831852488138949447369308006710206520416428472279919490765303978","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9qd3QtdGVzdGVyLm15c3RlbmxhYnMuY29tIiw","indexMod4":2},"headerBase64":"eyJraWQiOiJzdWkta2V5LWlkLTgxOTIiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9"}"#;
+    pub const PINNED_PROOF_ADDRESS_SEED: &str =
+        "1930628255822123795956154519923524356793387287437090556144422698180443693114";
+    pub const PINNED_V1_JWK_ID_JSON: &str = r#"{"iss":"https://oauth.sui.io","kid":"sui-key-id"}"#;
+    pub const PINNED_V1_JWK_JSON: &str = r#"{"kty":"RSA","e":"AQAB","n":"wdar6dBP7b88u6o190uXBK4yPS76OxFjiHDPwOyJwJiiAE3YRq8y_pfyQVua9nEasgrPfEBzVoC5QCld8NAC88uvbNKyoLZ6w5KlFjp88q2Sfy7nAzh3I-AnjsL6zl43NZrKep4_Nmb5nJeafcEi6B5MsYYDWW1Nn26O7ob9IWRNWcaTKhOhqDzbiN_66azN-NgaP_uHjlu1xuMV0kRt-luLSTXJS3S2n8PVNCxr3Gr2oViUpP8kSa-0i5vsg3gNtSfBY97AbChwOnyazj_PoaVD6zbEC4L5gvRZJA6vyoAWF_ZumvkwC3fxcFIBnSKMlGzS_Z-bUyQDCQy_BG9AOw","alg":"RS256"}"#;
+    pub const PINNED_V2_JWK_ID_JSON: &str =
+        r#"{"iss":"https://jwt-tester.mystenlabs.com","kid":"sui-key-id-8192"}"#;
+    pub const PINNED_V2_JWK_JSON: &str = r#"{"kty":"RSA","e":"AQAB","n":"lViYJOuLB6EZenCimgyWrwOH_QBEkCZxSIEfcQgP5MrZkRlohbrTAN1YpXGRaqugp9A4mRzCmi9ddXscpRBSsLefdPJJLG8lQZ2qrw6X2-6HD5kDFd6-K7JZS-_GOEfr5xGEDm8_MS_SorbmneKspL0n4MPYWH8qke4OBFCwL6WzGBU9rqDuvhYmafmkvVvOtHIqekBxNrCud7Spv43BHdiBM0V-jUquuNM3oK97i_GVLjGfwrGRpR3tK4nva_ryiHh9Ajs68If7-ZhIoLJ05lRsHJJpqsloiEqlCZwhge9zEMnNkoaIzdQr-xLy0GPnr5W0gikjlSGYiInfx9ITADwK3W33xdOB7npM7lqJY73Njbuw8hBQicU8t0M0gvvWfmh1KDeA5IqffZgue-ka9Jj1nrYmZtd0JimQpPDUiGbLv69gQJZcLVQWf9z6mVC4gNm8VU2OafssnolrvNndC3wIm8AgqzVzn_DIOcMQdhIe8jTF3hu1_6R4Id3KoA5Hb3uI2H86-8RjhSG2wKb3zi44yKSmxEDhzl7i450PQX64JK4ftv5jb9vSw5unpikmVvGlGsuvrqWFuWKBcrcXLgyar8pGvRO8fR9ifDHSj-D2fBiLnhK0-iqsJeU8XnfJhUvKxSjXejwsoQeLqlgq9-PgCDP3dE61fkqGpJ1UZjZ44Q9Vh4YLCPAO6oX8btXSkwreuP5m0UtWgFsc-ynWbt6NYS7JlsMtJNWybM4_auqRdil_cPMwFsUgjocztGLeG304YH-GehmyBJyGKuDIiXL9RfLoZ35jKawrWJb4UqckKWV5kOKeXsXdKtMw96ABFumcnhrzxAsqwshS5a2lT8P7Cdd9g3T1JXI7JM1AnJU9_gPXmJoc3yEFNf-JxEf00URoy2xUusyyxYdTswLJp3NQP4VjrAGwnsp7gHKC-V-mJ21FpQCHsV0JQ-1x-E3du9hkpsjTtGkffetEsV8k9enbkudox7WIlsnPcA8y7aY4lnaBqLLSzaj2GOf4KTN4cRpcPzOmSvgcVVYYQXDjRw45X86P1WJG8UDl6Wkl044tAdQRuIxW8QVzBFWWxeXcoagOBKn1_DV0RKUX9Ud4LLauy81rUNfoAcnolz9nippTBEZA_4OOBvXhdngCYaoZyjAkmYdPhKIkghGhKoVVKiEJ1Ua6nUr3zB9WFlTO9lODeV9h0tgKGtKGu3UBeaRCQSMv9gZK-eGIpcqjsqK_rEf4htdDZUBzfOJ0VtCiFYUUBPiuJNuIf9xQGVDE7qZufK1irvGug8jvWSWzB4pGLP75PnPH7B9axnXrxssaIR90Y3Vr9ih_ptzcfNrwD_wiGHUTy698FHu2fXp51HbSEQ","alg":"RS256"}"#;
+
+    /// Both pinned JWKs, indexed by (iss, kid).
+    pub fn pinned_jwks() -> im::HashMap<JwkId, JWK> {
+        [
+            (PINNED_V1_JWK_ID_JSON, PINNED_V1_JWK_JSON),
+            (PINNED_V2_JWK_ID_JSON, PINNED_V2_JWK_JSON),
+        ]
+        .into_iter()
+        .map(|(id, jwk)| {
+            (
+                serde_json::from_str(id).unwrap(),
+                serde_json::from_str(jwk).unwrap(),
+            )
+        })
+        .collect()
+    }
 
     pub fn load_test_vectors(path: &str) -> Vec<(SuiKeyPair, PublicKey, ZkLoginInputs)> {
         // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.

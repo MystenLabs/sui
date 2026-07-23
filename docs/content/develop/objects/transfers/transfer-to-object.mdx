@@ -1,7 +1,54 @@
 ---
 title: Transfer to Object
-description: On Sui, you can transfer objects to objects in the same way you can transfer objects to addresses.
-keywords: [ transfer to object, object transfer, transfer objects, parent-child relationship, object ownership, receiving objects, transfer receive, object id, stable id, custom receiving rules, soul-bound objects, dynamic fields, shared objects, programmable transaction blocks, PTB, receiving argument ]
+description: >-
+  On Sui, you can transfer objects to objects in the same way you can transfer
+  objects to addresses.
+keywords:
+  - transfer to object
+  - object transfer
+  - transfer objects
+  - parent-child relationship
+  - object ownership
+  - receiving objects
+  - transfer receive
+  - object id
+  - stable id
+  - custom receiving rules
+  - soul-bound objects
+  - dynamic fields
+  - shared objects
+  - programmable transaction blocks
+  - PTB
+  - receiving argument
+goal:
+  description: >-
+    Reader understands on Sui, you can transfer objects to objects in the same
+    way you can transfer objects to addresses
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I transfer to object?
+  - What is Transfer to Object in Sui?
+  - Why should I use transfer to object?
+answer: >-
+  On Sui, you can transfer objects to objects in the same way you can transfer
+  objects to addresses.
 ---
 
 You can transfer objects to an object ID in the same way you transfer objects to an address. This is because Sui does not distinguish between the 32-byte ID of an address and the 32-byte ID of an object, which are guaranteed not to overlap. The transfer to object operation takes advantage of this feature, allowing you to provide an object ID as the address input of a transfer operation.

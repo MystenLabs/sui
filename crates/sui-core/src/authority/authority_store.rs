@@ -20,7 +20,7 @@ use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_types::error::{SuiErrorKind, UserInputError};
+use sui_types::error::SuiErrorKind;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -29,7 +29,7 @@ use sui_types::storage::{
     get_module, get_package,
 };
 use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
+use sui_types::{base_types::SequenceNumber, fp_ensure};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::traits::Map;
@@ -332,6 +332,15 @@ impl AuthorityStore {
         self.perpetual_tables
             .unchanged_loaded_runtime_objects
             .get(digest)
+    }
+
+    pub fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<Vec<ObjectKey>>>, TypedStoreError> {
+        self.perpetual_tables
+            .unchanged_loaded_runtime_objects
+            .multi_get(digests)
     }
 
     pub fn multi_get_effects<'a>(
@@ -853,94 +862,6 @@ impl AuthorityStore {
             [(tx.digest(), tx.clone().into_unsigned().serializable_ref())],
         )?;
         batch.write()?;
-        Ok(())
-    }
-
-    /// Gets ObjectLockInfo that represents state of lock on an object.
-    /// Returns UserInputError::ObjectNotFound if cannot find lock record for this object
-    pub(crate) fn get_lock(
-        &self,
-        obj_ref: ObjectRef,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiLockResult {
-        if self
-            .perpetual_tables
-            .live_owned_object_markers
-            .get(&obj_ref)?
-            .is_none()
-        {
-            return Ok(ObjectLockStatus::LockedAtDifferentVersion {
-                locked_ref: self.get_latest_live_version_for_object_id(obj_ref.0)?,
-            });
-        }
-
-        let tables = epoch_store.tables()?;
-        let epoch_id = epoch_store.epoch();
-
-        if let Some(tx_digest) = tables.get_locked_transaction(&obj_ref)? {
-            Ok(ObjectLockStatus::LockedToTx {
-                locked_by_tx: LockDetailsDeprecated {
-                    epoch: epoch_id,
-                    tx_digest,
-                },
-            })
-        } else {
-            Ok(ObjectLockStatus::Initialized)
-        }
-    }
-
-    /// Returns UserInputError::ObjectNotFound if no lock records found for this object.
-    pub(crate) fn get_latest_live_version_for_object_id(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<ObjectRef> {
-        let mut iterator = self
-            .perpetual_tables
-            .live_owned_object_markers
-            .reversed_safe_iter_with_bounds(
-                None,
-                Some((object_id, SequenceNumber::MAX, ObjectDigest::MAX)),
-            )?;
-        Ok(iterator
-            .next()
-            .transpose()?
-            .and_then(|value| {
-                if value.0.0 == object_id {
-                    Some(value)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| {
-                SuiError::from(UserInputError::ObjectNotFound {
-                    object_id,
-                    version: None,
-                })
-            })?
-            .0)
-    }
-
-    /// Checks multiple object locks exist.
-    /// Returns UserInputError::ObjectNotFound if cannot find lock record for at least one of the objects.
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if at least one object lock is not initialized
-    ///     at the given version.
-    pub fn check_owned_objects_are_live(&self, objects: &[ObjectRef]) -> SuiResult {
-        let locks = self
-            .perpetual_tables
-            .live_owned_object_markers
-            .multi_get(objects)?;
-        for (lock, obj_ref) in locks.into_iter().zip_debug_eq(objects) {
-            if lock.is_none() {
-                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
-                fp_bail!(
-                    UserInputError::ObjectVersionUnavailableForConsumption {
-                        provided_obj_ref: *obj_ref,
-                        current_version: latest_lock.1
-                    }
-                    .into()
-                );
-            }
-        }
         Ok(())
     }
 
@@ -1522,10 +1443,7 @@ impl AuthorityStore {
             }
         }
 
-        wb.delete_batch(
-            &self.perpetual_tables.objects,
-            object_keys_to_prune.into_iter(),
-        )?;
+        wb.delete_batch(&self.perpetual_tables.objects, object_keys_to_prune)?;
         wb.write()?;
         Ok(())
     }
@@ -1661,8 +1579,10 @@ impl ModuleResolver for ResolverWrapper {
     }
 }
 
+#[cfg(test)]
 pub type SuiLockResult = SuiResult<ObjectLockStatus>;
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum ObjectLockStatus {
     Initialized,
@@ -1681,4 +1601,5 @@ pub struct LockDetailsV1Deprecated {
     pub tx_digest: TransactionDigest,
 }
 
+#[cfg(test)]
 pub type LockDetailsDeprecated = LockDetailsV1Deprecated;

@@ -103,16 +103,16 @@ async fn test_accumulators_root_created() {
         .with_proto_override_cb(Box::new(|version, mut cfg| {
             if version == ProtocolVersion::MAX - 1 {
                 cfg.disable_accumulators_for_testing();
-                cfg.disable_create_root_accumulator_object_for_testing();
+                cfg.set_create_root_accumulator_object_for_testing(false);
             } else if version == ProtocolVersion::MAX {
                 // accumulators are enabled for devnet/tests, so we need to disable them to run
                 // this test
                 cfg.disable_accumulators_for_testing();
-                cfg.create_root_accumulator_object_for_testing();
+                cfg.set_create_root_accumulator_object_for_testing(true);
                 // for some reason all 4 nodes are not reliably submitting capability messages
                 cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
             } else if version == ProtocolVersion::MAX_ALLOWED {
-                cfg.enable_accumulators_for_testing();
+                cfg.set_enable_accumulators_for_testing(true);
             }
             cfg
         }))
@@ -186,16 +186,16 @@ async fn test_accumulators_disabled() {
         .with_proto_override_cb(Box::new(|version, mut cfg| {
             if version == ProtocolVersion::MAX - 1 {
                 cfg.disable_accumulators_for_testing();
-                cfg.disable_create_root_accumulator_object_for_testing();
+                cfg.set_create_root_accumulator_object_for_testing(false);
             } else if version == ProtocolVersion::MAX {
                 // accumulators are enabled for devnet/tests, so we need to disable them to run
                 // this test
                 cfg.disable_accumulators_for_testing();
-                cfg.create_root_accumulator_object_for_testing();
+                cfg.set_create_root_accumulator_object_for_testing(true);
                 // for some reason all 4 nodes are not reliably submitting capability messages
                 cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
             } else if version == ProtocolVersion::MAX_ALLOWED {
-                cfg.enable_accumulators_for_testing();
+                cfg.set_enable_accumulators_for_testing(true);
             }
             cfg
         }))
@@ -321,13 +321,13 @@ async fn test_deposits() {
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
 
         let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        let runtime_object_resolver = state.get_runtime_object_resolver().as_ref();
 
         // Ensure that the accumulator root object is considered a read-only InputConsensusObject
         // by the settlement transaction.
         let sui_coin_type = Balance::type_tag(GAS::type_tag());
         let accumulator_object =
-            AccumulatorValue::load_object(child_object_resolver, None, recipient, &sui_coin_type)
+            AccumulatorValue::load_object(runtime_object_resolver, None, recipient, &sui_coin_type)
                 .expect("read cannot fail")
                 .expect("accumulator should exist");
         let settlement_digest = accumulator_object.previous_transaction;
@@ -450,7 +450,7 @@ async fn test_withdraw_non_existent_balance() {
         .build();
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
 
-    assert!(err.to_string().contains("is less than requested"));
+    assert!(err.to_string().contains("Insufficient address balance"));
 }
 
 #[sim_test]
@@ -478,7 +478,7 @@ async fn test_withdraw_insufficient_balance() {
         )
         .build();
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
-    assert!(err.to_string().contains("is less than requested"));
+    assert!(err.to_string().contains("Insufficient address balance"));
 
     // Refresh gas1 after the failed transaction
     let (sender, gas) = test_env.get_sender_and_all_gas(0);
@@ -2032,8 +2032,8 @@ async fn test_soft_bundle_different_gas_payers() {
 async fn test_multiple_deposits_merged_in_effects() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
+            cfg.set_create_root_accumulator_object_for_testing(true);
+            cfg.set_enable_accumulators_for_testing(true);
             cfg
         }))
         .with_num_validators(1)
@@ -3001,9 +3001,10 @@ async fn test_get_all_balances() {
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let indexes = state.indexes.clone().unwrap();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        let runtime_object_resolver = state.get_runtime_object_resolver().as_ref();
 
-        let balances = get_all_balances_for_owner(sender, child_object_resolver, &indexes).unwrap();
+        let balances =
+            get_all_balances_for_owner(sender, runtime_object_resolver, &indexes).unwrap();
 
         assert_eq!(balances.len(), 2);
         assert!(
@@ -3097,7 +3098,7 @@ async fn publish_and_mint_trusted_coin(test_env: &mut TestEnv, sender: SuiAddres
 async fn test_reject_transaction_executed_in_previous_epoch() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_multi_epoch_transaction_expiration_for_testing();
+            cfg.set_enable_multi_epoch_transaction_expiration_for_testing(true);
             cfg
         }))
         .with_num_validators(1)
@@ -3172,7 +3173,7 @@ async fn test_reject_transaction_executed_in_previous_epoch() {
 async fn test_transaction_executes_in_next_epoch_with_one_epoch_range() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_multi_epoch_transaction_expiration_for_testing();
+            cfg.set_enable_multi_epoch_transaction_expiration_for_testing(true);
             cfg
         }))
         .with_num_validators(1)
@@ -3222,7 +3223,7 @@ async fn test_transaction_executes_in_next_epoch_with_one_epoch_range() {
 async fn test_reject_signing_transaction_executed_in_previous_epoch() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_multi_epoch_transaction_expiration_for_testing();
+            cfg.set_enable_multi_epoch_transaction_expiration_for_testing(true);
             cfg
         }))
         .with_num_validators(1)
@@ -3486,7 +3487,7 @@ async fn address_balance_stress_test() {
                         }
                         Err(err) => {
                             let err_str = err.to_string();
-                            if err_str.contains("Available amount in account for object id") {
+                            if err_str.contains("Insufficient address balance") {
                                 signing_failure_count.fetch_add(1, Ordering::Relaxed);
                             }
                         }
@@ -4338,7 +4339,7 @@ async fn test_explicit_withdrawal_plus_implicit_gas_exceeds_balance() {
 
     let err = test_env.exec_tx_directly(tx).await.unwrap_err();
     assert!(
-        err.to_string().contains("is less than requested"),
+        err.to_string().contains("Insufficient address balance"),
         "Expected insufficient balance error, got: {}",
         err
     );

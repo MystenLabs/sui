@@ -96,6 +96,7 @@ use prometheus::register_int_gauge_with_registry;
 use sui_consistent_store::Batch;
 use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
+use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Schema;
 use sui_indexer_alt_framework::service::Service;
 use sui_types::base_types::ObjectID;
@@ -109,6 +110,8 @@ use tracing::warn;
 
 use crate::RpcStoreSchema;
 use crate::config::PrunerConfig;
+use crate::indexer::restore::HISTORY_COHORT;
+use crate::indexer::restore::LIVE_COHORT;
 use crate::schema::checkpoint_seq_by_digest;
 use crate::schema::event_bitmap;
 use crate::schema::object_version_by_checkpoint;
@@ -559,6 +562,14 @@ fn retract_object_version_by_checkpoint(
 /// the perpetual store prunes to, so the embedded rpc-store's history
 /// cohort stays in lockstep with it. Idempotent: a re-run with the same
 /// or a lower floor is a no-op.
+///
+/// Ordering contract: the caller must invoke this BEFORE durably
+/// committing its own prune of the same checkpoints. The
+/// `object_version_by_checkpoint` retraction is driven by the `effects`
+/// passed in this call and is never re-derived; if the caller's floor
+/// committed first, a crash between the two commits would skip these
+/// effects forever and leak the rows they retract. Committing this side
+/// first is safe precisely because a re-run is idempotent.
 pub fn prune_history_cohort(
     db: &Db,
     schema: &RpcStoreSchema,
@@ -630,6 +641,45 @@ pub fn prune_history_cohort(
     schema.set_pruning_floor(new.tx_seq_lo);
 
     Ok(())
+}
+
+/// The highest checkpoint the embedded fullnode's pruner may prune
+/// through (inclusive) without deleting source data the embedded
+/// indexer still needs: `min(checkpoint_hi_inclusive)` across every
+/// embedded-cohort pipeline ([`LIVE_COHORT`] and [`HISTORY_COHORT`]).
+///
+/// Both cohorts assemble full checkpoints from the perpetual and
+/// checkpoint stores through the local ingestion client — the history
+/// cohort while backfilling `(L, T]`, the live cohort when filling
+/// gaps behind the executor's broadcast stream — so a checkpoint's
+/// data may only be deleted once every pipeline has committed it.
+/// Pruning past a pipeline's watermark would leave that pipeline
+/// permanently stalled on a checkpoint that can no longer be served
+/// (`NotFound` is retried forever).
+///
+/// Returns `None` when any cohort pipeline has no watermark yet — a
+/// from-genesis build before that pipeline's first commit — in which
+/// case nothing may be pruned: the pipeline still needs the entire
+/// available range.
+///
+/// [`LIVE_COHORT`]: crate::LIVE_COHORT
+/// [`HISTORY_COHORT`]: crate::HISTORY_COHORT
+pub fn embedded_prunable_checkpoint(db: &Db) -> anyhow::Result<Option<u64>> {
+    let framework = db.framework();
+    let mut min_hi: Option<u64> = None;
+    for name in LIVE_COHORT.iter().chain(HISTORY_COHORT) {
+        let key = PipelineTaskKey::new(*name);
+        let Some(watermark) = framework
+            .watermarks
+            .get(&key)
+            .with_context(|| format!("reading watermark for {name}"))?
+        else {
+            return Ok(None);
+        };
+        let hi = watermark.checkpoint_hi_inclusive;
+        min_hi = Some(min_hi.map_or(hi, |m| m.min(hi)));
+    }
+    Ok(min_hi)
 }
 
 /// The lowest epoch fully committed across every registered pipeline,
@@ -709,6 +759,50 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         (dir, db, schema)
+    }
+
+    /// Stamp `checkpoint_hi_inclusive = hi` watermarks for `names`.
+    fn stamp_watermarks(db: &Db, names: &[&str], hi: u64) {
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        for name in names {
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(*name),
+                    &Watermark::for_checkpoint(hi),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+    }
+
+    /// `embedded_prunable_checkpoint` is the minimum watermark across
+    /// both embedded cohorts, and `None` while any cohort pipeline has
+    /// no watermark at all.
+    #[test]
+    fn embedded_prunable_checkpoint_is_min_across_cohorts() {
+        let (_dir, db, _schema) = fresh_db();
+
+        // Fresh database: nothing committed, nothing prunable.
+        assert_eq!(embedded_prunable_checkpoint(&db).unwrap(), None);
+
+        // Live cohort at the tip, history cohort still absent (e.g. a
+        // from-genesis backfill before its first commit): still
+        // nothing prunable.
+        stamp_watermarks(&db, LIVE_COHORT, 1_000);
+        assert_eq!(embedded_prunable_checkpoint(&db).unwrap(), None);
+
+        // Every history pipeline committed through 40 except one
+        // straggler at 25: the straggler bounds the prunable range.
+        stamp_watermarks(&db, HISTORY_COHORT, 40);
+        stamp_watermarks(&db, &[HISTORY_COHORT[0]], 25);
+        assert_eq!(embedded_prunable_checkpoint(&db).unwrap(), Some(25));
+
+        // The straggler catches up past the live cohort: the live
+        // cohort's watermark now bounds the range.
+        stamp_watermarks(&db, HISTORY_COHORT, 2_000);
+        assert_eq!(embedded_prunable_checkpoint(&db).unwrap(), Some(1_000));
     }
 
     /// Populate the CFs the pruner reads and deletes by running the

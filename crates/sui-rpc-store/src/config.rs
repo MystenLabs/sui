@@ -297,35 +297,69 @@ impl PipelineLayer {
 /// Per-pipeline registration toggles for
 /// [`restore_indexes`](crate::restore_indexes).
 ///
-/// The derived-index pipelines (`object_by_owner`, `object_by_type`,
-/// `balance`, `package_versions`) are always
-/// restored — they cannot be reconstructed from anywhere else. The
-/// raw `objects` CF is conditional: the standalone deployment
-/// needs it so version-keyed reads are served by the restored
-/// snapshot, while the embedded-fullnode deployment already has
-/// every object version in the validator's perpetual store and
-/// can skip the duplicate write.
+/// The live-cohort pipelines (`object_by_owner`, `object_by_type`,
+/// `balance`) are always restored — they cannot be reconstructed
+/// from anywhere else. The rest is conditional:
+///
+/// - The history floor rows (`object_version_by_checkpoint`,
+///   `package_versions`) matter only when some prefix of the chain
+///   is unavailable for backfill. A caller whose history cohort
+///   replays from genesis skips them — the backfill rebuilds both
+///   CFs in full, so restoring them would waste bulk-load work and
+///   stamp watermarks the backfill would have to be rewound past.
+/// - The raw `objects` CF is needed by the standalone deployment so
+///   version-keyed reads are served by the restored snapshot; the
+///   embedded-fullnode deployment already has every object version
+///   in the validator's perpetual store and skips the duplicate
+///   write.
 #[derive(Default, Clone, Debug)]
 pub struct RestoreLayer {
     /// If true, register the `objects` pipeline with the restore
     /// driver so each live object lands as an
     /// `(ObjectID, version) → StoredObject` row.
     pub objects: bool,
+
+    /// If true, register the `object_version_by_checkpoint` and
+    /// `package_versions` pipelines so their floor rows at the
+    /// restore target are bulk-loaded (see
+    /// [`HISTORY_COHORT`](crate::HISTORY_COHORT)'s docs for how the
+    /// history seed then rewinds their watermarks).
+    pub history_floors: bool,
 }
 
 impl RestoreLayer {
     /// Restore every pipeline, including the raw `objects` CF.
     /// The standalone-binary default.
     pub fn all() -> Self {
-        Self { objects: true }
+        Self {
+            objects: true,
+            history_floors: true,
+        }
     }
 
     /// Restore only the derived-index pipelines. The embedded-
-    /// fullnode default — the fullnode's perpetual store already
-    /// holds every object version, so the `objects` CF is left
-    /// untouched here.
+    /// fullnode default when the perpetual store has pruned
+    /// (`L > 0`) — the fullnode's perpetual store already holds
+    /// every object version, so the `objects` CF is left untouched
+    /// here.
     pub fn indexes_only() -> Self {
-        Self { objects: false }
+        Self {
+            objects: false,
+            history_floors: true,
+        }
+    }
+
+    /// Restore only the live-cohort index pipelines. The embedded-
+    /// fullnode choice when nothing has been pruned (`L == 0`): the
+    /// history cohort backfills from genesis and rebuilds
+    /// `object_version_by_checkpoint` and `package_versions` in
+    /// full, so their floor rows (and the restore watermarks that
+    /// come with them) must not be written.
+    pub fn live_only() -> Self {
+        Self {
+            objects: false,
+            history_floors: false,
+        }
     }
 }
 

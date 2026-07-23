@@ -67,7 +67,7 @@ impl<'a> ReferenceSafetyAnalysis<'a> {
     }
 }
 
-pub(crate) fn verify<'a>(
+pub fn verify<'a>(
     config: &'a VerifierConfig,
     module: &'a CompiledModule,
     function_context: &FunctionContext,

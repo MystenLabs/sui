@@ -105,7 +105,7 @@ jobs:
           key-prefix: ubuntu-ghcloud
       - run: rustup component add clippy
       - name: cargo clippy
-        run: cargo xclippy -D warnings
+        run: cargo xclippy -- -D warnings
 
   test:
     needs: [diff, rustfmt, clippy]

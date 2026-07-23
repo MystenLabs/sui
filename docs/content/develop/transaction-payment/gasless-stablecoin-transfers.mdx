@@ -1,7 +1,55 @@
 ---
 title: Gasless Stablecoin Transfers
-description: Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI.
-keywords: [ usdc, stablecoins, sui dollar, usdsui, usdy, ausd, fdusd, buck, ysld, gasless, free tier ]
+description: >-
+  Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified
+  stablecoins to execute without paying gas fees in SUI.
+keywords:
+  - usdc
+  - stablecoins
+  - sui dollar
+  - usdsui
+  - usdy
+  - ausd
+  - fdusd
+  - buck
+  - ysld
+  - gasless
+  - free tier
+goal:
+  description: >-
+    Reader understands gasless stablecoin transfers on Sui enable peer-to-peer
+    payments of qualified stablecoins to execute
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Gasless stablecoin transfers
+    stage: Gas
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Gasless stablecoin transfers
+    stage: Authorization
+questions:
+  - What is Gasless Stablecoin Transfers in Sui?
+  - What gasless stablecoin transfers don't cover?
+  - How do I monitor gasless stablecoin transfers?
+answer: >-
+  Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified
+  stablecoins to execute without paying gas fees in SUI.
 ---
 
 Chain-specific gas fees can introduce several points of friction to end users and complicate institutional compliance for asset trading or payments. Eliminating chain-specific gas is a major simplification for regulated institutions to conduct payments without the burden of holding digital assets that might fluctuate in value.

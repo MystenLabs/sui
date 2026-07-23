@@ -11,7 +11,6 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use clap::ArgGroup;
-use mysten_network::callback::CallbackLayer;
 use object_store::ClientOptions;
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
@@ -24,6 +23,7 @@ use reqwest::header::HeaderMap;
 use reqwest::header::HeaderName;
 use reqwest::header::HeaderValue;
 use sui_futures::future::with_slow_future_monitor;
+use sui_http::middleware::callback::CallbackLayer;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
 use sui_types::digests::ChainIdentifier;
@@ -192,7 +192,8 @@ pub struct IngestionClient {
     metrics: Arc<IngestionMetrics>,
     /// This client's cohort-labeled metric handles, rebound per cohort by [`Self::for_cohort`].
     cohort_metrics: Arc<CohortMetrics>,
-    chain_id: OnceCell<ChainIdentifier>,
+    /// Shared so cloning an uninitialized client does not create an independent cache.
+    chain_id: Arc<OnceCell<ChainIdentifier>>,
 }
 
 #[derive(Clone, Debug)]
@@ -278,9 +279,13 @@ impl IngestionClient {
         password: Option<String>,
         metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
-        let byte_count_layer = CallbackLayer::new(ByteCountMakeCallbackHandler::new(
-            metrics.total_ingested_bytes.clone(),
-        ));
+        let byte_count_layer = tower::ServiceBuilder::new()
+            .layer(CallbackLayer::new(ByteCountMakeCallbackHandler::new(
+                metrics.total_ingested_bytes.clone(),
+            )))
+            // Rebox the callback middleware's wrapped request body back into the
+            // body type that the underlying tonic channel is monomorphic on.
+            .map_request(|request: http::Request<_>| request.map(tonic::body::Body::new));
         let client = Client::new(url.to_string())?
             .with_max_decoding_message_size(MAX_GRPC_MESSAGE_SIZE_BYTES)
             .request_layer(byte_count_layer);
@@ -322,7 +327,7 @@ impl IngestionClient {
             client,
             metrics,
             cohort_metrics,
-            chain_id: OnceCell::new(),
+            chain_id: Arc::new(OnceCell::new()),
         }
     }
 
@@ -520,6 +525,8 @@ fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), 
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use clap::Parser;
@@ -570,6 +577,7 @@ pub(crate) mod tests {
         pub fetch_failures: DashMap<u64, usize>,
         pub decode_failures: DashMap<u64, usize>,
         pub latest_checkpoint: u64,
+        pub chain_id_calls: AtomicUsize,
     }
 
     impl MockIngestionClient {
@@ -589,6 +597,7 @@ pub(crate) mod tests {
     #[async_trait]
     impl IngestionClientTrait for MockIngestionClient {
         async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+            self.chain_id_calls.fetch_add(1, Ordering::Relaxed);
             Ok(Self::mock_chain_id())
         }
 
@@ -803,6 +812,26 @@ pub(crate) mod tests {
                 .get(),
             3
         );
+    }
+
+    #[tokio::test]
+    async fn test_clones_share_chain_id_cache() {
+        let (client, mock_client) = setup_test();
+        mock_client.insert_checkpoints(1..=2);
+
+        let first = client.clone();
+        let second = client.clone();
+        let (first, second) = tokio::join!(first.checkpoint(1), second.checkpoint(2));
+
+        assert_eq!(
+            first.unwrap().chain_id,
+            MockIngestionClient::mock_chain_id()
+        );
+        assert_eq!(
+            second.unwrap().chain_id,
+            MockIngestionClient::mock_chain_id()
+        );
+        assert_eq!(mock_client.chain_id_calls.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]

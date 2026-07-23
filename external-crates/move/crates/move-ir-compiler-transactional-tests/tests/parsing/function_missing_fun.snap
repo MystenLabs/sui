@@ -5,4 +5,4 @@ processed 1 task
 
 task 0, lines 1-10:
 //# print-bytecode
-Error: ParserError: Invalid Token: expected 'struct', 'enum', or 'fun' declaration
+Error: ParserError: Invalid Token: expected 'const', 'struct', 'enum', or 'fun' declaration

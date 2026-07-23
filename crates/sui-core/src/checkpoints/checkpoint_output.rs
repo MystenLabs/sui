@@ -4,7 +4,6 @@
 use crate::authority::StableSyncAuthoritySigner;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
-use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
@@ -40,7 +39,6 @@ pub struct SubmitCheckpointToConsensus<T> {
     sender: T,
     signer: StableSyncAuthoritySigner,
     authority: AuthorityName,
-    next_reconfiguration_timestamp_ms: u64,
     log_checkpoint_output: LogCheckpointOutput,
 }
 
@@ -49,14 +47,12 @@ impl<T> SubmitCheckpointToConsensus<T> {
         sender: T,
         signer: StableSyncAuthoritySigner,
         authority: AuthorityName,
-        next_reconfiguration_timestamp_ms: u64,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
         Self {
             sender,
             signer,
             authority,
-            next_reconfiguration_timestamp_ms,
             log_checkpoint_output: LogCheckpointOutput::new(metrics),
         }
     }
@@ -73,9 +69,7 @@ impl LogCheckpointOutput {
 }
 
 #[async_trait]
-impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
-    for SubmitCheckpointToConsensus<T>
-{
+impl<T: SubmitToConsensus> CheckpointOutput for SubmitCheckpointToConsensus<T> {
     #[instrument(level = "debug", skip_all)]
     async fn checkpoint_created(
         &self,
@@ -97,9 +91,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
 
         if Some(checkpoint_seq) > highest_verified_checkpoint {
             debug!(
-                "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}.
-                {}ms left till end of epoch at timestamp {}",
-                self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
+                "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}",
             );
 
             let summary = SignedCheckpointSummary::new(
@@ -132,16 +124,6 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
                 .set(checkpoint_seq as i64);
         }
 
-        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms
-            && !epoch_store.protocol_config().timestamp_based_epoch_close()
-        {
-            // close_epoch is ok if called multiple times
-            info!(
-                "Closing epoch at sequence {checkpoint_seq} at timestamp {checkpoint_timestamp}. next_reconfiguration_timestamp_ms {}",
-                self.next_reconfiguration_timestamp_ms
-            );
-            self.sender.close_epoch(epoch_store);
-        }
         Ok(())
     }
 }

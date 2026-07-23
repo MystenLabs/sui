@@ -293,6 +293,12 @@ type ExecutionModuleCache = SyncModuleCache<ResolverWrapper>;
 // Data related to VM and Move execution and type layout
 pub struct ExecutionComponents {
     pub(crate) executor: Arc<dyn Executor + Send + Sync>,
+    /// A dedicated executor used for transaction simulation
+    /// (dry-run/dev-inspect). Simulation executes arbitrary, unvalidated
+    /// transactions, so it gets its own VM instance to keep its internal
+    /// state (e.g. package caches) isolated from the executor used for
+    /// committed transaction execution.
+    pub(crate) simulate_executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
     pub(crate) module_cache: Arc<ExecutionModuleCache>,
     metrics: Arc<ResolverMetrics>,
@@ -924,6 +930,7 @@ impl AuthorityPerEpochStore {
             signature_verifier_metrics,
             supported_providers,
             zklogin_env,
+            protocol_config.zklogin_circuit_mode(),
             protocol_config.verify_legacy_zklogin_address(),
             protocol_config.accept_zklogin_in_multisig(),
             protocol_config.accept_passkey_in_multisig(),
@@ -1425,6 +1432,13 @@ impl AuthorityPerEpochStore {
 
     pub fn executor(&self) -> &Arc<dyn Executor + Send + Sync> {
         &self.execution_component.executor
+    }
+
+    /// The executor dedicated to transaction simulation
+    /// (dry-run/dev-inspect). It is refreshed together with the regular
+    /// executor at epoch boundaries.
+    pub fn simulate_executor(&self) -> &Arc<dyn Executor + Send + Sync> {
+        &self.execution_component.simulate_executor
     }
 
     pub fn set_local_execution_time_channels(
@@ -2253,6 +2267,20 @@ impl AuthorityPerEpochStore {
             .collect()
     }
 
+    /// Injects deferred transactions directly into the in-memory cache, bypassing consensus.
+    /// Simulates invariant-breaking bugs.
+    #[cfg(any(test, msim))]
+    pub fn insert_deferred_transactions_for_test(
+        &self,
+        key: DeferralKey,
+        transactions: Vec<VerifiedExecutableTransactionWithAliases>,
+    ) {
+        self.consensus_output_cache
+            .deferred_transactions
+            .lock()
+            .insert(key, transactions);
+    }
+
     pub(crate) fn should_defer(
         &self,
         cert: &VerifiedExecutableTransaction,
@@ -2752,11 +2780,19 @@ impl AuthorityPerEpochStore {
         self.reconfig_state_mem.write()
     }
 
-    pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
+    /// Persist the local gate used by manual epoch close before sending EndOfPublish.
+    pub(crate) fn close_user_certs_for_manual_epoch_close(
+        &self,
+        mut lock_guard: RwLockWriteGuard<'_, ReconfigState>,
+    ) {
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
 
+        self.record_epoch_close_time_once();
+    }
+
+    pub(crate) fn record_epoch_close_time_once(&self) {
         // Set epoch_close_time for metric purpose.
         let mut epoch_close_time = self.epoch_close_time.write();
         if epoch_close_time.is_none() {
@@ -2952,6 +2988,14 @@ impl AuthorityPerEpochStore {
                     );
                     return None;
                 }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UpdateTransactionDenyConfig(_),
+                ..
+            }) => {
+                // Validity is enforced in SuiTxValidator; author authentication and
+                // generation checks happen in TransactionDenyConfigManager::apply_updates
+                // when the commit handler applies the update.
             }
             SequencedConsensusTransactionKind::System(_) => {}
         }
@@ -3390,6 +3434,8 @@ impl ExecutionComponents {
         let silent = true;
         let executor = sui_execution::executor(protocol_config, silent)
             .expect("Creating an executor should not fail here");
+        let simulate_executor = sui_execution::executor(protocol_config, silent)
+            .expect("Creating an executor should not fail here");
 
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,
@@ -3397,6 +3443,7 @@ impl ExecutionComponents {
         )));
         Self {
             executor,
+            simulate_executor,
             module_cache,
             metrics,
         }

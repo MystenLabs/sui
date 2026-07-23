@@ -1,21 +1,58 @@
 ---
 title: Payment Kit Standard
-description: The Sui Payment Kit is a robust, open-source payment processing toolkit that provides secure payment verification, receipt management, and duplicate prevention for applications built on the Sui blockchain.
+description: >-
+  The Sui Payment Kit is a robust, open-source payment processing toolkit that
+  provides secure payment verification, receipt management, and duplicate
+  prevention for applications built on the Sui blockchain.
 sidebar_label: Payment Kit
 keywords:
-  [
-    payment processing,
-    payment verification,
-    payment receipts,
-    duplicate prevention,
-    payment registry,
-    ephemeral payments,
-    multi-coin support,
-    payment kit,
-    payment standard,
-    sui payments,
-  ]
+  - payment processing
+  - payment verification
+  - payment receipts
+  - duplicate prevention
+  - payment registry
+  - ephemeral payments
+  - multi-coin support
+  - payment kit
+  - payment standard
+  - sui payments
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the Payment Kit standard for secure payment processing
+    with registries, receipts, and duplicate prevention
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Build payment transaction
+    stage: Payment Flow
+    eval: partial
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - What is Payment Kit Standard in Sui?
+  - How does payment kit standard work on Sui?
+  - What are the security considerations for payment kit standard?
+answer: >-
+  The Sui Payment Kit is a framework for secure, flexible payment processing on
+  Sui. It provides persistent and ephemeral payment options, event-driven
+  architecture, and built-in duplicate prevention.
 ---
 
 The Sui Payment Kit is a framework for secure, flexible payment processing on Sui. It provides persistent and ephemeral payment options, event-driven architecture, and built-in duplicate prevention.

@@ -10,23 +10,19 @@ use bytes::Bytes;
 use futures::Stream;
 use futures::StreamExt;
 use prometheus::Registry;
+use sui_rpc::Client;
+use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2alpha as proto;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
-use tonic::transport::Channel;
-use tonic::transport::ClientTlsConfig;
 use tonic::transport::Uri;
-use tower::Layer;
 use tracing::warn;
 
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::metrics::GrpcMetricsLayer;
-use crate::metrics::GrpcMetricsService;
 
-/// A reader backed by the gRPC LedgerService's v2alpha experimental query APIs.
+/// A reader backed by the gRPC LedgerService's streaming list APIs.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
-    client: LedgerServiceClient<GrpcMetricsService<Channel>>,
+    client: Client,
     timeout: Option<Duration>,
 }
 
@@ -49,9 +45,12 @@ pub struct StreamPage<T> {
 
 #[derive(Debug)]
 enum FrameKind<T> {
-    Item { payload: T, cursor: Bytes },
-    Watermark { cursor: Option<Bytes> },
-    End { reason: proto::QueryEndReason },
+    Frame {
+        payload: Option<T>,
+        cursor: Option<Bytes>,
+        end_reason: Option<proto::QueryEndReason>,
+    },
+    /// A frame with none of the known fields set (unknown/future frame kind).
     Unknown,
 }
 
@@ -62,23 +61,17 @@ impl AlphaLedgerGrpcReader {
         prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
-        let mut endpoint = Channel::builder(uri.clone());
-        if let Some(timeout) = args.statement_timeout() {
-            endpoint = endpoint.timeout(timeout);
-        }
-
-        if uri.scheme_str() == Some("https") {
-            let tls_config = ClientTlsConfig::new().with_native_roots();
-            endpoint = endpoint.tls_config(tls_config)?;
-        }
-
-        let channel = endpoint.connect_lazy();
-        let layered =
-            GrpcMetricsLayer::new(prefix.unwrap_or("ledger_grpc"), registry).layer(channel);
-
         let timeout = args.statement_timeout();
-        let client = LedgerServiceClient::new(layered.clone())
-            .max_decoding_message_size(args.ledger_grpc_max_decoding_message_size);
+        let mut client = Client::new(uri)?
+            .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
+            .request_layer(GrpcMetricsLayer::new(
+                prefix.unwrap_or("ledger_grpc"),
+                registry,
+            ));
+
+        if let Some(timeout) = timeout {
+            client = client.with_response_headers_timeout(timeout);
+        }
 
         Ok(Self { client, timeout })
     }
@@ -87,8 +80,10 @@ impl AlphaLedgerGrpcReader {
         &self,
         request: proto::ListTransactionsRequest,
     ) -> anyhow::Result<StreamPage<ExecutedTransaction>> {
-        let mut client = self.client.clone();
-        let stream = client
+        let stream = self
+            .client
+            .clone()
+            .ledger_client()
             .list_transactions(self.request(request))
             .await
             .context("ListTransactions stream open failed")?
@@ -119,11 +114,11 @@ impl<T> StreamPage<T> {
         use proto::QueryEndReason as R;
         match self.end_reason {
             None => true,
-            Some(R::Unspecified | R::ItemLimit | R::ScanLimit) => true,
+            Some(R::Unknown | R::ItemLimit | R::ScanLimit) => true,
             Some(R::LedgerTip | R::CheckpointBound) => false,
             Some(R::CursorBound) => self.last_cursor().is_some(),
             // `QueryEndReason` is non exhaustive — conservatively `true` if a
-            // future variant slips past `apply()`'s `unwrap_or(Unspecified)`.
+            // future variant slips past `apply()`'s `unwrap_or(Unknown)`.
             Some(_) => true,
         }
     }
@@ -144,31 +139,58 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
+    /// Construct a page directly for cross-crate tests, bypassing the drain loop. The watermark
+    /// fields are private (their invariant is maintained by [`Self::apply`]); this is the only
+    /// sanctioned way to set them from outside the crate.
+    #[cfg(feature = "testing")]
+    pub fn for_test(
+        items: Vec<PageItem<T>>,
+        first_wm_cursor: Option<Bytes>,
+        last_wm_cursor: Option<Bytes>,
+        end_reason: Option<proto::QueryEndReason>,
+    ) -> Self {
+        Self {
+            items,
+            first_wm_cursor,
+            last_wm_cursor,
+            end_reason,
+        }
+    }
+
     /// Fold one frame into the page.
     ///
     /// Returns `true` when the frame is `QueryEnd`.
     fn apply(&mut self, frame: FrameKind<T>) -> bool {
-        match frame {
-            FrameKind::Item { payload, cursor } => {
+        let FrameKind::Frame {
+            payload,
+            cursor,
+            end_reason,
+        } = frame
+        else {
+            warn!("ignoring unrecognized frame");
+            return false;
+        };
+        match payload {
+            Some(payload) => {
+                let cursor = cursor.expect("TryFrom validated item cursor");
                 self.last_wm_cursor = None;
                 self.items.push(PageItem { payload, cursor });
             }
-            FrameKind::Watermark { cursor } => {
-                self.last_wm_cursor = cursor.clone();
-                if self.items.is_empty() && self.first_wm_cursor.is_none() {
-                    self.first_wm_cursor = cursor.clone();
+            None => {
+                if let Some(cursor) = cursor {
+                    self.last_wm_cursor = Some(cursor.clone());
+                    if self.items.is_empty() && self.first_wm_cursor.is_none() {
+                        self.first_wm_cursor = Some(cursor);
+                    }
                 }
             }
-            FrameKind::End { reason } => {
-                // `QueryEnd::reason()` folds an absent or unknown reason into
-                // `Unspecified`, so `None` here remains unambiguous shorthand for
-                // "no End frame received" (i.e. the deadline cut the stream short).
-                self.end_reason = Some(reason);
-                return true;
-            }
-            FrameKind::Unknown => {
-                warn!("unknown Frame");
-            }
+        }
+        if let Some(reason) = end_reason {
+            // `QueryEnd::reason()` folds an absent or unknown reason into
+            // `Unknown`, so `None` here remains unambiguous shorthand for
+            // "no End frame received" (i.e. the deadline cut the stream short).
+            self.end_reason = Some(reason);
+            return true;
         }
         false
     }
@@ -189,29 +211,21 @@ impl TryFrom<proto::ListTransactionsResponse> for FrameKind<ExecutedTransaction>
     type Error = anyhow::Error;
 
     fn try_from(response: proto::ListTransactionsResponse) -> anyhow::Result<Self> {
-        use proto::list_transactions_response::Response;
+        let payload = response.transaction;
+        let cursor = response.watermark.and_then(|w| w.cursor);
+        let end_reason = response.end.map(|e| e.reason());
 
-        let Some(response) = response.response else {
+        if payload.is_none() && cursor.is_none() && end_reason.is_none() {
             return Ok(FrameKind::Unknown);
-        };
-        Ok(match response {
-            Response::Item(item) => {
-                let cursor = item
-                    .watermark
-                    .and_then(|w| w.cursor)
-                    .context("Item frame missing watermark.cursor")?;
-                let payload = item
-                    .transaction
-                    .context("Item frame missing transaction payload")?;
-                FrameKind::Item { payload, cursor }
-            }
-            Response::Watermark(watermark) => FrameKind::Watermark {
-                cursor: watermark.cursor,
-            },
-            Response::End(end) => FrameKind::End {
-                reason: end.reason(),
-            },
-            _ => FrameKind::Unknown,
+        }
+        if payload.is_some() && cursor.is_none() {
+            bail!("Item frame missing watermark.cursor");
+        }
+
+        Ok(FrameKind::Frame {
+            payload,
+            cursor,
+            end_reason,
         })
     }
 }
@@ -259,9 +273,9 @@ where
         }
     }
 
-    // Exited via `break` or via `None`. If `has_more()` promises further data, the cursor to resume
-    // from must be present — either a standalone watermark advanced past the last item, or the last
-    // item's own cursor.
+    // Exited via `break` or via `None`. If `has_more()` promises further data, the resume cursor
+    // comes from the latest watermark received — on the fused last item, a ScanLimit end frame, or
+    // a prior beacon; a bare end frame is only sent when no progress claim exists.
     ensure!(
         !page.has_more() || page.last_cursor().is_some(),
         "{rpc_name}: server reported more results but did not provide resume cursor — cannot continue",
@@ -274,15 +288,13 @@ where
 mod tests {
     use super::*;
 
-    /// Well-formed `Item` frame with both `transaction` payload and a cursor-bearing watermark.
+    /// Well-formed frame with both `transaction` payload and a cursor-bearing watermark.
     fn item_response(cursor: &[u8]) -> proto::ListTransactionsResponse {
         let mut watermark = proto::Watermark::default();
         watermark.cursor = Some(Bytes::copy_from_slice(cursor));
-        let mut item = proto::TransactionItem::default();
-        item.watermark = Some(watermark);
-        item.transaction = Some(ExecutedTransaction::default());
         let mut response = proto::ListTransactionsResponse::default();
-        response.response = Some(proto::list_transactions_response::Response::Item(item));
+        response.transaction = Some(ExecutedTransaction::default());
+        response.watermark = Some(watermark);
         response
     }
 
@@ -290,9 +302,7 @@ mod tests {
         let mut watermark = proto::Watermark::default();
         watermark.cursor = Some(Bytes::copy_from_slice(cursor));
         let mut response = proto::ListTransactionsResponse::default();
-        response.response = Some(proto::list_transactions_response::Response::Watermark(
-            watermark,
-        ));
+        response.watermark = Some(watermark);
         response
     }
 
@@ -300,7 +310,18 @@ mod tests {
         let mut end = proto::QueryEnd::default();
         end.reason = Some(reason as i32);
         let mut response = proto::ListTransactionsResponse::default();
-        response.response = Some(proto::list_transactions_response::Response::End(end));
+        response.end = Some(end);
+        response
+    }
+
+    fn end_response_with_cursor(
+        cursor: &[u8],
+        reason: proto::QueryEndReason,
+    ) -> proto::ListTransactionsResponse {
+        let mut response = end_response(reason);
+        let mut watermark = proto::Watermark::default();
+        watermark.cursor = Some(Bytes::copy_from_slice(cursor));
+        response.watermark = Some(watermark);
         response
     }
 
@@ -323,12 +344,12 @@ mod tests {
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
         page.apply(frame(item_response(b"c1")));
         page.apply(frame(watermark_response(b"w2")));
-        page.apply(frame(item_response(b"c3")));
-        page.apply(frame(end_response(proto::QueryEndReason::ItemLimit)));
-
+        let mut last = item_response(b"c3");
+        last.end = end_response(proto::QueryEndReason::ItemLimit).end;
+        page.apply(frame(last));
         assert_eq!(page.items.len(), 2);
         // Per-item cursors are preserved on `PageItem` — that's the whole point of the
-        // payload/cursor split. The standalone watermark at `c2` does not produce a `PageItem`.
+        // payload/cursor split. The standalone watermark at `w2` does not produce a `PageItem`.
         assert_eq!(page.items[0].cursor.as_ref(), b"c1".as_ref());
         assert_eq!(page.items[1].cursor.as_ref(), b"c3".as_ref());
         assert_eq!(
@@ -337,16 +358,16 @@ mod tests {
         );
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c3".as_ref()));
         assert_eq!(page.end_reason, Some(proto::QueryEndReason::ItemLimit));
-        // w2 watermark was briefly set on last_wm_cursor, but got wiped from subsequent item.
-        assert!(page.last_wm_cursor.is_none());
     }
 
     #[test]
     fn standalone_watermark_advances_cursor_without_items() {
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
         page.apply(frame(watermark_response(b"w1")));
-        page.apply(frame(watermark_response(b"w2")));
-        page.apply(frame(end_response(proto::QueryEndReason::LedgerTip)));
+        page.apply(frame(end_response_with_cursor(
+            b"w2",
+            proto::QueryEndReason::LedgerTip,
+        )));
 
         assert!(page.items.is_empty());
         assert_eq!(
@@ -360,13 +381,21 @@ mod tests {
     #[test]
     fn apply_signals_stop_only_on_end_frame() {
         // The bool returned by `apply` is the drain loop's stop signal: `true` means "stop
-        // draining," `false` means "keep going." Only the `End` frame should signal stop.
+        // draining," `false` means "keep going." Only frames carrying `end` should signal stop.
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
         assert!(!page.apply(frame(item_response(b"c1"))));
         assert!(!page.apply(frame(watermark_response(b"w1"))));
-        // Outer message with no oneof set → `FrameKind::Unknown` → continue.
+        // Outer message with none of the known fields set → `FrameKind::Unknown` → continue.
         assert!(!page.apply(frame(proto::ListTransactionsResponse::default())));
         assert!(page.apply(frame(end_response(proto::QueryEndReason::LedgerTip))));
+
+        let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
+        let mut item_end = item_response(b"c2");
+        item_end.end = end_response(proto::QueryEndReason::ItemLimit).end;
+        assert!(page.apply(frame(item_end)));
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].cursor.as_ref(), b"c2".as_ref());
+        assert_eq!(page.end_reason, Some(proto::QueryEndReason::ItemLimit));
     }
 
     #[test]
@@ -455,8 +484,9 @@ mod tests {
     #[test]
     fn has_more_true_on_cursor_bound_with_tracked_cursor() {
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
-        page.apply(frame(item_response(b"c1")));
-        page.apply(frame(end_response(proto::QueryEndReason::CursorBound)));
+        let mut response = item_response(b"c1");
+        response.end = end_response(proto::QueryEndReason::CursorBound).end;
+        page.apply(frame(response));
 
         assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"c1".as_ref()));
         assert!(
@@ -466,21 +496,21 @@ mod tests {
     }
 
     #[test]
-    fn apply_end_with_unknown_reason_folds_to_unspecified() {
+    fn apply_end_with_unknown_reason_folds_to_unknown() {
         let mut end = proto::QueryEnd::default();
         end.reason = Some(i32::MAX);
         let mut response = proto::ListTransactionsResponse::default();
-        response.response = Some(proto::list_transactions_response::Response::End(end));
+        response.end = Some(end);
 
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
         page.apply(frame(response));
-        assert_eq!(page.end_reason, Some(proto::QueryEndReason::Unspecified));
+        assert_eq!(page.end_reason, Some(proto::QueryEndReason::Unknown));
     }
 
     #[test]
     fn apply_unknown_frame_does_not_mutate_page() {
-        // Outer message with no oneof set — classifies to `FrameKind::Unknown`. `apply` should
-        // warn but leave items / cursors / end_reason untouched.
+        // Outer message with none of the known fields set classifies to `FrameKind::Unknown`.
+        // `apply` should warn but leave items / cursors / end_reason untouched.
         let response = proto::ListTransactionsResponse::default();
 
         let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
@@ -492,19 +522,20 @@ mod tests {
     }
 
     #[test]
-    fn try_from_item_without_transaction_errors() {
-        // An Item frame without a `transaction` payload violates the protocol contract —
-        // the conversion must fail loudly rather than silently dropping the slot. The
-        // cursor on the watermark would otherwise be a tempting but lossy fallback.
-        let mut watermark = proto::Watermark::default();
-        watermark.cursor = Some(Bytes::copy_from_slice(b"c1"));
-        let mut item = proto::TransactionItem::default();
-        item.watermark = Some(watermark);
+    fn try_from_item_without_cursor_errors() {
+        // A frame with a `transaction` payload but no watermark cursor violates the
+        // resumability contract — the conversion must fail loudly rather than
+        // accepting an item that cannot be resumed from.
         let mut response = proto::ListTransactionsResponse::default();
-        response.response = Some(proto::list_transactions_response::Response::Item(item));
+        response.transaction = Some(ExecutedTransaction::default());
 
         let result: anyhow::Result<FrameKind<ExecutedTransaction>> = response.try_into();
-        assert!(result.is_err(), "missing transaction payload should error");
+        let err = result.expect_err("missing item cursor should error");
+        assert!(
+            err.to_string()
+                .contains("Item frame missing watermark.cursor"),
+            "unexpected error: {err:#}"
+        );
     }
 
     #[tokio::test]
@@ -552,15 +583,11 @@ mod tests {
 
     #[tokio::test]
     async fn drain_errors_on_malformed_item_frame() {
-        // A malformed Item frame (no `transaction` payload) reaches `drain_list_stream` via
+        // A malformed payload frame (no watermark cursor) reaches `drain_list_stream` via
         // `try_into`, which propagates the error out — partial work is discarded because the
         // cursor state is no longer trustworthy.
-        let mut watermark = proto::Watermark::default();
-        watermark.cursor = Some(Bytes::copy_from_slice(b"c1"));
-        let mut item = proto::TransactionItem::default();
-        item.watermark = Some(watermark);
         let mut malformed = proto::ListTransactionsResponse::default();
-        malformed.response = Some(proto::list_transactions_response::Response::Item(item));
+        malformed.transaction = Some(ExecutedTransaction::default());
 
         drain_iter(vec![Ok(item_response(b"c0")), Ok(malformed)])
             .await

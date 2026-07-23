@@ -226,10 +226,17 @@ impl AuthorityStorePruner {
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
 
-        wb.write()?;
-
+        // Prune the embedded rpc-store's history cohort to the same floor
+        // BEFORE committing the perpetual batch. The rpc-store's
+        // `object_version_by_checkpoint` retraction is driven by the
+        // effects passed here; if the perpetual floor committed first, a
+        // crash between the two commits would resume the pruner past these
+        // checkpoints and their effects would never be replayed, leaking
+        // the rpc-store rows they retract. In this order a crash re-reads
+        // the same checkpoints on restart (the perpetual floor has not
+        // moved) and `prune_history_cohort` re-runs as an idempotent
+        // no-op.
         if let Some(rpc_store) = rpc_store {
-            // Prune the embedded rpc-store's history cohort to the same floor.
             sui_rpc_store::prune_history_cohort(
                 rpc_store.db(),
                 rpc_store.schema(),
@@ -238,6 +245,8 @@ impl AuthorityStorePruner {
                 &transaction_effects,
             )?;
         }
+
+        wb.write()?;
 
         Ok(())
     }
@@ -273,10 +282,11 @@ impl AuthorityStorePruner {
 
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
         metrics.last_pruned_checkpoint.set(checkpoint_number as i64);
-        wb.write()?;
 
+        // Prune the embedded rpc-store's history cohort BEFORE committing
+        // the perpetual batch; see the rocksdb variant above for the
+        // crash-ordering rationale.
         if let Some(rpc_store) = rpc_store {
-            // Prune the embedded rpc-store's history cohort to the same floor.
             sui_rpc_store::prune_history_cohort(
                 rpc_store.db(),
                 rpc_store.schema(),
@@ -285,6 +295,8 @@ impl AuthorityStorePruner {
                 &transaction_effects,
             )?;
         }
+
+        wb.write()?;
 
         Ok(())
     }
@@ -365,6 +377,30 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    /// The exclusive upper bound the embedded rpc-store imposes on the
+    /// pruner's eligible range: one past the highest checkpoint every
+    /// embedded-cohort pipeline has committed
+    /// ([`sui_rpc_store::embedded_prunable_checkpoint`]). The indexer's
+    /// backfill and gap-fill assemble full checkpoints from the
+    /// perpetual and checkpoint stores, so pruning a checkpoint's data
+    /// (contents, effects, or the object versions its transactions
+    /// read) before every pipeline has committed it would stall the
+    /// indexer permanently on a checkpoint that can no longer be
+    /// served. `u64::MAX` (no bound) when no embedded store is
+    /// configured; `0` (nothing eligible) while any cohort pipeline
+    /// has no watermark yet.
+    fn rpc_store_max_eligible_checkpoint(
+        rpc_store: Option<&RpcStore>,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
+        let Some(rpc_store) = rpc_store else {
+            return Ok(u64::MAX);
+        };
+        let indexed = sui_rpc_store::embedded_prunable_checkpoint(rpc_store.db())?;
+        // The eligible bound is exclusive, so `indexed + 1` still
+        // allows pruning the committed checkpoint itself.
+        Ok(indexed.map_or(0, |c| c.saturating_add(1)))
+    }
+
     /// Prunes old data based on effects from all checkpoints from epochs eligible for pruning
     pub async fn prune_objects_for_eligible_epochs(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
@@ -391,6 +427,15 @@ impl AuthorityStorePruner {
                 epoch_duration_ms,
                 config.num_epochs_to_retain,
             )?;
+        }
+        let rpc_store_bound = Self::rpc_store_max_eligible_checkpoint(rpc_store)?;
+        if rpc_store_bound < max_eligible_checkpoint_number {
+            info!(
+                "objects pruning gated by the embedded rpc-store indexer: \
+                 max eligible checkpoint {} -> {}",
+                max_eligible_checkpoint_number, rpc_store_bound,
+            );
+            max_eligible_checkpoint_number = rpc_store_bound;
         }
         Self::prune_for_eligible_epochs(
             perpetual_db,
@@ -442,6 +487,19 @@ impl AuthorityStorePruner {
                 epoch_duration_ms,
                 num_epochs_to_retain,
             )?;
+        }
+        // With `num_epochs_to_retain == u64::MAX` the objects floor
+        // never advances, so the clamp above does not apply and the
+        // rpc-store bound is the only thing keeping checkpoint contents
+        // around for the indexer; apply it in both cases regardless.
+        let rpc_store_bound = Self::rpc_store_max_eligible_checkpoint(rpc_store)?;
+        if rpc_store_bound < max_eligible_checkpoint {
+            info!(
+                "checkpoint pruning gated by the embedded rpc-store indexer: \
+                 max eligible checkpoint {} -> {}",
+                max_eligible_checkpoint, rpc_store_bound,
+            );
+            max_eligible_checkpoint = rpc_store_bound;
         }
         debug!("Max eligible checkpoint {}", max_eligible_checkpoint);
         Self::prune_for_eligible_epochs(
@@ -503,14 +561,11 @@ impl AuthorityStorePruner {
         // directly instead of summing checkpoint content sizes.
         let mut pruned_tx_seq_exclusive = 0u64;
 
-        loop {
-            let Some(ckpt) = checkpoint_store
-                .tables
-                .certified_checkpoints
-                .get(&(checkpoint_number + 1))?
-            else {
-                break;
-            };
+        while let Some(ckpt) = checkpoint_store
+            .tables
+            .certified_checkpoints
+            .get(&(checkpoint_number + 1))?
+        {
             let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark (including the watermark itself)
@@ -853,8 +908,7 @@ impl AuthorityStorePruner {
             .checked_div(Self::pruning_tick_duration_ms(epoch_duration_ms))
             .unwrap_or(1);
         let delta = max_eligible_checkpoint
-            .checked_sub(pruned_checkpoint)
-            .unwrap_or_default()
+            .saturating_sub(pruned_checkpoint)
             .checked_div(num_intervals)
             .unwrap_or(1);
         Ok(pruned_checkpoint + delta)
@@ -1104,6 +1158,65 @@ mod tests {
     use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions, default_db_options};
 
     use super::AuthorityStorePruner;
+
+    /// The embedded rpc-store gate: no bound without a store, nothing
+    /// eligible while any cohort pipeline is unwatermarked, and one
+    /// past the slowest pipeline's watermark otherwise.
+    #[test]
+    fn rpc_store_gate_bounds_eligible_checkpoints() {
+        use sui_consistent_store::Db;
+        use sui_consistent_store::DbOptions;
+        use sui_consistent_store::FrameworkSchema;
+        use sui_consistent_store::PipelineTaskKey;
+        use sui_consistent_store::Watermark;
+        use sui_rpc_store::HISTORY_COHORT;
+        use sui_rpc_store::LIVE_COHORT;
+        use sui_rpc_store::RpcStoreSchema;
+
+        // No embedded store configured: pruning is unbounded.
+        assert_eq!(
+            AuthorityStorePruner::rpc_store_max_eligible_checkpoint(None).unwrap(),
+            u64::MAX,
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let store = sui_rpc_store::Store::new(db.clone(), Arc::new(schema));
+
+        // Cohort pipelines with no watermarks yet (a from-genesis
+        // build before its first commit): nothing is eligible.
+        assert_eq!(
+            AuthorityStorePruner::rpc_store_max_eligible_checkpoint(Some(&store)).unwrap(),
+            0,
+        );
+
+        // Every cohort pipeline committed through 41 except one
+        // history pipeline lagging at 7: pruning may cover the
+        // straggler's committed range [0, 7] and no further.
+        let framework = FrameworkSchema::new(db.clone());
+        let mut batch = db.batch();
+        for name in LIVE_COHORT.iter().chain(HISTORY_COHORT) {
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(*name),
+                    &Watermark::for_checkpoint(41),
+                )
+                .unwrap();
+        }
+        batch
+            .put(
+                &framework.watermarks,
+                &PipelineTaskKey::new(HISTORY_COHORT[0]),
+                &Watermark::for_checkpoint(7),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        assert_eq!(
+            AuthorityStorePruner::rpc_store_max_eligible_checkpoint(Some(&store)).unwrap(),
+            8,
+        );
+    }
 
     #[cfg(not(tidehunter))]
     fn get_keys_after_pruning(path: &Path) -> anyhow::Result<HashSet<ObjectKey>> {

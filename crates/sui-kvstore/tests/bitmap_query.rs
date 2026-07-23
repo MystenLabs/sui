@@ -66,6 +66,7 @@ fn bitmap_query_stream(
         spec.bucket_size,
         direction,
         u64::MAX,
+        sui_inverted_index::SkipPolicy::DRAIN_ONLY,
         |_| {},
     );
     use futures::TryStreamExt;
@@ -241,6 +242,136 @@ async fn test_eval_bitmap_query_and() -> Result<()> {
     .await?;
     assert_eq!(result, vec![3, 4, 5]);
 
+    Ok(())
+}
+
+/// The all-zeros sender address (`0x0`, the system-transaction sender) embeds 32 NUL bytes
+/// into the raw row key. Pinned against range-scan/emulator key handling treating the zero
+/// key as a prefix of the whole Sender dimension: `include(0x0)` must return only its own
+/// row's bits, never other senders'.
+#[tokio::test]
+async fn test_zero_address_sender_key_isolation() -> Result<()> {
+    let (mut client, _emulator) = setup_emulator().await?;
+
+    let dim_zero = encode_dimension_key(IndexDimension::Sender, &[0x00; 32]);
+    let dim_other = encode_dimension_key(IndexDimension::Sender, &[0xAA; 32]);
+
+    write_bitmap(&mut client, &dim_other, 0, &[2, 3]).await?;
+
+    // Phase 1 — the zero row is ABSENT (the shape a bootstrap-genesis cluster produces, where
+    // the only 0x0 transaction was never indexed): include(0x0) must match nothing, not leak
+    // the other sender's rows.
+    let query = BitmapQuery::new(vec![BitmapTerm::new(vec![BitmapLiteral::include(
+        dim_zero.clone(),
+    )?])?])?;
+    let result: Vec<u64> = bitmap_query_stream(
+        &client,
+        query,
+        0..100_000,
+        BitmapIndexSpec::tx(),
+        ScanDirection::Ascending,
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(
+        result,
+        Vec::<u64>::new(),
+        "include of an absent 0x0 row must match nothing"
+    );
+
+    // Phase 2 — the zero row exists alongside another sender's.
+    write_bitmap(&mut client, &dim_zero, 0, &[1]).await?;
+
+    // include(0x0) returns only the zero row's bits.
+    let query = BitmapQuery::new(vec![BitmapTerm::new(vec![BitmapLiteral::include(
+        dim_zero.clone(),
+    )?])?])?;
+    let result: Vec<u64> = bitmap_query_stream(
+        &client,
+        query,
+        0..100_000,
+        BitmapIndexSpec::tx(),
+        ScanDirection::Ascending,
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(
+        result,
+        vec![1],
+        "include(0x0) must not absorb other senders"
+    );
+
+    // exclude(0x0) anchored on another sender subtracts only the zero row's bits.
+    let query = BitmapQuery::new(vec![BitmapTerm::new(vec![
+        BitmapLiteral::include(dim_other)?,
+        BitmapLiteral::exclude(dim_zero)?,
+    ])?])?;
+    let result: Vec<u64> = bitmap_query_stream(
+        &client,
+        query,
+        0..100_000,
+        BitmapIndexSpec::tx(),
+        ScanDirection::Ascending,
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(
+        result,
+        vec![2, 3],
+        "exclude(0x0) must subtract only the zero row"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn filters_seek_past_skewed_gap_against_emulator() -> Result<()> {
+    let (mut client, _emulator) = setup_emulator().await?;
+    let dimension_x = encode_dimension_key(IndexDimension::Sender, &[0x11; 32]);
+    let dimension_y = encode_dimension_key(IndexDimension::MoveCall, &[0x22; 32]);
+    let spec = BitmapIndexSpec::tx();
+    let bucket_size = spec.bucket_size;
+
+    for bucket in [0, 40] {
+        write_bitmap(&mut client, &dimension_x, bucket, &[1]).await?;
+    }
+    for bucket in 0..=40 {
+        write_bitmap(&mut client, &dimension_y, bucket, &[1]).await?;
+    }
+
+    let query = BitmapQuery::new(vec![BitmapTerm::new(vec![
+        BitmapLiteral::include(dimension_x)?,
+        BitmapLiteral::include(dimension_y)?,
+    ])?])?;
+    let source = BigTableBitmapSource::new(client, spec);
+    let (metrics_tx, metrics_rx) = std::sync::mpsc::channel();
+    let marked: Vec<Watermarked<u64>> = eval_bitmap_query_stream(
+        source,
+        query,
+        0..(41 * bucket_size),
+        bucket_size,
+        ScanDirection::Ascending,
+        1_000,
+        sui_inverted_index::SkipPolicy {
+            drain_probe_rows: std::num::NonZeroU32::new(2),
+        },
+        move |metrics| metrics_tx.send(metrics).unwrap(),
+    )
+    .map_err(anyhow::Error::new)
+    .try_collect()
+    .await?;
+    let items: Vec<u64> = marked
+        .into_iter()
+        .filter_map(|item| match item {
+            Watermarked::Item(item) => Some(item),
+            Watermarked::Watermark(_) => None,
+        })
+        .collect();
+    let metrics = metrics_rx.recv().expect("metrics callback ran");
+
+    assert_eq!(items, vec![1, 40 * bucket_size + 1]);
+    assert!(metrics.leaf_seeks >= 1);
+    assert!(metrics.buckets_discarded <= 4);
     Ok(())
 }
 

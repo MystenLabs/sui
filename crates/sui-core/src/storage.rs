@@ -29,7 +29,6 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
-use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::LedgerBitmapBucketIterator;
@@ -39,6 +38,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::WriteStore;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
@@ -100,6 +100,15 @@ impl ReadStore for RocksDbStore {
     ) -> Option<VerifiedCheckpoint> {
         self.checkpoint_store
             .get_checkpoint_by_sequence_number(sequence_number)
+            .expect("db error")
+    }
+
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        self.checkpoint_store
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)
             .expect("db error")
     }
 
@@ -268,6 +277,15 @@ impl ReadStore for RocksDbStore {
             .get_unchanged_loaded_runtime_objects(digest)
     }
 
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        self.cache_traits
+            .transaction_cache_reader
+            .multi_get_unchanged_loaded_runtime_objects(digests)
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -320,6 +338,12 @@ impl ObjectStore for RocksDbStore {
         self.cache_traits
             .object_store
             .get_object_by_key(object_id, version)
+    }
+
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey]) -> Vec<Option<Object>> {
+        self.cache_traits
+            .object_cache_reader
+            .multi_get_objects_by_key(object_keys)
     }
 }
 
@@ -421,6 +445,10 @@ impl ObjectStore for RestReadStore {
     ) -> Option<Object> {
         self.rocks.get_object_by_key(object_id, version)
     }
+
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey]) -> Vec<Option<Object>> {
+        self.rocks.multi_get_objects_by_key(object_keys)
+    }
 }
 
 impl ReadStore for RestReadStore {
@@ -460,6 +488,14 @@ impl ReadStore for RestReadStore {
     ) -> Option<VerifiedCheckpoint> {
         self.rocks
             .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        self.rocks
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)
     }
 
     fn get_checkpoint_contents_by_digest(
@@ -523,6 +559,14 @@ impl ReadStore for RestReadStore {
         self.rocks.get_unchanged_loaded_runtime_objects(digest)
     }
 
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        self.rocks
+            .multi_get_unchanged_loaded_runtime_objects(digests)
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -531,7 +575,7 @@ impl ReadStore for RestReadStore {
     }
 }
 
-impl ChildObjectResolver for RestReadStore {
+impl RuntimeObjectResolver for RestReadStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -651,6 +695,10 @@ impl ObjectStore for RpcStoreReadStore {
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         self.rocks.get_object_by_key(object_id, version)
     }
+
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey]) -> Vec<Option<Object>> {
+        self.rocks.multi_get_objects_by_key(object_keys)
+    }
 }
 
 impl ReadStore for RpcStoreReadStore {
@@ -676,7 +724,17 @@ impl ReadStore for RpcStoreReadStore {
                         "live-indexed checkpoint {indexed} missing from the checkpoint store"
                     ))
                 }),
-            _ => Ok(latest),
+            Some(_) => Ok(latest),
+            // Fail closed: no live watermark means the index surface is
+            // empty -- a fresh node whose indexer has not committed its
+            // first checkpoint yet. Reporting the executed tip here would
+            // advertise checkpoints whose indexed state is not readable,
+            // the exact inconsistency the bound above exists to prevent.
+            // The window closes with the live cohort's first commit,
+            // moments after startup.
+            None => Err(StorageError::missing(
+                "the embedded rpc-store's live index has no committed checkpoint yet",
+            )),
         }
     }
 
@@ -707,6 +765,14 @@ impl ReadStore for RpcStoreReadStore {
     ) -> Option<VerifiedCheckpoint> {
         self.rocks
             .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn multi_get_checkpoint_by_sequence_number(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Vec<Option<VerifiedCheckpoint>> {
+        self.rocks
+            .multi_get_checkpoint_by_sequence_number(sequence_numbers)
     }
 
     fn get_checkpoint_contents_by_digest(
@@ -770,6 +836,14 @@ impl ReadStore for RpcStoreReadStore {
         self.rocks.get_unchanged_loaded_runtime_objects(digest)
     }
 
+    fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Vec<Option<Vec<ObjectKey>>> {
+        self.rocks
+            .multi_get_unchanged_loaded_runtime_objects(digests)
+    }
+
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -778,7 +852,7 @@ impl ReadStore for RpcStoreReadStore {
     }
 }
 
-impl ChildObjectResolver for RpcStoreReadStore {
+impl RuntimeObjectResolver for RpcStoreReadStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
