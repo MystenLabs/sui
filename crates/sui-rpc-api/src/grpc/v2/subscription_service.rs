@@ -180,15 +180,12 @@ impl SubscriptionService for RpcService {
                         }
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, tx_hi } => {
-                        // Checkpoint `cp` is fully delivered; the resume cursor lands
-                        // on the first transaction of `cp + 1`. The synthetic start
-                        // tick establishes only the cursor.
-                        let entry_checkpoint =
-                            *entry_checkpoint.get_or_insert(cp.saturating_add(1));
-                        if cp >= entry_checkpoint {
-                            boundary =
-                                merge_covered_checkpoint_bound(boundary, cp, &options);
-                        }
+                        record_watermark_tick_coverage(
+                            &mut boundary,
+                            &mut entry_checkpoint,
+                            cp,
+                            &options,
+                        );
                         let mut response = SubscribeTransactionsResponse::default();
                         response.watermark = Some(boundary_watermark(
                             Position::Transactions {
@@ -299,12 +296,12 @@ impl SubscriptionService for RpcService {
                         }
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, tx_hi } => {
-                        let entry_checkpoint =
-                            *entry_checkpoint.get_or_insert(cp.saturating_add(1));
-                        if cp >= entry_checkpoint {
-                            boundary =
-                                merge_covered_checkpoint_bound(boundary, cp, &options);
-                        }
+                        record_watermark_tick_coverage(
+                            &mut boundary,
+                            &mut entry_checkpoint,
+                            cp,
+                            &options,
+                        );
                         let mut response = SubscribeEventsResponse::default();
                         response.watermark = Some(boundary_watermark(
                             Position::Events {
@@ -417,6 +414,23 @@ fn render_transaction_message(
     message
 }
 
+/// Fold a subscription progress tick into the stream's checkpoint coverage.
+/// A filtered subscription's first tick names the checkpoint immediately before
+/// its entry checkpoint; later ticks name checkpoints the actor fully processed.
+/// Both establish a safe covered boundary.
+fn record_watermark_tick_coverage(
+    covered_checkpoint_bound: &mut Option<u64>,
+    entry_checkpoint: &mut Option<u64>,
+    checkpoint: u64,
+    options: &QueryOptions,
+) {
+    if entry_checkpoint.is_none() {
+        *entry_checkpoint = Some(checkpoint.saturating_add(1));
+    }
+    *covered_checkpoint_bound =
+        merge_covered_checkpoint_bound(*covered_checkpoint_bound, checkpoint, options);
+}
+
 fn compile_transaction_filter(
     service: &RpcService,
     filter: Option<&TransactionFilter>,
@@ -465,6 +479,29 @@ mod tests {
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
+    #[test]
+    fn initial_watermark_tick_covers_checkpoint_before_entry() {
+        let options = QueryOptions::subscription();
+        let mut covered_checkpoint_bound = None;
+        let mut entry_checkpoint = None;
+
+        record_watermark_tick_coverage(
+            &mut covered_checkpoint_bound,
+            &mut entry_checkpoint,
+            41,
+            &options,
+        );
+        let watermark = boundary_watermark(
+            Position::Transactions {
+                checkpoint: 42,
+                tx_seq: 100,
+            },
+            covered_checkpoint_bound,
+        );
+
+        assert_eq!(entry_checkpoint, Some(42));
+        assert_eq!(watermark.checkpoint, Some(41));
+    }
 
     #[test]
     fn transaction_objects_exclude_checkpoint_siblings() {
