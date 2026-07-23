@@ -8,7 +8,7 @@ use crate::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
             set_err_info,
-            state::{CallStack, MachineState},
+            state::{CallStack, MachineState, TypeArguments},
         },
         tracing::{trace, tracer::VMTracer},
         values::{
@@ -16,10 +16,9 @@ use crate::{
             Vector, VectorRef, VectorSpecialization,
         },
     },
-    jit::execution::ast::{Bytecode, CallType, Function, Type},
+    jit::execution::ast::{ArenaType, Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
-    shared::type_size_formulae::TypeSize,
     shared::{
         gas::{GasMeter, SimpleInstruction},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
@@ -269,7 +268,13 @@ fn step(
                 .map_err(|err| {
                     set_err_info!(run_context.interner(), state.call_stack.current_frame, err)
                 })?;
-            call_function(state, run_context, gas_meter, function, vec![])?;
+            call_function(
+                state,
+                run_context,
+                gas_meter,
+                function,
+                TypeArguments::empty(),
+            )?;
             Ok(StepStatus::Running)
         }
         Bytecode::DirectCall(function) => {
@@ -281,7 +286,13 @@ fn step(
                     None,
                 )
             });
-            call_function(state, run_context, gas_meter, function.ptr_clone(), vec![])?;
+            call_function(
+                state,
+                run_context,
+                gas_meter,
+                function.ptr_clone(),
+                TypeArguments::empty(),
+            )?;
             Ok(StepStatus::Running)
         }
         _ => {
@@ -736,15 +747,12 @@ fn op_step_impl(
         }
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
             // A vector value of this element type is created here; validate the element type's
-            // limits and the created value's depth.
+            // limits and the created value's depth before doing anything else.
             run_context
                 .vtables
                 .check_vector_element(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
             let value = Vector::pack(specialization, elements)?;
@@ -752,10 +760,7 @@ fn op_step_impl(
         }
         Bytecode::VecLen(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_len()?;
             let value = vec_ref.len_internal(specialization)?;
             state.push_operand(value)?;
@@ -763,10 +768,7 @@ fn op_step_impl(
         Bytecode::VecImmBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem_internal(idx, specialization);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
@@ -774,10 +776,7 @@ fn op_step_impl(
         Bytecode::VecMutBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.borrow_elem_internal(idx, specialization);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
@@ -785,10 +784,7 @@ fn op_step_impl(
         Bytecode::VecPushBack(ty_ptr) => {
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_push_back(&elem)?;
             vec_ref.push_back_internal(
                 elem,
@@ -798,20 +794,14 @@ fn op_step_impl(
         }
         Bytecode::VecPopBack(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             let res = vec_ref.pop_internal(specialization);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
             let elements = vec_val.unpack_internal(specialization, *num)?;
             for value in elements {
@@ -822,10 +812,7 @@ fn op_step_impl(
             let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let specialization = VectorSpecialization::from_element(
-                ty_ptr.to_ref(),
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(ty_ptr, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_swap()?;
             vec_ref.swap_internal(idx1, idx2, specialization)?;
         }
@@ -919,16 +906,15 @@ fn call_function(
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
     function: VMPointer<Function>,
-    ty_args: Vec<(Type, TypeSize)>,
+    ty_args: TypeArguments,
 ) -> VMResult<()> {
     trace!(run_context.tracer, |tracer| {
-        let ty_arg_types: Vec<Type> = ty_args.iter().map(|(ty, _)| ty.clone()).collect();
         tracer.enter_frame(
             run_context.vtables,
             state,
             &gas_meter.remaining_gas().into(),
             &function,
-            &ty_arg_types,
+            ty_args.types(),
         )
     });
 
@@ -954,8 +940,7 @@ fn call_function(
     }
 
     if function.is_native() {
-        let ty_arg_types: Vec<Type> = ty_args.iter().map(|(ty, _)| ty.clone()).collect();
-        let native_result = call_native(state, run_context, gas_meter, &function, &ty_arg_types);
+        let native_result = call_native(state, run_context, gas_meter, &function, ty_args.types());
 
         // NB: Pass any error into the tracer before raising it.
         trace!(run_context.tracer, |tracer| {
@@ -1151,7 +1136,7 @@ fn push_call_frame(
     state: &mut MachineState,
     run_context: &mut RunContext,
     function: VMPointer<Function>,
-    ty_args: Vec<(Type, TypeSize)>,
+    ty_args: TypeArguments,
 ) -> VMResult<()> {
     let fun_ref = function.ptr_clone().to_ref();
     let args = checked_as!(fun_ref.arg_count(), u16)
@@ -1179,9 +1164,16 @@ fn partial_error_to_error<T>(
     })
 }
 
+/// The vector specialization of an element type term, resolved against the frame's type
+/// arguments. No realized element type is built.
+fn vector_spec(elem: &ArenaType, ty_args: &TypeArguments) -> PartialVMResult<VectorSpecialization> {
+    VectorSpecialization::from_element(elem, ty_args.types())
+}
+
 /// Check that a concrete value type's nesting depth is within the configured limit before a
 /// value of it is created (`Pack`/`PackVariant`). Solved from the type's resolved formula — the
-/// type is never walked field by field.
+/// type is never walked field by field. `ty` is depth-bounded by construction, so `type_size_of`'s
+/// recursion over it is safe.
 fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<()> {
     let Some(max_depth) = run_context
         .vm_config

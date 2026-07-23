@@ -4,7 +4,7 @@
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
-        interpreter::state::{CallStack, MachineState},
+        interpreter::state::{CallStack, MachineState, TypeArguments},
         tracing::trace,
         values::Value,
     },
@@ -73,21 +73,14 @@ pub(crate) fn run(
             });
             return_result.map(|values| values.into_iter().collect())
         } else {
-            // Pair every entry-point type argument with its size once, keeping the two together;
-            // every limit check against them during execution is pure arithmetic from here on.
-            let ty_args = ty_args
-                .into_iter()
-                .map(|ty| {
-                    let size = vtables.type_size_of(&ty)?;
-                    Ok((ty, size))
-                })
-                .collect::<PartialVMResult<Vec<_>>>()
-                .map_err(|e| {
-                    e.at_code_offset(fun_ref.index(), 0)
-                        .finish(Location::Module(
-                            fun_ref.module_id(&vtables.interner).clone(),
-                        ))
-                })?;
+            // Size every entry-point type argument once; every limit check against them during
+            // execution is pure arithmetic from here on.
+            let ty_args = TypeArguments::new(vtables, ty_args).map_err(|e| {
+                e.at_code_offset(fun_ref.index(), 0)
+                    .finish(Location::Module(
+                        fun_ref.module_id(&vtables.interner).clone(),
+                    ))
+            })?;
             let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
                     .finish(Location::Module(

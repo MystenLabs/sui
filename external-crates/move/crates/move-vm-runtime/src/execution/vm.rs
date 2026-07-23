@@ -5,7 +5,8 @@ use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{
-        dispatch_tables::VMDispatchTables, interpreter, tracing::tracer::VMTracer, values::Value,
+        dispatch_tables::VMDispatchTables, interpreter, interpreter::state::TypeArguments,
+        tracing::tracer::VMTracer, values::Value,
     },
     jit::execution::ast::{ArenaType, Function, Type},
     natives::extensions::NativeExtensions,
@@ -427,10 +428,7 @@ impl<'extensions> MoveVM<'extensions> {
         // Pair the type arguments with their sizes so substitution goes through the checked
         // dispatch-table path, which bounds each realized type against the traversal limits
         // before building it.
-        let ty_args = ty_args
-            .iter()
-            .map(|ty| Ok((ty.clone(), self.virtual_tables.type_size_of(ty)?)))
-            .collect::<PartialVMResult<Vec<_>>>()
+        let ty_args = TypeArguments::new(&self.virtual_tables, ty_args.to_vec())
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
         let instantiate = |ty: &ArenaType| self.virtual_tables.subst_type(ty, &ty_args);
 
