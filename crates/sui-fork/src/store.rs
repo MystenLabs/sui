@@ -64,7 +64,7 @@ use crate::TransactionInfo;
 use crate::inventory::InventoryInitializer;
 use crate::local_store::LocalStore;
 use crate::local_store::ObjectRemoval;
-use crate::metadata::ForkMetadataStore;
+use crate::metadata::MetadataStore;
 use crate::pending::PendingCheckpointBuffer;
 use crate::remote::RemoteSource;
 
@@ -88,7 +88,7 @@ struct ForkStoreInner {
     /// Checkpoint-pinned GraphQL access to the forked-from chain; owns all
     /// pre/post-fork remote-read policy.
     remote: RemoteSource,
-    metadata: ForkMetadataStore,
+    metadata: MetadataStore,
     local_store: LocalStore,
     /// Lazy full-enumeration initializer for the owner/type indexes.
     inventory: InventoryInitializer,
@@ -103,7 +103,7 @@ impl ForkStore {
     pub(crate) fn from_parts(
         forked_at_checkpoint: CheckpointSequenceNumber,
         gql: GraphQLClient,
-        metadata: ForkMetadataStore,
+        metadata: MetadataStore,
         local_store: LocalStore,
     ) -> Self {
         let remote = RemoteSource::new(gql, forked_at_checkpoint);
@@ -147,7 +147,7 @@ impl ForkStore {
         self.inner.remote.gql()
     }
 
-    pub(crate) fn metadata(&self) -> &ForkMetadataStore {
+    pub(crate) fn metadata(&self) -> &MetadataStore {
         &self.inner.metadata
     }
 
@@ -505,7 +505,7 @@ impl ForkStore {
             "test",
         )
         .expect("graphql store with localhost url should construct");
-        let metadata = ForkMetadataStore::new_with_root(root);
+        let metadata = MetadataStore::new_with_root(root);
         Self::from_parts(0, gql, metadata, local_store)
     }
 
@@ -520,7 +520,7 @@ impl ForkStore {
     ) -> Self {
         let gql = GraphQLClient::new(crate::Node::Custom(gql_url), "test")
             .expect("graphql store with custom url should construct");
-        let metadata = ForkMetadataStore::new_with_root(root);
+        let metadata = MetadataStore::new_with_root(root);
         Self::from_parts(forked_at_checkpoint, gql, metadata, local_store)
     }
 

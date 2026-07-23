@@ -28,8 +28,8 @@ use wiremock::matchers::body_partial_json;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
-use crate::rpc::reader::ForkRpcReader;
-use crate::runtime::ForkRuntime;
+use crate::rpc::reader::RpcReader;
+use crate::services::ServiceManager;
 
 use super::*;
 
@@ -128,35 +128,38 @@ async fn mount_events_error_mock(server: &MockServer) {
         .await;
 }
 
-fn open_test_runtime(root: &Path, forked_at_checkpoint: CheckpointSequenceNumber) -> ForkRuntime {
-    ForkRuntime::open(
+fn open_test_services(
+    root: &Path,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+) -> ServiceManager {
+    ServiceManager::open(
         root,
         "custom".to_owned(),
         forked_at_checkpoint,
         CheckpointDigest::new([9; 32]).into(),
     )
-    .expect("fork runtime should open")
+    .expect("service manager should open")
 }
 
-fn test_data_store(root: &Path) -> (ForkStore, ForkRuntime) {
-    let runtime = open_test_runtime(root, 0);
-    let store = ForkStore::new_for_testing(root.to_path_buf(), runtime.local_store());
-    (store, runtime)
+fn test_data_store(root: &Path) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, 0);
+    let store = ForkStore::new_for_testing(root.to_path_buf(), services.local_store());
+    (store, services)
 }
 
 fn test_data_store_with_remote(
     root: &Path,
     gql_url: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
-) -> (ForkStore, ForkRuntime) {
-    let runtime = open_test_runtime(root, forked_at_checkpoint);
+) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, forked_at_checkpoint);
     let store = ForkStore::new_for_testing_with_remote(
         root.to_path_buf(),
         gql_url,
         forked_at_checkpoint,
-        runtime.local_store(),
+        services.local_store(),
     );
-    (store, runtime)
+    (store, services)
 }
 
 fn checkpoint_response(
@@ -263,7 +266,7 @@ async fn mount_transaction_mock(
 #[tokio::test]
 async fn rpc_store_hit_returns_transaction_without_remote() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let (store, runtime) = test_data_store(temp.path());
+    let (store, services) = test_data_store(temp.path());
 
     let (checkpoint, contents, executed) = checkpoint_with_transaction(1);
     let verified = signed_transaction(&executed);
@@ -271,7 +274,7 @@ async fn rpc_store_hit_returns_transaction_without_remote() {
 
     // Pre-populate rpc-store; the fake GraphQL URL in `new_for_testing`
     // would fail if the remote path were reached.
-    let local_store = runtime.local_store();
+    let local_store = services.local_store();
     local_store
         .save_checkpoint(&checkpoint, &contents)
         .expect("checkpoint should be saved");
@@ -314,14 +317,14 @@ async fn remote_fallback_saves_pre_fork_transaction_in_rpc_store() {
     .await;
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), 10);
+    let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), 10);
 
     let got = ForkStore::get_transaction(&store, &digest)
         .expect("remote fetch should succeed")
         .expect("transaction should be fetched");
     assert_eq!(*got.digest(), digest);
 
-    let reader = runtime.reader();
+    let reader = services.reader();
     let rpc_tx = ReadStore::get_transaction(&reader, &digest)
         .expect("transaction should be saved in rpc store");
     assert_eq!(*rpc_tx.digest(), digest);
@@ -341,7 +344,7 @@ async fn remote_fallback_saves_pre_fork_transaction_in_rpc_store() {
         fallback_temp.path().to_path_buf(),
         "http://localhost:1".to_owned(),
         store.forked_at_checkpoint(),
-        runtime.local_store(),
+        services.local_store(),
     );
 
     let fallback_tx = ForkStore::get_transaction(&fallback_store, &digest)
@@ -357,7 +360,7 @@ async fn remote_fallback_saves_pre_fork_transaction_in_rpc_store() {
             .expect("rpc-store checkpoint lookup should succeed"),
         Some(checkpoint.data().sequence_number),
     );
-    let fallback_reader = ForkRpcReader::new(fallback_store);
+    let fallback_reader = RpcReader::new(fallback_store);
     assert_eq!(
         ReadStore::get_events(&fallback_reader, &digest)
             .expect("events should be read from rpc store"),
@@ -383,7 +386,7 @@ async fn remote_fallback_errors_when_required_events_fail_to_fetch() {
     .await;
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), 10);
+    let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), 10);
 
     let err = ForkStore::get_transaction(&store, &digest)
         .expect_err("required event fetch failure should fail transaction save");
@@ -393,7 +396,7 @@ async fn remote_fallback_errors_when_required_events_fail_to_fetch() {
         "unexpected error: {err:#}",
     );
     assert!(
-        ReadStore::get_transaction(&runtime.reader(), &digest).is_none(),
+        ReadStore::get_transaction(&services.reader(), &digest).is_none(),
         "failed save must not persist the transaction",
     );
 }
@@ -416,7 +419,7 @@ async fn remote_fallback_rejects_post_fork_transaction() {
         .await;
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 10);
+    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 10);
 
     let got = ForkStore::get_transaction(&store, &digest)
         .expect("remote fetch should not error on post-fork digest");

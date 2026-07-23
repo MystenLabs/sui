@@ -449,7 +449,7 @@ impl LocalStore {
     /// inputs and the embedded indexer ingests each sealed checkpoint from
     /// these very rows. All *derived* indexes (owner, type, package-version,
     /// balance, bitmaps) are written by the indexer alone, and checkpoint
-    /// publication blocks on `ForkRuntime::wait_for_indexed_checkpoint`, so
+    /// publication blocks on `ServiceManager::wait_for_indexed_checkpoint`, so
     /// RPC reads issued after an execution returns always see fully indexed
     /// state. Pre-fork materialization (seed and inventory saves) still
     /// writes indexes synchronously because the indexer only processes
