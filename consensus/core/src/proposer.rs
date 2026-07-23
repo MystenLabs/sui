@@ -625,6 +625,7 @@ impl Proposer for ValidatorProposer {
         let extended_block = ExtendedBlock {
             block: verified_block,
             excluded_ancestors,
+            compressed_once: Default::default(),
         };
 
         // Update round tracker with our own highest accepted blocks

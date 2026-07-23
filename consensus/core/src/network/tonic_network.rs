@@ -145,12 +145,28 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .take_while(|b| futures::future::ready(b.is_ok()))
             .filter_map(move |b| async move {
                 match b {
-                    Ok(response) => Some(ExtendedSerializedBlock {
-                        // Copy out of the h2 receive buffer so retaining the block
-                        // does not pin the multi-MB network buffer chunk.
-                        block: Bytes::from(response.block.to_vec()),
-                        excluded_ancestors: response.excluded_ancestors,
-                    }),
+                    Ok(response) => {
+                        // zstd frame magic: sender used compress-once mode.
+                        // Decompression yields an owned buffer (also unpins the
+                        // network chunk); otherwise copy out explicitly.
+                        let block = if response.block.len() >= 4
+                            && response.block[..4] == [0x28, 0xB5, 0x2F, 0xFD]
+                        {
+                            match zstd::stream::decode_all(response.block.as_ref()) {
+                                Ok(decompressed) => Bytes::from(decompressed),
+                                Err(e) => {
+                                    debug!("Failed to decompress block from {}: {e:?}", peer);
+                                    return None;
+                                }
+                            }
+                        } else {
+                            Bytes::from(response.block.to_vec())
+                        };
+                        Some(ExtendedSerializedBlock {
+                            block,
+                            excluded_ancestors: response.excluded_ancestors,
+                        })
+                    }
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
                         None
@@ -977,7 +993,9 @@ impl TonicManager {
             .accept_compressed(CompressionEncoding::Zstd);
         // Test knob: skip outbound compression of this author's block streams, to
         // measure per-stream compression's share of send-path dispatch latency.
-        if std::env::var("CONSENSUS_DISABLE_STREAM_COMPRESSION").is_err() {
+        if std::env::var("CONSENSUS_DISABLE_STREAM_COMPRESSION").is_err()
+            && std::env::var("CONSENSUS_COMPRESS_ONCE").is_err()
+        {
             consensus_service_server =
                 consensus_service_server.send_compressed(CompressionEncoding::Zstd);
         }
