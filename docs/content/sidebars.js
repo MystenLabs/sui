@@ -370,6 +370,29 @@ export default {
           'onchain-finance/tokenized-assets/create-nft',
         ],
       },
+	  {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/gas-station',
+        'onchain-finance/p2p-reference-app',
+        {
+          type: 'category',
+          label: 'Agentic Payments',
+          link: { type: 'doc', id: 'onchain-finance/agentic-payments/index' },
+          items: [
+            'onchain-finance/agentic-payments/agent-wallet-setup',
+            'onchain-finance/agentic-payments/spending-policies',
+            'onchain-finance/agentic-payments/settlement-verification',
+            'onchain-finance/agentic-payments/production-hardening',
+          ],
+        },
+      ],
+    },
       {
         type: 'category',
         label: 'Example Asset Patterns',
@@ -522,29 +545,6 @@ export default {
       items: [
         'onchain-finance/kiosk/kiosk-example',
         'onchain-finance/kiosk/kiosk-apps',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Payments',
-      link: { type: 'doc', id: 'onchain-finance/payments' },
-      items: [
-        'onchain-finance/choose-payments-model',
-        'onchain-finance/payment-kit',
-        'onchain-finance/payment-intents',
-        'onchain-finance/gas-station',
-        'onchain-finance/p2p-reference-app',
-        {
-          type: 'category',
-          label: 'Agentic Payments',
-          link: { type: 'doc', id: 'onchain-finance/agentic-payments/index' },
-          items: [
-            'onchain-finance/agentic-payments/agent-wallet-setup',
-            'onchain-finance/agentic-payments/spending-policies',
-            'onchain-finance/agentic-payments/settlement-verification',
-            'onchain-finance/agentic-payments/production-hardening',
-          ],
-        },
       ],
     },
   ],
