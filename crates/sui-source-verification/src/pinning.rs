@@ -6,7 +6,7 @@ use std::path::Path;
 use move_package_alt::SourcePackageLayout;
 
 /// A dependency pinned to a revision that can move, such as a branch or a tag.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MovingRevision {
     pub dependency: String,
     pub rev: String,
@@ -34,7 +34,7 @@ fn moving_revisions_in(contents: &str) -> Vec<MovingRevision> {
 
     let mut found = vec![];
     collect(&lock, None, &mut found);
-    found.sort_by(|a, b| (&a.dependency, &a.rev).cmp(&(&b.dependency, &b.rev)));
+    found.sort();
     found.dedup();
     found
 }

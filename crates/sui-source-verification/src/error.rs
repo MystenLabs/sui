@@ -4,7 +4,6 @@
 use std::fmt;
 
 use move_core_types::account_address::AccountAddress;
-use move_symbol_pool::Symbol;
 use sui_types::base_types::ObjectID;
 
 /// One or more [`Error`]s from a verification run. Comparison errors are collected so that all
@@ -61,7 +60,7 @@ pub enum Error {
     #[error("Could not deserialize on-chain module {address}::{module}")]
     OnChainModuleDeserialization {
         address: AccountAddress,
-        module: Symbol,
+        module: String,
     },
 
     #[error(
@@ -80,13 +79,13 @@ pub enum Error {
     InvalidModule { name: String, message: String },
 
     #[error("Module {module} bytecode does not match its on-chain version")]
-    ModuleBytecodeMismatch { module: Symbol },
+    ModuleBytecodeMismatch { module: String },
 
     #[error("Module {module} is produced by the source but is not present on-chain")]
-    SourceModuleNotOnChain { module: Symbol },
+    SourceModuleNotOnChain { module: String },
 
     #[error("Module {module} is present on-chain but is not produced by the source")]
-    OnChainModuleNotInSource { module: Symbol },
+    OnChainModuleNotInSource { module: String },
 
     #[error(
         "Dependency {original} is linked at a different version: on-chain {on_chain}, source {in_source}"

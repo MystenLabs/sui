@@ -116,11 +116,11 @@ git log --all -S <PACKAGE_ID> -- '**/Published.toml' '**/Move.lock'
 Use `--all`: publishers frequently publish from a short-lived branch and merge it afterward, so the
 commit you want might not be on the main branch at all.
 
-That commit is a starting point, not an answer. A publish records the address *after* the build, so the
-recording commit can already contain source changes that were never published, and a release tag cut
-later still can be further ahead again. If a small number of modules continue to differ there, trust
-the module list over the commit: take each named module and walk its own history around the publish
-date, rebuilding with that file swapped in until the mismatch clears.
+The recording commit is often not the one that was built. A publish records the address *after* the
+build, so it can already contain source changes that were never published, and a release tag cut later
+can be further ahead again. If a small number of modules still differ there, trust the module list over
+the commit: take each named module, walk its history around the publish date, and rebuild with that
+file swapped in until the mismatch clears.
 
 ```bash
 git log --all --oneline <PUBLISH_DATE_RANGE> -- path/to/the/module.move
@@ -144,12 +144,11 @@ Compiler output is stable across neighboring releases, so an adjacent version us
 same bytecode; a version from far in the past or future might not, because the bytecode file format
 changes occasionally.
 
-That stability cuts both ways, and it is worth taking seriously before you start guessing. Because a
-whole band of releases generally produces *identical* bytecode, trying many versions explores far fewer
-distinct outcomes than it appears to: a sweep of ten releases might amount to only one or two real
-attempts. So if a version from roughly the right era fails, trying its neighbors is unlikely to help.
-Treat a broad failure as evidence that something other than the toolchain is wrong (the source, or the
-dependencies) rather than as a reason to widen the sweep.
+Because a whole band of releases usually produces *identical* bytecode, trying many versions explores
+far fewer distinct outcomes than it looks like: a sweep of ten releases might be only one or two real
+attempts. If a version from roughly the right era fails, its neighbors are unlikely to help. A broad
+failure usually means the problem is the source or the dependencies, not the toolchain, so widening the
+sweep does not help.
 
 `--toolchain-version` is also the workaround when a package's recorded toolchain cannot be used at all,
 for example a release whose framework revision is no longer available. The command fails early in that
@@ -185,12 +184,12 @@ Older toolchains require every dependency to declare its published address, and 
 it:
 
 ```
-Failed to publish the Move module(s), reason: Package dependency "Wormhole" does not specify a
-published address (the Move.toml manifest for "Wormhole" does not contain a published-at field).
+Failed to publish the Move module(s), reason: Package dependency "MyDep" does not specify a
+published address (the Move.toml manifest for "MyDep" does not contain a published-at field).
 ```
 
 This happens when the pinned revision of a dependency is a plain library checkout whose manifest leaves
-its address unset (`wormhole = "_"`), even though the package it links against is onchain. The publisher
+its address unset (`my_dep = "_"`), even though the package it links against is onchain. The publisher
 usually supplied the address out of band, by depending on a network-specific branch of the dependency
 or on a local checkout.
 
@@ -199,11 +198,11 @@ address to its manifest, and depend on it by local path.
 
 ```toml
 [package]
-name = "Wormhole"
+name = "MyDep"
 published-at = "0x5306f64e..."   # the dependency's address on this network
 
 [addresses]
-wormhole = "0x5306f64e..."
+my_dep = "0x5306f64e..."
 ```
 
 Supplying the address yourself does not weaken the check. Verification compares the root package's

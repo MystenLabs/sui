@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_symbol_pool::Symbol;
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::MovePackage;
@@ -17,7 +16,7 @@ use crate::error::Error;
 /// package id, and its linkage table reduced to `original id -> storage id`.
 pub struct OnChainPackage {
     pub original_id: AccountAddress,
-    pub modules: BTreeMap<Symbol, CompiledModule>,
+    pub modules: BTreeMap<String, CompiledModule>,
     pub linkage: BTreeMap<AccountAddress, AccountAddress>,
 }
 
@@ -33,7 +32,7 @@ pub async fn fetch(client: &Client, on_chain_id: ObjectID) -> Result<OnChainPack
                 module: name.as_str().into(),
             }
         })?;
-        modules.insert(Symbol::from(name.as_str()), module);
+        modules.insert(name.as_str().to_string(), module);
     }
 
     if modules.is_empty() {
