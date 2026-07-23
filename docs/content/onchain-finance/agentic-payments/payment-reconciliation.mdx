@@ -1,0 +1,166 @@
+---
+title: Payment History and Reconciliation
+description: >-
+  Track, query, and reconcile agent payment history using gRPC queries,
+  event subscriptions, and custom indexer pipelines.
+keywords:
+  - payment history
+  - reconciliation
+  - transaction history
+  - event subscription
+  - indexer
+  - audit
+---
+
+Autonomous agents can lose track of payments due to crashes, network timeouts, or retry failures. Payment reconciliation compares the agent's local payment records against onchain transaction history to detect missed, duplicate, or failed payments.
+
+## Querying transaction history
+
+Use gRPC `ListTransactions` to retrieve all transactions sent by the agent's address:
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+
+async function getAgentTransactions(agentAddress: string) {
+  const transactions = [];
+  let cursor: string | undefined;
+
+  while (true) {
+    const page = await client.listTransactions({
+      filter: { sentAddress: agentAddress },
+      limit: 50,
+      cursor,
+    });
+
+    transactions.push(...page.transactions);
+
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+
+  return transactions;
+}
+```
+
+For each transaction, inspect the balance changes to determine the payment amount and recipient:
+
+```typescript
+async function extractPaymentDetails(digest: string) {
+  const result = await client.getTransaction({
+    digest,
+    include: { balanceChanges: true, effects: true },
+  });
+
+  if (result.$kind === 'FailedTransaction') {
+    return { status: 'failed', digest };
+  }
+
+  const tx = result.Transaction!;
+  const payments = (tx.balanceChanges ?? [])
+    .filter((change) => BigInt(change.amount) > 0n)
+    .map((change) => ({
+      recipient: change.owner,
+      amount: change.amount,
+      coinType: change.coinType,
+    }));
+
+  return { status: 'success', digest, payments };
+}
+```
+
+## Real-time monitoring with event subscriptions
+
+For real-time payment tracking, subscribe to events emitted by your payment module:
+
+```typescript
+const subscription = await client.subscribeEvent({
+  filter: {
+    MoveEventType: '0xPACKAGE::payment::PaymentExecuted',
+  },
+  onMessage: (event) => {
+    console.log('Payment event:', event.parsedJson);
+    // Update local database
+  },
+});
+```
+
+:::tip Choose the right approach
+
+Use transaction queries for batch reconciliation (hourly or daily). Use event subscriptions for real-time monitoring and alerting. For production systems at scale, combine both with a [custom indexer pipeline](/develop/accessing-data/custom-indexer).
+
+:::
+
+## Reconciliation algorithm
+
+Compare the agent's local payment database against onchain history:
+
+```typescript
+interface LocalPaymentRecord {
+  id: string;
+  digest: string | null; // null if submission failed
+  amount: bigint;
+  recipient: string;
+  status: 'pending' | 'confirmed' | 'failed';
+}
+
+async function reconcile(
+  localRecords: LocalPaymentRecord[],
+  agentAddress: string,
+) {
+  const onchainTxs = await getAgentTransactions(agentAddress);
+  const onchainDigests = new Set(onchainTxs.map((tx) => tx.digest));
+
+  const discrepancies = [];
+
+  for (const record of localRecords) {
+    if (record.status === 'confirmed' && record.digest && !onchainDigests.has(record.digest)) {
+      // Local says confirmed, but not found onchain
+      discrepancies.push({
+        type: 'missing_onchain',
+        record,
+        action: 'Verify digest and re-query. May need to re-submit.',
+      });
+    }
+
+    if (record.status === 'pending' && record.digest && onchainDigests.has(record.digest)) {
+      // Local says pending, but it's confirmed onchain
+      discrepancies.push({
+        type: 'unacknowledged_confirmation',
+        record,
+        action: 'Update local status to confirmed.',
+      });
+    }
+  }
+
+  // Check for onchain transactions not in local records (unexpected payments)
+  const localDigests = new Set(localRecords.map((r) => r.digest).filter(Boolean));
+  for (const tx of onchainTxs) {
+    if (!localDigests.has(tx.digest)) {
+      discrepancies.push({
+        type: 'unknown_transaction',
+        digest: tx.digest,
+        action: 'Investigate. May be a duplicate retry or unauthorized transaction.',
+      });
+    }
+  }
+
+  return discrepancies;
+}
+```
+
+## Production reconciliation
+
+For production agents processing high volumes, use a [custom indexer](/develop/accessing-data/custom-indexer) built on the `sui-indexer-alt` framework. The indexer continuously processes checkpoints and writes payment data to your database, giving you a complete, queryable history without polling the RPC.
+
+Key design points:
+
+- **Pipeline per event type.** Create a dedicated indexer pipeline for your payment events so it can be scaled independently.
+- **Idempotent writes.** The indexer may reprocess checkpoints. Use `ON CONFLICT` / upsert patterns in your database writes.
+- **Watermark tracking.** The framework tracks which checkpoint each pipeline has processed, so you can verify there are no gaps in your payment history.
+
+See [Accessing Data](/develop/accessing-data) for the full overview of data access options.

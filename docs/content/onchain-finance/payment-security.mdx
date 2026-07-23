@@ -1,0 +1,147 @@
+---
+title: Payment Security Patterns
+description: >-
+  Security patterns for payment applications on Sui, including escrow
+  authorization, duplicate prevention, object ownership choices, and
+  time-based expiry.
+keywords:
+  - payment security
+  - escrow
+  - nonce
+  - replay prevention
+  - duplicate payments
+  - shared objects
+  - owned objects
+---
+
+Payment applications handle value transfers where bugs or design flaws can cause direct financial loss. This page consolidates security patterns specific to payment flows on Sui. For general smart contract security, see [Security Best Practices](/develop/security/best-practices).
+
+## Escrow authorization
+
+An escrow holds funds until a condition is met. The two critical authorization checks are: only the designated recipient can claim, and only the sender can cancel.
+
+```move
+module example::escrow;
+
+use sui::coin::Coin;
+use sui::sui::SUI;
+
+const ENotRecipient: u64 = 0;
+const ENotSender: u64 = 1;
+
+public struct Escrow has key {
+    id: UID,
+    sender: address,
+    recipient: address,
+    balance: Coin<SUI>,
+}
+
+/// Create an escrow. The sender deposits funds.
+public fun create(
+    coin: Coin<SUI>,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    let escrow = Escrow {
+        id: object::new(ctx),
+        sender: ctx.sender(),
+        recipient,
+        balance: coin,
+    };
+    transfer::share_object(escrow);
+}
+
+/// Claim the escrow. Only the recipient can call this.
+public fun claim(escrow: Escrow, ctx: &TxContext) {
+    assert!(ctx.sender() == escrow.recipient, ENotRecipient);
+    let Escrow { id, sender: _, recipient: _, balance } = escrow;
+    transfer::public_transfer(balance, ctx.sender());
+    id.delete();
+}
+
+/// Cancel the escrow and return funds. Only the sender can call this.
+public fun cancel(escrow: Escrow, ctx: &TxContext) {
+    assert!(ctx.sender() == escrow.sender, ENotSender);
+    let Escrow { id, sender, recipient: _, balance } = escrow;
+    transfer::public_transfer(balance, sender);
+    id.delete();
+}
+```
+
+:::caution Avoid shared escrows without access control
+
+If you make the escrow a shared object (as shown above), anyone can pass it as a transaction argument. The `assert!` checks are essential — without them, any address could claim or cancel the escrow.
+
+:::
+
+## Duplicate payment prevention
+
+### Transaction-level deduplication
+
+Every Sui transaction has a unique digest. Use the digest as a natural nonce — if the same digest is submitted twice, the network rejects the second submission. This provides automatic deduplication at the transaction level.
+
+### Application-level deduplication
+
+For business-level deduplication (for example, preventing two transactions that both pay invoice #1234), maintain a registry of processed payment IDs onchain:
+
+```move
+module example::dedup;
+
+use sui::table::{Self, Table};
+
+const EDuplicatePayment: u64 = 0;
+
+public struct PaymentRegistry has key {
+    id: UID,
+    processed: Table<vector<u8>, bool>,
+}
+
+public fun process_payment(
+    registry: &mut PaymentRegistry,
+    payment_id: vector<u8>,
+) {
+    assert!(!registry.processed.contains(&payment_id), EDuplicatePayment);
+    registry.processed.add(payment_id, true);
+}
+```
+
+Pass a unique `payment_id` (invoice number, order ID, or UUID) with each payment transaction. The `process_payment` call aborts if the ID was already used.
+
+## Shared vs owned objects for payments
+
+| Aspect | Owned objects | Shared objects |
+|---|---|---|
+| **Access** | Only the owner can use in transactions | Any address can use (with access control) |
+| **Contention** | None — single writer | Consensus required — potential contention |
+| **Best for** | Simple transfers, single-user wallets | Escrows, mandates, registries, multi-party flows |
+| **Latency** | Lower (no consensus needed) | Higher (consensus ordering) |
+
+**Recommendations:**
+
+- Use **owned `Coin` objects** or **address balances** for simple peer-to-peer transfers. No contention, fastest execution.
+- Use **shared objects** for escrows, spending mandates, and payment registries where multiple parties need access.
+- Avoid shared objects when only one party ever writes to them — use owned objects instead and transfer when ownership changes.
+
+## Time-based payment windows
+
+Use the onchain `Clock` for time-based expiry rather than epoch numbers. Epochs vary in length (~24 hours on Mainnet, but not guaranteed), while `Clock` provides millisecond-precision wall-clock time.
+
+```move
+use sui::clock::Clock;
+
+const EPaymentExpired: u64 = 0;
+
+public fun pay_with_deadline(
+    clock: &Clock,
+    deadline_ms: u64,
+) {
+    assert!(clock.timestamp_ms() <= deadline_ms, EPaymentExpired);
+    // ... process payment
+}
+```
+
+:::tip Set reasonable deadlines
+
+For payment windows, 5-15 minutes is typical for interactive payments (user clicking "pay"). For agent-to-agent payments (x402, API monetization), 60 seconds is usually sufficient. Longer windows increase the risk of price changes or double-spend attempts.
+
+:::
