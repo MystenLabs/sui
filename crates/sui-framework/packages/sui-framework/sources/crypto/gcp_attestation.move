@@ -52,8 +52,11 @@ public struct GcpAttestationDocument has drop {
 
 /// Verify a GCP Confidential Spaces attestation JWT and return the extracted claims.
 ///
-/// The RSA public key is looked up internally from the consensus-validated JWK set
-/// using the GCP issuer and the supplied `kid`. No AuthenticatorState input is needed.
+/// Like Nitro attestation, the `kid` needed to look up the trusted RSA public key is read
+/// directly from the JWT header rather than supplied by the caller: the native implementation
+/// parses the header once, extracts `kid`, looks up the consensus-validated JWK set using the
+/// GCP issuer and that `kid`, and verifies the signature and claims. No AuthenticatorState
+/// input is needed.
 ///
 /// This verifies token authenticity and time validity, but it does not authorize a workload.
 /// Callers MUST compare `aud()` with their expected audience and enforce their workload policy
@@ -63,22 +66,17 @@ public struct GcpAttestationDocument has drop {
 /// freshly generated value in `eat_nonce()` and consume it after successful verification. Reusing
 /// an unexpired token succeeds unless the caller tracks nonce use.
 ///
-/// @param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature).
-/// @param kid: The key ID from the JWT header, identifying which trusted key to use.
+/// @param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature). The header
+/// must contain a non-empty `kid` claim identifying which trusted key to use.
 /// @param clock: The clock object used to check token expiry.
 ///
 /// Aborts with ENotSupportedError if the feature is disabled,
-/// EParseError if the token cannot be parsed,
-/// EKidNotFoundError if `kid` is not found in the trusted JWK set,
+/// EParseError if the token cannot be parsed or its header `kid` is missing, empty, or oversized,
+/// EKidNotFoundError if the header `kid` is not found in the trusted JWK set,
 /// EVerifyError if the signature or claims are invalid.
-entry fun verify_gcp_attestation(
-    token: vector<u8>,
-    kid: vector<u8>,
-    clock: &Clock,
-): GcpAttestationDocument {
+entry fun verify_gcp_attestation(token: vector<u8>, clock: &Clock): GcpAttestationDocument {
     verify_gcp_attestation_internal(
         &token,
-        &kid,
         clock::timestamp_ms(clock),
     )
 }
@@ -145,9 +143,9 @@ public fun restart_policy(doc: &GcpAttestationDocument): &vector<u8> {
     &doc.restart_policy
 }
 
-/// Internal native function.
+/// Internal native function. The trusted key is looked up by the `kid` read from the JWT
+/// header inside `token`; no separate `kid` argument is needed.
 native fun verify_gcp_attestation_internal(
     token: &vector<u8>,
-    kid: &vector<u8>,
     current_timestamp_ms: u64,
 ): GcpAttestationDocument;

@@ -2,38 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gcp_attestation::{
-    GcpAttestationError, extract_kid_from_jwt, is_gcp_attestation_call, verify_gcp_attestation,
+    GCP_ISSUER, GcpAttestationError, MAX_RSA_MODULUS_SIZE, MIN_RSA_MODULUS_SIZE, ParsedGcpJwt,
+    RS256_ALG, is_gcp_attestation_call, rsa_exponent_ok, validate_rsa_public_key,
+    verify_gcp_attestation,
 };
 use crate::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
-const EXPECTED_ISSUER: &str = "https://confidentialcomputing.googleapis.com";
-
-// Pre-generated RSA-2048 test keys and pre-signed JWTs.
-// Generated once via crates/sui-types/tests/gen_gcp_test_vectors.rs (now deleted).
+// Pre-generated RSA-2048 test keys and pre-signed JWTs, all containing a `kid` header claim.
+// Generated once via a throwaway Python `cryptography` script (not checked in).
 // All tokens use NOW_MS = 1_700_000_000_000 as the reference time.
 const NOW_MS: u64 = 1_700_000_000_000;
+const TEST_KID: &str = "test-kid-001";
 
-// Primary test key (key A) — base64url-encoded modulus and exponent
-const KEY_A_N: &str = "5Q_dKcwT2Bn7jh4qXmNjzsIHtgXRMDAYcOedHYJIZG-qglZg_ZMdmUwp4tF8lL9kXUZ09OvkwCdrH28rm87hA2UookBxHCQL0VIpJnykusCy2pqFb198TQ4xp4GvEgCY823nex6PpV_q-R2efGqMAg6I3VeFb9Fs0-dpDZ_KNZYse3c3y3RromaBK8nXg4dpHEta7i1Em_jaCzXOqwpr0SWJq7J0L6mKCh9jzsETXfzCvQYPG0LC0eZ2cpBViWCZ5iwPN7Wh994my0WWZ5p0zhgNCQsso4e0VlBWii6rjVqZfX-EHMuz5pvzXwlarWy9_L_65SEdM7kgGhsSyg-Hlw";
+// Primary test key (key A) — base64url-encoded modulus and exponent.
+const KEY_A_N: &str = "sZoorsILtRO6BjX7BTHj3CbUCsREm4VMikJCoixjwiYCPoAu7wcrE-EtuEluHPl6cTIR0osS8he6Y5BIYom_eYFpopkktpDt89enRl4E0dXOrCdwRjVpepnK3CL_eZSUnutuMtl172Opt7vnnotx4b4hzIuEI-ywhTM7iWbvSd98sc8u_STQjx4P1GT3hr4K-JehRxUae_g8nL-24dw8_H0G4u493FiHrxK4M9jHdIGtI9C19_uEZHydif2y70OwoIgs-GEhw2pjl0NZX_VZSXJ2J6mtHMxkYRI4PE18yjNM9MgmEnEptiGcUU1r6KO4fg5RSEVnLQCoDtFyd7uEvw";
 const KEY_A_E: &str = "AQAB";
 
-// Wrong key (key B) — different keypair for signature mismatch tests
-const KEY_B_N: &str = "0kmExZ-vhOpqUO8Ff0H8QAAihAa7aVRT-Qugg7D91hadHyzxktnCfoNxOc2orboUfLLOf6OIuQqG7mGFjTz4dKCrbmAHutwJaJvjlPavcDWPPv2i4LT6-m-Qqdploml1Osi1jVEsDjWzI3DWCpe-_umgRXGOhzfUq7klr0-Wu8shCoJVsxXxSntcZBHpcKOtU6A0yXgPi7AvQGUDhcxBKeAGlELt7RSde6dc0SA-0omZok174o4n8vnw9rZpNjuGP_V9qXiDGLg2OsciK8JmMmA3CDU-i_H0BoSmg8xjS4mMF-2i70DXdv_NAlJFeTYXZK1_58pXUWS47uY5OhBAqw";
+// Wrong key (key B) — different keypair for signature mismatch tests.
+const KEY_B_N: &str = "pXZ4ZUpUzDQaYs8F9pnaSoNTGmafmLBUpoMVQdkZL2k4yhWE3Y4_pkvUR8URsQoIl1baX7abh_gjYkwzOkausJehttR0JpxzOraQ8pNIQ-8nMGT__T6N0IeW1pqyPoIqyiwPGKlyXC4RAinMpJ_TdpaNRSEYLMr7hjZ9WlYtSyi17tad7eFWDCKVXIjj24NxmZ-PGqkGiuMg2VlafJxjswlnQxipAwzkD3difajMMA0clI-hTxCv4YNlPI7ukDstdCwFN8bJ3CuW-2Vjivwu2IPGnNJoeQ6Ss_zKTv8dUjtf8wzj9XD20UBvyKeUnqc7l4793cESzudS4-GZMvIf7w";
 const KEY_B_E: &str = "AQAB";
 
-// Pre-signed JWT tokens (RS256, signed with key A)
+// Pre-signed JWT tokens (RS256, signed with key A), all with `kid`="test-kid-001" in the header.
 // Valid: iss=GCP, exp=now+3600, iat=now-10
-const VALID_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDM2MDAsImlhdCI6MTY5OTk5OTk5MCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.aGiTXA-4LCk800gwBj6TOKQKyp-MNnFD5uskbre4kvMCiFA0LZWYpinDv2BLQGQ4g6kLUUkVlQr2JyT05ycHaZ8s6KefF1G_N0TcHOK6WI3McR3Ym8aLTXFHr0sUtEbgZ15P8XOsaKItDMC33Pt6ZGGnxEkFG0gDvmoRbEtvmx9YwnJrycwqWngaUD-lYpC07xk9dhhws5n6h-e_10K-kSxfYi21rlNeaw9V9rgYirGPTTdy3I_8m--4AyTmro7lqXv-5Ep2D_A1USMpDtmcZ2fg7WWXu1NxraW7zgmO57r86AOAUIqRBjwF-H5fhU123rc0SiUFQEEAcIUXvAEE_Q";
+const VALID_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDM2MDAsImlhdCI6MTY5OTk5OTk5MCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.igZOxBZWeu6YfHqQOoimOWfHSzl9Cr4tiyT2hQ-GMlLYXoQ_ln0u8p13VVFdFfrd2xLfpqNvhNOyq4DarhguSumyv9rmvBUiy_iQ5ZezpJtfMTOChmDVb-bgIDxF4221GR6DjfhuOTxwpVgz4vxnTqH5ABVAQ-mv_XC0MAO2xFhvBMtkDRdvEFPhETyWizS9M_We_M_zj5c35ug0no33_nS-u-bFCnArVcQNlVyHTtkrkhGE6d3-xHi5V3Fs3rYxqENOMdAx5EbCm2-g_jiXjGdahCb5QkGjtO_HYM2NJo4Z-fHZzYkCmSYJGeUqXKeSmGT2F2Y2dbdGdOU60pCp7Q";
 // Expired: exp=now-1, iat=now-3600
-const EXPIRED_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE2OTk5OTk5OTksImlhdCI6MTY5OTk5NjQwMCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.XjHRrIT_aWAjnRxL2cB_U2J-nMTxywwqBIN3SC5IDiGt2ea5gK1Msc-KYZFirmzuuKgMHENbehXWFSsOfyXPBexqlVQQlzSNdwUvw8FYeucyR9qWHdYYjaQFJWAUcHEbXbSoVoQ3_mV5XW4d2HbbC3d3NLNtuYSpYqTB8kQNLLqBsLsForYx5QE-0McQBDd0Sqa3d9AWYkYB9KLPvY9EB3mjlmdyB_IYl7MWi_hA4DIy1rK5lII4LP6e_f7laDbCuLowQaJ9xX2amlf_CnPktprPUe_MTHw350ZppeHJ5EyUHMM_I2ofNaAuc_rKmUOccmWx0CHU0dnv4qEyszaxvA";
+const EXPIRED_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE2OTk5OTk5OTksImlhdCI6MTY5OTk5NjQwMCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.LNCAJMg3yq3uWkSdswWI4c0Sdr_BEUMTlPl2J0TiZlfvxyw1XeD9pdgAp4gawPeOSNjYtGhNVfV6PYNzohYUfzYEEporjkrUCMtPSfnD7qARxu03i7Ms9qlQekaanOlQxNSsarnN-CSJPVsQ1Z8bZQ1iRM60Nx1DiIIsK2QZ6HKYMFntTiLr-a2sQpvRuythicbCSuRoASW7Fam7J2fQQaGTUB1kY2fVRXvB53in33YZKKqGsbdOI4c_YR01OWtNoRXIHkdYzUgDLpSueIPjiE9pgBCCphp2a5HzXUfRii8BA7x60JKouNUXgslZbhSGO5O74TThy4FWf7F2HQ2n1A";
 // Wrong issuer: iss=wrong.issuer.example.com
-const WRONG_ISS_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3dyb25nLmlzc3Vlci5leGFtcGxlLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDM2MDAsImlhdCI6MTY5OTk5OTk5MCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.BLUZGV_h1jZibacPiJ2_kgiS6MEyMacH3v_nVvtW3F3FKEGyYvm7t9hjMh35rkNv3u5jb7if7GRDTSsvEe09CXMTwxmZSLQh6Q57ppaMWDtDCRzqMivcvC8kS1fGA14CAcWUm2F_i2XrVpMnn2wZY33UpXa4nU-7Hk3jQnfd2D0LG-Blynmx3fuBVQZG4lqZKwmpF1-Y9hJJhleF_RNW6zCe_P2-1d5W-uJZOlfZ2LLi6TfFi7Kr2I2Ft2l_KtM28LV4kzmvKfEn_yKZco8LD1UpJPmemYxxIDYuRXYfmSw2GLEsLm0h_NCJD5uQso2P0eYF9OEb4_-GDhilJusfVw";
+const WRONG_ISS_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL3dyb25nLmlzc3Vlci5leGFtcGxlLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDM2MDAsImlhdCI6MTY5OTk5OTk5MCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.DNH_b4oQZKO-fRZNDst4y4Ag3qjzLCKWxiNtzFq64mSQW6LP_QLd-G6viYcIMmfI6nZ06UaJAFV-x5PknKn9DrwljOS1Hpkj81C9ElFKd-GNGrCLiWvQpfIBOUQo61hEXChpYcPDPhsR5MqObYupr602QuNiblYb5UWZasMIa-GOWLzfd5zZZyaSzTF-WUQAr6MnvQJRi2uyseKUjy6BXEABpb1hHyUM9yX3SYewvu53wpkjXv5ORJu4jiaobadiYNUZWkgLaCHW9SX7T6NFuJROe9nO1JNgO8dmTghIRAOP2pndPk2iZWds8FICUNhzmTm4jMKH5nNvIoiqxggTHw";
 // Future iat: iat=now+3600, exp=now+7200
-const FUTURE_IAT_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDcyMDAsImlhdCI6MTcwMDAwMzYwMCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.FNlNYhkpbYi6m0ggRL48q9t3UK1rZL3WDkv-SawfeUiuVh1MIIH972ezp-yKDocp8jnqFNxo150XX76ngG1SgslcqFqj0Xm-ihMrLyQ-78AvzWpElNqfFXsSFeDAT2dC-8GraTF7RIPlM4ewFZ1_XFNSpUQVw_QkTGqYBNO6pCuzQRCV9eF6cROI598j7ZMTK87Is-qqRWk0Ndw_UENpJdj8GRSl-kjOpeU4l15b9e9LTrZKX252RgC2jziHhjsMSACA_WHlCC_pn6wvba4J7_U8KAls7fdFcW18PwBM4WioClRsiBs2tgAiddYtSU0lagATCT6NamYKqZIn7oe-gQ";
+const FUTURE_IAT_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDcyMDAsImlhdCI6MTcwMDAwMzYwMCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.jKux0m8RaBFYN3hrg00H9teAYxxPNkOkPi9cY9mVgI7oLATo19eXSVs5Yg7LDDe3PnErj3nWax6EwiWr5emonbWWCXbxRs0def7GYfYVYPLv4HURXDX51iWVBK2IFts9xW4svKWXs2Aq4QlvQYbAZ_VZfKJaTro0M0uAEbGXWuwSY0GuyZuypKAN28YF2lHruwv4sH1I_pCAaajp-qQcP_S3P84JjQ8ZCFCFvbC_gq5ZlqKnqwpbh9nhKG65tYdTC5XqMdsdN4vF5hPPpZPHh4bhWs8dnvt9ACzcjPJMwzot_ZBh7OqLi_V6NMDjCiNndY2Hl9ODwZ-2y_A_HksfAQ";
 // Real GCP payload structure: exp=4000000000 (year 2096), iat=1700000000
-const REAL_GCP_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6Imh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL2NvbXB1dGUvdjEvcHJvamVjdHMvazhzLWNsdXN0ZXJzLTM5NzUyMS96b25lcy91cy1jZW50cmFsMS1iL2luc3RhbmNlcy9jb25mc3BhY2UtaGVsbG8iLCJhdWQiOiJodHRwczovL215LXZlcmlmaWVyLmV4YW1wbGUiLCJleHAiOjQwMDAwMDAwMDAsImlhdCI6MTcwMDAwMDAwMCwibmJmIjoxNzAwMDAwMDAwLCJlYXRfbm9uY2UiOiI0MDdlNzcwMi1jZWM4LTQ0NmMtOGQ0Ni00NjY5ODcyMzU0M2MiLCJlYXRfcHJvZmlsZSI6Imh0dHBzOi8vY2xvdWQuZ29vZ2xlLmNvbS9jb25maWRlbnRpYWwtY29tcHV0aW5nL2NvbmZpZGVudGlhbC1zcGFjZS9kb2NzL3JlZmVyZW5jZS90b2tlbi1jbGFpbXMiLCJzZWNib290Ijp0cnVlLCJvZW1pZCI6MTExMjksImh3bW9kZWwiOiJHQ1BfQU1EX1NFViIsInN3bmFtZSI6IkNPTkZJREVOVElBTF9TUEFDRSIsInN3dmVyc2lvbiI6WyIyNTAzMDEiXSwiZGJnc3RhdCI6ImRpc2FibGVkLXNpbmNlLWJvb3QiLCJzdWJtb2RzIjp7ImNvbmZpZGVudGlhbF9zcGFjZSI6eyJzdXBwb3J0X2F0dHJpYnV0ZXMiOlsiTEFURVNUIiwiU1RBQkxFIiwiVVNBQkxFIl0sIm1vbml0b3JpbmdfZW5hYmxlZCI6eyJtZW1vcnkiOmZhbHNlfX0sImNvbnRhaW5lciI6eyJpbWFnZV9yZWZlcmVuY2UiOiJ1cy1jZW50cmFsMS1kb2NrZXIucGtnLmRldi9rOHMtY2x1c3RlcnMtMzk3NTIxL2NvbmZzcGFjZS10ZXN0L2hlbGxvX3dvcmxkQHNoYTI1NjphYzkxZGQzNjgxOTNlZmE5Mzg3NzZmMzVmZjcxNWUyOWY5MDdjMmI2NjcxYmFlNjU4OWQ0NGY2MGM4ZDgyYTU0IiwiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFjOTFkZDM2ODE5M2VmYTkzODc3NmYzNWZmNzE1ZTI5ZjkwN2MyYjY2NzFiYWU2NTg5ZDQ0ZjYwYzhkODJhNTQiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIiwiaW1hZ2VfaWQiOiJzaGEyNTY6ODJhOTZiOTM2YjIyMzY2NTI2YTRiMWE5NjBkYTNiMjYxMzVlNzc3N2Q1Yzg2ZWNjNGY0ODc0MmVjMGE2NTU1NyIsImVudiI6eyJIT1NUTkFNRSI6ImNvbmZzcGFjZS1oZWxsbyIsIlBBVEgiOiIvdXNyL2xvY2FsL3NiaW46L3Vzci9sb2NhbC9iaW46L3Vzci9zYmluOi91c3IvYmluOi9zYmluOi9iaW4iLCJTU0xfQ0VSVF9GSUxFIjoiL2V0Yy9zc2wvY2VydHMvY2EtY2VydGlmaWNhdGVzLmNydCJ9LCJhcmdzIjpbIi9oZWxsb193b3JsZCJdfSwiZ2NlIjp7InpvbmUiOiJ1cy1jZW50cmFsMS1iIiwicHJvamVjdF9pZCI6Ims4cy1jbHVzdGVycy0zOTc1MjEiLCJwcm9qZWN0X251bWJlciI6IjY2MDg5MjIyNzQwNyIsImluc3RhbmNlX25hbWUiOiJjb25mc3BhY2UtaGVsbG8iLCJpbnN0YW5jZV9pZCI6IjU4NzczNjMzMzAwNzU5ODY1MiJ9fSwiZ29vZ2xlX3NlcnZpY2VfYWNjb3VudHMiOlsiY29uZnNwYWNlLXJ1bm5lckBrOHMtY2x1c3RlcnMtMzk3NTIxLmlhbS5nc2VydmljZWFjY291bnQuY29tIl19.0Pk0nTcM35tGU-fb6jCv-HEZfKXjklI4MqYBUpJqCy98wqkzZ9QR4EvB-fIEZC1zfgkYTvqgtOxco7Q-56oa8rzLnIG_6uC7HwfrkXL9ASeSS6kk2ygyapN-zJrlfsdHOoWM7ILNH9UtBVk0h-IPHgra80qMQO41_X75rBHY30g39dyPUMmanN-rh0M-nFPDU-WyAGehfbbjPGWZS0oodu1Tk4v1C6SmeNclYEW2-DKKsxSZyzZgBq46BUws7ZOrf84eW8qfeEGHOA6b29qQZivUdfkwR1txH4ZwI_oPO8c5-p6DI-1gfY8C5sh9-BRQelhIo9WMUMRbbKE4lbcAeQ";
+const REAL_GCP_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6Imh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL2NvbXB1dGUvdjEvcHJvamVjdHMvazhzLWNsdXN0ZXJzLTM5NzUyMS96b25lcy91cy1jZW50cmFsMS1iL2luc3RhbmNlcy9jb25mc3BhY2UtaGVsbG8iLCJhdWQiOiJodHRwczovL215LXZlcmlmaWVyLmV4YW1wbGUiLCJleHAiOjQwMDAwMDAwMDAsImlhdCI6MTcwMDAwMDAwMCwibmJmIjoxNzAwMDAwMDAwLCJlYXRfbm9uY2UiOiI0MDdlNzcwMi1jZWM4LTQ0NmMtOGQ0Ni00NjY5ODcyMzU0M2MiLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJzd3ZlcnNpb24iOlsiMjUwMzAxIl0sImRiZ3N0YXQiOiJkaXNhYmxlZC1zaW5jZS1ib290Iiwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfcmVmZXJlbmNlIjoidXMtY2VudHJhbDEtZG9ja2VyLnBrZy5kZXYvazhzLWNsdXN0ZXJzLTM5NzUyMS9jb25mc3BhY2UtdGVzdC9oZWxsb193b3JsZEBzaGEyNTY6YWM5MWRkMzY4MTkzZWZhOTM4Nzc2ZjM1ZmY3MTVlMjlmOTA3YzJiNjY3MWJhZTY1ODlkNDRmNjBjOGQ4MmE1NCIsImltYWdlX2RpZ2VzdCI6InNoYTI1NjphYzkxZGQzNjgxOTNlZmE5Mzg3NzZmMzVmZjcxNWUyOWY5MDdjMmI2NjcxYmFlNjU4OWQ0NGY2MGM4ZDgyYTU0IiwicmVzdGFydF9wb2xpY3kiOiJOZXZlciJ9fX0.lyDVf3eXfFG8g63CjQ8T9D3F9P26aSdgLBIO91f_93oJG40pyVtuTqhD_8CUW3E91jz_sgeTykULD49ATs2bK1EoTxllL5PfKFqJQMsn8684yT8UROJO1WrQOBSmxixkNNn5GKFkn_5u_6egLW8ze35geuCX4_sR6GrRpmRetbtE2tpW9AdTJaz5GfeGISb9J48pkEoDzG3eEr2b4cO0t_g6j_0byxaTFy7N1nemp0dIluRdpIrioY6yJELRR0jwjG_fTPqOhv1iE-8E_U1rosnKgQyTbmVRORE83T6Rk9-4MwUCPZdmGIACjg3mZrwYGiyhbyHozKhy2Z772hDBFA";
+// Well-formed structure (RS256, kid present) but an all-zero signature that cannot verify
+// against any key.
+const WELL_FORMED_BAD_SIG_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDM2MDAsImlhdCI6MTY5OTk5OTk5MCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+// Same claims as `VALID_TOKEN`, but the header has been tampered with post-signing
+// (dropped the `typ` field) while `kid` still names a registered key.
+const TAMPERED_HEADER_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkLTAwMSJ9.eyJpc3MiOiJodHRwczovL2NvbmZpZGVudGlhbGNvbXB1dGluZy5nb29nbGVhcGlzLmNvbSIsInN1YiI6InRlc3Qtc3ViamVjdCIsImF1ZCI6InRlc3QtYXVkaWVuY2UiLCJleHAiOjE3MDAwMDM2MDAsImlhdCI6MTY5OTk5OTk5MCwiZWF0X25vbmNlIjpbIm5vbmNlMSIsIm5vbmNlMiJdLCJzZWNib290Ijp0cnVlLCJod21vZGVsIjoiR0NQX0FNRF9TRVYiLCJzd25hbWUiOiJDT05GSURFTlRJQUxfU1BBQ0UiLCJkYmdzdGF0IjoiZGlzYWJsZWQtc2luY2UtYm9vdCIsInN3dmVyc2lvbiI6WyIyMzEwMzEiXSwic3VibW9kcyI6eyJjb250YWluZXIiOnsiaW1hZ2VfZGlnZXN0Ijoic2hhMjU2OmFiYzEyMyIsImltYWdlX3JlZmVyZW5jZSI6InVzLWRvY2tlci5wa2cuZGV2L3Byb2plY3QvcmVwby9pbWFnZTpsYXRlc3QiLCJyZXN0YXJ0X3BvbGljeSI6Ik5ldmVyIn19fQ.igZOxBZWeu6YfHqQOoimOWfHSzl9Cr4tiyT2hQ-GMlLYXoQ_ln0u8p13VVFdFfrd2xLfpqNvhNOyq4DarhguSumyv9rmvBUiy_iQ5ZezpJtfMTOChmDVb-bgIDxF4221GR6DjfhuOTxwpVgz4vxnTqH5ABVAQ-mv_XC0MAO2xFhvBMtkDRdvEFPhETyWizS9M_We_M_zj5c35ug0no33_nS-u-bFCnArVcQNlVyHTtkrkhGE6d3-xHi5V3Fs3rYxqENOMdAx5EbCm2-g_jiXjGdahCb5QkGjtO_HYM2NJo4Z-fHZzYkCmSYJGeUqXKeSmGT2F2Y2dbdGdOU60pCp7Q";
+
+// Structural fixtures with no valid signature; only used to exercise `ParsedGcpJwt::parse`.
+const MISSING_KID_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.eA";
+const EMPTY_KID_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IiJ9.e30.eA";
+const NONE_ALG_TOKEN: &str = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIiwia2lkIjoic29tZS1raWQifQ.e30.eA";
 
 fn decode_key(n_b64: &str, e_b64: &str) -> (Vec<u8>, Vec<u8>) {
     (
@@ -42,14 +54,28 @@ fn decode_key(n_b64: &str, e_b64: &str) -> (Vec<u8>, Vec<u8>) {
     )
 }
 
+fn oversized_kid_token() -> String {
+    let kid = "k".repeat(4097);
+    let header = serde_json::json!({"alg": "RS256", "typ": "JWT", "kid": kid});
+    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
+    format!("{header_b64}.e30.eA")
+}
+
+fn max_size_kid_token() -> String {
+    let kid = "k".repeat(4096);
+    let header = serde_json::json!({"alg": "RS256", "typ": "JWT", "kid": kid});
+    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
+    format!("{header_b64}.e30.eA")
+}
+
 #[test]
 fn test_valid_attestation() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
     let now_secs = NOW_MS / 1000;
 
-    let doc = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None)
-        .expect("should verify");
-    assert_eq!(doc.iss, EXPECTED_ISSUER.as_bytes());
+    let doc =
+        verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS).expect("should verify");
+    assert_eq!(doc.iss, GCP_ISSUER.as_bytes());
     assert_eq!(doc.sub, b"test-subject");
     assert_eq!(doc.aud, b"test-audience");
     assert_eq!(doc.exp, now_secs + 3600);
@@ -71,7 +97,7 @@ fn test_valid_attestation() {
 #[test]
 fn test_expired_token() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let err = verify_gcp_attestation(EXPIRED_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = verify_gcp_attestation(EXPIRED_TOKEN.as_bytes(), &n, &e, NOW_MS).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::VerifyError("token has expired".to_string())
@@ -81,7 +107,7 @@ fn test_expired_token() {
 #[test]
 fn test_invalid_issuer() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let err = verify_gcp_attestation(WRONG_ISS_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = verify_gcp_attestation(WRONG_ISS_TOKEN.as_bytes(), &n, &e, NOW_MS).unwrap_err();
     match err {
         GcpAttestationError::VerifyError(msg) => assert!(msg.contains("invalid issuer")),
         other => panic!("unexpected error: {:?}", other),
@@ -91,7 +117,22 @@ fn test_invalid_issuer() {
 #[test]
 fn test_wrong_key() {
     let (n, e) = decode_key(KEY_B_N, KEY_B_E);
-    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS).unwrap_err();
+    assert_eq!(
+        err,
+        GcpAttestationError::VerifyError("signature verification failed".to_string())
+    );
+}
+
+#[test]
+fn test_tampered_header_fails_verify_for_registered_key() {
+    // The kid in the tampered header still names a registered key (key A), but the header
+    // bytes differ from what was signed, so signature verification -- not kid lookup -- must
+    // be what fails. This is what the native layer maps to VERIFY_ERROR.
+    let (n, e) = decode_key(KEY_A_N, KEY_A_E);
+    let parsed = ParsedGcpJwt::parse(TAMPERED_HEADER_TOKEN.as_bytes()).expect("should parse");
+    assert_eq!(parsed.kid(), TEST_KID);
+    let err = parsed.verify(&n, &e, NOW_MS).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::VerifyError("signature verification failed".to_string())
@@ -106,7 +147,7 @@ fn test_tampered_payload() {
         b"{\"iss\":\"https://confidentialcomputing.googleapis.com\",\"exp\":9999999999,\"iat\":0}",
     );
     let tampered = format!("{}.{}.{}", parts[0], tampered_payload, parts[2]);
-    let err = verify_gcp_attestation(tampered.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = verify_gcp_attestation(tampered.as_bytes(), &n, &e, NOW_MS).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::VerifyError("signature verification failed".to_string())
@@ -115,14 +156,7 @@ fn test_tampered_payload() {
 
 #[test]
 fn test_reject_none_algorithm() {
-    let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let header = serde_json::json!({"alg": "none", "typ": "JWT"});
-    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
-    let payload_b64 = URL_SAFE_NO_PAD.encode(
-        b"{\"iss\":\"https://confidentialcomputing.googleapis.com\",\"exp\":9999999999,\"iat\":0}",
-    );
-    let token = format!("{}.{}.", header_b64, payload_b64);
-    let err = verify_gcp_attestation(token.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = ParsedGcpJwt::parse(NONE_ALG_TOKEN.as_bytes()).unwrap_err();
     match err {
         GcpAttestationError::VerifyError(msg) => assert!(msg.contains("unsupported algorithm")),
         other => panic!("unexpected error: {:?}", other),
@@ -131,9 +165,8 @@ fn test_reject_none_algorithm() {
 
 #[test]
 fn test_oversized_token() {
-    let (n, e) = decode_key(KEY_A_N, KEY_A_E);
     let oversized_token = vec![b'a'; 16 * 1024 + 1];
-    let err = verify_gcp_attestation(&oversized_token, &n, &e, NOW_MS, None).unwrap_err();
+    let err = ParsedGcpJwt::parse(&oversized_token).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("JWT token too large".to_string())
@@ -142,10 +175,9 @@ fn test_oversized_token() {
 
 #[test]
 fn test_oversized_modulus() {
-    let oversized_n = vec![0u8; 513];
+    let oversized_n = vec![0u8; MAX_RSA_MODULUS_SIZE + 1];
     let e = vec![0x01, 0x00, 0x01];
-    let token = b"a.b.c";
-    let err = verify_gcp_attestation(token, &oversized_n, &e, NOW_MS, None).unwrap_err();
+    let err = validate_rsa_public_key(&oversized_n, &e).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("RSA modulus size out of bounds".to_string())
@@ -153,27 +185,34 @@ fn test_oversized_modulus() {
 }
 
 #[test]
-fn test_invalid_rsa_key() {
+fn test_undersized_modulus() {
+    let undersized_n = vec![0u8; MIN_RSA_MODULUS_SIZE - 1];
+    let e = vec![0x01, 0x00, 0x01];
+    let err = validate_rsa_public_key(&undersized_n, &e).unwrap_err();
+    assert_eq!(
+        err,
+        GcpAttestationError::ParseError("RSA modulus size out of bounds".to_string())
+    );
+}
+
+#[test]
+fn test_invalid_rsa_key_fails_verify_before_signature_check() {
+    // Well-formed token (valid structure, header, and kid) but the caller-supplied key is
+    // invalid; validate_rsa_public_key must reject before any signature work occurs.
     let n = vec![0x00];
     let e = vec![0x00];
-    let header_b64 = URL_SAFE_NO_PAD.encode(b"{\"alg\":\"RS256\"}");
-    let payload_b64 = URL_SAFE_NO_PAD.encode(
-        b"{\"iss\":\"https://confidentialcomputing.googleapis.com\",\"exp\":9999999999,\"iat\":0}",
-    );
-    let sig_b64 = URL_SAFE_NO_PAD.encode(b"fakesig");
-    let token = format!("{}.{}.{}", header_b64, payload_b64, sig_b64);
-    let err = verify_gcp_attestation(token.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
-    assert!(matches!(
+    let parsed = ParsedGcpJwt::parse(WELL_FORMED_BAD_SIG_TOKEN.as_bytes()).expect("should parse");
+    let err = parsed.verify(&n, &e, NOW_MS).unwrap_err();
+    assert_eq!(
         err,
-        GcpAttestationError::VerifyError(_) | GcpAttestationError::ParseError(_)
-    ));
+        GcpAttestationError::ParseError("RSA modulus size out of bounds".to_string())
+    );
 }
 
 #[test]
 fn test_future_iat() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let err =
-        verify_gcp_attestation(FUTURE_IAT_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = verify_gcp_attestation(FUTURE_IAT_TOKEN.as_bytes(), &n, &e, NOW_MS).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::VerifyError("token issued in the future".to_string())
@@ -183,8 +222,8 @@ fn test_future_iat() {
 #[test]
 fn test_real_gcp_payload_claims() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let doc = verify_gcp_attestation(REAL_GCP_TOKEN.as_bytes(), &n, &e, NOW_MS, None)
-        .expect("should verify");
+    let doc =
+        verify_gcp_attestation(REAL_GCP_TOKEN.as_bytes(), &n, &e, NOW_MS).expect("should verify");
 
     assert_eq!(doc.iss, b"https://confidentialcomputing.googleapis.com");
     assert_eq!(
@@ -215,20 +254,18 @@ fn test_real_gcp_payload_claims() {
 }
 
 #[test]
-fn test_extract_kid_from_jwt() {
-    let header = serde_json::json!({"alg": "RS256", "typ": "JWT", "kid": "key-id-abc123"});
-    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
-    let token = format!("{}.fakepayload.fakesig", header_b64);
-    let kid = extract_kid_from_jwt(token.as_bytes()).expect("should extract kid");
-    assert_eq!(kid, "key-id-abc123");
+fn test_parse_extracts_kid_without_reparsing_header() {
+    let parsed = ParsedGcpJwt::parse(VALID_TOKEN.as_bytes()).expect("should parse");
+    assert_eq!(parsed.kid(), TEST_KID);
+    // Calling verify() must not need to touch the header again; kid() remains stable.
+    let (n, e) = decode_key(KEY_A_N, KEY_A_E);
+    parsed.verify(&n, &e, NOW_MS).expect("should verify");
+    assert_eq!(parsed.kid(), TEST_KID);
 }
 
 #[test]
-fn test_extract_kid_missing() {
-    let header = serde_json::json!({"alg": "RS256", "typ": "JWT"});
-    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
-    let token = format!("{}.fakepayload.fakesig", header_b64);
-    let err = extract_kid_from_jwt(token.as_bytes()).unwrap_err();
+fn test_parse_rejects_missing_kid() {
+    let err = ParsedGcpJwt::parse(MISSING_KID_TOKEN.as_bytes()).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("missing 'kid' in header".to_string())
@@ -236,11 +273,37 @@ fn test_extract_kid_missing() {
 }
 
 #[test]
+fn test_parse_rejects_empty_kid() {
+    let err = ParsedGcpJwt::parse(EMPTY_KID_TOKEN.as_bytes()).unwrap_err();
+    assert_eq!(
+        err,
+        GcpAttestationError::ParseError("empty 'kid' in header".to_string())
+    );
+}
+
+#[test]
+fn test_parse_rejects_oversized_kid() {
+    let token = oversized_kid_token();
+    let err = ParsedGcpJwt::parse(token.as_bytes()).unwrap_err();
+    assert_eq!(
+        err,
+        GcpAttestationError::ParseError("'kid' exceeds maximum size".to_string())
+    );
+}
+
+#[test]
+fn test_parse_accepts_max_size_kid() {
+    let token = max_size_kid_token();
+    let parsed = ParsedGcpJwt::parse(token.as_bytes()).expect("4096-byte kid should be accepted");
+    assert_eq!(parsed.kid().len(), 4096);
+}
+
+#[test]
 fn test_reject_weak_exponent_padded_e3() {
     let (n, _) = decode_key(KEY_A_N, KEY_A_E);
     // Numerically e=3, padded to 3 bytes — must reject (not just length check).
     let e = vec![0x00, 0x00, 0x03];
-    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = validate_rsa_public_key(&n, &e).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("RSA exponent out of bounds".to_string())
@@ -251,7 +314,7 @@ fn test_reject_weak_exponent_padded_e3() {
 fn test_reject_weak_exponent_e3() {
     let (n, _) = decode_key(KEY_A_N, KEY_A_E);
     let e = vec![0x03];
-    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = validate_rsa_public_key(&n, &e).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("RSA exponent out of bounds".to_string())
@@ -263,7 +326,7 @@ fn test_reject_even_exponent() {
     let (n, _) = decode_key(KEY_A_N, KEY_A_E);
     // 65538 is > 65537 numerically but even — must still be rejected.
     let e = vec![0x01, 0x00, 0x02];
-    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).unwrap_err();
+    let err = validate_rsa_public_key(&n, &e).unwrap_err();
     assert_eq!(
         err,
         GcpAttestationError::ParseError("RSA exponent out of bounds".to_string())
@@ -271,39 +334,19 @@ fn test_reject_even_exponent() {
 }
 
 #[test]
-fn test_kid_mismatch() {
-    let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    let header = serde_json::json!({"alg": "RS256", "typ": "JWT", "kid": "actual-kid"});
-    let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string().as_bytes());
-    let payload_b64 = URL_SAFE_NO_PAD.encode(
-        b"{\"iss\":\"https://confidentialcomputing.googleapis.com\",\"exp\":9999999999,\"iat\":0}",
-    );
-    let token = format!("{}.{}.fakesig", header_b64, payload_b64);
-    let err =
-        verify_gcp_attestation(token.as_bytes(), &n, &e, NOW_MS, Some("other-kid")).unwrap_err();
-    assert_eq!(
-        err,
-        GcpAttestationError::VerifyError("kid mismatch".to_string())
-    );
-}
-
-#[test]
-fn test_kid_missing_when_expected() {
-    let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    // VALID_TOKEN has no kid in the header.
-    let err = verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, Some("any-kid"))
-        .unwrap_err();
-    assert_eq!(
-        err,
-        GcpAttestationError::ParseError("missing 'kid' in header".to_string())
-    );
-}
-
-#[test]
 fn test_accept_min_exponent_65537() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
-    // KEY_A_E is AQAB == [1,0,1] == 65537; verify still succeeds with None kid.
-    verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).expect("should verify");
+    // KEY_A_E is AQAB == [1,0,1] == 65537; verify still succeeds.
+    validate_rsa_public_key(&n, &e).expect("should accept minimum valid exponent");
+    verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS).expect("should verify");
+}
+
+#[test]
+fn test_rsa_exponent_ok_matches_validate_rsa_public_key() {
+    // rsa_exponent_ok remains available as a standalone building block, reused by
+    // validate_rsa_public_key.
+    assert!(rsa_exponent_ok(&[0x01, 0x00, 0x01]));
+    assert!(!rsa_exponent_ok(&[0x03]));
 }
 
 #[test]
@@ -328,4 +371,10 @@ fn test_is_gcp_attestation_call_matches_only_framework_entrypoint() {
         "gcp_attestation",
         "load_nitro_attestation",
     ));
+}
+
+#[test]
+fn test_gcp_issuer_and_alg_constants() {
+    assert_eq!(GCP_ISSUER, "https://confidentialcomputing.googleapis.com");
+    assert_eq!(RS256_ALG, "RS256");
 }

@@ -16,9 +16,7 @@ use move_vm_runtime::{
     pop_arg,
 };
 use std::collections::VecDeque;
-use sui_types::gcp_attestation::{
-    GcpAttestationDocument, GcpAttestationError, verify_gcp_attestation,
-};
+use sui_types::gcp_attestation::{GcpAttestationDocument, GcpAttestationError, ParsedGcpJwt};
 
 use crate::{JwkMap, NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 
@@ -26,8 +24,6 @@ pub const NOT_SUPPORTED_ERROR: u64 = 0;
 pub const PARSE_ERROR: u64 = 1;
 pub const VERIFY_ERROR: u64 = 2;
 pub const KID_NOT_FOUND_ERROR: u64 = 3;
-
-const GCP_ISS: &str = "https://confidentialcomputing.googleapis.com";
 
 #[derive(Clone)]
 pub struct GcpAttestationCostParams {
@@ -61,24 +57,23 @@ pub fn verify_gcp_attestation_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    debug_assert!(args.len() == 2);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
-    // Pop args in reverse order from the Move call: (token, kid, current_timestamp_ms).
+    // Pop args in reverse order from the Move call: (token, current_timestamp_ms).
     let current_timestamp_ms = pop_arg!(args, u64);
-    let kid_ref = pop_arg!(args, VectorRef);
     let token_ref = pop_arg!(args, VectorRef);
-    let kid_bytes = kid_ref.as_bytes_ref()?;
     let token = token_ref.as_bytes_ref()?;
 
     let cost_params = get_extension!(context, NativesCostTable)?
         .gcp_attestation_cost_params
         .clone();
 
+    // Token bytes are charged regardless of how parsing/verification proceeds below.
     native_charge_gas_early_exit_option!(
         context,
         cost_params.verify_base_cost.and_then(|base| {
@@ -88,28 +83,34 @@ pub fn verify_gcp_attestation_internal(
         })
     );
 
-    let kid = match std::str::from_utf8(&kid_bytes) {
-        Ok(s) => s,
-        Err(_) => return Ok(NativeResult::err(context.gas_used(), PARSE_ERROR)),
+    // Parse the JWT structure and header exactly once. This extracts and bounds-checks `kid`
+    // from the header so it can be used for key lookup below without re-parsing.
+    let parsed = match ParsedGcpJwt::parse(&token) {
+        Ok(parsed) => parsed,
+        Err(GcpAttestationError::ParseError(_)) => {
+            return Ok(NativeResult::err(context.gas_used(), PARSE_ERROR));
+        }
+        Err(GcpAttestationError::VerifyError(_)) => {
+            return Ok(NativeResult::err(context.gas_used(), VERIFY_ERROR));
+        }
     };
 
     let jwk_map = get_extension!(context, JwkMap)?;
-    let (n_b64, e_b64) = match jwk_map.map.get(&(GCP_ISS.to_string(), kid.to_string())) {
-        Some(pair) => pair,
+    let jwk = match jwk_map.get(parsed.kid()) {
+        Some(jwk) => jwk,
         None => return Ok(NativeResult::err(context.gas_used(), KID_NOT_FOUND_ERROR)),
     };
 
-    let jwk_n = match URL_SAFE_NO_PAD.decode(n_b64.as_bytes()) {
+    let jwk_n = match URL_SAFE_NO_PAD.decode(jwk.n.as_bytes()) {
         Ok(v) => v,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), PARSE_ERROR)),
     };
-    let jwk_e = match URL_SAFE_NO_PAD.decode(e_b64.as_bytes()) {
+    let jwk_e = match URL_SAFE_NO_PAD.decode(jwk.e.as_bytes()) {
         Ok(v) => v,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), PARSE_ERROR)),
     };
 
-    // Bind Move-supplied kid to the JWT header kid.
-    match verify_gcp_attestation(&token, &jwk_n, &jwk_e, current_timestamp_ms, Some(kid)) {
+    match parsed.verify(&jwk_n, &jwk_e, current_timestamp_ms) {
         Ok(doc) => {
             let result = pack_document(doc);
             NativeResult::map_partial_vm_result_one(context.gas_used(), result)

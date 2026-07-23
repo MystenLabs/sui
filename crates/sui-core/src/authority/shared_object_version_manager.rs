@@ -1205,11 +1205,7 @@ mod tests {
             SUI_FRAMEWORK_PACKAGE_ID,
             "gcp_attestation",
             "verify_gcp_attestation",
-            vec![
-                CallArg::Pure(vec![]),
-                CallArg::Pure(vec![]),
-                CallArg::CLOCK_IMM,
-            ],
+            vec![CallArg::Pure(vec![]), CallArg::CLOCK_IMM],
         )
         .build();
         let tx = SenderSignedData::new(tx_data, vec![]);

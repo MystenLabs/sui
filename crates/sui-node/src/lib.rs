@@ -2803,9 +2803,9 @@ impl SuiNode {
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use futures::StreamExt;
         use sui_types::error::SuiErrorKind;
+        use sui_types::gcp_attestation::GCP_ISSUER as GCP_ISS;
 
         const GCP_JWKS_URL: &str = "https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com";
-        const GCP_ISS: &str = "https://confidentialcomputing.googleapis.com";
         // Bound response size to prevent memory exhaustion from a malicious or misconfigured endpoint.
         const GCP_JWKS_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
@@ -2887,11 +2887,7 @@ fn validate_gcp_jwks_http_status(status: reqwest::StatusCode) -> SuiResult<()> {
 fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec<(JwkId, JWK)>> {
     use base64::Engine;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use sui_types::gcp_attestation::rsa_exponent_ok;
-
-    // Match verify_gcp_attestation bounds (2048–4096 bit RSA).
-    const MIN_RSA_MODULUS_SIZE: usize = 256;
-    const MAX_RSA_MODULUS_SIZE: usize = 512;
+    use sui_types::gcp_attestation::{RS256_ALG, validate_rsa_public_key};
 
     let v: serde_json::Value = serde_json::from_str(body)?;
     let keys = v
@@ -2911,7 +2907,7 @@ fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec
             reject("unsupported key type");
             continue;
         }
-        if alg != "RS256" {
+        if alg != RS256_ALG {
             reject("unsupported algorithm");
             continue;
         }
@@ -2941,16 +2937,14 @@ fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec
             reject("invalid modulus encoding");
             continue;
         };
-        if n_bytes.len() < MIN_RSA_MODULUS_SIZE || n_bytes.len() > MAX_RSA_MODULUS_SIZE {
-            reject("modulus size out of bounds");
-            continue;
-        }
         let Ok(e_bytes) = URL_SAFE_NO_PAD.decode(e.as_bytes()) else {
             reject("invalid exponent encoding");
             continue;
         };
-        if !rsa_exponent_ok(&e_bytes) {
-            reject("weak or invalid exponent");
+        // Centralized bounds check, shared with the native verifier
+        // (see sui_types::gcp_attestation::validate_rsa_public_key).
+        if validate_rsa_public_key(&n_bytes, &e_bytes).is_err() {
+            reject("invalid RSA key");
             continue;
         }
 
@@ -3441,8 +3435,7 @@ mod tests {
         use super::*;
         use base64::Engine;
         use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-
-        const TEST_GCP_ISSUER: &str = "https://confidentialcomputing.googleapis.com";
+        use sui_types::gcp_attestation::GCP_ISSUER as TEST_GCP_ISSUER;
 
         fn gcp_test_metrics() -> Arc<SuiNodeMetrics> {
             Arc::new(SuiNodeMetrics::new(&Registry::new()))

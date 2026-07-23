@@ -224,25 +224,136 @@ pub struct NativesCostTable {
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
 
-/// Cached JWK map populated at execution setup from AuthenticatorState.
-/// Maps `(iss, kid)` to `(n_b64, e_b64)` where the values are base64url strings
-/// of the RSA JWK modulus and exponent, as stored in AuthenticatorState.
+/// Cached GCP-only JWK map populated at execution setup from AuthenticatorState, keyed by `kid`.
+///
+/// Only JWKs whose issuer exactly matches [`sui_types::gcp_attestation::GCP_ISSUER`] are
+/// retained; entries for any other issuer (e.g. zkLogin OIDC providers) are filtered out. If two
+/// active JWKs share the same `kid` with conflicting values, both are dropped: a `kid` with an
+/// ambiguous key is treated the same as an absent `kid` (fail closed) rather than risk silently
+/// picking one of the conflicting keys.
 #[derive(Tid, Default)]
 pub struct JwkMap {
-    pub map: std::collections::HashMap<(String, String), (String, String)>,
+    map: std::collections::HashMap<String, fastcrypto_zkp::bn254::zk_login::JWK>,
 }
 
 impl NativeExtensionMarker<'_> for JwkMap {}
 
 impl JwkMap {
     pub fn from_active_jwks(active_jwks: Vec<sui_types::authenticator_state::ActiveJwk>) -> Self {
-        let mut jwk_map = JwkMap::default();
+        use std::collections::{HashMap, HashSet};
+
+        let mut accepted: HashMap<String, fastcrypto_zkp::bn254::zk_login::JWK> = HashMap::new();
+        let mut conflicted: HashSet<String> = HashSet::new();
         for active_jwk in active_jwks {
-            let key = (active_jwk.jwk_id.iss, active_jwk.jwk_id.kid);
-            let value = (active_jwk.jwk.n, active_jwk.jwk.e);
-            jwk_map.map.insert(key, value);
+            if active_jwk.jwk_id.iss != sui_types::gcp_attestation::GCP_ISSUER {
+                continue;
+            }
+            let kid = active_jwk.jwk_id.kid;
+            if conflicted.contains(&kid) {
+                continue;
+            }
+            match accepted.get(&kid) {
+                // Same kid, different key material: ambiguous. Fail closed by removing it,
+                // and remember not to re-insert it if a third conflicting entry follows.
+                Some(existing) if existing != &active_jwk.jwk => {
+                    accepted.remove(&kid);
+                    conflicted.insert(kid);
+                }
+                _ => {
+                    accepted.insert(kid, active_jwk.jwk);
+                }
+            }
         }
-        jwk_map
+        Self { map: accepted }
+    }
+
+    /// Look up the trusted RSA JWK for `kid`. Returns `None` for unknown or conflicting kids.
+    pub fn get(&self, kid: &str) -> Option<&fastcrypto_zkp::bn254::zk_login::JWK> {
+        self.map.get(kid)
+    }
+}
+
+#[cfg(test)]
+mod jwk_map_tests {
+    use super::JwkMap;
+    use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+    use sui_types::authenticator_state::ActiveJwk;
+
+    fn jwk(n: &str, e: &str) -> JWK {
+        JWK {
+            kty: "RSA".to_string(),
+            e: e.to_string(),
+            n: n.to_string(),
+            alg: "RS256".to_string(),
+        }
+    }
+
+    fn active_jwk(iss: &str, kid: &str, jwk: JWK) -> ActiveJwk {
+        ActiveJwk {
+            jwk_id: JwkId {
+                iss: iss.to_string(),
+                kid: kid.to_string(),
+            },
+            jwk,
+            epoch: 0,
+        }
+    }
+
+    const GCP_ISS: &str = sui_types::gcp_attestation::GCP_ISSUER;
+    const OTHER_ISS: &str = "https://accounts.google.com";
+
+    #[test]
+    fn filters_out_non_gcp_issuers() {
+        let map = JwkMap::from_active_jwks(vec![
+            active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+            active_jwk(OTHER_ISS, "kid-b", jwk("nB", "AQAB")),
+        ]);
+        assert!(map.get("kid-a").is_some());
+        assert!(map.get("kid-b").is_none());
+    }
+
+    #[test]
+    fn looks_up_by_kid() {
+        let key = jwk("nA", "AQAB");
+        let map = JwkMap::from_active_jwks(vec![active_jwk(GCP_ISS, "kid-a", key.clone())]);
+        assert_eq!(map.get("kid-a"), Some(&key));
+        assert_eq!(map.get("unknown-kid"), None);
+    }
+
+    #[test]
+    fn conflicting_duplicate_kid_is_treated_as_absent() {
+        let map = JwkMap::from_active_jwks(vec![
+            active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+            active_jwk(GCP_ISS, "kid-a", jwk("nA-different", "AQAB")),
+        ]);
+        // Fail closed: ambiguous kid must not resolve to either key.
+        assert!(map.get("kid-a").is_none());
+    }
+
+    #[test]
+    fn duplicate_kid_with_identical_key_is_not_treated_as_conflict() {
+        let key = jwk("nA", "AQAB");
+        let map = JwkMap::from_active_jwks(vec![
+            active_jwk(GCP_ISS, "kid-a", key.clone()),
+            active_jwk(GCP_ISS, "kid-a", key.clone()),
+        ]);
+        assert_eq!(map.get("kid-a"), Some(&key));
+    }
+
+    #[test]
+    fn third_conflicting_entry_stays_absent_after_prior_conflict() {
+        let map = JwkMap::from_active_jwks(vec![
+            active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+            active_jwk(GCP_ISS, "kid-a", jwk("nA-different", "AQAB")),
+            active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+        ]);
+        assert!(map.get("kid-a").is_none());
+    }
+
+    #[test]
+    fn empty_active_jwks_yields_empty_map() {
+        let map = JwkMap::from_active_jwks(vec![]);
+        assert!(map.get("anything").is_none());
     }
 }
 
