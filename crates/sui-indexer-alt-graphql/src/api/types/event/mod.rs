@@ -664,39 +664,21 @@ mod tests {
     /// Build a synthetic `PageItem` pointing at `event_index` of the zero-digest
     /// transaction, with the provided resume cursor.
     fn ev_item(event_index: u32, cursor: CursorToken) -> PageItem<v2::Event> {
+        let mut contents = v2::Bcs::default();
+        contents.name = Some("0x0::m::T".to_string());
+        contents.value = Some(Default::default());
+
         let mut payload = v2::Event::default();
         payload.transaction_digest = Some(Base58::encode(TransactionDigest::default().inner()));
         payload.event_index = Some(event_index);
+        payload.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
+        payload.module = Some("m".to_string());
+        payload.sender = Some(NativeSuiAddress::ZERO.to_string());
+        payload.contents = Some(contents);
         PageItem {
             payload,
             cursor: cursor.encode(),
         }
-    }
-
-    fn native_event() -> NativeEvent {
-        NativeEvent {
-            package_id: ObjectID::ZERO,
-            transaction_module: Identifier::new("m").unwrap(),
-            sender: NativeSuiAddress::ZERO,
-            type_: StructTag {
-                address: ObjectID::ZERO.into(),
-                module: Identifier::new("m").unwrap(),
-                name: Identifier::new("T").unwrap(),
-                type_params: vec![],
-            },
-            contents: vec![],
-        }
-    }
-
-    /// Hydrated contents for the zero-digest transaction with `n` events.
-    fn contents_for(n: usize) -> HashMap<TransactionDigest, TxEventContents> {
-        HashMap::from([(
-            TransactionDigest::default(),
-            TxEventContents {
-                events: (0..n).map(|_| native_event()).collect(),
-                timestamp_ms: Some(1_234),
-            },
-        )])
     }
 
     /// The GraphQL cursor string that `build_grpc_connection` mints for raw server cursor
@@ -798,49 +780,62 @@ mod tests {
             None,
         );
 
-        let conn =
-            build_grpc_connection(scope, &page, result, &HashMap::new()).expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(conn.edges.is_empty());
         assert!(!conn.page_info.has_previous_page);
         assert!(conn.page_info.has_next_page);
 
-        fn ev_position(checkpoint: u64, tx_seq: u64, event_index: u32) -> Position {
-            Position::Events {
-                checkpoint,
-                tx_seq,
-                event_index,
-            }
-        }
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_ne!(start, end, "start and end cursors should be different");
+    }
 
-        /// Build a synthetic, fully-populated `PageItem` pointing at `event_index` of the
-        /// zero-digest transaction, with the provided resume cursor.
-        fn ev_item(event_index: u32, cursor: CursorToken) -> PageItem<v2::Event> {
-            let mut contents = v2::Bcs::default();
-            contents.name = Some("0x0::m::T".to_string());
-            contents.value = Some(Default::default());
+    /// Order of cursors on connection should be swapped from streamed page.
+    #[test]
+    fn empty_page_backward_correct_cursors() {
+        let scope = Scope::for_tests();
+        let page = backward_page(10);
+        // Descending stream: the first watermark the stream reports is the high end.
+        let result = StreamPage::<v2::Event>::for_test(
+            Vec::new(),
+            Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
+            None,
+        );
 
-            let mut payload = v2::Event::default();
-            payload.transaction_digest = Some(Base58::encode(TransactionDigest::default().inner()));
-            payload.event_index = Some(event_index);
-            payload.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
-            payload.module = Some("m".to_string());
-            payload.sender = Some(NativeSuiAddress::ZERO.to_string());
-            payload.contents = Some(contents);
-            PageItem {
-                payload,
-                cursor: cursor.encode(),
-            }
-        }
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert!(conn.edges.is_empty());
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
 
-        /// The GraphQL cursor string that `build_grpc_connection` mints for raw server cursor
-        /// bytes.
-        fn graphql_cursor(token: CursorToken) -> String {
-            let token: EventToken = token.try_into().expect("events cursor");
-            CEvent::new(OpaqueCursor::new(token)).encode_cursor()
-        }
+        let start = conn.page_info.start_cursor.expect("start cursor set");
+        let end = conn.page_info.end_cursor.expect("end cursor set");
+        assert_eq!(
+            start,
+            graphql_cursor(CursorToken::boundary(ev_position(1, 10, 0)))
+        );
+        assert_eq!(
+            end,
+            graphql_cursor(CursorToken::boundary(ev_position(2, 20, 0)))
+        );
+    }
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(3))
-            .expect("connection built");
+    #[test]
+    fn non_empty_page_uses_edge_cursors_and_hydrates_nodes() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![
+                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
+                ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
+            ],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 3);
         // `CheckpointBound` means the range was exhausted — no forward continuation.
         assert!(!conn.page_info.has_next_page);
@@ -856,266 +851,51 @@ mod tests {
             "non-empty page should anchor end_cursor on last edge, not stream watermark"
         );
 
-        /// Build a `Page<CEvent>` going backwards (`last: N`, no `after`/`before`).
-        fn backward_page(limit: u64) -> Page<CEvent> {
-            Page::from_params(&page_limits(limit), None, None, Some(limit), None)
-                .expect("constructing backward Page<CEvent>")
-        }
-
-        /// Forward page opened from an `after` cursor (`first: N, after: <cursor>`).
-        fn forward_page_after(limit: u64, after: CEvent) -> Page<CEvent> {
-            Page::from_params(&page_limits(limit), Some(limit), Some(after), None, None)
-                .expect("constructing forward Page with after")
-        }
-
-        /// Backward page opened from a `before` cursor (`last: N, before: <cursor>`).
-        fn backward_page_before(limit: u64, before: CEvent) -> Page<CEvent> {
-            Page::from_params(&page_limits(limit), None, None, Some(limit), Some(before))
-                .expect("constructing backward Page with before")
-        }
-
-        /// Empty connection surfaces cursors if provided by the streamed page.
-        #[test]
-        fn empty_page_surfaces_boundary_cursors() {
-            let scope = Scope::for_tests();
-            let page = forward_page(10);
-            let result = StreamPage::<v2::Event>::for_test(
-                Vec::new(),
-                Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
-                Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
-                None,
-            );
-
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert!(conn.edges.is_empty());
-            assert!(!conn.page_info.has_previous_page);
-            assert!(conn.page_info.has_next_page);
-
-            let start = conn.page_info.start_cursor.expect("start cursor set");
-            let end = conn.page_info.end_cursor.expect("end cursor set");
-            assert_ne!(start, end, "start and end cursors should be different");
-        }
-
-        /// Order of cursors on connection should be swapped from streamed page.
-        #[test]
-        fn empty_page_backward_correct_cursors() {
-            let scope = Scope::for_tests();
-            let page = backward_page(10);
-            // Descending stream: the first watermark the stream reports is the high end.
-            let result = StreamPage::<v2::Event>::for_test(
-                Vec::new(),
-                Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
-                Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
-                None,
-            );
-
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert!(conn.edges.is_empty());
-            assert!(conn.page_info.has_previous_page);
-            assert!(!conn.page_info.has_next_page);
-
-            let start = conn.page_info.start_cursor.expect("start cursor set");
-            let end = conn.page_info.end_cursor.expect("end cursor set");
+        // Nodes carry the hydrated position and envelope; timestamps resolve lazily.
+        for (i, edge) in conn.edges.iter().enumerate() {
+            assert_eq!(edge.node.sequence_number, i as u64);
+            assert_eq!(edge.node.transaction_digest, TransactionDigest::default());
+            assert_eq!(edge.node.native.package_id, ObjectID::ZERO);
             assert_eq!(
-                start,
-                graphql_cursor(CursorToken::boundary(ev_position(1, 10, 0)))
+                edge.node.native.type_,
+                parse_sui_struct_tag("0x0::m::T").unwrap()
             );
-            assert_eq!(
-                end,
-                graphql_cursor(CursorToken::boundary(ev_position(2, 20, 0)))
-            );
+            assert!(matches!(edge.node.timestamp, EventTimestamp::Lazy));
         }
+    }
 
-        #[test]
-        fn non_empty_page_uses_edge_cursors_and_hydrates_nodes() {
-            let scope = Scope::for_tests();
-            let page = forward_page(10);
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![
-                    ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
-                    ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                    ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
-                ],
-                None,
-                None,
-                Some(v2::QueryEndReason::CheckpointBound),
-            );
+    /// The read mask requests the full event envelope, so an item missing one of its fields
+    /// is an internal inconsistency, not an empty result.
+    #[test]
+    fn missing_payload_field_errors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
 
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert_eq!(conn.edges.len(), 3);
-            // `CheckpointBound` means the range was exhausted — no forward continuation.
-            assert!(!conn.page_info.has_next_page);
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        item.payload.contents = None;
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![item],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+        assert!(
+            build_grpc_connection(scope.clone(), &page, result).is_err(),
+            "missing event contents should error"
+        );
 
-            let start = conn.page_info.start_cursor.expect("start set");
-            let end = conn.page_info.end_cursor.expect("end set");
-            assert_eq!(
-                start, conn.edges[0].cursor,
-                "non-empty page should anchor start_cursor on first edge, not stream watermark"
-            );
-            assert_eq!(
-                end, conn.edges[2].cursor,
-                "non-empty page should anchor end_cursor on last edge, not stream watermark"
-            );
-
-            // Nodes carry the hydrated position and envelope; timestamps resolve lazily.
-            for (i, edge) in conn.edges.iter().enumerate() {
-                assert_eq!(edge.node.sequence_number, i as u64);
-                assert_eq!(edge.node.transaction_digest, TransactionDigest::default());
-                assert_eq!(edge.node.native.package_id, ObjectID::ZERO);
-                assert_eq!(
-                    edge.node.native.type_,
-                    parse_sui_struct_tag("0x0::m::T").unwrap()
-                );
-                assert!(matches!(edge.node.timestamp, EventTimestamp::Lazy));
-            }
-        }
-
-        #[test]
-        fn full_page_at_item_limit_signals_more() {
-            let scope = Scope::for_tests();
-            let page = forward_page(2);
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![
-                    ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
-                    ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                ],
-                None,
-                None,
-                Some(v2::QueryEndReason::ItemLimit),
-            );
-
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert_eq!(conn.edges.len(), 2);
-            assert!(
-                conn.page_info.has_next_page,
-                "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
-            );
-        }
-
-        #[test]
-        fn descending_page_reverses_to_ascending_edges() {
-            let scope = Scope::for_tests();
-            let page = backward_page(10);
-            // Descending stream order: event indices 2, 1, 0 (highest position first).
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![
-                    ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
-                    ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                    ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
-                ],
-                None,
-                None,
-                Some(v2::QueryEndReason::CheckpointBound),
-            );
-
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert_eq!(conn.edges.len(), 3);
-            // After reversal, the *first* edge corresponds to the *lowest* position from the
-            // stream — i.e. the last item the stream emitted (event index 0).
-            let start = conn.page_info.start_cursor.expect("start set");
-            let end = conn.page_info.end_cursor.expect("end set");
-            assert_eq!(start, conn.edges[0].cursor);
-            assert_eq!(
-                start,
-                graphql_cursor(CursorToken::item(ev_position(1, 1, 0)))
-            );
-            assert_eq!(end, conn.edges[2].cursor);
-            assert_eq!(end, graphql_cursor(CursorToken::item(ev_position(1, 1, 2))));
-            assert_eq!(
-                conn.edges
-                    .iter()
-                    .map(|e| e.node.sequence_number)
-                    .collect::<Vec<_>>(),
-                [0, 1, 2],
-            );
-        }
-
-        /// A forward page opened from an `after` cursor reports `hasPreviousPage: true`
-        /// (`page.after().is_some()`). `CheckpointBound` makes `has_more()` false, so the only
-        /// source of a `true` flag is the input cursor — not the stream.
-        #[test]
-        fn forward_after_signals_previous_page() {
-            let scope = Scope::for_tests();
-            let page = forward_page_after(10, EventToken::cursor(1, 1, 0));
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![ev_item(1, CursorToken::item(ev_position(1, 1, 1)))],
-                None,
-                None,
-                Some(v2::QueryEndReason::CheckpointBound),
-            );
-
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert!(
-                conn.page_info.has_previous_page,
-                "after cursor set → hasPreviousPage"
-            );
-            assert!(
-                !conn.page_info.has_next_page,
-                "CheckpointBound → no hasNextPage"
-            );
-        }
-
-        /// A backward page opened from a `before` cursor reports `hasNextPage: true`
-        /// (`page.before().is_some()`). `CheckpointBound` makes `has_more()` false, so the only
-        /// source of a `true` flag is the input cursor — not the stream.
-        #[test]
-        fn backward_before_signals_next_page() {
-            let scope = Scope::for_tests();
-            let page = backward_page_before(10, EventToken::cursor(1, 1, 2));
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![
-                    ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                    ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
-                ],
-                None,
-                None,
-                Some(v2::QueryEndReason::CheckpointBound),
-            );
-
-            let conn = build_grpc_connection(scope, &page, result).expect("connection built");
-            assert!(
-                conn.page_info.has_next_page,
-                "before cursor set → hasNextPage"
-            );
-            assert!(
-                !conn.page_info.has_previous_page,
-                "CheckpointBound → no hasPreviousPage"
-            );
-        }
-
-        /// The read mask requests the full event envelope, so an item missing one of its fields
-        /// is an internal inconsistency, not an empty result.
-        #[test]
-        fn missing_payload_field_errors() {
-            let scope = Scope::for_tests();
-            let page = forward_page(10);
-
-            let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
-            item.payload.contents = None;
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![item],
-                None,
-                None,
-                Some(v2::QueryEndReason::CheckpointBound),
-            );
-            assert!(
-                build_grpc_connection(scope.clone(), &page, result).is_err(),
-                "missing event contents should error"
-            );
-
-            let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
-            item.payload.sender = None;
-            let result = StreamPage::<v2::Event>::for_test(
-                vec![item],
-                None,
-                None,
-                Some(v2::QueryEndReason::CheckpointBound),
-            );
-            assert!(
-                build_grpc_connection(scope, &page, result).is_err(),
-                "missing sender should error"
-            );
-        }
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        item.payload.sender = None;
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![item],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+        assert!(
+            build_grpc_connection(scope, &page, result).is_err(),
+            "missing sender should error"
+        );
     }
 
     #[test]
@@ -1132,8 +912,7 @@ mod tests {
             Some(v2::QueryEndReason::ItemLimit),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(2))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 2);
         assert!(
             conn.page_info.has_next_page,
@@ -1157,8 +936,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(3))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 3);
         // After reversal, the *first* edge corresponds to the *lowest* position from the
         // stream — i.e. the last item the stream emitted (event index 0).
@@ -1194,8 +972,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(2))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(
             conn.page_info.has_previous_page,
             "after cursor set → hasPreviousPage"
@@ -1223,8 +1000,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(2))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(
             conn.page_info.has_next_page,
             "before cursor set → hasNextPage"
@@ -1232,35 +1008,6 @@ mod tests {
         assert!(
             !conn.page_info.has_previous_page,
             "CheckpointBound → no hasPreviousPage"
-        );
-    }
-
-    /// An item pointing at a transaction the KV store did not return (or an out-of-bounds
-    /// event index) is an internal inconsistency, not an empty result.
-    #[test]
-    fn missing_contents_errors() {
-        let scope = Scope::for_tests();
-        let page = forward_page(10);
-        let result = StreamPage::<v2::Event>::for_test(
-            vec![ev_item(0, CursorToken::item(ev_position(1, 1, 0)))],
-            None,
-            None,
-            Some(v2::QueryEndReason::CheckpointBound),
-        );
-        assert!(
-            build_grpc_connection(scope.clone(), &page, result, &HashMap::new()).is_err(),
-            "missing transaction contents should error"
-        );
-
-        let result = StreamPage::<v2::Event>::for_test(
-            vec![ev_item(5, CursorToken::item(ev_position(1, 1, 5)))],
-            None,
-            None,
-            Some(v2::QueryEndReason::CheckpointBound),
-        );
-        assert!(
-            build_grpc_connection(scope, &page, result, &contents_for(2)).is_err(),
-            "out-of-bounds event index should error"
         );
     }
 }
