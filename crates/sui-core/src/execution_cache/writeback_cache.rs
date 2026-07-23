@@ -501,17 +501,18 @@ impl WritebackCache {
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> Option<Object> {
+        assert!(
+            sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
+            "{object_id} is not an implicitly read system object"
+        );
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
             return Some(object);
         }
-        let Some(object) = ObjectCacheRead::get_object(self, object_id) else {
-            debug_fatal!("system object {object_id} does not exist locally");
-            return None;
-        };
-        let Some(initial_shared_version) = object.owner().start_version() else {
-            debug_fatal!("system object {object_id} is not a consensus object");
-            return None;
-        };
+        let initial_shared_version = ObjectCacheRead::get_object(self, object_id)
+            .expect("implicitly read system object must exist locally")
+            .owner()
+            .start_version()
+            .expect("implicitly read system object must be a consensus object");
         self.metrics
             .implicit_system_object_read_waits
             .with_label_values(&[object_id.to_string().as_str()])
@@ -521,6 +522,9 @@ impl WritebackCache {
             id: FullObjectID::Consensus((*object_id, initial_shared_version)),
             version,
         };
+        // `object_notify_read` carries no payload (it is also notified on marker-only
+        // writes, where there is no object), so the wait only signals availability and
+        // the object must be fetched separately once it completes.
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
                 "get_implicitly_read_system_object_blocking",
