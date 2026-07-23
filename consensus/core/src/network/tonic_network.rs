@@ -707,18 +707,13 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
-        let commits = commits
+        let commits: Vec<Bytes> = commits
             .into_iter()
-            .map(|c| c.serialized().clone())
+            .map(|c| maybe_compress_payload(c.serialized().clone()))
             .collect();
-        let certifier_blocks = certifier_blocks
-            .into_iter()
-            .map(|b| b.serialized().clone())
-            .collect();
-        let commits: Vec<Bytes> = commits.into_iter().map(maybe_compress_payload).collect();
         let certifier_blocks: Vec<Bytes> = certifier_blocks
             .into_iter()
-            .map(maybe_compress_payload)
+            .map(|b| maybe_compress_payload(b.serialized().clone()))
             .collect();
         Ok(Response::new(FetchCommitsResponse {
             commits,
