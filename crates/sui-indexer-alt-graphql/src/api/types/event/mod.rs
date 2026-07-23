@@ -106,9 +106,9 @@ pub(crate) enum EventTimestamp {
     /// Timestamp known at construction time. `None` when the transaction is not part of a
     /// checkpoint (simulated or just-executed transactions).
     Known(Option<u64>),
-    /// Only the containing checkpoint is known (events hydrated from the gRPC scan stream); its
-    /// summary is loaded on demand if the timestamp is requested.
-    Checkpoint(u64),
+    /// Timestamp not resolved yet (events hydrated from the gRPC scan stream); the emitting
+    /// transaction's contents are loaded on demand if the timestamp is requested.
+    Lazy,
 }
 
 /// Custom `Connection` for events to support partially-filled pages.
@@ -161,13 +161,13 @@ impl Event {
         async {
             let timestamp_ms = match self.timestamp {
                 EventTimestamp::Known(timestamp_ms) => timestamp_ms,
-                EventTimestamp::Checkpoint(sequence_number) => {
+                EventTimestamp::Lazy => {
                     let kv_loader: &KvLoader = ctx.data()?;
                     kv_loader
-                        .load_one_checkpoint(sequence_number)
+                        .load_one_transaction(self.transaction_digest)
                         .await
-                        .context("Failed to fetch checkpoint summary")?
-                        .map(|(summary, _, _)| summary.timestamp_ms)
+                        .context("Failed to fetch transaction contents")?
+                        .and_then(|contents| contents.timestamp_ms())
                 }
             };
 
@@ -344,9 +344,8 @@ impl Event {
         });
 
         let mut request = v2::ListEventsRequest::default();
-        // Everything the GraphQL node needs rides on the stream item: the event envelope, its
-        // position, and its containing checkpoint (the timestamp resolves lazily from the
-        // checkpoint's summary).
+        // Everything the GraphQL node needs rides on the stream item: the event envelope and its
+        // position (the timestamp resolves lazily via the emitting transaction's contents).
         request.read_mask = Some(FieldMask::from_paths([
             "contents",
             "package_id",
@@ -354,7 +353,6 @@ impl Event {
             "sender",
             "transaction_digest",
             "event_index",
-            "checkpoint",
         ]));
         request.start_checkpoint = Some(*cp_bounds.start());
         // `cp_bounds` end is inclusive; the request bound is exclusive.
@@ -504,8 +502,8 @@ impl From<Connection<String, Event>> for EventConnection {
 }
 
 /// Hydrate an `Event` node from a `ListEvents` stream item. The read mask requests everything the
-/// node needs — the event envelope, its position, and its containing checkpoint — so no KV lookup
-/// is required; a missing field is an internal inconsistency.
+/// node needs — the event envelope and its position — so no KV lookup is required; a missing
+/// field is an internal inconsistency.
 fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
     let transaction_digest = payload
         .transaction_digest
@@ -517,10 +515,6 @@ fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, Rp
     let event_index = payload
         .event_index
         .context("ListEvents item missing event index")?;
-
-    let checkpoint = payload
-        .checkpoint
-        .context("ListEvents item missing checkpoint")?;
 
     let package_id = payload
         .package_id
@@ -576,7 +570,7 @@ fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, Rp
         native: Arc::new(native),
         transaction_digest,
         sequence_number: event_index as u64,
-        timestamp: EventTimestamp::Checkpoint(checkpoint),
+        timestamp: EventTimestamp::Lazy,
     })
 }
 
@@ -810,9 +804,6 @@ mod tests {
         assert!(!conn.page_info.has_previous_page);
         assert!(conn.page_info.has_next_page);
 
-        /// Checkpoint stamped on every synthetic stream item.
-        const ITEM_CHECKPOINT: u64 = 1;
-
         fn ev_position(checkpoint: u64, tx_seq: u64, event_index: u32) -> Position {
             Position::Events {
                 checkpoint,
@@ -831,7 +822,6 @@ mod tests {
             let mut payload = v2::Event::default();
             payload.transaction_digest = Some(Base58::encode(TransactionDigest::default().inner()));
             payload.event_index = Some(event_index);
-            payload.checkpoint = Some(ITEM_CHECKPOINT);
             payload.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
             payload.module = Some("m".to_string());
             payload.sender = Some(NativeSuiAddress::ZERO.to_string());
@@ -967,7 +957,7 @@ mod tests {
                 "non-empty page should anchor end_cursor on last edge, not stream watermark"
             );
 
-            // Nodes carry the hydrated position, envelope, and checkpoint for lazy timestamps.
+            // Nodes carry the hydrated position and envelope; timestamps resolve lazily.
             for (i, edge) in conn.edges.iter().enumerate() {
                 assert_eq!(edge.node.sequence_number, i as u64);
                 assert_eq!(edge.node.transaction_digest, TransactionDigest::default());
@@ -976,10 +966,7 @@ mod tests {
                     edge.node.native.type_,
                     parse_sui_struct_tag("0x0::m::T").unwrap()
                 );
-                assert!(matches!(
-                    edge.node.timestamp,
-                    EventTimestamp::Checkpoint(ITEM_CHECKPOINT)
-                ));
+                assert!(matches!(edge.node.timestamp, EventTimestamp::Lazy));
             }
         }
 
@@ -1117,7 +1104,7 @@ mod tests {
             );
 
             let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
-            item.payload.checkpoint = None;
+            item.payload.sender = None;
             let result = StreamPage::<v2::Event>::for_test(
                 vec![item],
                 None,
@@ -1126,7 +1113,7 @@ mod tests {
             );
             assert!(
                 build_grpc_connection(scope, &page, result).is_err(),
-                "missing checkpoint should error"
+                "missing sender should error"
             );
         }
     }
