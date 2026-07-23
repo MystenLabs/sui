@@ -20,10 +20,10 @@ async function fetchWithPayment(url: string): Promise<Response> {
 		return response;
 	}
 
-	// Parse payment instructions (includes server-issued challenge and exact amount)
+	// Parse payment instructions (includes server-issued challenge)
 	const { amount, recipient, coinType, challenge } = await response.json();
 
-	// Build and submit payment for the exact challenge amount
+	// Build and submit payment
 	const tx = new Transaction();
 	tx.setSender(keypair.toSuiAddress());
 

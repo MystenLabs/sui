@@ -40,9 +40,9 @@ questions:
   - How do I verify onchain payments in an Express.js server?
 answer: >-
   The x402 protocol uses HTTP 402 responses to gate API access behind
-  onchain payments. The server issues a challenge with a unique nonce
-  amount, the client pays that exact amount, and the server verifies the
-  payment onchain before serving the resource.
+  onchain payments. The server issues a single-use challenge ID, the
+  client pays and returns the digest with the challenge, and the server
+  verifies the payment onchain before serving the resource.
 ---
 
 The x402 protocol uses HTTP `402 Payment Required` responses to gate API access behind onchain payments. A client requests a resource, receives payment instructions, submits a Sui transaction, and retries with proof of payment. This pattern is especially useful for agent-to-agent interactions where one service charges another per request.
@@ -56,22 +56,20 @@ sequenceDiagram
     participant Sui
 
     Client->>Server: GET /api/resource
-    Server-->>Client: 402 Payment Required<br/>(exact nonce amount, recipient, challenge)
-    Client->>Sui: Pay exact nonce amount
+    Server-->>Client: 402 Payment Required<br/>(amount, recipient, challenge ID)
+    Client->>Sui: Pay requested amount
     Sui-->>Client: Transaction digest
     Client->>Server: GET /api/resource<br/>X-Payment-Digest + X-Payment-Challenge
-    Server->>Sui: Verify exact amount matches challenge
+    Server->>Sui: Verify payment onchain
     Sui-->>Server: Transaction confirmed
     Server-->>Client: 200 OK + resource
 ```
 
 1. The client requests a resource from the server.
-2. The server responds with HTTP 402 and a JSON body containing: a unique challenge ID, a nonce amount (base price + random offset), recipient address, and coin type.
-3. The client builds a PTB that transfers the **exact nonce amount** to the server's address, signs, and submits it.
+2. The server responds with HTTP 402 and a JSON body containing: a single-use challenge ID, the required amount, recipient address, and coin type.
+3. The client builds a PTB that transfers the requested amount to the server's address, signs, and submits it.
 4. The client retries the original request with the transaction digest and challenge ID in headers.
-5. The server verifies the challenge was issued by itself, checks that the onchain payment matches the challenge's exact nonce amount, and serves the resource.
-
-The nonce amount binds the onchain payment to a specific challenge. An attacker who observes a payment cannot reuse it with a different challenge because the amounts won't match.
+5. The server verifies the challenge is valid, checks the payment onchain, and serves the resource. Both the challenge and the digest are consumed — neither can be reused.
 
 ## Server implementation
 
@@ -105,7 +103,7 @@ The in-memory `Map` and `Set` work for a single server instance. For production,
 
 ## Client implementation
 
-The client handles 402 responses by paying the exact challenge amount and retrying.
+The client handles 402 responses by constructing a payment transaction and retrying with the challenge ID.
 
 <ImportContent source="examples/onchain-finance/x402-pay-per-request/src/client.ts" mode="code" tag="fetch-with-payment" />
 
@@ -115,8 +113,9 @@ For autonomous agents, combine x402 with the [agent wallet setup](/onchain-finan
 
 ## Security considerations
 
-- **Nonce-amount binding.** Each challenge includes a unique nonce amount (base price + random offset). The server verifies the onchain payment matches this exact amount. An attacker who observes a payment digest cannot pair it with a different challenge because the amounts won't match.
-- **Replay prevention.** The server tracks used digests. A digest accepted for one challenge cannot be reused.
-- **Amount validation.** Always verify the exact amount received onchain. Do not trust the client's claim about payment amount.
-- **Timeout window.** Expire pending challenges after 5 minutes. This bounds the window in which a challenge can be fulfilled and limits how long nonce amounts remain valid.
+- **Digest uniqueness.** The server tracks every accepted digest globally. A digest used for one challenge cannot be reused for any future challenge.
+- **Challenge consumption.** Each challenge ID is single-use — deleted after successful verification. This prevents an attacker from replaying a valid (digest, challenge) pair.
+- **Amount validation.** Always verify the amount received onchain meets or exceeds the required price. Do not trust the client's claim.
+- **Timeout window.** Expire pending challenges after a short window (for example, 5 minutes). This limits the time an attacker has to race a legitimate payment.
+- **Front-running risk.** In this model, the server cannot cryptographically bind a specific transaction to a specific challenge onchain. An attacker who observes a payment in the mempool could race to present the digest with their own challenge before the legitimate client. For high-value resources, require authenticated clients (API keys or signed challenges) so the server can verify the payer's identity. For low-value micropayments, the race window is typically too short to exploit profitably.
 - **Recipient verification.** The client should verify the 402 response's recipient address matches the expected server address to prevent payment redirection attacks.
