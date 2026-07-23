@@ -17,7 +17,7 @@ through `sui-rpc-api`'s `RpcService` rather than through `sui-rpc-node`.
 A read and a write each pass through the same small set of components:
 
 ```
-get_object(id)                       (latest semantics — ForkRpcReader → ForkStore)
+get_object(id)                       (latest semantics — RpcReader → ForkStore)
   ├─ consult the pointer table       (LiveState: Live(v) | Removed | absent)
   ├─ Live(v):  objects[(id, v)]      (LocalStore, a stock rpc-store row)
   ├─ Removed:  not found             (authoritative tombstone, no fallback)
@@ -32,10 +32,10 @@ execute(tx)                          (Simulacrum, with ForkStore as its Simulato
   └─ publish                         (blocks until every pipeline has caught up)
 ```
 
-The pieces the diagram names each have one job. `ForkRuntime` owns everything that must
+The pieces the diagram names each have one job. `ServiceManager` owns everything that must
 exist before any of it can run: the two RocksDB instances, the `fork_metadata.json` check
 that a data directory belongs to the network and fork checkpoint it claims, and the
-embedded indexer, started with the runtime and watched for the lifetime of the node.
+embedded indexer, started with the manager and watched for the lifetime of the node.
 `ForkStore` orchestrates the rest — local-first reads with remote fallback, checkpoint
 sealing, and the `SimulatorStore` surface Simulacrum executes against — delegating row
 access to `LocalStore` (object materialization, checkpoint and transaction persistence,
@@ -46,7 +46,7 @@ validation of the references a response carries.
 
 ## Where reads resolve
 
-`ForkRpcReader` implements the upstream RPC storage traits and is deliberately thin:
+`RpcReader` implements the upstream RPC storage traits and is deliberately thin:
 every read the fork has policy for resolves through `ForkStore`, which is already
 local-first — it checks the rpc-store rows before consulting the remote — so a second
 routing layer in the reader would only repeat the same point-get. The reader touches the

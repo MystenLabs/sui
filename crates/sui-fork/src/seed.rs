@@ -27,7 +27,7 @@ use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::GraphQLClient;
 use crate::gql::ObjectSeedMetadata;
-use crate::metadata::ForkMetadataStore;
+use crate::metadata::MetadataStore;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
@@ -88,10 +88,7 @@ impl From<AddressOwnedObject> for SeedEntry {
 }
 
 /// Reject seed inputs that would overwrite or reinterpret an existing manifest.
-pub(crate) fn ensure_seed_policy(
-    local: &ForkMetadataStore,
-    input: &SeedInput,
-) -> Result<(), Error> {
+pub(crate) fn ensure_seed_policy(local: &MetadataStore, input: &SeedInput) -> Result<(), Error> {
     if local.seed_manifest_exists() && !input.is_empty() {
         bail!(
             "A seed manifest already exists at {}. To fork the same checkpoint with different seeds, use a different --data-dir.",
@@ -335,7 +332,7 @@ mod tests {
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
-    use crate::runtime::ForkRuntime;
+    use crate::services::ServiceManager;
 
     use super::*;
 
@@ -343,21 +340,21 @@ mod tests {
         root: &Path,
         gql_url: String,
         forked_at_checkpoint: CheckpointSequenceNumber,
-    ) -> (ForkStore, ForkRuntime) {
-        let runtime = ForkRuntime::open(
+    ) -> (ForkStore, ServiceManager) {
+        let services = ServiceManager::open(
             root,
             "custom".to_owned(),
             forked_at_checkpoint,
             CheckpointDigest::new([9; 32]).into(),
         )
-        .expect("fork runtime should open");
+        .expect("service manager should open");
         let store = ForkStore::new_for_testing_with_remote(
             root.to_path_buf(),
             gql_url,
             forked_at_checkpoint,
-            runtime.local_store(),
+            services.local_store(),
         );
-        (store, runtime)
+        (store, services)
     }
 
     fn object_seed_response_body(
@@ -431,7 +428,7 @@ mod tests {
     #[tokio::test]
     async fn prepare_seed_manifest_writes_empty_manifest_without_seed_input() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) =
+        let (store, _services) =
             test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
 
         let manifest = prepare_seed_manifest(&store, "custom".to_owned(), &SeedInput::default())
@@ -460,7 +457,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let err = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -511,7 +508,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -576,7 +573,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -636,7 +633,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -751,7 +748,7 @@ mod tests {
         mock_address_objects(&server, 11, empty_owner, &[]).await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -779,7 +776,7 @@ mod tests {
     #[tokio::test]
     async fn save_seed_manifest_objects_marks_seeded_address_inventories_complete() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _runtime) =
+        let (store, _services) =
             test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
         let owner = SuiAddress::random_for_testing_only();
         let empty_owner = SuiAddress::random_for_testing_only();

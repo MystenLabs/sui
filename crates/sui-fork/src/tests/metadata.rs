@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for [`crate::metadata::ForkMetadataStore`]. Wired via
+//! Unit tests for [`crate::metadata::MetadataStore`]. Wired via
 //! `#[path]` in `metadata.rs`, so `super::*` resolves into that module.
 
 use std::collections::BTreeMap;
@@ -18,7 +18,7 @@ fn env_value(vars: &BTreeMap<&'static str, &'static str>, key: &str) -> Option<O
 #[test]
 fn explicit_data_dir_is_used_as_store_root() {
     let root = tempfile::tempdir().expect("tempdir");
-    let store = ForkMetadataStore::new(&crate::Node::Mainnet, 42, Some(root.path().to_path_buf()))
+    let store = MetadataStore::new(&crate::Node::Mainnet, 42, Some(root.path().to_path_buf()))
         .expect("store should construct");
 
     assert_eq!(store.root(), root.path());
@@ -31,7 +31,7 @@ fn explicit_data_dir_is_used_as_store_root() {
 #[test]
 fn default_root_appends_network_and_checkpoint_to_base_path() {
     let base = std::path::PathBuf::from("/tmp/sui-fork-test");
-    let root = ForkMetadataStore::root_from_base(base.clone(), &crate::Node::Testnet, 99);
+    let root = MetadataStore::root_from_base(base.clone(), &crate::Node::Testnet, 99);
 
     assert_eq!(root, base.join("testnet").join("forked_at_99"));
 }
@@ -44,7 +44,7 @@ fn sui_fork_data_env_takes_precedence_over_xdg_and_home() {
         ("HOME", "/home/alice"),
     ]);
 
-    let base = ForkMetadataStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
+    let base = MetadataStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
 
     assert_eq!(base, std::path::PathBuf::from("/custom/fork-root"));
 }
@@ -54,7 +54,7 @@ fn sui_fork_data_env_takes_precedence_over_xdg_and_home() {
 fn xdg_data_home_env_takes_precedence_over_home() {
     let vars = BTreeMap::from([("XDG_DATA_HOME", "/xdg"), ("HOME", "/home/alice")]);
 
-    let base = ForkMetadataStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
+    let base = MetadataStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
 
     assert_eq!(base, std::path::PathBuf::from("/xdg").join(DATA_DIR));
 }
@@ -64,7 +64,7 @@ fn xdg_data_home_env_takes_precedence_over_home() {
 fn home_env_is_used_when_no_override_or_xdg_data_home() {
     let vars = BTreeMap::from([("HOME", "/home/alice")]);
 
-    let base = ForkMetadataStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
+    let base = MetadataStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
 
     assert_eq!(base, std::path::PathBuf::from("/home/alice/.sui_fork_data"));
 }
@@ -72,7 +72,7 @@ fn home_env_is_used_when_no_override_or_xdg_data_home() {
 #[test]
 fn seed_manifest_round_trips_and_is_immutable() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let store = ForkMetadataStore::new_with_root(dir.path().to_path_buf());
+    let store = MetadataStore::new_with_root(dir.path().to_path_buf());
     let manifest = SeedManifest {
         network: "custom".to_owned(),
         checkpoint: 42,
@@ -90,7 +90,7 @@ fn seed_manifest_round_trips_and_is_immutable() {
 #[test]
 fn inventory_metadata_tracks_remote_completion_sets() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let store = ForkMetadataStore::new_with_root(dir.path().to_path_buf());
+    let store = MetadataStore::new_with_root(dir.path().to_path_buf());
     let parent = ObjectID::random();
     let type_filter = "0x2::coin::Coin<0x2::sui::SUI>";
 
@@ -107,7 +107,7 @@ fn inventory_metadata_tracks_remote_completion_sets() {
 #[test]
 fn inventory_metadata_accepts_older_files() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let store = ForkMetadataStore::new_with_root(dir.path().to_path_buf());
+    let store = MetadataStore::new_with_root(dir.path().to_path_buf());
     let parent = ObjectID::random();
     fs::write(
         store.inventory_metadata_path(),

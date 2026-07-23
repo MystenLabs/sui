@@ -16,8 +16,8 @@ pub(crate) mod pending;
 mod proto;
 pub(crate) mod remote;
 mod rpc;
-pub(crate) mod runtime;
 pub(crate) mod seed;
+pub(crate) mod services;
 pub mod startup;
 pub mod store;
 #[cfg(test)]

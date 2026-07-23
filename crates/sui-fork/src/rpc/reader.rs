@@ -59,11 +59,11 @@ use crate::store::ForkStore;
 /// keeps no policy for: events, full checkpoint contents, committees, epoch
 /// info, struct layouts, and the ledger/bitmap indexes, all written by the
 /// embedded indexer and correct to serve as-is.
-pub(crate) struct ForkRpcReader {
+pub(crate) struct RpcReader {
     store: ForkStore,
 }
 
-impl ForkRpcReader {
+impl RpcReader {
     /// Creates an RPC reader over fork state. `store` owns all read policy,
     /// including checkpoint-scoped remote fetches and index initialization.
     pub(crate) fn new(store: ForkStore) -> Self {
@@ -77,7 +77,7 @@ impl ForkRpcReader {
     }
 }
 
-impl ObjectStore for ForkRpcReader {
+impl ObjectStore for RpcReader {
     /// Reads the current object through fork state.
     ///
     /// Latest-semantics reads must consult the fork's currency authority
@@ -96,7 +96,7 @@ impl ObjectStore for ForkRpcReader {
     }
 }
 
-impl RuntimeObjectResolver for ForkRpcReader {
+impl RuntimeObjectResolver for RpcReader {
     /// Resolves a child object through fork-specific bounded object reads.
     ///
     /// `RpcStoreReader` does not perform the fork's parent/version validation,
@@ -131,7 +131,7 @@ impl RuntimeObjectResolver for ForkRpcReader {
     }
 }
 
-impl ReadStore for ForkRpcReader {
+impl ReadStore for RpcReader {
     /// Reads committee information from committed `sui-rpc-store` data.
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
         self.stock_reader().get_committee(epoch)
@@ -264,7 +264,7 @@ impl ReadStore for ForkRpcReader {
     }
 }
 
-impl RpcStateReader for ForkRpcReader {
+impl RpcStateReader for RpcReader {
     /// Returns the lowest checkpoint with object data through fork state.
     ///
     /// This is remote-chain availability metadata, not fork-local state.
@@ -299,7 +299,7 @@ impl RpcStateReader for ForkRpcReader {
     }
 }
 
-impl RpcIndexes for ForkRpcReader {
+impl RpcIndexes for RpcReader {
     /// Reads epoch index metadata from `sui-rpc-store`.
     fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
         RpcIndexes::get_epoch_info(self.stock_reader(), epoch)
@@ -472,7 +472,7 @@ mod tests {
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_types::transaction::Transaction as SuiTransaction;
 
-    use crate::runtime::ForkRuntime;
+    use crate::services::ServiceManager;
     use crate::store::ForkStore;
 
     use super::*;
@@ -530,14 +530,14 @@ mod tests {
     #[test]
     fn ledger_indexes_delegate_to_rpc_store() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let runtime = ForkRuntime::open(
+        let services = ServiceManager::open(
             temp.path(),
             "custom".to_owned(),
             0,
             CheckpointDigest::new([9; 32]).into(),
         )
-        .expect("fork runtime should open");
-        let store = ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        .expect("service manager should open");
+        let store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
 
         let (checkpoint, contents, executed) = checkpoint_with_transaction(1);
         let transaction = signed_transaction(&executed);
@@ -551,11 +551,11 @@ mod tests {
             .expect("checkpoint contents should include transaction");
         let tx_offset = u32::try_from(tx_offset).expect("checkpoint offset fits in u32");
 
-        runtime
+        services
             .local_store()
             .save_checkpoint(&checkpoint, &contents)
             .expect("checkpoint should persist");
-        runtime
+        services
             .local_store()
             .save_transaction(
                 &checkpoint,
@@ -566,7 +566,7 @@ mod tests {
             )
             .expect("transaction should persist");
 
-        let reader = ForkRpcReader::new(store);
+        let reader = RpcReader::new(store);
         let row = RpcIndexes::ledger_tx_seq_digest(&reader, tx_sequence_number)
             .expect("ledger lookup should read rpc store")
             .expect("ledger row should exist");

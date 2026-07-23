@@ -29,7 +29,7 @@ use wiremock::matchers::body_partial_json;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
-use crate::runtime::ForkRuntime;
+use crate::services::ServiceManager;
 
 use super::*;
 
@@ -41,35 +41,38 @@ fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
     )
 }
 
-fn open_test_runtime(root: &Path, forked_at_checkpoint: CheckpointSequenceNumber) -> ForkRuntime {
-    ForkRuntime::open(
+fn open_test_services(
+    root: &Path,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+) -> ServiceManager {
+    ServiceManager::open(
         root,
         "custom".to_owned(),
         forked_at_checkpoint,
         CheckpointDigest::new([9; 32]).into(),
     )
-    .expect("fork runtime should open")
+    .expect("service manager should open")
 }
 
-fn test_data_store(root: &Path) -> (ForkStore, ForkRuntime) {
-    let runtime = open_test_runtime(root, 0);
-    let store = ForkStore::new_for_testing(root.to_path_buf(), runtime.local_store());
-    (store, runtime)
+fn test_data_store(root: &Path) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, 0);
+    let store = ForkStore::new_for_testing(root.to_path_buf(), services.local_store());
+    (store, services)
 }
 
 fn test_data_store_with_remote(
     root: &Path,
     gql_url: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
-) -> (ForkStore, ForkRuntime) {
-    let runtime = open_test_runtime(root, forked_at_checkpoint);
+) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, forked_at_checkpoint);
     let store = ForkStore::new_for_testing_with_remote(
         root.to_path_buf(),
         gql_url,
         forked_at_checkpoint,
-        runtime.local_store(),
+        services.local_store(),
     );
-    (store, runtime)
+    (store, services)
 }
 
 fn checkpoint_response_body(
@@ -127,7 +130,7 @@ async fn mount_checkpoint_mock(
 #[test]
 fn insert_checkpoint_pair_saves_both_to_rpc_store() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let (mut store, _runtime) = test_data_store(temp.path());
+    let (mut store, _services) = test_data_store(temp.path());
     let (checkpoint, contents) = build_checkpoint(42);
     let sequence = checkpoint.data().sequence_number;
 
@@ -146,7 +149,7 @@ fn insert_checkpoint_pair_saves_both_to_rpc_store() {
 #[test]
 fn post_fork_sequence_miss_returns_none_without_remote() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let (store, _runtime) = test_data_store(temp.path());
+    let (store, _services) = test_data_store(temp.path());
     // `new_for_testing` pins `forked_at_checkpoint = 0`, so any positive
     // sequence is "post-fork". The dummy GraphQL endpoint is unreachable,
     // so reaching the network would surface as an error here.
@@ -162,14 +165,14 @@ async fn remote_checkpoint_fetch_saves_into_rpc_store() {
     mount_checkpoint_mock(&server, &checkpoint, &contents).await;
 
     let temp = tempfile::tempdir().expect("tempdir");
-    let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+    let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
 
     let loaded = ForkStore::get_checkpoint_by_sequence_number(&store, 11)
         .expect("remote checkpoint fetch should succeed")
         .expect("checkpoint should exist");
     assert_eq!(loaded.data(), checkpoint.data());
 
-    let reader = runtime.reader();
+    let reader = services.reader();
     let rpc_checkpoint = ReadStore::get_checkpoint_by_sequence_number(&reader, 11)
         .expect("checkpoint should be saved in rpc store");
     assert_eq!(rpc_checkpoint.data(), checkpoint.data());
@@ -190,7 +193,7 @@ async fn remote_checkpoint_fetch_saves_into_rpc_store() {
         fallback_temp.path().to_path_buf(),
         "http://localhost:1".to_owned(),
         checkpoint.data().sequence_number,
-        runtime.local_store(),
+        services.local_store(),
     );
 
     let fallback_checkpoint = ForkStore::get_checkpoint_by_sequence_number(&fallback_store, 11)
@@ -214,7 +217,7 @@ async fn remote_checkpoint_fetch_saves_into_rpc_store() {
 #[test]
 fn insert_checkpoint_summary_is_pending_until_contents_arrive() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let (mut store, _runtime) = test_data_store(temp.path());
+    let (mut store, _services) = test_data_store(temp.path());
     let (checkpoint, contents) = build_checkpoint(5);
 
     store.insert_checkpoint(checkpoint.clone());
@@ -250,7 +253,7 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
     // Session 1: persist genesis objects and an advanced local tip, then drop
     // every handle so the data dir can be reopened like a real restart.
     let tip = {
-        let (mut store, _runtime) = test_data_store(temp.path());
+        let (mut store, _services) = test_data_store(temp.path());
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()
@@ -272,7 +275,7 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
     // probes reach the remote, so the store needs a reachable mock that
     // reports the objects absent.
     let gql_server = crate::test_support::absent_objects_gql_server().await;
-    let (store, _runtime) = test_data_store_with_remote(temp.path(), gql_server.uri(), 0);
+    let (store, _services) = test_data_store_with_remote(temp.path(), gql_server.uri(), 0);
     let base = crate::startup::resume_base_checkpoint(&store)
         .expect("resume base checkpoint should resolve");
     assert_eq!(base.data().sequence_number, tip.data().sequence_number);

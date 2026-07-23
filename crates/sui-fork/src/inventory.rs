@@ -26,7 +26,7 @@ use sui_types::coin::RegulatedCoinMetadata;
 use sui_types::coin::TreasuryCap;
 
 use crate::local_store::LocalStore;
-use crate::metadata::ForkMetadataStore;
+use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
 
 /// Runs inventory scans on first use and marks them complete.
@@ -37,7 +37,7 @@ use crate::remote::RemoteSource;
 /// concurrent scans of the same owner run once.
 pub(crate) struct InventoryInitializer {
     remote: RemoteSource,
-    metadata: ForkMetadataStore,
+    metadata: MetadataStore,
     local_store: LocalStore,
     snapshot_lock: Arc<RwLock<()>>,
 }
@@ -45,7 +45,7 @@ pub(crate) struct InventoryInitializer {
 impl InventoryInitializer {
     pub(crate) fn new(
         remote: RemoteSource,
-        metadata: ForkMetadataStore,
+        metadata: MetadataStore,
         local_store: LocalStore,
         snapshot_lock: Arc<RwLock<()>>,
     ) -> Self {
