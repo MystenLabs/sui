@@ -119,7 +119,7 @@ function assertSuccess(result: Awaited<ReturnType<typeof client.getTransaction>>
 
 ### Verify balance changes
 
-For simple coin transfers, check `balanceChanges` to confirm the correct amount reached the correct recipient.
+For basic coin transfers, check `balanceChanges` to confirm the correct amount reached the correct recipient.
 
 ```typescript
 function verifyPayment(
@@ -229,12 +229,12 @@ See [Production Hardening](/onchain-finance/agentic-payments/production-hardenin
 
 ### Transaction reverted
 
-If `result.$kind` is `'FailedTransaction'`, the transaction reverted. User-visible effects (transfers, Move state changes) are rolled back, but gas is still charged and the gas coin version changes onchain. Read the error message from `result.FailedTransaction.status.error?.message` to diagnose the cause:
+If `result.$kind` is `'FailedTransaction'`, the transaction reverted. User-visible effects (transfers, Move state changes) are rolled back, but the network still charges gas and the gas coin version changes onchain. Read the error message from `result.FailedTransaction.status.error?.message` to diagnose the cause:
 
 - **Insufficient balance:** The sender did not have enough coins.
 - **Mandate exceeded:** The spending mandate's cap or per-tx limit was hit.
 - **Mandate expired:** The mandate's `expires_at_ms` has passed.
-- **Recipient not in allowlist:** The recipient address is not authorized.
+- **Recipient not in allowlist:** The allowlist does not include the recipient address.
 
 Log the error, alert the operator, and decide whether to retry (with a corrected transaction) or halt.
 
@@ -293,7 +293,7 @@ public fun verify_settlement(
 }
 ```
 
-In the PTB, the caller must chain `pay_and_prove` into `verify_settlement`. If they skip verification, the transaction aborts because the hot potato `SettlementProof` was not consumed.
+In the PTB, the caller must chain `pay_and_prove` into `verify_settlement`. If they skip verification, the transaction aborts because nothing consumed the hot potato `SettlementProof`.
 
 ```typescript
 const tx = new Transaction();
