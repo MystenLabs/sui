@@ -101,7 +101,7 @@ No asset migration needed. All objects and balances stay at the original address
 
 ### Multisig-to-alias delegation
 
-A multisig account can add a single-key alias for routine operations. High-value operations still require the full multisig, but day-to-day transactions can be signed by the alias without gathering multiple signatures.
+A multisig account can add a single-key alias for routine operations. The alias has full sender authority — it can do anything the multisig can, so use this pattern only when you trust the alias holder completely. The benefit is operational speed: day-to-day transactions can be signed by the alias without gathering multiple signatures.
 
 ### Agent authorization
 

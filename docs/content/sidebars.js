@@ -768,7 +768,6 @@ suiStackSidebar: [
 		label: 'Validators',
 		link: { type: 'doc', id: 'operators/validator/index', },
 		items: [
-      'operators/validator/validator-setup',
         'operators/validator/validator-config',
       'operators/validator/validator-tasks',
       'operators/validator/node-tools',

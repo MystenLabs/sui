@@ -100,7 +100,7 @@ public fun process_payment(
     registry: &mut PaymentRegistry,
     payment_id: vector<u8>,
 ) {
-    assert!(!registry.processed.contains(&payment_id), EDuplicatePayment);
+    assert!(!registry.processed.contains(payment_id), EDuplicatePayment);
     registry.processed.add(payment_id, true);
 }
 ```
