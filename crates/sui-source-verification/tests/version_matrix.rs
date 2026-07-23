@@ -53,7 +53,7 @@ use move_package_alt::schema::Environment;
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_package_alt::SuiFlavor;
 use sui_sdk::wallet_context::WalletContext;
-use sui_source_verification::{ensure_binary, verify_source};
+use sui_source_verification::{ToolchainSource, ensure_binary, verify_source};
 use test_cluster::TestClusterBuilder;
 
 /// Curated versions for the nightly matrix, spanning both package-system eras. v1.63 is where
@@ -348,7 +348,7 @@ async fn verify_legacy(config: &Path, sandbox: &Path, chain_id: &str) -> Result<
     verify_source(
         sandbox,
         &publication,
-        None,
+        ToolchainSource::Version(None),
         &build_env,
         &client,
         Some(config),

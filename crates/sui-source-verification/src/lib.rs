@@ -32,36 +32,54 @@ pub struct VerifiedMetadata {
     pub original_id: ObjectID,
     /// The on-chain address whose bytecode the rebuild was compared against.
     pub published_at: ObjectID,
-    /// The `sui` toolchain version the source was rebuilt with.
-    pub toolchain_version: String,
+    /// The `sui` toolchain version the source was rebuilt with, or `None` when a caller-supplied
+    /// binary was used (its version is not known).
+    pub toolchain_version: Option<String>,
     /// The path to the `sui` binary used for the rebuild.
     pub binary_path: PathBuf,
+}
+
+/// How to obtain the `sui` toolchain that rebuilds a package.
+pub enum ToolchainSource {
+    /// Download and cache a release: the publication's recorded version, or `Some(version)` to
+    /// override it.
+    Version(Option<String>),
+    /// Use the `sui` binary already at this path, skipping version resolution and download.
+    Binary(PathBuf),
 }
 
 /// Verify that the Move source package at `source_path` compiles to the on-chain package described
 /// by `publication`, matching both its module bytecode and its linkage. On success, returns the
 /// [`VerifiedMetadata`] the verification relied on.
 ///
-/// The package is rebuilt with the `sui` binary of the publication's recorded toolchain version, or
-/// of `toolchain_override` when one is given (downloaded and cached if necessary), against `env`. The
-/// resulting `0x0` root address is rewritten to the publication's original id, and the modules and
-/// linkage are compared against the package fetched from the publication's published-at address.
-/// `client_config` locates the wallet for releases whose build contacts the network.
+/// `toolchain` selects the `sui` binary to rebuild with: a downloaded release (the publication's
+/// recorded version, or an override) or a caller-supplied binary. The package is rebuilt against
+/// `env`, the resulting `0x0` root address is rewritten to the publication's original id, and the
+/// modules and linkage are compared against the package fetched from the publication's published-at
+/// address. `client_config` locates the wallet for releases whose build contacts the network.
 pub async fn verify_source(
     source_path: &Path,
     publication: &Publication<SuiFlavor>,
-    toolchain_override: Option<String>,
+    toolchain: ToolchainSource,
     env: &Environment,
     client: &Client,
     client_config: Option<&Path>,
 ) -> Result<VerifiedMetadata, AggregateError> {
-    let toolchain = resolve_toolchain(
-        publication.metadata.toolchain_version.clone(),
-        source_path,
-        toolchain_override,
-    )?;
-    check_toolchain_version(&toolchain)?;
-    let binary = ensure_binary(&toolchain)?;
+    // Resolve the binary to rebuild with. A downloaded release has a known version to report; a
+    // caller-supplied binary does not.
+    let (binary, toolchain_version) = match toolchain {
+        ToolchainSource::Binary(path) => (path, None),
+        ToolchainSource::Version(override_) => {
+            let version = resolve_toolchain(
+                publication.metadata.toolchain_version.clone(),
+                source_path,
+                override_,
+            )?;
+            check_toolchain_version(&version)?;
+            let binary = ensure_binary(&version)?;
+            (binary, Some(version))
+        }
+    };
 
     // Verification is attempted even for packages whose dependencies are not pinned to commit
     // hashes; only if that attempt fails is the lack of pinning reported, since it explains why the
@@ -91,7 +109,7 @@ pub async fn verify_source(
     Ok(VerifiedMetadata {
         original_id: ObjectID::from_address(original_id),
         published_at,
-        toolchain_version: toolchain,
+        toolchain_version,
         binary_path: binary,
     })
 }
@@ -237,7 +255,7 @@ mod tests {
         let metadata = VerifiedMetadata {
             original_id: ObjectID::from_hex_literal("0x1").unwrap(),
             published_at: ObjectID::from_hex_literal("0x2").unwrap(),
-            toolchain_version: "1.71.1".to_string(),
+            toolchain_version: Some("1.71.1".to_string()),
             binary_path: PathBuf::from("/cache/1.71.1/target/release/sui"),
         };
 
@@ -246,6 +264,20 @@ mod tests {
           "originalId": "0x0000000000000000000000000000000000000000000000000000000000000001",
           "publishedAt": "0x0000000000000000000000000000000000000000000000000000000000000002",
           "toolchainVersion": "1.71.1",
+          "binaryPath": "/cache/1.71.1/target/release/sui"
+        }
+        "###);
+
+        // A caller-supplied binary has no known version, so `toolchainVersion` is null.
+        let local = VerifiedMetadata {
+            toolchain_version: None,
+            ..metadata
+        };
+        insta::assert_json_snapshot!(local, @r###"
+        {
+          "originalId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "publishedAt": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "toolchainVersion": null,
           "binaryPath": "/cache/1.71.1/target/release/sui"
         }
         "###);
