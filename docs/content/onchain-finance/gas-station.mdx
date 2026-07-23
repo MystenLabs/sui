@@ -70,18 +70,18 @@ The sponsor handshake has five steps:
 
 5. **Client adds its own signature and submits.** The client signs the same bytes and submits the dual-signed transaction to a full node.
 
-```
-┌────────┐                       ┌─────────────┐                    ┌──────────┐
-│ Client │                       │ Gas Station │                    │ Full Node│
-└───┬────┘                       └──────┬──────┘                    └────┬─────┘
-    │  1. Build tx (no gas)             │                                │
-    │  2. POST /sponsor ───────────────>│                                │
-    │                                   │  3. Validate tx                │
-    │                                   │  4. Add gas coin, sign         │
-    │  <─────────── sponsorSig, txBytes │                                │
-    │  5. Sign txBytes                  │                                │
-    │  6. Submit dual-signed tx ────────┼───────────────────────────────>│
-    │                                   │                                │
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant G as Gas Station
+    participant N as Full Node
+    C->>C: 1. Build tx (no gas)
+    C->>G: 2. POST /sponsor (kind bytes + sender)
+    G->>G: 3. Validate tx
+    G->>G: 4. Add gas coin, sign
+    G-->>C: sponsorSig, txBytes
+    C->>C: 5. Sign txBytes
+    C->>N: 6. Submit dual-signed tx
 ```
 
 ## Gas coin pool
