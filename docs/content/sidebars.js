@@ -534,6 +534,9 @@ export default {
         'onchain-finance/payment-intents',
         'onchain-finance/gas-station',
         'onchain-finance/p2p-reference-app',
+        'onchain-finance/x402-pay-per-request',
+        'onchain-finance/funding-wallets',
+        'onchain-finance/recipient-resolution',
         {
           type: 'category',
           label: 'Agentic Payments',

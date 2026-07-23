@@ -1,0 +1,133 @@
+---
+title: Recipient Resolution
+description: >-
+  Resolve human-readable names to Sui addresses for payments using SuiNS and
+  custom directory patterns.
+keywords:
+  - SuiNS
+  - name resolution
+  - pay by username
+  - recipient lookup
+  - .sui names
+  - address resolution
+---
+
+Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resolution maps human-readable identifiers — SuiNS `.sui` names, email addresses, or application handles — to Sui addresses so users can pay by name.
+
+## SuiNS name resolution
+
+[SuiNS](/sui-stack/suins) is Sui's native name service. Users register `.sui` names (like `alice.sui`) that resolve to their Sui address.
+
+### Resolve a name with the TypeScript SDK
+
+```typescript
+import { SuinsClient } from '@mysten/suins';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+
+const suins = new SuinsClient({ client, network: 'mainnet' });
+
+async function resolveRecipient(name: string): Promise<string> {
+  const nameRecord = await suins.getNameRecord(name);
+
+  if (!nameRecord) {
+    throw new Error(`Name "${name}" not found`);
+  }
+
+  // Check expiry
+  if (nameRecord.expirationTimestampMs < Date.now()) {
+    throw new Error(`Name "${name}" has expired`);
+  }
+
+  return nameRecord.targetAddress;
+}
+
+// Usage
+const recipientAddress = await resolveRecipient('alice.sui');
+```
+
+:::danger Always check expiry
+
+A `.sui` name can expire and be re-registered by a different user. Always verify that `expirationTimestampMs` is in the future before using the resolved address. Sending funds to an expired name's cached address could send them to the wrong person.
+
+:::
+
+### Reverse resolution
+
+To display a human-readable name in transaction history or receipts, look up the default name for an address:
+
+```typescript
+const defaultName = await suins.getDefaultName(address);
+// Returns 'alice.sui' or undefined if no default name is set
+```
+
+### Resolve via GraphQL
+
+```graphql
+query ResolveName {
+  resolveSuinsAddress(domain: "alice.sui") {
+    address
+  }
+}
+```
+
+## Custom directory patterns
+
+For applications that need email-to-address or handle-to-address mappings beyond SuiNS, use one of these patterns:
+
+### Off-chain lookup service
+
+Maintain a backend database mapping identifiers to Sui addresses. The client queries the service before building the payment transaction.
+
+```
+User enters "alice@example.com"
+  → App calls backend: GET /api/resolve?email=alice@example.com
+  → Backend returns: { address: "0x..." }
+  → App builds PTB with resolved address
+```
+
+This is the simplest approach and works for any identifier format. The tradeoff is centralization — the lookup service must be available and trusted.
+
+### Onchain registry
+
+For decentralized resolution, deploy a Move module that stores mappings in a shared `Table`:
+
+```move
+module example::directory;
+
+use sui::table::{Self, Table};
+
+public struct Directory has key {
+    id: UID,
+    entries: Table<vector<u8>, address>,
+}
+```
+
+Clients query the registry onchain via a `devInspectTransactionBlock` call before building the payment transaction. This avoids trusting a centralized service but requires onchain storage costs for each registration.
+
+## Combining with payments
+
+When building a payment flow, resolve the recipient before constructing the PTB:
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+async function payByName(name: string, amountMist: bigint) {
+  const recipient = await resolveRecipient(name);
+
+  const tx = new Transaction();
+  const [coin] = tx.splitCoins(tx.gas, [amountMist]);
+  tx.transferObjects([coin], recipient);
+
+  return client.signAndExecuteTransaction({
+    transaction: tx,
+    signer: keypair,
+  });
+}
+```
+
+For the full payment flow including gas sponsorship and settlement verification, see the [P2P Reference App](/onchain-finance/p2p-reference-app).
