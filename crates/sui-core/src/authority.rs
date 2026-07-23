@@ -1159,7 +1159,7 @@ impl AuthorityState {
             epoch_store.epoch(),
         )?;
 
-        let (_gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
+        let (gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
             tx_data,
@@ -1176,7 +1176,107 @@ impl AuthorityState {
             epoch_store,
         )?;
 
+        // A gasless transaction pays no gas, so admitting one that will fail at execution is free
+        // spam. Its success also depends on runtime values (e.g. transfer amounts must meet the
+        // per-token minimum) that can only be checked by executing it. Dry-run it here and reject
+        // it if execution would fail for any reason, so it never reaches consensus/execution.
+        //
+        // `is_gasless_transaction()` requires the tx to already be in gasless shape (zero price,
+        // no gas payment); the callers of this method run `validity_check` -- which includes the
+        // gasless structural validation -- beforehand, so by this point the tx is confirmed
+        // gasless. Gated additionally by a node-local config so operators can disable it.
+        if self.config.enable_gasless_dry_run_at_signing
+            && epoch_store.protocol_config().enable_gasless()
+            && tx_data.is_gasless_transaction()
+        {
+            self.reject_gasless_transaction_that_would_fail(
+                tx_data,
+                checked_input_objects.clone(),
+                gas_status,
+                epoch_store,
+            )?;
+        }
+
         Ok(checked_input_objects)
+    }
+
+    /// Runs a non-committing dry-run of a confirmed-gasless transaction and returns an error if
+    /// execution would fail for any reason. Because gasless transactions pay no gas, there is no
+    /// point admitting one that will not execute successfully. This is a best-effort,
+    /// non-deterministic signing/voting check (like `check_remaining_amounts_after_withdrawal`);
+    /// the authoritative enforcement stays in the execution engine.
+    fn reject_gasless_transaction_that_would_fail(
+        &self,
+        tx_data: &TransactionData,
+        checked_input_objects: CheckedInputObjects,
+        gas_status: SuiGasStatus,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<()> {
+        let protocol_config = epoch_store.protocol_config();
+        // Use the per-epoch simulate executor, whose VM state is isolated from the executor used
+        // for committed execution, so dry-running these (uncommitted) transactions cannot pollute
+        // its caches.
+        let executor = epoch_store.simulate_executor();
+
+        let (mut kind, signer, gas_data) = tx_data.execution_parts();
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            signer,
+            &mut kind,
+            None,
+        )?;
+        let tx_digest = tx_data.digest();
+        let early_execution_error = get_early_execution_error(
+            &tx_digest,
+            &checked_input_objects,
+            self.config.certificate_deny_config.certificate_deny_set(),
+            &FundsWithdrawStatus::MaybeSufficient,
+        );
+        let execution_params = match early_execution_error {
+            None => ExecutionOrEarlyError::ok(None),
+            Some(errors) => ExecutionOrEarlyError::failed(errors, None),
+        };
+
+        let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
+        let epoch_id = epoch_store.epoch_start_config().epoch_data().epoch_id();
+        let epoch_timestamp_ms = epoch_store
+            .epoch_start_config()
+            .epoch_data()
+            .epoch_start_timestamp();
+
+        let (_inner_temp_store, _, effects, _execution_result) = executor.dev_inspect_transaction(
+            &tracking_store,
+            protocol_config,
+            self.metrics.execution_metrics.clone(),
+            false, // expensive_checks
+            execution_params,
+            &epoch_id,
+            epoch_timestamp_ms,
+            checked_input_objects,
+            gas_data,
+            gas_status,
+            kind,
+            rewritten_inputs,
+            signer,
+            tx_digest,
+            false, // dev_inspect
+        );
+
+        // Any execution failure (minimum-transfer violation, Move abort, out-of-gas against the
+        // gasless compute cap, etc.) means the transaction cannot succeed, so reject it. Reuse the
+        // same error we return for transactions that do not otherwise qualify as gasless.
+        if effects.status().is_err() {
+            return Err(SuiErrorKind::UserInputError {
+                error: UserInputError::Unsupported(format!(
+                    "Gasless transaction would fail execution and cannot be admitted: {:?}",
+                    effects.status()
+                )),
+            }
+            .into());
+        }
+
+        Ok(())
     }
 
     fn handle_coin_deny_list_checks(
