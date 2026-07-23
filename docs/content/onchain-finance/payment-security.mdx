@@ -12,6 +12,34 @@ keywords:
   - duplicate payments
   - shared objects
   - owned objects
+goal:
+  description: >-
+    Reader can apply payment-specific security patterns including escrow
+    authorization, duplicate prevention, and time-based expiry
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I prevent duplicate payments on Sui?
+  - How do I build a secure escrow on Sui?
+  - Should I use shared or owned objects for payments on Sui?
+answer: >-
+  Use escrow patterns with sender/recipient authorization, maintain a
+  payment ID registry for duplicate prevention, choose owned objects for
+  simple transfers and shared objects for multi-party flows, and use
+  Clock-based expiry for payment windows.
 ---
 
 Payment applications handle value transfers where bugs or design flaws can cause direct financial loss. This page consolidates security patterns specific to payment flows on Sui. For general smart contract security, see [Security Best Practices](/develop/security/best-practices).

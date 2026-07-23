@@ -10,6 +10,38 @@ keywords:
   - event subscription
   - indexer
   - audit
+goal:
+  description: >-
+    Reader can query agent payment history and reconcile local records
+    against onchain transaction data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Payment reconciliation
+    stage: Operations
+questions:
+  - How do I track payment history for a Sui agent?
+  - How do I reconcile agent payments on Sui?
+  - How do I detect missed or duplicate payments on Sui?
+answer: >-
+  Query transaction history via GraphQL or inspect individual transactions
+  with the gRPC client. Compare local payment records against onchain data
+  to detect missed, duplicate, or failed payments.
 ---
 
 Autonomous agents can lose track of payments due to crashes, network timeouts, or retry failures. Payment reconciliation compares the agent's local payment records against onchain transaction history to detect missed, duplicate, or failed payments.

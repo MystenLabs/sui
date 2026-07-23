@@ -9,6 +9,38 @@ keywords:
   - subscriptions
   - scheduled payments
   - payment automation
+goal:
+  description: >-
+    Reader can implement recurring or streaming payment patterns on Sui
+    using off-chain schedulers or onchain streaming objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Recurring payments
+    stage: Patterns
+questions:
+  - How do I implement recurring payments on Sui?
+  - What is a streaming payment on Sui?
+  - How do I build a subscription payment system on Sui?
+answer: >-
+  Sui has no native recurring payments. Use an off-chain scheduler with a
+  spending mandate for periodic payments, or lock funds in a shared
+  StreamPayment object with a linear unlock schedule.
 ---
 
 Sui does not have native recurring payments — there is no cron system or auto-debit mechanism that pulls funds from an account on a schedule. Instead, you implement recurring payments using an off-chain scheduler that triggers onchain transactions, or a prepaid streaming object that the recipient claims from over time.
