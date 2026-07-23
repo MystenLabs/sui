@@ -299,7 +299,7 @@ fn detect_platform(version: &str) -> Result<Platform, Error> {
             version: version.to_string(),
             message: format!(
                 "no downloadable sui {version} release for your platform \
-                 (OS: {os}, architecture: {arch})"
+                 (OS: {os}, architecture: {arch}); pass --toolchain <path> to build with a local binary"
             ),
         }),
     }
