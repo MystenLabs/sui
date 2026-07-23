@@ -451,6 +451,35 @@ impl fmt::Debug for Slot {
 pub(crate) struct SignedBlock {
     inner: Block,
     signature: Bytes,
+    // Test-only live-instance census: counts every SignedBlock in memory regardless
+    // of construction path (deserialize goes through Default via serde(skip)).
+    #[serde(skip)]
+    _census: SignedBlockCensus,
+}
+
+/// Global census of live SignedBlock instances, for leak attribution.
+pub(crate) static SIGNED_BLOCK_CENSUS: std::sync::atomic::AtomicI64 =
+    std::sync::atomic::AtomicI64::new(0);
+
+pub(crate) struct SignedBlockCensus;
+
+impl Default for SignedBlockCensus {
+    fn default() -> Self {
+        SIGNED_BLOCK_CENSUS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self
+    }
+}
+
+impl Clone for SignedBlockCensus {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl Drop for SignedBlockCensus {
+    fn drop(&mut self) {
+        SIGNED_BLOCK_CENSUS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl SignedBlock {
@@ -459,6 +488,7 @@ impl SignedBlock {
         Self {
             inner: block,
             signature: Bytes::default(),
+            _census: SignedBlockCensus::default(),
         }
     }
 
@@ -467,6 +497,7 @@ impl SignedBlock {
         Ok(Self {
             inner: block,
             signature: Bytes::copy_from_slice(signature.to_bytes()),
+            _census: SignedBlockCensus::default(),
         })
     }
 
@@ -587,6 +618,7 @@ impl VerifiedBlock {
         let signed_block = SignedBlock {
             inner: block,
             signature: Default::default(),
+            _census: SignedBlockCensus::default(),
         };
         let serialized: Bytes = bcs::to_bytes(&signed_block)
             .expect("Serialization should not fail")

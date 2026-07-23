@@ -261,6 +261,9 @@ pub(crate) struct NodeMetrics {
     pub(crate) finalizer_blocks_bytes: IntGauge,
     pub(crate) certifier_votes_entries: IntGauge,
     pub(crate) certifier_votes_bytes: IntGauge,
+    pub(crate) adaptive_block_cap_bytes: IntGauge,
+    pub(crate) signed_block_census: IntGauge,
+    pub(crate) commit_sync_fetched_ranges_bytes: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
     pub(crate) finalizer_reject_votes: IntCounterVec,
@@ -1049,6 +1052,21 @@ impl NodeMetrics {
             certifier_votes_bytes: register_int_gauge_with_registry!(
                 "certifier_votes_bytes",
                 "Total serialized bytes of blocks retained in the transaction vote tracker",
+                registry,
+            ).unwrap(),
+            adaptive_block_cap_bytes: register_int_gauge_with_registry!(
+                "adaptive_block_cap_bytes",
+                "Current adaptive block byte cap applied to own proposals",
+                registry,
+            ).unwrap(),
+            signed_block_census: register_int_gauge_with_registry!(
+                "signed_block_census",
+                "Number of SignedBlock instances currently live in memory",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_ranges_bytes: register_int_gauge_with_registry!(
+                "commit_sync_fetched_ranges_bytes",
+                "Total serialized block bytes buffered in commit syncer fetched ranges",
                 registry,
             ).unwrap(),
             finalizer_round_delay: register_histogram_with_registry!(
