@@ -327,13 +327,16 @@ async fn test_get_implicitly_read_system_object_blocking() {
     let blocked = tokio::spawn({
         let cache = cache.clone();
         async move {
-            cache.as_ref().get_implicitly_read_system_object_blocking(
-                &object_id,
-                ConsensusObjectVersion {
-                    initial_shared_version: init_version,
-                    version: target_version,
-                },
-            )
+            cache
+                .as_ref()
+                .get_implicitly_read_system_object_blocking(
+                    &object_id,
+                    ConsensusObjectVersion {
+                        initial_shared_version: init_version,
+                        version: target_version,
+                    },
+                )
+                .unwrap()
         }
     });
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -353,12 +356,15 @@ async fn test_get_implicitly_read_system_object_blocking() {
         .unwrap();
     assert_eq!(object.version(), target_version);
 
-    let object = cache.as_ref().get_implicitly_read_system_object_blocking(
-        &object_id,
-        ConsensusObjectVersion {
-            initial_shared_version: init_version,
-            version: target_version,
-        },
-    );
+    let object = cache
+        .as_ref()
+        .get_implicitly_read_system_object_blocking(
+            &object_id,
+            ConsensusObjectVersion {
+                initial_shared_version: init_version,
+                version: target_version,
+            },
+        )
+        .unwrap();
     assert_eq!(object.version(), target_version);
 }

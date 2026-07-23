@@ -17,14 +17,8 @@ pub trait ObjectStore {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         self.get_object_by_key(object_id, version.version)
-            .unwrap_or_else(|| {
-                panic!(
-                    "implicitly read system object {object_id} must exist at version {:?}",
-                    version.version
-                )
-            })
     }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
@@ -51,7 +45,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         (*self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 
@@ -77,7 +71,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         (**self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 
@@ -103,7 +97,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
         &self,
         object_id: &ObjectID,
         version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         (**self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 

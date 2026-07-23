@@ -501,7 +501,7 @@ impl WritebackCache {
         &self,
         object_id: &ObjectID,
         consensus_version: ConsensusObjectVersion,
-    ) -> Object {
+    ) -> Option<Object> {
         assert!(
             sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
             "{object_id} is not an implicitly read system object"
@@ -511,7 +511,7 @@ impl WritebackCache {
             version,
         } = consensus_version;
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
-            return object;
+            return Some(object);
         }
         self.metrics
             .implicit_system_object_read_waits
@@ -527,11 +527,10 @@ impl WritebackCache {
                 "get_implicitly_read_system_object_blocking",
                 &[key],
                 move |_keys| {
-                    vec![if self.object_exists_by_key(object_id, version) {
-                        Some(())
-                    } else {
-                        None
-                    }]
+                    let resolved = self.object_exists_by_key(object_id, version)
+                        || ObjectCacheRead::get_object(self, object_id)
+                            .is_some_and(|latest| latest.version() >= version);
+                    vec![if resolved { Some(()) } else { None }]
                 },
             ))
         });
@@ -539,9 +538,7 @@ impl WritebackCache {
             .implicit_system_object_read_wait_latency
             .with_label_values(&[object_id.to_string().as_str()])
             .observe(wait_start.elapsed().as_secs_f64());
-        ObjectCacheRead::get_object_by_key(self, object_id, version).expect(
-            "implicitly read system object must exist at the awaited version after the wait",
-        )
+        ObjectCacheRead::get_object_by_key(self, object_id, version)
     }
 
     pub fn new(
