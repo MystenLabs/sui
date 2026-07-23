@@ -15,7 +15,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::{SystemObjectVersion, VersionDigest};
+use sui_types::base_types::{ConsensusObjectVersion, VersionDigest};
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
@@ -106,7 +106,7 @@ pub struct TemporaryStore<'backing> {
     /// recorded version; `check_system_object_available` consults this map. Every system object read
     /// during execution must appear here — querying one that is absent is an invariant violation
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
-    system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+    system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
 
     /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
     /// digest) at which they were read. Recorded by `check_system_object_available` and
@@ -126,7 +126,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -181,7 +181,7 @@ impl<'backing> TemporaryStore<'backing> {
         // Every system object read during execution must have an assigned version. Its absence
         // here means the transaction is reading a system object it was not sequenced against,
         // which is an invariant violation.
-        let Some(SystemObjectVersion {
+        let Some(ConsensusObjectVersion {
             initial_shared_version,
             version: required_version,
         }) = self.system_object_versions.get(object_id).copied()

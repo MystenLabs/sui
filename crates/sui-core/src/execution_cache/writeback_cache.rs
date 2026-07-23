@@ -518,9 +518,6 @@ impl WritebackCache {
             id: FullObjectID::Consensus((*object_id, initial_shared_version)),
             version,
         };
-        // `object_notify_read` carries no payload (it is also notified on marker-only
-        // writes, where there is no object), so the wait only signals availability and
-        // the object must be fetched separately once it completes.
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
                 "get_implicitly_read_system_object_blocking",

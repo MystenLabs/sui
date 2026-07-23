@@ -828,9 +828,6 @@ async fn test_authority_txn_validation_pushback() {
     assert!(result.is_ok());
 }
 
-/// A system-object writer must be dispatched and execute even when every user-pool permit is
-/// held by a (parked) execution: the writer is what unblocks those executions, so it must never
-/// queue behind them — neither in the permit pool nor in the dispatch loop itself.
 #[tokio::test]
 async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
     use crate::execution_driver::execution_process_with_limits;
@@ -849,8 +846,6 @@ async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
         .await;
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
 
-    // Builds a certificate and marks it as already executed, so the driver task completes
-    // (and releases its permit) as soon as it gets to run, without real execution.
     let make_executed_cert = |with_accumulator_input: bool| {
         let mut builder = ProgrammableTransactionBuilder::new();
         if with_accumulator_input {
@@ -888,11 +883,9 @@ async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
 
     let user_limit = Arc::new(Semaphore::new(1));
     let writer_limit = Arc::new(Semaphore::new(1));
-    // Hold the only user permit, simulating a user execution parked waiting for a
-    // system-object write.
     let _held_user_permit = user_limit.clone().acquire_owned().await.unwrap();
 
-    #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
+    #[allow(clippy::disallowed_methods)]
     let (tx_ready, rx_ready) = unbounded_channel();
     let (_tx_shutdown, rx_shutdown) = oneshot::channel();
     tokio::spawn(execution_process_with_limits(
@@ -903,12 +896,9 @@ async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
         writer_limit.clone(),
     ));
 
-    // A user transaction that cannot get a permit, followed by a system-object writer.
     tx_ready.send(pending(make_executed_cert(false))).unwrap();
     tx_ready.send(pending(make_executed_cert(true))).unwrap();
 
-    // Both certificates must be dispatched despite the saturated user pool (the dispatch
-    // queue gauge is decremented once per dequeued certificate).
     timeout(Duration::from_secs(10), async {
         while authority.metrics.execution_driver_dispatch_queue.get() > -2 {
             sleep(Duration::from_millis(10)).await;
@@ -917,8 +907,6 @@ async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
     .await
     .expect("system-object writer was never dispatched: dispatch loop starved by user pool");
 
-    // The writer's task must complete and return its permit while the user pool is still
-    // saturated; acquiring it here proves the writer did not park on the user pool.
     let _writer_permit = timeout(Duration::from_secs(10), writer_limit.acquire_owned())
         .await
         .expect("system-object writer never released its permit")

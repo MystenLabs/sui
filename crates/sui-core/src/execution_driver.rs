@@ -40,7 +40,6 @@ pub async fn execution_process(
     .await
 }
 
-/// Inner loop with injectable permit pools, so tests can exercise the permit routing.
 pub(crate) async fn execution_process_with_limits(
     authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
@@ -133,13 +132,9 @@ pub(crate) async fn execution_process_with_limits(
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _executing_guard = executing_guard;
-            // The permit is acquired inside the task rather than in the dispatch loop:
-            // if the loop blocked here on a user transaction while every user permit was
-            // held by a parked execution, a system-object writer queued behind it could
-            // never be dispatched — the starvation the dedicated pool exists to prevent.
-            // unwrap ok because we never close the semaphore in this context. The scope
-            // measures time blocked waiting for a permit, i.e. how saturated execution
-            // concurrency is.
+            // hold semaphore permit until task completes. unwrap ok because we never close
+            // the semaphore in this context. The scope measures time blocked waiting for a
+            // permit, i.e. how saturated execution concurrency is.
             // `permit` is moved into the blocking closure below and installed on the
             // execution thread, so that a blocking sync primitive can release it if
             // execution has to wait on work that another execution must perform (which
