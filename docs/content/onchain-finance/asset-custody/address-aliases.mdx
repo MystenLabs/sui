@@ -9,6 +9,34 @@ keywords:
   - key rotation
   - AddressAliases
   - alias management
+goal:
+  description: >-
+    Reader can use address aliases for key rotation and account
+    abstraction without migrating assets
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What are address aliases on Sui?
+  - How do I rotate keys without migrating assets on Sui?
+  - How do I enable and manage address aliases on Sui?
+answer: >-
+  Address aliases let you authorize additional Sui addresses to act as
+  your account. Enable aliases, then add, remove, or replace alias
+  addresses. Aliases have full sender authority, enabling key rotation
+  without asset migration.
 ---
 
 Address aliases let you authorize additional Sui addresses to act on behalf of your account. A transaction signed by an alias address can set its sender to the original address, giving the alias full authority to transact as the original account. This enables key rotation without migrating assets and basic account abstraction patterns.
