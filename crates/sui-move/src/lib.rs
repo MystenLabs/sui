@@ -49,7 +49,7 @@ pub async fn execute_move_command(
     command_meta: Option<CommandMeta>,
     wallet: &WalletContext,
 ) -> anyhow::Result<()> {
-    let flavor = SuiFlavor::with_client(wallet);
+    let flavor = SuiFlavor::with_wallet(wallet);
     match command {
         Command::Build(c) => c.execute(package_path, build_config, wallet).await,
         Command::CachePackage(c) => c.execute(flavor).await,

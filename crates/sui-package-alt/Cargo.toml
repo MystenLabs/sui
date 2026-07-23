@@ -18,7 +18,6 @@ move-package-alt.workspace = true
 serde.workspace = true
 sui-package-management.workspace = true
 sui-protocol-config.workspace = true
-sui-rpc-api.workspace = true
 sui-sdk.workspace = true
 tokio.workspace = true
 tracing.workspace = true
