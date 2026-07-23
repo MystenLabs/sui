@@ -133,7 +133,7 @@ class GasCoinPool {
   private coins: Map<string, GasCoin> = new Map();
 
   async initialize(client: SuiGrpcClient, sponsorAddress: string) {
-    const ownedCoins = await client.listCoins({
+    const ownedCoins = await client.core.listCoins({
       owner: sponsorAddress,
       coinType: '0x2::sui::SUI',
     });
@@ -240,8 +240,12 @@ app.post('/sponsor', async (req, res) => {
   try {
     const { txBytes } = req.body; // Base64-encoded transaction bytes
 
-    // 1. Deserialize the client's transaction
-    const tx = Transaction.from(fromBase64(txBytes));
+    // 1. Deserialize the client's transaction kind bytes.
+    // The client sends kind-only bytes (built with onlyTransactionKind: true),
+    // so use Transaction.fromKind() — not Transaction.from() — to reconstruct them.
+    const { txBytes, sender } = req.body; // sender is the user's Sui address
+    const tx = Transaction.fromKind(fromBase64(txBytes));
+    tx.setSender(sender);
 
     // 2. Acquire a gas coin from the pool
     const gasCoin = pool.acquire();
@@ -335,7 +339,6 @@ const user = new Ed25519Keypair();
 
 // 1. Build the transaction without gas
 const tx = new Transaction();
-tx.setSender(user.toSuiAddress());
 tx.moveCall({ target: '0xPACKAGE::module::function' });
 
 // 2. Serialize and send to gas station
@@ -343,7 +346,7 @@ const txBytes = await tx.build({ client, onlyTransactionKind: true });
 const response = await fetch('http://localhost:3001/sponsor', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ txBytes: toBase64(txBytes) }),
+  body: JSON.stringify({ txBytes: toBase64(txBytes), sender: user.toSuiAddress() }),
 });
 
 const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await response.json();
