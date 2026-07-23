@@ -15,10 +15,10 @@ use std::time::Duration;
 use rand::rngs::OsRng;
 
 use move_core_types::identifier::Identifier;
+use prometheus::Registry;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
-use sui_protocol_config::Chain;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
@@ -28,7 +28,6 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::get_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::gas_coin::GAS;
@@ -36,10 +35,14 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::storage::ObjectStore;
+use sui_types::storage::ReadStore;
+use sui_types::storage::RpcIndexes;
 use sui_types::transaction::Argument;
 use sui_types::transaction::GasData;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction_driver_types::EffectsFinalityInfo;
 use sui_types::transaction_driver_types::ExecuteTransactionRequestV3;
@@ -49,18 +52,22 @@ use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
 use crate::rpc::executor::ForkedTransactionExecutor;
-use crate::store::DataStore;
+use crate::rpc::reader::ForkRpcReader;
+use crate::runtime::ForkRuntime;
+use crate::store::ForkStore;
 
 /// Test harness that sets up a Simulacrum and a transaction executor to run transactions. Each test
 /// creates a new harness to ensure isolation and a fresh state.
 struct TestHarness {
     executor: ForkedTransactionExecutor,
+    context: Arc<Context>,
     sender: SuiAddress,
     sender_key: AccountKeyPair,
     gas_object: Object,
     reference_gas_price: u64,
     checkpoint_receiver: tokio::sync::broadcast::Receiver<Arc<Checkpoint>>,
     temp: tempfile::TempDir,
+    _runtime: Option<ForkRuntime>,
 }
 
 impl TestHarness {
@@ -72,15 +79,30 @@ impl TestHarness {
             .deterministic_committee_size(NonZeroUsize::MIN)
             .build();
 
-        // Initialize a DataStore with the genesis objects, so the Simulacrum can read them.
-        let mut data_store = DataStore::new_for_testing(temp.path().to_path_buf());
+        let genesis_checkpoint = config.genesis.checkpoint();
+        let genesis_contents = config.genesis.checkpoint_contents().clone();
+        let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
+        let chain_identifier = (*genesis_checkpoint.digest()).into();
+        let runtime = ForkRuntime::open(
+            temp.path(),
+            "localnet".to_owned(),
+            forked_at_checkpoint,
+            chain_identifier,
+        )
+        .expect("runtime should open");
+        // Initialize a ForkStore with the genesis objects, so the Simulacrum can read them.
+        let mut store =
+            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        store
+            .save_checkpoint(&genesis_checkpoint, &genesis_contents)
+            .expect("genesis checkpoint should be saved");
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()
             .iter()
             .map(|o| (o.id(), o.clone()))
             .collect();
-        data_store.update_objects(written, vec![]);
+        store.update_objects(written, vec![]);
 
         // Create a simulacrum object from the genesis config
         let keystore = KeyStore::from_network_config(&config);
@@ -89,7 +111,7 @@ impl TestHarness {
             config.genesis.checkpoint(),
             config.genesis.sui_system_object(),
             &config,
-            data_store.clone(),
+            store.clone(),
             rng,
         );
         let reference_gas_price = sim.reference_gas_price();
@@ -106,17 +128,94 @@ impl TestHarness {
         let gas_object = Self::find_gas_coin(&config, sender);
 
         let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
-        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
-        let executor = ForkedTransactionExecutor::new(context);
+        let context = Arc::new(Context::new(sim, checkpoint_sender));
+        let executor = ForkedTransactionExecutor::new(context.clone());
 
         Self {
             executor,
+            context,
             sender,
             sender_key,
             gas_object,
             reference_gas_price,
             checkpoint_receiver,
             temp,
+            _runtime: Some(runtime),
+        }
+    }
+
+    async fn new_with_runtime() -> Self {
+        let temp = tempfile::tempdir().expect("failed to create tempdir");
+        let mut rng = OsRng;
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .deterministic_committee_size(NonZeroUsize::MIN)
+            .build();
+
+        let genesis_checkpoint = config.genesis.checkpoint();
+        let genesis_contents = config.genesis.checkpoint_contents().clone();
+        let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
+        let chain_identifier = (*genesis_checkpoint.digest()).into();
+        let runtime = ForkRuntime::open(
+            temp.path(),
+            "localnet".to_owned(),
+            forked_at_checkpoint,
+            chain_identifier,
+        )
+        .expect("runtime should open");
+        let mut store =
+            ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+        store
+            .save_checkpoint(&genesis_checkpoint, &genesis_contents)
+            .expect("genesis checkpoint should be saved");
+        let written: BTreeMap<ObjectID, Object> = config
+            .genesis
+            .objects()
+            .iter()
+            .map(|o| (o.id(), o.clone()))
+            .collect();
+        store.update_objects(written, vec![]);
+
+        let keystore = KeyStore::from_network_config(&config);
+        let sim = Simulacrum::new_from_custom_state(
+            keystore,
+            genesis_checkpoint,
+            config.genesis.sui_system_object(),
+            &config,
+            store.clone(),
+            rng,
+        );
+        let reference_gas_price = sim.reference_gas_price();
+
+        let (sender, sender_key) = {
+            let (addr, key) = sim
+                .keystore()
+                .accounts()
+                .next()
+                .expect("at least one account");
+            (*addr, key.copy())
+        };
+
+        let gas_object = Self::find_gas_coin(&config, sender);
+        let registry = Registry::new();
+        let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
+        let context = Arc::new(
+            Context::new_with_runtime(sim, runtime, checkpoint_sender, &registry)
+                .await
+                .expect("runtime-backed context should initialize"),
+        );
+        let executor = ForkedTransactionExecutor::new(context.clone());
+
+        Self {
+            executor,
+            context,
+            sender,
+            sender_key,
+            gas_object,
+            reference_gas_price,
+            checkpoint_receiver,
+            temp,
+            _runtime: None,
         }
     }
 
@@ -130,11 +229,11 @@ impl TestHarness {
             .clone()
     }
 
-    /// Create transaction data where `amount` of SUI is transferred to a random recipient.
-    fn build_transfer_tx_data(&self, amount: u64) -> TransactionData {
+    /// Create transaction data where `amount` of SUI is transferred to `recipient`.
+    fn build_transfer_tx_data_to(&self, recipient: SuiAddress, amount: u64) -> TransactionData {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_sui(SuiAddress::random_for_testing_only(), Some(amount));
+            builder.transfer_sui(recipient, Some(amount));
             builder.finish()
         };
         TransactionData::new_with_gas_data(
@@ -147,6 +246,11 @@ impl TestHarness {
                 budget: 100_000_000,
             },
         )
+    }
+
+    /// Create transaction data where `amount` of SUI is transferred to a random recipient.
+    fn build_transfer_tx_data(&self, amount: u64) -> TransactionData {
+        self.build_transfer_tx_data_to(SuiAddress::random_for_testing_only(), amount)
     }
 
     /// Create a transaction where `amount` of SUI is transferred to a random recipient.
@@ -206,6 +310,239 @@ async fn test_tx_execution_publishes_checkpoint() {
             .expect("checkpoint channel closed");
 
     assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
+}
+
+// `simulate_transaction` is not yet supported by the forked executor (the
+// current Simulacrum has no simulate entrypoint); re-enable once it lands.
+#[ignore = "simulate_transaction not yet supported by the forked network"]
+#[tokio::test]
+async fn test_simulate_transaction_does_not_commit_or_checkpoint() {
+    let mut harness = TestHarness::new();
+    let tx_data = harness.build_transfer_tx_data(1_000);
+    let gas_id = harness.gas_object.id();
+    let before = {
+        let sim = harness.context.simulacrum().read().await;
+        SimulatorStore::get_object(sim.store(), &gas_id)
+            .expect("gas object should exist before simulation")
+            .compute_object_reference()
+    };
+
+    let result = harness
+        .executor
+        .simulate_transaction(tx_data, TransactionChecks::Enabled, false)
+        .expect("simulate_transaction should succeed");
+
+    assert!(result.effects.status().is_ok());
+    assert!(!result.objects.is_empty());
+    assert!(result.mock_gas_id.is_none());
+    assert!(
+        harness.checkpoint_receiver.try_recv().is_err(),
+        "simulation must not publish a checkpoint",
+    );
+
+    let after = {
+        let sim = harness.context.simulacrum().read().await;
+        SimulatorStore::get_object(sim.store(), &gas_id)
+            .expect("gas object should still exist after simulation")
+            .compute_object_reference()
+    };
+    assert_eq!(after, before, "simulation must not mutate stored objects");
+}
+
+#[ignore = "simulate_transaction not yet supported by the forked network"]
+#[tokio::test]
+async fn test_simulate_transaction_supports_mock_gas() {
+    let harness = TestHarness::new();
+    let mut tx_data = harness.build_transfer_tx_data(1_000);
+    tx_data.gas_data_mut().payment = Vec::new();
+
+    let result = harness
+        .executor
+        .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+        .expect("simulate_transaction with mock gas should succeed");
+
+    assert!(result.effects.status().is_ok());
+    assert_eq!(result.mock_gas_id, Some(ObjectID::MAX));
+}
+
+#[tokio::test]
+async fn test_tx_execution_indexes_checkpoint_in_rpc_store() {
+    let mut harness = TestHarness::new_with_runtime().await;
+    let signed_tx = harness.build_transfer_tx(1_000);
+    let expected_digest = *signed_tx.digest();
+
+    let request = ExecuteTransactionRequestV3 {
+        transaction: signed_tx,
+        include_events: true,
+        include_input_objects: false,
+        include_output_objects: true,
+        include_auxiliary_data: false,
+    };
+    let response = harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("execute_transaction should succeed");
+
+    let EffectsFinalityInfo::Checkpointed(_epoch, checkpoint_seq) = response.effects.finality_info
+    else {
+        panic!("forked execution should report checkpointed finality");
+    };
+
+    let checkpoint =
+        tokio::time::timeout(Duration::from_secs(5), harness.checkpoint_receiver.recv())
+            .await
+            .expect("timed out waiting for indexed checkpoint broadcast")
+            .expect("checkpoint channel closed");
+    assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
+
+    let reader = harness.context.runtime().unwrap().reader();
+    assert!(
+        reader
+            .get_checkpoint_by_sequence_number(checkpoint_seq)
+            .is_some()
+    );
+    assert!(
+        reader
+            .get_checkpoint_contents_by_sequence_number(checkpoint_seq)
+            .is_some()
+    );
+    assert!(reader.get_transaction(&expected_digest).is_some());
+    assert_eq!(
+        *reader
+            .get_transaction_effects(&expected_digest)
+            .expect("effects should be indexed")
+            .transaction_digest(),
+        expected_digest,
+    );
+
+    for object in response
+        .output_objects
+        .expect("output objects should be populated")
+    {
+        let stored = reader
+            .get_object(&object.id())
+            .expect("output object should be indexed as live");
+        assert_eq!(
+            stored.compute_object_reference(),
+            object.compute_object_reference(),
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
+    let mut harness = TestHarness::new_with_runtime().await;
+    let signed_tx = harness.build_transfer_tx(1_000);
+    let expected_digest = *signed_tx.digest();
+
+    let request = ExecuteTransactionRequestV3 {
+        transaction: signed_tx,
+        include_events: false,
+        include_input_objects: false,
+        include_output_objects: true,
+        include_auxiliary_data: false,
+    };
+    let response = harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("execute_transaction should succeed");
+
+    let EffectsFinalityInfo::Checkpointed(_epoch, checkpoint_seq) = response.effects.finality_info
+    else {
+        panic!("forked execution should report checkpointed finality");
+    };
+
+    tokio::time::timeout(Duration::from_secs(5), harness.checkpoint_receiver.recv())
+        .await
+        .expect("timed out waiting for indexed checkpoint broadcast")
+        .expect("checkpoint channel closed");
+
+    let empty_store = ForkStore::new_for_testing(
+        harness.temp.path().join("empty-rpc-reader-store"),
+        harness.context.runtime().unwrap().local_store(),
+    );
+    let reader = ForkRpcReader::new(harness.context.runtime().unwrap().reader(), empty_store);
+
+    assert!(
+        reader
+            .get_checkpoint_by_sequence_number(checkpoint_seq)
+            .is_some()
+    );
+    assert!(reader.get_transaction(&expected_digest).is_some());
+    assert_eq!(
+        *reader
+            .get_transaction_effects(&expected_digest)
+            .expect("effects should be indexed")
+            .transaction_digest(),
+        expected_digest,
+    );
+
+    for object in response
+        .output_objects
+        .expect("output objects should be populated")
+    {
+        assert!(
+            reader.get_object(&object.id()).is_some(),
+            "output object {} should be readable through ForkRpcReader",
+            object.id(),
+        );
+    }
+}
+
+/// The embedded indexer is the sole writer of derived indexes (owner, type,
+/// balance, package) for local checkpoints, and checkpoint publication blocks
+/// until it has indexed the sealed checkpoint. After an execution returns,
+/// owner and balance lookups must therefore already serve the transfer
+/// through the stock rpc-store reader.
+#[tokio::test]
+async fn test_indexer_populates_derived_indexes_for_local_execution() {
+    let mut harness = TestHarness::new_with_runtime().await;
+    let recipient = SuiAddress::random_for_testing_only();
+    let transfer_amount = 1_000;
+    let tx_data = harness.build_transfer_tx_data_to(recipient, transfer_amount);
+    let signed_tx = Transaction::from_data_and_signer(tx_data, vec![&harness.sender_key]);
+
+    let request = ExecuteTransactionRequestV3::new_v2(signed_tx);
+    harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("execute_transaction should succeed");
+
+    tokio::time::timeout(Duration::from_secs(5), harness.checkpoint_receiver.recv())
+        .await
+        .expect("timed out waiting for indexed checkpoint broadcast")
+        .expect("checkpoint channel closed");
+
+    let reader = harness.context.runtime().unwrap().reader();
+
+    // Recipient: the transferred coin appears in the owner index...
+    let recipient_infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, recipient, None, None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
+    assert_eq!(recipient_infos.len(), 1);
+    assert_eq!(recipient_infos[0].owner, recipient);
+    assert_eq!(recipient_infos[0].balance, Some(transfer_amount));
+
+    // ...and in the balance index.
+    let balance = RpcIndexes::get_balance(&reader, &recipient, &GAS::type_())
+        .expect("balance lookup should not error")
+        .expect("recipient balance should be indexed");
+    assert_eq!(balance.coin_balance, transfer_amount);
+
+    // Sender: the mutated gas coin is re-indexed at its post-execution version.
+    let sender_infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, harness.sender, None, None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
+    let gas_info = sender_infos
+        .iter()
+        .find(|info| info.object_id == harness.gas_object.id())
+        .expect("sender's gas coin should be indexed");
+    assert!(gas_info.version > harness.gas_object.version());
 }
 
 #[tokio::test]

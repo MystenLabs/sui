@@ -3,15 +3,20 @@
 
 //! Building blocks for the experimental `sui-fork` tool.
 
-#![allow(unused)]
-
 pub mod cli;
 pub(crate) mod context;
-pub(crate) mod filesystem;
 mod gql;
+pub(crate) mod ingestion;
+pub(crate) mod inventory;
+pub(crate) mod live_state;
+pub(crate) mod local_store;
+pub(crate) mod metadata;
 mod node;
+pub(crate) mod pending;
 mod proto;
+pub(crate) mod remote;
 mod rpc;
+pub(crate) mod runtime;
 pub(crate) mod seed;
 pub mod startup;
 pub mod store;
@@ -23,7 +28,7 @@ pub use proto::forking::AdvanceClockRequest;
 pub use proto::forking::GetStatusRequest;
 pub use proto::forking::forking_service_client::ForkingServiceClient;
 pub use seed::SeedInput;
-pub use store::DataStore;
+pub use store::ForkStore;
 
 use anyhow::Error;
 use anyhow::Result;
@@ -34,7 +39,6 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::VerifiedTransaction;
 
 // ============================================================================
@@ -42,7 +46,7 @@ use sui_types::transaction::VerifiedTransaction;
 // ============================================================================
 
 /// Signed transaction envelope paired with its execution effects and the checkpoint
-/// it was finalized in. The checkpoint is used by [`crate::store::DataStore`] as a
+/// it was finalized in. The checkpoint is used by [`crate::store::ForkStore`] as a
 /// pre-fork guard: remote results whose `checkpoint > forked_at_checkpoint` must not
 /// leak into a fork that has already diverged from the upstream chain.
 #[derive(Clone, Debug)]
@@ -71,13 +75,11 @@ pub(crate) struct ObjectKey {
 }
 
 /// Query options for an object.
-/// `Version` request an object at a specific version, or latest if no version is provided
 /// `RootVersion` request an object at a given version at most (<=)
-/// `AtCheckpoint` request an object at a given checkpoint. Useful for unknown `Version`.
+/// `AtCheckpoint` request an object at a given checkpoint. Useful for an unknown version.
 /// `VersionAtCheckpoint` requests an exact version, but only if it existed by the given checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum VersionQuery {
-    Version(u64),
     RootVersion(u64),
     AtCheckpoint(u64),
     VersionAtCheckpoint { version: u64, checkpoint: u64 },

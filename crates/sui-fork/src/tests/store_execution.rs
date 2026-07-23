@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end execution tests: build a `Simulacrum<OsRng, DataStore>` over a
-//! tempdir-backed filesystem cache, execute transactions, and assert the
-//! resulting state is persisted. Wired via `#[cfg(test)] #[path]` in
+//! End-to-end execution tests: build a `Simulacrum<OsRng, ForkStore>` over a
+//! tempdir-backed fork store, execute transactions, and assert the resulting
+//! state is saved. Wired via `#[cfg(test)] #[path]` in
 //! `store.rs`, so `super::*` resolves into the `store` module.
 
 use std::num::NonZeroUsize;
+use std::path::Path;
 use std::time::Duration;
 
 use fastcrypto::encoding::Base64 as FastCryptoBase64;
-use fastcrypto::encoding::Encoding as _;
 use rand::rngs::OsRng;
 use wiremock::Mock;
 use wiremock::MockServer;
@@ -25,14 +25,20 @@ use simulacrum::store::in_mem_store::KeyStore;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::SuiAddress;
+use sui_types::coin::CoinMetadata;
+use sui_types::coin::RegulatedCoinMetadata;
+use sui_types::coin::TreasuryCap;
 use sui_types::crypto::KeypairTraits;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
+use sui_types::gas_coin::GAS;
 use sui_types::gas_coin::GasCoin;
+use sui_types::id::UID;
 use sui_types::object::MoveObject;
 use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
@@ -43,21 +49,20 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 
-use crate::seed::SeedEntry;
-use crate::seed::SeedManifest;
-
 use super::*;
+use crate::rpc::reader::ForkRpcReader;
+use crate::runtime::ForkRuntime;
 
-/// Build a `Simulacrum<OsRng, DataStore>` from a fresh genesis NetworkConfig.
-/// The DataStore's local cache lives in the returned tempdir; its remote
-/// endpoint is fake and never called. Genesis objects are populated directly
-/// via `update_objects` to avoid touching the `init_with_genesis` checkpoint/
-/// committee paths (which are still `todo!()`).
+/// Build a `Simulacrum<OsRng, ForkStore>` from a fresh genesis NetworkConfig.
+/// The ForkStore's local metadata and RPC store live in the returned tempdir;
+/// its remote endpoint is fake and never called. Genesis objects are populated
+/// directly via `update_objects` to avoid touching the `init_with_genesis`
+/// checkpoint/committee paths (which are still `todo!()`).
 ///
 /// Returns the simulacrum, the underlying NetworkConfig (so tests can find
-/// genesis objects and account keys), and the tempdir guarding the local cache.
+/// genesis objects and account keys), and the tempdir guarding the local store.
 fn test_simulacrum() -> (
-    Simulacrum<OsRng, DataStore>,
+    Simulacrum<OsRng, ForkStore>,
     NetworkConfig,
     tempfile::TempDir,
 ) {
@@ -68,14 +73,15 @@ fn test_simulacrum() -> (
         .deterministic_committee_size(NonZeroUsize::MIN)
         .build();
 
-    let mut data_store = DataStore::new_for_testing(temp.path().to_path_buf());
+    let runtime = open_test_runtime(temp.path(), 0);
+    let mut store = ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
     let written: BTreeMap<ObjectID, Object> = config
         .genesis
         .objects()
         .iter()
         .map(|o| (o.id(), o.clone()))
         .collect();
-    data_store.update_objects(written, vec![]);
+    store.update_objects(written, vec![]);
 
     let keystore = KeyStore::from_network_config(&config);
     let sim = Simulacrum::new_from_custom_state(
@@ -83,7 +89,7 @@ fn test_simulacrum() -> (
         config.genesis.checkpoint(),
         config.genesis.sui_system_object(),
         &config,
-        data_store,
+        store,
         rng,
     );
     (sim, config, temp)
@@ -100,10 +106,40 @@ fn find_gas_coin(config: &NetworkConfig, owner: SuiAddress) -> Object {
         .clone()
 }
 
-fn test_data_store() -> (tempfile::TempDir, DataStore) {
+fn test_data_store() -> (tempfile::TempDir, ForkStore) {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let data_store = DataStore::new_for_testing(temp.path().to_path_buf());
-    (temp, data_store)
+    let runtime = open_test_runtime(temp.path(), 0);
+    let store = ForkStore::new_for_testing(temp.path().to_path_buf(), runtime.local_store());
+    (temp, store)
+}
+
+fn fork_rpc_reader(store: &ForkStore) -> ForkRpcReader {
+    ForkRpcReader::new(store.local_store().reader().clone(), store.clone())
+}
+
+fn test_data_store_with_remote(
+    root: &Path,
+    gql_url: String,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+) -> (ForkStore, ForkRuntime) {
+    let runtime = open_test_runtime(root, forked_at_checkpoint);
+    let store = ForkStore::new_for_testing_with_remote(
+        root.to_path_buf(),
+        gql_url,
+        forked_at_checkpoint,
+        runtime.local_store(),
+    );
+    (store, runtime)
+}
+
+fn open_test_runtime(root: &Path, forked_at_checkpoint: CheckpointSequenceNumber) -> ForkRuntime {
+    ForkRuntime::open(
+        root,
+        "custom".to_owned(),
+        forked_at_checkpoint,
+        CheckpointDigest::new([9; 32]).into(),
+    )
+    .expect("fork runtime should open")
 }
 
 fn make_gas_object(id: ObjectID, version: u64, owner: Owner) -> Object {
@@ -158,6 +194,138 @@ fn objects_response(objects: &[Option<&Object>]) -> serde_json::Value {
     })
 }
 
+fn inventory_objects_response(objects: &[&Object]) -> serde_json::Value {
+    serde_json::json!({
+        "data": {
+            "checkpoint": {
+                "query": {
+                    "objects": {
+                        "nodes": objects
+                            .iter()
+                            .map(|object| {
+                                serde_json::json!({
+                                    "address": object.id().to_string(),
+                                    "version": object.version().value(),
+                                    "digest": object.digest().to_string(),
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                        "pageInfo": {
+                            "hasNextPage": false,
+                            "endCursor": null,
+                        },
+                    }
+                }
+            }
+        }
+    })
+}
+
+fn address_objects_response(objects: &[&Object]) -> serde_json::Value {
+    serde_json::json!({
+        "data": {
+            "checkpoint": {
+                "query": {
+                    "address": {
+                        "objects": {
+                            "nodes": objects
+                                .iter()
+                                .map(|object| {
+                                    serde_json::json!({
+                                        "address": object.id().to_string(),
+                                        "version": object.version().value(),
+                                        "digest": object.digest().to_string(),
+                                    })
+                                })
+                                .collect::<Vec<_>>(),
+                            "pageInfo": {
+                                "hasNextPage": false,
+                                "endCursor": null,
+                            },
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
+async fn mock_address_owner_inventory(
+    server: &MockServer,
+    checkpoint: u64,
+    owner: SuiAddress,
+    objects: &[&Object],
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "sequenceNumber": checkpoint,
+                "address": owner.to_string(),
+                "after": null,
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(address_objects_response(objects)))
+        .mount(server)
+        .await;
+
+    for object in objects {
+        mock_seed_object(server, checkpoint, object).await;
+    }
+}
+
+async fn mock_object_owner_inventory(
+    server: &MockServer,
+    checkpoint: u64,
+    owner: ObjectID,
+    objects: &[&Object],
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "sequenceNumber": checkpoint,
+                "filter": {
+                    "owner": owner.to_string(),
+                },
+                "after": null,
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(inventory_objects_response(objects)))
+        .mount(server)
+        .await;
+
+    for object in objects {
+        mock_seed_object(server, checkpoint, object).await;
+    }
+}
+
+async fn mock_type_inventory(
+    server: &MockServer,
+    checkpoint: u64,
+    object_type: &StructTag,
+    objects: &[&Object],
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "sequenceNumber": checkpoint,
+                "filter": {
+                    "type": object_type.to_string(),
+                },
+                "after": null,
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(inventory_objects_response(objects)))
+        .mount(server)
+        .await;
+
+    for object in objects {
+        mock_seed_object(server, checkpoint, object).await;
+    }
+}
+
 async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object) {
     Mock::given(method("POST"))
         .and(path("/"))
@@ -175,8 +343,355 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+#[tokio::test]
+async fn test_current_object_read_saves_into_rpc_store_when_attached() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [
+                    {
+                        "address": object_id.to_string(),
+                        "atCheckpoint": checkpoint,
+                    },
+                ],
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(&object)])))
+        .mount(&server)
+        .await;
+
+    let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+
+    let read = ForkStore::get_object(&store, &object_id)
+        .expect("current object read should not error")
+        .expect("remote object should be found");
+    assert_eq!(read, object);
+
+    let reader = runtime.reader();
+    assert_eq!(
+        sui_types::storage::ObjectStore::get_object(&reader, &object_id),
+        Some(object),
+    );
+    assert!(
+        !temp
+            .path()
+            .join("objects")
+            .join(object_id.to_string())
+            .exists(),
+        "rpc-backed saves should not write object files",
+    );
+}
+
 #[test]
-fn test_advance_clock_executes_and_persists() {
+fn test_rpc_store_tombstone_blocks_remote_current_fallback() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
+
+    store.update_objects(BTreeMap::from([(object_id, object.clone())]), vec![]);
+    store.update_objects(
+        BTreeMap::new(),
+        vec![(
+            object_id,
+            SequenceNumber::from_u64(2),
+            ObjectDigest::OBJECT_DIGEST_DELETED,
+        )],
+    );
+
+    assert!(
+        ForkStore::get_object(&store, &object_id)
+            .expect("deleted object read should not call remote")
+            .is_none(),
+    );
+    assert_eq!(
+        ForkStore::get_object_at_version(&store, &object_id, 1)
+            .expect("historical object read should not error"),
+        Some(object),
+    );
+}
+
+#[tokio::test]
+async fn test_rpc_owned_objects_initializes_address_inventory_from_graphql() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
+
+    let server = MockServer::start().await;
+    mock_address_owner_inventory(&server, checkpoint, owner, &[&object]).await;
+
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+
+    let reader = fork_rpc_reader(&store);
+    let infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should initialize address inventory")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].owner, owner);
+    assert_eq!(infos[0].object_id, object_id);
+    assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
+    assert_eq!(infos[0].balance, Some(1_000_000));
+
+    let balance = RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
+        .expect("balance lookup should use initialized address inventory")
+        .expect("gas balance should exist");
+    assert_eq!(balance.coin_balance, 1_000_000);
+    assert_eq!(balance.address_balance, 0);
+
+    let balances: Vec<_> = RpcIndexes::balance_iter(&reader, &owner, None)
+        .expect("balance iterator should use initialized address inventory")
+        .map(|entry| entry.expect("balance row should decode"))
+        .collect();
+    assert_eq!(balances.len(), 1);
+    assert_eq!(balances[0].0, GAS::type_());
+    assert_eq!(balances[0].1.coin_balance, 1_000_000);
+}
+
+#[tokio::test]
+async fn test_seed_save_survives_restart_without_remote() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
+
+    let server = MockServer::start().await;
+    mock_seed_object(&server, checkpoint, &object).await;
+    mock_address_owner_inventory(&server, checkpoint, owner, &[&object]).await;
+    let object_ref = object.compute_object_reference();
+
+    {
+        let (store, runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+        store
+            .save_address_owned_seed_objects(&[object_ref])
+            .expect("seed object should be saved");
+        let reader = fork_rpc_reader(&store);
+        let infos: Vec<_> =
+            RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+                .expect("owned-object iterator should use saved seed")
+                .map(|result| result.expect("owned-object entry should decode"))
+                .collect();
+        assert_eq!(infos.len(), 1);
+        let balance = RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
+            .expect("balance lookup should use saved seed")
+            .expect("gas balance should exist");
+        assert_eq!(balance.coin_balance, 1_000_000);
+        drop(runtime);
+    }
+
+    let (store, _runtime) =
+        test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
+    store
+        .save_address_owned_seed_objects(&[object_ref])
+        .expect("existing seed object should be saved without remote");
+    let reader = fork_rpc_reader(&store);
+    let infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should use reopened seed index")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].object_id, object_id);
+}
+
+#[tokio::test]
+async fn test_rpc_dynamic_field_iter_initializes_object_owner_inventory_from_graphql() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let parent = ObjectID::random();
+    let child_id = ObjectID::random();
+    let child = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
+
+    let server = MockServer::start().await;
+    mock_object_owner_inventory(&server, checkpoint, parent, &[&child]).await;
+
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+
+    let reader = fork_rpc_reader(&store);
+    let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None)
+        .expect("dynamic-field iterator should initialize object-owner inventory")
+        .map(|result| result.expect("dynamic-field row should decode"))
+        .collect();
+
+    assert_eq!(fields.len(), 1);
+    assert_eq!(fields[0].parent, parent);
+    assert_eq!(fields[0].field_id, child_id);
+}
+
+#[tokio::test]
+async fn test_rpc_get_coin_info_initializes_type_inventory_from_graphql() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let coin_type = GAS::type_();
+    let metadata_id = ObjectID::random();
+    let metadata_object = Object::coin_metadata_for_testing(
+        coin_type.clone(),
+        CoinMetadata {
+            id: UID::new(metadata_id),
+            decimals: 9,
+            name: "Sui".to_owned(),
+            symbol: "SUI".to_owned(),
+            description: "Sui gas coin".to_owned(),
+            icon_url: None,
+        },
+    );
+    assert_eq!(metadata_object.id(), metadata_id);
+
+    let server = MockServer::start().await;
+    mock_type_inventory(
+        &server,
+        checkpoint,
+        &CoinMetadata::type_(coin_type.clone()),
+        &[&metadata_object],
+    )
+    .await;
+    mock_type_inventory(
+        &server,
+        checkpoint,
+        &TreasuryCap::type_(coin_type.clone()),
+        &[],
+    )
+    .await;
+    mock_type_inventory(
+        &server,
+        checkpoint,
+        &RegulatedCoinMetadata::type_(coin_type.clone()),
+        &[],
+    )
+    .await;
+
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+
+    let reader = fork_rpc_reader(&store);
+    let info = RpcIndexes::get_coin_info(&reader, &coin_type)
+        .expect("coin-info lookup should initialize type inventories")
+        .expect("coin info should be assembled from indexed wrapper objects");
+    assert_eq!(info.coin_metadata_object_id, Some(metadata_id));
+    assert_eq!(info.treasury_object_id, None);
+    assert_eq!(info.regulated_coin_metadata_object_id, None);
+}
+
+#[tokio::test]
+async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let recipient = SuiAddress::random_for_testing_only();
+    let first_id = ObjectID::random();
+    let remote_object = make_gas_object(first_id, 1, Owner::AddressOwner(owner));
+    let transferred = make_gas_object(first_id, 2, Owner::AddressOwner(recipient));
+
+    let server = MockServer::start().await;
+    mock_address_owner_inventory(&server, checkpoint, owner, &[&remote_object]).await;
+    mock_address_owner_inventory(&server, checkpoint, recipient, &[]).await;
+
+    let (mut store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    store.update_objects(BTreeMap::from([(first_id, transferred)]), vec![]);
+
+    let reader = fork_rpc_reader(&store);
+    assert!(
+        RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
+            .expect("balance lookup should initialize address inventory")
+            .is_none(),
+        "remote address inventory must not re-credit an object already moved locally",
+    );
+
+    let owner_infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should read initialized address inventory")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+    assert!(owner_infos.is_empty());
+
+    // The recipient's owner-index row is written by the embedded indexer at
+    // checkpoint publication, not synchronously by the local transfer. Before
+    // the indexer runs, the index stays empty while canonical reads already
+    // serve the transferred version.
+    let recipient_infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, recipient, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should read initialized address inventory")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+    assert!(recipient_infos.is_empty());
+    assert_eq!(
+        ForkStore::get_object(&store, &first_id)
+            .expect("current object read should not error")
+            .unwrap()
+            .version(),
+        SequenceNumber::from_u64(2),
+    );
+}
+
+#[tokio::test]
+async fn test_rpc_reader_latest_ignores_stale_cached_history() {
+    // A pre-fork object whose true current-at-fork version is 9, while the
+    // local store holds only a cached historical row at version 5 (the exact
+    // state a bounded child read or exact-version read leaves behind: raw row,
+    // no live-state pointer). A latest read through the RPC reader must not
+    // trust the sparse objects CF's highest row — it must consult the fork's
+    // currency authority and fetch the real current version.
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let checkpoint = 42;
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let stale = make_gas_object(object_id, 5, Owner::AddressOwner(owner));
+    let current = make_gas_object(object_id, 9, Owner::AddressOwner(owner));
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(serde_json::json!({
+            "variables": {
+                "keys": [{
+                    "address": object_id.to_string(),
+                    "atCheckpoint": checkpoint,
+                }]
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(objects_response(&[Some(&current)])))
+        .mount(&server)
+        .await;
+
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    store
+        .local_store()
+        .save_object_version_only(&stale)
+        .expect("historical row should save");
+
+    let reader = fork_rpc_reader(&store);
+    let got = sui_types::storage::ObjectStore::get_object(&reader, &object_id)
+        .expect("latest read should resolve the current version");
+    assert_eq!(
+        got.version(),
+        SequenceNumber::from_u64(9),
+        "reader must serve the current-at-fork version, not cached history",
+    );
+
+    // The fetch-and-persist leg must also have recorded currency.
+    assert_eq!(
+        store
+            .local_store()
+            .get_latest_object_status(object_id)
+            .unwrap(),
+        Some((SequenceNumber::from_u64(9), Status::Live(current))),
+    );
+}
+
+#[tokio::test]
+async fn test_advance_clock_executes_and_persists() {
     let (mut sim, _config, _temp) = test_simulacrum();
     let initial_ts = sim.store().get_clock().timestamp_ms;
 
@@ -189,13 +704,15 @@ fn test_advance_clock_executes_and_persists() {
 
     assert_eq!(sim.store().get_clock().timestamp_ms, initial_ts + 60_000,);
 
-    // The transaction was persisted to the filesystem cache.
+    // Transaction rows are keyed by checkpoint position in `sui-rpc-store`,
+    // so they are saved once the pending transaction is checkpointed.
+    let _checkpoint = sim.create_checkpoint();
     let tx_digest = effects.transaction_digest();
     let persisted = sim
         .store()
         .get_transaction(tx_digest)
         .expect("transaction read should not error");
-    assert!(persisted.is_some(), "transaction not persisted on disk");
+    assert!(persisted.is_some(), "transaction not persisted");
 
     let persisted_effects = sim
         .store()
@@ -204,8 +721,8 @@ fn test_advance_clock_executes_and_persists() {
     assert_eq!(persisted_effects.unwrap(), effects);
 }
 
-#[test]
-fn test_transfer_sui_executes_and_persists() {
+#[tokio::test]
+async fn test_transfer_sui_executes_and_persists() {
     let (mut sim, config, _temp) = test_simulacrum();
 
     // Pick a sender from the genesis keystore and a gas coin owned by the sender.
@@ -252,14 +769,16 @@ fn test_transfer_sui_executes_and_persists() {
         exec_error,
     );
 
-    // The transaction is persisted on disk.
+    // Transaction rows are keyed by checkpoint position in `sui-rpc-store`,
+    // so they are saved once the pending transaction is checkpointed.
+    let _checkpoint = sim.create_checkpoint();
     let tx_digest = effects.transaction_digest();
     assert!(
         sim.store()
             .get_transaction(tx_digest)
             .expect("transaction read should not error")
             .is_some(),
-        "transaction not persisted on disk",
+        "transaction not persisted",
     );
     assert_eq!(
         sim.store()
@@ -296,20 +815,29 @@ fn test_transfer_sui_executes_and_persists() {
 }
 
 #[test]
-fn test_owned_objects_tracks_address_owner_transfers() {
-    let (_temp, mut store) = test_data_store();
+fn test_owned_objects_reads_seeded_index_across_owner_moves() {
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
 
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    // Pre-fork materialization (the seed/inventory path) writes the owner
+    // index synchronously; `owned_objects` joins those rows against current
+    // canonical state.
+    store
+        .local_store()
+        .save_address_owned_seed_object(&object)
+        .unwrap();
     let owner_objects: Vec<_> = SimulatorStore::owned_objects(&store, owner).collect();
     assert_eq!(owner_objects.len(), 1);
     assert_eq!(owner_objects[0].id(), object_id);
 
     let transferred = make_gas_object(object_id, 2, Owner::AddressOwner(recipient));
-    store.update_objects(BTreeMap::from([(object_id, transferred)]), vec![]);
+    store
+        .local_store()
+        .save_address_owned_seed_object(&transferred)
+        .unwrap();
 
     assert_eq!(
         SimulatorStore::owned_objects(&store, owner).count(),
@@ -324,7 +852,7 @@ fn test_owned_objects_tracks_address_owner_transfers() {
 
 #[test]
 fn test_owned_objects_tracks_consensus_address_owner_writes() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(
@@ -336,227 +864,36 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
         },
     );
 
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    // The seed/inventory path collapses ConsensusAddressOwner into the
+    // address-owner index kind.
+    store
+        .local_store()
+        .save_address_owned_seed_object(&object)
+        .unwrap();
 
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    let reader = store.local_store().reader().clone();
+    let infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].owner, owner);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(infos[0].version, SequenceNumber::from_u64(1));
     assert_eq!(infos[0].balance, Some(1_000_000));
 
+    // Indexing a newer non-address-owned version removes the address row.
     let immutable = make_gas_object(object_id, 2, Owner::Immutable);
-    store.update_objects(BTreeMap::from([(object_id, immutable)]), vec![]);
-    assert_eq!(
-        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .count(),
-        0,
-    );
-}
-
-#[test]
-fn test_owned_objects_removes_non_address_owned_transitions() {
-    let (_temp, mut store) = test_data_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
-
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
-    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 1);
-
-    let immutable = make_gas_object(object_id, 2, Owner::Immutable);
-    store.update_objects(BTreeMap::from([(object_id, immutable)]), vec![]);
-    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
-}
-
-#[test]
-fn test_owned_object_info_uses_index_metadata_until_deleted() {
-    let (_temp, mut store) = test_data_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
-
     store
-        .local()
-        .write_owned_object_entries(&[OwnedObjectEntry {
-            owner,
-            object_ref: object.compute_object_reference(),
-            object_type: GasCoin::type_(),
-            balance: Some(1_000_000),
-        }])
+        .local_store()
+        .save_type_inventory_object(&immutable)
         .unwrap();
-
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
-        .expect("seeded owned-object iterator should build")
-        .map(|result| result.expect("seeded entry should decode"))
-        .collect();
-    assert_eq!(infos.len(), 1);
-    assert_eq!(infos[0].object_id, object_id);
-    assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
-    assert_eq!(infos[0].object_type, GasCoin::type_());
-    assert_eq!(infos[0].balance, Some(1_000_000));
-
-    store.update_objects(
-        BTreeMap::new(),
-        vec![(
-            object_id,
-            SequenceNumber::from_u64(8),
-            ObjectDigest::OBJECT_DIGEST_DELETED,
-        )],
-    );
-
     assert_eq!(
-        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
             .expect("owned-object iterator should build")
             .count(),
         0,
-    );
-}
-
-#[tokio::test]
-async fn test_owned_object_query_lazily_initializes_complete_index_from_seed_manifest() {
-    let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let checkpoint = 42;
-    let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
-
-    let server = MockServer::start().await;
-    mock_seed_object(&server, checkpoint, &object).await;
-
-    let store =
-        DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), checkpoint);
-    store
-        .local()
-        .write_seed_manifest(&SeedManifest {
-            network: "custom".to_owned(),
-            checkpoint,
-            entries: vec![SeedEntry {
-                object_ref: object.compute_object_reference(),
-            }],
-        })
-        .expect("seed manifest should write");
-
-    assert!(!store.local().owned_object_index_exists());
-
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
-        .expect("owned-object iterator should initialize from seed")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
-
-    assert_eq!(infos.len(), 1);
-    assert_eq!(infos[0].object_id, object_id);
-    assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
-    assert_eq!(infos[0].object_type, GasCoin::type_());
-    assert_eq!(infos[0].balance, Some(1_000_000));
-
-    let entries = store
-        .local()
-        .get_owned_object_entries()
-        .expect("owned-object index should read");
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].object_type, GasCoin::type_());
-    assert_eq!(entries[0].balance, Some(1_000_000));
-    assert_eq!(
-        store
-            .local()
-            .get_object_at_version(&object_id, 7)
-            .expect("seeded object should be cached"),
-        Some(object),
-    );
-}
-
-#[tokio::test]
-async fn test_local_execution_before_owned_query_preserves_other_seeded_entries() {
-    let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let checkpoint = 42;
-    let owner = SuiAddress::random_for_testing_only();
-    let recipient = SuiAddress::random_for_testing_only();
-    let first_id = ObjectID::random();
-    let second_id = ObjectID::random();
-    let first = make_gas_object(first_id, 1, Owner::AddressOwner(owner));
-    let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner));
-    let transferred = make_gas_object(first_id, 2, Owner::AddressOwner(recipient));
-
-    let server = MockServer::start().await;
-    mock_seed_object(&server, checkpoint, &first).await;
-    mock_seed_object(&server, checkpoint, &second).await;
-
-    let mut store =
-        DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), checkpoint);
-    store
-        .local()
-        .write_seed_manifest(&SeedManifest {
-            network: "custom".to_owned(),
-            checkpoint,
-            entries: vec![
-                SeedEntry {
-                    object_ref: first.compute_object_reference(),
-                },
-                SeedEntry {
-                    object_ref: second.compute_object_reference(),
-                },
-            ],
-        })
-        .expect("seed manifest should write");
-
-    store.update_objects(BTreeMap::from([(first_id, transferred)]), vec![]);
-
-    let owner_infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
-    assert_eq!(owner_infos.len(), 1);
-    assert_eq!(owner_infos[0].object_id, second_id);
-    assert_eq!(owner_infos[0].version, SequenceNumber::from_u64(1));
-
-    let recipient_infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&store, recipient, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
-    assert_eq!(recipient_infos.len(), 1);
-    assert_eq!(recipient_infos[0].object_id, first_id);
-    assert_eq!(recipient_infos[0].version, SequenceNumber::from_u64(2));
-}
-
-#[test]
-fn test_missing_owned_index_after_local_checkpoint_advancement_fails_closed() {
-    let (_temp, store) = test_data_store();
-    let owner = SuiAddress::random_for_testing_only();
-    let object = make_gas_object(ObjectID::random(), 1, Owner::AddressOwner(owner));
-    let data =
-        sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(1).build_checkpoint();
-    let checkpoint =
-        sui_types::messages_checkpoint::VerifiedCheckpoint::new_unchecked(data.summary);
-
-    store
-        .local()
-        .write_seed_manifest(&SeedManifest {
-            network: "custom".to_owned(),
-            checkpoint: 0,
-            entries: vec![SeedEntry {
-                object_ref: object.compute_object_reference(),
-            }],
-        })
-        .expect("seed manifest should write");
-    store
-        .local()
-        .write_checkpoint_summary(&checkpoint)
-        .expect("advanced checkpoint should write");
-
-    let err = match RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None) {
-        Ok(_) => panic!("owned-object iterator should fail closed"),
-        Err(err) => err,
-    };
-    assert!(
-        err.to_string()
-            .contains("owned-object index is missing while local checkpoints have advanced")
     );
 }
 
@@ -568,8 +905,9 @@ fn test_read_child_object_uses_highest_local_version_within_bound() {
     let child_v5 = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
     let child_v7 = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
 
-    store.local().write_object(&child_v5).unwrap();
-    store.local().write_object(&child_v7).unwrap();
+    let local_store = store.local_store();
+    local_store.save_object_version_only(&child_v5).unwrap();
+    local_store.save_object_version_only(&child_v7).unwrap();
 
     let child = sui_types::storage::RuntimeObjectResolver::read_child_object(
         &store,
@@ -608,8 +946,7 @@ async fn test_read_child_object_falls_back_to_remote_root_version() {
         .mount(&server)
         .await;
 
-    let store =
-        DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), checkpoint);
+    let (store, _runtime) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
     let read = sui_types::storage::RuntimeObjectResolver::read_child_object(
         &store,
         &parent,
@@ -621,7 +958,7 @@ async fn test_read_child_object_falls_back_to_remote_root_version() {
 
     assert_eq!(read, child);
     assert_eq!(
-        store.local().get_object_at_version(&child_id, 5).unwrap(),
+        ForkStore::get_object_at_version(&store, &child_id, 5).unwrap(),
         Some(child),
     );
 }
@@ -634,7 +971,10 @@ fn test_read_child_object_rejects_wrong_owner_after_bounded_lookup() {
     let child_id = ObjectID::random();
     let child = make_gas_object(child_id, 5, Owner::ObjectOwner(other_parent.into()));
 
-    store.local().write_object(&child).unwrap();
+    store
+        .local_store()
+        .save_object_version_only(&child)
+        .unwrap();
 
     let err = sui_types::storage::RuntimeObjectResolver::read_child_object(
         &store,
@@ -673,13 +1013,13 @@ fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() 
 
     assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
     assert!(
-        DataStore::get_object(&store, &object_id)
+        ForkStore::get_object(&store, &object_id)
             .expect("current object read should not error")
             .is_none(),
         "current object lookup must not fall back to the remote after local deletion",
     );
     assert_eq!(
-        DataStore::get_object_at_version(&store, &object_id, 1)
+        ForkStore::get_object_at_version(&store, &object_id, 1)
             .expect("exact version read should not error")
             .unwrap(),
         object,
@@ -705,23 +1045,23 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     store.update_objects(BTreeMap::from([(object_id, object.clone())]), vec![]);
     let result = store.apply_object_updates(
         BTreeMap::new(),
-        vec![RemovedObject {
+        vec![ObjectRemoval {
             object_id,
             version: SequenceNumber::from_u64(2),
-            kind: RemovedObjectKind::Wrapped,
+            kind: TombstoneKind::Wrapped,
         }],
     );
     assert!(result.is_ok(), "object updates should apply: {result:?}");
 
     assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
     assert!(
-        DataStore::get_object(&store, &object_id)
+        ForkStore::get_object(&store, &object_id)
             .expect("current object read should not error")
             .is_none(),
         "current object lookup must not fall back to the remote after local wrapping",
     );
     assert_eq!(
-        DataStore::get_object_at_version(&store, &object_id, 1)
+        ForkStore::get_object_at_version(&store, &object_id, 1)
             .expect("exact version read should not error")
             .unwrap(),
         object,
@@ -738,7 +1078,7 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
 }
 
 #[test]
-fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
+fn test_unwrapped_write_clears_wrapped_latest() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -748,10 +1088,10 @@ fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
     let result = store.apply_object_updates(
         BTreeMap::new(),
-        vec![RemovedObject {
+        vec![ObjectRemoval {
             object_id,
             version: SequenceNumber::from_u64(2),
-            kind: RemovedObjectKind::Wrapped,
+            kind: TombstoneKind::Wrapped,
         }],
     );
     assert!(result.is_ok(), "object updates should apply: {result:?}");
@@ -762,19 +1102,11 @@ fn test_unwrapped_write_clears_wrapped_latest_and_reindexes_owner() {
     assert!(result.is_ok(), "object updates should apply: {result:?}");
 
     assert_eq!(
-        store.local().object_latest_state(&object_id).unwrap(),
-        Some(ObjectLatestState::Live),
-    );
-    assert_eq!(
-        DataStore::get_object(&store, &object_id)
+        ForkStore::get_object(&store, &object_id)
             .expect("current object read should not error")
             .unwrap(),
         unwrapped,
     );
-    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
-    let recipient_objects: Vec<_> = SimulatorStore::owned_objects(&store, recipient).collect();
-    assert_eq!(recipient_objects.len(), 1);
-    assert_eq!(recipient_objects[0].id(), object_id);
 }
 
 #[test]
@@ -788,24 +1120,24 @@ fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
     store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
     let result = store.apply_object_updates(
         BTreeMap::from([(object_id, written_again)]),
-        vec![RemovedObject {
+        vec![ObjectRemoval {
             object_id,
             version: SequenceNumber::from_u64(2),
-            kind: RemovedObjectKind::Deleted,
+            kind: TombstoneKind::Deleted,
         }],
     );
     assert!(result.is_ok(), "object updates should apply: {result:?}");
 
     assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
     assert!(
-        DataStore::get_object(&store, &object_id)
+        ForkStore::get_object(&store, &object_id)
             .expect("current object read should not error")
             .is_none(),
     );
 }
 
 #[test]
-fn test_removed_objects_from_effects_preserves_removal_kind() {
+fn test_removed_objects_from_effects_maps_to_tombstones() {
     let owner = SuiAddress::random_for_testing_only();
     let deleted_id = ObjectID::random();
     let deleted_ref = (
@@ -851,20 +1183,20 @@ fn test_removed_objects_from_effects_preserves_removal_kind() {
     assert_eq!(
         removed_objects_from_effects(&effects),
         vec![
-            RemovedObject {
+            ObjectRemoval {
                 object_id: deleted_id,
                 version: deleted_ref.1,
-                kind: RemovedObjectKind::Deleted,
+                kind: TombstoneKind::Deleted,
             },
-            RemovedObject {
+            ObjectRemoval {
                 object_id: unwrapped_then_deleted_id,
                 version: unwrapped_then_deleted_ref.1,
-                kind: RemovedObjectKind::UnwrappedThenDeleted,
+                kind: TombstoneKind::Deleted,
             },
-            RemovedObject {
+            ObjectRemoval {
                 object_id: wrapped_id,
                 version: wrapped_ref.1,
-                kind: RemovedObjectKind::Wrapped,
+                kind: TombstoneKind::Wrapped,
             },
         ],
     );
@@ -872,7 +1204,7 @@ fn test_removed_objects_from_effects_preserves_removal_kind() {
 
 #[test]
 fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let other_owner = SuiAddress::random_for_testing_only();
     let first_id = ObjectID::random();
@@ -882,15 +1214,19 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner));
     let other = make_gas_object(other_id, 1, Owner::AddressOwner(other_owner));
 
-    store.update_objects(
-        BTreeMap::from([(first_id, first), (second_id, second), (other_id, other)]),
-        vec![],
-    );
+    for object in [&first, &second, &other] {
+        store
+            .local_store()
+            .save_address_owned_seed_object(object)
+            .unwrap();
+    }
 
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    let reader = store.local_store().reader().clone();
+    let infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
     assert_eq!(infos.len(), 2);
     assert!(infos[0].object_id < infos[1].object_id);
     assert!(infos.iter().all(|info| info.owner == owner));
@@ -898,14 +1234,17 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
 
     let wrong_type = "0x2::clock::Clock".parse::<StructTag>().unwrap();
     assert_eq!(
-        RpcIndexes::owned_objects_iter(&store, owner, Some(wrong_type), None)
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(wrong_type), None)
             .expect("owned-object iterator should build")
             .count(),
         0,
     );
 
+    // The rpc-store cursor is inclusive: it carries the full sort position of
+    // the first *unread* object, and the resumed scan seeks straight to it. So
+    // resuming from `infos[1]` yields exactly that trailing object.
     let page_from_cursor: Vec<_> = RpcIndexes::owned_objects_iter(
-        &store,
+        &reader,
         owner,
         Some(GasCoin::type_()),
         Some(infos[1].clone()),
@@ -919,22 +1258,26 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
 
 #[test]
 fn test_cloned_store_shares_owned_object_snapshot_guard() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
-    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    store
+        .local_store()
+        .save_address_owned_seed_object(&object)
+        .unwrap();
 
-    let reader = store.clone();
+    let cloned_store = store.clone();
     let local_snapshot_guard = store
         .write_local_snapshot()
         .expect("snapshot lock should not be poisoned");
     assert!(
-        reader.inner.local_snapshot_lock.try_read().is_err(),
+        cloned_store.inner.local_snapshot_lock.try_read().is_err(),
         "cloned stores should share the same snapshot guard",
     );
     drop(local_snapshot_guard);
 
+    let reader = cloned_store.local_store().reader().clone();
     let infos: Vec<_> =
         RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
             .expect("owned-object iterator should build")
