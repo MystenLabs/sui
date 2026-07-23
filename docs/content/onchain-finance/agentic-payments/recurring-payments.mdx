@@ -96,7 +96,7 @@ async function executeRecurringPayment(
     ],
   });
 
-  const result = await client.signAndExecuteTransaction({
+  const result = await client.core.signAndExecuteTransaction({
     transaction: tx,
     signer: agentKeypair,
   });

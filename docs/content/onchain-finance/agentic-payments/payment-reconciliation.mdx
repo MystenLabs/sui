@@ -57,7 +57,7 @@ Query transactions by sender address using GraphQL:
 ```graphql
 query AgentTransactions($sender: SuiAddress!, $cursor: String) {
   address(address: $sender) {
-    transactionBlocks(first: 50, after: $cursor) {
+    transactions(first: 50, after: $cursor, relation: SENT) {
       nodes {
         digest
         effects {
@@ -92,7 +92,7 @@ const client = new SuiGrpcClient({
 });
 
 async function extractPaymentDetails(digest: string) {
-  const result = await client.getTransaction({
+  const result = await client.core.getTransaction({
     digest,
     include: { balanceChanges: true, effects: true },
   });
