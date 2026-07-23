@@ -55,21 +55,21 @@ sequenceDiagram
     participant Server
     participant Sui
 
-    Client->>Server: GET /api/resource
-    Server-->>Client: 402 Payment Required<br/>(amount, recipient, challenge ID)
-    Client->>Sui: Pay requested amount
+    Client->>Server: GET /api/resource<br/>X-Payment-Sender: 0xCLIENT
+    Server-->>Client: 402 Payment Required<br/>(amount, recipient, challenge bound to 0xCLIENT)
+    Client->>Sui: Pay requested amount from 0xCLIENT
     Sui-->>Client: Transaction digest
     Client->>Server: GET /api/resource<br/>X-Payment-Digest + X-Payment-Challenge
-    Server->>Sui: Verify payment onchain
+    Server->>Sui: Verify sender = 0xCLIENT and amount
     Sui-->>Server: Transaction confirmed
     Server-->>Client: 200 OK + resource
 ```
 
-1. The client requests a resource from the server.
-2. The server responds with HTTP 402 and a JSON body containing: a single-use challenge ID, the required amount, recipient address, and coin type.
-3. The client builds a PTB that transfers the requested amount to the server's address, signs, and submits it.
+1. The client requests a resource, declaring its Sui address in the `X-Payment-Sender` header.
+2. The server responds with HTTP 402 and a JSON body containing: a single-use challenge ID (bound to the declared sender), the required amount, recipient address, and coin type.
+3. The client builds a PTB that transfers the requested amount to the server's address, signs with its keypair, and submits it.
 4. The client retries the original request with the transaction digest and challenge ID in headers.
-5. The server verifies the challenge is valid, checks the payment onchain, and serves the resource. Both the challenge and the digest are consumed — neither can be reused.
+5. The server verifies the challenge is valid, checks that the onchain transaction's sender matches the bound address, verifies the payment amount, and serves the resource. Both the challenge and the digest are consumed.
 
 ## Server implementation
 
@@ -113,9 +113,10 @@ For autonomous agents, combine x402 with the [agent wallet setup](/onchain-finan
 
 ## Security considerations
 
+- **Sender binding.** Each challenge is bound to the client's declared Sui address. The server verifies the onchain transaction's sender matches. An attacker cannot redeem another payer's digest because the sender won't match.
 - **Digest uniqueness.** The server tracks every accepted digest globally. A digest used for one challenge cannot be reused for any future challenge.
-- **Challenge consumption.** Each challenge ID is single-use — deleted after successful verification. This prevents an attacker from replaying a valid (digest, challenge) pair.
-- **Amount validation.** Always verify the amount received onchain meets or exceeds the required price. Do not trust the client's claim.
-- **Timeout window.** Expire pending challenges after a short window (for example, 5 minutes). This limits the time an attacker has to race a legitimate payment.
-- **Front-running risk.** In this model, the server cannot cryptographically bind a specific transaction to a specific challenge onchain. An attacker who observes a payment in the mempool could race to present the digest with their own challenge before the legitimate client. For high-value resources, require authenticated clients (API keys or signed challenges) so the server can verify the payer's identity. For low-value micropayments, the race window is typically too short to exploit profitably.
+- **Challenge consumption.** Each challenge ID is single-use — deleted after successful verification.
+- **Amount validation.** Always verify the amount received onchain meets or exceeds the required price.
+- **Timeout window.** Expire pending challenges after a short window (for example, 5 minutes).
 - **Recipient verification.** The client should verify the 402 response's recipient address matches the expected server address to prevent payment redirection attacks.
+- **Sender address trust.** The `X-Payment-Sender` header is self-declared. This is acceptable because the server verifies the onchain sender matches — an attacker cannot forge a transaction's sender field. If you need identity verification beyond address ownership, add API key authentication.

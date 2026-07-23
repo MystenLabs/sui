@@ -17,11 +17,12 @@ const client = new SuiGrpcClient({
 // docs::/#config
 
 // docs::#challenge-store
-// Replay prevention uses two mechanisms:
-// 1. Each challenge ID is single-use — deleted after successful verification.
-// 2. Each transaction digest is tracked globally — a digest accepted once
-//    cannot be reused for any future challenge.
+// Each challenge binds a payment to a specific sender address.
+// On verification, the server checks that the transaction's sender
+// matches the address that requested the challenge. This prevents
+// an attacker from redeeming another payer's digest.
 interface PendingChallenge {
+	sender: string; // Sui address of the requester
 	expiry: number;
 }
 
@@ -39,8 +40,18 @@ const paymentRequired: express.RequestHandler = (req, res, next) => {
 	const challengeId = req.headers['x-payment-challenge'] as string;
 
 	if (!digest || !challengeId) {
+		// The client must identify itself so the challenge is bound to its address
+		const sender = req.headers['x-payment-sender'] as string;
+		if (!sender) {
+			res.status(400).json({
+				error: 'X-Payment-Sender header required (your Sui address)',
+			});
+			return;
+		}
+
 		const id = generateChallengeId();
 		pendingChallenges.set(id, {
+			sender,
 			expiry: Date.now() + 5 * 60 * 1000, // 5 minute window
 		});
 
@@ -50,7 +61,7 @@ const paymentRequired: express.RequestHandler = (req, res, next) => {
 			coinType: COIN_TYPE,
 			challenge: id,
 			message:
-				'Payment required. Pay the amount, then retry with X-Payment-Digest and X-Payment-Challenge headers.',
+				'Payment required. Pay the amount from the declared sender address, then retry with X-Payment-Digest and X-Payment-Challenge headers.',
 		});
 		return;
 	}
@@ -78,9 +89,9 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 	}
 
 	try {
-		const result = await client.getTransaction({
+		const result = await client.core.getTransaction({
 			digest,
-			include: { balanceChanges: true },
+			include: { balanceChanges: true, transaction: true },
 		});
 
 		if (result.$kind === 'FailedTransaction') {
@@ -89,9 +100,17 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 		}
 
 		const tx = result.Transaction!;
-		const balanceChanges = tx.balanceChanges ?? [];
 
-		// 3. Verify the server received the expected amount
+		// 3. Verify the transaction sender matches the challenge's bound address
+		if (tx.transaction?.sender !== pending.sender) {
+			res.status(403).json({
+				error: 'Transaction sender does not match the address that requested this challenge',
+			});
+			return;
+		}
+
+		// 4. Verify the server received the expected amount
+		const balanceChanges = tx.balanceChanges ?? [];
 		const received = balanceChanges.find(
 			(change) =>
 				change.address === PAYMENT_RECIPIENT &&
@@ -104,7 +123,7 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 			return;
 		}
 
-		// 4. Consume challenge and mark digest as used
+		// 5. Consume challenge and mark digest as used
 		usedDigests.add(digest);
 		pendingChallenges.delete(challengeId);
 		next();
