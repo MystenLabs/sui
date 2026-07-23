@@ -1,0 +1,32 @@
+{
+  "name": "foundry-starter-kit",
+  "version": "1.0.0",
+  "description": "Minimal Template for Foundry Projects",
+  "author": "Patrick Collins",
+  "license": "MIT",
+  "files": [
+    "src/**/*.sol"
+  ],
+  "devDependencies": {
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.19.1",
+    "prettier": "^2.7.1",
+    "prettier-plugin-solidity": "^1.0.0-beta.19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smartcontractkit/foundry-starter-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/smartcontractkit/foundry-starter-kit/issues"
+  },
+  "scripts": {
+    "setup": "make clean && make build",
+    "sync": "make update",
+    "test": "make test",
+    "snapshot": "make snapshot",
+    "format": "make format",
+    "lint": "make lint",
+    "all": "make all"
+  }
+}
