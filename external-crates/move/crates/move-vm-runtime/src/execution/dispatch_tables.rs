@@ -9,13 +9,13 @@
 
 use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
-    execution::vm::DatatypeInfo,
+    execution::{interpreter::state::TypeArguments, vm::DatatypeInfo},
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, FunctionInstantiation, Package,
         StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
-        TraversalBudget,
+        TypeTraversalBudget,
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
             VALUE_DEPTH_MAX,
@@ -92,7 +92,7 @@ impl TypeCache {
 /// worker threads that read the package cache. Per-execution state (the size-formula cache) lives
 /// on the [`VMDispatchTables`] resolver that wraps this.
 #[derive(Debug, Clone)]
-pub struct DispatchTables {
+pub(crate) struct DispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) interner: Arc<IdentifierInterner>,
     pub(crate) loaded_packages: Arc<BTreeMap<OriginalId, Arc<Package>>>,
@@ -110,7 +110,7 @@ pub struct DispatchTables {
 /// threads, its size cache can be unsynchronized. It derefs to [`DispatchTables`], so all the
 /// resolution methods read the shared tables directly.
 #[derive(Debug)]
-pub struct VMDispatchTables {
+pub(crate) struct VMDispatchTables {
     pub(crate) tables: DispatchTables,
     pub(crate) size_formulas: TypeCache,
 }
@@ -358,14 +358,14 @@ impl VMDispatchTables {
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
     pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
-        self.load_type_impl(type_tag, &mut TraversalBudget::for_type_traversal())
+        self.load_type_impl(type_tag, &mut TypeTraversalBudget::for_type_traversal())
             .map_err(|e| e.finish(Location::Undefined))
     }
 
     fn load_type_impl(
         &self,
         type_tag: &TypeTag,
-        type_size_budget: &mut TraversalBudget,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<Type> {
         type_size_budget.enter_type(|type_size_budget| {
             Ok(match type_tag {
@@ -457,13 +457,13 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
-        self.abilities_impl(ty, &mut TraversalBudget::for_type_traversal())
+        self.abilities_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
     }
 
     fn abilities_impl(
         &self,
         ty: &Type,
-        type_size_budget: &mut TraversalBudget,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<AbilitySet> {
         type_size_budget.enter_type(|type_size_budget| {
             match ty {
@@ -552,16 +552,21 @@ impl VMDispatchTables {
     // -------------------------------------------
     // Type sizing
     // -------------------------------------------
-    // Type sizing works via partial evaluation / application. The vtable is our translation's
-    // `env`, and `partial_type_size` translates a datatype's JIT-built `ArenaTypeSizeFormula`
-    // against this linkage into a flat `PartialTypeSizeFormula` over the datatype's parameters,
-    // memoized per key in `size_formulas`. `substitute` recurs back through it, so every datatype
-    // boundary re-enters the cache, optimizing this approach. Finally, `type_size_of` walks a
-    // concrete runtime type straight to a `TypeSize` from this information.
+    // Type sizing is a partial evaluation: the vtable is the environment. A datatype's JIT-built
+    // `ArenaTypeSizeFormula` is resolved against this linkage into a flat `PartialTypeSizeFormula`,
+    // memoized per key in `size_formulas`. Resolution recurs back through the cache at every
+    // datatype boundary. `type_size_of` then solves a concrete runtime type to a `TypeSize`.
 
-    /// The resolved formula of a datatype under this linkage, over the datatype's own parameters.
-    /// `visiting` turns a cyclic (corrupt/adversarial) datatype graph into an invariant violation.
-    fn partial_type_size_impl(
+    /// The resolved formula of a datatype under this linkage.
+    pub(crate) fn virtual_key_size_formula(
+        &self,
+        key: &VirtualTableKey,
+    ) -> PartialVMResult<PartialTypeSizeFormula> {
+        self.virtual_key_size_formula_impl(key, &mut Visiting::new())
+    }
+
+    /// `visiting` turns a cyclic datatype graph into an invariant violation.
+    fn virtual_key_size_formula_impl(
         &self,
         key: &VirtualTableKey,
         visiting: &mut Visiting,
@@ -578,27 +583,23 @@ impl VMDispatchTables {
         }
         let descriptor = self.resolve_type(key)?;
         // `size_formula()` is arena-resident (VMPointer), so it does not borrow `self`.
-        let formula = descriptor
-            .to_ref()
-            .size_formula()
-            .substitute(self, visiting)?;
+        let formula = descriptor.to_ref().size_formula().resolve(self, visiting)?;
         visiting.remove(key);
         self.size_formulas.insert(key.clone(), formula.clone());
         Ok(formula)
     }
 
-    /// The resolved formula of a datatype under this linkage.
-    pub(crate) fn partial_type_size(
+    /// The size of an arena type, realized against the sizes of the virtual-table keys included in
+    /// the linkage. This partially applies the key sizes to produce a closed-form formula for this
+    /// type's size.
+    pub(crate) fn arena_type_size_formula(
         &self,
-        key: &VirtualTableKey,
+        ty: &ArenaType,
     ) -> PartialVMResult<PartialTypeSizeFormula> {
-        if let Some(hit) = self.size_formulas.get(key) {
-            return Ok(hit);
-        }
-        self.partial_type_size_impl(key, &mut Visiting::new())
+        self.arena_type_size_formula_impl(ty, &mut Visiting::new())
     }
 
-    pub(crate) fn size_formula_impl(
+    pub(crate) fn arena_type_size_formula_impl(
         &self,
         ty: &ArenaType,
         visiting: &mut Visiting,
@@ -607,15 +608,17 @@ impl VMDispatchTables {
             ArenaType::TyParam(idx) => PartialTypeSizeFormula::parameter(*idx),
             ArenaType::Vector(inner)
             | ArenaType::Reference(inner)
-            | ArenaType::MutableReference(inner) => self.size_formula_impl(inner, visiting)?.wrap(),
-            ArenaType::Datatype(key) => self.partial_type_size_impl(key, visiting)?,
+            | ArenaType::MutableReference(inner) => {
+                self.arena_type_size_formula_impl(inner, visiting)?.wrap()
+            }
+            ArenaType::Datatype(key) => self.virtual_key_size_formula_impl(key, visiting)?,
             ArenaType::DatatypeInstantiation(inst) => {
                 let (key, args) = &**inst;
                 let arg_forms = args
                     .iter()
-                    .map(|arg| self.size_formula_impl(arg, visiting))
+                    .map(|arg| self.arena_type_size_formula_impl(arg, visiting))
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                self.partial_type_size_impl(key, visiting)?
+                self.virtual_key_size_formula_impl(key, visiting)?
                     .substitute(&arg_forms)?
             }
             ArenaType::Bool
@@ -630,28 +633,23 @@ impl VMDispatchTables {
         })
     }
 
-    /// Interpret an arena type term into its size formula over the ambient (function)
-    /// parameters.
-    /// Note: datatype nodes resolve through the cache.
-    pub(crate) fn size_formula(&self, ty: &ArenaType) -> PartialVMResult<PartialTypeSizeFormula> {
-        self.size_formula_impl(ty, &mut Visiting::new())
-    }
-
     /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
     /// resolve through the cache.
+    ///
+    /// Note: `ty` is depth-bound by construction here.
     pub(crate) fn type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
         Ok(match ty {
             Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
                 TypeSize::wrap(self.type_size_of(inner)?)
             }
-            Type::Datatype(key) => self.partial_type_size(key)?.solve(&[])?,
+            Type::Datatype(key) => self.virtual_key_size_formula(key)?.solved()?,
             Type::DatatypeInstantiation(inst) => {
                 let (key, args) = &**inst;
                 let arg_sizes = args
                     .iter()
                     .map(|arg| self.type_size_of(arg))
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                self.partial_type_size(key)?.solve(&arg_sizes)?
+                self.virtual_key_size_formula(key)?.solve(&arg_sizes)?
             }
             Type::TyParam(_) => {
                 return Err(partial_vm_error!(
@@ -690,10 +688,9 @@ impl VMDispatchTables {
     pub(crate) fn check_vector_element(
         &self,
         elem: &ArenaType,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
-        let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
-        let elem_size = self.size_formula(elem)?.solve(&arg_sizes)?;
+        let elem_size = self.arena_type_size_formula(elem)?.solve(ty_args.sizes())?;
         check_syntactic_limits(elem_size.type_size, elem_size.type_depth)?;
         self.check_value_depth(elem_size.value_depth.saturating_add(1))
     }
@@ -707,7 +704,7 @@ impl VMDispatchTables {
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
         tag_type: DatatypeTagType,
-        type_size_budget: &mut TraversalBudget,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<StructTag> {
         type_size_budget.check()?;
         let type_params = ty_args
@@ -743,7 +740,7 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
         tag_type: DatatypeTagType,
-        type_size_budget: &mut TraversalBudget,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<TypeTag> {
         type_size_budget.enter_type(|type_size_budget| {
             Ok(match ty {
@@ -791,7 +788,7 @@ impl VMDispatchTables {
         self.type_to_type_tag_impl(
             ty,
             DatatypeTagType::Defining,
-            &mut TraversalBudget::for_type_traversal(),
+            &mut TypeTraversalBudget::for_type_traversal(),
         )
     }
 
@@ -799,7 +796,7 @@ impl VMDispatchTables {
         self.type_to_type_tag_impl(
             ty,
             DatatypeTagType::Runtime,
-            &mut TraversalBudget::for_type_traversal(),
+            &mut TypeTraversalBudget::for_type_traversal(),
         )
     }
 
@@ -940,7 +937,7 @@ impl VMDispatchTables {
                 datatype_name,
                 ty_args,
                 DatatypeTagType::Defining,
-                &mut TraversalBudget::for_type_traversal(),
+                &mut TypeTraversalBudget::for_type_traversal(),
             )?;
 
             let type_layout = match ty.datatype_info.inner_ref() {
@@ -1070,51 +1067,48 @@ impl VMDispatchTables {
 
     /// The one checked substitution primitive: realize `term` against `ty_args` and return both
     /// the built type and its size, having first checked the size against the syntactic limits.
-    /// Every route to a substituted type goes through here.
+    /// Every route to a substituted type goes through here. The type and size slices are read
+    /// straight off `ty_args` — no per-call allocation.
     fn realize_type(
         &self,
         term: &ArenaType,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<(Type, TypeSize)> {
-        let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
-        let size = self.size_formula(term)?.solve(&arg_sizes)?;
+        let size = self.arena_type_size_formula(term)?.solve(ty_args.sizes())?;
         check_syntactic_limits(size.type_size, size.type_depth)?;
-        let arg_types: Vec<Type> = ty_args.iter().map(|(ty, _)| ty.clone()).collect();
-        Ok((term.subst_unchecked(&arg_types)?, size))
+        Ok((term.subst_unchecked(ty_args.types())?, size))
     }
 
-    /// Realize a generic function's callee type arguments and measure each one, producing the
-    /// `(Type, TypeSize)` pairs the callee frame is built from. Every size is solved from the
-    /// term's formula against the caller frame's argument sizes — the realized type is never
-    /// walked for measurement — and each term is checked against the syntactic limits and the
-    /// running instantiation-node budget before it is built.
+    /// The [`TypeArguments`] for the callee's frame. Also performs sizing checks.
     pub(crate) fn instantiate_generic_function(
         &self,
         fun_inst: &FunctionInstantiation,
-        ty_args: &[(Type, TypeSize)],
-    ) -> PartialVMResult<Vec<(Type, TypeSize)>> {
-        let terms = fun_inst.instantiation.to_ref();
-        let mut result = Vec::with_capacity(terms.len());
-
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<TypeArguments> {
         // The whole instantiation — caller arguments plus the callee arguments realized below —
         // must fit within the instantiation-node budget. Pure arithmetic over the sizes.
         let mut sum_nodes = 1u64;
-        for (_, size) in ty_args.iter() {
-            sum_nodes = sum_nodes.saturating_add(size.type_size);
+        let mut charge_nodes = |type_size: u64| {
+            sum_nodes = sum_nodes.saturating_add(type_size);
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
             }
+            Ok(())
+        };
+        for size in ty_args.sizes() {
+            charge_nodes(size.type_size)?;
         }
-
-        for term in terms.iter() {
-            let (ty, size) = self.realize_type(term, ty_args)?;
-            sum_nodes = sum_nodes.saturating_add(size.type_size);
-            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-                return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
-            }
-            result.push((ty, size));
-        }
-        Ok(result)
+        let types = fun_inst
+            .instantiation
+            .to_ref()
+            .iter()
+            .map(|term| {
+                let (ty, size) = self.realize_type(term, ty_args)?;
+                charge_nodes(size.type_size)?;
+                Ok(ty)
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        TypeArguments::new(self, types)
     }
 
     /// Realize a single term with `ty_args`, checking its predicted syntactic sizes against the
@@ -1122,7 +1116,7 @@ impl VMDispatchTables {
     pub(crate) fn subst_type(
         &self,
         term: &ArenaType,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         Ok(self.realize_type(term, ty_args)?.0)
     }
@@ -1132,7 +1126,7 @@ impl VMDispatchTables {
     pub(crate) fn check_struct_instantiation(
         &self,
         struct_inst: &StructInstantiation,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
         self.check_instantiation(
             &struct_inst.def_vtable_key,
@@ -1146,7 +1140,7 @@ impl VMDispatchTables {
     pub(crate) fn check_variant_instantiation(
         &self,
         variant_inst: &VariantInstantiation,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
         let enum_inst = variant_inst.enum_inst.to_ref();
         self.check_instantiation(
@@ -1161,7 +1155,7 @@ impl VMDispatchTables {
     pub(crate) fn instantiate_struct_type(
         &self,
         struct_inst: &StructInstantiation,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         self.check_struct_instantiation(struct_inst, ty_args)?;
         self.instantiate_datatype_type(
@@ -1176,7 +1170,7 @@ impl VMDispatchTables {
     pub(crate) fn instantiate_enum_type(
         &self,
         variant_inst: &VariantInstantiation,
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         self.check_variant_instantiation(variant_inst, ty_args)?;
         let enum_inst = variant_inst.enum_inst.to_ref();
@@ -1191,7 +1185,7 @@ impl VMDispatchTables {
         &self,
         datatype_key: &VirtualTableKey,
         type_params: &[ArenaType],
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         let instantiation = type_params
             .iter()
@@ -1211,14 +1205,13 @@ impl VMDispatchTables {
         &self,
         datatype_key: &VirtualTableKey,
         type_params: &[ArenaType],
-        ty_args: &[(Type, TypeSize)],
+        ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
-        let arg_sizes: Vec<TypeSize> = ty_args.iter().map(|(_, size)| *size).collect();
         // Realize each type-parameter term's size against the frame's argument sizes, checking
         // each against the syntactic limits as it is computed. Nothing is built.
         let mut param_sizes = Vec::with_capacity(type_params.len());
         for term in type_params.iter() {
-            let size = self.size_formula(term)?.solve(&arg_sizes)?;
+            let size = self.arena_type_size_formula(term)?.solve(ty_args.sizes())?;
             check_syntactic_limits(size.type_size, size.type_depth)?;
             param_sizes.push(size);
         }
@@ -1230,7 +1223,9 @@ impl VMDispatchTables {
         // value is created. Note this is the exact size of the built type — the running-argument
         // sum a naive guard would use over-counts an argument once per parameter that references
         // it (the `S<T×32>` blow-up: 128 arguments-plus-parameters, but 3041 realized nodes).
-        let result = self.partial_type_size(datatype_key)?.solve(&param_sizes)?;
+        let result = self
+            .virtual_key_size_formula(datatype_key)?
+            .solve(&param_sizes)?;
         check_syntactic_limits(result.type_size, result.type_depth)?;
         self.check_value_depth(result.value_depth)?;
         Ok(())

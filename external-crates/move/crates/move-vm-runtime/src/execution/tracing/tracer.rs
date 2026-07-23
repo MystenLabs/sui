@@ -1892,6 +1892,8 @@ impl FunctionTypeInfo {
         }
 
         let subst_and_layout_type = |ty: &ArenaType| -> Option<TagWithLayoutInfoOpt> {
+            // Unchecked substitution is fine here: the tracer is observational and never runs on
+            // a network execution path, so it needn't re-check the traversal limits.
             let subst_ty = ty.subst_unchecked(ty_args).ok()?;
             let (ty, ref_type) = deref_ty(subst_ty)?;
             let tag = vtables.type_to_type_tag(&ty).ok()?;

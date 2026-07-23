@@ -214,7 +214,7 @@ impl Adapter {
             .unwrap();
         session
             .virtual_tables
-            .partial_type_size(&key)
+            .virtual_key_size_formula(&key)
             .expect("computing depth of datatype should succeed")
             .value_depth
     }
