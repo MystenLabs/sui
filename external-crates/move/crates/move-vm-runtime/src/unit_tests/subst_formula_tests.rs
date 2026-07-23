@@ -4,12 +4,12 @@
 //! Tests for the type size formula algebra (`LinearForm`/`MaxPlusForm`, the partial and arena
 //! bundles). The load-bearing property is *closure under substitution*: substituting argument
 //! forms into a formula and then solving equals solving each argument form and then the formula.
-//! That is what lets the runtime resolve a datatype's formula once (op1) and evaluate it against
-//! concrete argument sizes later (op2) and still get the size it would have measured on the fully
-//! realized type. We check it over a family of generated forms, and spot-check the JIT datatype
-//! builder against a hand computation.
+//! That is what lets the runtime resolve a datatype's formula once and solve it against concrete
+//! argument sizes later and still get the size it would have measured on the fully realized type.
+//! We check it over a family of generated forms, and spot-check the JIT datatype builder against a
+//! hand computation.
 //!
-//! The end-to-end resolution path (op1 against a real linkage) is exercised by the loader and
+//! The end-to-end resolution path (against a real linkage) is exercised by the loader and
 //! instantiation tests, which run the whole VM; here we test the pure algebra in isolation.
 
 use crate::{

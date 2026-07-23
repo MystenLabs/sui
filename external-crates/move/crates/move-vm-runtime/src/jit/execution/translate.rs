@@ -16,7 +16,7 @@ use crate::{
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
-        TraversalBudget,
+        TypeTraversalBudget,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         type_size_formulae::ArenaTypeSizeFormula,
         types::{DefiningTypeId, OriginalId, VersionId},
@@ -1748,7 +1748,7 @@ fn make_arena_type(
         context,
         module,
         tok,
-        &mut TraversalBudget::for_type_traversal(),
+        &mut TypeTraversalBudget::for_type_traversal(),
     )
 }
 
@@ -1756,7 +1756,7 @@ fn make_arena_type_impl(
     context: &PackageContext,
     module: &CompiledModule,
     tok: &SignatureToken,
-    type_size: &mut TraversalBudget,
+    type_size: &mut TypeTraversalBudget,
 ) -> PartialVMResult<ArenaType> {
     type_size.enter_type(|type_size| {
         let res = match tok {
