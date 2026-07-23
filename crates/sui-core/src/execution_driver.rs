@@ -91,6 +91,9 @@ pub async fn execution_process(
         // Transactions that mutate an implicitly-read system object draw from a dedicated
         // permit pool: executions can block waiting for such an object to reach its required
         // version, and the transaction that writes that version must never queue behind them.
+        // TODO: Add a test for the anti-starvation behavior (writers keep executing while
+        // parked user executions hold every user permit) once execution actually blocks on
+        // implicitly-read system objects.
         let limit = if certificate
             .data()
             .transaction_data()
