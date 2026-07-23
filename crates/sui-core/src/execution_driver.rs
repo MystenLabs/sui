@@ -26,8 +26,27 @@ const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
+    rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
+    rx_execution_shutdown: oneshot::Receiver<()>,
+) {
+    // Rate limit concurrent executions to # of cpus.
+    execution_process_with_limits(
+        authority_state,
+        rx_ready_certificates,
+        rx_execution_shutdown,
+        Arc::new(Semaphore::new(num_cpus::get())),
+        Arc::new(Semaphore::new(num_cpus::get())),
+    )
+    .await
+}
+
+/// Inner loop with injectable permit pools, so tests can exercise the permit routing.
+pub(crate) async fn execution_process_with_limits(
+    authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
+    limit: Arc<Semaphore>,
+    system_object_writer_limit: Arc<Semaphore>,
 ) {
     info!("Starting pending certificates execution process.");
 
@@ -43,14 +62,14 @@ pub async fn execution_process(
         let certificate;
         let execution_env;
         let txn_ready_time;
-        let _executing_guard;
+        let executing_guard;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
                 if let Some(pending_cert) = result {
                     certificate = pending_cert.certificate;
                     execution_env = pending_cert.execution_env;
                     txn_ready_time = pending_cert.stats.ready_time.unwrap();
-                    _executing_guard = pending_cert.executing_guard;
+                    executing_guard = pending_cert.executing_guard;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by ExecutionScheduler.
@@ -103,28 +122,6 @@ pub async fn execution_process(
         } else {
             limit.clone()
         };
-        // hold semaphore permit until task completes. unwrap ok because we never close
-        // the semaphore in this context. The scope measures time blocked waiting for a
-        // permit, i.e. how saturated execution concurrency is.
-        let permit = {
-            let _scope = monitored_scope("ExecutionDriver::acquire_permit");
-            limit.acquire_owned().await.unwrap()
-        };
-
-        if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
-            authority
-                .metrics
-                .execution_queueing_latency
-                .report(txn_ready_time.elapsed());
-            if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
-                authority
-                    .metrics
-                    .execution_queueing_delay_s
-                    .observe(latency.as_secs_f64());
-            }
-        }
-
-        authority.metrics.execution_rate_tracker.lock().record();
 
         // Certificate execution is CPU-bound and can take significant time, so run it on a
         // blocking thread to avoid stalling the async runtime's worker threads.
@@ -135,11 +132,39 @@ pub async fn execution_process(
         let blocking_span = execution_span.clone();
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
+            let _executing_guard = executing_guard;
+            // The permit is acquired inside the task rather than in the dispatch loop:
+            // if the loop blocked here on a user transaction while every user permit was
+            // held by a parked execution, a system-object writer queued behind it could
+            // never be dispatched — the starvation the dedicated pool exists to prevent.
+            // unwrap ok because we never close the semaphore in this context. The scope
+            // measures time blocked waiting for a permit, i.e. how saturated execution
+            // concurrency is.
             // `permit` is moved into the blocking closure below and installed on the
             // execution thread, so that a blocking sync primitive can release it if
             // execution has to wait on work that another execution must perform (which
             // would otherwise deadlock under limited concurrency). Until then it is held
             // by this task, and the early returns below drop it, freeing the slot.
+            let permit = {
+                let _scope = monitored_scope("ExecutionDriver::acquire_permit");
+                limit.acquire_owned().await.unwrap()
+            };
+
+            if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
+                authority
+                    .metrics
+                    .execution_queueing_latency
+                    .report(txn_ready_time.elapsed());
+                if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
+                    authority
+                        .metrics
+                        .execution_queueing_delay_s
+                        .observe(latency.as_secs_f64());
+                }
+            }
+
+            authority.metrics.execution_rate_tracker.lock().record();
+
             if authority.is_tx_already_executed(&digest) {
                 return;
             }

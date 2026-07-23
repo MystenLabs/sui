@@ -10,7 +10,7 @@ use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SuiAddress, SystemObjectVersion},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -40,7 +40,7 @@ pub trait Executor {
         // Transaction Inputs
         input_objects: CheckedInputObjects,
         // Versions of system objects this transaction may read, keyed by object ID.
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
         // Gas related
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -70,7 +70,7 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,

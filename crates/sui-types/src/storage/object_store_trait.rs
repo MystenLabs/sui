@@ -13,9 +13,14 @@ pub trait ObjectStore {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
 
+    /// Returns the system object at exactly `version`, blocking until that version has been
+    /// committed if the implementation supports waiting. `initial_shared_version` identifies the
+    /// object's consensus stream for implementations that wait on version-committed notifications;
+    /// the default implementation is a plain keyed read and ignores it.
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
+        _initial_shared_version: VersionNumber,
         version: VersionNumber,
     ) -> Option<Object> {
         self.get_object_by_key(object_id, version)
@@ -44,9 +49,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
+        initial_shared_version: VersionNumber,
         version: VersionNumber,
     ) -> Option<Object> {
-        (*self).get_implicitly_read_system_object_blocking(object_id, version)
+        (*self).get_implicitly_read_system_object_blocking(
+            object_id,
+            initial_shared_version,
+            version,
+        )
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
@@ -70,9 +80,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
+        initial_shared_version: VersionNumber,
         version: VersionNumber,
     ) -> Option<Object> {
-        (**self).get_implicitly_read_system_object_blocking(object_id, version)
+        (**self).get_implicitly_read_system_object_blocking(
+            object_id,
+            initial_shared_version,
+            version,
+        )
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
@@ -96,9 +111,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
+        initial_shared_version: VersionNumber,
         version: VersionNumber,
     ) -> Option<Object> {
-        (**self).get_implicitly_read_system_object_blocking(object_id, version)
+        (**self).get_implicitly_read_system_object_blocking(
+            object_id,
+            initial_shared_version,
+            version,
+        )
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {

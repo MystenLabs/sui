@@ -331,7 +331,11 @@ async fn test_get_implicitly_read_system_object_blocking() {
         async move {
             cache
                 .as_ref()
-                .get_implicitly_read_system_object_blocking(&object_id, target_version)
+                .get_implicitly_read_system_object_blocking(
+                    &object_id,
+                    init_version,
+                    target_version,
+                )
                 .unwrap()
         }
     });
@@ -354,7 +358,7 @@ async fn test_get_implicitly_read_system_object_blocking() {
 
     let object = cache
         .as_ref()
-        .get_implicitly_read_system_object_blocking(&object_id, target_version)
+        .get_implicitly_read_system_object_blocking(&object_id, init_version, target_version)
         .unwrap();
     assert_eq!(object.version(), target_version);
 }

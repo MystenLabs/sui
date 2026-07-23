@@ -11,8 +11,8 @@ use move_core_types::language_storage::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::base_types::SystemObjectVersion;
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
@@ -25,6 +25,7 @@ use sui_types::gas_coin::GAS;
 use sui_types::message_envelope::Message as _;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
     CallArg, CheckedInputObjects, Command, FundsWithdrawalArg, GasData, ObjectArg, TransactionData,
     TransactionDataAPI, TransactionKind,
@@ -128,7 +129,7 @@ struct PreparedTx {
     /// its recorded effects. The executor loads each system object at exactly this version and
     /// treats a system read with no assigned version as an invariant violation, so it must cover
     /// every such object the transaction touched.
-    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+    system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
     gas_data: GasData,
     gas_status: SuiGasStatus,
     txn_kind: TransactionKind,
@@ -214,7 +215,9 @@ pub(crate) fn execute_one_transaction(
 
     // The versions the transaction's system (consensus) objects were sequenced against, recovered
     // from its effects (mirrors the per-transaction map a live node assigns). Cancelled inputs carry
-    // no live version and are excluded above, so only mutated/read-only entries remain.
+    // no live version and are excluded above, so only mutated/read-only entries remain. The initial
+    // shared version is recovered from the object itself; the scan store serves plain keyed reads,
+    // so the initial version is otherwise unused here.
     let system_object_versions = executed
         .effects
         .input_consensus_objects()
@@ -223,6 +226,17 @@ pub(crate) fn execute_one_transaction(
             InputConsensusObject::Mutate((id, v, _))
             | InputConsensusObject::ReadOnly((id, v, _)) => Some((id, v)),
             _ => None,
+        })
+        .filter_map(|(id, v)| {
+            let initial_shared_version =
+                store.get_object_by_key(&id, v)?.owner().start_version()?;
+            Some((
+                id,
+                SystemObjectVersion {
+                    initial_shared_version,
+                    version: v,
+                },
+            ))
         })
         .collect();
 

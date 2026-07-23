@@ -227,6 +227,16 @@ impl FullObjectRef {
 /// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
+/// Versions of an implicitly read system object assigned to a transaction at sequencing time:
+/// the version the transaction must read, together with the object's initial shared version.
+/// The initial shared version identifies the object's consensus stream, so a reader can wait
+/// for `version` to be committed without having to load the object first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SystemObjectVersion {
+    pub initial_shared_version: SequenceNumber,
+    pub version: SequenceNumber,
+}
+
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of
