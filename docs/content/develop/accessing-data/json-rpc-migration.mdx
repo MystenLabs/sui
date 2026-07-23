@@ -74,7 +74,7 @@ JSON-RPC is deprecated and is being decommissioned on the following timeline:
 | Implicit fallback from JSON-RPC to archival service disconnected | End of September 2026 |
 | Full decommission of JSON-RPC from full nodes, including code removal | Mid-October 2026 |
 
-The two replacements are [gRPC](/develop/accessing-data/grpc) for real-time full node access, archival service access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for rich, structured queries over live and historical blockchain data.
+The 2 replacements are [gRPC](/develop/accessing-data/grpc) for real-time full node access, archival service access and transaction execution, and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) for rich, structured queries over live and historical blockchain data.
 
 ## Choose your replacement
 
@@ -84,7 +84,9 @@ Use **gRPC** for:
 
 - Backend services, indexers, and exchange pipelines.
 
-- Streaming finalized checkpoints with `SubscriptionService.SubscribeCheckpoints`. Combined with client-side event filtering, this can serve as a replacement for JSON-RPC WebSocket subscriptions.
+- Streaming finalized checkpoints, transactions, and events with `SubscriptionService`. Use `SubscribeCheckpoints`, `SubscribeTransactions`, or `SubscribeEvents` with server-side filters to receive only the data your application needs.
+
+- Paginated, filtered queries over historical checkpoints, transactions, and events through the `LedgerService` list APIs (`ListCheckpoints`, `ListTransactions`, `ListEvents`). These APIs accept the same filter types as the subscription APIs, so you can backfill historical data and then continue from the same point with a live subscription.
 
 - Low-latency point lookups against the current state and recent history of a full node, through `LedgerService` and `StateService`.
 
@@ -115,7 +117,7 @@ The following table maps common JSON-RPC method families to their gRPC service a
 | JSON-RPC method | gRPC service and operation | GraphQL field |
 | --- | --- | --- |
 | `sui_getCheckpoint`, `sui_getLatestCheckpointSequenceNumber` | `LedgerService.GetCheckpoint` | `Query.checkpoint` |
-| `sui_getCheckpoints` | No paginated gRPC list. Use `LedgerService.GetCheckpoint` for point lookups, or `SubscriptionService.SubscribeCheckpoints` for an ordered stream, depending on your use case. | `Query.checkpoints` |
+| `sui_getCheckpoints` | `LedgerService.ListCheckpoints` for paginated, filtered queries over a checkpoint range. Use `SubscriptionService.SubscribeCheckpoints` for an ordered live stream, or `LedgerService.GetCheckpoint` for single-checkpoint lookups. | `Query.checkpoints` |
 | `sui_getTransactionBlock` | `LedgerService.GetTransaction` | `Query.transaction` |
 | `sui_multiGetTransactionBlocks` | `LedgerService.BatchGetTransactions` | `Query.multiGetTransactions` |
 | `sui_getTotalTransactionBlocks` | `LedgerService.GetCheckpoint` on the latest or target checkpoint, then read `summary.total_network_transactions` | `Checkpoint.networkTotalTransactions` |
@@ -127,9 +129,9 @@ The following table maps common JSON-RPC method families to their gRPC service a
 | `suix_getOwnedObjects` | `StateService.ListOwnedObjects` | `Address.objects` |
 | `suix_getDynamicFields` | `StateService.ListDynamicFields` | `Object.dynamicFields` |
 | `suix_getDynamicFieldObject` | Derive the dynamic field's object ID locally from the parent object ID and the field name, then call `LedgerService.GetObject`. `ListDynamicFields` is not needed when you already know the field name. | `Object.dynamicObjectField` |
-| `suix_queryTransactionBlocks` | No direct filtered query. Enumerate finalized transactions through `SubscriptionService.SubscribeCheckpoints`, or fetch known transactions through `LedgerService.GetTransaction`. | `Query.transactions` with a `TransactionFilter` |
-| `suix_queryEvents` (deprecated) | Read events from transaction data returned by `LedgerService.GetTransaction` or streamed by `SubscriptionService.SubscribeCheckpoints`. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-grpc) for examples and migration guidance. | `Query.events` with an `EventFilter`. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-graphql) for examples. |
-| `sui_subscribeEvent`, `sui_subscribeTransaction` (WebSocket) | `SubscriptionService.SubscribeCheckpoints`, then read events and transactions from each checkpoint | No streaming subscription. Poll `Query.events` with an `EventFilter`, or `Query.transactions` with a `TransactionFilter`. |
+| `suix_queryTransactionBlocks` | `LedgerService.ListTransactions` with a `TransactionFilter` for paginated, filtered queries over a checkpoint range. Use `SubscriptionService.SubscribeTransactions` with the same filter for a live stream of matching transactions. | `Query.transactions` with a `TransactionFilter` |
+| `suix_queryEvents` (deprecated) | `LedgerService.ListEvents` with an `EventFilter` for paginated, filtered queries over a checkpoint range. Use `SubscriptionService.SubscribeEvents` with the same filter for a live stream. For a single transaction's events, use `LedgerService.GetTransaction` with `events` in the field mask. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-grpc) for examples and migration guidance. | `Query.events` with an `EventFilter`. See [Emitting Events](/develop/accessing-data/using-events#querying-events-with-graphql) for examples. |
+| `sui_subscribeEvent`, `sui_subscribeTransaction` (WebSocket) | `SubscriptionService.SubscribeEvents` with an `EventFilter`, or `SubscriptionService.SubscribeTransactions` with a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` if you need entire checkpoints. All 3 support server-side filtering. | No streaming subscription. Poll `Query.events` with an `EventFilter`, or `Query.transactions` with a `TransactionFilter`. |
 | `suix_getReferenceGasPrice` | `LedgerService.GetEpoch` (read `reference_gas_price` from the response) | `Epoch.referenceGasPrice` |
 | `suix_getStakes`, `suix_getStakesByIds` | No direct gRPC method. Read owned `StakedSui` objects through `StateService.ListOwnedObjects` filtered by type, then fetch full contents through `LedgerService.GetObject`. | `Address.objects` with `filter: { type: "0x3::staking_pool::StakedSui" }` |
 | `suix_getValidatorsApy` | No direct gRPC method and no APY field. Read validator-set data and compute APY client-side. See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation. | No direct APY field. Read validator-set data through `Epoch.validatorSet` and compute APY client-side. See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation. |
@@ -146,7 +148,7 @@ The JSON-RPC `unsafe_*` builder methods do not have a one-to-one replacement on 
 
 JSON-RPC sometimes resolved requests for older data through fallback paths that were transparent to the caller. Full node gRPC does not do this. A full node serves only the data within its retention window, and `LedgerService` returns "not found" for anything older.
 
-The three interfaces differ in how they reach pruned history:
+The 3 interfaces differ in how they reach pruned history:
 
 - **Full node gRPC** serves the complete RPC surface (transaction execution, point lookups, checkpoint subscriptions), but only within the full node's retention window.
 
@@ -160,7 +162,7 @@ JSON-RPC accepts a positional array of arguments. gRPC uses typed protobuf messa
 
 ### WebSocket subscriptions are replaced by gRPC streaming
 
-JSON-RPC offered WebSocket subscriptions for events and transactions. Sui does not carry those forward. Use `SubscriptionService.SubscribeCheckpoints` over gRPC server streaming to receive finalized checkpoints in order, and read each checkpoint's transactions, effects, and events from the streamed payload. If your stream disconnects, resume from the last processed checkpoint sequence number. Backfill any missed range using `LedgerService` before you resubscribe. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+JSON-RPC offered WebSocket subscriptions for events and transactions, which have been deprecated since mid-2024. Sui does not carry those forward. Use `SubscriptionService` over gRPC server streaming instead: `SubscribeEvents` with an `EventFilter` replaces `sui_subscribeEvent`, `SubscribeTransactions` with a `TransactionFilter` replaces `sui_subscribeTransaction`, and `SubscribeCheckpoints` delivers entire checkpoints. All 3 support server-side filtering. Subscriptions always begin at the current tip of the chain; they do not support resumption from a prior point. To avoid gaps, open the subscription first, note the first progress marker (`cursor` for checkpoints, `Watermark` for transactions and events), then backfill with the corresponding `LedgerService` list API (`ListEvents`, `ListTransactions`, or `ListCheckpoints`) up to that point. Once the backfill is complete, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 
 ### Public load balancer URLs are not production endpoints
 
@@ -269,7 +271,7 @@ Each pattern below links to the canonical worked example and includes an inline 
 
 #### Filtered event queries (GraphQL only)
 
-GraphQL supports server-side filtered event queries. gRPC does not have a direct equivalent — use checkpoint streaming with client-side filtering instead. See [Querying events with GraphQL](/develop/accessing-data/using-events#querying-events-with-graphql) and [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
+- **gRPC:** Use `LedgerService.ListEvents` with an `EventFilter` for paginated historical queries. For live updates, use `SubscriptionService.SubscribeEvents` with the same filter types. Events also arrive as part of transaction data in `LedgerService.GetTransaction` responses. See [Querying events with gRPC](/develop/accessing-data/using-events#querying-events-with-grpc).
 
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">

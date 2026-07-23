@@ -93,7 +93,7 @@ $ diesel --version
 
 The following steps show how to create an indexer that:
 
-- Connects to a Sui checkpoint source: Uses gRPC streaming from a full node as the primary source, with the durable GCS checkpoint bucket as the recommended production fallback. The public HTTPS endpoint at https://checkpoints.testnet.sui.io is available as a convenience for recent data only (most recent 30 days).
+- Connects to Sui checkpoint sources: Uses the durable Requester Pays GCS bucket for production backfill, then fullnode gRPC polling and streaming for steady-state ingestion. The public-good HTTPS checkpoint store is for recent-data testing only.
 - Processes checkpoints: Streams checkpoint data continuously.
 - Extracts transaction data: Pulls transaction digests from each checkpoint.
 - Stores in local PostgreSQL: Commits data to a local PostgreSQL database as the default example storage layer. For other storage systems, implement the framework's `Store` and `Connection` traits.
@@ -105,8 +105,10 @@ In the end, you have a working indexer that demonstrates all core framework conc
 
 Sui provides checkpoint data through multiple sources:
 
-- **GCS buckets (recommended for production and backfill):** `gs://mysten-testnet-checkpoints-use4` for Testnet or `gs://mysten-mainnet-checkpoints-use4` for Mainnet. These buckets have full checkpoint retention and are Requester Pays enabled, so configure GCS credentials and a billing project before using them.
-- **HTTPS endpoints (recent data only, most recent 30 days):** `https://checkpoints.testnet.sui.io` for Testnet or `https://checkpoints.mainnet.sui.io` for Mainnet.
+- **GCS buckets (production backfill and recovery):** `gs://mysten-testnet-checkpoints-use4` for Testnet or `gs://mysten-mainnet-checkpoints-use4` for Mainnet. These buckets have full checkpoint retention and are Requester Pays enabled, so configure GCS credentials and a billing project before using them.
+- **Fullnode gRPC (production steady state):** Use a production-grade endpoint from an [RPC provider](/develop/accessing-data/rpc-providers) for polling and streaming after the historical backfill reaches the network tip.
+- **Public-good fullnode gRPC (testing only):** `https://fullnode.testnet.sui.io:443`, `https://fullnode.mainnet.sui.io:443`, and `https://fullnode.devnet.sui.io:443`. Do not use these endpoints for production ingestion.
+- **Public HTTPS checkpoint stores (testing only, most recent 30 days):** `https://checkpoints.testnet.sui.io` for Testnet or `https://checkpoints.mainnet.sui.io` for Mainnet. Do not use these public-good endpoints for production ingestion.
 
 :::
 
@@ -325,15 +327,15 @@ Key concepts:
 Save the `handlers.rs` file.
 
 <details>
-  
+
 <summary>
-  
+
 Processor trait definition
-  
+
 </summary>
-  
+
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/processor.rs" mode="code" trait="Processor" />
-  
+
 </details>
 
 ##step Implement the `Handler`
@@ -363,27 +365,27 @@ You can override the default batch limits by implementing constants in your `Han
 The `handlers.rs` file is now complete. Save the file.
 
 <details>
-  
+
 <summary>
-  
+
 Complete `handler.rs` file
-  
+
 </summary>
-  
+
 <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" />
-  
+
 </details>
 
 <details>
-  
+
 <summary>
-  
+
 Handler trait definition
-  
+
 </summary>
-  
+
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs" mode="code" trait="Handler" />
-  
+
 </details>
 
 ##step Create `.env` file
@@ -392,25 +394,25 @@ The main function you create in the next step needs the value you stored to the 
 
 <Tabs>
 <TabItem label="Bash/zsh" value="bash">
-  
+
 ```sh
 echo "DATABASE_URL=$PSQL_URL" > .env
 ```
-  
+
 </TabItem>
 <TabItem label="fish" value="fish">
-  
+
 ```sh
 echo "DATABASE_URL=$PSQL_URL" > .env
 ```
-  
+
 </TabItem>
 <TabItem label="PowerShell" value="powershell">
-  
+
 ```sh
 "DATABASE_URL=$env:PSQL_URL" | Out-File -Encoding UTF8 .env
 ```
-  
+
 </TabItem>
 </Tabs>
 
@@ -435,28 +437,38 @@ Your indexer is now complete. The next steps walk you through running the indexe
 
 ##step Run your indexer
 
-Use the `cargo run` command to run your indexer against Testnet. For production use, prefer gRPC streaming from a full node as your primary source with the durable GCS bucket as a fallback. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for details on each option.
+Use the `cargo run` command to run your indexer against Testnet. Production operation has separate backfill and steady-state phases. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for details on each source.
 
-Before using a Requester Pays GCS bucket, configure GCS credentials and set your billing project with `--remote-store-header x-goog-user-project:YOUR_PROJECT_ID`.
+Before using a Requester Pays GCS bucket, configure credentials and a billing project. Pass the billing project in the `x-goog-user-project` header:
 
-**Recommended for production: gRPC streaming with GCS-backed fallback:**
+```sh
+$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
+$ export GOOGLE_CLOUD_PROJECT=your-billing-project
+```
+
+**Phase 1: backfill from the full-retention GCS checkpoint bucket:**
 
 ```sh
 $ cargo run -- \
     --remote-store-gcs mysten-testnet-checkpoints-use4 \
-    --remote-store-header x-goog-user-project:YOUR_PROJECT_ID \
-    --streaming-url https://fullnode.testnet.sui.io:443
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}"
 ```
 
-**GCS checkpoint bucket only (full retention, suitable for backfill):**
+After the indexer reaches the network tip, stop it and restart it with fullnode gRPC. Existing pipelines resume from their committed watermarks. For production, obtain a production-grade fullnode gRPC endpoint from an RPC provider:
+
+**Phase 2: use fullnode gRPC polling and streaming for steady state:**
 
 ```sh
+$ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
+
 $ cargo run -- \
-    --remote-store-gcs mysten-testnet-checkpoints-use4 \
-    --remote-store-header x-goog-user-project:YOUR_PROJECT_ID
+    --rpc-api-url "$FULLNODE_GRPC_URL" \
+    --streaming-url "$FULLNODE_GRPC_URL"
 ```
 
-**HTTPS checkpoint endpoint (recent data only, most recent 30 days):**
+For testing only, you can instead use the public-good Testnet endpoint `https://fullnode.testnet.sui.io:443`. The public-good Mainnet, Testnet, and Devnet fullnode endpoints are not intended for production use.
+
+**Testing only: public HTTPS checkpoint store (most recent 30 days):**
 
 ```sh
 $ cargo run -- \
@@ -464,7 +476,7 @@ $ cargo run -- \
     --first-checkpoint RECENT_CHECKPOINT
 ```
 
-The public HTTPS checkpoint endpoints (`https://checkpoints.testnet.sui.io` and `https://checkpoints.mainnet.sui.io`) retain only the most recent 30 days of checkpoints and are suitable as a convenience for quick testing or recent-data workloads. When using one with a fresh database, set `--first-checkpoint` to a checkpoint that is still within the retained range; otherwise, the indexer starts at checkpoint 0 and retries missing checkpoints indefinitely. For production deployments and full-retention backfills, use the GCS buckets through `--remote-store-gcs`: `mysten-testnet-checkpoints-use4` for Testnet or `mysten-mainnet-checkpoints-use4` for Mainnet. These buckets are Requester Pays enabled. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup) for more information.
+The public HTTPS checkpoint stores (`https://checkpoints.testnet.sui.io` and `https://checkpoints.mainnet.sui.io`) retain only the most recent 30 days of checkpoints. Use them only for testing. When using one with a fresh database, set `--first-checkpoint` to a checkpoint that is still within the retained range; otherwise, the indexer starts at checkpoint 0 and retries missing checkpoints indefinitely. For production backfills, use `--remote-store-gcs` with `mysten-testnet-checkpoints-use4` for Testnet or `mysten-mainnet-checkpoints-use4` for Mainnet. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup) for more information.
 
 :::info
 
