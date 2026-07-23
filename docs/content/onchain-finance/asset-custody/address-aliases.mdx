@@ -1,5 +1,5 @@
 ---
-title: Address Aliases
+title: Address Aliases for Asset Custody
 description: >-
   Use address aliases to allow multiple keys to act as a single Sui address,
   enabling key rotation and account abstraction without asset migration.
@@ -9,6 +9,7 @@ keywords:
   - key rotation
   - AddressAliases
   - alias management
+  - asset custody
 goal:
   description: >-
     Reader can use address aliases for key rotation and account
@@ -31,109 +32,52 @@ goal:
 questions:
   - What are address aliases on Sui?
   - How do I rotate keys without migrating assets on Sui?
-  - How do I enable and manage address aliases on Sui?
+  - How do I use address aliases for agent authorization?
 answer: >-
   Address aliases let you authorize additional Sui addresses to act as
-  your account. Enable aliases, then add, remove, or replace alias
-  addresses. Aliases have full sender authority, enabling key rotation
-  without asset migration.
+  your account. Aliases have full sender authority, enabling key rotation
+  without asset migration and agent delegation without object transfers.
 ---
 
-Address aliases let you authorize additional Sui addresses to act on behalf of your account. A transaction signed by an alias address can set its sender to the original address, giving the alias full authority to transact as the original account. This enables key rotation without migrating assets and basic account abstraction patterns.
+Address aliases let you authorize additional Sui addresses to sign transactions on behalf of your account. This page covers how aliases apply to asset custody patterns. For the full API reference and CLI commands, see [Address Aliases](/develop/transactions/transaction-auth/address-aliases).
 
-## How aliases work
+:::warning
 
-The `sui::address_alias` module manages a per-account `AddressAliases` object. Each account can have up to 8 aliases.
-
-When address X sets address Y as an alias, transactions signed by Y can specify X as the sender. From the network's perspective, the transaction executes as if X sent it — Y's key is just the signing mechanism.
-
-```mermaid
-graph LR
-    A[Alias Y signs tx] --> B[Tx sender = X]
-    B --> C[Executes as X]
-    C --> D[X's objects, balances, and permissions]
-```
-
-## Enable aliases
-
-Before adding aliases, you must enable the alias system for your address. This creates the `AddressAliases` object:
-
-```bash
-sui client call \
-  --package 0x2 \
-  --module address_alias \
-  --function enable \
-  --args 0xADDRESS_ALIAS_STATE_ID \
-  --gas-budget 10000000
-```
-
-The `ADDRESS_ALIAS_STATE_ID` is a singleton shared object. Query it from the network or use the SDK.
-
-## Add an alias
-
-After enabling, add an alias address:
-
-```bash
-sui client call \
-  --package 0x2 \
-  --module address_alias \
-  --function add \
-  --args <ALIASES_OBJECT_ID> <ALIAS_ADDRESS> \
-  --gas-budget 10000000
-```
-
-The alias address can now sign transactions on behalf of your account.
-
-## Remove an alias
-
-```bash
-sui client call \
-  --package 0x2 \
-  --module address_alias \
-  --function remove \
-  --args <ALIASES_OBJECT_ID> <ALIAS_ADDRESS> \
-  --gas-budget 10000000
-```
-
-:::caution You cannot remove the last alias
-
-The `remove` function aborts if you attempt to remove the last alias. This prevents accidentally locking yourself out of the alias system.
+All aliases for a given address have the ability to **unilaterally control or take** all coins, balances, and other resources owned by the address. Be extremely careful when making changes to your aliases.
 
 :::
 
-## Replace all aliases
+## Key rotation without asset migration
 
-To replace the entire alias set at once (useful for bulk rotation):
-
-```bash
-sui client call \
-  --package 0x2 \
-  --module address_alias \
-  --function replace_all \
-  --args <ALIASES_OBJECT_ID> '["<ADDR1>", "<ADDR2>"]' \
-  --gas-budget 10000000
-```
-
-## Use cases
-
-### Key rotation without asset migration
-
-Traditional key rotation on Sui requires transferring all objects and balances from the old address to the new one. With aliases:
+Traditional key rotation on Sui requires transferring all objects and balances from the old address to the new one. With aliases, assets stay in place:
 
 1. Generate a new keypair (new address).
-2. Add the new address as an alias of the old address.
+2. Add the new address as an alias of the old address:
+   ```sh
+   sui client ptb \
+       --move-call sui::address_alias::add @<ALIASES_OBJECT_ID> @<NEW_ADDRESS> \
+       --gas-budget 50000000
+   ```
 3. Start signing transactions with the new key, setting the sender to the old address.
-4. Remove the old address's alias (optional — it remains valid until removed).
+4. Optionally remove the old key from the alias set once you've verified the new key works.
 
 No asset migration needed. All objects and balances stay at the original address.
 
-### Multisig-to-alias delegation
+## Agent authorization
 
-A multisig account can add a single-key alias for routine operations. The alias has full sender authority — it can do anything the multisig can, so use this pattern only when you trust the alias holder completely. The benefit is operational speed: day-to-day transactions can be signed by the alias without gathering multiple signatures.
+Instead of transferring objects to an agent's address, add the agent as an alias. The agent signs transactions as your address, accessing your objects and balances directly. Revoke access at any time by removing the alias:
 
-### Agent authorization
+```sh
+sui client ptb \
+    --move-call sui::address_alias::remove @<ALIASES_OBJECT_ID> @<AGENT_ADDRESS> \
+    --gas-budget 50000000
+```
 
-Instead of transferring objects to an agent's address, add the agent as an alias. The agent signs transactions as your address, accessing your objects and balances. Revoke by removing the alias.
+This is simpler than [spending mandates](/onchain-finance/agentic-payments/spending-policies) but offers no spending limits — the agent has full authority over the aliased address. Use mandates when you need bounded spending; use aliases when you need full delegation to a trusted key.
+
+## Multisig-to-alias delegation
+
+A multisig account can add a single-key alias for operational speed. The alias has full sender authority — it can do anything the multisig can. Use this pattern only when you trust the alias holder completely. The benefit is that day-to-day transactions can be signed by the alias without gathering multiple signatures.
 
 :::danger Aliases have full authority
 
@@ -141,13 +85,6 @@ An alias address has the same authority as the original address. It can transfer
 
 :::
 
-## API reference
+## Managing aliases
 
-The `sui::address_alias` module exposes the following entry functions:
-
-| Function | Description |
-|---|---|
-| `enable(state, ctx)` | Create the `AddressAliases` object for the sender |
-| `add(aliases, address)` | Add an alias address (max 8) |
-| `remove(aliases, address)` | Remove an alias (cannot remove the last one) |
-| `replace_all(aliases, new_aliases)` | Replace the entire alias set |
+The `AddressAliasState` singleton object lives at address `0xa`. Use `sui client ptb` to call entry functions in the `sui::address_alias` module. See [Address Aliases](/develop/transactions/transaction-auth/address-aliases) for the complete CLI reference, including `enable`, `add`, `remove`, and `replace_all` commands.
