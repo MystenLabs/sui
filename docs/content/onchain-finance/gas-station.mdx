@@ -135,7 +135,8 @@ class GasCoinPool {
   async initialize(client: SuiGrpcClient, sponsorAddress: string) {
     const ownedCoins = await client.core.listOwnedObjects({
       owner: sponsorAddress,
-      filter: { type: '0x2::coin::Coin<0x2::sui::SUI>' },
+      type: '0x2::coin::Coin<0x2::sui::SUI>',
+      limit: 50,
     });
     for (const coin of ownedCoins.objects) {
       const id = coin.objectId;
