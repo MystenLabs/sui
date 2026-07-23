@@ -87,14 +87,14 @@ impl TypeLimits {
 
 /// Tracks depth and node count during recursive type traversal, enforcing configurable
 /// limits on both.
-pub struct TraversalBudget {
+pub struct TypeTraversalBudget {
     depth: u64,
     node_count: u64,
     max_depth: u64,
     max_nodes: u64,
 }
 
-impl TraversalBudget {
+impl TypeTraversalBudget {
     /// Standard limits for normal type traversal (i.e., not factoring in field types or
     /// "values"/layouts of that type): `TYPE_DEPTH_MAX` depth, `MAX_TYPE_INSTANTIATION_NODES` nodes.
     pub fn for_type_traversal() -> Self {
