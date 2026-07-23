@@ -25,28 +25,14 @@ const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
-    rx_execution_shutdown: oneshot::Receiver<()>,
-) {
-    // Rate limit concurrent executions to # of cpus.
-    execution_process_with_limits(
-        authority_state,
-        rx_ready_certificates,
-        rx_execution_shutdown,
-        Arc::new(Semaphore::new(num_cpus::get())),
-        Arc::new(Semaphore::new(num_cpus::get())),
-    )
-    .await
-}
-
-pub(crate) async fn execution_process_with_limits(
-    authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
-    limit: Arc<Semaphore>,
-    system_object_writer_limit: Arc<Semaphore>,
 ) {
     info!("Starting pending certificates execution process.");
+
+    // Rate limit concurrent executions to # of cpus.
+    let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    let system_object_writer_limit = Arc::new(Semaphore::new(num_cpus::get()));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
