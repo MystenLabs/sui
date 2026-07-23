@@ -21,7 +21,6 @@ Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resoluti
 ### Resolve a name with the TypeScript SDK
 
 ```typescript
-import { SuinsClient } from '@mysten/suins';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const client = new SuiGrpcClient({
@@ -29,30 +28,21 @@ const client = new SuiGrpcClient({
   network: 'mainnet',
 });
 
-const suins = new SuinsClient({ client, network: 'mainnet' });
+// Resolve a .sui name to an address
+const address = await client.resolveNameServiceAddress({
+  name: 'alice.sui',
+});
 
-async function resolveRecipient(name: string): Promise<string> {
-  const nameRecord = await suins.getNameRecord(name);
-
-  if (!nameRecord) {
-    throw new Error(`Name "${name}" not found`);
-  }
-
-  // Check expiry
-  if (nameRecord.expirationTimestampMs < Date.now()) {
-    throw new Error(`Name "${name}" has expired`);
-  }
-
-  return nameRecord.targetAddress;
+if (!address) {
+  throw new Error('Name not found or expired');
 }
 
-// Usage
-const recipientAddress = await resolveRecipient('alice.sui');
+console.log('Resolved address:', address);
 ```
 
-:::danger Always check expiry
+:::danger Always verify name validity
 
-A `.sui` name can expire and be re-registered by a different user. Always verify that `expirationTimestampMs` is in the future before using the resolved address. Sending funds to an expired name's cached address could send them to the wrong person.
+A `.sui` name can expire and be re-registered by a different user. The `resolveNameServiceAddress` method returns `null` for expired names. If you cache resolved addresses, re-resolve before each payment to ensure the name still points to the intended recipient.
 
 :::
 
@@ -61,16 +51,32 @@ A `.sui` name can expire and be re-registered by a different user. Always verify
 To display a human-readable name in transaction history or receipts, look up the default name for an address:
 
 ```typescript
-const defaultName = await suins.getDefaultName(address);
-// Returns 'alice.sui' or undefined if no default name is set
+const names = await client.resolveNameServiceNames({
+  address: '0x...',
+});
+// Returns: { data: ['alice.sui'], hasNextPage: false, nextCursor: null }
 ```
 
 ### Resolve via GraphQL
 
+Use `address(name:)` to resolve a name, or `nameRecord(name:)` to get full record details:
+
 ```graphql
 query ResolveName {
-  resolveSuinsAddress(domain: "alice.sui") {
+  address(name: "alice.sui") {
     address
+  }
+}
+```
+
+For reverse lookup, query the `defaultNameRecord` field on an address:
+
+```graphql
+query ReverseLookup {
+  address(address: "0x...") {
+    defaultNameRecord {
+      domain
+    }
   }
 }
 ```
