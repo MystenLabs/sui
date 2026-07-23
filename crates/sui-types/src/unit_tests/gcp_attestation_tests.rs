@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gcp_attestation::{GcpAttestationError, extract_kid_from_jwt, verify_gcp_attestation};
+use crate::gcp_attestation::{
+    GcpAttestationError, extract_kid_from_jwt, is_gcp_attestation_call, verify_gcp_attestation,
+};
+use crate::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
@@ -301,4 +304,28 @@ fn test_accept_min_exponent_65537() {
     let (n, e) = decode_key(KEY_A_N, KEY_A_E);
     // KEY_A_E is AQAB == [1,0,1] == 65537; verify still succeeds with None kid.
     verify_gcp_attestation(VALID_TOKEN.as_bytes(), &n, &e, NOW_MS, None).expect("should verify");
+}
+
+#[test]
+fn test_is_gcp_attestation_call_matches_only_framework_entrypoint() {
+    assert!(is_gcp_attestation_call(
+        SUI_FRAMEWORK_ADDRESS,
+        "gcp_attestation",
+        "verify_gcp_attestation",
+    ));
+    assert!(!is_gcp_attestation_call(
+        MOVE_STDLIB_ADDRESS,
+        "gcp_attestation",
+        "verify_gcp_attestation",
+    ));
+    assert!(!is_gcp_attestation_call(
+        SUI_FRAMEWORK_ADDRESS,
+        "nitro_attestation",
+        "verify_gcp_attestation",
+    ));
+    assert!(!is_gcp_attestation_call(
+        SUI_FRAMEWORK_ADDRESS,
+        "gcp_attestation",
+        "load_nitro_attestation",
+    ));
 }

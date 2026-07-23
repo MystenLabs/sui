@@ -55,6 +55,14 @@ public struct GcpAttestationDocument has drop {
 /// The RSA public key is looked up internally from the consensus-validated JWK set
 /// using the GCP issuer and the supplied `kid`. No AuthenticatorState input is needed.
 ///
+/// This verifies token authenticity and time validity, but it does not authorize a workload.
+/// Callers MUST compare `aud()` with their expected audience and enforce their workload policy
+/// over claims such as `image_digest()`, `secboot()`, `hwmodel()`, and `dbgstat()`.
+///
+/// Like Nitro attestation, replay protection is caller-enforced. Callers MUST require an expected,
+/// freshly generated value in `eat_nonce()` and consume it after successful verification. Reusing
+/// an unexpired token succeeds unless the caller tracks nonce use.
+///
 /// @param token: The RS256 JWT token bytes (UTF-8 encoded header.payload.signature).
 /// @param kid: The key ID from the JWT header, identifying which trusted key to use.
 /// @param clock: The clock object used to check token expiry.

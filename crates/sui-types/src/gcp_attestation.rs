@@ -3,6 +3,9 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use move_core_types::account_address::AccountAddress;
+
+use crate::SUI_FRAMEWORK_ADDRESS;
 
 #[cfg(test)]
 #[path = "unit_tests/gcp_attestation_tests.rs"]
@@ -19,6 +22,15 @@ const MAX_RSA_EXPONENT_SIZE: usize = 8;
 /// Minimum acceptable RSA public exponent (Fermat F4). Reject weaker exponents such as e=3.
 const MIN_RSA_EXPONENT: u64 = 65537;
 const EXPECTED_ISSUER: &str = "https://confidentialcomputing.googleapis.com";
+pub const GCP_ATTESTATION_MODULE_NAME: &str = "gcp_attestation";
+pub const VERIFY_GCP_ATTESTATION_FUNCTION_NAME: &str = "verify_gcp_attestation";
+
+/// Returns true only for the public GCP attestation entry point in the Sui framework.
+pub fn is_gcp_attestation_call(package: AccountAddress, module: &str, function: &str) -> bool {
+    package == SUI_FRAMEWORK_ADDRESS
+        && module == GCP_ATTESTATION_MODULE_NAME
+        && function == VERIFY_GCP_ATTESTATION_FUNCTION_NAME
+}
 
 /// Error type for GCP attestation verification.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -190,6 +202,12 @@ pub fn extract_kid_from_jwt(token: &[u8]) -> Result<String, GcpAttestationError>
 /// a trusted RSA public key (n, e) in big-endian byte representation.
 ///
 /// When `expected_kid` is `Some`, the JWT header must contain a matching `kid`.
+///
+/// # Authorization policy
+///
+/// This function does not validate `aud` or workload policy claims. Callers must compare the
+/// returned audience with their expected audience and enforce the required image, secure-boot,
+/// hardware-model, and debug-status claims.
 ///
 /// # Replay protection
 ///

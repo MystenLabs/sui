@@ -500,7 +500,7 @@ impl SuiNode {
                     loop {
                         jwk_log!("fetching GCP JWKs");
                         metrics.jwk_requests.with_label_values(&["gcp"]).inc();
-                        match Self::fetch_gcp_jwks(authority).await {
+                        match Self::fetch_gcp_jwks(authority, metrics.as_ref()).await {
                             Err(e) => {
                                 metrics.jwk_request_errors.with_label_values(&["gcp"]).inc();
                                 warn!("Error when fetching GCP JWKs: {:?}", e);
@@ -2797,7 +2797,10 @@ impl SuiNode {
             .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 
-    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<Vec<(JwkId, JWK)>> {
+    async fn fetch_gcp_jwks(
+        _authority: AuthorityName,
+        metrics: &SuiNodeMetrics,
+    ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use futures::StreamExt;
         use sui_types::error::SuiErrorKind;
 
@@ -2815,6 +2818,7 @@ impl SuiNode {
             .send()
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        validate_gcp_jwks_http_status(resp.status())?;
         if let Some(len) = resp.content_length()
             && len > GCP_JWKS_MAX_RESPONSE_BYTES as u64
         {
@@ -2832,7 +2836,7 @@ impl SuiNode {
             body.extend_from_slice(&chunk);
         }
         let body = String::from_utf8(body).map_err(|_| SuiErrorKind::JWKRetrievalError)?;
-        parse_gcp_jwks(&body, GCP_ISS).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
+        parse_gcp_jwks(&body, GCP_ISS, metrics).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 }
 
@@ -2858,8 +2862,21 @@ impl SuiNode {
     }
 
     #[allow(unused_variables)]
-    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<Vec<(JwkId, JWK)>> {
+    async fn fetch_gcp_jwks(
+        _authority: AuthorityName,
+        _metrics: &SuiNodeMetrics,
+    ) -> SuiResult<Vec<(JwkId, JWK)>> {
         Ok(get_gcp_jwk_injector())
+    }
+}
+
+#[cfg(not(msim))]
+fn validate_gcp_jwks_http_status(status: reqwest::StatusCode) -> SuiResult<()> {
+    if status.is_success() {
+        Ok(())
+    } else {
+        warn!("GCP JWKS endpoint returned HTTP status {status}");
+        Err(sui_types::error::SuiErrorKind::JWKRetrievalError.into())
     }
 }
 
@@ -2867,7 +2884,7 @@ impl SuiNode {
 /// Only RSA keys with alg=RS256 are accepted. Rejects weak exponents (e < 65537)
 /// and out-of-bounds moduli at ingest.
 #[cfg(not(msim))]
-fn parse_gcp_jwks(body: &str, iss: &str) -> Result<Vec<(JwkId, JWK)>, serde_json::Error> {
+fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec<(JwkId, JWK)>> {
     use base64::Engine;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use sui_types::gcp_attestation::rsa_exponent_ok;
@@ -2877,40 +2894,63 @@ fn parse_gcp_jwks(body: &str, iss: &str) -> Result<Vec<(JwkId, JWK)>, serde_json
     const MAX_RSA_MODULUS_SIZE: usize = 512;
 
     let v: serde_json::Value = serde_json::from_str(body)?;
-    let keys = match v.get("keys").and_then(|k| k.as_array()) {
-        Some(arr) => arr.clone(),
-        None => return Ok(vec![]),
-    };
+    let keys = v
+        .get("keys")
+        .and_then(|keys| keys.as_array())
+        .ok_or_else(|| anyhow!("GCP JWKS response is missing the keys array"))?;
     let mut result = Vec::new();
-    for key in &keys {
+    for key in keys {
+        let reject = |reason: &str| {
+            let kid = key.get("kid").and_then(|value| value.as_str());
+            warn!(?kid, reason, "Rejecting invalid GCP JWK");
+            metrics.invalid_jwks.with_label_values(&["gcp"]).inc();
+        };
         let kty = key.get("kty").and_then(|v| v.as_str()).unwrap_or("");
         let alg = key.get("alg").and_then(|v| v.as_str()).unwrap_or("");
-        if kty != "RSA" || alg != "RS256" {
+        if kty != "RSA" {
+            reject("unsupported key type");
+            continue;
+        }
+        if alg != "RS256" {
+            reject("unsupported algorithm");
             continue;
         }
         let kid = match key.get("kid").and_then(|v| v.as_str()) {
             Some(k) => k.to_string(),
-            None => continue,
+            None => {
+                reject("missing kid");
+                continue;
+            }
         };
         let n = match key.get("n").and_then(|v| v.as_str()) {
             Some(n) => n.to_string(),
-            None => continue,
+            None => {
+                reject("missing modulus");
+                continue;
+            }
         };
         let e = match key.get("e").and_then(|v| v.as_str()) {
             Some(e) => e.to_string(),
-            None => continue,
+            None => {
+                reject("missing exponent");
+                continue;
+            }
         };
 
         let Ok(n_bytes) = URL_SAFE_NO_PAD.decode(n.as_bytes()) else {
+            reject("invalid modulus encoding");
             continue;
         };
         if n_bytes.len() < MIN_RSA_MODULUS_SIZE || n_bytes.len() > MAX_RSA_MODULUS_SIZE {
+            reject("modulus size out of bounds");
             continue;
         }
         let Ok(e_bytes) = URL_SAFE_NO_PAD.decode(e.as_bytes()) else {
+            reject("invalid exponent encoding");
             continue;
         };
         if !rsa_exponent_ok(&e_bytes) {
+            reject("weak or invalid exponent");
             continue;
         }
 
@@ -2925,6 +2965,9 @@ fn parse_gcp_jwks(body: &str, iss: &str) -> Result<Vec<(JwkId, JWK)>, serde_json
             alg: alg.to_string(),
         };
         result.push((id, jwk));
+    }
+    if result.is_empty() {
+        warn!("GCP JWKS response contained no usable keys");
     }
     Ok(result)
 }
@@ -3392,6 +3435,82 @@ mod tests {
     use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
     use sui_core::checkpoints::{CheckpointMetrics, CheckpointStore};
     use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEffectsDigest};
+
+    #[cfg(not(msim))]
+    mod gcp_jwks_tests {
+        use super::*;
+        use base64::Engine;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+        const TEST_GCP_ISSUER: &str = "https://confidentialcomputing.googleapis.com";
+
+        fn gcp_test_metrics() -> Arc<SuiNodeMetrics> {
+            Arc::new(SuiNodeMetrics::new(&Registry::new()))
+        }
+
+        fn valid_gcp_jwk_json() -> String {
+            serde_json::json!({
+                "keys": [{
+                    "kty": "RSA",
+                    "alg": "RS256",
+                    "kid": "gcp-key-1",
+                    "n": URL_SAFE_NO_PAD.encode(vec![0x80; 256]),
+                    "e": "AQAB"
+                }]
+            })
+            .to_string()
+        }
+
+        #[test]
+        fn parse_gcp_jwks_accepts_valid_rs256_key() {
+            let metrics = gcp_test_metrics();
+            let keys = parse_gcp_jwks(&valid_gcp_jwk_json(), TEST_GCP_ISSUER, &metrics).unwrap();
+
+            assert_eq!(keys.len(), 1);
+            assert_eq!(keys[0].0.iss, TEST_GCP_ISSUER);
+            assert_eq!(keys[0].0.kid, "gcp-key-1");
+            assert_eq!(keys[0].1.alg, "RS256");
+            assert_eq!(metrics.invalid_jwks.with_label_values(&["gcp"]).get(), 0);
+        }
+
+        #[test]
+        fn parse_gcp_jwks_counts_rejected_keys() {
+            let body = serde_json::json!({
+                "keys": [
+                    {"kty": "EC", "alg": "RS256", "kid": "wrong-kty", "n": "AA", "e": "AQAB"},
+                    {"kty": "RSA", "alg": "RS512", "kid": "wrong-alg", "n": "AA", "e": "AQAB"},
+                    {
+                        "kty": "RSA",
+                        "alg": "RS256",
+                        "kid": "weak-e",
+                        "n": URL_SAFE_NO_PAD.encode(vec![0x80; 256]),
+                        "e": "Aw"
+                    }
+                ]
+            })
+            .to_string();
+            let metrics = gcp_test_metrics();
+
+            assert!(
+                parse_gcp_jwks(&body, TEST_GCP_ISSUER, &metrics)
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(metrics.invalid_jwks.with_label_values(&["gcp"]).get(), 3);
+        }
+
+        #[test]
+        fn parse_gcp_jwks_rejects_missing_keys_array() {
+            let metrics = gcp_test_metrics();
+            assert!(parse_gcp_jwks("{}", TEST_GCP_ISSUER, &metrics).is_err());
+        }
+
+        #[test]
+        fn validate_gcp_jwks_http_status_rejects_errors() {
+            assert!(validate_gcp_jwks_http_status(reqwest::StatusCode::OK).is_ok());
+            assert!(validate_gcp_jwks_http_status(reqwest::StatusCode::BAD_GATEWAY).is_err());
+        }
+    }
 
     #[test]
     fn deny_config_broadcast_payload_decisions() {

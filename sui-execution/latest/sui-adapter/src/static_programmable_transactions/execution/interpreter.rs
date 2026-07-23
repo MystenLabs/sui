@@ -26,11 +26,11 @@ use std::{
     time::{Duration, Instant},
 };
 use sui_types::{
-    SUI_FRAMEWORK_ADDRESS,
     base_types::TxContext,
     error::ExecutionErrorTrait,
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
+    gcp_attestation::is_gcp_attestation_call,
     metrics::ExecutionMetrics,
     object::Owner,
 };
@@ -104,9 +104,11 @@ where
         matches!(
             &command.value.command,
             T::Command__::MoveCall(call)
-                if call.function.original_mid.address() == &SUI_FRAMEWORK_ADDRESS
-                    && call.function.original_mid.name().as_str() == "gcp_attestation"
-                    && call.function.name.as_str() == "verify_gcp_attestation"
+                if is_gcp_attestation_call(
+                    *call.function.original_mid.address(),
+                    call.function.original_mid.name().as_str(),
+                    call.function.name.as_str(),
+                )
         )
     });
     let mut context = Context::new(
