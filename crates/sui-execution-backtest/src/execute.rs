@@ -530,7 +530,7 @@ fn log_divergence(
         .collect();
     let missing_consensus: Vec<String> = executed
         .effects
-        .input_consensus_objects()
+        .accessed_consensus_objects()
         .into_iter()
         .filter_map(|ico| match ico {
             InputConsensusObject::Mutate((id, v, _))
