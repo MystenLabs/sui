@@ -499,6 +499,7 @@ impl WritebackCache {
     pub(crate) fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
+        initial_shared_version: SequenceNumber,
         version: SequenceNumber,
     ) -> Option<Object> {
         assert!(
@@ -508,11 +509,6 @@ impl WritebackCache {
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
             return Some(object);
         }
-        let initial_shared_version = ObjectCacheRead::get_object(self, object_id)
-            .expect("implicitly read system object must exist locally")
-            .owner()
-            .start_version()
-            .expect("implicitly read system object must be a consensus object");
         self.metrics
             .implicit_system_object_read_waits
             .with_label_values(&[object_id.to_string().as_str()])

@@ -827,3 +827,100 @@ async fn test_authority_txn_validation_pushback() {
     let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
     assert!(result.is_ok());
 }
+
+/// A system-object writer must be dispatched and execute even when every user-pool permit is
+/// held by a (parked) execution: the writer is what unblocks those executions, so it must never
+/// queue behind them — neither in the permit pool nor in the dispatch loop itself.
+#[tokio::test]
+async fn test_system_object_writer_not_starved_by_saturated_user_pool() {
+    use crate::execution_driver::execution_process_with_limits;
+    use crate::execution_scheduler::{PendingCertificate, PendingCertificateStats};
+    use crate::transaction_outputs::TransactionOutputs;
+    use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+    use sui_types::base_types::random_object_ref;
+    use sui_types::effects::TransactionEffects as EffectsForTest;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{ObjectArg, SharedObjectMutability, TransactionData};
+    use tokio::sync::{Semaphore, mpsc::unbounded_channel, oneshot};
+    use tokio::time::{Instant, timeout};
+
+    let authority = crate::authority::test_authority_builder::TestAuthorityBuilder::new()
+        .build()
+        .await;
+    let (sender, keypair) = get_key_pair::<AccountKeyPair>();
+
+    // Builds a certificate and marks it as already executed, so the driver task completes
+    // (and releases its permit) as soon as it gets to run, without real execution.
+    let make_executed_cert = |with_accumulator_input: bool| {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        if with_accumulator_input {
+            builder
+                .obj(ObjectArg::SharedObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: 1.into(),
+                    mutability: SharedObjectMutability::Mutable,
+                })
+                .unwrap();
+        }
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![random_object_ref()],
+            builder.finish(),
+            1_000_000,
+            1_000,
+        );
+        let tx = VerifiedTransaction::new_unchecked(to_sender_signed_transaction(data, &keypair));
+        let outputs = TransactionOutputs::new_for_testing(tx.clone(), EffectsForTest::default());
+        authority
+            .get_cache_writer()
+            .write_transaction_outputs(0, outputs.into());
+        VerifiedExecutableTransaction::new_from_consensus(tx, 0)
+    };
+    let pending = |certificate: VerifiedExecutableTransaction| PendingCertificate {
+        certificate,
+        execution_env: ExecutionEnv::new(),
+        stats: PendingCertificateStats {
+            enqueue_time: Instant::now(),
+            ready_time: Some(Instant::now()),
+        },
+        executing_guard: None,
+    };
+
+    let user_limit = Arc::new(Semaphore::new(1));
+    let writer_limit = Arc::new(Semaphore::new(1));
+    // Hold the only user permit, simulating a user execution parked waiting for a
+    // system-object write.
+    let _held_user_permit = user_limit.clone().acquire_owned().await.unwrap();
+
+    #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
+    let (tx_ready, rx_ready) = unbounded_channel();
+    let (_tx_shutdown, rx_shutdown) = oneshot::channel();
+    tokio::spawn(execution_process_with_limits(
+        Arc::downgrade(&authority),
+        rx_ready,
+        rx_shutdown,
+        user_limit.clone(),
+        writer_limit.clone(),
+    ));
+
+    // A user transaction that cannot get a permit, followed by a system-object writer.
+    tx_ready.send(pending(make_executed_cert(false))).unwrap();
+    tx_ready.send(pending(make_executed_cert(true))).unwrap();
+
+    // Both certificates must be dispatched despite the saturated user pool (the dispatch
+    // queue gauge is decremented once per dequeued certificate).
+    timeout(Duration::from_secs(10), async {
+        while authority.metrics.execution_driver_dispatch_queue.get() > -2 {
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("system-object writer was never dispatched: dispatch loop starved by user pool");
+
+    // The writer's task must complete and return its permit while the user pool is still
+    // saturated; acquiring it here proves the writer did not park on the user pool.
+    let _writer_permit = timeout(Duration::from_secs(10), writer_limit.acquire_owned())
+        .await
+        .expect("system-object writer never released its permit")
+        .unwrap();
+}
