@@ -160,7 +160,7 @@ Interact with gRPC by using [`grpcurl`](https://github.com/fullstorydev/grpcurl)
 ### List available gRPC services
 
 ```shell
-$ grpcurl <full node URL:port> list
+$ grpcurl <FULL_NODE_URL> list
 ```
 
 The port on Sui Foundation managed full nodes is `443`. 
@@ -168,47 +168,144 @@ The port on Sui Foundation managed full nodes is `443`.
 ### List available APIs in the `LedgerService`
 
 ```shell
-$ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
+$ grpcurl <FULL_NODE_URL> list sui.rpc.v2.LedgerService
 ```
 
 ### Get the events and effects details of a particular transaction
 
 ```shell
-$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
+$ grpcurl -d '{ "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4" }' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetTransaction
 ```
 
 ### Get the transactions in a particular checkpoint
 
 ```shell
-$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
+$ grpcurl -d '{ "sequence_number": "164329987", "read_mask": { "paths": ["transactions"]} }' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetCheckpoint
 ```
 
 ### Get the latest information for a coin type
 
 ```shell
-$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <full node URL:port> sui.rpc.v2.StateService/GetCoinInfo
+$ grpcurl -d '{ "coin_type": "0x2::sui::SUI" }' <FULL_NODE_URL> sui.rpc.v2.StateService/GetCoinInfo
 ```
 
 ### List the objects owned by a particular address
 
 ```shell
-$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
+$ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5" }' <FULL_NODE_URL> sui.rpc.v2.StateService/ListOwnedObjects
 ```
 
 ### List the dynamic fields in a particular object
 
 ```shell
-$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
+$ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <FULL_NODE_URL> sui.rpc.v2.StateService/ListDynamicFields
+```
+
+### List transactions matching a filter
+
+Use `LedgerService.ListTransactions` to query transactions over a checkpoint range with a `TransactionFilter`. The service returns a server-side stream.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "sender": { "address": "<ADDRESS>" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListTransactions
+```
+
+### List events matching a filter
+
+Use `LedgerService.ListEvents` to query events over a checkpoint range with an `EventFilter`.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListEvents
+```
+
+### List checkpoints
+
+Use `LedgerService.ListCheckpoints` to query a range of checkpoints.
+
+Run the following command:
+
+```shell
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000010",
+  "read_mask": { "paths": ["digest", "summary"] }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListCheckpoints
 ```
 
 ## Access streaming data with Buf
 
-`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
+`grpcurl` handles server-side streaming for finite calls like `LedgerService.List*`. For indefinite `SubscriptionService` streams, the [Buf CLI](https://buf.build/docs/cli/) provides better timeout and reconnection control.
+
+### Subscribe to checkpoints
 
 ```shell
-$ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
+$ buf curl --protocol grpc https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
 ```
 
+### Subscribe to transactions with a filter
+
+Use `SubscriptionService.SubscribeTransactions` to stream transactions that match a `TransactionFilter` from the current tip of the chain.
+
+Run the following command:
+
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "sender": { "address": "<ADDRESS>" }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
+```
+
+### Subscribe to events with a filter
+
+Use `SubscriptionService.SubscribeEvents` to stream events that match an `EventFilter` from the current tip of the chain.
+
+Run the following command:
+
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
+```
 
 
 ## Build gRPC clients
@@ -272,7 +369,7 @@ const LedgerService = suiProto.sui.rpc.v2.LedgerService;
 
 // Create gRPC client
 const client = new LedgerService(
-  '<full node URL>:443',
+  '<FULL_NODE_URL>:443',
   grpc.credentials.createSsl()
 );
 
@@ -364,7 +461,7 @@ import (
 func main() {
     // Set up gRPC connection with TLS (port 443)
 		creds := credentials.NewTLS(&tls.Config{})
-		conn, err := grpc.Dial("<full node URL>:443", grpc.WithTransportCredentials(creds))
+		conn, err := grpc.Dial("<FULL_NODE_URL>:443", grpc.WithTransportCredentials(creds))
 		if err != nil {
 			log.Fatalf("failed to connect: %v", err)
 		}
@@ -446,7 +543,7 @@ from sui.rpc.v2 import ledger_service_pb2, ledger_service_pb2_grpc
 
 def main():
     # Create secure channel to port 443
-    channel = grpc.secure_channel("<full node URL>:443", grpc.ssl_channel_credentials())
+    channel = grpc.secure_channel("<FULL_NODE_URL>:443", grpc.ssl_channel_credentials())
     stub = ledger_service_pb2_grpc.LedgerServiceStub(channel)
 
     # Sample transaction digest in Base58 format
