@@ -110,20 +110,18 @@ pub mod configs {
     }
 }
 
-thread_local! {
-    static NODE_COUNT: AtomicUsize = const { AtomicUsize::new(0) };
-}
+static NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub struct NodeLeakDetector(());
 
 impl NodeLeakDetector {
     pub fn new() -> Self {
-        NODE_COUNT.with(|c| c.fetch_add(1, Ordering::SeqCst));
+        NODE_COUNT.fetch_add(1, Ordering::SeqCst);
         Self(())
     }
 
     pub fn get_current_node_count() -> usize {
-        NODE_COUNT.with(|c| c.load(Ordering::SeqCst))
+        NODE_COUNT.load(Ordering::SeqCst)
     }
 }
 
@@ -135,7 +133,7 @@ impl Default for NodeLeakDetector {
 
 impl Drop for NodeLeakDetector {
     fn drop(&mut self) {
-        NODE_COUNT.with(|c| c.fetch_sub(1, Ordering::SeqCst));
+        NODE_COUNT.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -162,49 +160,45 @@ pub mod random {
 
     use rand_crate::{Rng, SeedableRng, rngs::SmallRng, thread_rng};
     use serde::Serialize;
-    use std::cell::RefCell;
     use std::collections::HashSet;
     use std::hash::Hash;
+    use std::sync::{Mutex, OnceLock};
 
     /// Given a value, produce a random probability using the value as a seed, with
     /// an additional seed that is constant only for the current test thread.
     pub fn deterministic_probability<T: Hash>(value: T, chance: f32) -> bool {
-        thread_local! {
-            // a random seed that is shared by the whole test process, so that equal `value`
-            // inputs produce different outputs when the test seed changes
-            static SEED: u64 = thread_rng().r#gen();
-        }
+        // a random seed that is shared by the whole test process, so that equal `value`
+        // inputs produce different outputs when the test seed changes
+        static SEED: OnceLock<u64> = OnceLock::new();
+        let seed = *SEED.get_or_init(|| thread_rng().r#gen());
 
-        chance
-            > SEED.with(|seed| {
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                seed.hash(&mut hasher);
-                value.hash(&mut hasher);
-                let mut rng = SmallRng::seed_from_u64(hasher.finish());
-                rng.gen_range(0.0..1.0)
-            })
+        chance > {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            seed.hash(&mut hasher);
+            value.hash(&mut hasher);
+            let mut rng = SmallRng::seed_from_u64(hasher.finish());
+            rng.gen_range(0.0..1.0)
+        }
     }
 
     /// Like deterministic_probability, but only returns true once for each unique value. May eventually
     /// consume all memory if there are a large number of unique, failing values.
     pub fn deterministic_probability_once<T: Hash + Serialize>(value: T, chance: f32) -> bool {
-        thread_local! {
-            static FAILING_VALUES: RefCell<HashSet<(msim::task::NodeId, Vec<u8>)>> = RefCell::new(HashSet::new());
-        }
+        static FAILING_VALUES: Mutex<Option<HashSet<(msim::task::NodeId, Vec<u8>)>>> =
+            Mutex::new(None);
 
         let bytes = bcs::to_bytes(&value).unwrap();
         let key = (current_simnode_id(), bytes);
 
-        FAILING_VALUES.with(|failing_values| {
-            let mut failing_values = failing_values.borrow_mut();
-            if failing_values.contains(&key) {
-                false
-            } else if deterministic_probability(value, chance) {
-                failing_values.insert(key);
-                true
-            } else {
-                false
-            }
-        })
+        let mut guard = FAILING_VALUES.lock().unwrap();
+        let failing_values = guard.get_or_insert_with(HashSet::new);
+        if failing_values.contains(&key) {
+            false
+        } else if deterministic_probability(value, chance) {
+            failing_values.insert(key);
+            true
+        } else {
+            false
+        }
     }
 }

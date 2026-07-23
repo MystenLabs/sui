@@ -9,9 +9,6 @@ use std::{
     },
 };
 
-#[cfg(msim)]
-use std::cell::RefCell;
-#[cfg(not(msim))]
 use std::sync::Mutex;
 
 use clap::*;
@@ -2361,14 +2358,7 @@ impl ProtocolConfig {
     }
 }
 
-#[cfg(not(msim))]
 static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
-
-// Use a thread local in sim tests for test isolation.
-#[cfg(msim)]
-thread_local! {
-    static POISON_VERSION_METHODS: AtomicBool = AtomicBool::new(false);
-}
 
 // Instantiations for each protocol version.
 impl ProtocolConfig {
@@ -2421,24 +2411,12 @@ impl ProtocolConfig {
         }
     }
 
-    #[cfg(not(msim))]
     pub fn poison_get_for_min_version() {
         POISON_VERSION_METHODS.store(true, Ordering::Relaxed);
     }
 
-    #[cfg(not(msim))]
     fn load_poison_get_for_min_version() -> bool {
         POISON_VERSION_METHODS.load(Ordering::Relaxed)
-    }
-
-    #[cfg(msim)]
-    pub fn poison_get_for_min_version() {
-        POISON_VERSION_METHODS.with(|p| p.store(true, Ordering::Relaxed));
-    }
-
-    #[cfg(msim)]
-    fn load_poison_get_for_min_version() -> bool {
-        POISON_VERSION_METHODS.with(|p| p.load(Ordering::Relaxed))
     }
 
     /// Convenience to get the constants at the current minimum supported version.
@@ -4727,7 +4705,6 @@ impl ProtocolConfig {
     /// Override one or more settings in the config, for testing.
     /// This must be called at the beginning of the test, before get_for_(min|max)_version is
     /// called, since those functions cache their return value.
-    #[cfg(not(msim))]
     pub fn apply_overrides_for_testing(
         override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + Sync + 'static,
     ) -> OverrideGuard {
@@ -4737,22 +4714,6 @@ impl ProtocolConfig {
         OverrideGuard
     }
 
-    /// Override one or more settings in the config, for testing.
-    /// This must be called at the beginning of the test, before get_for_(min|max)_version is
-    /// called, since those functions cache their return value.
-    #[cfg(msim)]
-    pub fn apply_overrides_for_testing(
-        override_fn: impl Fn(ProtocolVersion, Self) -> Self + Send + 'static,
-    ) -> OverrideGuard {
-        CONFIG_OVERRIDE.with(|ovr| {
-            let mut cur = ovr.borrow_mut();
-            assert!(cur.is_none(), "config override already present");
-            *cur = Some(Box::new(override_fn));
-            OverrideGuard
-        })
-    }
-
-    #[cfg(not(msim))]
     fn apply_config_override(version: ProtocolVersion, mut ret: Self) -> Self {
         if let Some(override_fn) = CONFIG_OVERRIDE.lock().unwrap().as_ref() {
             warn!(
@@ -4761,20 +4722,6 @@ impl ProtocolConfig {
             ret = override_fn(version, ret);
         }
         ret
-    }
-
-    #[cfg(msim)]
-    fn apply_config_override(version: ProtocolVersion, ret: Self) -> Self {
-        CONFIG_OVERRIDE.with(|ovr| {
-            if let Some(override_fn) = &*ovr.borrow() {
-                warn!(
-                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
-                );
-                override_fn(version, ret)
-            } else {
-                ret
-            }
-        })
     }
 }
 
@@ -4865,38 +4812,17 @@ impl ProtocolConfig {
     }
 }
 
-#[cfg(not(msim))]
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync;
 
-#[cfg(not(msim))]
 static CONFIG_OVERRIDE: Mutex<Option<Box<OverrideFn>>> = Mutex::new(None);
-
-#[cfg(msim)]
-type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
-
-#[cfg(msim)]
-thread_local! {
-    static CONFIG_OVERRIDE: RefCell<Option<Box<OverrideFn>>> = RefCell::new(None);
-}
 
 #[must_use]
 pub struct OverrideGuard;
 
-#[cfg(not(msim))]
 impl Drop for OverrideGuard {
     fn drop(&mut self) {
         info!("restoring override fn");
         *CONFIG_OVERRIDE.lock().unwrap() = None;
-    }
-}
-
-#[cfg(msim)]
-impl Drop for OverrideGuard {
-    fn drop(&mut self) {
-        info!("restoring override fn");
-        CONFIG_OVERRIDE.with(|ovr| {
-            *ovr.borrow_mut() = None;
-        });
     }
 }
 

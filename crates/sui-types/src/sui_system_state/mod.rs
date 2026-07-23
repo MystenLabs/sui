@@ -463,16 +463,12 @@ pub mod advance_epoch_result_injection {
         committee::EpochId, error::ExecutionError, execution::ResultWithTimings,
         execution_status::ExecutionErrorKind,
     };
-    use std::cell::RefCell;
-
-    thread_local! {
-        /// Override the result of advance_epoch in the range [start, end).
-        static OVERRIDE: RefCell<Option<(EpochId, EpochId)>>  = RefCell::new(None);
-    }
+    /// Override the result of advance_epoch in the range [start, end).
+    static OVERRIDE: std::sync::Mutex<Option<(EpochId, EpochId)>> = std::sync::Mutex::new(None);
 
     /// Override the result of advance_epoch transaction if new epoch is in the provided range [start, end).
     pub fn set_override(value: Option<(EpochId, EpochId)>) {
-        OVERRIDE.with(|o| *o.borrow_mut() = value);
+        *OVERRIDE.lock().unwrap() = value;
     }
 
     /// This function is used to modify the result of advance_epoch transaction for testing.
@@ -481,7 +477,7 @@ pub mod advance_epoch_result_injection {
         result: ResultWithTimings<(), ExecutionError>,
         current_epoch: EpochId,
     ) -> ResultWithTimings<(), ExecutionError> {
-        if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
+        if let Some((start, end)) = *OVERRIDE.lock().unwrap() {
             if current_epoch >= start && current_epoch < end {
                 return Err((
                     ExecutionError::new(ExecutionErrorKind::FunctionNotFound, None),
@@ -498,7 +494,7 @@ pub mod advance_epoch_result_injection {
         result: ResultWithTimings<(), E>,
         current_epoch: EpochId,
     ) -> ResultWithTimings<(), E> {
-        if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
+        if let Some((start, end)) = *OVERRIDE.lock().unwrap() {
             if current_epoch >= start && current_epoch < end {
                 return Err((
                     // TODO use E constructor
@@ -515,7 +511,7 @@ pub mod advance_epoch_result_injection {
         result: Result<(), ExecutionError>,
         current_epoch: EpochId,
     ) -> Result<(), ExecutionError> {
-        if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
+        if let Some((start, end)) = *OVERRIDE.lock().unwrap() {
             if current_epoch >= start && current_epoch < end {
                 return Err(ExecutionError::new(
                     ExecutionErrorKind::FunctionNotFound,
