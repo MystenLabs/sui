@@ -1849,10 +1849,10 @@ impl SuiClientCommands {
                 let publication =
                     read_publication::<SuiFlavor>(&package_path, &environment, &flavor)
                         .await?
-                        .ok_or_else(|| {
-                            anyhow!(
+                        .with_context(|| {
+                            format!(
                                 "package at {} records no publication for environment `{}`; \
-                             nothing to verify against",
+                                 nothing to verify against",
                                 package_path.display(),
                                 environment.name(),
                             )

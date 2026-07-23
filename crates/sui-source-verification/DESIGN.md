@@ -9,7 +9,8 @@ what is on chain:
 ```
 verify_source(source_path, publication, toolchain_override, env, client, ...)
   ├─ resolve the toolchain version   (publication metadata, the legacy Move.lock, or the override)
-  ├─ ensure that toolchain's binary  (cached under $MOVE_HOME/binaries, downloaded if absent)
+  ├─ ensure that toolchain's binary  (cached under the platform cache dir at
+  │                                    `sui/source-verification/binaries/<version>`, downloaded if absent)
   ├─ rebuild the source with it      (`move build --dump-bytecode-as-base64`, in a subprocess)
   ├─ fetch the on-chain package      (modules, linkage table, original id) at the publication's address
   ├─ check the original id matches   (the package there is the one the source claims to be)
@@ -69,10 +70,12 @@ not have tree-shaken unused dependencies out. So the comparison is an intersecti
 2. Intersect the two sets of original ids.
 3. For every original id in the intersection, require the storage ids to be equal.
 
-An original id present in only one linkage is ignored. That is sound because the module bytecode is
-also compared: if the root bytecode matches and every shared dependency resolves to the same version,
-the set of dependencies reachable from the root is identical, so anything appearing in only one
-linkage is unreachable, and therefore unused.
+An original id present in only one linkage is reported as a warning rather than failing verification.
+If the root bytecode matches and every shared dependency resolves to the same version, the set of
+dependencies reachable from the root is identical, so a one-sided entry is not reachable from the root
+and cannot change how the root itself executes. It is not entirely inert, though: a package's linkage
+table imposes version constraints on packages that later link *it*, so a one-sided entry can still
+matter to a downstream consumer, which is why the verifier surfaces it instead of dropping it.
 
 ## Security
 
@@ -93,12 +96,13 @@ Two failure modes drive the design:
 
 - **The wrong linkage.** Module bytecode does not by itself pin the *versions* of the dependencies a
   package calls into — that is the linkage table's job — so a package whose modules match but whose
-  linkage does not is running against different dependency code. Sui's linkage is flat: the root
-  package's table alone chooses the version of every transitive dependency, and a dependency's own
-  table is ignored at runtime. The verifier therefore compares the whole table, not just the root's
-  direct dependencies, which is what catches a transitive version swap; the intersection above drops
-  only *unused* (tree-shaken) entries, and every entry actually reachable given matching bytecode must
-  agree.
+  linkage does not is running against different dependency code. Sui's linkage is flat: when a package
+  executes, its own root table chooses the version of every transitive dependency it calls into (a
+  dependency's table is not ignored in general — it constrains the linkage of packages built on top of
+  it — but it does not override the executing root's table). The verifier therefore compares the whole
+  table, not just the root's direct dependencies, which is what catches a transitive version swap;
+  every entry present on both sides must agree, and an entry on only one side (unreachable from the
+  root itself) is reported as a warning.
 
 ## What a package must do to be verifiable
 

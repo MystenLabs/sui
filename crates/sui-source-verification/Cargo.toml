@@ -15,6 +15,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow.workspace = true
 colored.workspace = true
+dirs.workspace = true
 fastcrypto.workspace = true
 flate2.workspace = true
 futures.workspace = true

@@ -3,10 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use colored::Colorize;
 use futures::future;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_symbol_pool::Symbol;
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
 
@@ -42,10 +42,10 @@ fn rewrite_modules(
     modules: Vec<CompiledModule>,
     original_id: AccountAddress,
     errs: &mut Vec<Error>,
-) -> BTreeMap<Symbol, CompiledModule> {
+) -> BTreeMap<String, CompiledModule> {
     let mut out = BTreeMap::new();
     for module in modules {
-        let name = Symbol::from(module.self_id().name().as_str());
+        let name = module.self_id().name().as_str().to_string();
         match substitute_root_address(module, original_id) {
             Ok(m) => {
                 out.insert(name, m);
@@ -58,8 +58,8 @@ fn rewrite_modules(
 
 /// Require the generated and on-chain module sets to be identical and byte-for-byte equal.
 fn compare_modules(
-    generated: BTreeMap<Symbol, CompiledModule>,
-    mut onchain: BTreeMap<Symbol, CompiledModule>,
+    generated: BTreeMap<String, CompiledModule>,
+    mut onchain: BTreeMap<String, CompiledModule>,
     errs: &mut Vec<Error>,
 ) {
     for (name, generated_module) in generated {
@@ -76,9 +76,10 @@ fn compare_modules(
 
 /// Require that every dependency shared by both linkages resolves to the same storage id. The
 /// modules are compared separately and must match, so the two packages reference the same
-/// dependencies; a dependency that appears in only one linkage is therefore one the code does not
-/// reference (tree-shaking kept it on one side but not the other) and is ignored. A shared
-/// dependency at differing storage ids is a real version mismatch.
+/// dependencies; a dependency that appears in only one linkage is one the code does not reference
+/// (tree-shaking kept it on one side but not the other), which does not change how this package runs
+/// but is warned about because its linkage constrains packages that depend on it. A shared dependency
+/// at differing storage ids is a real version mismatch.
 async fn compare_linkage(
     client: &Client,
     generated: &[ObjectID],
@@ -86,27 +87,43 @@ async fn compare_linkage(
     errs: &mut Vec<Error>,
 ) {
     let generated = fetch_generated_linkage(client, generated, errs).await;
-    diff_linkage(&generated, onchain, errs);
+    for original in diff_linkage(&generated, onchain, errs) {
+        eprintln!(
+            "{} dependency {original} appears in only one linkage table; it does not affect this \
+             package's own execution, but can impose version constraints on packages that depend on it",
+            "WARNING".bold().yellow(),
+        );
+    }
 }
 
-/// Compare two `original id -> storage id` linkage maps: a shared original at differing storage
-/// ids is a mismatch; an original present in only one map is ignored (unused).
+/// Compare two `original id -> storage id` linkage maps. A shared original at differing storage ids
+/// is pushed to `errs` as a mismatch; the originals present in only one map are returned, so the
+/// caller can warn about them.
 fn diff_linkage(
     generated: &BTreeMap<AccountAddress, AccountAddress>,
     onchain: &BTreeMap<AccountAddress, AccountAddress>,
     errs: &mut Vec<Error>,
-) {
+) -> Vec<AccountAddress> {
+    let mut one_sided = vec![];
     for (original, on_chain_storage) in onchain {
-        if let Some(source_storage) = generated.get(original)
-            && source_storage != on_chain_storage
-        {
-            errs.push(Error::LinkageVersionMismatch {
-                original: *original,
-                on_chain: *on_chain_storage,
-                in_source: *source_storage,
-            });
+        match generated.get(original) {
+            Some(source_storage) if source_storage != on_chain_storage => {
+                errs.push(Error::LinkageVersionMismatch {
+                    original: *original,
+                    on_chain: *on_chain_storage,
+                    in_source: *source_storage,
+                });
+            }
+            Some(_) => {}
+            None => one_sided.push(*original),
         }
     }
+    for original in generated.keys() {
+        if !onchain.contains_key(original) {
+            one_sided.push(*original);
+        }
+    }
+    one_sided
 }
 
 /// Resolve the generated linkage's storage ids to `original id -> storage id` by fetching each
@@ -177,8 +194,8 @@ mod tests {
         AccountAddress::new(bytes)
     }
 
-    fn sym(s: &str) -> Symbol {
-        Symbol::from(s)
+    fn sym(s: &str) -> String {
+        s.to_string()
     }
 
     #[test]
@@ -236,13 +253,17 @@ mod tests {
     }
 
     #[test]
-    fn diff_linkage_accepts_matching_and_ignores_one_sided() {
-        // Shared dep at the same version; plus one generated-only and one on-chain-only dep.
+    fn diff_linkage_warns_on_one_sided_without_error() {
+        // Shared dep at the same version; plus one generated-only (0x2) and one on-chain-only (0x3).
         let generated = BTreeMap::from([(addr(1), addr(10)), (addr(2), addr(20))]);
         let onchain = BTreeMap::from([(addr(1), addr(10)), (addr(3), addr(30))]);
         let mut errs = vec![];
-        diff_linkage(&generated, &onchain, &mut errs);
+        let mut one_sided = diff_linkage(&generated, &onchain, &mut errs);
+        one_sided.sort();
+        // The shared, matching dep is fine; the two one-sided deps are returned (to be warned about),
+        // not errored on.
         assert!(errs.is_empty(), "{errs:?}");
+        assert_eq!(one_sided, vec![addr(2), addr(3)]);
     }
 
     #[test]

@@ -30,7 +30,7 @@ struct DumpOutput {
 /// dependencies via `--dump-bytecode-as-base64`.
 ///
 /// The flag set is adapted to what `binary` supports (probed from its `--help`): older binaries lack
-/// `--no-tree-shaking` (their output is whatever they shake) and the `--build-env` selector.
+/// `--no-tree-shaking` (their output includes all dependencies) and the `--build-env` selector.
 ///
 /// `--with-unpublished-dependencies` is never passed. Up to v1.66 it means "emit only the modules
 /// still at `0x0`", which is empty for any package that has been published — precisely the packages

@@ -17124,6 +17124,7 @@ dependencies = [
  "anyhow",
  "colored",
  "datatest-stable",
+ "dirs 4.0.0",
  "expect-test",
  "fastcrypto",
  "flate2",

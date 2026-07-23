@@ -16,8 +16,8 @@ use crate::error::Error;
 
 const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Resolve the path to a `sui` binary for `version`, downloading and caching it under
-/// `$MOVE_HOME/binaries/<version>` if necessary.
+/// Resolve the path to a `sui` binary for `version`, downloading and caching it under the user's
+/// cache directory (one subdirectory per version) if necessary.
 ///
 /// If `version` is the version of the running binary, the running executable is used directly
 /// (avoiding a redundant download of the version already in hand). This is also the precache /
@@ -31,13 +31,9 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
     }
 
     let platform = detect_platform(version)?;
-    let binary_name = if platform == "windows-x86_64" {
-        "sui.exe"
-    } else {
-        "sui"
-    };
+    let binary_name = platform.binary_name();
 
-    let cache_root = PathBuf::from_iter([&*MOVE_HOME, "binaries"]);
+    let cache_root = binary_cache_dir();
     let version_dir = cache_root.join(version);
     let canonical = version_dir.join("target").join("release").join(binary_name);
 
@@ -45,12 +41,17 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
         return Ok(canonical);
     }
 
-    download_and_install(version, &platform, binary_name, &cache_root, &version_dir).map_err(
-        |e| Error::BinaryDownload {
-            version: version.to_string(),
-            message: e.to_string(),
-        },
-    )?;
+    download_and_install(
+        version,
+        platform.artifact_str(),
+        binary_name,
+        &cache_root,
+        &version_dir,
+    )
+    .map_err(|e| Error::BinaryDownload {
+        version: version.to_string(),
+        message: e.to_string(),
+    })?;
 
     Ok(canonical)
 }
@@ -191,27 +192,61 @@ fn find_binary(root: &Path, platform: &str) -> Option<PathBuf> {
     None
 }
 
-/// The release-artifact platform string for the current OS/architecture, or an error explaining
-/// how to sideload a binary if there is no downloadable release for this platform.
-fn detect_platform(version: &str) -> Result<String, Error> {
-    let s = match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => "macos-arm64",
-        ("macos", "x86_64") => "macos-x86_64",
-        ("linux", "x86_64") => "ubuntu-x86_64",
-        ("windows", "x86_64") => "windows-x86_64",
-        (os, arch) => {
-            return Err(Error::BinaryDownload {
-                version: version.to_string(),
-                message: format!(
-                    "no downloadable sui {version} release for your platform \
-                     (OS: {os}, architecture: {arch}); place a matching binary in \
-                     {}/binaries/{version}/target/release/",
-                    &*MOVE_HOME,
-                ),
-            });
+/// A platform for which `sui` release binaries are published.
+enum Platform {
+    MacosArm64,
+    MacosX86_64,
+    UbuntuX86_64,
+    WindowsX86_64,
+}
+
+impl Platform {
+    /// The platform string used in release download URLs.
+    fn artifact_str(&self) -> &'static str {
+        match self {
+            Platform::MacosArm64 => "macos-arm64",
+            Platform::MacosX86_64 => "macos-x86_64",
+            Platform::UbuntuX86_64 => "ubuntu-x86_64",
+            Platform::WindowsX86_64 => "windows-x86_64",
         }
-    };
-    Ok(s.into())
+    }
+
+    /// The name of the `sui` executable on this platform.
+    fn binary_name(&self) -> &'static str {
+        match self {
+            Platform::WindowsX86_64 => "sui.exe",
+            _ => "sui",
+        }
+    }
+}
+
+/// The [`Platform`] for the current OS/architecture, or an error explaining how to sideload a binary
+/// if there is no downloadable release for this platform.
+fn detect_platform(version: &str) -> Result<Platform, Error> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => Ok(Platform::MacosArm64),
+        ("macos", "x86_64") => Ok(Platform::MacosX86_64),
+        ("linux", "x86_64") => Ok(Platform::UbuntuX86_64),
+        ("windows", "x86_64") => Ok(Platform::WindowsX86_64),
+        (os, arch) => Err(Error::BinaryDownload {
+            version: version.to_string(),
+            message: format!(
+                "no downloadable sui {version} release for your platform \
+                 (OS: {os}, architecture: {arch})"
+            ),
+        }),
+    }
+}
+
+/// Directory under which downloaded `sui` binaries are cached, one subdirectory per version. Uses the
+/// platform cache directory (as other Sui tooling does), falling back to `$MOVE_HOME` if it cannot be
+/// determined.
+fn binary_cache_dir() -> PathBuf {
+    dirs::cache_dir()
+        .unwrap_or_else(|| PathBuf::from(&*MOVE_HOME))
+        .join("sui")
+        .join("source-verification")
+        .join("binaries")
 }
 
 #[cfg(unix)]
@@ -224,11 +259,9 @@ fn set_executable_permission(path: &OsStr) -> anyhow::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn set_executable_permission(path: &OsStr) -> anyhow::Result<()> {
-    use std::process::Command;
-    Command::new("icacls")
-        .args([path, OsStr::new("/grant"), OsStr::new("Everyone:(RX)")])
-        .status()?;
+fn set_executable_permission(_path: &OsStr) -> anyhow::Result<()> {
+    // On Windows an executable is runnable by virtue of its extension, and the freshly-written file
+    // is already owned by the current user, so there is no permission bit to set.
     Ok(())
 }
 
