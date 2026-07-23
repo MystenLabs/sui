@@ -11,7 +11,7 @@ Individual preferences supersede and extend project preferences:
 
 ### License comments
 
-All new files must start with the following license in comments at the top of the file:
+All applicable source code files must start with the following license in comments at the top of the file:
 
     Copyright (c) Mysten Labs, Inc.
     SPDX-License-Identifier: Apache-2.0
@@ -22,7 +22,7 @@ All new files must start with the following license in comments at the top of th
 # Build a specific crate. Generally don't need to do release build.
 cargo build -p sui-core
 
-# Check code without building (preferred)
+# Check code without code generation or linking (preferred)
 cargo check
 ```
 
@@ -50,7 +50,7 @@ SUI_SKIP_SIMTESTS=1 cargo nextest run -p <crate-name>
 ./scripts/lint.sh
 
 # For formatting:
-cargo fmt --all -- --check
+cargo fmt --all
 
 # Lint a single crate in `crates/`, `consensus/`, `sui-execution/`:
 cargo xclippy -p <crate-name>
@@ -88,10 +88,10 @@ sui/
 3. **Transaction Flow**:
    - User → Fullnode → Validators
    - All user transactions require consensus voting and commit before execution.
-   - Pre and post-consensus fastpath executions have been removed. Surviving mentions of "fastpath" either refer to consensus transaction-voting logic, or should be removed. There is no longer a separate execution path called fastpath.
+   - Pre and post-consensus fastpath executions have been removed. Surviving mentions of "fastpath" refer to consensus transaction-voting logic, owned object logic, or should be reworded or removed. There is no longer a separate execution path called fastpath.
 
 4. **Storage Layer**:
-   - Uses RocksDB for persistent storage
+   - Uses RocksDB or Tidehunter for persistent storage on Sui nodes.
    - Separate stores for permanent, per-epoch, checkpoint, consensus and indexing data
 
 5. **Execution Pipeline**:
@@ -99,17 +99,25 @@ sui/
    - Move VM executes smart contracts with gas metering
    - Parallel execution for non-conflicting transactions
 
+## Development Notes
+
+### Build flags
+
+Sui binaries like sui-node built with `release` profile have `panic=abort` enabled.
+
 ### Test-Only Code
 
 Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(feature = "testing")]` for test-only code that must be callable cross-crate. For the `testing` feature: define `testing = []` in the crate's `Cargo.toml`, and callers must propagate it via `features = ["testing"]` in their dependency declaration.
 
-### Development Notes
-1. **Testing**:
-   - Use `#[tokio::test]` for async tests, not `#[test]`, to ensure the tests don't panic in simtest mode.
-2. **Protocol Config Changes**:
-   - When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
-3. **Raising a PR**:
-   - When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
+Use `#[tokio::test]` for async tests, not `#[test]`.
+
+### Protocol Config Changes:
+
+When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
+
+### Raising a PR:
+
+When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
 
 ### Comment Writing Guidelines
 

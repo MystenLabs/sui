@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use futures::StreamExt;
 use futures::stream::BoxStream;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
@@ -57,15 +58,13 @@ use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
+use super::object_set::fetch_object_sets_for_chunk;
+use super::object_set::mask_requests_object_set;
 
 const METHOD: &str = "list_transactions";
 
 fn resolution(read_mask: &FieldMaskTree) -> &'static str {
-    // This tier matches the object-set fetch predicate in
-    // `render_executed_transaction`.
-    if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-        || read_mask.contains(ExecutedTransaction::EFFECTS_FIELD.name)
-    {
+    if mask_requests_object_set(read_mask) {
         "full_objects"
     } else if should_render_transaction_contents(read_mask) {
         "full"
@@ -544,20 +543,20 @@ fn render_transaction_rows(
     cancel: &CancellationToken,
     metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
-    let mut transaction_reads = if render_contents {
-        let digests = rows
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut transaction_reads_and_objects = if render_contents {
+        let items = rows
             .iter()
-            .map(|row| {
-                let digest: Digest = row.digest.into();
-                digest
-            })
-            .collect::<Vec<_>>();
-        service
-            .reader
-            .multi_get_transaction_reads(&digests)?
-            .into_iter()
+            .map(|row| (row.digest.into(), row.checkpoint_number))
+            .collect::<Vec<(Digest, u64)>>();
+        let reads = service.reader.multi_get_transaction_reads(&items)?;
+        let object_sets = fetch_object_sets_for_chunk(&service.reader, &reads, read_mask)?;
+        reads.into_iter().zip_debug_eq(object_sets)
     } else {
-        Vec::new().into_iter()
+        Vec::new().into_iter().zip_debug_eq(Vec::new())
     };
 
     let mut items = Vec::with_capacity(rows.len());
@@ -583,12 +582,13 @@ fn render_transaction_rows(
             checkpoint_boundary,
         );
         let response = if render_contents {
-            let transaction_read = transaction_reads
+            let (transaction_read, object_set) = transaction_reads_and_objects
                 .next()
-                .expect("transaction reads match tx_seq rows");
+                .expect("transaction reads and object sets match tx_seq rows");
             let transaction = render_executed_transaction(
                 service,
                 transaction_read,
+                &object_set,
                 row.checkpoint_number,
                 read_mask,
             )?;
@@ -707,6 +707,8 @@ mod tests {
         for (mask, expected) in [
             ("digest", "digest"),
             ("transaction", "full"),
+            ("objects", "full_objects"),
+            ("objects.objects.object_id", "full_objects"),
             ("balance_changes", "full_objects"),
             ("effects", "full_objects"),
             ("transaction,effects", "full_objects"),

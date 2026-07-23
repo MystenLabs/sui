@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::{Arc, Weak},
     time::Duration,
 };
 
@@ -14,7 +11,8 @@ use futures::StreamExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
 use tokio::{
-    task::{JoinHandle, JoinSet},
+    sync::oneshot,
+    task::{JoinError, JoinHandle, JoinSet},
     time::sleep,
 };
 use tracing::{debug, info, warn};
@@ -26,6 +24,7 @@ use crate::{
     dag_state::DagState,
     error::ConsensusError,
     network::{ObserverNetworkClient, ObserverNetworkService, PeerId, RandomnessSignatureHandler},
+    task::{join_and_propagate_panic, reap_finished_task, shutdown_join_set},
 };
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
@@ -37,8 +36,41 @@ pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetwor
     observer_service: Arc<S>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
-    subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
+    subscriptions: Mutex<Subscriptions>,
     randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
+}
+
+/// The current and retired subscriptions are tracked under a single lock, so replacing the
+/// current subscription and retiring the previous one is atomic w.r.t. concurrent subscribe()
+/// and stop() calls.
+struct Subscriptions {
+    current: Option<ObserverSubscription>,
+    // Retain replaced subscription tasks so stop() can await them and propagate panics.
+    retired: Vec<ObserverSubscription>,
+}
+
+struct ObserverSubscription {
+    // Signals the subscription task to stop cooperatively, instead of aborting it. Aborting
+    // would drop the block handler JoinSet owned by the task, which aborts the handlers without
+    // awaiting them: they could briefly keep running (holding strong references to the observer
+    // service) and any panic recorded in the set would be discarded. On this signal the task
+    // stops streaming, then cancels the remaining block handlers and awaits their termination,
+    // so join() returns only after no block handler is running and recorded handler panics
+    // have propagated.
+    shutdown_sender: Option<oneshot::Sender<()>>,
+    subscription_task: JoinHandle<()>,
+}
+
+impl ObserverSubscription {
+    fn request_shutdown(&mut self) {
+        if let Some(sender) = self.shutdown_sender.take() {
+            let _ = sender.send(());
+        }
+    }
+
+    async fn join(self) {
+        join_and_propagate_panic(self.subscription_task).await;
+    }
 }
 
 impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, S> {
@@ -56,26 +88,28 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             observer_service,
             commit_vote_monitor,
             dag_state,
-            subscription: Arc::new(Mutex::new(None)),
+            subscriptions: Mutex::new(Subscriptions {
+                current: None,
+                retired: Vec::new(),
+            }),
             randomness_signature_handler,
         }
     }
 
     /// Subscribe to a peer (validator or observer) to receive block streams. The `ObserverSubscriber` can only subscribe to one peer at a time.
-    /// The method will abort the existing subscription (if any) and start a new one.
+    /// The method will stop the existing subscription (if any) and start a new one.
     pub(crate) fn subscribe(&self, peer: PeerId) {
         let context = self.context.clone();
         let network_client = self.network_client.clone();
-        let observer_service = self.observer_service.clone();
+        // ObserverSubscriber already holds these resources strongly. Give subscription tasks weak
+        // references so they do not become additional owners during shutdown.
+        let observer_service = Arc::downgrade(&self.observer_service);
         let commit_vote_monitor = self.commit_vote_monitor.clone();
-        let dag_state = self.dag_state.clone();
+        let dag_state = Arc::downgrade(&self.dag_state);
         let randomness_signature_handler = self.randomness_signature_handler.clone();
 
-        let mut subscription = self.subscription.lock();
-        if let Some(handle) = subscription.take() {
-            handle.abort();
-        }
-        *subscription = Some(spawn_monitored_task!(Self::subscription_loop(
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+        let subscription_task = spawn_monitored_task!(Self::subscription_loop(
             context,
             network_client,
             observer_service,
@@ -83,25 +117,88 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             dag_state,
             peer,
             randomness_signature_handler,
-        )));
+            shutdown_receiver,
+        ));
+
+        let mut subscriptions = self.subscriptions.lock();
+        // Reap retired subscriptions that have finished, so the list stays bounded under
+        // repeated resubscriptions.
+        subscriptions
+            .retired
+            .retain_mut(|subscription| !reap_finished_task(&mut subscription.subscription_task));
+        let previous_subscription = subscriptions.current.replace(ObserverSubscription {
+            shutdown_sender: Some(shutdown_sender),
+            subscription_task,
+        });
+        if let Some(mut previous_subscription) = previous_subscription {
+            previous_subscription.request_shutdown();
+            subscriptions.retired.push(previous_subscription);
+        }
     }
 
     /// Stop the active subscription (if any).
-    pub(crate) fn stop(&self) {
-        let mut subscription = self.subscription.lock();
-        if let Some(handle) = subscription.take() {
-            handle.abort();
+    pub(crate) async fn stop(&self) {
+        let mut subscriptions = {
+            let mut subscriptions = self.subscriptions.lock();
+            let mut all = std::mem::take(&mut subscriptions.retired);
+            all.extend(subscriptions.current.take());
+            all
+        };
+        for subscription in &mut subscriptions {
+            subscription.request_shutdown();
+        }
+        for subscription in subscriptions {
+            subscription.join().await;
         }
     }
 
     async fn subscription_loop(
         context: Arc<Context>,
         network_client: Arc<C>,
-        observer_service: Arc<S>,
+        observer_service: Weak<S>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
-        dag_state: Arc<parking_lot::RwLock<DagState>>,
+        dag_state: Weak<parking_lot::RwLock<DagState>>,
         peer: PeerId,
         randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
+        mut shutdown_receiver: oneshot::Receiver<()>,
+    ) {
+        let mut tasks = JoinSet::new();
+        {
+            // The `subscription` future borrows `tasks` mutably to spawn block handlers, so it
+            // is scoped to this block. When shutdown is signaled, the select below returns and
+            // `subscription` is dropped at the end of the block. This stops block streaming, but
+            // the current task (subscription_loop) and the block handlers already spawned into
+            // `tasks` keep running. Dropping `subscription` also ends the `&mut tasks` borrow,
+            // so the block handlers in `tasks` can be awaited below.
+            let subscription = Self::run_subscription(
+                context,
+                network_client,
+                observer_service,
+                commit_vote_monitor,
+                dag_state,
+                peer,
+                randomness_signature_handler,
+                &mut tasks,
+            );
+            tokio::pin!(subscription);
+            tokio::select! {
+                _ = &mut shutdown_receiver => {}
+                _ = &mut subscription => {}
+            }
+        }
+
+        shutdown_join_set(&mut tasks).await;
+    }
+
+    async fn run_subscription(
+        context: Arc<Context>,
+        network_client: Arc<C>,
+        observer_service: Weak<S>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
+        dag_state: Weak<parking_lot::RwLock<DagState>>,
+        peer: PeerId,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
+        tasks: &mut JoinSet<()>,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -109,8 +206,8 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             Duration::from_millis(100),
             Duration::from_secs(10),
         );
-
         let mut retries: i64 = 0;
+
         'subscription: loop {
             let mut delay = Duration::ZERO;
             if retries > IMMEDIATE_RETRIES {
@@ -132,6 +229,9 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             // already-seen blocks. Clamp to the GC round, since blocks below it would
             // be skipped anyway.
             let highest_round_per_authority = {
+                let Some(dag_state) = dag_state.upgrade() else {
+                    return;
+                };
                 let ds = dag_state.read();
                 let gc_round = ds.gc_round();
                 let mut rounds = vec![0 as Round; context.committee.size()];
@@ -160,15 +260,19 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 }
             };
 
-            // On-demand task spawning with atomic counter for tracking active tasks
             let max_parallel_tasks = context.committee.size();
-            let active_tasks = Arc::new(AtomicUsize::new(0));
-            let mut tasks = JoinSet::new();
-
             'stream: loop {
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
-                match blocks.next().await {
+                let next_item = tokio::select! {
+                    result = tasks.join_next(), if !tasks.is_empty() => {
+                        Self::handle_task_result(result);
+                        continue 'stream;
+                    }
+                    item = blocks.next(), if tasks.len() < max_parallel_tasks => item,
+                };
+
+                match next_item {
                     Some(item) => {
                         context
                             .metrics
@@ -178,12 +282,15 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
                         // During catch-up (commit lagging behind quorum), drop silently --
                         // those rounds will arrive via checkpoint sync, same as lagging validators.
-                        if let Some(handler) = &randomness_signature_handler
-                            && !is_commit_lagging(
+                        let is_commit_lagging = dag_state.upgrade().is_none_or(|dag_state| {
+                            is_commit_lagging(
                                 &context,
                                 dag_state.read().last_commit_index(),
                                 commit_vote_monitor.quorum_commit_index(),
                             )
+                        });
+                        if let Some(handler) = &randomness_signature_handler
+                            && !is_commit_lagging
                         {
                             for sig in item.auxiliary_data.randomness_signatures {
                                 handler.handle_randomness_signature(sig);
@@ -191,37 +298,20 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                         }
 
                         for block in item.blocks {
-                            // Backpressure: wait if we've hit max parallelism
-                            while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
-                                // Block until a task completes instead of busy-waiting
-                                match tasks.join_next().await {
-                                    Some(Ok(_)) => {
-                                        // Task completed successfully, counter already decremented
-                                    }
-                                    Some(Err(e)) => {
-                                        warn!("Task failed with error: {}", e);
-                                    }
-                                    None => {
-                                        // This shouldn't happen if our counter is accurate
-                                        warn!(
-                                            "No tasks to join but counter shows {} active tasks",
-                                            active_tasks.load(Ordering::Acquire)
-                                        );
-                                        break;
-                                    }
-                                }
+                            // Backpressure: wait if we've hit max parallelism.
+                            while tasks.len() >= max_parallel_tasks {
+                                Self::handle_task_result(tasks.join_next().await);
                             }
 
-                            // Spawn a new task to handle this block
-                            active_tasks.fetch_add(1, Ordering::AcqRel);
-                            let counter = active_tasks.clone();
                             let observer_service = observer_service.clone();
                             let peer_cloned = peer.clone();
-
                             tasks.spawn(async move {
                                 let _scope =
                                     monitored_scope("ObserverSubscriberTask::handle_block");
 
+                                let Some(observer_service) = observer_service.upgrade() else {
+                                    return;
+                                };
                                 let result = observer_service
                                     .handle_block(peer_cloned.clone(), block)
                                     .await;
@@ -241,9 +331,6 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                                         }
                                     }
                                 }
-
-                                // Decrement counter when done
-                                counter.fetch_sub(1, Ordering::AcqRel);
                             });
                         }
 
@@ -259,36 +346,35 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 }
             }
 
-            // Wait for all spawned tasks to complete
-            while let Some(result) = tasks.join_next().await {
-                match result {
-                    Ok(_) => {} // Task completed successfully
-                    Err(e) => warn!("Task failed during cleanup: {}", e),
-                }
+            while !tasks.is_empty() {
+                Self::handle_task_result(tasks.join_next().await);
             }
+        }
+    }
 
-            // Sanity check: ensure all tasks have completed
-            let remaining = active_tasks.load(Ordering::Acquire);
-            if remaining > 0 {
-                warn!(
-                    "Warning: {} tasks still marked as active after cleanup",
-                    remaining
-                );
+    fn handle_task_result(result: Option<Result<(), JoinError>>) {
+        if let Some(Err(error)) = result {
+            if error.is_panic() {
+                std::panic::resume_unwind(error.into_panic());
             }
+            warn!("Observer block handler task was cancelled: {error}");
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::{future::pending, sync::Arc, time::Duration};
 
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_types::block::{BlockRef, Round};
     use futures::stream;
     use parking_lot::{Mutex, RwLock};
-    use tokio::time::sleep;
+    use tokio::{
+        sync::Notify,
+        time::{sleep, timeout},
+    };
 
     use super::*;
     use crate::{
@@ -359,12 +445,24 @@ mod tests {
 
     struct ObserverSubscriberTestService {
         handle_block_calls: Mutex<Vec<(PeerId, Bytes)>>,
+        block_handlers: bool,
+        handler_started: Notify,
     }
 
     impl ObserverSubscriberTestService {
         fn new() -> Self {
             Self {
                 handle_block_calls: Mutex::new(Vec::new()),
+                block_handlers: false,
+                handler_started: Notify::new(),
+            }
+        }
+
+        fn new_blocking() -> Self {
+            Self {
+                handle_block_calls: Mutex::new(Vec::new()),
+                block_handlers: true,
+                handler_started: Notify::new(),
             }
         }
     }
@@ -373,6 +471,10 @@ mod tests {
     impl ObserverNetworkService for ObserverSubscriberTestService {
         async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()> {
             self.handle_block_calls.lock().push((peer, block));
+            self.handler_started.notify_one();
+            if self.block_handlers {
+                pending::<()>().await;
+            }
             Ok(())
         }
 
@@ -509,7 +611,7 @@ mod tests {
         let count_before_stop = observer_service.handle_block_calls.lock().len();
 
         // Test that stop() still works
-        subscriber.stop();
+        subscriber.stop().await;
 
         // Wait and verify no new blocks are received after stop
         sleep(Duration::from_millis(50)).await;
@@ -518,5 +620,41 @@ mod tests {
             count_before_stop, count_after_stop,
             "No new blocks should be received after stop()"
         );
+    }
+
+    #[tokio::test]
+    async fn test_stop_waits_for_block_handlers() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new_blocking());
+        let network_client = Arc::new(ObserverSubscriberTestClient::new());
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client,
+            observer_service.clone(),
+            commit_vote_monitor,
+            dag_state,
+            None,
+        );
+
+        let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        subscriber.subscribe(peer);
+        timeout(
+            Duration::from_secs(1),
+            observer_service.handler_started.notified(),
+        )
+        .await
+        .expect("Block handler should start");
+        assert!(Arc::strong_count(&observer_service) > 2);
+
+        timeout(Duration::from_secs(1), subscriber.stop())
+            .await
+            .expect("Subscriber should stop after cancelling block handlers");
+        assert_eq!(Arc::strong_count(&observer_service), 2);
     }
 }

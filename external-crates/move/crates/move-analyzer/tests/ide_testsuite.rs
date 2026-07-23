@@ -113,7 +113,6 @@ struct HintTest {
 struct AccessChainQuickFixTest {
     err_line: u32,
     err_col: u32,
-    err_msg: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -384,16 +383,27 @@ impl AccessChainQuickFixTest {
         };
         writeln!(output, "-- test {test_idx} -------------------")?;
         let mut code_actions = vec![];
-
-        access_chain_autofix_actions_for_error(
-            symbols,
-            compiled_pkg_info,
-            Url::from_file_path(use_file_path).unwrap(),
-            err_pos,
-            self.err_msg.clone(),
-            None,
-            &mut code_actions,
-        );
+        // Just like in the real usage scenario, use compiler-produced diagnostics
+        // (collect and offer them to the quick-fix handler)
+        let diagnostics = compiled_pkg_info
+            .lsp_diags
+            .get(use_file_path)
+            .into_iter()
+            .flatten()
+            .filter(|diag| diag.range.start == err_pos)
+            .cloned()
+            .collect::<Vec<_>>();
+        for diagnostic in diagnostics {
+            access_chain_autofix_actions_for_error(
+                symbols,
+                compiled_pkg_info,
+                Url::from_file_path(use_file_path).unwrap(),
+                diagnostic.range.start,
+                diagnostic.message.clone(),
+                Some(diagnostic),
+                &mut code_actions,
+            );
+        }
         for action in code_actions {
             writeln!(output, "CODE ACTION: {}", action.title)?;
             if let Some(edit) = action.edit

@@ -7,21 +7,17 @@ use async_graphql::dataloader::DataLoader;
 use futures::future::try_join_all;
 use prometheus::Registry;
 use prost_types::FieldMask;
+use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_sdk_types::Address;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
-use tonic::transport::Channel;
-use tonic::transport::ClientTlsConfig;
-use tower::Layer;
 use tracing::instrument;
 use url::Url;
 
 use crate::metrics::GrpcMetricsLayer;
-use crate::metrics::GrpcMetricsService;
 
 // Programmable transaction validation requires the command count to be strictly less than the
 // protocol's 1,024-command limit.
@@ -38,7 +34,7 @@ pub struct FullnodeArgs {
 /// A client for executing and simulating transactions via the full node gRPC service.
 #[derive(Clone)]
 pub struct FullnodeClient {
-    execution_client: TransactionExecutionServiceClient<GrpcMetricsService<Channel>>,
+    client: Client,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -68,22 +64,14 @@ impl FullnodeClient {
             return Ok(None);
         };
 
-        let mut endpoint = Channel::from_shared(url.to_string())
-            .context("Failed to create channel for gRPC endpoint")?;
+        let client = Client::new(url.to_string())
+            .context("Failed to create client for gRPC endpoint")?
+            .request_layer(GrpcMetricsLayer::new(
+                prefix.unwrap_or("fullnode"),
+                registry,
+            ));
 
-        if url.scheme() == "https" {
-            endpoint = endpoint
-                .tls_config(ClientTlsConfig::new().with_native_roots())
-                .context("Failed to configure TLS for gRPC endpoint")?;
-        }
-
-        let channel = endpoint.connect_lazy();
-
-        let layered = GrpcMetricsLayer::new(prefix.unwrap_or("fullnode"), registry).layer(channel);
-
-        let execution_client = TransactionExecutionServiceClient::new(layered);
-
-        Ok(Some(Self { execution_client }))
+        Ok(Some(Self { client }))
     }
 
     pub fn as_data_loader(&self) -> DataLoader<Self> {
@@ -122,8 +110,9 @@ impl FullnodeClient {
         .with_signatures(signatures)
         .with_read_mask(read_mask);
 
-        self.execution_client
+        self.client
             .clone()
+            .execution_client()
             .execute_transaction(request)
             .await
             .map(|r| r.into_inner())
@@ -156,8 +145,9 @@ impl FullnodeClient {
             .with_checks(checks)
             .with_do_gas_selection(do_gas_selection);
 
-        self.execution_client
+        self.client
             .clone()
+            .execution_client()
             .simulate_transaction(request)
             .await
             .map(|r| r.into_inner())

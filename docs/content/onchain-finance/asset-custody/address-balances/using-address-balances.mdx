@@ -364,9 +364,10 @@ tx.setGasPayment([]); // Empty array = sponsor pays from address balance
 const bytes = await tx.build({ client });
 const { signature: userSignature } = await userKeypair.signTransaction(bytes);
 
-// Option A: Send transaction and signature to sponsor, sponsor can sign and execute immediately:
-// (`send_tx_to_sponsor` is a placeholder, there is no such API in the SDK)
-await send_tx_to_sponsor(userSignature, bytes);
+// Option A: Send the transaction bytes and user signature to the sponsor service.
+// The sponsor signs and executes the transaction on their end.
+// Replace with your own sponsor communication logic (e.g., an API call).
+await sendToSponsor(userSignature, bytes);
 
 // Option B: Get signature from sponsor and submit it ourselves. Sponsor signs (can happen asynchronously)
 const { signature: sponsorSignature } = await sponsorKeypair.signTransaction(bytes);

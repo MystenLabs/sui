@@ -120,12 +120,16 @@ where
                 cohort_metrics.clone(),
             );
 
-            let (streaming_result, ingestion_result) =
-                futures::future::join(stream_guard, ingest_guard).await;
-
-            // Check ingestion result, exit on any error.
-            match ingestion_result.context("Ingestion task panicked, stopping broadcaster")? {
-                Ok(()) => {}
+            // Wait for ingestion first, rather than joining both tasks together, so that a
+            // fatal ingestion error can stop the broadcaster immediately instead of waiting for
+            // the streaming task (which, once connected, runs until `end_cp` and may not finish
+            // for a long time). `stream_guard`'s `Drop` aborts its task, so leaving it undropped
+            // below cancels streaming as soon as this loop iteration ends.
+            let streaming_result = match ingest_guard
+                .await
+                .context("Ingestion task panicked, stopping broadcaster")?
+            {
+                Ok(()) => stream_guard.await,
 
                 // Ingestion stopped because one of its channels was closed. The
                 // overall broadcaster should also shutdown.
@@ -136,7 +140,7 @@ where
                 Err(Break::Err(e)) => {
                     return Err(anyhow!(e).context("Ingestion task failed, stopping broadcaster"));
                 }
-            }
+            };
 
             // Update checkpoint_hi from streaming, or shutdown on error
             checkpoint_hi =
@@ -1422,5 +1426,53 @@ mod tests {
         );
 
         svc.join().await.unwrap();
+    }
+
+    // =============== Part 5: Ingestion/streaming task coordination ==================
+
+    #[tokio::test]
+    async fn ingestion_break_stops_broadcaster_without_waiting_for_streaming() {
+        // Regression test: when ingestion detects a closed subscriber (`Break::Break`), the
+        // broadcaster must stop as soon as it notices, rather than waiting for an unrelated,
+        // still-healthy streaming task to also finish. Streaming here is set up to stay
+        // pending for several seconds after sending its one checkpoint, well past this test's
+        // assertion window, so this test would time out against the old `join`-based
+        // implementation that waits for both tasks together.
+        let (subscriber_dest, subscriber_rx) = single_subscriber(64);
+
+        // Ingestion covers [0, 50). Make the last checkpoint (49) take ~300ms of NotFound
+        // retries, so there's a window to close the subscriber while ingestion is still
+        // working, before it notices the closed channel.
+        let metrics = test_ingestion_metrics();
+        let mock = MockIngestionClient::default();
+        mock.insert_checkpoints(0..50);
+        mock.not_found_failures.insert(49, 3);
+        let ingestion_client = IngestionClient::from_trait(Arc::new(mock), metrics).for_cohort(0);
+
+        // Streaming starts at checkpoint 50, sends it, then stalls for 3s waiting for more -
+        // far longer than the broadcaster should take to shut down.
+        let mut streaming_client = MockStreamingClient::new(50..51, Some(Duration::from_secs(10)));
+        streaming_client.insert_timeout_with_duration(Duration::from_secs(3));
+
+        let mut svc = broadcaster(
+            0..,
+            Some(Arc::new(streaming_client)),
+            test_config(),
+            ingestion_client,
+            subscriber_dest,
+        );
+
+        // Give ingestion time to process checkpoints 0..49 and start retrying 49, and let
+        // streaming send its one checkpoint and settle into its long pending wait, then close
+        // the subscriber while ingestion is still working.
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        drop(subscriber_rx);
+
+        // The broadcaster should stop promptly once ingestion notices the closed subscriber,
+        // without waiting out streaming's multi-second stall.
+        timeout(Duration::from_secs(2), svc.join())
+            .await
+            .expect("broadcaster should stop promptly, not wait for the unrelated streaming task")
+            .unwrap();
     }
 }

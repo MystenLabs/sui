@@ -8485,7 +8485,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=4326af7b314f9683a1e26cb25dfa1a62b4adce1f#4326af7b314f9683a1e26cb25dfa1a62b4adce1f"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=852bfddd56581942ffa47365227e03775a498f9f#852bfddd56581942ffa47365227e03775a498f9f"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -14494,7 +14494,6 @@ dependencies = [
  "derive_more 1.0.0",
  "fastcrypto",
  "futures",
- "jsonrpsee",
  "move-core-types",
  "regex",
  "reqwest",
@@ -14503,10 +14502,11 @@ dependencies = [
  "sui-config",
  "sui-faucet",
  "sui-json",
- "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
+ "sui-rpc-api",
  "sui-sdk",
+ "sui-sdk-types",
  "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",
@@ -14947,6 +14947,38 @@ dependencies = [
  "sui-verifier-v2",
  "sui-verifier-v3",
  "tracing",
+]
+
+[[package]]
+name = "sui-execution-backtest"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "backoff",
+ "bcs",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "futures",
+ "move-core-types",
+ "object_store 0.13.0",
+ "prometheus",
+ "serde",
+ "serde_json",
+ "sui-execution",
+ "sui-framework",
+ "sui-framework-snapshot",
+ "sui-indexer-alt-framework",
+ "sui-protocol-config",
+ "sui-rpc",
+ "sui-types",
+ "tokio",
+ "tonic 0.14.6",
+ "tracing",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -18197,7 +18229,7 @@ dependencies = [
 [[package]]
 name = "tideconsole"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=4326af7b314f9683a1e26cb25dfa1a62b4adce1f#4326af7b314f9683a1e26cb25dfa1a62b4adce1f"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=852bfddd56581942ffa47365227e03775a498f9f#852bfddd56581942ffa47365227e03775a498f9f"
 dependencies = [
  "anyhow",
  "clap",
@@ -18212,7 +18244,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=4326af7b314f9683a1e26cb25dfa1a62b4adce1f#4326af7b314f9683a1e26cb25dfa1a62b4adce1f"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=852bfddd56581942ffa47365227e03775a498f9f#852bfddd56581942ffa47365227e03775a498f9f"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",

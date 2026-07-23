@@ -11,6 +11,7 @@ const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
+const graphqlFrontmatterPlugin = require("./src/plugins/graphql-frontmatter");
 
 const lightCodeTheme = require("prism-react-renderer").themes.github;
 const darkCodeTheme = require("prism-react-renderer").themes.nightOwl;
@@ -241,6 +242,12 @@ const config = {
                         "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
+                    {
+                      loader: path.resolve(
+                        __dirname,
+                        "./src/shared/plugins/inject-code/includeSectionLoader.js",
+                      ),
+                    },
                   ],
                 },
               ],
@@ -319,6 +326,7 @@ const config = {
             [npm2yarn, { sync: true, converters: ["yarn", "pnpm"] }],
             effortRemarkPlugin,
             betaRemarkPlugin,
+            graphqlFrontmatterPlugin,
             [remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }],
           ],
           rehypePlugins: [katex],

@@ -183,6 +183,7 @@ export default {
           items: [
             'develop/accessing-data/graphql/graphql-rpc',
             'develop/accessing-data/graphql/query-with-graphql',
+            'develop/accessing-data/graphql/graphql-migration-cookbook',
           ],
         },
         {
@@ -289,6 +290,8 @@ export default {
             'getting-started/examples/lootbox-ctf',
             'getting-started/examples/merchant-ctf',
             'getting-started/examples/staking-ctf',
+            'getting-started/examples/consumer-app-zklogin',
+            'getting-started/examples/defi-trading-zklogin',
           ],
         },
         'getting-started/examples/event-indexer',
@@ -379,6 +382,7 @@ export default {
           'onchain-finance/examples-patterns/loyalty-tokens',
           'onchain-finance/examples-patterns/in-game-currency',
           'onchain-finance/examples-patterns/soulbound-tokens',
+          'onchain-finance/examples-patterns/staking-rewards',
           'onchain-finance/examples-patterns/nft-rental',
           'onchain-finance/examples-patterns/kiosk',
           'onchain-finance/examples-patterns/wasm-template',
@@ -694,9 +698,10 @@ suiStackSidebar: [
       label: 'zkLogin',
       link: { type: 'doc', id: 'sui-stack/zklogin-integration/index' },
       items: [
-        'sui-stack/zklogin-integration/zklogin',
+        'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
+        'sui-stack/zklogin-integration/zklogin',
       ],
     },
     {

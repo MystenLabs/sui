@@ -192,7 +192,8 @@ pub struct IngestionClient {
     metrics: Arc<IngestionMetrics>,
     /// This client's cohort-labeled metric handles, rebound per cohort by [`Self::for_cohort`].
     cohort_metrics: Arc<CohortMetrics>,
-    chain_id: OnceCell<ChainIdentifier>,
+    /// Shared so cloning an uninitialized client does not create an independent cache.
+    chain_id: Arc<OnceCell<ChainIdentifier>>,
 }
 
 #[derive(Clone, Debug)]
@@ -326,7 +327,7 @@ impl IngestionClient {
             client,
             metrics,
             cohort_metrics,
-            chain_id: OnceCell::new(),
+            chain_id: Arc::new(OnceCell::new()),
         }
     }
 
@@ -524,6 +525,8 @@ fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), 
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use clap::Parser;
@@ -574,6 +577,7 @@ pub(crate) mod tests {
         pub fetch_failures: DashMap<u64, usize>,
         pub decode_failures: DashMap<u64, usize>,
         pub latest_checkpoint: u64,
+        pub chain_id_calls: AtomicUsize,
     }
 
     impl MockIngestionClient {
@@ -593,6 +597,7 @@ pub(crate) mod tests {
     #[async_trait]
     impl IngestionClientTrait for MockIngestionClient {
         async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
+            self.chain_id_calls.fetch_add(1, Ordering::Relaxed);
             Ok(Self::mock_chain_id())
         }
 
@@ -807,6 +812,26 @@ pub(crate) mod tests {
                 .get(),
             3
         );
+    }
+
+    #[tokio::test]
+    async fn test_clones_share_chain_id_cache() {
+        let (client, mock_client) = setup_test();
+        mock_client.insert_checkpoints(1..=2);
+
+        let first = client.clone();
+        let second = client.clone();
+        let (first, second) = tokio::join!(first.checkpoint(1), second.checkpoint(2));
+
+        assert_eq!(
+            first.unwrap().chain_id,
+            MockIngestionClient::mock_chain_id()
+        );
+        assert_eq!(
+            second.unwrap().chain_id,
+            MockIngestionClient::mock_chain_id()
+        );
+        assert_eq!(mock_client.chain_id_calls.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]

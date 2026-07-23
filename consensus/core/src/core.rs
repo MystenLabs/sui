@@ -247,23 +247,6 @@ impl Core {
         .recover_observer()
     }
 
-    fn recover_observer(mut self) -> Self {
-        let _s = self
-            .context
-            .metrics
-            .node_metrics
-            .scope_processing_time
-            .with_label_values(&["Core::recover_observer"])
-            .start_timer();
-
-        // Try to commit, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
-
-        self.try_signal_new_round();
-
-        self
-    }
-
     fn recover_validator(mut self) -> Self {
         let _s = self
             .context
@@ -314,6 +297,27 @@ impl Core {
         );
 
         self
+    }
+
+    fn recover_observer(mut self) -> Self {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::recover_observer"])
+            .start_timer();
+
+        // Try to commit, since they may not have run after the last storage write.
+        self.try_commit(vec![]).unwrap();
+
+        self.try_signal_new_round();
+
+        self
+    }
+
+    pub(crate) async fn stop(&mut self) {
+        self.commit_observer.stop().await;
     }
 
     /// Calls `BlockManager::try_accept_blocks` and broadcasts each accepted block to any active
