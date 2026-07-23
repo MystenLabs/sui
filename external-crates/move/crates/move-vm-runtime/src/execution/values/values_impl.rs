@@ -5,7 +5,6 @@
 use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
     jit::execution::ast::{ArenaType, Type},
-    shared::type_size_formulae::TypeSize,
     shared::{
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         views::{ValueView, ValueVisitor},
@@ -1891,16 +1890,34 @@ pub const VEC_SIZE_LIMIT_REACHED: u64 = NFE_VECTOR_ERROR_BASE + 4;
 fn check_elem_layout(specialization: VectorSpecialization, v: &Value) -> PartialVMResult<()> {
     use PrimVec as PV;
     use VectorSpecialization as S;
-    let matches = match v {
-        Value::Vec(_) => specialization == S::Container,
-        Value::PrimVec(PV::VecU8(_)) => specialization == S::U8,
-        Value::PrimVec(PV::VecU16(_)) => specialization == S::U16,
-        Value::PrimVec(PV::VecU32(_)) => specialization == S::U32,
-        Value::PrimVec(PV::VecU64(_)) => specialization == S::U64,
-        Value::PrimVec(PV::VecU128(_)) => specialization == S::U128,
-        Value::PrimVec(PV::VecU256(_)) => specialization == S::U256,
-        Value::PrimVec(PV::VecBool(_)) => specialization == S::Bool,
-        Value::PrimVec(PV::VecAddress(_)) => specialization == S::Address,
+    // Mirrors the original type-based check: a container value expects a `Container` element, and
+    // each primitive-vector value expects its own primitive specialization. The specialization is
+    // a faithful summary of the element type's vector representation, so the accept/reject verdict
+    // is unchanged; the mismatch error names the expected specialization.
+    macro_rules! expect {
+        ($expected:expr) => {
+            if specialization == $expected {
+                Ok(())
+            } else {
+                Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "vector elem layout mismatch, expected {:?}, got {:?}",
+                    specialization,
+                    v
+                ))
+            }
+        };
+    }
+    match v {
+        Value::Vec(_) => expect!(S::Container),
+        Value::PrimVec(PV::VecU8(_)) => expect!(S::U8),
+        Value::PrimVec(PV::VecU16(_)) => expect!(S::U16),
+        Value::PrimVec(PV::VecU32(_)) => expect!(S::U32),
+        Value::PrimVec(PV::VecU64(_)) => expect!(S::U64),
+        Value::PrimVec(PV::VecU128(_)) => expect!(S::U128),
+        Value::PrimVec(PV::VecU256(_)) => expect!(S::U256),
+        Value::PrimVec(PV::VecBool(_)) => expect!(S::Bool),
+        Value::PrimVec(PV::VecAddress(_)) => expect!(S::Address),
         Value::U8(_)
         | Value::U16(_)
         | Value::U32(_)
@@ -1912,23 +1929,11 @@ fn check_elem_layout(specialization: VectorSpecialization, v: &Value) -> Partial
         | Value::Struct(_)
         | Value::Variant(_)
         | Value::Invalid
-        | Value::Reference(_) => {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "value {:?} is not a vector",
-                v
-            ));
-        }
-    };
-    if matches {
-        Ok(())
-    } else {
-        Err(partial_vm_error!(
+        | Value::Reference(_) => Err(partial_vm_error!(
             UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            "vector elem layout mismatch, expected {:?}, got {:?}",
-            specialization,
+            "value {:?} is not a vector",
             v
-        ))
+        )),
     }
 }
 
@@ -2227,10 +2232,7 @@ impl VectorSpecialization {
     /// Determine a vector's specialization directly from its element type term, resolving a
     /// type-parameter element through the frame's arguments — without realizing (or sizing) the
     /// element type. Only the element's outermost constructor matters.
-    pub(crate) fn from_element(
-        elem: &ArenaType,
-        ty_args: &[(Type, TypeSize)],
-    ) -> PartialVMResult<Self> {
+    pub(crate) fn from_element(elem: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Self> {
         Ok(match elem {
             ArenaType::U8 => VectorSpecialization::U8,
             ArenaType::U16 => VectorSpecialization::U16,
@@ -2245,7 +2247,7 @@ impl VectorSpecialization {
             | ArenaType::Datatype(_)
             | ArenaType::DatatypeInstantiation(_) => VectorSpecialization::Container,
             ArenaType::TyParam(idx) => {
-                let (ty, _) = ty_args.get(*idx as usize).ok_or_else(|| {
+                let ty = ty_args.get(*idx as usize).ok_or_else(|| {
                     partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "type parameter {idx} out of bounds -- len {}",

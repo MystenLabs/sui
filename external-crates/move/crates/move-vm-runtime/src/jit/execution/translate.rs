@@ -22,7 +22,7 @@ use crate::{
     },
     natives::functions::NativeFunctions,
     shared::{
-        TraversalBudget,
+        TypeTraversalBudget,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         type_size_formulae::ArenaTypeSizeFormula,
         types::{DefiningTypeId, OriginalId, VersionId},
@@ -1751,7 +1751,7 @@ fn make_arena_type(
         context,
         module,
         tok,
-        &mut TraversalBudget::for_type_traversal(),
+        &mut TypeTraversalBudget::for_type_traversal(),
     )?
     .ptr())
 }
@@ -1760,7 +1760,7 @@ fn make_arena_type_impl(
     context: &mut PackageContext,
     module: &CompiledModule,
     tok: &SignatureToken,
-    type_size: &mut TraversalBudget,
+    type_size: &mut TypeTraversalBudget,
 ) -> PartialVMResult<InternedType> {
     type_size.enter_type(|type_size| match tok {
         SignatureToken::Bool => context
