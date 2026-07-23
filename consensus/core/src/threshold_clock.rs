@@ -43,11 +43,18 @@ impl ThresholdClock {
                     self.aggregator.clear();
                     // We have seen 2f+1 blocks for current round, advance
                     self.round = block.round + 1;
+                    let round_duration = now.duration_since(self.quorum_ts);
                     self.context
                         .metrics
                         .node_metrics
                         .threshold_clock_round_duration
-                        .observe(now.duration_since(self.quorum_ts).as_secs_f64());
+                        .observe(round_duration.as_secs_f64());
+                    if let Some(cap) = crate::transaction::adaptive_block_cap() {
+                        cap.observe_round(
+                            round_duration.as_secs_f64() * 1000.0,
+                            &self.context.metrics.node_metrics,
+                        );
+                    }
                     // Record the time of last quorum and new round start.
                     self.quorum_ts = now;
                     debug!(

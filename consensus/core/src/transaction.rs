@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicU64, Ordering as AtomicOrdering},
+    },
+};
 
 use consensus_config::Epoch;
 use consensus_types::block::{
@@ -14,10 +20,77 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};
 
-use crate::{block::Transaction, context::Context};
+use crate::{block::Transaction, context::Context, metrics::NodeMetrics};
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
+
+/// Test-only adaptive damper on proposed block bytes (protocol-legal: only lowers this
+/// author's own proposals). AIMD controller driven by the local threshold-clock round
+/// period: multiplicative decrease proportional to overshoot when the round-period EWMA
+/// exceeds the target, additive recovery when comfortably below it. Floor 64 KB is the
+/// cap validated in Test 17e; the ceiling leaves healthy traffic untouched.
+/// Enabled via CONSENSUS_ADAPTIVE_BLOCK_CAP=<target round period ms>.
+pub(crate) struct AdaptiveBlockCap {
+    target_ms: f64,
+    floor_bytes: u64,
+    ceiling_bytes: u64,
+    ewma_ms_bits: AtomicU64,
+    cap_bytes: AtomicU64,
+}
+
+impl AdaptiveBlockCap {
+    /// Called from ThresholdClock on each locally-observed round advance.
+    pub(crate) fn observe_round(&self, round_ms: f64, metrics: &NodeMetrics) {
+        let prev = f64::from_bits(self.ewma_ms_bits.load(AtomicOrdering::Relaxed));
+        let ewma = if prev == 0.0 {
+            round_ms
+        } else {
+            prev * 0.8 + round_ms * 0.2
+        };
+        self.ewma_ms_bits
+            .store(ewma.to_bits(), AtomicOrdering::Relaxed);
+        let cap = self.cap_bytes.load(AtomicOrdering::Relaxed);
+        let new_cap = if ewma > self.target_ms {
+            // At most halves per round: ceiling-to-floor in 3 rounds of deep overshoot.
+            let scale = (self.target_ms / ewma).max(0.5);
+            ((cap as f64 * scale) as u64).max(self.floor_bytes)
+        } else if ewma < self.target_ms * 0.8 {
+            (cap + 8 * 1024).min(self.ceiling_bytes)
+        } else {
+            cap
+        };
+        if new_cap != cap {
+            self.cap_bytes.store(new_cap, AtomicOrdering::Relaxed);
+        }
+        metrics.adaptive_block_cap_bytes.set(new_cap as i64);
+    }
+
+    pub(crate) fn cap_bytes(&self) -> u64 {
+        self.cap_bytes.load(AtomicOrdering::Relaxed)
+    }
+}
+
+pub(crate) fn adaptive_block_cap() -> Option<&'static AdaptiveBlockCap> {
+    static INSTANCE: OnceLock<Option<AdaptiveBlockCap>> = OnceLock::new();
+    INSTANCE
+        .get_or_init(|| {
+            let v = std::env::var("CONSENSUS_ADAPTIVE_BLOCK_CAP").ok()?;
+            let target_ms = v.parse::<f64>().ok().filter(|t| *t > 1.0).unwrap_or(150.0);
+            let ceiling_bytes = std::env::var("CONSENSUS_ADAPTIVE_BLOCK_CAP_CEILING")
+                .ok()
+                .and_then(|c| c.parse().ok())
+                .unwrap_or(512 * 1024);
+            Some(AdaptiveBlockCap {
+                target_ms,
+                floor_bytes: 64 * 1024,
+                ceiling_bytes,
+                ewma_ms_bits: AtomicU64::new(0),
+                cap_bytes: AtomicU64::new(ceiling_bytes),
+            })
+        })
+        .as_ref()
+}
 
 /// The guard acts as an acknowledgment mechanism for the inclusion of the transactions to a block.
 /// When its last transaction is included to a block then `included_in_block_ack` will be signalled.
@@ -115,6 +188,9 @@ impl TransactionConsumer {
         let mut acks = Vec::new();
         let mut total_bytes = 0;
         let mut limit_reached = LimitReached::AllTransactionsIncluded;
+        let max_block_bytes = adaptive_block_cap()
+            .map(|a| a.cap_bytes().min(self.max_transactions_in_block_bytes))
+            .unwrap_or(self.max_transactions_in_block_bytes);
 
         // Handle one batch of incoming transactions from TransactionGuard.
         // The method will return `None` if all the transactions can be included in the block. Otherwise none of the transactions will be
@@ -131,7 +207,7 @@ impl TransactionConsumer {
             // Check if the total bytes of the transactions exceed the max transactions in block bytes.
             let transactions_bytes =
                 t.transactions.iter().map(|t| t.data().len()).sum::<usize>() as u64;
-            if total_bytes + transactions_bytes > self.max_transactions_in_block_bytes {
+            if total_bytes + transactions_bytes > max_block_bytes {
                 limit_reached = LimitReached::MaxBytes;
                 return Some(t);
             }
