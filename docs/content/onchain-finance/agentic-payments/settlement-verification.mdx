@@ -245,7 +245,7 @@ For high-value flows, move the verification logic onchain using a Move module. T
 ```move
 module example::settlement;
 
-use std::string::String;
+use std::string::{Self, String};
 use sui::coin::Coin;
 use sui::event;
 
@@ -267,7 +267,7 @@ public fun pay_and_prove<T>(
     recipient: address,
 ): SettlementProof {
     let amount = payment.value();
-    let coin_type = std::type_name::get<T>().into_string().to_ascii_string().to_string();
+    let coin_type = std::string::from_ascii(std::type_name::with_defining_ids<T>().into_string());
     transfer::public_transfer(payment, recipient);
 
     SettlementProof { recipient, amount, coin_type }
