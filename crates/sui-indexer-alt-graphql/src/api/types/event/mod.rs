@@ -27,12 +27,12 @@ use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
+use sui_sdk_types::Event as SdkEvent;
 use sui_sql_macro::query;
-use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
-use sui_types::parse_sui_struct_tag;
+use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
@@ -348,6 +348,7 @@ impl Event {
         // position (the timestamp resolves lazily via the emitting transaction's contents).
         request.read_mask = Some(FieldMask::from_paths([
             "contents",
+            "event_type",
             "package_id",
             "module",
             "sender",
@@ -505,6 +506,7 @@ impl From<Connection<String, Event>> for EventConnection {
 /// node needs — the event envelope and its position — so no KV lookup is required; a missing
 /// field is an internal inconsistency.
 fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
+    // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
     let transaction_digest = payload
         .transaction_digest
         .as_deref()
@@ -516,53 +518,15 @@ fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, Rp
         .event_index
         .context("ListEvents item missing event index")?;
 
-    let package_id = payload
-        .package_id
-        .as_deref()
-        .context("ListEvents item missing package ID")?
-        .parse::<ObjectID>()
-        .context("Failed to parse package ID from ListEvents")?;
-
-    let transaction_module = Identifier::new(
-        payload
-            .module
-            .as_deref()
-            .context("ListEvents item missing module")?,
-    )
-    .context("Failed to parse module from ListEvents")?;
-
-    let sender = payload
-        .sender
-        .as_deref()
-        .context("ListEvents item missing sender")?
-        .parse::<NativeSuiAddress>()
-        .context("Failed to parse sender from ListEvents")?;
-
-    let contents = payload
-        .contents
-        .as_ref()
-        .context("ListEvents item missing contents")?;
-
-    // Both servers render event contents via the SDK's `Event` merge, which sets the `Bcs.name`
-    // to the event's canonical type string.
-    let type_ = parse_sui_struct_tag(
-        contents
-            .name
-            .as_deref()
-            .context("ListEvents item contents missing type name")?,
-    )
-    .context("Failed to parse event type from ListEvents")?;
+    let event = SdkEvent::try_from(payload).context("Failed to convert ListEvents item")?;
 
     let native = NativeEvent {
-        package_id,
-        transaction_module,
-        sender,
-        type_,
-        contents: contents
-            .value
-            .as_ref()
-            .context("ListEvents item contents missing value")?
-            .to_vec(),
+        package_id: event.package_id.into(),
+        transaction_module: Identifier::new(event.module.as_str())
+            .context("Failed to convert module identifier")?,
+        sender: event.sender.into(),
+        type_: struct_tag_sdk_to_core(event.type_).context("Failed to convert event type")?,
+        contents: event.contents,
     };
 
     Ok(Event {
@@ -638,10 +602,9 @@ mod tests {
     use fastcrypto::encoding::Base58;
     use fastcrypto::encoding::Base64 as B64;
     use fastcrypto::encoding::Encoding;
-    use move_core_types::identifier::Identifier;
-    use move_core_types::language_storage::StructTag;
     use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
     use sui_types::base_types::ObjectID;
+    use sui_types::parse_sui_struct_tag;
 
     use crate::pagination::PageLimits;
 
@@ -665,7 +628,6 @@ mod tests {
     /// transaction, with the provided resume cursor.
     fn ev_item(event_index: u32, cursor: CursorToken) -> PageItem<v2::Event> {
         let mut contents = v2::Bcs::default();
-        contents.name = Some("0x0::m::T".to_string());
         contents.value = Some(Default::default());
 
         let mut payload = v2::Event::default();
@@ -674,6 +636,7 @@ mod tests {
         payload.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
         payload.module = Some("m".to_string());
         payload.sender = Some(NativeSuiAddress::ZERO.to_string());
+        payload.event_type = Some("0x0::m::T".to_string());
         payload.contents = Some(contents);
         PageItem {
             payload,
