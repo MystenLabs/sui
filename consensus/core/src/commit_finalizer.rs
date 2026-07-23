@@ -392,10 +392,25 @@ impl CommitFinalizer {
                 }
             }
             // Initialize the block state.
+            let block_bytes = block.serialized().len();
+            let mut inserted = false;
             blocks_map.entry(block_ref).or_insert_with(|| {
+                inserted = true;
                 RwLock::new(BlockState::new(block, commit_state.commit.commit_ref.index))
             });
+            if inserted {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .finalizer_blocks_bytes
+                    .add(block_bytes as i64);
+            }
         }
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_blocks_entries
+            .set(blocks_map.len() as i64);
     }
 
     /// Updates the set of origin descendants, by appending blocks from the last commit to
@@ -835,8 +850,19 @@ impl CommitFinalizer {
             // Clean up committed blocks.
             let mut blocks_map = self.blocks.write();
             for block in commit.blocks.iter() {
-                blocks_map.remove(&block.reference());
+                if let Some(state) = blocks_map.remove(&block.reference()) {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .finalizer_blocks_bytes
+                        .sub(state.into_inner().block.serialized().len() as i64);
+                }
             }
+            self.context
+                .metrics
+                .node_metrics
+                .finalizer_blocks_entries
+                .set(blocks_map.len() as i64);
 
             let round_delay = if let Some(last_commit_state) = self.pending_commits.back() {
                 last_commit_state.commit.leader.round - commit.leader.round
