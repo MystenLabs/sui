@@ -312,7 +312,7 @@ impl ForkStore {
     /// Optionally let executor-driven bounds (always the parent's current root
     /// version, which Lamport-dominates the child) set the live pointer on
     /// fetch so each child pays the remote round-trip once. Tracked in
-    /// design/storage.md § "Crash consistency and known gaps".
+    /// design/storage.md § "Known gaps".
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
