@@ -254,10 +254,11 @@ For high-value flows, move the verification logic onchain using a Move module. T
 ```move
 module example::settlement;
 
+use std::string::String;
 use sui::coin::Coin;
 use sui::event;
 
-/// Hot potato — must be consumed in the same transaction.
+/// Hot potato (no `drop`) — must be consumed in the same transaction.
 public struct SettlementProof {
     recipient: address,
     amount: u64,
@@ -275,7 +276,7 @@ public fun pay_and_prove<T>(
     recipient: address,
 ): SettlementProof {
     let amount = payment.value();
-    let coin_type = std::type_name::get<T>().into_string().to_string();
+    let coin_type = std::type_name::get<T>().into_string().to_ascii_string().to_string();
     transfer::public_transfer(payment, recipient);
 
     SettlementProof { recipient, amount, coin_type }
@@ -283,7 +284,7 @@ public fun pay_and_prove<T>(
 
 /// Consume the proof. Call this after verifying the payment details.
 /// Because SettlementProof has no `drop`, this function MUST be called
-/// in the same transaction — the proof cannot be ignored.
+/// in the same transaction. The proof cannot be ignored.
 public fun verify_settlement(
     proof: SettlementProof,
     expected_recipient: address,
