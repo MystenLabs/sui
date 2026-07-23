@@ -39,7 +39,6 @@ pub async fn execution_process(
     .await
 }
 
-/// Inner loop with injectable permit pools, so tests can exercise the permit routing.
 pub(crate) async fn execution_process_with_limits(
     authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
@@ -122,11 +121,8 @@ pub(crate) async fn execution_process_with_limits(
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _executing_guard = executing_guard;
-            // The permit is acquired inside the task rather than in the dispatch loop:
-            // if the loop blocked here on a user transaction while every user permit was
-            // held by a parked execution, a system-object writer queued behind it could
-            // never be dispatched — the starvation the dedicated pool exists to prevent.
-            // unwrap ok because we never close the semaphore in this context.
+            // hold semaphore permit until task completes. unwrap ok because we never close
+            // the semaphore in this context.
             let _guard = limit.acquire_owned().await.unwrap();
 
             if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {

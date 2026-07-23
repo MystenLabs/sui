@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use move_core_types::language_storage::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
+use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::SystemObjectVersion;
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
@@ -128,7 +128,7 @@ struct PreparedTx {
     /// its recorded effects. The executor loads each system object at exactly this version and
     /// treats a system read with no assigned version as an invariant violation, so it must cover
     /// every such object the transaction touched.
-    system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+    system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
     gas_data: GasData,
     gas_status: SuiGasStatus,
     txn_kind: TransactionKind,
@@ -214,9 +214,7 @@ pub(crate) fn execute_one_transaction(
 
     // The versions the transaction's system (consensus) objects were sequenced against, recovered
     // from its effects (mirrors the per-transaction map a live node assigns). Cancelled inputs carry
-    // no live version and are excluded above, so only mutated/read-only entries remain. The initial
-    // shared version is recovered from the object itself; the scan store serves plain keyed reads,
-    // so the initial version is otherwise unused here.
+    // no live version and are excluded above, so only mutated/read-only entries remain.
     let system_object_versions = executed
         .effects
         .input_consensus_objects()
@@ -231,7 +229,7 @@ pub(crate) fn execute_one_transaction(
                 store.get_object_by_key(&id, v)?.owner().start_version()?;
             Some((
                 id,
-                SystemObjectVersion {
+                ConsensusObjectVersion {
                     initial_shared_version,
                     version: v,
                 },

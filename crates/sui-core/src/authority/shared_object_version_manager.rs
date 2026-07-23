@@ -14,8 +14,8 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
+use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::SystemObjectVersion;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
@@ -39,20 +39,19 @@ pub struct AssignedVersions {
     /// Versions of system objects, keyed by object ID, that this transaction may read during
     /// execution but that are not part of its declared shared inputs. Each version is assigned
     /// deterministically during consensus sequencing, so that every validator reads the same
-    /// version of the object. The object's initial shared version is carried alongside so
-    /// downstream readers can wait for the version to be committed without loading the object.
+    /// version of the object.
     ///
     /// Today this holds at most the accumulator root version (as of the beginning of the consensus
     /// commit this transaction belongs to). The accumulator root qualifies because it is written at
     /// the end of every commit, so there is always a well-defined prior version to read from. More
     /// system objects will be added over time.
-    pub system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+    pub system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
 }
 
 impl AssignedVersions {
     pub fn new(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
     ) -> Self {
         Self {
             shared_object_versions,
@@ -74,10 +73,7 @@ impl AssignedVersions {
                 .map(|v| {
                     (
                         SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                        SystemObjectVersion {
-                            // In test genesis the accumulator root is created at the object
-                            // start version, so this matches what production assignment reads
-                            // from the epoch start configuration.
+                        ConsensusObjectVersion {
                             initial_shared_version: sui_types::object::OBJECT_START_VERSION,
                             version: v,
                         },
@@ -392,7 +388,7 @@ impl SharedObjVerManager {
                 ?cert_assigned_versions,
                 "assigned consensus object versions from effects"
             );
-            let system_object_versions: BTreeMap<ObjectID, SystemObjectVersion> =
+            let system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion> =
                 (*accumulator_version)
                     .map(|v| {
                         let initial_shared_version = epoch_store
@@ -403,7 +399,7 @@ impl SharedObjVerManager {
                             );
                         (
                             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                            SystemObjectVersion {
+                            ConsensusObjectVersion {
                                 initial_shared_version,
                                 version: v,
                             },
@@ -437,7 +433,7 @@ impl SharedObjVerManager {
                 .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version))
                 .expect("accumulator object must be in shared_input_next_versions when withdraws are enabled");
 
-            Some(SystemObjectVersion {
+            Some(ConsensusObjectVersion {
                 initial_shared_version: accumulator_initial_version,
                 version: accumulator_version,
             })
@@ -445,10 +441,11 @@ impl SharedObjVerManager {
             None
         };
         // The accumulator root is the only system object read implicitly during execution today.
-        let system_object_versions: BTreeMap<ObjectID, SystemObjectVersion> = accumulator_version
-            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-            .into_iter()
-            .collect();
+        let system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion> =
+            accumulator_version
+                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+                .into_iter()
+                .collect();
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.
