@@ -55,6 +55,10 @@ impl ThresholdClock {
                             &self.context.metrics.node_metrics,
                         );
                     }
+                    self.context.metrics.node_metrics.signed_block_census.set(
+                        crate::block::SIGNED_BLOCK_CENSUS
+                            .load(std::sync::atomic::Ordering::Relaxed),
+                    );
                     // Record the time of last quorum and new round start.
                     self.quorum_ts = now;
                     debug!(
