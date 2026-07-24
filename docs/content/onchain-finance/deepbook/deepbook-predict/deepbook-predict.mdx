@@ -57,7 +57,7 @@ DeepBook Predict smart contracts might change before Mainnet deployment. Treat t
 
 ## Quickstart: mint a binary position
 
-This quickstart installs the Sui TypeScript SDK, funds a Testnet account, creates a `PredictManager`, and mints one binary position. These samples pass compile checks against `@mysten/sui` version 2.22.1 and `typescript` version 6.0.3. This document does not execute them against Testnet, so run the [manual verification steps](#verify-on-testnet) before you rely on them.
+This quickstart installs the Sui TypeScript SDK, funds a Testnet account, creates a `PredictManager`, and mints one binary position. These samples live in the `examples/deepbook-predict` package, which CI type-checks with `tsc --noEmit` against `@mysten/sui` version 2.22.1. This document does not execute them against Testnet, so run the [manual verification steps](#verify-on-testnet) before you rely on them.
 
 ### 1. Install the SDK
 
@@ -74,157 +74,27 @@ You need two assets on Testnet:
 - **SUI for gas:** Request it from a [Sui Testnet faucet](/getting-started/onboarding/get-coins).
 - **DUSDC as the quote asset:** Request DUSDC and other Predict assets through the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L).
 
-### 3. Set the config block
+### 3. Set the configuration block
 
 Keep every onchain ID in one place. These values are Testnet-only and come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page. They change at Mainnet launch, so never inline them elsewhere.
 
-```ts title='config.ts'
-// Testnet-only DeepBook Predict IDs, pinned to the `predict-testnet-4-16` branch.
-// These change at Mainnet launch. Source: Contract Information page.
-export const PREDICT = {
-	network: 'testnet' as const,
-	packageId: '0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138',
-	predictObjectId: '0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a',
-	// DeepBook Test USDC (DUSDC), 6 decimals.
-	quoteType:
-		'0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC',
-	serverUrl: 'https://predict-server.testnet.mystenlabs.com',
-};
-
-// Oracle ID, expiry, and strike are NOT hardcoded. Read a live oracle from the
-// Predict server before minting: GET /predicts/:predict_id/oracles.
-export type ActiveOracle = {
-	oracleId: string; // object ID of the OracleSVI
-	expiry: number; // ms timestamp
-	strike: number; // fixed-point strike, per oracle scale
-};
-```
+<ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
 Set up a client and a signer next. The following example uses the [gRPC](/develop/accessing-data/grpc) client, which matches the rest of the DeepBook SDK docs.
 
-```ts title='client.ts'
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { PREDICT } from './config.js';
-
-export function getKeypair(privateKey: string): Ed25519Keypair {
-	const { secretKey } = decodeSuiPrivateKey(privateKey);
-	return Ed25519Keypair.fromSecretKey(secretKey);
-}
-
-export const client = new SuiGrpcClient({
-	network: PREDICT.network,
-	baseUrl: 'https://fullnode.testnet.sui.io:443',
-});
-```
+<ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
 
 ### 4. Create a `PredictManager`
 
 Each user creates one `PredictManager` and reuses it. The `create_manager` function shares the manager as a new object, so you read its ID from the transaction effects. Because `create_manager` shares the manager during this transaction, you deposit into it and mint from it in a later transaction, not the same one.
 
-```ts title='create-manager.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT } from './config.js';
-
-// Creates and shares a PredictManager, then returns its object ID.
-export async function createManager(signer: Ed25519Keypair): Promise<string> {
-	const tx = new Transaction();
-	tx.moveCall({ target: `${PREDICT.packageId}::predict::create_manager` });
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true, objectTypes: true },
-	});
-
-	if (result.$kind === 'FailedTransaction') {
-		throw new Error('create_manager transaction failed');
-	}
-
-	const objectTypes = result.Transaction?.objectTypes ?? {};
-	const managerId = result.Transaction?.effects?.changedObjects?.find(
-		(obj) =>
-			obj.idOperation === 'Created' &&
-			objectTypes[obj.objectId]?.includes('PredictManager'),
-	)?.objectId;
-
-	if (!managerId) {
-		throw new Error('Could not find created PredictManager in effects');
-	}
-	return managerId;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/create-manager.ts" mode="code" tag="create-manager" />
 
 ### 5. Mint your first binary position
 
 Read a live oracle from the Predict server, then deposit DUSDC and mint one binary position in a single transaction. A binary position is keyed by oracle, expiry, strike, and direction. This example mints an up position with `market_key::up`.
 
-```ts title='mint.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT, type ActiveOracle } from './config.js';
-
-// Deposits DUSDC into the manager and mints one binary "up" position, in a
-// single PTB. `dusdcCoinId` is a DUSDC coin object owned by the signer.
-export async function mintBinaryUp(params: {
-	signer: Ed25519Keypair;
-	managerId: string;
-	oracle: ActiveOracle;
-	dusdcCoinId: string;
-	depositAmount: bigint; // DUSDC base units (6 decimals)
-	quantity: bigint; // position quantity
-}) {
-	const { signer, managerId, oracle, dusdcCoinId, depositAmount, quantity } =
-		params;
-	const tx = new Transaction();
-
-	// 1. Split the deposit amount off a DUSDC coin and deposit it into the manager.
-	const [deposit] = tx.splitCoins(tx.object(dusdcCoinId), [depositAmount]);
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict_manager::deposit`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [tx.object(managerId), deposit],
-	});
-
-	// 2. Build the MarketKey for an "up" binary position.
-	const key = tx.moveCall({
-		target: `${PREDICT.packageId}::market_key::up`,
-		arguments: [
-			tx.pure.id(oracle.oracleId),
-			tx.pure.u64(oracle.expiry),
-			tx.pure.u64(oracle.strike),
-		],
-	});
-
-	// 3. Mint the position, paying from the manager's deposited balance.
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict::mint`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [
-			tx.object(PREDICT.predictObjectId),
-			tx.object(managerId),
-			tx.object(oracle.oracleId),
-			key,
-			tx.pure.u64(quantity),
-			tx.object.clock(),
-		],
-	});
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	if (result.$kind === 'FailedTransaction') {
-		throw new Error('mint transaction failed');
-	}
-	return result.Transaction;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
 The mint succeeds only when the oracle is live, the quote asset is accepted, the market key matches the oracle, and the manager holds enough deposited DUSDC. For preview amounts, call `get_trade_amounts` before you mint. The [end-to-end Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) covers previews, vertical ranges, redemption, and the liquidity provider flow.
 

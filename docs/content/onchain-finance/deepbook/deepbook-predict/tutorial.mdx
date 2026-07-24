@@ -55,7 +55,7 @@ import TabItem from '@theme/TabItem';
 
 A complete DeepBook Predict flow on Sui Testnet covers reading a live oracle, minting binary and vertical range positions, redeeming before and after settlement, and running the liquidity provider vault flow. It continues from the [DeepBook Predict quickstart](/onchain-finance/deepbook/deepbook-predict#quickstart-mint-a-binary-position), which covers install, funding, and your first mint.
 
-There is no dedicated Predict TypeScript SDK. You build every transaction with the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) against the protocol's Move entry points. The transaction samples pass compile checks against `@mysten/sui` version 2.22.1 and `typescript` version 6.0.3. This document does not execute them against Testnet. The oracle-list response shape matches the live Testnet server. Run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
+There is no dedicated Predict TypeScript SDK. You build every transaction with the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) against the protocol's Move entry points. The transaction samples live in the `examples/deepbook-predict` package, which CI type-checks with `tsc --noEmit` against `@mysten/sui` version 2.22.1. This document does not execute them against Testnet. The oracle-list response shape matches the live Testnet server. Run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
 
 :::caution
 
@@ -72,36 +72,15 @@ DeepBook Predict smart contracts might change before Mainnet deployment. Treat t
 </TabItem>
 </Tabs>
 
-## Config and client
+## Configuration and client
 
-Keep every Testnet-only ID in one config block. These values come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page and change at Mainnet launch.
+Keep every Testnet-only ID in one configuration block. These values come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page and change at Mainnet launch.
 
-```ts title='config.ts'
-// Testnet-only DeepBook Predict IDs, pinned to the `predict-testnet-4-16` branch.
-export const PREDICT = {
-	network: 'testnet' as const,
-	packageId: '0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138',
-	predictObjectId: '0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a',
-	quoteType:
-		'0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC',
-	serverUrl: 'https://predict-server.testnet.mystenlabs.com',
-};
-
-// App-level oracle selection. The trader picks a strike from the oracle's grid.
-export type ActiveOracle = { oracleId: string; expiry: number; strike: number };
-```
+<ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
 The samples reuse the `client` from the quickstart:
 
-```ts title='client.ts'
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { PREDICT } from './config.js';
-
-export const client = new SuiGrpcClient({
-	network: PREDICT.network,
-	baseUrl: 'https://fullnode.testnet.sui.io:443',
-});
-```
+<ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
 
 ## Understand the oracle
 
@@ -120,34 +99,7 @@ Minting requires a live (active) oracle. Redeeming works against a live or settl
 
 Read the current oracle list from the public Predict server, then select an active oracle and a strike from its grid. The server returns `snake_case` fields and the strike grid rather than a single strike.
 
-```ts title='oracle.ts'
-import { PREDICT, type ActiveOracle } from './config.js';
-
-type ServerOracle = {
-	oracle_id: string;
-	expiry: number;
-	min_strike: number;
-	tick_size: number;
-	status: string; // "inactive" | "active" | "pending_settlement" | "settled"
-};
-
-// Picks the first active oracle and a strike `tickIndex` ticks up the grid.
-export async function getActiveOracle(
-	predictObjectId: string,
-	tickIndex = 0,
-): Promise<ActiveOracle> {
-	const res = await fetch(`${PREDICT.serverUrl}/predicts/${predictObjectId}/oracles`);
-	if (!res.ok) throw new Error(`oracle fetch failed: ${res.status}`);
-	const oracles = (await res.json()) as ServerOracle[];
-	const live = oracles.find((o) => o.status === 'active');
-	if (!live) throw new Error('no active oracle available');
-	return {
-		oracleId: live.oracle_id,
-		expiry: live.expiry,
-		strike: live.min_strike + tickIndex * live.tick_size,
-	};
-}
-```
+<ImportContent source="examples/deepbook-predict/src/oracle.ts" mode="code" tag="oracle" />
 
 ## Set up the `PredictManager`
 
@@ -159,61 +111,7 @@ The manager stores your deposited quote balance, binary position quantities keye
 
 A binary position pays out when settlement lands above the strike (an up position) or at or below it (a down position). Deposit DUSDC into the manager and mint one up position in a single transaction. Build the `MarketKey` with `market_key::up`.
 
-```ts title='mint-binary.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT, type ActiveOracle } from './config.js';
-
-export async function mintBinaryUp(params: {
-	signer: Ed25519Keypair;
-	managerId: string;
-	oracle: ActiveOracle;
-	dusdcCoinId: string;
-	depositAmount: bigint; // DUSDC base units (6 decimals)
-	quantity: bigint;
-}) {
-	const { signer, managerId, oracle, dusdcCoinId, depositAmount, quantity } = params;
-	const tx = new Transaction();
-
-	const [deposit] = tx.splitCoins(tx.object(dusdcCoinId), [depositAmount]);
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict_manager::deposit`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [tx.object(managerId), deposit],
-	});
-
-	const key = tx.moveCall({
-		target: `${PREDICT.packageId}::market_key::up`,
-		arguments: [
-			tx.pure.id(oracle.oracleId),
-			tx.pure.u64(oracle.expiry),
-			tx.pure.u64(oracle.strike),
-		],
-	});
-
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict::mint`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [
-			tx.object(PREDICT.predictObjectId),
-			tx.object(managerId),
-			tx.object(oracle.oracleId),
-			key,
-			tx.pure.u64(quantity),
-			tx.object.clock(),
-		],
-	});
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	if (result.$kind === 'FailedTransaction') throw new Error('mint failed');
-	return result.Transaction;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
 For a down position, use `market_key::down` with the same oracle, expiry, and strike.
 
@@ -225,55 +123,7 @@ Before minting, preview the cost. The `predict::get_trade_amounts` read function
 
 A vertical range pays out when settlement lands in the half-open band `(lower_strike, higher_strike]`. Build the key with `range_key::new`, which aborts if `lower_strike` is not less than `higher_strike`. This example assumes the manager already holds enough DUSDC.
 
-```ts title='mint-range.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT, type ActiveOracle } from './config.js';
-
-export async function mintRange(params: {
-	signer: Ed25519Keypair;
-	managerId: string;
-	oracle: ActiveOracle;
-	lowerStrike: bigint;
-	higherStrike: bigint;
-	quantity: bigint;
-}) {
-	const { signer, managerId, oracle, lowerStrike, higherStrike, quantity } = params;
-	const tx = new Transaction();
-
-	const key = tx.moveCall({
-		target: `${PREDICT.packageId}::range_key::new`,
-		arguments: [
-			tx.pure.id(oracle.oracleId),
-			tx.pure.u64(oracle.expiry),
-			tx.pure.u64(lowerStrike),
-			tx.pure.u64(higherStrike),
-		],
-	});
-
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict::mint_range`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [
-			tx.object(PREDICT.predictObjectId),
-			tx.object(managerId),
-			tx.object(oracle.oracleId),
-			key,
-			tx.pure.u64(quantity),
-			tx.object.clock(),
-		],
-	});
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	if (result.$kind === 'FailedTransaction') throw new Error('mint_range failed');
-	return result.Transaction;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
 
 Preview range amounts with `predict::get_range_trade_amounts`, which mirrors `get_trade_amounts` for a `RangeKey`.
 
@@ -286,53 +136,7 @@ Redeeming sells a position back to the vault and deposits the payout into the ow
 
 The owner redeems a position with `predict::redeem`.
 
-```ts title='redeem.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT, type ActiveOracle } from './config.js';
-
-export async function redeemBinaryUp(params: {
-	signer: Ed25519Keypair;
-	managerId: string;
-	oracle: ActiveOracle;
-	quantity: bigint;
-	permissionless?: boolean; // for settled positions redeemed by anyone
-}) {
-	const { signer, managerId, oracle, quantity, permissionless } = params;
-	const tx = new Transaction();
-
-	const key = tx.moveCall({
-		target: `${PREDICT.packageId}::market_key::up`,
-		arguments: [
-			tx.pure.id(oracle.oracleId),
-			tx.pure.u64(oracle.expiry),
-			tx.pure.u64(oracle.strike),
-		],
-	});
-
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict::${permissionless ? 'redeem_permissionless' : 'redeem'}`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [
-			tx.object(PREDICT.predictObjectId),
-			tx.object(managerId),
-			tx.object(oracle.oracleId),
-			key,
-			tx.pure.u64(quantity),
-			tx.object.clock(),
-		],
-	});
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	if (result.$kind === 'FailedTransaction') throw new Error('redeem failed');
-	return result.Transaction;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/redeem.ts" mode="code" tag="redeem" />
 
 After an oracle settles, anyone can redeem a settled position on the owner's behalf with `predict::redeem_permissionless`. The payout still lands in the owner's manager. Use this to close out settled positions for users without requiring their signature. Redeem a vertical range with `predict::redeem_range`.
 
@@ -344,71 +148,13 @@ Liquidity providers supply an accepted quote asset into the shared vault and rec
 
 `predict::supply` returns a `Coin<PLP>`. Transfer it to the supplier to keep it.
 
-```ts title='supply.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT } from './config.js';
-
-export async function supplyLiquidity(params: {
-	signer: Ed25519Keypair;
-	dusdcCoinId: string;
-	amount: bigint;
-}) {
-	const { signer, dusdcCoinId, amount } = params;
-	const tx = new Transaction();
-
-	const [supply] = tx.splitCoins(tx.object(dusdcCoinId), [amount]);
-	const plp = tx.moveCall({
-		target: `${PREDICT.packageId}::predict::supply`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [tx.object(PREDICT.predictObjectId), supply, tx.object.clock()],
-	});
-	tx.transferObjects([plp], signer.toSuiAddress());
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	if (result.$kind === 'FailedTransaction') throw new Error('supply failed');
-	return result.Transaction;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/supply.ts" mode="code" tag="supply" />
 
 ### Withdraw liquidity
 
 `predict::withdraw` burns a `Coin<PLP>` and returns the selected quote asset. The withdrawal succeeds only when enough funds remain after the vault covers its current maximum payout and the withdrawal limiter allows the amount.
 
-```ts title='withdraw.ts'
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { client } from './client.js';
-import { PREDICT } from './config.js';
-
-export async function withdrawLiquidity(params: {
-	signer: Ed25519Keypair;
-	plpCoinId: string;
-}) {
-	const { signer, plpCoinId } = params;
-	const tx = new Transaction();
-
-	const quote = tx.moveCall({
-		target: `${PREDICT.packageId}::predict::withdraw`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [tx.object(PREDICT.predictObjectId), tx.object(plpCoinId), tx.object.clock()],
-	});
-	tx.transferObjects([quote], signer.toSuiAddress());
-
-	const result = await client.core.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	if (result.$kind === 'FailedTransaction') throw new Error('withdraw failed');
-	return result.Transaction;
-}
-```
+<ImportContent source="examples/deepbook-predict/src/withdraw.ts" mode="code" tag="withdraw" />
 
 ## Vault strategy considerations
 
