@@ -527,6 +527,11 @@ impl WritebackCache {
             version,
         };
         tokio::task::block_in_place(|| {
+            // Release the execution permit (if any) before parking, so that blocked
+            // executions never starve the transaction that will unblock them. The permit
+            // is not reacquired after the wait: transient over-subscription resolves
+            // itself as executions complete.
+            mysten_common::sync::execution_permit::release_execution_permit();
             tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
                 "get_implicitly_read_system_object_blocking",
                 &[key],

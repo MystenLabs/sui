@@ -368,3 +368,63 @@ async fn test_get_implicitly_read_system_object_blocking() {
         .unwrap();
     assert_eq!(object.version(), target_version);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_execution_permit_released_while_blocked() {
+    use mysten_common::sync::execution_permit::set_execution_permit;
+    use tokio::sync::Semaphore;
+
+    let cache = create_writeback_cache().await;
+
+    let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+    let init_version = SequenceNumber::from(1);
+    let target_version = SequenceNumber::from(3);
+
+    let below_target = Object::with_id_owner_version_for_testing(
+        object_id,
+        SequenceNumber::from(2),
+        Owner::Shared {
+            initial_shared_version: init_version,
+        },
+    );
+    cache.write_object_entry_for_test(below_target);
+
+    let semaphore = Arc::new(Semaphore::new(1));
+    let permit = semaphore.clone().try_acquire_owned().unwrap();
+    assert_eq!(semaphore.available_permits(), 0);
+
+    let blocked = tokio::spawn({
+        let cache = cache.clone();
+        async move {
+            let _permit_guard = set_execution_permit(Box::new(permit));
+            cache
+                .as_ref()
+                .get_implicitly_read_system_object_blocking(
+                    &object_id,
+                    ConsensusObjectVersion {
+                        initial_shared_version: init_version,
+                        version: target_version,
+                    },
+                )
+                .unwrap()
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!blocked.is_finished());
+    assert_eq!(semaphore.available_permits(), 1);
+
+    let at_target = Object::with_id_owner_version_for_testing(
+        object_id,
+        target_version,
+        Owner::Shared {
+            initial_shared_version: init_version,
+        },
+    );
+    cache.write_object_entry_for_test(at_target);
+    let object = timeout(Duration::from_secs(3), blocked)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(object.version(), target_version);
+    assert_eq!(semaphore.available_permits(), 1);
+}
