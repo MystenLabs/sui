@@ -18,7 +18,7 @@ on:
         required: true
         default: main
       test_num:
-        description: "MSIM_TEST_NUM (test iterations)"
+        description: "Number of seeds to run (seed-search iterations)"
         type: string
         required: false
         default: "30"

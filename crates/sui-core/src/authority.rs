@@ -2983,15 +2983,14 @@ impl AuthorityState {
         >,
         fork_probability: f32,
     ) {
-        use std::cell::RefCell;
-        thread_local! {
-            static TOTAL_FAILING_STAKE: RefCell<u64> = RefCell::new(0);
-        }
+        static TOTAL_FAILING_STAKE: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
-                TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
+                {
+                    let mut total_stake = TOTAL_FAILING_STAKE.lock().unwrap();
+                    let total_stake = &mut *total_stake;
                     let already_forked = forked_validators
                         .lock()
                         .ok()
@@ -3047,7 +3046,7 @@ impl AuthorityState {
                             }
                         }
                     }
-                });
+                }
             }
         }
     }
@@ -6631,17 +6630,15 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 pub mod framework_injection {
     use move_binary_format::CompiledModule;
     use std::collections::BTreeMap;
-    use std::{cell::RefCell, collections::BTreeSet};
+    use std::collections::BTreeSet;
+    use std::sync::Mutex;
     use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
     use sui_types::is_system_package;
 
     type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
-    // Thread local cache because all simtests run in a single unique thread.
-    thread_local! {
-        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::default());
-    }
+    static OVERRIDE: Mutex<FrameworkOverrideConfig> = Mutex::new(BTreeMap::new());
 
     type Framework = Vec<CompiledModule>;
 
@@ -6665,40 +6662,40 @@ pub mod framework_injection {
     }
 
     pub fn set_override(package_id: ObjectID, modules: Vec<CompiledModule>) {
-        OVERRIDE.with(|bs| {
-            bs.borrow_mut()
-                .insert(package_id, PackageOverrideConfig::Global(modules))
-        });
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .insert(package_id, PackageOverrideConfig::Global(modules));
     }
 
     pub fn set_override_cb(package_id: ObjectID, func: PackageUpgradeCallback) {
-        OVERRIDE.with(|bs| {
-            bs.borrow_mut()
-                .insert(package_id, PackageOverrideConfig::PerValidator(func))
-        });
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .insert(package_id, PackageOverrideConfig::PerValidator(func));
     }
 
     pub fn set_system_packages(packages: Vec<SystemPackage>) {
-        OVERRIDE.with(|bs| {
-            let mut new_packages_not_to_include: BTreeSet<_> =
-                BuiltInFramework::all_package_ids().into_iter().collect();
-            for pkg in &packages {
-                new_packages_not_to_include.remove(&pkg.id);
-            }
-            for pkg in packages {
-                bs.borrow_mut()
-                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
-            }
-            for empty_pkg in new_packages_not_to_include {
-                bs.borrow_mut()
-                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
-            }
-        });
+        let mut cfg = OVERRIDE.lock().unwrap();
+        let mut new_packages_not_to_include: BTreeSet<_> =
+            BuiltInFramework::all_package_ids().into_iter().collect();
+        for pkg in &packages {
+            new_packages_not_to_include.remove(&pkg.id);
+        }
+        for pkg in packages {
+            cfg.insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+        }
+        for empty_pkg in new_packages_not_to_include {
+            cfg.insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+        }
     }
 
     pub fn get_override_bytes(package_id: &ObjectID, name: AuthorityName) -> Option<Vec<Vec<u8>>> {
-        OVERRIDE.with(|cfg| {
-            cfg.borrow().get(package_id).and_then(|entry| match entry {
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .get(package_id)
+            .and_then(|entry| match entry {
                 PackageOverrideConfig::Global(framework) => {
                     Some(compiled_modules_to_bytes(framework))
                 }
@@ -6706,19 +6703,20 @@ pub mod framework_injection {
                     func(name).map(|fw| compiled_modules_to_bytes(&fw))
                 }
             })
-        })
     }
 
     pub fn get_override_modules(
         package_id: &ObjectID,
         name: AuthorityName,
     ) -> Option<Vec<CompiledModule>> {
-        OVERRIDE.with(|cfg| {
-            cfg.borrow().get(package_id).and_then(|entry| match entry {
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .get(package_id)
+            .and_then(|entry| match entry {
                 PackageOverrideConfig::Global(framework) => Some(framework.clone()),
                 PackageOverrideConfig::PerValidator(func) => func(name),
             })
-        })
     }
 
     pub fn get_override_system_package(
@@ -6743,12 +6741,12 @@ pub mod framework_injection {
 
     pub fn get_extra_packages(name: AuthorityName) -> Vec<SystemPackage> {
         let built_in = BTreeSet::from_iter(BuiltInFramework::all_package_ids().into_iter());
-        let extra: Vec<ObjectID> = OVERRIDE.with(|cfg| {
-            cfg.borrow()
-                .keys()
-                .filter_map(|package| (!built_in.contains(package)).then_some(*package))
-                .collect()
-        });
+        let extra: Vec<ObjectID> = OVERRIDE
+            .lock()
+            .unwrap()
+            .keys()
+            .filter_map(|package| (!built_in.contains(package)).then_some(*package))
+            .collect();
 
         extra
             .into_iter()

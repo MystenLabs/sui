@@ -42,21 +42,17 @@ pub mod intercept_debug_fatal {
         pub callback: Arc<dyn Fn() + Send + Sync>,
     }
 
-    thread_local! {
-        static INTERCEPT_DEBUG_FATAL: Mutex<Option<DebugFatalCallback>> = Mutex::new(None);
-    }
+    static INTERCEPT_DEBUG_FATAL: Mutex<Option<DebugFatalCallback>> = Mutex::new(None);
 
     pub fn register_callback(message: &str, f: impl Fn() + Send + Sync + 'static) {
-        INTERCEPT_DEBUG_FATAL.with(|m| {
-            *m.lock().unwrap() = Some(DebugFatalCallback {
-                pattern: message.to_string(),
-                callback: Arc::new(f),
-            });
+        *INTERCEPT_DEBUG_FATAL.lock().unwrap() = Some(DebugFatalCallback {
+            pattern: message.to_string(),
+            callback: Arc::new(f),
         });
     }
 
     pub fn get_callback() -> Option<DebugFatalCallback> {
-        INTERCEPT_DEBUG_FATAL.with(|m| m.lock().unwrap().clone())
+        INTERCEPT_DEBUG_FATAL.lock().unwrap().clone()
     }
 }
 

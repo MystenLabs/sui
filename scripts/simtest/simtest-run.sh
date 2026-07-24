@@ -19,9 +19,6 @@ if [ -z "$NUM_CPUS" ]; then
   NUM_CPUS=$(cat /proc/cpuinfo | grep processor | wc -l) # ubuntu
 fi
 
-# filter out some tests that give spurious failures.
-TEST_FILTER="(not (test(~batch_verification_tests)))"
-
 DATE=$(date +%s)
 SEED="$DATE"
 
@@ -74,7 +71,6 @@ for SUB_SEED in `seq 1 $NUM_CPUS`; do
 
   # --test-threads 1 is important: parallelism is achieved via the for loop
   MSIM_TEST_SEED="$SEED" \
-  MSIM_TEST_NUM=1 \
   MSIM_WATCHDOG_TIMEOUT_MS=60000 \
   SIM_STRESS_TEST_DURATION_SECS=300 \
   scripts/simtest/cargo-simtest simtest \
@@ -98,20 +94,14 @@ echo "Running determinism simtest"
 echo "==========================="
 date
 
-# Check for determinism in stress simtests
+# Check determinism by running a test twice in separate processes and comparing the
+# output (replaces the retired in-process MSIM_TEST_CHECK_DETERMINISM mechanism).
 LOG_FILE="$LOG_DIR/determinism-log"
 echo "Using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 
 MSIM_TEST_SEED="$SEED" \
-MSIM_TEST_NUM=1 \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-MSIM_TEST_CHECK_DETERMINISM=1 \
-scripts/simtest/cargo-simtest simtest \
-  --color always \
-  --test-threads "$NUM_CPUS" \
-  --package sui-benchmark \
-  --profile simtestnightly \
-  -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+scripts/simtest/check-determinism.sh 2>&1 | tee "$LOG_FILE"
 
 echo ""
 echo "============================================="

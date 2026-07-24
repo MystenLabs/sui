@@ -435,9 +435,9 @@ jobs:
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
-      - name: check new tests for flakiness
+      - name: check determinism
         run: |
-          scripts/simtest/stress-new-tests.sh
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/check-determinism.sh
 
   simtest-mainnet:
     permissions:
@@ -473,9 +473,6 @@ jobs:
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
-      - name: check new tests for flakiness
-        run: |
-          scripts/simtest/stress-new-tests.sh
 
   # This job ensures that Move unit tests are run if there are changes
   # to Move code but not Rust code (If there are Rust changes, they
