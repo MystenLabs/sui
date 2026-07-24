@@ -381,7 +381,7 @@ importers:
         specifier: ^5.5.3
         version: 5.8.3
       vitest:
-        specifier: ^2.1.8
+        specifier: ^2.1
         version: 2.1.9(@types/node@20.17.46)(lightningcss@1.30.0)
 
   examples/regulated-coin/ts-client:
