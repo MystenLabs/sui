@@ -50,7 +50,6 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 
 use super::*;
-use crate::rpc::reader::RpcReader;
 use crate::services::ServiceManager;
 
 /// Build a `Simulacrum<OsRng, ForkStore>` from a fresh genesis NetworkConfig.
@@ -118,10 +117,6 @@ fn test_data_store() -> (tempfile::TempDir, ForkStore) {
     let services = open_test_services(temp.path(), 0);
     let store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
     (temp, store)
-}
-
-fn fork_rpc_reader(store: &ForkStore) -> RpcReader {
-    RpcReader::new(store.clone())
 }
 
 fn test_data_store_with_remote(
@@ -442,7 +437,7 @@ async fn test_rpc_owned_objects_initializes_address_inventory_from_graphql() {
 
     let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
-    let reader = fork_rpc_reader(&store);
+    let reader = store.clone();
     let infos: Vec<_> =
         RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
             .expect("owned-object iterator should initialize address inventory")
@@ -487,7 +482,7 @@ async fn test_seed_save_survives_restart_without_remote() {
         store
             .save_address_owned_seed_objects(&[object_ref])
             .expect("seed object should be saved");
-        let reader = fork_rpc_reader(&store);
+        let reader = store.clone();
         let infos: Vec<_> =
             RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
                 .expect("owned-object iterator should use saved seed")
@@ -506,7 +501,7 @@ async fn test_seed_save_survives_restart_without_remote() {
     store
         .save_address_owned_seed_objects(&[object_ref])
         .expect("existing seed object should be saved without remote");
-    let reader = fork_rpc_reader(&store);
+    let reader = store.clone();
     let infos: Vec<_> =
         RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
             .expect("owned-object iterator should use reopened seed index")
@@ -530,7 +525,7 @@ async fn test_rpc_dynamic_field_iter_initializes_object_owner_inventory_from_gra
 
     let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
-    let reader = fork_rpc_reader(&store);
+    let reader = store.clone();
     let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None)
         .expect("dynamic-field iterator should initialize object-owner inventory")
         .map(|result| result.expect("dynamic-field row should decode"))
@@ -585,7 +580,7 @@ async fn test_rpc_get_coin_info_initializes_type_inventory_from_graphql() {
 
     let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
-    let reader = fork_rpc_reader(&store);
+    let reader = store.clone();
     let info = RpcIndexes::get_coin_info(&reader, &coin_type)
         .expect("coin-info lookup should initialize type inventories")
         .expect("coin info should be assembled from indexed wrapper objects");
@@ -611,7 +606,7 @@ async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
     let (mut store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
     store.update_objects(BTreeMap::from([(first_id, transferred)]), vec![]);
 
-    let reader = fork_rpc_reader(&store);
+    let reader = store.clone();
     assert!(
         RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
             .expect("balance lookup should initialize address inventory")
@@ -646,7 +641,7 @@ async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
 }
 
 #[tokio::test]
-async fn test_rpc_reader_latest_ignores_stale_cached_history() {
+async fn test_rpc_latest_read_ignores_stale_cached_history() {
     // A pre-fork object whose true current-at-fork version is 9, while the
     // local store holds only a cached historical row at version 5 (the exact
     // state a bounded child read or exact-version read leaves behind: raw row,
@@ -681,7 +676,7 @@ async fn test_rpc_reader_latest_ignores_stale_cached_history() {
         .save_object_version_only(&stale)
         .expect("historical row should save");
 
-    let reader = fork_rpc_reader(&store);
+    let reader = store.clone();
     let got = sui_types::storage::ObjectStore::get_object(&reader, &object_id)
         .expect("latest read should resolve the current version");
     assert_eq!(

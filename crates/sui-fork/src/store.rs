@@ -9,9 +9,11 @@ use std::sync::RwLockWriteGuard;
 use anyhow::Context as _;
 use anyhow::anyhow;
 use anyhow::bail;
+use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::schema::objects::Status;
 use sui_rpc_store::schema::objects::TombstoneKind;
 
+use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
@@ -33,9 +35,11 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::SuiResult;
+use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::BackingStore;
@@ -44,12 +48,18 @@ use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::DynamicFieldKey;
+use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
 use sui_types::storage::ParentSync;
 use sui_types::storage::ReadStore;
 use sui_types::storage::RpcIndexes;
+use sui_types::storage::RpcStateReader;
 use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Kind as StorageErrorKind;
@@ -77,7 +87,9 @@ use crate::remote::RemoteSource;
 /// executor coordinate index initialization.
 ///
 /// Implements [`SimulatorStore`] so it can be passed directly into
-/// [`simulacrum::Simulacrum::new_from_custom_state`].
+/// [`simulacrum::Simulacrum::new_from_custom_state`], and the upstream RPC
+/// storage traits (`ReadStore`, `RpcStateReader`, `RpcIndexes`) so the same
+/// store backs the `sui-rpc-api` `RpcService`.
 #[derive(Clone)]
 pub struct ForkStore {
     inner: Arc<ForkStoreInner>,
@@ -538,123 +550,6 @@ impl ForkStore {
             .map_err(|e| StorageError::custom(e.to_string()))
     }
 
-    /// Initialize and iterate address-owned objects from the RPC-store owner index.
-    ///
-    /// The remote scan is checkpoint-bounded and recorded in the metadata store
-    /// so repeated owner queries read the local RPC-store index.
-    pub(crate) fn owned_objects_iter(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
-    {
-        self.inner
-            .inventory
-            .ensure_address_owner(owner)
-            .map_err(to_storage_error)?;
-        RpcIndexes::owned_objects_iter(self.local_store().reader(), owner, object_type, cursor)
-    }
-
-    /// Initialize and iterate the object-owned children of `parent`.
-    ///
-    /// The remote scan is checkpoint-bounded and recorded in the metadata store
-    /// so repeated dynamic-field requests read the local RPC-store index.
-    pub(crate) fn dynamic_field_iter(
-        &self,
-        parent: ObjectID,
-        cursor: Option<DynamicFieldKey>,
-    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        self.inner
-            .inventory
-            .ensure_object_owner(parent)
-            .map_err(to_storage_error)?;
-        RpcIndexes::dynamic_field_iter(self.local_store().reader(), parent, cursor)
-    }
-
-    /// Initialize the type indexes needed to assemble RPC coin metadata.
-    pub(crate) fn coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
-        self.inner
-            .inventory
-            .ensure_coin_info(coin_type)
-            .map_err(to_storage_error)?;
-        RpcIndexes::get_coin_info(self.local_store().reader(), coin_type)
-    }
-
-    /// Initialize address inventory and read an address balance from the RPC-store balance index.
-    pub(crate) fn balance(
-        &self,
-        owner: &SuiAddress,
-        coin_type: &StructTag,
-    ) -> StorageResult<Option<BalanceInfo>> {
-        self.inner
-            .inventory
-            .ensure_address_owner(*owner)
-            .map_err(to_storage_error)?;
-        RpcIndexes::get_balance(self.local_store().reader(), owner, coin_type)
-    }
-
-    /// Initialize address inventory and iterate address balances from the RPC-store balance index.
-    pub(crate) fn balance_iter(
-        &self,
-        owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
-    ) -> StorageResult<BalanceIterator<'_>> {
-        self.inner
-            .inventory
-            .ensure_address_owner(*owner)
-            .map_err(to_storage_error)?;
-        RpcIndexes::balance_iter(self.local_store().reader(), owner, cursor)
-    }
-
-    /// Return the highest checkpoint currently visible to fork-managed RPC indexes.
-    pub(crate) fn highest_indexed_checkpoint_seq_number(
-        &self,
-    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
-        Ok(self.get_highest_checkpoint().ok())
-    }
-
-    /// Return the chain identifier for the forked network.
-    ///
-    /// Known networks use their fixed identifiers. Custom networks derive the
-    /// identifier from the fork checkpoint digest.
-    pub(crate) fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
-        let id = match self.chain() {
-            Chain::Mainnet => get_mainnet_chain_identifier(),
-            Chain::Testnet => get_testnet_chain_identifier(),
-            Chain::Unknown => {
-                let checkpoint =
-                    ForkStore::get_checkpoint_by_sequence_number(self, self.forked_at_checkpoint())
-                        .map_err(to_storage_error)?
-                        .ok_or_else(|| {
-                            StorageError::missing(
-                                "forked checkpoint missing -- cannot derive chain identifier",
-                            )
-                        })?;
-                ChainIdentifier::from(*checkpoint.digest())
-            }
-        };
-        Ok(id)
-    }
-
-    /// Return the highest checkpoint persisted in the local RPC store.
-    pub(crate) fn latest_checkpoint_for_rpc(&self) -> StorageResult<VerifiedCheckpoint> {
-        ForkStore::get_highest_verified_checkpoint(self)
-            .map_err(to_storage_error)?
-            .ok_or_else(|| StorageError::missing("no checkpoint persisted yet"))
-    }
-
-    /// Return the highest checkpoint considered synced by the fork RPC reader.
-    pub(crate) fn highest_synced_checkpoint_for_rpc(&self) -> StorageResult<VerifiedCheckpoint> {
-        ForkStore::get_highest_verified_checkpoint(self)
-            .map_err(to_storage_error)?
-            .ok_or_else(|| {
-                StorageError::missing(
-                    "no checkpoint persisted yet -- cannot determine highest synced checkpoint",
-                )
-            })
-    }
-
     pub(crate) fn save_address_owned_seed_objects(
         &self,
         object_refs: &[ObjectRef],
@@ -1058,6 +953,402 @@ impl SimulatorStore for ForkStore {
     }
 }
 
+// ============================================================================
+// RPC storage traits
+// ============================================================================
+//
+// The fork serves RPC directly through `sui-rpc-api` (it does not use
+// `sui-rpc-node`): [`crate::startup`] hands the store to `RpcService` as its
+// `RpcStateReader`. These impls are the routing table between fork policy and
+// the stock rpc-store reader: every read the fork has policy for resolves
+// through the local-first, remote-fallback helpers above, while surfaces the
+// fork keeps no policy for -- events, full checkpoint contents, committees,
+// epoch info, struct layouts, and the ledger/bitmap indexes, all written by
+// the embedded indexer -- are served straight from the stock reader.
+//
+// The one read the stock reader could answer but must not is `get_object`
+// without a version: a stock reverse scan over the fork's sparse `objects` CF
+// would serve cached history as current, so latest-semantics reads go through
+// the store's `LiveState`-backed path (see the `ObjectStore` impl above).
+
+/// RPC-side helpers; the trait impls below are the only callers.
+impl ForkStore {
+    /// The stock reader over the fork's local `sui-rpc-store`, for reads the
+    /// fork has no policy for.
+    fn stock_reader(&self) -> &RpcStoreReader {
+        self.local_store().reader()
+    }
+
+    /// Chain identifier for the forked network: known networks use their
+    /// fixed identifiers; custom networks derive one from the fork checkpoint
+    /// digest.
+    fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
+        let id = match self.chain() {
+            Chain::Mainnet => get_mainnet_chain_identifier(),
+            Chain::Testnet => get_testnet_chain_identifier(),
+            Chain::Unknown => {
+                let checkpoint =
+                    ForkStore::get_checkpoint_by_sequence_number(self, self.forked_at_checkpoint())
+                        .map_err(to_storage_error)?
+                        .ok_or_else(|| {
+                            StorageError::missing(
+                                "forked checkpoint missing -- cannot derive chain identifier",
+                            )
+                        })?;
+                ChainIdentifier::from(*checkpoint.digest())
+            }
+        };
+        Ok(id)
+    }
+}
+
+impl ReadStore for ForkStore {
+    /// Reads committee information from committed `sui-rpc-store` data.
+    fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
+        self.stock_reader().get_committee(epoch)
+    }
+
+    /// Reads the latest checkpoint from the local rpc-store. This never
+    /// consults the remote endpoint -- the local executor is the source of
+    /// truth for "latest" in a forked network.
+    fn get_latest_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
+        ForkStore::get_highest_verified_checkpoint(self)
+            .map_err(to_storage_error)?
+            .ok_or_else(|| StorageError::missing("no checkpoint persisted yet"))
+    }
+
+    /// Reads the highest verified checkpoint: the fork's local tip.
+    fn get_highest_verified_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
+        self.get_latest_checkpoint()
+    }
+
+    /// Reads the highest synced checkpoint: also the fork's local tip.
+    fn get_highest_synced_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
+        ForkStore::get_highest_verified_checkpoint(self)
+            .map_err(to_storage_error)?
+            .ok_or_else(|| {
+                StorageError::missing(
+                    "no checkpoint persisted yet -- cannot determine highest synced checkpoint",
+                )
+            })
+    }
+
+    /// Returns the remote chain's lowest available checkpoint.
+    ///
+    /// This value is not derived from the fork's local store.
+    fn get_lowest_available_checkpoint(&self) -> StorageResult<CheckpointSequenceNumber> {
+        ForkStore::get_lowest_available_checkpoint(self).map_err(to_storage_error)
+    }
+
+    /// Reads a checkpoint summary by checkpoint digest; rpc-store only (the
+    /// GraphQL checkpoint query is keyed by sequence number).
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        optional_store_read(
+            "checkpoint digest lookup",
+            ForkStore::get_checkpoint_by_digest(self, digest),
+        )
+    }
+
+    /// Reads a checkpoint summary by sequence number, persisting pre-fork
+    /// rows fetched from the remote.
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<VerifiedCheckpoint> {
+        optional_store_read(
+            "checkpoint sequence lookup",
+            ForkStore::get_checkpoint_by_sequence_number(self, sequence_number),
+        )
+    }
+
+    /// Reads checkpoint contents by content digest.
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<CheckpointContents> {
+        optional_store_read(
+            "checkpoint contents digest lookup",
+            ForkStore::get_checkpoint_contents_by_digest(self, digest),
+        )
+    }
+
+    /// Reads checkpoint contents by sequence number, with the same remote
+    /// fallback as the summary read.
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<CheckpointContents> {
+        optional_store_read(
+            "checkpoint contents sequence lookup",
+            ForkStore::get_checkpoint_contents_by_sequence_number(self, sequence_number),
+        )
+    }
+
+    /// Reads a transaction by digest, persisting pre-fork rows fetched from
+    /// the remote.
+    fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
+        optional_store_read(
+            "transaction lookup",
+            ForkStore::get_transaction(self, tx_digest),
+        )
+        .map(Arc::new)
+    }
+
+    /// Reads transaction effects by digest, with the same remote fallback as
+    /// the transaction read.
+    fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
+        optional_store_read(
+            "transaction effects lookup",
+            ForkStore::get_transaction_effects(self, tx_digest),
+        )
+    }
+
+    /// Reads transaction events from the rpc-store only. Events are saved
+    /// with their transaction rows and the fork keeps no separate copy, so a
+    /// fork-side fallback would just repeat the same lookup.
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
+        self.stock_reader().get_events(event_digest)
+    }
+
+    /// Reads unchanged runtime-loaded objects from committed `sui-rpc-store`
+    /// data only; the fork does not synthesize this execution cache.
+    fn get_unchanged_loaded_runtime_objects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        self.stock_reader()
+            .get_unchanged_loaded_runtime_objects(digest)
+    }
+
+    /// Reads the checkpoint sequence that finalized a transaction.
+    fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        optional_store_read(
+            "transaction checkpoint lookup",
+            ForkStore::get_transaction_checkpoint(self, digest),
+        )
+    }
+
+    /// Reads full checkpoint contents from committed `sui-rpc-store` data
+    /// only; the fork exposes checkpoint summaries and contents, not full
+    /// checkpoint payloads.
+    fn get_full_checkpoint_contents(
+        &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<VersionedFullCheckpointContents> {
+        self.stock_reader()
+            .get_full_checkpoint_contents(sequence_number, digest)
+    }
+}
+
+impl RpcStateReader for ForkStore {
+    /// Returns the lowest checkpoint with object data on the remote chain;
+    /// availability metadata, not fork-local state.
+    fn get_lowest_available_checkpoint_objects(&self) -> StorageResult<CheckpointSequenceNumber> {
+        ForkStore::get_lowest_available_checkpoint_objects(self).map_err(to_storage_error)
+    }
+
+    /// Genuinely hybrid: the stock read serves the framework `chain_ids`
+    /// table seeded at open, while the fallback derives the identifier from
+    /// the fork checkpoint for custom networks.
+    fn get_chain_identifier(&self) -> StorageResult<ChainIdentifier> {
+        fallback_on_missing(self.stock_reader().get_chain_identifier(), || {
+            self.chain_identifier()
+        })
+    }
+
+    /// Exposes the store as the RPC index provider.
+    fn indexes(&self) -> Option<&dyn RpcIndexes> {
+        Some(self)
+    }
+
+    /// Reads a struct layout from `sui-rpc-store`.
+    fn get_struct_layout_with_overlay(
+        &self,
+        struct_tag: &StructTag,
+        overlay: &ObjectSet,
+    ) -> StorageResult<Option<MoveTypeLayout>> {
+        self.stock_reader()
+            .get_struct_layout_with_overlay(struct_tag, overlay)
+    }
+}
+
+impl RpcIndexes for ForkStore {
+    /// Reads epoch index metadata from `sui-rpc-store`.
+    fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
+        RpcIndexes::get_epoch_info(self.stock_reader(), epoch)
+    }
+
+    /// Initialize and iterate address-owned objects from the RPC-store owner
+    /// index. The remote scan is checkpoint-bounded and recorded in the
+    /// metadata store so repeated owner queries read the local index.
+    fn owned_objects_iter(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        self.inner
+            .inventory
+            .ensure_address_owner(owner)
+            .map_err(to_storage_error)?;
+        RpcIndexes::owned_objects_iter(self.stock_reader(), owner, object_type, cursor)
+    }
+
+    /// Initialize and iterate the object-owned children of `parent`, with the
+    /// same checkpoint-bounded remote scan as the owner index.
+    fn dynamic_field_iter(
+        &self,
+        parent: ObjectID,
+        cursor: Option<DynamicFieldKey>,
+    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
+        self.inner
+            .inventory
+            .ensure_object_owner(parent)
+            .map_err(to_storage_error)?;
+        RpcIndexes::dynamic_field_iter(self.stock_reader(), parent, cursor)
+    }
+
+    /// Initialize the type indexes needed to assemble RPC coin metadata.
+    fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        self.inner
+            .inventory
+            .ensure_coin_info(coin_type)
+            .map_err(to_storage_error)?;
+        RpcIndexes::get_coin_info(self.stock_reader(), coin_type)
+    }
+
+    /// Initialize address inventory and read an address balance from the
+    /// RPC-store balance index.
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> StorageResult<Option<BalanceInfo>> {
+        self.inner
+            .inventory
+            .ensure_address_owner(*owner)
+            .map_err(to_storage_error)?;
+        RpcIndexes::get_balance(self.stock_reader(), owner, coin_type)
+    }
+
+    /// Initialize address inventory and iterate address balances from the
+    /// RPC-store balance index.
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> StorageResult<BalanceIterator<'_>> {
+        self.inner
+            .inventory
+            .ensure_address_owner(*owner)
+            .map_err(to_storage_error)?;
+        RpcIndexes::balance_iter(self.stock_reader(), owner, cursor)
+    }
+
+    /// Iterates package versions from committed `sui-rpc-store` indexes.
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
+    {
+        RpcIndexes::package_versions_iter(self.stock_reader(), original_id, cursor)
+    }
+
+    /// Genuinely hybrid: the stock read serves the indexer watermark, while
+    /// the fallback reports the highest persisted checkpoint before the
+    /// indexer has written its first watermark.
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        match RpcIndexes::get_highest_indexed_checkpoint_seq_number(self.stock_reader())? {
+            Some(sequence) => Ok(Some(sequence)),
+            None => Ok(self.get_highest_checkpoint().ok()),
+        }
+    }
+
+    /// Reads the transaction sequence-to-digest index from `sui-rpc-store`.
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        RpcIndexes::ledger_tx_seq_digest(self.stock_reader(), tx_seq)
+    }
+
+    /// Iterates transaction sequence-to-digest rows from `sui-rpc-store`.
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
+        RpcIndexes::ledger_tx_seq_digest_iter(self.stock_reader(), start, end_exclusive, descending)
+    }
+
+    /// Iterates transaction bitmap buckets from `sui-rpc-store`.
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        RpcIndexes::transaction_bitmap_bucket_iter(
+            self.stock_reader(),
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    /// Iterates event bitmap buckets from `sui-rpc-store`.
+    fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        RpcIndexes::event_bitmap_bucket_iter(
+            self.stock_reader(),
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+}
+
+/// Runs the fork-policy fallback only when the stock rpc-store read reports
+/// missing data.
+fn fallback_on_missing<T>(
+    result: StorageResult<T>,
+    fallback: impl FnOnce() -> StorageResult<T>,
+) -> StorageResult<T> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(err) if err.kind() == StorageErrorKind::Missing => fallback(),
+        Err(err) => Err(err),
+    }
+}
+
+/// Converts a fallible fork-policy read into an optional trait response.
+///
+/// The storage traits using this helper return `Option`, so store errors are
+/// logged and treated as absent data.
+fn optional_store_read<T>(context: &'static str, result: anyhow::Result<Option<T>>) -> Option<T> {
+    match result {
+        Ok(value) => value,
+        Err(err) => {
+            tracing::warn!(context, error = ?err, "fork-state read failed");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/store_checkpoint_persistence.rs"]
 mod checkpoint_persistence_tests;
@@ -1069,3 +1360,7 @@ mod execution_tests;
 #[cfg(test)]
 #[path = "tests/store_transaction_fallback.rs"]
 mod transaction_fallback_tests;
+
+#[cfg(test)]
+#[path = "tests/store_rpc_traits.rs"]
+mod rpc_traits_tests;

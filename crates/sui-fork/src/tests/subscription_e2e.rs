@@ -36,7 +36,6 @@ use crate::context::Context;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
-use crate::rpc::reader::RpcReader;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
@@ -106,7 +105,7 @@ impl ServerHarness {
 
         let context = Arc::new(Context::new(sim, checkpoint_sender));
 
-        let reader: Arc<dyn RpcStateReader> = Arc::new(RpcReader::new(store));
+        let reader: Arc<dyn RpcStateReader> = Arc::new(store);
         let mut service = RpcService::new(reader);
         service.with_server_version(ServerVersion::new("sui-fork", "test"));
         service.with_subscription_service(subscription_handle);

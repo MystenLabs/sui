@@ -17,7 +17,7 @@ through `sui-rpc-api`'s `RpcService` rather than through `sui-rpc-node`.
 A read and a write each pass through the same small set of components:
 
 ```
-get_object(id)                       (latest semantics — RpcReader → ForkStore)
+get_object(id)                       (latest semantics — an RPC read on ForkStore)
   ├─ consult the pointer table       (LiveState: Live(v) | Removed | absent)
   ├─ Live(v):  objects[(id, v)]      (LocalStore, a stock rpc-store row)
   ├─ Removed:  not found             (authoritative tombstone, no fallback)
@@ -46,19 +46,20 @@ validation of the references a response carries.
 
 ## Where reads resolve
 
-`RpcReader` implements the upstream RPC storage traits and is deliberately thin:
-every read the fork has policy for resolves through `ForkStore`, which is already
-local-first — it checks the rpc-store rows before consulting the remote — so a second
-routing layer in the reader would only repeat the same point-get. The reader touches the
-stock reader directly only for surfaces the fork keeps no policy for at all — events,
-full checkpoint contents, committees, epoch info, struct layouts, and the ledger and
-bitmap indexes, all written by the embedded indexer and correct to serve as-is — plus two
-genuinely hybrid reads: the chain identifier (the framework table seeded at open, derived
-from the fork checkpoint when absent) and the highest indexed checkpoint (the indexer
-watermark, with the highest persisted checkpoint standing in before the first watermark
-is written).
+`ForkStore` implements the upstream RPC storage traits (`ReadStore`, `RpcStateReader`,
+`RpcIndexes`) itself — there is no adapter struct in between; startup hands the store to
+`RpcService` directly. The impls are deliberately thin: every read the fork has policy
+for resolves through the store's inherent helpers, which are already local-first — they
+check the rpc-store rows before consulting the remote — so a second routing layer would
+only repeat the same point-get. The impls touch the stock reader directly only for
+surfaces the fork keeps no policy for at all — events, full checkpoint contents,
+committees, epoch info, struct layouts, and the ledger and bitmap indexes, all written by
+the embedded indexer and correct to serve as-is — plus two genuinely hybrid reads: the
+chain identifier (the framework table seeded at open, derived from the fork checkpoint
+when absent) and the highest indexed checkpoint (the indexer watermark, with the highest
+persisted checkpoint standing in before the first watermark is written).
 
-Latest-semantics reads are why the routing must go through `ForkStore`. The stock reader
+Latest-semantics reads are why that routing exists at all. The stock reader
 answers `get_object` without a version by reverse-scanning the `objects` column family,
 which is only correct when the version history is complete. The fork's history is sparse:
 a historical version is present only because something once fetched it. Serving the

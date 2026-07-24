@@ -28,7 +28,6 @@ use wiremock::matchers::body_partial_json;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
-use crate::rpc::reader::RpcReader;
 use crate::services::ServiceManager;
 
 use super::*;
@@ -360,9 +359,8 @@ async fn remote_fallback_saves_pre_fork_transaction_in_rpc_store() {
             .expect("rpc-store checkpoint lookup should succeed"),
         Some(checkpoint.data().sequence_number),
     );
-    let fallback_reader = RpcReader::new(fallback_store);
     assert_eq!(
-        ReadStore::get_events(&fallback_reader, &digest)
+        ReadStore::get_events(&fallback_store, &digest)
             .expect("events should be read from rpc store"),
         TransactionEvents::default(),
     );
