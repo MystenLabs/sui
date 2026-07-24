@@ -17,6 +17,7 @@ Sui object identifiers
 -  [Function `authenticator_state`](#sui_object_authenticator_state)
 -  [Function `randomness_state`](#sui_object_randomness_state)
 -  [Function `sui_deny_list_object_id`](#sui_object_sui_deny_list_object_id)
+-  [Function `sui_package_config_object_id`](#sui_object_sui_package_config_object_id)
 -  [Function `sui_accumulator_root_object_id`](#sui_object_sui_accumulator_root_object_id)
 -  [Function `sui_accumulator_root_address`](#sui_object_sui_accumulator_root_address)
 -  [Function `sui_coin_registry_object_id`](#sui_object_sui_coin_registry_object_id)
@@ -169,6 +170,16 @@ The hardcoded ID for the singleton DenyList.
 
 
 <pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a>: <b>address</b> = 0x403;
+</code></pre>
+
+
+
+<a name="sui_object_SUI_PACKAGE_CONFIG_OBJECT_ID"></a>
+
+The hardcoded ID for the singleton PackageConfig.
+
+
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_PACKAGE_CONFIG_OBJECT_ID">SUI_PACKAGE_CONFIG_OBJECT_ID</a>: <b>address</b> = 0x426;
 </code></pre>
 
 
@@ -476,6 +487,34 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a> },
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_package_config_object_id"></a>
+
+## Function `sui_package_config_object_id`
+
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>PackageConfig</code> object.
+This should only be called once from <code><a href="../sui/package_config.md#sui_package_config">package_config</a></code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_package_config_object_id">sui_package_config_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_package_config_object_id">sui_package_config_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+    <a href="../sui/object.md#sui_object_UID">UID</a> {
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_PACKAGE_CONFIG_OBJECT_ID">SUI_PACKAGE_CONFIG_OBJECT_ID</a> },
     }
 }
 </code></pre>

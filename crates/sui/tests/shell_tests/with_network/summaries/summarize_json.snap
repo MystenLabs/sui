@@ -66,6 +66,7 @@ object.json
 object_bag.json
 object_table.json
 package.json
+package_config.json
 party.json
 pay.json
 poseidon.json
@@ -763,6 +764,26 @@ vector.json
       {
         "module_name": "object_table",
         "datatype_name": "ObjectTable",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package_config",
+        "datatype_name": "PackageConfig",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package_config",
+        "datatype_name": "PackageConfigCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package_config",
+        "datatype_name": "PackageMetadataKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package_config",
+        "datatype_name": "VersionForbiddenKey",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
