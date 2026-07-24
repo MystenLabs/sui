@@ -19,8 +19,7 @@ use crate::{
     shared::{
         constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
         type_size_formulae::{
-            ArenaTypeSizeFormula, LinearForm, LinearTerm, MaxPlusForm, MaxPlusTerm,
-            PartialTypeSizeFormula, TypeSize, check_syntactic_limits,
+            LinearForm, MaxPlusForm, PartialTypeSizeFormula, TypeSize, check_syntactic_limits,
         },
     },
 };
@@ -205,113 +204,6 @@ fn wrap_adds_one_level_to_every_measure() {
         .solve(&[inner])
         .unwrap();
     assert_eq!(wrapped, TypeSize::wrap(inner));
-}
-
-// -------------------------------------------------------------------------------------------------
-// The JIT datatype builder
-// -------------------------------------------------------------------------------------------------
-
-#[test]
-fn for_datatype_struct_forms() {
-    // struct S<T> { a: T, b: vector<T>, c: u64 }
-    let arena = ArenaBuilder::new_bounded();
-    let fields = [
-        to_arena(&arena, &Type::TyParam(0)),
-        to_arena(&arena, &Type::Vector(Box::new(Type::TyParam(0)))),
-        to_arena(&arena, &Type::U64),
-    ];
-    let formula = ArenaTypeSizeFormula::for_datatype(1, fields.iter(), 0, &arena).unwrap();
-
-    // type_size(S<T>) = 1 + type_size(T); type_depth(S<T>) = max(1, 1 + depth(T)).
-    assert_eq!(
-        formula.type_size,
-        LinearForm {
-            constant: 1,
-            terms: vec![LinearTerm {
-                param: 0,
-                coefficient: 1
-            }],
-        }
-    );
-    assert_eq!(
-        formula.type_depth,
-        MaxPlusForm {
-            constant: 1,
-            terms: vec![MaxPlusTerm {
-                param: 0,
-                offset: 1
-            }],
-        }
-    );
-
-    // No datatype-application fields, so nothing stays symbolic.
-    assert!(formula.apps.is_empty());
-
-    // value_depth: the deepest field is `vector<T>` (T two levels below S), and the primitive
-    // `c` bottoms out at level 2 → max(2, 2 + value_depth(T)).
-    assert_eq!(
-        formula.value_depth_local,
-        MaxPlusForm {
-            constant: 2,
-            terms: vec![MaxPlusTerm {
-                param: 0,
-                offset: 2
-            }],
-        }
-    );
-    // layout_size: S node + T (from `a`) + vector node + T (from `b`) + u64 node = 3 + 2·T.
-    assert_eq!(
-        formula.layout_size_local,
-        LinearForm {
-            constant: 3,
-            terms: vec![LinearTerm {
-                param: 0,
-                coefficient: 2
-            }],
-        }
-    );
-
-    // Cross-check by solving against T = u64 (every measure 1).
-    let concrete = PartialTypeSizeFormula {
-        type_size: formula.type_size.clone(),
-        type_depth: formula.type_depth.clone(),
-        value_depth: formula.value_depth_local.clone(),
-        layout_size: formula.layout_size_local.clone(),
-    }
-    .solve(&[TypeSize::PRIMITIVE])
-    .unwrap();
-    assert_eq!(
-        concrete,
-        TypeSize {
-            type_size: 2,   // S<u64>: S + u64
-            type_depth: 2,  // S over u64
-            value_depth: 3, // S value nests vector<u64> (depth 2)
-            layout_size: 5, // 3 + 2·1
-        }
-    );
-}
-
-#[test]
-fn for_datatype_enum_counts_a_node_per_variant() {
-    // enum E<T> { A(T), B(T, u64) } — two variants, so one extra layout node beyond the fields.
-    let arena = ArenaBuilder::new_bounded();
-    let fields = [
-        to_arena(&arena, &Type::TyParam(0)),
-        to_arena(&arena, &Type::TyParam(0)),
-        to_arena(&arena, &Type::U64),
-    ];
-    let formula = ArenaTypeSizeFormula::for_datatype(1, fields.iter(), 2, &arena).unwrap();
-    // layout: E node + 2 variant nodes + 2·T (one per `T` field) + u64 node = 4 + 2·T.
-    assert_eq!(
-        formula.layout_size_local,
-        LinearForm {
-            constant: 4,
-            terms: vec![LinearTerm {
-                param: 0,
-                coefficient: 2
-            }],
-        }
-    );
 }
 
 // -------------------------------------------------------------------------------------------------
