@@ -934,11 +934,8 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
         object_id: &ObjectID,
         version: crate::base_types::SystemObjectVersion,
     ) -> Object {
-        let object = self
-            .inner
-            .load_implicitly_read_system_object(object_id, version);
-        self.track_object(&object);
-        object
+        self.inner
+            .load_implicitly_read_system_object(object_id, version)
     }
 
     fn get_object_by_key(

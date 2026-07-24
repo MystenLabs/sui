@@ -497,8 +497,6 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
-    /// Reads an implicitly read system object at the given version.
-    /// If it's not available yet, it will block until it is.
     pub(crate) fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
@@ -554,7 +552,7 @@ impl WritebackCache {
             .with_label_values(&[object_id.to_string().as_str()])
             .observe(wait_start.elapsed().as_secs_f64());
         ObjectCacheRead::get_object_by_key(self, object_id, version).unwrap_or_else(|| {
-            mysten_common::fatal!(
+            panic!(
                 "system object {object_id} not found at version {version} after its write was \
                  committed"
             )

@@ -369,6 +369,8 @@ impl SharedObjVerManager {
                 .into_iter()
                 .map(|input| input.into_id_and_version())
                 .collect();
+            // When we add more implicitly read system objects, here we need to retrive their accessed version
+            // from this map and pass to `SystemObjectVersions`.
             let accessed_versions: BTreeMap<ObjectID, SequenceNumber> = effects
                 .accessed_consensus_objects()
                 .into_iter()
@@ -390,31 +392,21 @@ impl SharedObjVerManager {
                         .map(|initial_version| ((*id, *initial_version), *version))
                 })
                 .collect();
-            // Record the version each known implicitly-read system object was read at (from
-            // effects) so the checkpoint-execution read resolves to the same version the original
-            // execution used. This holds even when the transaction also declares the object as an
-            // explicit input. A cancelled transaction records special sentinel versions (e.g.
-            // CONGESTED) for its declared inputs; those may land in this map, which is harmless —
-            // a cancelled transaction never enters Move execution, so its entries are never read.
-            let root_version_from_effects = accessed_versions
-                .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                .copied();
-            // The accumulator root version is needed even when the transaction doesn't read it in
-            // execution (e.g. coin-reservation rewriting), so always write the version
-            // reconstructed from the settlement transaction. A version harvested from effects must
-            // agree with it, unless it is a cancelled sentinel, which this overwrite corrects.
-            let root_version = if let Some(v) = *accumulator_version {
-                debug_assert!(
-                    root_version_from_effects.is_none_or(|p| p == v || p.is_cancelled()),
-                    "accumulator root version from effects {root_version_from_effects:?} disagrees \
-                     with the reconstructed accumulator version {v:?}"
+            if let (Some(effects_version), Some(sequenced_version)) = (
+                accessed_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID),
+                accumulator_version,
+            ) {
+                assert!(
+                    effects_version == sequenced_version,
+                    "accumulator root version from effects {:?} disagrees \
+                     with the reconstructed accumulator version {:?} for tx {:?}",
+                    effects_version,
+                    sequenced_version,
+                    cert.digest()
                 );
-                Some(v)
-            } else {
-                root_version_from_effects
-            };
+            }
             let system_object_versions = SystemObjectVersions {
-                accumulator_version: root_version.map(|version| {
+                accumulator_version: accumulator_version.map(|version| {
                     let initial_shared_version = epoch_store
                         .epoch_start_config()
                         .accumulator_root_obj_initial_shared_version()
@@ -467,7 +459,6 @@ impl SharedObjVerManager {
         } else {
             None
         };
-        // The accumulator root is the only system object read implicitly during execution today.
         let system_object_versions = SystemObjectVersions {
             accumulator_version,
         };
