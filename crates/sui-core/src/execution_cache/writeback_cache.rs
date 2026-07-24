@@ -534,12 +534,11 @@ impl WritebackCache {
                         "get_implicitly_read_system_object_blocking",
                         &[key],
                         move |_keys| {
-                            // In the case of dry-run/simulate, it is theoretically possible that the object's
-                            // required version gets pruned by the time we get here.
-                            // To ensure liveness, we use >= for the version comparison to ensure that we always return.
-                            let resolved = ObjectCacheRead::get_object(self, object_id)
-                                .is_some_and(|latest| latest.version() >= version);
-                            vec![if resolved { Some(()) } else { None }]
+                            vec![if self.object_exists_by_key(object_id, version) {
+                                Some(())
+                            } else {
+                                None
+                            }]
                         },
                     )
                     .await;

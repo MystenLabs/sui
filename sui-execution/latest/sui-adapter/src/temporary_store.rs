@@ -15,7 +15,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::{ConsensusObjectVersion, VersionDigest};
+use sui_types::base_types::{SystemObjectVersion, VersionDigest};
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
@@ -106,7 +106,7 @@ pub struct TemporaryStore<'backing> {
     /// recorded version; `check_system_object_available` consults this map. Every system object read
     /// during execution must appear here — querying one that is absent is an invariant violation
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
-    system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+    system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
 
     /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
     /// digest) at which they were read. Recorded by `check_system_object_available` and
@@ -126,7 +126,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -189,22 +189,42 @@ impl<'backing> TemporaryStore<'backing> {
                 ),
             );
         };
-        // Load the object at exactly the version this transaction was sequenced against.
-        let required_version = consensus_version.version;
-        let Some(object_at_required) = self
-            .store
-            .get_implicitly_read_system_object_blocking(object_id, consensus_version)
-        else {
-            debug_fatal!(
-                "system object {object_id} not found at required version {required_version}"
-            );
-            return Err(
-                PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
-                    format!(
+        let object_at_required = match consensus_version {
+            SystemObjectVersion::Exact(exact_version) => {
+                let required_version = exact_version.version;
+                let Some(object) = self
+                    .store
+                    .get_implicitly_read_system_object_blocking(object_id, exact_version)
+                else {
+                    debug_fatal!(
                         "system object {object_id} not found at required version {required_version}"
-                    ),
-                ),
-            );
+                    );
+                    return Err(
+                        PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
+                            format!(
+                                "system object {object_id} not found at required version {required_version}"
+                            ),
+                        ),
+                    );
+                };
+                object
+            }
+            SystemObjectVersion::ExactOrLatest(version) => {
+                let object = self
+                    .store
+                    .get_object_by_key(object_id, version)
+                    .or_else(|| self.store.get_object(object_id));
+                let Some(object) = object else {
+                    return Err(
+                        PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
+                            format!(
+                                "system object {object_id} not found at version {version} or latest"
+                            ),
+                        ),
+                    );
+                };
+                object
+            }
         };
 
         // Available: record the read at `required_version` (which is what the transaction depends
@@ -212,9 +232,10 @@ impl<'backing> TemporaryStore<'backing> {
         // reproduced on replay. The version and digest are taken at `required_version` — not the
         // latest — so the recorded value is deterministic across nodes regardless of how far the
         // object has since advanced.
-        self.loaded_system_objects
-            .borrow_mut()
-            .insert(*object_id, (required_version, object_at_required.digest()));
+        self.loaded_system_objects.borrow_mut().insert(
+            *object_id,
+            (object_at_required.version(), object_at_required.digest()),
+        );
         Ok(())
     }
 
