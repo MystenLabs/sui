@@ -6,13 +6,13 @@ info:
   lint: false
 ---
 error[E08001]: cannot compute constant value
-  ┌─ tests/move_2024/constants/cross_module_unfoldable.move:9:34
+  ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:9:34
   │
 9 │ public(package) const BAD: u64 = 1 / 0;
   │                                  ^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
 
 error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/constants/cross_module_unfoldable.move:15:23
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:15:23
    │
 15 │ public(package) const X: u64 = Y + 1;
    │                       ^ Constant definitions form a circular dependency: X, Y
@@ -20,7 +20,7 @@ error[E08001]: cannot compute constant value
    │       - Cyclic constant defined here
 
 error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/constants/cross_module_unfoldable.move:25:16
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:25:16
    │
 25 │ const D: u64 = a::BAD + c::X;
    │                ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
