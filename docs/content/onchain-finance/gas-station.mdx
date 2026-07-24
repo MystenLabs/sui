@@ -86,7 +86,7 @@ sequenceDiagram
 
 ## Gas coin pool
 
-The sponsor address needs a pool of SUI coins to fund transactions. A single coin cannot be used by two inflight transactions simultaneously. If it is, one transaction fails due to an object version conflict.
+The sponsor address needs a pool of SUI coins to fund transactions. Two inflight transactions cannot use a single coin simultaneously. If you try, one transaction fails due to an object version conflict.
 
 ### Pre-splitting coins
 
@@ -119,7 +119,7 @@ await client.signAndExecuteTransaction({ transaction: tx, signer: sponsor });
 
 ### Pool management
 
-Track available gas coins in memory. When a coin is used for sponsorship, mark it as reserved until the transaction finalizes. The network always charges gas (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
+Track available gas coins in memory. When you use a coin for sponsorship, mark it as reserved until the transaction finalizes. The network always charges gas (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
 
 ```typescript
 interface GasCoin {

@@ -41,11 +41,11 @@ questions:
 answer: >-
   Use the gRPC NameService.LookupName method to resolve SuiNS .sui
   names to Sui addresses. For reverse lookup, use
-  defaultNameServiceName. For custom identifiers, build an off-chain
+  defaultNameServiceName. For custom identifiers, build an offchain
   lookup service or an onchain registry.
 ---
 
-Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resolution maps human-readable identifiers — SuiNS `.sui` names, email addresses, or application handles — to Sui addresses so users can pay by name.
+Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resolution maps human-readable identifiers (SuiNS `.sui` names, email addresses, or application handles) to Sui addresses so users can pay by name.
 
 ## SuiNS name resolution
 
@@ -53,7 +53,7 @@ Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resoluti
 
 ### Resolve a name with the TypeScript SDK
 
-Use the gRPC `NameService.LookupName` method via the SDK:
+Use the gRPC `NameService.LookupName` method through the SDK:
 
 <ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="resolve-name" />
 
@@ -69,7 +69,7 @@ To display a human-readable name in transaction history or receipts, look up the
 
 <ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="reverse-resolve" />
 
-### Resolve via GraphQL
+### Resolve through GraphQL
 
 Use `address(name:)` to resolve a name, or `nameRecord(name:)` to get full record details:
 
@@ -108,7 +108,7 @@ User enters "alice@example.com"
   → App builds PTB with resolved address
 ```
 
-This is the simplest approach and works for any identifier format. The tradeoff is centralization — the lookup service must be available and trusted.
+This is the simplest approach and works for any identifier format. The tradeoff is centralization: the lookup service must be available and trusted.
 
 ### Onchain registry
 
