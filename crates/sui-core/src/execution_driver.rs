@@ -33,7 +33,10 @@ pub async fn execution_process(
 
     // Rate limit concurrent executions to half of the available CPUs.
     let execution_concurrency = std::cmp::max(1, num_cpus::get() / 2);
-    let limit = Arc::new(Semaphore::new(execution_concurrency));
+    let normal_limit = Arc::new(Semaphore::new(execution_concurrency));
+    // This is an optimization to speed up the execution of transactions that mutate an implicitly-read system object.
+    // These transactions help unblock other transactions that read the same object.
+    // Give them a dedicated permit pool so they execute as fast as possible.
     let system_object_writer_limit = Arc::new(Semaphore::new(execution_concurrency));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
@@ -90,12 +93,6 @@ pub async fn execution_process(
             continue;
         }
 
-        // Transactions that mutate an implicitly-read system object draw from a dedicated
-        // permit pool: executions can block waiting for such an object to reach its required
-        // version, and the transaction that writes that version must never queue behind them.
-        // TODO: Add a test for the anti-starvation behavior (writers keep executing while
-        // parked user executions hold every user permit) once execution actually blocks on
-        // implicitly-read system objects.
         let limit = if certificate
             .data()
             .transaction_data()
@@ -104,7 +101,7 @@ pub async fn execution_process(
         {
             system_object_writer_limit.clone()
         } else {
-            limit.clone()
+            normal_limit.clone()
         };
 
         // Certificate execution is CPU-bound and can take significant time, so run it on a
@@ -117,7 +114,7 @@ pub async fn execution_process(
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _executing_guard = executing_guard;
-            // hold semaphore permit until task completes. unwrap ok because we never close
+            // Hold semaphore permit until task completes. Unwrap is ok because we never close
             // the semaphore in this context. The scope measures time blocked waiting for a
             // permit, i.e. how saturated execution concurrency is.
             // `permit` is moved into the blocking closure below and installed on the
