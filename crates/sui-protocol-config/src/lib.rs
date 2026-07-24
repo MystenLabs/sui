@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 132;
+const MAX_PROTOCOL_VERSION: u64 = 133;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -372,6 +372,8 @@ const MAINNET_USDB: &str =
 //              function signatures with `&mut TxContext` + any `&mut _` return
 //              that have no non-`TxContext` `&mut U` parameter.
 // Version 132: Enable defer_owned_object_double_spend on devnet.
+// Version 133: Enable GCP Confidential Spaces attestation verification on
+//              Unknown/devnet only. Gas costs set on all chains.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -672,6 +674,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
+
+    // Enable GCP Confidential Spaces attestation verification.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_gcp_attestation: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1918,6 +1924,10 @@ pub struct ProtocolConfig {
     nitro_attestation_verify_base_cost: Option<u64>,
     nitro_attestation_verify_cost_per_cert: Option<u64>,
 
+    // gcp_attestation::verify_gcp_attestation
+    gcp_attestation_verify_base_cost: Option<u64>,
+    gcp_attestation_verify_cost_per_byte: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -2842,6 +2852,10 @@ impl ProtocolConfig {
             nitro_attestation_parse_cost_per_byte: None,
             nitro_attestation_verify_base_cost: None,
             nitro_attestation_verify_cost_per_cert: None,
+
+            // gcp_attestation::verify_gcp_attestation
+            gcp_attestation_verify_base_cost: None,
+            gcp_attestation_verify_cost_per_byte: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -4561,6 +4575,16 @@ impl ProtocolConfig {
                 132 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
+                    }
+                }
+                133 => {
+                    // Gas on all chains (matches nitro intro pattern)
+                    cfg.gcp_attestation_verify_base_cost = Some(22_000 * 50);
+                    cfg.gcp_attestation_verify_cost_per_byte = Some(50);
+
+                    // Phase-1 merge: Unknown/devnet only
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_gcp_attestation = true;
                     }
                 }
                 // Use this template when making changes:

@@ -20,7 +20,7 @@ use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
-    TransactionEffectsV2, TransactionEvents,
+    TransactionEffectsV2, TransactionEvents, UnchangedConsensusKind,
 };
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
@@ -525,11 +525,20 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
-        let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
-            shared_object_refs,
-            loaded_per_epoch_config_objects,
-            &object_changes,
-        );
+        let mut unchanged_consensus_objects =
+            TransactionEffectsV2::compute_unchanged_consensus_objects(
+                shared_object_refs,
+                loaded_per_epoch_config_objects,
+                &object_changes,
+            );
+        unchanged_consensus_objects.extend(self.loaded_system_objects.borrow().iter().map(
+            |(id, (version, digest))| {
+                (
+                    *id,
+                    UnchangedConsensusKind::ReadOnlyRoot((*version, *digest)),
+                )
+            },
+        ));
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
@@ -1159,6 +1168,29 @@ impl Storage for TemporaryStore<'_> {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         TemporaryStore::read_object(self, id)
+    }
+
+    fn read_system_object(
+        &self,
+        id: &ObjectID,
+    ) -> PartialVMResult<Option<(Object, SequenceNumber)>> {
+        self.check_system_object_available(id)?;
+        let version = self.system_object_versions[id];
+        Ok(self
+            .store
+            .get_object_by_key(id, version)
+            .map(|object| (object, version)))
+    }
+
+    fn get_object_by_key_including_store(
+        &self,
+        id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        TemporaryStore::read_object(self, id)
+            .filter(|object| object.version() == version)
+            .cloned()
+            .or_else(|| self.store.get_object_by_key(id, version))
     }
 
     /// Take execution results v2, and translate it back to be compatible with effects v1.

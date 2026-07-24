@@ -28,6 +28,7 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
+use move_binary_format::errors::PartialVMResult;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::resolver::SerializedPackage;
 pub use object_store_trait::ObjectStore;
@@ -223,6 +224,31 @@ pub trait Storage {
     fn reset(&mut self);
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
+
+    /// Read a system object at the version assigned to this transaction.
+    ///
+    /// Production execution overrides this to enforce consensus sequencing. Test stores default
+    /// to their current object view.
+    fn read_system_object(
+        &self,
+        id: &ObjectID,
+    ) -> PartialVMResult<Option<(Object, SequenceNumber)>> {
+        Ok(self.read_object(id).map(|object| {
+            let version = object.version();
+            (object.clone(), version)
+        }))
+    }
+
+    /// Read an object at an exact version, including from the backing store when available.
+    fn get_object_by_key_including_store(
+        &self,
+        id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        self.read_object(id)
+            .filter(|object| object.version() == version)
+            .cloned()
+    }
 
     fn record_execution_results(&mut self, results: ExecutionResults)
     -> Result<(), ExecutionError>;

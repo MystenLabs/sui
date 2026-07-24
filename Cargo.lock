@@ -16135,6 +16135,7 @@ dependencies = [
 name = "sui-move-natives-latest"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.7",
  "bcs",
  "better_any",
  "fastcrypto",
@@ -17566,6 +17567,7 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
+ "ring 0.17.8",
  "roaring",
  "rustls-pki-types",
  "schemars 0.8.21",

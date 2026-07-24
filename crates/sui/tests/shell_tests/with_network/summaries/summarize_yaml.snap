@@ -49,6 +49,7 @@ ecvrf.yaml
 ed25519.yaml
 event.yaml
 funds_accumulator.yaml
+gcp_attestation.yaml
 groth16.yaml
 group_ops.yaml
 hash.yaml
@@ -413,6 +414,9 @@ type_origins:
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: display_registry
       datatype_name: DisplayKey
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: gcp_attestation
+      datatype_name: GcpAttestationDocument
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: groth16
       datatype_name: Curve

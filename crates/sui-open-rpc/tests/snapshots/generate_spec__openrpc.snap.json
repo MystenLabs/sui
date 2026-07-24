@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "132",
+              "maxSupportedProtocolVersion": "133",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1364,6 +1364,7 @@
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_gasless": false,
+                "enable_gcp_attestation": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_init_on_upgrade": false,
@@ -1716,6 +1717,8 @@
                 "gasless_max_tps": null,
                 "gasless_max_tx_size_bytes": null,
                 "gasless_max_unused_inputs": null,
+                "gcp_attestation_verify_base_cost": null,
+                "gcp_attestation_verify_cost_per_byte": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },
@@ -2252,6 +2255,7 @@
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_gasless": false,
+                "enable_gcp_attestation": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_init_on_upgrade": false,

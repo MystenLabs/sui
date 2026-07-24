@@ -21,7 +21,7 @@ use std::{
 use sui_adapter::gas_meter::SuiGasMeter;
 use sui_move_build::decorate_warnings;
 use sui_move_natives::{
-    NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,
+    JwkMap, NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,
     test_scenario::InMemoryTestStore, transaction_context::TransactionContext,
 };
 use sui_package_alt::{SuiFlavor, find_environment};
@@ -251,6 +251,7 @@ impl VMTestSetup for SuiVMTestSetup {
         ext.add(TransactionContext::new_for_testing(Rc::new(RefCell::new(
             tx_context,
         ))));
+        ext.add(JwkMap::default());
         ext.add(&builder.store);
         ext
     }
