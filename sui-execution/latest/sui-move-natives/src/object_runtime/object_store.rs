@@ -438,10 +438,25 @@ impl<'a> ChildObjectStore<'a> {
     /// When `parent` has a tracked root version, record the same root version for `id`.
     /// Note that this is not observable at this time, but will be if we either allow for the
     /// re-creation of derived objects, or if we grant access to the `id: UID` of a dynamic field.
-    pub(super) fn inherit_root_version_from_parent(&mut self, parent: ObjectID, id: ObjectID) {
+    pub(super) fn inherit_root_version_from_parent(
+        &mut self,
+        parent: ObjectID,
+        id: ObjectID,
+    ) -> PartialVMResult<()> {
         if let Some(v) = self.inner.root_version.get(&parent).copied() {
-            self.inner.root_version.insert(id, v);
+            let prev_v_opt = self.inner.root_version.insert(id, v);
+            if let Some(prev_v) = prev_v_opt
+                && prev_v != v
+            {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!(
+                            "Root version for {parent} changed from {prev_v} to {v}"
+                        )),
+                );
+            }
         }
+        Ok(())
     }
 
     pub(super) fn receive_object(
