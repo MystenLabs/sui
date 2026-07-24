@@ -137,7 +137,6 @@ impl GraphQlTestCluster {
             SubscriptionArgs::default(),
             "0.0.0",
             GraphQlConfig::default(),
-            vec![], // No pipelines since we're not using database
             &Registry::new(),
         )
         .await
