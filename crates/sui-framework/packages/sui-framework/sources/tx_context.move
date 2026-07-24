@@ -29,6 +29,18 @@ public use fun scratch::remove_opt as TxContext.scratch_remove_opt;
 /// Allows calling `sui::scratch::replace` as `.scratch_replace(permit, key, value)`.
 public use fun scratch::replace as TxContext.scratch_replace;
 
+/// Allows calling `sui::scratch::get_do` as `.scratch_get_do!(permit, key, f)`.
+public use fun scratch::get_do as TxContext.scratch_get_do;
+
+/// Allows calling `sui::scratch::get_mut_do` as `.scratch_get_mut_do!(permit, key, f)`.
+public use fun scratch::get_mut_do as TxContext.scratch_get_mut_do;
+
+/// Allows calling `sui::scratch::get_fold` as `.scratch_get_fold!(permit, key, none, some)`.
+public use fun scratch::get_fold as TxContext.scratch_get_fold;
+
+/// Allows calling `sui::scratch::get_mut_fold` as `.scratch_get_mut_fold!(permit, key, none, some)`.
+public use fun scratch::get_mut_fold as TxContext.scratch_get_mut_fold;
+
 /// Allows calling `sui::scratch::internal_add` as `.scratch_internal_add!(key, value)`.
 public use fun scratch::internal_add as TxContext.scratch_internal_add;
 
@@ -53,6 +65,20 @@ public use fun scratch::internal_remove_opt as TxContext.scratch_internal_remove
 
 /// Allows calling `sui::scratch::internal_replace` as `.scratch_internal_replace!(key, value)`.
 public use fun scratch::internal_replace as TxContext.scratch_internal_replace;
+
+/// Allows calling `sui::scratch::internal_get_do` as `.scratch_internal_get_do!(key, f)`.
+public use fun scratch::internal_get_do as TxContext.scratch_internal_get_do;
+
+/// Allows calling `sui::scratch::internal_get_mut_do` as `.scratch_internal_get_mut_do!(key, f)`.
+public use fun scratch::internal_get_mut_do as TxContext.scratch_internal_get_mut_do;
+
+/// Allows calling `sui::scratch::internal_get_fold` as
+/// `.scratch_internal_get_fold!(key, none, some)`.
+public use fun scratch::internal_get_fold as TxContext.scratch_internal_get_fold;
+
+/// Allows calling `sui::scratch::internal_get_mut_fold` as
+/// `.scratch_internal_get_mut_fold!(key, none, some)`.
+public use fun scratch::internal_get_mut_fold as TxContext.scratch_internal_get_mut_fold;
 
 #[test_only]
 /// Number of bytes in an tx hash (which will be the transaction digest)
