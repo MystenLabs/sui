@@ -1,21 +1,21 @@
 ---
 title: Settlement Verification
 description: >-
-  Implement the verify-then-settle pattern for autonomous agents on Sui to
-  confirm payment finality before releasing goods or services.
+  Verify that a payment transaction has been finalized and the correct amount
+  reached the correct recipient before releasing goods or services.
 sidebar_label: Settlement Verification
 keywords:
   - settlement verification
-  - verify then settle
   - payment finality
-  - transaction effects
-  - payment confirmation
-  - agent settlement
   - balance changes
+  - transaction effects
+  - hot potato
+  - verify payment
+  - payment confirmation
 goal:
   description: >-
-    Reader can implement the verify-then-settle pattern for agent payments on
-    Sui
+    Reader can verify payment finality and inspect transaction effects before
+    settling
   requires:
     - has_frontmatter:
         - title
@@ -35,28 +35,25 @@ builder_paths:
   - path_id: agentic-payments
     path_name: Agentic Payments
     step: Settlement verification
-    stage: Money Movement
+    stage: Verification
 questions:
-  - How do I verify a payment on Sui before releasing a service?
-  - How do I check that a Sui transaction settled successfully?
-  - What is the verify-then-settle pattern for agents on Sui?
+  - How do I verify a payment on Sui?
+  - How do I check transaction effects on Sui?
+  - How do I implement settlement verification for an agent?
 answer: >-
-  The verify-then-settle pattern requires an agent to wait for transaction
-  finality, verify the transaction effects (correct recipient, amount, coin
-  type, and success status), and only then release goods or services. On Sui,
-  finality is sub-second, but the agent must still confirm effects to prevent
-  releasing on a failed or misrouted transaction.
+  After submitting a payment, wait for finality with waitForTransaction, then
+  inspect balance changes and events to confirm the correct amount reached
+  the correct recipient. For high-value flows, use onchain verification with
+  the hot potato pattern.
 ---
 
-An agent should never release a service before verifying that payment is final. On Sui, finality is fast (sub-second), but the agent must still confirm transaction effects to prevent acting on a failed, reverted, or misrouted transaction.
+Settlement verification is the step between "I submitted a payment" and "I release the goods or service." An agent should never treat a successful submission as proof of settlement. The verify-then-settle pattern ensures the payment is final and correct before proceeding.
 
 ## The verify-then-settle pattern
 
-The pattern has four steps:
-
-1. **Submit:** the agent (or a user) submits the payment transaction.
-2. **Wait:** the agent waits for the transaction to reach finality, not just submission acknowledgment.
-3. **Verify:** the agent checks the effects: correct recipient, correct amount, correct coin type, success status.
+1. **Submit:** the agent signs and submits the payment transaction.
+2. **Wait:** the agent blocks until the transaction is finalized (included in a checkpoint).
+3. **Verify:** the agent inspects the transaction effects to confirm the expected outcome.
 4. **Settle:** only after verification passes does the agent release the goods, service, or next operation.
 
 ```mermaid
@@ -71,123 +68,29 @@ flowchart LR
 
 After submitting a transaction, use `waitForTransaction` to block until the transaction is finalized. Do not treat a successful submission response as proof of settlement. Submission means the transaction was received, not that it succeeded.
 
-```typescript
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.testnet.sui.io:443',
-  network: 'testnet',
-});
-
-// Submit the transaction
-const submitResult = await agentKeypair.signAndExecuteTransaction({
-  transaction: tx,
-  client,
-});
-
-if (submitResult.$kind === 'FailedTransaction') {
-  throw new Error(`Transaction failed: ${submitResult.FailedTransaction.status.error?.message}`);
-}
-
-// Wait for the transaction to be indexed
-await client.waitForTransaction({ digest: submitResult.Transaction.digest });
-
-// Fetch full effects for verification
-const confirmed = await client.getTransaction({
-  digest: submitResult.Transaction.digest,
-  include: { effects: true, balanceChanges: true, events: true },
-});
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="wait-for-finality" />
 
 ## Verifying transaction effects
 
-After the transaction is confirmed, inspect the effects to verify the payment. The result from `getTransaction` uses a `$kind` discriminator (`'Transaction'` on success, `'FailedTransaction'` on failure).
+After the transaction is confirmed, inspect the effects to verify the payment.
 
 ### Check status
 
 The most basic check: did the transaction succeed?
 
-```typescript
-function assertSuccess(result: Awaited<ReturnType<typeof client.getTransaction>>) {
-  if (result.$kind !== 'Transaction') {
-    throw new Error(
-      `Transaction failed: ${result.FailedTransaction.status.error?.message}`,
-    );
-  }
-}
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="assert-success" />
 
 ### Verify balance changes
 
 For basic coin transfers, check `balanceChanges` to confirm the correct amount reached the correct recipient.
 
-```typescript
-function verifyPayment(
-  result: { $kind: 'Transaction'; Transaction: { balanceChanges?: any[] } },
-  expectedRecipient: string,
-  expectedAmount: bigint,
-  expectedCoinType: string,
-): boolean {
-  const changes = result.Transaction.balanceChanges ?? [];
-
-  // Find the recipient's positive balance change
-  const recipientChange = changes.find(
-    (c) =>
-      c.address === expectedRecipient &&
-      c.coinType === expectedCoinType &&
-      BigInt(c.amount) > 0n,
-  );
-
-  if (!recipientChange) {
-    return false; // No matching change found
-  }
-
-  return BigInt(recipientChange.amount) >= expectedAmount;
-}
-
-// Usage
-const isValid = verifyPayment(
-  confirmed,
-  recipientAddress,
-  5_000_000n,  // 5 USDC
-  '0xdba...::usdc::USDC',
-);
-
-if (!isValid) {
-  throw new Error('Payment verification failed');
-}
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="verify-balance-changes" />
 
 ### Verify Payment Kit events
 
 If you are using the [Payment Kit](/onchain-finance/payment-kit), verify the payment by checking emitted events instead of raw balance changes. Payment Kit events include the nonce, amount, coin type, and receiver, which makes matching more precise.
 
-```typescript
-function verifyPaymentKitEvent(
-  result: { $kind: 'Transaction'; Transaction: { events?: any[] } },
-  expectedNonce: string,
-  expectedAmount: bigint,
-  expectedRecipient: string,
-): boolean {
-  const events = result.Transaction.events ?? [];
-
-  const paymentEvent = events.find(
-    (e) =>
-      e.eventType.includes('payment_kit::PaymentProcessed') &&
-      e.json?.nonce === expectedNonce,
-  );
-
-  if (!paymentEvent) {
-    return false;
-  }
-
-  const data = paymentEvent.json;
-  return (
-    BigInt(data.payment_amount) >= expectedAmount &&
-    data.receiver === expectedRecipient
-  );
-}
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="verify-payment-kit-events" />
 
 ## Handling edge cases
 
@@ -195,41 +98,19 @@ function verifyPaymentKitEvent(
 
 This is an agent bug, not a network issue. The transaction is final and cannot be reversed. Prevent this by validating the recipient address before building the transaction:
 
-```typescript
-// Validate before building
-if (recipientAddress.length !== 66 || !recipientAddress.startsWith('0x')) {
-  throw new Error('Invalid recipient address');
-}
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="validate-address" />
 
 ### Transaction timed out
 
 If `waitForTransaction` times out, the transaction might still succeed later. Query the digest directly before retrying:
 
-```typescript
-try {
-  await client.waitForTransaction({ digest, timeout: 30_000 });
-} catch (timeoutError) {
-  // Check if the transaction eventually settled
-  try {
-    const result = await client.getTransaction({
-      digest,
-      include: { effects: true },
-    });
-    // Transaction settled — verify effects
-    return result;
-  } catch {
-    // Transaction never settled — safe to retry with same idempotency key
-    throw new Error('Transaction not found — retry is safe');
-  }
-}
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="handle-timeout" />
 
 See [Production Hardening](/onchain-finance/agentic-payments/production-hardening) for the full retry-safety pattern.
 
 ### Transaction reverted
 
-If `result.$kind` is `'FailedTransaction'`, the transaction reverted. User-visible effects (transfers, Move state changes) are rolled back, but the network still charges gas and the gas coin version changes onchain. Read the error message from `result.FailedTransaction.status.error?.message` to diagnose the cause:
+If the transaction reverted, user-visible effects (transfers, Move state changes) are rolled back, but the network still charges gas and the gas coin version changes onchain. Read the error message to diagnose the cause:
 
 - **Insufficient balance:** The sender did not have enough coins.
 - **Mandate exceeded:** The spending mandate's cap or per-tx limit was hit.
@@ -249,7 +130,7 @@ use std::string::{Self, String};
 use sui::coin::Coin;
 use sui::event;
 
-/// Hot potato (no `drop`) — must be consumed in the same transaction.
+/// Hot potato (no `drop`): must be consumed in the same transaction.
 public struct SettlementProof {
     recipient: address,
     amount: u64,
@@ -295,28 +176,7 @@ public fun verify_settlement(
 
 In the PTB, the caller must chain `pay_and_prove` into `verify_settlement`. If they skip verification, the transaction aborts because nothing consumed the hot potato `SettlementProof`.
 
-```typescript
-const tx = new Transaction();
-
-const [coin] = tx.splitCoins(tx.gas, [amount]);
-
-// Pay and get proof
-const [proof] = tx.moveCall({
-  target: `${PACKAGE_ID}::settlement::pay_and_prove`,
-  typeArguments: ['0x2::sui::SUI'],
-  arguments: [coin, tx.pure.address(recipient)],
-});
-
-// Verify the proof (mandatory — hot potato)
-tx.moveCall({
-  target: `${PACKAGE_ID}::settlement::verify_settlement`,
-  arguments: [
-    proof,
-    tx.pure.address(recipient),
-    tx.pure.u64(amount),
-  ],
-});
-```
+<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="onchain-settlement-ptb" />
 
 ## Polling vs event subscription
 
@@ -324,7 +184,7 @@ Choose based on your agent architecture:
 
 | | Polling | Event subscription |
 |---|---|---|
-| **How** | Call `waitForTransaction` or `getTransaction` per digest | Subscribe to events through gRPC streaming |
+| **How** | Call `waitForTransaction` or `getTransactionBlock` per digest | Subscribe to events through gRPC streaming |
 | **Best for** | Request-response agents that process one transaction at a time | High-throughput agents that process many transactions concurrently |
 | **Complexity** | Low | Medium (manage stream lifecycle, reconnection) |
 | **Latency** | Low for individual transactions | Lowest for bulk monitoring |

@@ -381,6 +381,32 @@ importers:
         specifier: ^5.5.3
         version: 5.8.3
 
+  examples/onchain-finance/production-hardening:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+
+  examples/onchain-finance/settlement:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+
   examples/onchain-finance/x402-pay-per-request:
     dependencies:
       '@mysten/sui':
