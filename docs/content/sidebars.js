@@ -333,10 +333,10 @@ export default {
               'onchain-finance/asset-custody/wallets/slush',
               'onchain-finance/asset-custody/wallets/self-custody',
               'onchain-finance/asset-custody/wallets/zk-login-wallets',
-        'onchain-finance/asset-custody/address-aliases',
               'onchain-finance/asset-custody/wallets/suilink',
             ],
           },
+          'onchain-finance/asset-custody/address-aliases',
         ],
       },
       {
@@ -376,7 +376,7 @@ export default {
           'onchain-finance/tokenized-assets/create-nft',
         ],
       },
-	  {
+    {
       type: 'category',
       label: 'Payments',
       link: { type: 'doc', id: 'onchain-finance/payments' },
