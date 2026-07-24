@@ -1413,9 +1413,26 @@ fn check_visibility_modifiers(
         }
     }
     for (_, _, constant) in constants {
-        if let E::Visibility::Package(loc) = constant.visibility {
-            context.check_feature(package_name, FeatureGate::CrossModuleConstants, loc);
-            public_package_usage = Some(loc);
+        match constant.visibility {
+            E::Visibility::Package(loc) => {
+                context.check_feature(package_name, FeatureGate::CrossModuleConstants, loc);
+                public_package_usage = Some(loc);
+            }
+            E::Visibility::Internal => (),
+            // the parser rejects 'public' on constants
+            E::Visibility::Public(loc) => {
+                context.add_diag(ice!((
+                    loc,
+                    "ICE constant declared with disallowed 'public' visibility"
+                )));
+            }
+            // the parser rejects 'public(friend)' on constants
+            E::Visibility::Friend(loc) => {
+                context.add_diag(ice!((
+                    loc,
+                    "ICE constant declared with disallowed 'public(friend)' visibility"
+                )));
+            }
         }
     }
 

@@ -138,6 +138,14 @@ pub struct ModuleContext<'env> {
     pub stdlib_types: BTreeMap<StdlibName, Type>,
 }
 
+/// The kind of module member whose definition is currently being type-checked
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DefinitionKind {
+    Function,
+    MacroFunction,
+    Constant,
+}
+
 pub struct Context<'env, 'outer> {
     pub outer: &'outer ModuleContext<'env>,
 
@@ -155,7 +163,11 @@ pub struct Context<'env, 'outer> {
     next_match_var_id: usize,
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
     pub current_function: Option<FunctionName>,
-    pub in_macro_function: bool,
+    pub definition_kind: DefinitionKind,
+    /// collects the constants used cross-module in function bodies, which need a generated
+    /// `public(package)` constant function in their defining module. Keyed with the location of
+    /// the first use for error reporting.
+    pub needed_constant_functions: BTreeMap<(ModuleIdent, ConstantName), Loc>,
     /// True only while speculatively typing an IDE macro body with diagnostics thrown away.
     pub ide_typing_macro_body: bool,
     max_variable_color: RefCell<u16>,
@@ -547,7 +559,8 @@ impl<'env> ModuleContext<'env> {
             next_match_var_id: 0,
             use_funs,
             current_function: None,
-            in_macro_function: false,
+            definition_kind: DefinitionKind::Function,
+            needed_constant_functions: BTreeMap::new(),
             ide_typing_macro_body: false,
             max_variable_color: RefCell::new(0),
             return_type: None,
@@ -1199,10 +1212,12 @@ impl<'env, 'outer> Context<'env, 'outer> {
         BTreeSet<(ModuleIdent, Loc)>,
         BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
         UsedMethods,
+        BTreeMap<(ModuleIdent, ConstantName), Loc>,
     ) {
         let Self {
             used_module_members,
             new_friends,
+            needed_constant_functions,
             mut use_funs,
             ..
         } = self;
@@ -1212,7 +1227,12 @@ impl<'env, 'outer> Context<'env, 'outer> {
             UseFunsScope_::Outer(_, used) => used,
             UseFunsScope_::Local(_) => panic!("ICE last scope should never be local"),
         };
-        (new_friends, used_module_members, used_methods)
+        (
+            new_friends,
+            used_module_members,
+            used_methods,
+            needed_constant_functions,
+        )
     }
 
     //********************************************
@@ -1967,31 +1987,60 @@ pub fn make_constant_type(
         } = context.constant_info(m, c);
         (*defined_loc, *visibility, signature.clone())
     };
-    if !in_current_module {
-        let supports_cross_module = context
-            .env()
-            .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
-        let msg = format!("Invalid access of '{}::{}'", m, c);
-        if !supports_cross_module {
-            let internal_msg = "Constants are internal to their module, and cannot be \
-                                accessed outside of their module";
-            let mut diag = diag!(
-                TypeSafety::Visibility,
-                (loc, msg),
-                (defined_loc, internal_msg)
-            );
-            if let Some(edition) =
-                editions::valid_editions_for_feature(FeatureGate::CrossModuleConstants).last()
-            {
-                diag.add_note(format!(
-                    "With the '{}' edition, a constant declared '{}' can be accessed from \
-                     other modules in its package",
-                    edition,
-                    Visibility::PACKAGE,
+    // Inside a macro function definition, visibility is resolved in the scope of the caller at
+    // each expansion site
+    if in_current_module || context.definition_kind == DefinitionKind::MacroFunction {
+        return signature;
+    }
+    let msg = format!("Invalid access of '{}::{}'", m, c);
+    let cross_module_constants = context
+        .env()
+        .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
+    if !cross_module_constants {
+        let internal_msg = "Constants are internal to their module, and cannot be \
+                            accessed outside of their module";
+        let mut diag = diag!(
+            TypeSafety::Visibility,
+            (loc, msg),
+            (defined_loc, internal_msg)
+        );
+        if let Some(note) = editions::feature_edition_error_msg(
+            context.env().edition(context.current_package()),
+            FeatureGate::CrossModuleConstants,
+        ) {
+            diag.add_note(note);
+        }
+        context.add_diag(diag);
+        return signature;
+    }
+    match visibility {
+        Visibility::Package(_) => {
+            if context.module_info(m).package != context.current_package() {
+                // constants are accessed cross-module via compiler-generated `public(package)`
+                // functions, so they cannot be referenced outside of their package
+                let internal_msg = "Constants are internal to their package, and cannot be \
+                                    accessed outside of their package";
+                context.add_diag(diag!(
+                    TypeSafety::Visibility,
+                    (loc, msg),
+                    (defined_loc, internal_msg)
                 ));
+            } else {
+                match context.definition_kind {
+                    // resolved by constant folding; no runtime call is made
+                    DefinitionKind::Constant => (),
+                    // the use compiles to a call of the generated constant function, so the
+                    // using module must become a friend of the defining module
+                    DefinitionKind::Function => {
+                        context.record_current_module_as_friend(m, loc);
+                        context.needed_constant_functions.insert((*m, *c), loc);
+                    }
+                    // handled by the early return above
+                    DefinitionKind::MacroFunction => (),
+                }
             }
-            context.add_diag(diag);
-        } else if !matches!(visibility, Visibility::Package(_)) {
+        }
+        Visibility::Internal => {
             let internal_msg = format!(
                 "The constant '{}::{}' is internal to its module. Declare it '{}' to allow \
                  access from other modules in its package",
@@ -2004,15 +2053,25 @@ pub fn make_constant_type(
                 (loc, msg),
                 (defined_loc, internal_msg)
             ));
-        } else if context.module_info(m).package != context.current_package() {
-            // constants are accessed cross-module via compiler-generated `public(package)`
-            // functions, so they cannot be referenced outside of their package
-            let internal_msg = "Constants are internal to their package, and cannot be accessed \
-                                outside of their package";
-            context.add_diag(diag!(
-                TypeSafety::Visibility,
+        }
+        Visibility::Public(vloc) => {
+            // the parser rejects 'public' on constants
+            context.add_diag(ice!(
                 (loc, msg),
-                (defined_loc, internal_msg)
+                (
+                    vloc,
+                    "ICE constant declared with disallowed 'public' visibility"
+                )
+            ));
+        }
+        Visibility::Friend(vloc) => {
+            // the parser rejects 'public(friend)' on constants
+            context.add_diag(ice!(
+                (loc, msg),
+                (
+                    vloc,
+                    "ICE constant declared with disallowed 'public(friend)' visibility"
+                )
             ));
         }
     }
