@@ -549,6 +549,7 @@ pub trait TypingVisitorContext {
                     self.visit_type(Some(exp_loc), ty)
                 }
             }
+            E::MacroExpansion(_, e) => self.visit_exp(e),
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
@@ -1151,6 +1152,7 @@ pub trait TypingMutVisitorContext {
                     self.visit_type(Some(exp_loc), ty)
                 }
             }
+            E::MacroExpansion(_, e) => self.visit_exp(e),
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
@@ -1228,6 +1230,7 @@ where
         | E::Borrow(_, e, _)
         | E::TempBorrow(_, e)
         | E::Cast(e, _)
+        | E::MacroExpansion(_, e)
         | E::Annotate(e, _) => exp_satisfies_(e, p),
         E::While(_, e1, e2) | E::Mutate(e1, e2) | E::BinopExp(e1, _, _, e2) => {
             exp_satisfies_(e1, p) || exp_satisfies_(e2, p)

@@ -6,8 +6,8 @@ use crate::{
     diagnostics::filter::FilterScope,
     expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
     hlir::ast::{
-        BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,
-        StructDefinition, Var, Visibility,
+        BaseType, Command_, EnumDefinition, FunctionSignature, Label, SingleType, StructDefinition,
+        Var, Visibility,
     },
     parser::ast::{ConstantName, DatatypeName, ENTRY_MODIFIER, FunctionName, TargetKind},
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
@@ -106,7 +106,12 @@ pub struct Function {
 
 pub type BasicBlocks = BTreeMap<Label, BasicBlock>;
 
-pub type BasicBlock = VecDeque<Command>;
+pub type BasicBlock = VecDeque<SyntaxCommand>;
+
+pub(crate) use crate::shared::syntax_info::ssp;
+pub use crate::shared::syntax_info::{SyntaxInfo, SyntaxInfoEntry, SyntaxLoc, SyntaxSpanned};
+
+pub type SyntaxCommand = SyntaxSpanned<Command_>;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum LoopEnd {
@@ -166,7 +171,7 @@ fn remap_labels_block(remapping: &BTreeMap<Label, Label>, block: &mut BasicBlock
     }
 }
 
-fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Command) {
+fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, ssp!(_, cmd_): &mut SyntaxCommand) {
     use Command_::*;
     match cmd_ {
         Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),

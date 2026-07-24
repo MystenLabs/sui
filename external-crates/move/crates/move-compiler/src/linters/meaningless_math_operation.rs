@@ -33,7 +33,7 @@ simple_visitor!(
             let msg = "This operation has no effect and can be removed";
             self.add_diag(diag!(
                 StyleCodes::MeaninglessMath.diag_info(),
-                (exp.exp.loc, msg),
+                (exp.exp.loc(), msg),
                 (meaningless_operand, "Because of this operand"),
             ));
         }
@@ -49,7 +49,7 @@ simple_visitor!(
             let msg = "This operation is always zero and can be replaced with '0'";
             self.add_diag(diag!(
                 StyleCodes::MeaninglessMath.diag_info(),
-                (exp.exp.loc, msg),
+                (exp.exp.loc(), msg),
                 (zero_operand, "Because of this operand"),
             ));
         }
@@ -63,7 +63,7 @@ simple_visitor!(
             let msg = "This operation is always one and can be replaced with '1'";
             self.add_diag(diag!(
                 StyleCodes::MeaninglessMath.diag_info(),
-                (exp.exp.loc, msg),
+                (exp.exp.loc(), msg),
                 (one_operand, "Because of this operand"),
             ));
         }

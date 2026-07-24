@@ -485,6 +485,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> ControlFlow {
             body_flow.remove_label(name)
         }
         E::Block((_, seq)) => tail_block(context, seq),
+        E::MacroExpansion(_, e) => tail(context, e),
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -600,6 +601,7 @@ fn value(context: &mut Context, e: &T::Exp) -> ControlFlow {
             body_flow.remove_label(name)
         }
         E::Block((_, seq)) => value_block(context, seq),
+        E::MacroExpansion(_, e) => value(context, e),
 
         // -----------------------------------------------------------------------------------------
         //  calls and nested expressions
@@ -793,6 +795,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> ControlFlow {
         E::Block((_, seq)) => statement_block(
             context, seq, /* stmt_pos */ true, /* skip_last */ false,
         ),
+        E::MacroExpansion(_, e) => statement(context, e),
         E::Return(rhs) => value_report!(rhs).combine_seq(return_called(*eloc)),
         E::Abort(rhs) => value_report!(rhs).combine_seq(abort_called(*eloc)),
         E::Give(name, rhs) => value_report!(rhs).combine_seq(give_called(*eloc, *name)),

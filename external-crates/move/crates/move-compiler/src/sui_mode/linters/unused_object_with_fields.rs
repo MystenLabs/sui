@@ -41,6 +41,7 @@ use crate::{
     cfgir::{
         CFGContext,
         absint::{BlockStates, JoinResult},
+        ast::{SyntaxCommand, ssp},
         cfg::{CFG, ImmForwardCFG},
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
@@ -52,8 +53,8 @@ use crate::{
         codes::{DiagnosticInfo, Severity, custom},
     },
     hlir::ast::{
-        BaseType_, Command, Command_ as C, Exp, LValue_ as L, Label, ModuleCall, SingleType,
-        SingleType_, Type, TypeName_, UnannotatedExp_, Var,
+        BaseType_, Command_ as C, Exp, LValue_ as L, Label, ModuleCall, SingleType, SingleType_,
+        Type, TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::StructFields,
     parser::ast::Ability_,
@@ -174,7 +175,7 @@ fn always_aborts(cfg: &ImmForwardCFG) -> bool {
             let ends_with_abort = cfg
                 .commands(lbl)
                 .last()
-                .is_some_and(|(_, sp!(_, cmd))| matches!(cmd, C::Abort(_, _)));
+                .is_some_and(|(_, ssp!(_, cmd))| matches!(cmd, C::Abort(_, _)));
             if !ends_with_abort {
                 return false;
             }
@@ -271,7 +272,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         &self,
         context: &mut ExecutionContext,
         state: &mut State,
-        cmd: &Command,
+        cmd: &SyntaxCommand,
     ) -> bool {
         match &cmd.value {
             C::Mutate(lhs, rhs) => {

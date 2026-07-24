@@ -14,8 +14,8 @@ use crate::{
         FunctionName, MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
-        stdlib_definitions::StdlibName, unique_map::UniqueMap, *,
+        ast_debug::*, known_attributes::SyntaxAttribute, macro_expansion::MacroExpansionInfo,
+        program_info::NamingProgramInfo, stdlib_definitions::StdlibName, unique_map::UniqueMap, *,
     },
 };
 use move_ir_types::location::*;
@@ -410,6 +410,9 @@ pub struct Lambda {
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
+    /// The original argument span for a lambda forwarded between macro calls.
+    /// Populated on its first binding and used only for expansion provenance.
+    pub macro_expansion_loc: Option<Loc>,
     // Collected during macro expansion. These additional annotations can come from `Annotate` or
     // more subtly by passing a lambda from one macro to another.
     // Conceptually we could handle this by eta-expanding the lambda
@@ -463,6 +466,10 @@ pub enum Exp_ {
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
     Lambda(Lambda),
+    /// Marks an expression introduced by one macro-body, lambda, or by-name
+    /// argument expansion. Introduced during macro expansion in typing and
+    /// preserved until HLIR lowering converts it into a syntax context.
+    MacroExpansion(MacroExpansionInfo, Box<Exp>),
 
     Assign(LValueList, Box<Exp>),
     FieldMutate(ExpDotted, Box<Exp>),
@@ -1882,6 +1889,10 @@ impl AstDebug for Exp_ {
             }
             E::Block(seq) => seq.ast_debug(w),
             E::Lambda(l) => l.ast_debug(w),
+            E::MacroExpansion(info, e) => {
+                w.write(format!("macro-expansion {}: ", info.kind.debug_name()));
+                e.ast_debug(w)
+            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
@@ -1989,6 +2000,7 @@ impl AstDebug for Lambda {
             return_label,
             use_fun_color,
             body: e,
+            macro_expansion_loc: _,
             extra_annotations,
         } = self;
         return_label.ast_debug(w);

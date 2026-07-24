@@ -9,6 +9,7 @@ use crate::{
     cfgir::{
         CFGContext,
         absint::{BlockStates, JoinResult},
+        ast::SyntaxCommand,
         cfg::ImmForwardCFG,
         visitor::{
             LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
@@ -19,8 +20,8 @@ use crate::{
     editions::Flavor,
     hlir::{
         ast::{
-            Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
-            Type, Type_, UnannotatedExp_, Var,
+            Command_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_, Type,
+            Type_, UnannotatedExp_, Var,
         },
         translate::{DisplayVar, display_var},
     },
@@ -125,7 +126,7 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         &self,
         context: &mut ExecutionContext,
         state: &mut State,
-        cmd: &Command,
+        cmd: &SyntaxCommand,
     ) -> bool {
         let Command_::IgnoreAndPop { exp, .. } = &cmd.value else {
             return false;
@@ -165,7 +166,7 @@ impl SimpleAbsInt for UnusedReturnValueAI {
         if state.locals().contains_key(var) {
             state
                 .locals_mut()
-                .insert(*var, LocalState::Available(e.exp.loc, Value::Other));
+                .insert(*var, LocalState::Available(e.exp.loc(), Value::Other));
         }
         None
     }

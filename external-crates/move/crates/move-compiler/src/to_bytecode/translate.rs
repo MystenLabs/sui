@@ -5,7 +5,10 @@
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
     PreCompiledProgramInfo,
-    cfgir::{ast as G, translate::move_value_from_value_},
+    cfgir::{
+        ast::{self as G, ssp},
+        translate::move_value_from_value_,
+    },
     compiled_unit::*,
     diag,
     diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
@@ -1046,7 +1049,14 @@ fn label(lbl: H::Label) -> IR::BlockLabel_ {
     IR::BlockLabel_(format!("{}", lbl).into())
 }
 
-fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): H::Command) {
+fn command(
+    context: &mut Context,
+    code: &mut IR::BytecodeBlock,
+    ssp!(sloc, cmd_): G::SyntaxCommand,
+) {
+    // TODO(debugger): carry `sloc.syntax_info` alongside emitted instructions
+    // so bytecode source maps can record macro-frame attribution.
+    let loc = sloc.loc;
     use H::Command_ as C;
     use IR::Bytecode_ as B;
     match cmd_ {
@@ -1191,7 +1201,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
     use Value_ as V;
-    let sp!(loc, e_) = e.exp;
+    let ssp!(loc, _, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),
         E::UnresolvedError => panic!("ICE should not have reached compilation if there are errors"),

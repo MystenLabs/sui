@@ -53,6 +53,7 @@ mod count {
     use move_proc_macros::growing_stack;
 
     use crate::{
+        cfgir::ast::{SyntaxCommand, ssp},
         hlir::ast::{FunctionSignature, *},
         parser::ast::{BinOp, UnaryOp},
     };
@@ -114,7 +115,7 @@ mod count {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
+    pub fn command(context: &mut Context, ssp!(_, cmd_): &SyntaxCommand) {
         use Command_ as C;
         match cmd_ {
             C::Assign(_, ls, e) => {
@@ -272,7 +273,10 @@ fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
 }
 
 mod eliminate {
-    use crate::hlir::ast::{self as H, *};
+    use crate::{
+        cfgir::ast::{SyntaxCommand, ssp},
+        hlir::ast::{self as H, *},
+    };
     use move_ir_types::location::*;
     use move_proc_macros::growing_stack;
     use std::collections::{BTreeMap, BTreeSet};
@@ -296,7 +300,7 @@ mod eliminate {
     }
 
     #[growing_stack]
-    pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
+    pub fn command(context: &mut Context, ssp!(_, cmd_): &mut SyntaxCommand) {
         use Command_ as C;
         match cmd_ {
             C::Assign(_, ls, e) => {
@@ -454,22 +458,26 @@ mod eliminate {
                     }
                 }
                 if es.is_empty() {
-                    *e = unit(e.exp.loc)
+                    *e = unit_from(e)
                 }
             }
         }
     }
 
     fn remove_eliminated_single(context: &mut Context, v: Var, e: &mut Exp) {
-        let old = std::mem::replace(e, unit(e.exp.loc));
+        let unit = unit_from(e);
+        let old = std::mem::replace(e, unit);
         context.eliminated.insert(v, old);
     }
 
-    fn unit(loc: Loc) -> Exp {
+    /// A unit expression replacing `e`, at `e`'s location and syntactic context.
+    fn unit_from(e: &Exp) -> Exp {
+        let loc = e.exp.sloc.loc;
         H::exp(
             sp(loc, Type_::Unit),
-            sp(
+            ssp(
                 loc,
+                e.exp.sloc.syntax_info.clone(),
                 UnannotatedExp_::Unit {
                     case: UnitCase::Implicit,
                 },

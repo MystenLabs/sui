@@ -239,7 +239,7 @@ impl SimpleAbsInt for IDLeakVerifierAI<'_> {
                 ts = TEST_SCENARIO_MODULE_NAME,
                 ts_new = TS_NEW_OBJECT,
             );
-            let mut d = diag!(ID_LEAK_DIAG, (e.exp.loc, msg), (f.loc(), uid_msg));
+            let mut d = diag!(ID_LEAK_DIAG, (e.exp.loc(), msg), (f.loc(), uid_msg));
             if let Value::NotFresh(stale) = first_value {
                 d.add_secondary_label((stale, "Non fresh UID from this position"))
             }
