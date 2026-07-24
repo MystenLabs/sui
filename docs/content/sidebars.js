@@ -463,6 +463,7 @@ export default {
           items: [
             'onchain-finance/deepbook/deepbook-margin/design',
             'onchain-finance/deepbook/deepbook-margin/margin-risks',
+            'onchain-finance/deepbook/deepbook-margin/leveraged-workflow',
             {
               type: 'category',
               label: 'Contract Information',

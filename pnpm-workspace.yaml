@@ -5,6 +5,7 @@ packages:
   # bump shared graphql tooling across the workspace. Built in isolation.
   - '!examples/deepbook-predict'
   - '!examples/deepbook-spot'
+  - '!examples/deepbook-margin'
   - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'
   - '!**/.next/**'
