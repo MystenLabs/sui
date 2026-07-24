@@ -5,23 +5,23 @@ info:
   edition: 2024.alpha
   lint: false
 ---
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/cross_module_cycle.move:11:32
+   │
+11 │ public(package) const A: u64 = b::B + 1;
+   │                                ^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/cross_module_cycle.move:19:32
+   │
+19 │ public(package) const B: u64 = a::A + 1;
+   │                                ^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
 error[E02004]: invalid 'module' declaration
-   ┌─ tests/move_2024/constants/cross_module_cycle.move:10:32
+   ┌─ tests/move_2024/constants/cross_module_cycle.move:26:28
    │
-10 │ public(package) const A: u64 = b::B + 1;
-   │                                ^^^^ '0x42::b' uses '0x42::a'. This 'use' relationship creates a dependency cycle.
+26 │ public fun uses_d(): u64 { 0x42::d::D }
+   │                            ^^^^^^^^^^ '0x42::d' uses '0x42::c'. This 'use' relationship creates a dependency cycle.
    ·
-18 │ public(package) const B: u64 = a::A + 1;
-   │                                ---- '0x42::a' uses '0x42::b'
-
-error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/constants/cross_module_cycle.move:10:32
-   │
-10 │ public(package) const A: u64 = b::B + 1;
-   │                                ^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
-
-error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/constants/cross_module_cycle.move:18:32
-   │
-18 │ public(package) const B: u64 = a::A + 1;
-   │                                ^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+34 │ public fun uses_c(): u64 { 0x42::c::C }
+   │                            ---------- '0x42::c' uses '0x42::d'

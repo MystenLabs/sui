@@ -3,14 +3,26 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 2 tasks
 
-task 1, lines 7-19:
+task 1, lines 8-31:
 //# print-bytecode
 // Move bytecode v7
 module 42.a {
 
+public(friend) helper(): u64 {
+B0:
+	0: LdU64(0)
+	1: Ret
+}
+
 public local(): u64 {
 B0:
 	0: LdConst[1](u64: 2)
+	1: Ret
+}
+
+public(friend) _const_BYTES(): vector<u8> {
+B0:
+	0: LdConst[2](vector<u8>: "hel..)
 	1: Ret
 }
 
@@ -23,13 +35,33 @@ B0:
 Constants [
 	0 => u64: 1
 	1 => u64: 2
+	2 => vector<u8>: "hello" // interpreted as UTF8 string
 ]
 }
 // Move bytecode v7
 module 42.b {
 use 0000000000000000000000000000000000000000000000000000000000000042::a;
 
-public used(): u64 {
+public both(): u64 {
+B0:
+	0: Call a::helper(): u64
+	1: Call a::_const_USED(): u64
+	2: Add
+	3: Ret
+}
+
+public bytes(): vector<u8> {
+B0:
+	0: Call a::_const_BYTES(): vector<u8>
+	1: Ret
+}
+
+}
+// Move bytecode v7
+module 42.c {
+use 0000000000000000000000000000000000000000000000000000000000000042::a;
+
+public read(): u64 {
 B0:
 	0: Call a::_const_USED(): u64
 	1: Ret

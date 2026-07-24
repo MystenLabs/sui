@@ -1,4 +1,15 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 3 tasks
+processed 4 tasks
+
+task 3, line 50:
+//# run 0x42::b::fail
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(100),
+    location: 0x42::b,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000042::b::fail at offset 1",
+}
