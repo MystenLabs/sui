@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod builder;
+mod builder2;
+mod graph2;
 mod linkage;
 mod package_info;
 mod rename_from;
