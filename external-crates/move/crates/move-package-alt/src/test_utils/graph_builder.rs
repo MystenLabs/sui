@@ -81,6 +81,8 @@ pub struct TestPackageGraph {
     inner: DiGraph<PackageSpec, DepSpec>,
     nodes: BTreeMap<String, NodeIndex>,
     root: Option<PathBuf>,
+    /// On-chain packages to register with Vanilla for testing.
+    on_chain_pkgs: Vec<(PublishedID, crate::flavor::OnChainPackageData)>,
 }
 
 /// Information used to build a node in the package graph
@@ -164,6 +166,51 @@ pub struct DepSpec {
     modes: Option<Vec<ModeName>>,
 }
 
+/// Builder for on-chain package test data registered via
+/// [`TestPackageGraph::add_on_chain_pkg`].
+pub struct OnChainPkgSpec {
+    address: PublishedID,
+    modules: BTreeMap<String, Vec<u8>>,
+    dependencies: BTreeMap<OriginalID, PublishedID>,
+    original_id: OriginalID,
+    version: u64,
+}
+
+impl OnChainPkgSpec {
+    fn new(address: PublishedID) -> Self {
+        Self {
+            original_id: OriginalID(address.0),
+            address,
+            modules: BTreeMap::new(),
+            dependencies: BTreeMap::new(),
+            version: 1,
+        }
+    }
+
+    /// Add a module by loading bytecode from a `.mv` file in `tests/data/`.
+    pub fn module(self, _name: &str, _mv_file: &str) -> Self {
+        todo!("load .mv bytecode from tests/data/")
+    }
+
+    /// Add a linkage table entry: this on-chain package depends on `linked` at `original`.
+    pub fn dep(mut self, original: OriginalID, linked: PublishedID) -> Self {
+        self.dependencies.insert(original, linked);
+        self
+    }
+
+    /// Set the original (runtime) ID if it differs from the address.
+    pub fn original_id(mut self, id: OriginalID) -> Self {
+        self.original_id = id;
+        self
+    }
+
+    /// Set the on-chain version.
+    pub fn version(mut self, version: u64) -> Self {
+        self.version = version;
+        self
+    }
+}
+
 /// Information about a publication
 pub struct PubSpec {
     chain_id: EnvironmentID,
@@ -174,6 +221,7 @@ pub struct PubSpec {
 pub struct Scenario {
     root_path: PathBuf,
     tempdir: Option<TempDir>,
+    vanilla: Vanilla,
 }
 
 impl TestPackageGraph {
@@ -185,6 +233,7 @@ impl TestPackageGraph {
             inner,
             nodes,
             root: None,
+            on_chain_pkgs: Vec::new(),
         };
         result.add_packages(node_names)
     }
@@ -302,6 +351,26 @@ impl TestPackageGraph {
         self
     }
 
+    /// Register an on-chain package at `address`. The `build` closure configures the
+    /// package's bytecode, linkage table, and version via [`OnChainPkgSpec`].
+    pub fn add_on_chain_pkg(
+        mut self,
+        address: PublishedID,
+        build: impl FnOnce(OnChainPkgSpec) -> OnChainPkgSpec,
+    ) -> Self {
+        let spec = build(OnChainPkgSpec::new(address.clone()));
+        self.on_chain_pkgs.push((
+            address,
+            crate::flavor::OnChainPackageData {
+                modules: spec.modules,
+                dependencies: spec.dependencies,
+                original_id: spec.original_id,
+                version: spec.version,
+            },
+        ));
+        self
+    }
+
     pub fn at(mut self, path: impl AsRef<Path>) -> Self {
         self.root = Some(path.as_ref().to_path_buf());
         self
@@ -346,7 +415,16 @@ impl TestPackageGraph {
             }
         }
 
-        Scenario { tempdir, root_path }
+        let mut vanilla = Vanilla::new();
+        for (address, data) in self.on_chain_pkgs {
+            vanilla = vanilla.with_on_chain_package(address, data);
+        }
+
+        Scenario {
+            tempdir,
+            root_path,
+            vanilla,
+        }
     }
 
     /// Return the contents of a `Move.toml` file for the package represented by `node`
@@ -831,10 +909,10 @@ impl Scenario {
     ) -> PackageResult<PackageGraph<Vanilla>> {
         let path = PackagePath::new(self.path_for(&package)).unwrap();
 
-        let config = PackageLoader::new(
+        let mut config = PackageLoader::new(
             self.path_for(&package),
             Vanilla::default_environment(),
-            Vanilla::new(),
+            self.vanilla.clone(),
         )
         .config()
         .clone();
@@ -885,7 +963,7 @@ impl Scenario {
         config(PackageLoader::new(
             self.path_for(package),
             Vanilla::default_environment(),
-            Vanilla::new(),
+            self.vanilla.clone(),
         ))
         .load()
         .await

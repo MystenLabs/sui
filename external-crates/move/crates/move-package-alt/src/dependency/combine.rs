@@ -147,10 +147,25 @@ impl CombinedDependency {
             ));
         }
 
+        // On-chain deps use a fixed environment; reject explicit use-environment
+        let is_on_chain = matches!(&dep.dependency_info, ManifestDependencyInfo::OnChain(_));
+
+        if is_on_chain && replacement.use_environment.is_some() {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainWithUseEnvironment { name },
+            ));
+        }
+
+        let use_environment = if is_on_chain {
+            crate::on_chain::fetch::ON_CHAIN_ENV_NAME.to_string()
+        } else {
+            replacement.use_environment.unwrap_or(source_env_name)
+        };
+
         Ok(Self {
             context: DependencyContext {
                 name,
-                use_environment: replacement.use_environment.unwrap_or(source_env_name),
+                use_environment,
                 is_override: dep.is_override,
                 addresses: replacement.addresses,
                 containing_file: file,
@@ -184,11 +199,26 @@ impl CombinedDependency {
             ));
         }
 
+        // On-chain deps use a fixed environment; reject explicit use-environment
+        let is_on_chain = matches!(&dep.dependency_info, ManifestDependencyInfo::OnChain(_));
+
+        if is_on_chain && replacement.use_environment.is_some() {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainWithUseEnvironment { name },
+            ));
+        }
+
+        let use_environment = if is_on_chain {
+            crate::on_chain::fetch::ON_CHAIN_ENV_NAME.to_string()
+        } else {
+            replacement.use_environment.unwrap_or(source_env_name)
+        };
+
         // TODO: possibly additional compatibility checks here?
         Ok(Self {
             context: DependencyContext {
                 name,
-                use_environment: replacement.use_environment.unwrap_or(source_env_name),
+                use_environment,
                 is_override: dep.is_override,
                 addresses: replacement.addresses,
                 containing_file: file,
@@ -287,8 +317,8 @@ mod tests {
         );
     }
 
-    /// on-chain = true + address replacement passes combining and fails during fetch.
-    /// This error should change when on-chain dep fetching is implemented.
+    /// on-chain = true + address replacement passes combining and fails during fetch
+    /// because Vanilla has no on-chain packages registered.
     #[test(tokio::test)]
     async fn on_chain_with_address_replacement_passes_combining() {
         let scenario = TestPackageGraph::new(["root"])
@@ -297,9 +327,11 @@ mod tests {
             .build();
 
         let err = scenario.root_package_err("root").await;
-        assert!(
-            err.contains("On-chain dependencies are not yet supported"),
-            "expected fetch error, got: {err}"
+        // Redact the MOVE_HOME path which varies per user
+        let err = err.replace(
+            move_command_line_common::env::MOVE_HOME.as_str(),
+            "<MOVE_HOME>",
         );
+        assert_snapshot!(err, @"Error while loading dependency <MOVE_HOME>/on-chain/_test_env_id/0x0000000000000000000000000000000000000000000000000000000000000001: on-chain package not found: 0x0000000000000000000000000000000000000000000000000000000000000001");
     }
 }

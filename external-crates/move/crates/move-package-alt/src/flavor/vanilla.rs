@@ -7,16 +7,17 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::schema::{
     Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
-    ParsedManifest, ReplacementDependency,
+    ParsedManifest, PublishedID, ReplacementDependency,
 };
 
 use async_trait::async_trait;
 
-use super::MoveFlavor;
+use super::{MoveFlavor, OnChainPackageData};
 use indexmap::IndexMap;
 
 pub const DEFAULT_ENV_NAME: &str = "_test_env";
@@ -24,9 +25,13 @@ pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
-#[derive(Debug, Default)]
+///
+/// On-chain packages can be pre-populated via [`Vanilla::with_on_chain_package`].
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
-pub struct Vanilla;
+pub struct Vanilla {
+    on_chain_packages: BTreeMap<PublishedID, OnChainPackageData>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -78,12 +83,28 @@ impl MoveFlavor for Vanilla {
     fn is_system_address(&self, address: &crate::schema::OriginalID) -> bool {
         address == &OriginalID::from(0xBEEF)
     }
+
+    async fn fetch_onchain_package(
+        &self,
+        address: &PublishedID,
+    ) -> anyhow::Result<OnChainPackageData> {
+        self.on_chain_packages
+            .get(address)
+            .cloned()
+            .with_context(|| format!("on-chain package not found: {address}"))
+    }
 }
 
 impl Vanilla {
     /// Create a new `Vanilla` flavor.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Add a pre-populated on-chain package. Returns `self` for chaining.
+    pub fn with_on_chain_package(mut self, address: PublishedID, data: OnChainPackageData) -> Self {
+        self.on_chain_packages.insert(address, data);
+        self
     }
 
     pub fn default_environment() -> Environment {

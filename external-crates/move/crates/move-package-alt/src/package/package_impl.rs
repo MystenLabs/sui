@@ -107,7 +107,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
         let flavor = &*config.flavor;
-        let path = fetch::fetch(&dep, config.allow_dirty, &config.chain_id).await?;
+        let path = fetch::fetch(&dep, config).await?;
 
         let (file_handle, manifest, publication) =
             Self::read_manifest_and_publication(&path, env, dep.is_root(), mtx, flavor).await?;
@@ -453,7 +453,10 @@ fn check_for_environment<F: MoveFlavor>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla},
+        flavor::{
+            OnChainPackageData,
+            vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla},
+        },
         schema::{
             LocalDepInfo, LockfileDependencyInfo, PublishAddresses, PublishedID,
             ReplacementDependency, SystemDepName,
@@ -539,6 +542,13 @@ mod tests {
 
         fn is_system_address(&self, _: &OriginalID) -> bool {
             false
+        }
+
+        async fn fetch_onchain_package(
+            &self,
+            _address: &PublishedID,
+        ) -> anyhow::Result<OnChainPackageData> {
+            anyhow::bail!("on-chain fetching not supported in TestFlavor")
         }
     }
 
