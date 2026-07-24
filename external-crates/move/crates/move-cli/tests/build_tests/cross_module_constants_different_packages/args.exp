@@ -13,23 +13,23 @@ error[E04001]: restricted visibility
   ┌─ ./sources/usage.move:5:25
   │
 5 │     const DOUBLE: u64 = defn::MAX * 2;
-  │                         ^^^^^^^^^ Invalid access of 'Defn::defn::MAX'
+  │                         ^^^^^^^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
   │
-  ┌─ defn/sources/defn.move:2:27
+  ┌─ defn/sources/defn.move:2:5
   │
 2 │     public(package) const MAX: u64 = 100;
-  │                           --- Constants are internal to their package, and cannot be accessed outside of their package
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
 
 error[E04001]: restricted visibility
   ┌─ ./sources/usage.move:8:29
   │
 8 │     public fun max(): u64 { defn::MAX }
-  │                             ^^^^^^^^^ Invalid access of 'Defn::defn::MAX'
+  │                             ^^^^^^^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
   │
-  ┌─ defn/sources/defn.move:2:27
+  ┌─ defn/sources/defn.move:2:5
   │
 2 │     public(package) const MAX: u64 = 100;
-  │                           --- Constants are internal to their package, and cannot be accessed outside of their package
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
 
 error[E03003]: unbound module member
    ┌─ ./sources/usage.move:11:40
