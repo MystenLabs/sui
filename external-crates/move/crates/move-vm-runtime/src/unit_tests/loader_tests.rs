@@ -657,6 +657,19 @@ fn test_depth() {
                 constant: 2,
             },
         ),
+        // enum J::E<T> { A(T), B(T, u64) }: value nests one level past the enum for each field,
+        // and the u64 bottoms out at level 2 -> max(2, 1 + depth(T)).
+        (
+            "J",
+            "E",
+            MaxPlusForm {
+                terms: vec![MaxPlusTerm {
+                    param: 0,
+                    offset: 1,
+                }],
+                constant: 2,
+            },
+        ),
     ];
     adapter.publish_package(modules);
     // loads all structs sequentially
@@ -811,6 +824,19 @@ fn test_layout_size() {
             LinearForm {
                 constant: 4,
                 terms: param0(),
+            },
+        ),
+        // enum J::E<T> { A(T), B(T, u64) } — E node + 2 variant nodes + 2·T (one per T field) +
+        // u64 node = 4 + 2·T.
+        (
+            "J",
+            "E",
+            LinearForm {
+                constant: 4,
+                terms: vec![LinearTerm {
+                    param: 0,
+                    coefficient: 2,
+                }],
             },
         ),
     ];
