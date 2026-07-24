@@ -1295,8 +1295,8 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
 /// A store or remote failure during a child read must surface as an error:
 /// swallowed into `Ok(None)`, it would reach Move execution as "child not
 /// found" and be durably committed as a wrong result.
-#[test]
-fn test_read_child_object_propagates_store_errors() {
+#[tokio::test]
+async fn test_read_child_object_propagates_store_errors() {
     let (_temp, store) = test_data_store();
     let parent = ObjectID::random();
     let child = ObjectID::random();
