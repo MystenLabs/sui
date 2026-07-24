@@ -3,24 +3,35 @@
 
 #[cfg(msim)]
 mod consensus_tests {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        collections::BTreeMap,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicU64, Ordering},
+        },
+        time::Duration,
+    };
 
     use consensus_config::{
         Authority, AuthorityIndex, AuthorityName, Committee, ConsensusProtocolConfig, Epoch,
         NetworkKeyPair, Parameters, ProtocolKeyPair, Stake,
     };
     use consensus_core::NoopTransactionVerifier;
-    use consensus_core::{BlockAPI, BlockStatus, Priority, TransactionVerifier, ValidationError};
+    use consensus_core::{
+        BlockAPI, BlockStatus, CommitIndex, CommittedSubDag, Priority, TransactionVerifier,
+        ValidationError,
+    };
     use consensus_simtests::node::{AuthorityNode, Config};
-    use consensus_types::block::{BlockRef, TransactionIndex};
+    use consensus_types::block::{BlockRef, BlockTimestampMs, TransactionIndex};
     use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
     use mysten_metrics::RegistryService;
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use mysten_network::{Multiaddr, multiaddr::Protocol};
+    use parking_lot::Mutex;
     use prometheus::Registry;
-    use rand::{Rng, SeedableRng as _, rngs::StdRng};
+    use rand::{Rng, SeedableRng as _, rngs::StdRng, seq::SliceRandom as _};
     use sui_config::local_ip_utils;
-    use sui_macros::sim_test;
+    use sui_macros::{clear_fail_point, register_fail_points, sim_test};
     use sui_simulator::{
         SimConfig,
         configs::{bimodal_latency_ms, env_config, uniform_latency_ms},
@@ -58,33 +69,19 @@ mod consensus_tests {
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
-        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
-        let mut clock_drifts = [0; NUM_OF_AUTHORITIES];
-        clock_drifts[0] = 50;
-        clock_drifts[1] = 100;
-        clock_drifts[2] = 120;
+        let clock_drifts = test_clock_drifts::<NUM_OF_AUTHORITIES>();
 
+        // Start all authorities except the last one, which is started later to catch up.
         for (authority_index, _authority_info) in committee.authorities() {
-            // Introduce a non-trivial clock drift for the first node (it's time will be ahead of the others). This will provide extra reassurance
-            // around the block timestamp checks.
-            let db_dir = Arc::new(TempDir::new().unwrap());
-            let mut params = default_parameters();
-            params.db_path = db_dir.path().to_path_buf();
-
-            let config = Config {
+            let node = build_node(
+                &committee,
+                &keypairs,
+                &protocol_config,
                 authority_index,
-                db_dir,
-                committee: committee.clone(),
-                keypairs: keypairs.clone(),
-                boot_counter: boot_counters[authority_index],
-                protocol_config: protocol_config.clone(),
-                clock_drift: clock_drifts[authority_index.value() as usize],
-                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
-                parameters: params,
-                observer_network_keypair: None,
-                observer_ip: None,
-            };
-            let node = AuthorityNode::new(config);
+                clock_drifts[authority_index],
+                Arc::new(NoopTransactionVerifier {}),
+                |_| {},
+            );
 
             if authority_index != AuthorityIndex::new_for_test(NUM_OF_AUTHORITIES as u32 - 1) {
                 node.start().await.unwrap();
@@ -94,7 +91,6 @@ mod consensus_tests {
                 transaction_clients.push(client);
             }
 
-            boot_counters[authority_index] += 1;
             authorities.push(node);
         }
 
@@ -131,11 +127,179 @@ mod consensus_tests {
         );
     }
 
-    // Tests the fastpath transactions with randomized votes. The test creates a fixed number of transactions,
-    // sends them to random authorities, and randomizes votes on them (accept or reject). The output is verified
-    // by comparing commits across validators and ensuring they are consistent.
+    // Like test_committee_start_simple, but injects probabilistic crashes while the committee is
+    // under load. At key consensus fail points each node has a small chance to kill itself; the
+    // test harness recreates it after a short delay, so the node must recover from its persisted
+    // on-disk state. Verifies that every authority recovers and keeps making commit progress.
     #[sim_test(config = "test_config()")]
-    async fn test_committee_fast_path() {
+    async fn test_consensus_crash_and_restart() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        const NUM_OF_AUTHORITIES: usize = 10;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
+
+        // Start the whole committee so crashes hit a fully running network.
+        let clock_drifts = test_clock_drifts::<NUM_OF_AUTHORITIES>();
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &clock_drifts,
+            Arc::new(NoopTransactionVerifier {}),
+            |_, _| {},
+        )
+        .await;
+
+        let crashes = inject_random_crashes(&authorities, Duration::ZERO);
+
+        // Continuously submit transactions while nodes crash and restart. Submissions to a node
+        // that is momentarily down simply fail and are dropped; the load keeps flowing through the
+        // remaining nodes.
+        let authorities_clone = authorities.clone();
+        let _handle = tokio::spawn(async move {
+            const NUM_TRANSACTIONS: u16 = 3000;
+            for i in 0..NUM_TRANSACTIONS {
+                let txn = vec![i as u8; 16];
+                let authority = &authorities_clone[i as usize % authorities_clone.len()];
+                if let Some(client) = authority.transaction_client_if_running() {
+                    let _ = client.submit(vec![txn], Priority::Normal).await;
+                }
+                sleep(Duration::from_millis(20)).await;
+            }
+        });
+
+        // Give the committee time to make progress across many crashes and restarts.
+        sleep(Duration::from_secs(120)).await;
+
+        crashes.stop().await;
+
+        // Every authority should have recovered from its crashes and made commit progress.
+        for i in 0..NUM_OF_AUTHORITIES {
+            let highest_committed_index = authorities[i]
+                .commit_consumer_monitor()
+                .highest_handled_commit();
+            tracing::info!("Authority {i} highest handled commit: {highest_committed_index}");
+            assert!(
+                highest_committed_index > 0,
+                "Authority {i} made no commit progress after crashes"
+            );
+        }
+    }
+
+    // Repeatedly restart every validator while the committee is under load. Each pass uses a
+    // different random order and leaves each validator down for either no time or a few seconds.
+    // Verifies that the final instances all reconnect and make new commit progress.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_rolling_restarts_all_validators() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_RESTART_ROUNDS: usize = 4;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
+
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &[0; NUM_OF_AUTHORITIES],
+            Arc::new(NoopTransactionVerifier {}),
+            |_, _| {},
+        )
+        .await;
+
+        let load_authorities = authorities.clone();
+        let load_handle = tokio::spawn(async move {
+            let mut transaction_id = 0u64;
+            loop {
+                let authority = &load_authorities[transaction_id as usize % load_authorities.len()];
+                if let Some(client) = authority.transaction_client_if_running() {
+                    let _ = client
+                        .submit(
+                            vec![transaction_id.to_le_bytes().to_vec()],
+                            Priority::Normal,
+                        )
+                        .await;
+                }
+                transaction_id += 1;
+                sleep(Duration::from_millis(20)).await;
+            }
+        });
+
+        // Let the initial instances connect and begin committing before rolling the committee.
+        sleep(Duration::from_secs(10)).await;
+        let mut restart_orders = Vec::with_capacity(NUM_RESTART_ROUNDS);
+        for round in 0..NUM_RESTART_ROUNDS {
+            let restart_order = {
+                let mut rng = rand::thread_rng();
+                loop {
+                    let mut order = (0..NUM_OF_AUTHORITIES).collect::<Vec<_>>();
+                    order.shuffle(&mut rng);
+                    if !restart_orders.contains(&order) {
+                        break order;
+                    }
+                }
+            };
+            tracing::info!(round, ?restart_order, "Starting validator restart round");
+
+            for (position, authority_index) in restart_order.iter().copied().enumerate() {
+                let authority = &authorities[authority_index];
+                tracing::info!(round, authority_index, "Restarting validator");
+                authority.stop().await;
+
+                let downtime_secs = if (round + position) % 2 == 0 {
+                    0
+                } else {
+                    rand::thread_rng().gen_range(1..=3)
+                };
+                tracing::info!(round, authority_index, downtime_secs, "Validator stopped");
+                sleep(Duration::from_secs(downtime_secs)).await;
+
+                authority.start().await.unwrap();
+                authority.spawn_committed_subdag_consumer().unwrap();
+            }
+            restart_orders.push(restart_order);
+        }
+
+        // Measure after every validator has been replaced for the final time. Each final instance
+        // must advance from here, proving the fully restarted committee reconnected.
+        let post_restart_commit_indexes = authorities
+            .iter()
+            .map(|authority| authority.commit_consumer_monitor().highest_handled_commit())
+            .collect::<Vec<_>>();
+        sleep(Duration::from_secs(60)).await;
+        load_handle.abort();
+
+        for (authority_index, authority) in authorities.iter().enumerate() {
+            let highest_committed_index =
+                authority.commit_consumer_monitor().highest_handled_commit();
+            let post_restart_commit_index = post_restart_commit_indexes[authority_index];
+            tracing::info!(
+                authority_index,
+                post_restart_commit_index,
+                highest_committed_index,
+                "Validator commit progress after rolling restarts"
+            );
+            assert!(
+                highest_committed_index > post_restart_commit_index,
+                "Authority {authority_index} made no commit progress after rolling restarts: \
+                 {highest_committed_index} <= {post_restart_commit_index}"
+            );
+        }
+    }
+
+    // Tests consensus transaction voting with randomized votes and random crashes. The test
+    // creates a fixed number of transactions, sends them to random authorities, and randomizes
+    // votes on them (accept or reject), while authorities randomly crash and restart under the
+    // load. The output is verified by comparing commits across validators and ensuring they are
+    // consistent, including commits replayed after crash recovery.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_transaction_votes() {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
@@ -148,53 +312,26 @@ mod consensus_tests {
         let mut protocol_config = ConsensusProtocolConfig::for_testing();
         protocol_config.set_gc_depth_for_testing(3);
 
-        let mut authorities = Vec::with_capacity(committee.size());
-        let mut transaction_clients = Vec::with_capacity(committee.size());
-        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
-        let mut clock_drifts = [0; NUM_OF_AUTHORITIES];
-        clock_drifts[0] = 50;
-        clock_drifts[1] = 100;
-        clock_drifts[2] = 120;
-
         // Initialize consensus authorities and transaction clients.
-        for (authority_index, _authority_info) in committee.authorities() {
-            // Introduce clock drifts for the first three nodes (their time will be ahead of the others).
-            // This will provide extra reassurance around the block timestamp checks.
-            let db_dir = Arc::new(TempDir::new().unwrap());
-            let mut params = default_parameters();
-            params.db_path = db_dir.path().to_path_buf();
-
-            let config = Config {
-                authority_index,
-                db_dir,
-                committee: committee.clone(),
-                keypairs: keypairs.clone(),
-                boot_counter: boot_counters[authority_index],
-                protocol_config: protocol_config.clone(),
-                clock_drift: clock_drifts[authority_index.value() as usize],
-                transaction_verifier: Arc::new(RandomizedTransactionVerifier::new(
-                    REJECTION_PROBABILITY,
-                )),
-                parameters: params,
-                observer_network_keypair: None,
-                observer_ip: None,
-            };
-            let node = AuthorityNode::new(config);
-            node.start().await.unwrap();
-            node.spawn_committed_subdag_consumer().unwrap();
-
-            let client = node.transaction_client();
-            transaction_clients.push(client);
-
-            boot_counters[authority_index] += 1;
-            authorities.push(node);
-        }
-
+        let clock_drifts = test_clock_drifts::<NUM_OF_AUTHORITIES>();
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &clock_drifts,
+            Arc::new(RandomizedTransactionVerifier::new(REJECTION_PROBABILITY)),
+            |_, _| {},
+        )
+        .await;
         // Initialize commit consumers.
         let mut commit_consumer_receivers = vec![];
         for authority in &authorities {
             commit_consumer_receivers.push(authority.commit_consumer_receiver());
         }
+
+        // Space out crashes, so the test finishes within its total time budget even though
+        // sequencing all transactions has to run through crash recoveries.
+        let crashes = inject_random_crashes(&authorities, Duration::from_secs(30));
 
         let mut join_set = JoinSet::new();
         let mut transaction_index = 0;
@@ -215,37 +352,46 @@ mod consensus_tests {
                 transaction_index += 1;
             }
 
-            let index =
-                (transaction_index - num_of_transactions) as usize % transaction_clients.len();
-            let (_block_ref, _indexes, status_waiter) = transaction_clients[index]
-                .submit(transactions, Priority::Normal)
-                .await
-                .unwrap();
-
-            join_set.spawn({
-                let total_sequenced_transactions = total_sequenced_transactions.clone();
-                let total_garbage_collected_transactions =
-                    total_garbage_collected_transactions.clone();
-                async move {
-                    match status_waiter.await {
-                        Ok(BlockStatus::Sequenced(_)) => {
-                            // Just increment the transaction count
-                            total_sequenced_transactions
-                                .fetch_add(num_of_transactions as u64, Ordering::SeqCst);
-                        }
-                        Ok(BlockStatus::GarbageCollected(_)) => {
-                            total_garbage_collected_transactions
-                                .fetch_add(num_of_transactions as u64, Ordering::SeqCst);
-                        }
-                        Err(e) => {
-                            panic!(
-                                "Transactions in range {:?} failed with error: {e}",
-                                transaction_indexes_range
-                            );
+            let index = (transaction_index - num_of_transactions) as usize % authorities.len();
+            // Submit from a separate task: submitting to an authority that is down or
+            // recovering can fail or block until the authority can propose again, and should
+            // not stall the submission loop. Failed submissions are dropped, and the load
+            // keeps flowing through the rest of the committee.
+            if let Some(client) = authorities[index].transaction_client_if_running() {
+                join_set.spawn({
+                    let total_sequenced_transactions = total_sequenced_transactions.clone();
+                    let total_garbage_collected_transactions =
+                        total_garbage_collected_transactions.clone();
+                    async move {
+                        let Ok((_block_ref, _indexes, status_waiter)) =
+                            client.submit(transactions, Priority::Normal).await
+                        else {
+                            // The authority crashed while the transactions were being submitted.
+                            return;
+                        };
+                        match status_waiter.await {
+                            Ok(BlockStatus::Sequenced(_)) => {
+                                // Just increment the transaction count
+                                total_sequenced_transactions
+                                    .fetch_add(num_of_transactions as u64, Ordering::SeqCst);
+                            }
+                            Ok(BlockStatus::GarbageCollected(_)) => {
+                                total_garbage_collected_transactions
+                                    .fetch_add(num_of_transactions as u64, Ordering::SeqCst);
+                            }
+                            Err(e) => {
+                                // The authority crashed before the block was sequenced. The fate
+                                // of these transactions is unknown, so count them as neither
+                                // sequenced nor garbage collected.
+                                tracing::info!(
+                                    "Status of transactions in range {:?} is unknown: {e}",
+                                    transaction_indexes_range
+                                );
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
 
             let sleep_duration = Duration::from_millis(rand::thread_rng().gen_range(1..100));
             sleep(sleep_duration).await;
@@ -256,14 +402,30 @@ mod consensus_tests {
             }
         }
 
+        tracing::info!("Test phase: waiting for transaction statuses");
+
         // Wait for submission transactions to finish.
         while let Some(result) = join_set.join_next().await {
             result.unwrap();
         }
 
+        tracing::info!(
+            "Test phase: stopping crashes. Sequenced {}, garbage collected {}",
+            total_sequenced_transactions.load(Ordering::SeqCst),
+            total_garbage_collected_transactions.load(Ordering::SeqCst)
+        );
+
+        // Stop crashing authorities before comparing commits, so every authority can finish
+        // recovering and make progress.
+        let completed_crashes = crashes.stop().await;
+
+        tracing::info!("Test phase: comparing commits after {completed_crashes} crashes");
+
         // Iterate over the committed sub dags until all the transactions have been committed on finalized sub dags.
         let mut transaction_count = 0;
         let mut total_rejected_transactions = 0;
+        let mut last_seen_commit_indexes: [CommitIndex; NUM_OF_AUTHORITIES] =
+            [0; NUM_OF_AUTHORITIES];
         loop {
             let mut sub_dags = vec![];
             let mut last_sub_dag_commit_ref = None;
@@ -272,23 +434,25 @@ mod consensus_tests {
             // underlying used channel is unbounded we won't have issues we dropped sub dags.
             for authority_index in 0..NUM_OF_AUTHORITIES {
                 tracing::trace!("Waiting for sub dag from authority {authority_index}");
-                if let Some(sub_dag) = timeout(
+                let sub_dag = timeout(
                     Duration::from_secs(90),
-                    commit_consumer_receivers[authority_index].recv(),
+                    next_sub_dag(
+                        &authorities[authority_index],
+                        &mut commit_consumer_receivers[authority_index],
+                        last_seen_commit_indexes[authority_index],
+                    ),
                 )
                 .await
-                .expect("Timeout waiting for subdag")
-                {
-                    if let Some(last_sub_dag_commit_ref) = last_sub_dag_commit_ref {
-                        assert_eq!(last_sub_dag_commit_ref, sub_dag.commit_ref);
-                    } else {
-                        last_sub_dag_commit_ref = Some(sub_dag.commit_ref);
-                    }
+                .expect("Timeout waiting for subdag");
+                last_seen_commit_indexes[authority_index] = sub_dag.commit_ref.index;
 
-                    sub_dags.push(sub_dag);
+                if let Some(last_sub_dag_commit_ref) = last_sub_dag_commit_ref {
+                    assert_eq!(last_sub_dag_commit_ref, sub_dag.commit_ref);
                 } else {
-                    panic!("Commit consumer for authority {authority_index} closed.");
+                    last_sub_dag_commit_ref = Some(sub_dag.commit_ref);
                 }
+
+                sub_dags.push(sub_dag);
             }
 
             tracing::info!(
@@ -355,38 +519,23 @@ mod consensus_tests {
         let mut protocol_config = ConsensusProtocolConfig::for_testing();
         protocol_config.set_gc_depth_for_testing(5);
 
-        let mut authorities = Vec::with_capacity(committee.size());
-        let mut transaction_clients = Vec::with_capacity(committee.size());
-        let mut boot_counters = [0; NUM_OF_AUTHORITIES];
-
         // Start validators with observer server support enabled
         // Note: In production, validators would need observer server ports configured
-        for (authority_index, _) in committee.authorities() {
-            let db_dir = Arc::new(TempDir::new().unwrap());
-            let mut parameters = default_parameters();
-            parameters.db_path = db_dir.path().to_path_buf();
-            parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
-
-            let config = Config {
-                authority_index,
-                db_dir,
-                committee: committee.clone(),
-                keypairs: keypairs.clone(),
-                boot_counter: boot_counters[authority_index],
-                protocol_config: protocol_config.clone(),
-                clock_drift: 0,
-                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
-                parameters,
-                observer_network_keypair: None,
-                observer_ip: None,
-            };
-            let node = AuthorityNode::new(config);
-            node.start().await.unwrap();
-            node.spawn_committed_subdag_consumer().unwrap();
-            transaction_clients.push(node.transaction_client());
-            boot_counters[authority_index] += 1;
-            authorities.push(node);
-        }
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &[0; NUM_OF_AUTHORITIES],
+            Arc::new(NoopTransactionVerifier {}),
+            |authority_index, parameters| {
+                parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
+            },
+        )
+        .await;
+        let transaction_clients = authorities
+            .iter()
+            .map(|authority| authority.transaction_client())
+            .collect::<Vec<_>>();
 
         // Pre-allocate IPs for Observer nodes so we can configure them properly
         let observer1_ip = local_ip_utils::get_new_ip();
@@ -536,10 +685,10 @@ mod consensus_tests {
         );
 
         // Clean up
-        observer1.stop();
-        observer2.stop();
+        observer1.stop().await;
+        observer2.stop().await;
         for authority in authorities {
-            authority.stop();
+            authority.stop().await;
         }
     }
 
@@ -575,6 +724,201 @@ mod consensus_tests {
         let ip = local_ip_utils::get_new_ip();
 
         local_ip_utils::new_udp_address_for_testing(&ip)
+    }
+
+    // Clock drifts for the first few nodes (their time will be ahead of the others), providing
+    // extra reassurance around the block timestamp checks.
+    fn test_clock_drifts<const N: usize>() -> [BlockTimestampMs; N] {
+        let mut drifts = [0; N];
+        drifts[0] = 50;
+        drifts[1] = 100;
+        drifts[2] = 120;
+        drifts
+    }
+
+    // Builds an AuthorityNode with its own temp DB dir and default parameters, which
+    // `configure_params` can adjust (e.g. to enable the observer server).
+    fn build_node(
+        committee: &Committee,
+        keypairs: &[(NetworkKeyPair, ProtocolKeyPair)],
+        protocol_config: &ConsensusProtocolConfig,
+        authority_index: AuthorityIndex,
+        clock_drift: BlockTimestampMs,
+        transaction_verifier: Arc<dyn TransactionVerifier>,
+        configure_params: impl FnOnce(&mut Parameters),
+    ) -> AuthorityNode {
+        let db_dir = Arc::new(TempDir::new().unwrap());
+        let mut parameters = default_parameters();
+        parameters.db_path = db_dir.path().to_path_buf();
+        configure_params(&mut parameters);
+        AuthorityNode::new(Config {
+            authority_index,
+            db_dir,
+            committee: committee.clone(),
+            keypairs: keypairs.to_vec(),
+            boot_counter: 0,
+            protocol_config: protocol_config.clone(),
+            clock_drift,
+            transaction_verifier,
+            parameters,
+            observer_network_keypair: None,
+            observer_ip: None,
+        })
+    }
+
+    // Builds and starts every authority in the committee, and spawns their committed subdag
+    // consumers.
+    async fn start_committee(
+        committee: &Committee,
+        keypairs: &[(NetworkKeyPair, ProtocolKeyPair)],
+        protocol_config: &ConsensusProtocolConfig,
+        clock_drifts: &[BlockTimestampMs],
+        transaction_verifier: Arc<dyn TransactionVerifier>,
+        configure_params: impl Fn(AuthorityIndex, &mut Parameters),
+    ) -> Vec<Arc<AuthorityNode>> {
+        let mut authorities = Vec::with_capacity(committee.size());
+        for (authority_index, _) in committee.authorities() {
+            let node = build_node(
+                committee,
+                keypairs,
+                protocol_config,
+                authority_index,
+                clock_drifts[authority_index.value()],
+                transaction_verifier.clone(),
+                |parameters| configure_params(authority_index, parameters),
+            );
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            authorities.push(Arc::new(node));
+        }
+        authorities
+    }
+
+    const CRASH_FAIL_POINTS: [&str; 4] = [
+        "consensus-store-before-write",
+        "consensus-store-after-write",
+        "consensus-after-propose",
+        "consensus-after-leader-schedule-change",
+    ];
+
+    // Handle to random crash injection, started with inject_random_crashes().
+    struct RandomCrashes {
+        crash_in_progress: Arc<AtomicBool>,
+        completed_crashes: Arc<AtomicU64>,
+        restart_controller: tokio::task::JoinHandle<()>,
+    }
+
+    // Injects random crashes into the committee: at each of the CRASH_FAIL_POINTS a node has a
+    // small chance to kill itself (the first fail point hit always crashes), and a controller
+    // task recreates the killed node after a short delay, forcing it to recover from its
+    // persisted on-disk state. Only one crash is in flight at a time, and `crash_interval` must
+    // pass after a restart before the next crash: with Duration::ZERO the fail points fire often
+    // enough that some node is always down or restarting, while a longer interval lets the
+    // committee run at full strength between crashes.
+    fn inject_random_crashes(
+        authorities: &[Arc<AuthorityNode>],
+        crash_interval: Duration,
+    ) -> RandomCrashes {
+        let authorities_by_node_id = Arc::new(Mutex::new(
+            authorities
+                .iter()
+                .map(|authority| (authority.sim_node_id(), authority.clone()))
+                .collect::<BTreeMap<_, _>>(),
+        ));
+        let (crash_sender, mut crash_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let crash_in_progress = Arc::new(AtomicBool::new(false));
+        let completed_crashes = Arc::new(AtomicU64::new(0));
+
+        // The full-node fixture used by test_simulated_load_restarts deletes a stopped simulator
+        // node and creates a new one. Do the same here: AuthorityNode owns ConsensusAuthority
+        // outside the simulated task, so an automatic simulator restart would leave the old DB
+        // and network resources alive in the harness.
+        let controller_crash_in_progress = crash_in_progress.clone();
+        let controller_completed_crashes = completed_crashes.clone();
+        let restart_controller = tokio::spawn(async move {
+            while let Some(node_id) = crash_receiver.recv().await {
+                sleep(Duration::from_secs(10)).await;
+                let authority = authorities_by_node_id
+                    .lock()
+                    .remove(&node_id)
+                    .expect("Unknown simulator node requested a restart");
+                authority.stop().await;
+                authority.start().await.unwrap();
+                authority.spawn_committed_subdag_consumer().unwrap();
+                authorities_by_node_id
+                    .lock()
+                    .insert(authority.sim_node_id(), authority);
+                controller_completed_crashes.fetch_add(1, Ordering::Relaxed);
+                sleep(crash_interval).await;
+                controller_crash_in_progress.store(false, Ordering::Release);
+            }
+        });
+
+        let failpoint_crash_in_progress = crash_in_progress.clone();
+        let failpoint_completed_crashes = completed_crashes.clone();
+        register_fail_points(&CRASH_FAIL_POINTS, move || {
+            let should_crash = failpoint_completed_crashes.load(Ordering::Relaxed) == 0
+                || rand::thread_rng().gen_range(0..100) == 0;
+            if should_crash
+                && failpoint_crash_in_progress
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+            {
+                let node_id = sui_simulator::current_simnode_id();
+                tracing::error!(%node_id, "Killing current node");
+                crash_sender.send(node_id).unwrap();
+                sui_simulator::task::shutdown_current_node();
+            }
+        });
+
+        RandomCrashes {
+            crash_in_progress,
+            completed_crashes,
+            restart_controller,
+        }
+    }
+
+    impl RandomCrashes {
+        // Stops injecting crashes, waits for an in-flight restart to complete, and returns the
+        // number of injected crashes. Panics if no crash happened.
+        async fn stop(self) -> u64 {
+            for fail_point in CRASH_FAIL_POINTS {
+                clear_fail_point(fail_point);
+            }
+            while self.crash_in_progress.load(Ordering::Acquire) {
+                sleep(Duration::from_secs(1)).await;
+            }
+            self.restart_controller.abort();
+            let completed_crashes = self.completed_crashes.load(Ordering::Relaxed);
+            assert!(
+                completed_crashes > 0,
+                "Test completed without crashing an authority"
+            );
+            completed_crashes
+        }
+    }
+
+    // Receives the next committed sub dag from the authority, tolerating crashes and restarts of
+    // the authority. When the authority crashes, its commit consumer channel closes: re-acquire
+    // the channel created by the restart. After a restart all commits are replayed from the
+    // start, so commits at or below `last_seen_commit_index` are skipped.
+    // Must only be called when no crash can start, e.g. after RandomCrashes::stop(), so the
+    // restarted authority is guaranteed to have a new commit consumer channel available.
+    async fn next_sub_dag(
+        authority: &AuthorityNode,
+        receiver: &mut UnboundedReceiver<CommittedSubDag>,
+        last_seen_commit_index: CommitIndex,
+    ) -> CommittedSubDag {
+        loop {
+            let Some(sub_dag) = receiver.recv().await else {
+                *receiver = authority.commit_consumer_receiver();
+                continue;
+            };
+            if sub_dag.commit_ref.index <= last_seen_commit_index {
+                continue;
+            }
+            return sub_dag;
+        }
     }
 
     // Helper function to create default parameters with custom db_path
