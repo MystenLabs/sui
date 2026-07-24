@@ -102,6 +102,11 @@ fn classify_write_latency(
     }
 }
 
+struct ServerFeedback {
+    factor: f64,
+    period: Duration,
+}
+
 struct ObservationWindow {
     started_at: Instant,
     rpc_starts: u64,
@@ -412,7 +417,7 @@ impl BatchWriteFlowController {
     }
 
     fn on_server_feedback(&self, info: Option<&RateLimitInfo>) {
-        let Some((factor, period)) = Self::validated_server_feedback(info) else {
+        let Some(feedback) = Self::validated_server_feedback(info) else {
             return;
         };
         let (rate_update, started_observation, server_feedback_rejected) = {
@@ -425,9 +430,9 @@ impl BatchWriteFlowController {
             let server_feedback_allowed = now >= state.next_server_update_at;
             let healthy_growth_pending = state.pending.allows_growth();
             let (started_observation, server_feedback_rejected) =
-                if server_feedback_allowed && (factor <= 1.0 || healthy_growth_pending) {
+                if server_feedback_allowed && (feedback.factor <= 1.0 || healthy_growth_pending) {
                     (
-                        Self::queue_server_feedback(&mut state, now, factor, period),
+                        Self::queue_server_feedback(&mut state, now, feedback),
                         false,
                     )
                 } else {
@@ -461,7 +466,14 @@ impl BatchWriteFlowController {
             let server_feedback_allowed = now >= state.next_server_update_at;
             let (started_observation, server_feedback_rejected) = if server_feedback_allowed {
                 (
-                    Self::queue_server_feedback(&mut state, now, MIN_FACTOR, DEFAULT_PERIOD),
+                    Self::queue_server_feedback(
+                        &mut state,
+                        now,
+                        ServerFeedback {
+                            factor: MIN_FACTOR,
+                            period: DEFAULT_PERIOD,
+                        },
+                    ),
                     false,
                 )
             } else {
@@ -480,7 +492,7 @@ impl BatchWriteFlowController {
         }
     }
 
-    fn validated_server_feedback(info: Option<&RateLimitInfo>) -> Option<(f64, Duration)> {
+    fn validated_server_feedback(info: Option<&RateLimitInfo>) -> Option<ServerFeedback> {
         let info = info?;
         if !info.factor.is_finite() || info.factor <= 0.0 {
             return None;
@@ -493,15 +505,18 @@ impl BatchWriteFlowController {
         if period.is_zero() {
             return None;
         }
-        Some((info.factor.clamp(MIN_FACTOR, MAX_FACTOR), period))
+        Some(ServerFeedback {
+            factor: info.factor.clamp(MIN_FACTOR, MAX_FACTOR),
+            period,
+        })
     }
 
     fn queue_server_feedback(
         state: &mut ControllerState,
         now: Instant,
-        factor: f64,
-        period: Duration,
+        feedback: ServerFeedback,
     ) -> bool {
+        let ServerFeedback { factor, period } = feedback;
         let started_observation = state.observation.is_none();
         state.pending.server_factor = Some(
             state
