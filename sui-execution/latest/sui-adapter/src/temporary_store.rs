@@ -3,10 +3,8 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::cell::RefCell;
@@ -177,32 +175,20 @@ impl<'backing> TemporaryStore<'backing> {
     /// Checks that the system object `object_id` is available at the version this transaction
     /// requires, i.e. its latest committed version has caught up to that version, and records the
     /// read so it can be emitted into effects and reproduced on replay.
-    pub fn check_system_object_available(&self, object_id: &ObjectID) -> PartialVMResult<()> {
-        // Every system object read during execution must have an assigned version. Its absence
-        // here means the transaction is reading a system object it was not sequenced against,
-        // which is an invariant violation.
-        let Some(consensus_version) = self.system_object_versions.get(object_id).copied() else {
-            debug_fatal!("system object {object_id} read without an assigned version");
-            return Err(
-                PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
-                    format!("system object {object_id} read without an assigned version"),
-                ),
-            );
-        };
+    pub fn check_system_object_available(&self, object_id: &ObjectID) {
+        // Every system object read during execution must have an assigned version.
+        let consensus_version = self.system_object_versions.get(object_id).copied().unwrap();
         let object_at_required = self
             .store
             .get_implicitly_read_system_object_blocking(object_id, consensus_version);
 
-        // Available: record the read at `required_version` (which is what the transaction depends
+        // Record the read at `required_version` (which is what the transaction depends
         // on and reads) so it can be emitted into effects as a read-only consensus object and
-        // reproduced on replay. The version and digest are taken at `required_version` — not the
-        // latest — so the recorded value is deterministic across nodes regardless of how far the
-        // object has since advanced.
+        // reproduced on replay.
         self.loaded_system_objects.borrow_mut().insert(
             *object_id,
             (object_at_required.version(), object_at_required.digest()),
         );
-        Ok(())
     }
 
     // Helpers to access private fields
