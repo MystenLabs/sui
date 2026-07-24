@@ -497,7 +497,17 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                         .subscription_dispatch_age
                         .observe(age_ms as f64 / 1000.0);
                 }
-                stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
+                let ser_hist = dispatch_metrics
+                    .metrics
+                    .node_metrics
+                    .subscription_serialize_latency
+                    .clone();
+                stream::iter(items.into_iter().map(move |b| {
+                    let t = std::time::Instant::now();
+                    let s = ExtendedSerializedBlock::from(b);
+                    ser_hist.observe(t.elapsed().as_secs_f64());
+                    s
+                }))
             }),
         )))
     }

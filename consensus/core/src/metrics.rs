@@ -268,6 +268,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) handle_send_block_vote_record_latency: Histogram,
     pub(crate) handle_send_block_core_dispatch_latency: Histogram,
     pub(crate) handle_send_block_age_accepted: Histogram,
+    pub(crate) subscription_serialize_latency: Histogram,
     pub(crate) signed_block_census: IntGauge,
     pub(crate) commit_sync_fetched_ranges_bytes: IntGauge,
     pub(crate) finalizer_round_delay: Histogram,
@@ -1099,6 +1100,12 @@ impl NodeMetrics {
                 "handle_send_block_age_accepted",
                 "Block age at Core acceptance (creation to accepted): full pipeline",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscription_serialize_latency: register_histogram_with_registry!(
+                "subscription_serialize_latency",
+                "Per-peer block serialize/compress time at subscription stream yield",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             signed_block_census: register_int_gauge_with_registry!(
