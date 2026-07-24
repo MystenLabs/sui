@@ -15,19 +15,23 @@ error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/const_in_const_invalid.move:13:20
    │
  3 │ const C_ZERO: u64 = 0;
-   │       ------ Constants are internal to their module, and cannot can be accessed outside of their module
+   │       ------ Constants are internal to their module, and cannot be accessed outside of their module
    ·
 13 │ const C_ONE: u64 = C_ZERO + 1;
    │                    ^^^^^^ Invalid access of '0x42::t::C_ZERO'
+   │
+   = With the '2024.alpha' edition, a constant declared 'public(package)' can be accessed from other modules in its package
 
 error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/const_in_const_invalid.move:14:34
    │
  3 │ const C_ZERO: u64 = 0;
-   │       ------ Constants are internal to their module, and cannot can be accessed outside of their module
+   │       ------ Constants are internal to their module, and cannot be accessed outside of their module
    ·
 14 │ const C_V2: vector<u64> = vector[C_ZERO, C_FIVE];
    │                                  ^^^^^^ Invalid access of '0x42::t::C_ZERO'
+   │
+   = With the '2024.alpha' edition, a constant declared 'public(package)' can be accessed from other modules in its package
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_check/typing/const_in_const_invalid.move:14:42

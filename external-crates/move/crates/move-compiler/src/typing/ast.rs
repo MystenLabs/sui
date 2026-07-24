@@ -116,9 +116,8 @@ pub struct Constant {
     pub visibility: Visibility,
     pub signature: Type,
     pub value: Exp,
-    /// The synthesized `public(package)` getter function for cross-module access, if this
-    /// constant needs one. Set after typing, once macros have been expanded.
-    pub getter_name: Option<FunctionName>,
+    /// The compiler-generated function that returns this constant for cross-module calls
+    pub constant_fn_name: Option<FunctionName>,
 }
 
 //**************************************************************************************************
@@ -580,14 +579,14 @@ impl AstDebug for (ConstantName, &Constant) {
                 visibility,
                 signature,
                 value,
-                getter_name,
+                constant_fn_name,
             },
         ) = self;
         doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
-        if let Some(getter) = getter_name {
-            w.writeln(format!("getter: {getter}"));
+        if let Some(constant_fn) = constant_fn_name {
+            w.writeln(format!("constant_fn: {constant_fn}"));
         }
         visibility.ast_debug(w);
         w.write(format!("const#{index} {name}:"));

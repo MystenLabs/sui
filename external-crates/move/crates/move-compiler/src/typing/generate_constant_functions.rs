@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Synthesizes `public(package)` getter functions for constants that are used in the function
+//! Synthesizes `public(package)` constant functions for constants that are used in the function
 //! bodies of other modules. Constants live in the constant pool of their defining module, so a
-//! cross-module use cannot be compiled as a constant load; instead it is lowered (during HLIR
-//! translation) to a call of a getter function, synthesized here in the defining module. The
-//! getters are created on demand: a constant only referenced within its own module (or only in
-//! other modules' constant definitions, which are resolved by constant folding) gets none.
+//! cross-module use cannot be compiled as a constant load; instead it is lowered (during CFGIR
+//! translation) to a call of a constant function, synthesized here in the defining module. The
+//! functions are created on demand: a constant only referenced within its own module (or only in
+//! other modules' constant definitions, which are resolved by constant folding) gets none. Since
+//! `public(package)` functions are not part of the upgrade-compatibility surface, the generated
+//! functions may appear and disappear across package versions as usage changes.
 //!
 //! This runs at the end of typing, after macro expansion, so that a constant reference in a macro
 //! body that expands into another module is correctly seen as a cross-module use.
@@ -32,10 +34,27 @@ use crate::{
 //**************************************************************************************************
 
 pub fn program(env: &CompilationEnv, modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>) {
-    let needed = needed_getters(env, modules);
+    let needed = needed_constant_fns(env, modules);
     for (mident, uses) in needed {
         let mdef = modules.get_mut(&mident).unwrap();
-        synthesize_getters(mident, mdef, uses);
+        record_friends(mdef, &uses);
+        synthesize_constant_functions(mident, mdef, uses.constants);
+    }
+}
+
+/// The generated functions are `public(package)`, which compiles to friend visibility, so each
+/// using module must be a friend of the defining module. This mirrors what typing does for
+/// calls of user-written `public(package)` functions.
+fn record_friends(mdef: &mut T::ModuleDefinition, uses: &CrossModuleUses) {
+    for (user, loc) in &uses.users {
+        if !mdef.friends.contains_key(user) {
+            let friend = Friend {
+                attributes: UniqueMap::new(),
+                attr_locs: vec![],
+                loc: *loc,
+            };
+            mdef.friends.add(*user, friend).unwrap();
+        }
     }
 }
 
@@ -43,9 +62,9 @@ pub fn program(env: &CompilationEnv, modules: &mut UniqueMap<ModuleIdent, T::Mod
 // Collection
 //**************************************************************************************************
 
-/// The cross-module uses of a module's constants: the constants needing getters, and the using
-/// modules, which must become friends of the defining module (`public(package)` visibility is
-/// friend visibility in the compiled module)
+/// The cross-module uses of a module's constants: the constants needing generated functions,
+/// and the using modules, which must become friends of the defining module (`public(package)`
+/// visibility is friend visibility in the compiled module)
 #[derive(Default)]
 struct CrossModuleUses {
     constants: BTreeSet<ConstantName>,
@@ -55,18 +74,21 @@ struct CrossModuleUses {
 struct Context<'a> {
     env: &'a CompilationEnv,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
-    current_module: ModuleIdent,
+    current_module: Option<ModuleIdent>,
     /// Constants used from a module other than their defining one, keyed by defining module
     needed: BTreeMap<ModuleIdent, CrossModuleUses>,
 }
 
 impl Context<'_> {
     fn add_constant_use(&mut self, m: ModuleIdent, c: ConstantName, loc: Loc) {
-        if m == self.current_module {
+        let current_module = self
+            .current_module
+            .expect("ICE constant use outside a module");
+        if m == current_module {
             return;
         }
         // Uses of non-'public(package)' constants, cross-package uses, and uses without the
-        // feature enabled were rejected during typing, so no getter is synthesized for them.
+        // feature enabled were rejected during typing, so no function is generated for them.
         let Some(defining_mdef) = self.modules.get(&m) else {
             return;
         };
@@ -76,7 +98,7 @@ impl Context<'_> {
         if !matches!(cdef.visibility, Visibility::Package(_)) {
             return;
         }
-        let use_mdef = self.modules.get(&self.current_module).unwrap();
+        let use_mdef = self.modules.get(&current_module).unwrap();
         if defining_mdef.package_name != use_mdef.package_name {
             return;
         }
@@ -88,22 +110,22 @@ impl Context<'_> {
         }
         let uses = self.needed.entry(m).or_default();
         uses.constants.insert(c);
-        uses.users.entry(self.current_module).or_insert(loc);
+        uses.users.entry(current_module).or_insert(loc);
     }
 }
 
-fn needed_getters(
+fn needed_constant_fns(
     env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) -> BTreeMap<ModuleIdent, CrossModuleUses> {
-    let mut needed = BTreeMap::new();
+    let mut context = Context {
+        env,
+        modules,
+        current_module: None,
+        needed: BTreeMap::new(),
+    };
     for (mident, mdef) in modules.key_cloned_iter() {
-        let mut context = Context {
-            env,
-            modules,
-            current_module: mident,
-            needed,
-        };
+        context.current_module = Some(mident);
         for (_, _, fdef) in &mdef.functions {
             // Macro bodies are not stored in the typed AST -- their expansions appear inline in
             // their callers, which are covered here.
@@ -111,9 +133,8 @@ fn needed_getters(
                 sequence(&mut context, seq);
             }
         }
-        needed = context.needed;
     }
-    needed
+    context.needed
 }
 
 fn sequence(context: &mut Context, (_, seq): &T::Sequence) {
@@ -227,21 +248,11 @@ fn pat(context: &mut Context, p: &T::MatchPattern) {
 // Synthesis
 //**************************************************************************************************
 
-fn synthesize_getters(mident: ModuleIdent, mdef: &mut T::ModuleDefinition, uses: CrossModuleUses) {
-    let CrossModuleUses { constants, users } = uses;
-    // The getters are `public(package)`, which compiles to friend visibility, so each using
-    // module must be a friend of the defining module. This mirrors what typing does for calls
-    // of user-written `public(package)` functions.
-    for (user, loc) in users {
-        if !mdef.friends.contains_key(&user) {
-            let friend = Friend {
-                attributes: UniqueMap::new(),
-                attr_locs: vec![],
-                loc,
-            };
-            mdef.friends.add(user, friend).unwrap();
-        }
-    }
+fn synthesize_constant_functions(
+    mident: ModuleIdent,
+    mdef: &mut T::ModuleDefinition,
+    constants: BTreeSet<ConstantName>,
+) {
     let next_index = mdef
         .functions
         .iter()
@@ -249,14 +260,15 @@ fn synthesize_getters(mident: ModuleIdent, mdef: &mut T::ModuleDefinition, uses:
         .max()
         .unwrap_or(0);
     for (i, cname) in constants.into_iter().enumerate() {
-        // The name is guaranteed unique: user-defined module members cannot start with '_', and
-        // constant names are unique within the module. It is a valid bytecode identifier as long
-        // as the constant name is one.
-        let getter_symbol = Symbol::from(format!("_const_{}", cname));
+        // The name is guaranteed unique: name validation (expansion/name_validation.rs) rejects
+        // user-defined module members starting with '_' in every member namespace, and constant
+        // names are unique within the module. It is a valid bytecode identifier as long as the
+        // constant name is one.
+        let fn_symbol = Symbol::from(format!("_const_{}", cname));
         let cdef = mdef.constants.get_mut(&cname).unwrap();
         let loc = cdef.loc;
-        let fname = FunctionName(sp(loc, getter_symbol));
-        cdef.getter_name = Some(fname);
+        let fname = FunctionName(sp(loc, fn_symbol));
+        cdef.constant_fn_name = Some(fname);
         let signature = N::FunctionSignature {
             type_parameters: vec![],
             parameters: vec![],
@@ -283,6 +295,6 @@ fn synthesize_getters(mident: ModuleIdent, mdef: &mut T::ModuleDefinition, uses:
         };
         mdef.functions
             .add(fname, fdef)
-            .expect("ICE getter name should be unique in the module");
+            .expect("ICE generated constant function name should be unique in the module");
     }
 }
