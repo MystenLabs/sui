@@ -109,9 +109,8 @@ pub struct Constant {
     pub loc: Loc,
     pub signature: BaseType,
     pub value: (UniqueMap<Var, (Mutability, SingleType)>, Block),
-    /// The synthesized `public(package)` getter function for cross-module access, if this
-    /// constant needs one
-    pub getter_name: Option<FunctionName>,
+    /// The compiler-generated function that returns this constant for cross-module calls
+    pub constant_fn_name: Option<FunctionName>,
 }
 
 //**************************************************************************************************
@@ -1208,7 +1207,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 loc: _loc,
                 signature,
                 value,
-                getter_name: _,
+                constant_fn_name: _,
             },
         ) = self;
         warning_filter.ast_debug(w);

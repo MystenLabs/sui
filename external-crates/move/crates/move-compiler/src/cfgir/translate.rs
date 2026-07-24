@@ -50,13 +50,14 @@ pub(super) struct CFGIRDebugFlags {
     pub(super) print_optimized_blocks: bool,
 }
 
-struct Context<'env> {
-    env: &'env CompilationEnv,
+pub(super) struct Context<'env> {
+    pub(super) env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
-    /// getters for constants used cross-module, synthesized at the end of typing
-    constant_getters: BTreeMap<(ModuleIdent, ConstantName), FunctionName>,
+    /// compiler-generated functions returning constants used cross-module, synthesized at the
+    /// end of typing
+    pub(super) constant_fns: BTreeMap<(ModuleIdent, ConstantName), FunctionName>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -72,7 +73,7 @@ impl<'env> Context<'env> {
             reporter,
             info,
             current_package: None,
-            constant_getters: BTreeMap::new(),
+            constant_fns: BTreeMap::new(),
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
@@ -167,14 +168,14 @@ pub fn program(
     } = prog;
 
     let mut context = Context::new(compilation_env, &info);
-    context.constant_getters = hmodules
+    context.constant_fns = hmodules
         .key_cloned_iter()
         .flat_map(|(mident, mdef)| {
             mdef.constants
                 .key_cloned_iter()
                 .filter_map(move |(cname, cdef)| {
-                    let getter = cdef.getter_name?;
-                    Some(((mident, cname), getter))
+                    let constant_fn = cdef.constant_fn_name?;
+                    Some(((mident, cname), constant_fn))
                 })
         })
         .collect();
@@ -217,8 +218,7 @@ fn modules(
     // already evaluated when the constant is folded.
     let mut hmodules = hmodules.into_iter().collect::<Vec<_>>();
     hmodules.sort_by_key(|(_, mdef)| mdef.dependency_order);
-    let mut constant_values: BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>> =
-        BTreeMap::new();
+    let mut constant_values: BTreeMap<(ModuleIdent, ConstantName), Value> = BTreeMap::new();
     let modules = hmodules
         .into_iter()
         .map(|(mname, m)| module(context, &mut constant_values, mname, m));
@@ -227,7 +227,7 @@ fn modules(
 
 fn module(
     context: &mut Context,
-    constant_values: &mut BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module_ident: ModuleIdent,
     mdef: H::ModuleDefinition,
 ) -> (ModuleIdent, G::ModuleDefinition) {
@@ -272,7 +272,7 @@ fn module(
 
 fn constants(
     context: &mut Context,
-    constant_values: &mut BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     mut consts: UniqueMap<ConstantName, H::Constant>,
 ) -> UniqueMap<ConstantName, G::Constant> {
@@ -377,140 +377,6 @@ fn constants(
     out_map
 }
 
-/// Rewrites cross-module constant references in function bodies into calls of the getter
-/// function synthesized in the defining module. References in constant definitions do not go
-/// through this: they are resolved by constant folding.
-mod constant_calls {
-    use super::Context;
-    use crate::{expansion::ast::ModuleIdent, hlir::ast as H, ice};
-
-    pub fn block(context: &mut Context, module: ModuleIdent, block: &mut H::Block) {
-        for stmt in block {
-            statement(context, module, stmt);
-        }
-    }
-
-    fn statement(context: &mut Context, module: ModuleIdent, sp!(_, stmt_): &mut H::Statement) {
-        use H::Statement_ as S;
-        match stmt_ {
-            S::Command(cmd) => command(context, module, cmd),
-            S::IfElse {
-                cond,
-                if_block,
-                else_block,
-            } => {
-                exp(context, module, cond);
-                block(context, module, if_block);
-                block(context, module, else_block)
-            }
-            S::VariantMatch {
-                subject,
-                enum_name: _,
-                arms,
-            } => {
-                exp(context, module, subject);
-                for (_, arm) in arms {
-                    block(context, module, arm);
-                }
-            }
-            S::While {
-                cond: (cond_block, cond_exp),
-                block: body,
-                ..
-            } => {
-                block(context, module, cond_block);
-                exp(context, module, cond_exp);
-                block(context, module, body)
-            }
-            S::Loop { block: body, .. } => block(context, module, body),
-            S::NamedBlock { block: body, .. } => block(context, module, body),
-        }
-    }
-
-    fn command(context: &mut Context, module: ModuleIdent, sp!(_, cmd_): &mut H::Command) {
-        use H::Command_ as C;
-        match cmd_ {
-            C::IgnoreAndPop { exp: e, .. }
-            | C::Return { exp: e, .. }
-            | C::Abort(_, e)
-            | C::Assign(_, _, e)
-            | C::JumpIf { cond: e, .. }
-            | C::VariantSwitch { subject: e, .. } => exp(context, module, e),
-            C::Mutate(lhs, rhs) => {
-                exp(context, module, lhs);
-                exp(context, module, rhs)
-            }
-            C::Break(_) | C::Continue(_) | C::Jump { .. } => (),
-        }
-    }
-
-    fn exp(context: &mut Context, module: ModuleIdent, e: &mut H::Exp) {
-        use H::UnannotatedExp_ as E;
-        let eloc = e.exp.loc;
-        match &mut e.exp.value {
-            e_ @ E::Constant(_, _) => {
-                let E::Constant(m, c) = e_ else {
-                    unreachable!()
-                };
-                if *m == module {
-                    return;
-                }
-                if let Some(getter) = context.constant_getters.get(&(*m, *c)).copied() {
-                    *e_ = E::ModuleCall(Box::new(H::ModuleCall {
-                        module: *m,
-                        name: getter,
-                        type_arguments: vec![],
-                        arguments: vec![],
-                    }));
-                } else {
-                    // reachable only when typing rejected the access (private constant, feature
-                    // off, or cross-package)
-                    if !context.env.has_errors() {
-                        context.add_diag(ice!((
-                            eloc,
-                            "cross-module constant use with no synthesized getter"
-                        )));
-                    }
-                    *e_ = E::UnresolvedError;
-                }
-            }
-
-            E::Unit { .. }
-            | E::Value(_)
-            | E::Move { .. }
-            | E::Copy { .. }
-            | E::ErrorConstant { .. }
-            | E::BorrowLocal(_, _)
-            | E::UnresolvedError
-            | E::Unreachable => (),
-
-            E::ModuleCall(mcall) => {
-                for arg in &mut mcall.arguments {
-                    exp(context, module, arg);
-                }
-            }
-            E::Freeze(base) | E::Dereference(base) | E::UnaryExp(_, base) | E::Cast(base, _) => {
-                exp(context, module, base)
-            }
-            E::Borrow(_, base, _, _) => exp(context, module, base),
-            E::BinopExp(lhs, _, rhs) => {
-                exp(context, module, lhs);
-                exp(context, module, rhs)
-            }
-            E::Pack(_, _, fields) | E::PackVariant(_, _, _, fields) => {
-                for (_, _, fe) in fields {
-                    exp(context, module, fe);
-                }
-            }
-            E::Vector(_, _, _, args) | E::Multiple(args) => {
-                for arg in args {
-                    exp(context, module, arg);
-                }
-            }
-        }
-    }
-}
-
 fn dependent_constants(constant: &H::Constant) -> BTreeSet<(ModuleIdent, ConstantName)> {
     fn dep_exp(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, exp: &H::Exp) {
         use H::UnannotatedExp_ as E;
@@ -608,7 +474,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<(ModuleIdent, Constan
 
 fn constant(
     context: &mut Context,
-    constant_values: &mut BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     name: ConstantName,
     c: H::Constant,
@@ -620,7 +486,7 @@ fn constant(
         loc,
         signature,
         value: (locals, block),
-        getter_name: _,
+        constant_fn_name: _,
     } = c;
 
     context.push_warning_filter_scope(warning_filter.clone());
@@ -640,11 +506,13 @@ fn constant(
             exp: sp!(_, H::UnannotatedExp_::Value(value)),
             ..
         }) => {
-            constant_values
-                .entry(module)
-                .or_default()
-                .add(name, value.clone())
-                .expect("ICE constant name collision");
+            let prev = constant_values.insert((module, name), value.clone());
+            ice_assert!(
+                context.reporter,
+                prev.is_none(),
+                loc,
+                "constant name collision"
+            );
             Some(move_value_from_value(value))
         }
         _ => None,
@@ -666,7 +534,7 @@ const CANNOT_FOLD: &str =
 
 fn constant_(
     context: &mut Context,
-    constant_values: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     name: ConstantName,
     full_loc: Loc,
@@ -851,7 +719,7 @@ fn function_body(
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, mut body } => {
-            constant_calls::block(context, module, &mut body);
+            super::constants::rewrite_constant_calls(context, module, &mut body);
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();

@@ -18,7 +18,7 @@ pub fn optimize(
     _reporter: &DiagnosticReporter,
     signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = remove_no_ops::optimize(cfg);

@@ -31,3 +31,9 @@ error[E04001]: restricted visibility
 2 │     public(package) const MAX: u64 = 100;
   │                           --- Constants are internal to their package, and cannot be accessed outside of their package
 
+error[E03003]: unbound module member
+   ┌─ ./sources/usage.move:11:40
+   │
+11 │     public fun call_generated(): u64 { defn::_const_MAX() }
+   │                                        ^^^^^^^^^^^^^^^^ Invalid module access. Unbound function '_const_MAX' in module 'Defn::defn'
+

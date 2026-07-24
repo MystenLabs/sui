@@ -9,7 +9,9 @@ error[E04001]: restricted visibility
   ┌─ tests/move_check/folding/constant_cross_module.move:7:20
   │
 2 │     const C_ZERO: u64 = 0;
-  │           ------ Constants are internal to their module, and cannot can be accessed outside of their module
+  │           ------ Constants are internal to their module, and cannot be accessed outside of their module
   ·
 7 │     const D: u64 = C_ZERO + 1;
   │                    ^^^^^^ Invalid access of '0x42::t::C_ZERO'
+  │
+  = With the '2024.alpha' edition, a constant declared 'public(package)' can be accessed from other modules in its package

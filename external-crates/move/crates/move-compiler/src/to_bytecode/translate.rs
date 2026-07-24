@@ -1226,11 +1226,11 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
         E::Constant(m, c) => {
-            // cross-module constant references in function bodies are rewritten to getter calls
-            // during HLIR translation
+            // cross-module constant references in function bodies are rewritten to calls of the
+            // generated constant functions during CFGIR translation
             assert!(
                 context.current_module() == Some(&m),
-                "ICE cross-module constant should have been rewritten to a getter call"
+                "ICE cross-module constant should have been rewritten to a constant function call"
             );
             code.push(sp(loc, B::LdNamedConst(context.constant_name(c))))
         }

@@ -9,7 +9,7 @@ use crate::{
         codes::{NameResolution, TypeSafety},
         filter::FilterScope,
     },
-    editions::FeatureGate,
+    editions::{self, FeatureGate},
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
@@ -1973,13 +1973,24 @@ pub fn make_constant_type(
             .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
         let msg = format!("Invalid access of '{}::{}'", m, c);
         if !supports_cross_module {
-            let internal_msg = "Constants are internal to their module, and cannot can be \
+            let internal_msg = "Constants are internal to their module, and cannot be \
                                 accessed outside of their module";
-            context.add_diag(diag!(
+            let mut diag = diag!(
                 TypeSafety::Visibility,
                 (loc, msg),
                 (defined_loc, internal_msg)
-            ));
+            );
+            if let Some(edition) =
+                editions::valid_editions_for_feature(FeatureGate::CrossModuleConstants).last()
+            {
+                diag.add_note(format!(
+                    "With the '{}' edition, a constant declared '{}' can be accessed from \
+                     other modules in its package",
+                    edition,
+                    Visibility::PACKAGE,
+                ));
+            }
+            context.add_diag(diag);
         } else if !matches!(visibility, Visibility::Package(_)) {
             let internal_msg = format!(
                 "The constant '{}::{}' is internal to its module. Declare it '{}' to allow \
@@ -1994,8 +2005,8 @@ pub fn make_constant_type(
                 (defined_loc, internal_msg)
             ));
         } else if context.module_info(m).package != context.current_package() {
-            // constants are accessed cross-module via `public(package)` getter functions, so
-            // they cannot be referenced outside of their package
+            // constants are accessed cross-module via compiler-generated `public(package)`
+            // functions, so they cannot be referenced outside of their package
             let internal_msg = "Constants are internal to their package, and cannot be accessed \
                                 outside of their package";
             context.add_diag(diag!(
