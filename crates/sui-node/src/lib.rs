@@ -163,6 +163,7 @@ pub mod address_prober;
 pub mod admin;
 pub mod db_shell;
 mod handle;
+mod jwk_updater;
 pub mod metrics;
 
 pub struct ValidatorComponents {
@@ -329,8 +330,6 @@ impl fmt::Debug for SuiNode {
     }
 }
 
-static MAX_JWK_KEYS_PER_FETCH: usize = 100;
-
 impl SuiNode {
     pub async fn start(
         config: NodeConfig,
@@ -368,21 +367,15 @@ impl SuiNode {
             "Starting JWK updater tasks with supported providers: {:?}", supported_providers
         );
 
-        fn validate_jwk(
-            metrics: &Arc<SuiNodeMetrics>,
-            provider: &OIDCProvider,
-            id: &JwkId,
-            jwk: &JWK,
-        ) -> bool {
+        // Best-effort per-key sanity checks (provider match, total size). This is intentionally
+        // a plain predicate with no metrics side effects of its own: `jwk_updater` centrally
+        // accounts every rejection (from this or from fetch/parse) into `invalid_jwks`.
+        fn validate_jwk(provider: &OIDCProvider, id: &JwkId, jwk: &JWK) -> bool {
             let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
                 warn!(
                     "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
                     id.iss, provider
                 );
-                metrics
-                    .invalid_jwks
-                    .with_label_values(&[&provider.to_string()])
-                    .inc();
                 return false;
             };
 
@@ -391,91 +384,50 @@ impl SuiNode {
                     "JWK iss {:?} (retrieved from {:?}) does not match provider {:?}",
                     id.iss, provider, iss_provider
                 );
-                metrics
-                    .invalid_jwks
-                    .with_label_values(&[&provider.to_string()])
-                    .inc();
                 return false;
             }
 
             if !check_total_jwk_size(id, jwk) {
                 warn!("JWK {:?} (retrieved from {:?}) is too large", id, provider);
-                metrics
-                    .invalid_jwks
-                    .with_label_values(&[&provider.to_string()])
-                    .inc();
                 return false;
             }
 
             true
         }
 
-        // metrics is:
-        //  pub struct SuiNodeMetrics {
-        //      pub jwk_requests: IntCounterVec,
-        //      pub jwk_request_errors: IntCounterVec,
-        //      pub total_jwks: IntCounterVec,
-        //      pub unique_jwks: IntCounterVec,
-        //  }
-
         for p in supported_providers.into_iter() {
             let provider_str = p.to_string();
             let epoch_store = epoch_store.clone();
             let consensus_adapter = consensus_adapter.clone();
             let metrics = metrics.clone();
-            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(
-                async move {
-                    // note: restart-safe de-duplication happens after consensus, this is
-                    // just best-effort to reduce unneeded submissions.
-                    let mut seen = HashSet::new();
-                    loop {
-                        jwk_log!("fetching JWK for provider {:?}", p);
-                        metrics.jwk_requests.with_label_values(&[&provider_str]).inc();
-                        match Self::fetch_jwks(authority, &p).await {
-                            Err(e) => {
-                                metrics.jwk_request_errors.with_label_values(&[&provider_str]).inc();
-                                warn!("Error when fetching JWK for provider {:?} {:?}", p, e);
-                                // Retry in 30 seconds
-                                tokio::time::sleep(Duration::from_secs(30)).await;
-                                continue;
+            let fetch_provider = p.clone();
+            let validate_provider = p.clone();
+            spawn_monitored_task!(
+                epoch_store.clone().within_alive_epoch(
+                    jwk_updater::run_jwk_updater_loop(
+                        jwk_updater::JwkUpdaterLabels {
+                            metric_label: provider_str,
+                            source_name: format!("JWK for provider {:?}", p),
+                        },
+                        fetch_interval,
+                        jwk_updater::JwkCapTiming::AfterDedup,
+                        metrics,
+                        authority,
+                        epoch_store,
+                        consensus_adapter,
+                        move || {
+                            let p = fetch_provider.clone();
+                            async move {
+                                Self::fetch_jwks(authority, &p)
+                                    .await
+                                    .map(|keys| (keys, 0usize))
                             }
-                            Ok(mut keys) => {
-                                metrics.total_jwks
-                                    .with_label_values(&[&provider_str])
-                                    .inc_by(keys.len() as u64);
-
-                                keys.retain(|(id, jwk)| {
-                                    validate_jwk(&metrics, &p, id, jwk) &&
-                                    !epoch_store.jwk_active_in_current_epoch(id, jwk) &&
-                                    seen.insert((id.clone(), jwk.clone()))
-                                });
-
-                                metrics.unique_jwks
-                                    .with_label_values(&[&provider_str])
-                                    .inc_by(keys.len() as u64);
-
-                                // prevent oauth providers from sending too many keys,
-                                // inadvertently or otherwise
-                                if keys.len() > MAX_JWK_KEYS_PER_FETCH {
-                                    warn!("Provider {:?} sent too many JWKs, only the first {} will be used", p, MAX_JWK_KEYS_PER_FETCH);
-                                    keys.truncate(MAX_JWK_KEYS_PER_FETCH);
-                                }
-
-                                for (id, jwk) in keys.into_iter() {
-                                    jwk_log!("Submitting JWK to consensus: {:?}", id);
-
-                                    let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
-                                    consensus_adapter.submit(txn, None, &epoch_store, None, None)
-                                        .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
-                                        .ok();
-                                }
-                            }
-                        }
-                        tokio::time::sleep(fetch_interval).await;
-                    }
-                }
-                .instrument(error_span!("jwk_updater_task", epoch)),
-            ));
+                        },
+                        move |id: &JwkId, jwk: &JWK| validate_jwk(&validate_provider, id, jwk),
+                    )
+                    .instrument(error_span!("jwk_updater_task", epoch)),
+                )
+            );
         }
     }
 
@@ -493,63 +445,29 @@ impl SuiNode {
         let epoch = epoch_store.epoch();
         spawn_monitored_task!(
             epoch_store.clone().within_alive_epoch(
-                async move {
-                    // note: restart-safe de-duplication happens after consensus, this is
-                    // just best-effort to reduce unneeded submissions.
-                    let mut seen = HashSet::new();
-                    loop {
-                        jwk_log!("fetching GCP JWKs");
-                        metrics.jwk_requests.with_label_values(&["gcp"]).inc();
-                        match Self::fetch_gcp_jwks(authority, metrics.as_ref()).await {
-                            Err(e) => {
-                                metrics.jwk_request_errors.with_label_values(&["gcp"]).inc();
-                                warn!("Error when fetching GCP JWKs: {:?}", e);
-                                // Retry in 30 seconds
-                                tokio::time::sleep(Duration::from_secs(30)).await;
-                                continue;
-                            }
-                            Ok(mut keys) => {
-                                metrics
-                                    .total_jwks
-                                    .with_label_values(&["gcp"])
-                                    .inc_by(keys.len() as u64);
-
-                                // Enforce the response-size boundary on the raw fetch result,
-                                // before `seen`/active-epoch de-duplication narrows it down (see
-                                // `enforce_gcp_response_key_limit`).
-                                enforce_gcp_response_key_limit(&mut keys, MAX_JWK_KEYS_PER_FETCH);
-
-                                keys.retain(|(id, jwk)| {
-                                    if !check_total_jwk_size(id, jwk) {
-                                        warn!("GCP JWK {:?} is too large, skipping", id);
-                                        metrics.invalid_jwks.with_label_values(&["gcp"]).inc();
-                                        return false;
-                                    }
-                                    !epoch_store.jwk_active_in_current_epoch(id, jwk)
-                                        && seen.insert((id.clone(), jwk.clone()))
-                                });
-
-                                metrics
-                                    .unique_jwks
-                                    .with_label_values(&["gcp"])
-                                    .inc_by(keys.len() as u64);
-
-                                for (id, jwk) in keys.into_iter() {
-                                    jwk_log!("Submitting GCP JWK to consensus: {:?}", id);
-                                    let txn =
-                                        ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
-                                    consensus_adapter
-                                        .submit(txn, None, &epoch_store, None, None)
-                                        .tap_err(|e| {
-                                            warn!("Error submitting GCP JWK to consensus: {:?}", e)
-                                        })
-                                        .ok();
-                                }
-                            }
+                jwk_updater::run_jwk_updater_loop(
+                    jwk_updater::JwkUpdaterLabels {
+                        metric_label: "gcp".to_string(),
+                        source_name: "GCP JWKs".to_string(),
+                    },
+                    fetch_interval,
+                    // Cap before dedup: a malicious/misconfigured endpoint sending far more
+                    // than the cap's worth of distinctly-shaped keys must not have all of them
+                    // influence which keys survive de-duplication. See `jwk_updater::JwkCapTiming`.
+                    jwk_updater::JwkCapTiming::BeforeDedup,
+                    metrics,
+                    authority,
+                    epoch_store.clone(),
+                    consensus_adapter,
+                    move || Self::fetch_gcp_jwks(authority),
+                    |id: &JwkId, jwk: &JWK| {
+                        if !check_total_jwk_size(id, jwk) {
+                            warn!("GCP JWK {:?} is too large, skipping", id);
+                            return false;
                         }
-                        tokio::time::sleep(fetch_interval).await;
-                    }
-                }
+                        true
+                    },
+                )
                 .instrument(error_span!("gcp_jwk_updater_task", epoch)),
             )
         );
@@ -2792,10 +2710,7 @@ impl SuiNode {
             .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 
-    async fn fetch_gcp_jwks(
-        _authority: AuthorityName,
-        metrics: &SuiNodeMetrics,
-    ) -> SuiResult<Vec<(JwkId, JWK)>> {
+    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<(Vec<(JwkId, JWK)>, usize)> {
         use futures::StreamExt;
         use sui_types::error::SuiErrorKind;
         use sui_types::gcp_attestation::GCP_ISSUER as GCP_ISS;
@@ -2836,7 +2751,7 @@ impl SuiNode {
             body.extend_from_slice(&chunk);
         }
         let body = String::from_utf8(body).map_err(|_| SuiErrorKind::JWKRetrievalError)?;
-        parse_gcp_jwks(&body, GCP_ISS, metrics).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
+        parse_gcp_jwks(&body, GCP_ISS).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 }
 
@@ -2862,25 +2777,24 @@ impl SuiNode {
     }
 
     #[allow(unused_variables)]
-    async fn fetch_gcp_jwks(
-        _authority: AuthorityName,
-        metrics: &SuiNodeMetrics,
-    ) -> SuiResult<Vec<(JwkId, JWK)>> {
+    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<(Vec<(JwkId, JWK)>, usize)> {
         // msim-injected keys must pass the same shared `validate_gcp_jwk` policy as
         // production ingestion (`parse_gcp_jwks`), so tests can never exercise a path that
         // bypasses production validation by injecting keys that would otherwise be rejected.
         use sui_types::gcp_attestation::validate_gcp_jwk;
-        Ok(get_gcp_jwk_injector()
+        let mut rejected = 0usize;
+        let accepted = get_gcp_jwk_injector()
             .into_iter()
             .filter(|(id, jwk)| match validate_gcp_jwk(id, jwk) {
                 Ok(()) => true,
                 Err(err) => {
                     warn!(?id, %err, "msim-injected GCP JWK failed shared validation, dropping");
-                    metrics.invalid_jwks.with_label_values(&["gcp"]).inc();
+                    rejected += 1;
                     false
                 }
             })
-            .collect())
+            .collect();
+        Ok((accepted, rejected))
     }
 }
 
@@ -2894,7 +2808,8 @@ fn validate_gcp_jwks_http_status(status: reqwest::StatusCode) -> SuiResult<()> {
     }
 }
 
-/// Parse a GCP JWKS JSON response into `(JwkId, JWK)` pairs.
+/// Parse a GCP JWKS JSON response into `(JwkId, JWK)` pairs, plus a count of entries rejected
+/// during parsing/validation.
 ///
 /// Every candidate is validated with the same, issuer-scoped
 /// [`sui_types::gcp_attestation::validate_gcp_jwk`] used by consensus (live and replay) and by
@@ -2907,8 +2822,12 @@ fn validate_gcp_jwks_http_status(status: reqwest::StatusCode) -> SuiResult<()> {
 /// rejected: an ambiguous `kid` is treated the same as an absent one (fail closed) rather than
 /// risk silently picking one of the conflicting keys. A `kid` repeated with byte-for-byte
 /// identical key material is not a conflict.
+///
+/// This function does not touch node metrics; the caller (the shared `jwk_updater` loop) is
+/// responsible for accounting the returned rejected count into `invalid_jwks`, so all
+/// `invalid_jwks` bookkeeping lives in one place.
 #[cfg(not(msim))]
-fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec<(JwkId, JWK)>> {
+fn parse_gcp_jwks(body: &str, iss: &str) -> Result<(Vec<(JwkId, JWK)>, usize)> {
     use sui_types::gcp_attestation::validate_gcp_jwk;
 
     let v: serde_json::Value = serde_json::from_str(body)?;
@@ -2917,15 +2836,16 @@ fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec
         .and_then(|keys| keys.as_array())
         .ok_or_else(|| anyhow!("GCP JWKS response is missing the keys array"))?;
     let mut result: Vec<(JwkId, JWK)> = Vec::new();
+    let mut rejected: usize = 0;
     // Tracks the accepted key material for each `kid` seen so far, and the set of `kid`s that
     // have already been found to conflict (so a third, later entry doesn't get re-inserted).
     let mut accepted_by_kid: HashMap<String, JWK> = HashMap::new();
     let mut conflicting_kids: HashSet<String> = HashSet::new();
     for key in keys {
-        let reject = |reason: &str| {
+        let mut reject = |reason: &str| {
             let kid = key.get("kid").and_then(|value| value.as_str());
             warn!(?kid, reason, "Rejecting invalid GCP JWK");
-            metrics.invalid_jwks.with_label_values(&["gcp"]).inc();
+            rejected += 1;
         };
 
         let kid = key
@@ -2991,21 +2911,7 @@ fn parse_gcp_jwks(body: &str, iss: &str, metrics: &SuiNodeMetrics) -> Result<Vec
     if result.is_empty() {
         warn!("GCP JWKS response contained no usable keys");
     }
-    Ok(result)
-}
-
-/// Enforces the `max`-keys-per-fetch response boundary on a raw fetch result, before any
-/// `seen`/active-epoch de-duplication is applied. This must run first: de-duplicating first
-/// and truncating afterward would let a response with many more than `max` distinctly-shaped
-/// entries influence which keys survive, defeating the point of the boundary.
-fn enforce_gcp_response_key_limit(keys: &mut Vec<(JwkId, JWK)>, max: usize) {
-    if keys.len() > max {
-        warn!(
-            "GCP sent too many JWKs, only the first {} will be used",
-            max
-        );
-        keys.truncate(max);
-    }
+    Ok((result, rejected))
 }
 
 enum SpawnOnce {
@@ -3479,10 +3385,6 @@ mod tests {
         use base64::engine::general_purpose::URL_SAFE_NO_PAD;
         use sui_types::gcp_attestation::GCP_ISSUER as TEST_GCP_ISSUER;
 
-        fn gcp_test_metrics() -> Arc<SuiNodeMetrics> {
-            Arc::new(SuiNodeMetrics::new(&Registry::new()))
-        }
-
         /// A structurally valid GCP RSA modulus: 2048 numeric bits (top byte 0x80), no
         /// leading zero byte, and odd (last byte 0xFF).
         fn valid_gcp_modulus() -> Vec<u8> {
@@ -3506,14 +3408,13 @@ mod tests {
 
         #[test]
         fn parse_gcp_jwks_accepts_valid_rs256_key() {
-            let metrics = gcp_test_metrics();
-            let keys = parse_gcp_jwks(&valid_gcp_jwk_json(), TEST_GCP_ISSUER, &metrics).unwrap();
+            let (keys, rejected) = parse_gcp_jwks(&valid_gcp_jwk_json(), TEST_GCP_ISSUER).unwrap();
 
             assert_eq!(keys.len(), 1);
             assert_eq!(keys[0].0.iss, TEST_GCP_ISSUER);
             assert_eq!(keys[0].0.kid, "gcp-key-1");
             assert_eq!(keys[0].1.alg, "RS256");
-            assert_eq!(metrics.invalid_jwks.with_label_values(&["gcp"]).get(), 0);
+            assert_eq!(rejected, 0);
         }
 
         #[test]
@@ -3532,20 +3433,15 @@ mod tests {
                 ]
             })
             .to_string();
-            let metrics = gcp_test_metrics();
 
-            assert!(
-                parse_gcp_jwks(&body, TEST_GCP_ISSUER, &metrics)
-                    .unwrap()
-                    .is_empty()
-            );
-            assert_eq!(metrics.invalid_jwks.with_label_values(&["gcp"]).get(), 3);
+            let (keys, rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
+            assert!(keys.is_empty());
+            assert_eq!(rejected, 3);
         }
 
         #[test]
         fn parse_gcp_jwks_rejects_missing_keys_array() {
-            let metrics = gcp_test_metrics();
-            assert!(parse_gcp_jwks("{}", TEST_GCP_ISSUER, &metrics).is_err());
+            assert!(parse_gcp_jwks("{}", TEST_GCP_ISSUER).is_err());
         }
 
         #[test]
@@ -3573,15 +3469,13 @@ mod tests {
                 }]
             })
             .to_string();
-            let metrics = gcp_test_metrics();
 
+            let (keys, rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
             assert!(
-                parse_gcp_jwks(&body, TEST_GCP_ISSUER, &metrics)
-                    .unwrap()
-                    .is_empty(),
+                keys.is_empty(),
                 "even modulus must be rejected by the shared GCP validator"
             );
-            assert_eq!(metrics.invalid_jwks.with_label_values(&["gcp"]).get(), 1);
+            assert_eq!(rejected, 1);
         }
 
         /// If a single GCP JWKS response contains two entries with the same `kid` but
@@ -3601,9 +3495,8 @@ mod tests {
                 ]
             })
             .to_string();
-            let metrics = gcp_test_metrics();
 
-            let keys = parse_gcp_jwks(&body, TEST_GCP_ISSUER, &metrics).unwrap();
+            let (keys, _rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
             assert!(
                 keys.iter().all(|(id, _)| id.kid != "dup-kid"),
                 "conflicting duplicate kid must not be present in the result: {keys:?}"
@@ -3624,69 +3517,13 @@ mod tests {
                 ]
             })
             .to_string();
-            let metrics = gcp_test_metrics();
 
-            let keys = parse_gcp_jwks(&body, TEST_GCP_ISSUER, &metrics).unwrap();
+            let (keys, _rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
             assert_eq!(
                 keys.iter().filter(|(id, _)| id.kid == "same-kid").count(),
                 1,
                 "identical duplicate kid must resolve to exactly one entry: {keys:?}"
             );
-        }
-
-        /// The `MAX_JWK_KEYS_PER_FETCH` response boundary must be enforced on the raw fetch
-        /// result, before any `seen`/active-epoch de-duplication narrows it down.
-        #[test]
-        fn enforce_gcp_response_key_limit_truncates_before_dedup() {
-            let mut n = vec![0xFFu8; 256];
-            n[0] = 0x80;
-            let jwk = JWK {
-                kty: "RSA".to_string(),
-                e: "AQAB".to_string(),
-                n: URL_SAFE_NO_PAD.encode(&n),
-                alg: "RS256".to_string(),
-            };
-            let mut keys: Vec<(JwkId, JWK)> = (0..101)
-                .map(|i| {
-                    (
-                        JwkId {
-                            iss: TEST_GCP_ISSUER.to_string(),
-                            kid: format!("kid-{i}"),
-                        },
-                        jwk.clone(),
-                    )
-                })
-                .collect();
-            assert_eq!(keys.len(), 101);
-
-            enforce_gcp_response_key_limit(&mut keys, MAX_JWK_KEYS_PER_FETCH);
-            assert_eq!(keys.len(), MAX_JWK_KEYS_PER_FETCH);
-        }
-
-        #[test]
-        fn enforce_gcp_response_key_limit_is_noop_under_limit() {
-            let mut n = vec![0xFFu8; 256];
-            n[0] = 0x80;
-            let jwk = JWK {
-                kty: "RSA".to_string(),
-                e: "AQAB".to_string(),
-                n: URL_SAFE_NO_PAD.encode(&n),
-                alg: "RS256".to_string(),
-            };
-            let mut keys: Vec<(JwkId, JWK)> = (0..MAX_JWK_KEYS_PER_FETCH)
-                .map(|i| {
-                    (
-                        JwkId {
-                            iss: TEST_GCP_ISSUER.to_string(),
-                            kid: format!("kid-{i}"),
-                        },
-                        jwk.clone(),
-                    )
-                })
-                .collect();
-
-            enforce_gcp_response_key_limit(&mut keys, MAX_JWK_KEYS_PER_FETCH);
-            assert_eq!(keys.len(), MAX_JWK_KEYS_PER_FETCH);
         }
     }
 
