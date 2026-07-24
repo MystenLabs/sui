@@ -1,0 +1,25 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 11-42:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6376400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 44-54:
+//# programmable --inputs 1
+//> 0: test::m::new();
+//> 1: test::m::new();
+//> 2: test::m::borrow_mut(Result(0));
+//> 3: test::m::borrow_mut(Result(1));
+//> 4: test::m::write(Result(2));
+//> 5: test::m::write(Result(3));
+//> 6: test::m::check(Result(2), Input(0));
+//> 7: test::m::check(Result(3), Input(0));
+//> 8: test::m::delete(Result(0));
+//> 9: test::m::delete(Result(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

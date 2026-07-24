@@ -1,0 +1,21 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 10-40:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 42-48:
+//# programmable
+// mutably using the object while the `&mut Y` result is live must fail
+//> 0: test::m::new();
+//> 1: test::m::borrow_mut(Result(0));
+//> 2: test::m::touch(Result(0));
+//> 3: test::m::write(Result(1));
+//> 4: test::m::delete(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(2) } }
