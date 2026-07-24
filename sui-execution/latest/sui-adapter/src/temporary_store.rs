@@ -180,7 +180,7 @@ impl<'backing> TemporaryStore<'backing> {
         let consensus_version = self.system_object_versions.get(object_id).copied().unwrap();
         let object_at_required = self
             .store
-            .get_implicitly_read_system_object_blocking(object_id, consensus_version);
+            .load_implicitly_read_system_object(object_id, consensus_version);
 
         // Record the read at `required_version` (which is what the transaction depends
         // on and reads) so it can be emitted into effects as a read-only consensus object and

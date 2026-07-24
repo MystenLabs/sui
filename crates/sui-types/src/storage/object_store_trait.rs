@@ -13,7 +13,7 @@ pub trait ObjectStore {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
 
-    fn get_implicitly_read_system_object_blocking(
+    fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         version: SystemObjectVersion,
@@ -54,12 +54,12 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
         (*self).get_object(object_id)
     }
 
-    fn get_implicitly_read_system_object_blocking(
+    fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         version: SystemObjectVersion,
     ) -> Object {
-        (*self).get_implicitly_read_system_object_blocking(object_id, version)
+        (*self).load_implicitly_read_system_object(object_id, version)
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
@@ -80,12 +80,12 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
         (**self).get_object(object_id)
     }
 
-    fn get_implicitly_read_system_object_blocking(
+    fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         version: SystemObjectVersion,
     ) -> Object {
-        (**self).get_implicitly_read_system_object_blocking(object_id, version)
+        (**self).load_implicitly_read_system_object(object_id, version)
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
@@ -106,12 +106,12 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
         (**self).get_object(object_id)
     }
 
-    fn get_implicitly_read_system_object_blocking(
+    fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         version: SystemObjectVersion,
     ) -> Object {
-        (**self).get_implicitly_read_system_object_blocking(object_id, version)
+        (**self).load_implicitly_read_system_object(object_id, version)
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {

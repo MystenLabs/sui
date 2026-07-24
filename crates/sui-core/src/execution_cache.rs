@@ -716,12 +716,12 @@ macro_rules! implement_storage_traits {
                 ObjectCacheRead::get_object_by_key(self, object_id, version)
             }
 
-            fn get_implicitly_read_system_object_blocking(
+            fn load_implicitly_read_system_object(
                 &self,
                 object_id: &ObjectID,
                 version: sui_types::base_types::SystemObjectVersion,
             ) -> Object {
-                $implementor::get_implicitly_read_system_object_blocking(self, object_id, version)
+                $implementor::load_implicitly_read_system_object(self, object_id, version)
             }
         }
 

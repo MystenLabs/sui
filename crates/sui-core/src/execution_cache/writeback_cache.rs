@@ -499,7 +499,7 @@ macro_rules! check_cache_entry_by_latest {
 impl WritebackCache {
     /// Reads an implicitly read system object at the given version.
     /// If it's not available yet, it will block until it is.
-    pub(crate) fn get_implicitly_read_system_object_blocking(
+    pub(crate) fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
         system_object_version: SystemObjectVersion,
@@ -539,7 +539,7 @@ impl WritebackCache {
             // itself as executions complete.
             mysten_common::sync::execution_permit::release_execution_permit();
             tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
-                "get_implicitly_read_system_object_blocking",
+                "load_implicitly_read_system_object",
                 &[key],
                 move |_keys| {
                     vec![if self.object_exists_by_key(object_id, version) {

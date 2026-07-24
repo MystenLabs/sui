@@ -310,7 +310,7 @@ async fn test_receiving_object_higher_version() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_get_implicitly_read_system_object_blocking() {
+async fn test_load_implicitly_read_system_object() {
     let cache = create_writeback_cache().await;
 
     let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
@@ -329,7 +329,7 @@ async fn test_get_implicitly_read_system_object_blocking() {
     let blocked = tokio::spawn({
         let cache = cache.clone();
         async move {
-            cache.as_ref().get_implicitly_read_system_object_blocking(
+            cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
                 SystemObjectVersion::Exact(ConsensusObjectVersion {
                     initial_shared_version: init_version,
@@ -355,7 +355,7 @@ async fn test_get_implicitly_read_system_object_blocking() {
         .unwrap();
     assert_eq!(object.version(), target_version);
 
-    let object = cache.as_ref().get_implicitly_read_system_object_blocking(
+    let object = cache.as_ref().load_implicitly_read_system_object(
         &object_id,
         SystemObjectVersion::Exact(ConsensusObjectVersion {
             initial_shared_version: init_version,
@@ -393,7 +393,7 @@ async fn test_execution_permit_released_while_blocked() {
         let cache = cache.clone();
         async move {
             let _permit_guard = set_execution_permit(Box::new(permit));
-            cache.as_ref().get_implicitly_read_system_object_blocking(
+            cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
                 SystemObjectVersion::Exact(ConsensusObjectVersion {
                     initial_shared_version: init_version,
