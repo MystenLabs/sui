@@ -17,8 +17,8 @@ last_verified: 2025-04-16T00:00:00.000Z
 verified_against: predict-testnet-4-16
 goal:
   description: >-
-    Reader understands prediction market protocol built alongside DeepBook, with
-    binary positions, vertical ranges
+    Reader understands what DeepBook Predict is and can mint a first binary
+    position on Testnet through a minimal quickstart.
   requires:
     - has_frontmatter:
         - title
@@ -27,65 +27,97 @@ goal:
       label: Has required frontmatter fields
     - min_words: 300
       label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
     - has_questions: true
       label: Needs questions for AI search visibility
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - What is DeepBook Predict in Sui?
-  - How do I user flow?
-  - How does deepbook predict work on Sui?
+  - What is DeepBook Predict on Sui?
+  - How do I mint a binary position on DeepBook Predict?
+  - Does DeepBook Predict have a TypeScript SDK?
+  - How do I create a PredictManager?
 answer: >-
-  Prediction market protocol built alongside DeepBook, with binary positions,
-  vertical ranges, oracle-driven pricing, and shared vault liquidity on Sui.
+  DeepBook Predict is an expiry-based prediction market protocol on Sui. You
+  build transactions against its Move entry points to create a PredictManager,
+  deposit a quote asset, and mint binary positions or vertical ranges.
 ---
 
-DeepBook Predict is an expiry-based prediction market protocol on Sui. It lets applications build markets where users can mint and redeem binary positions or vertical ranges against oracle-driven prices, while liquidity providers supply quote assets to a shared vault and receive `PLP` LP shares.
+DeepBook Predict is an expiry-based prediction market protocol on Sui. It lets applications build markets where users mint and redeem binary positions or vertical ranges against oracle-driven prices. Liquidity providers supply quote assets to a shared vault and receive `PLP` LP shares in return.
 
-The protocol is currently documented from the `predict-testnet-4-16` branch of the [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-4-16/packages/predict). The current public integration target is on Sui Testnet.
+The protocol runs on Sui Testnet and is documented from the `predict-testnet-4-16` branch of the [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-4-16/packages/predict). There is no dedicated Predict TypeScript SDK yet, so you build Predict transactions directly with the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) against the protocol's Move entry points, as the quickstart below shows.
 
 :::caution
 
-DeepBook Predict smart contracts might change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets. All package IDs and source references on these pages are pinned to the `predict-testnet-4-16` branch and will change at Mainnet launch.
+DeepBook Predict smart contracts might change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets. All package IDs and source references on these pages are pinned to the `predict-testnet-4-16` branch and change at Mainnet launch.
 
 :::
 
-## Request Testnet tokens
+## Quickstart: mint a binary position
 
-Builders can request Testnet tokens for DeepBook Predict integration and testing, including DUSDC and other assets, by submitting the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L).
+This quickstart installs the Sui TypeScript SDK, funds a Testnet account, creates a `PredictManager`, and mints one binary position. These samples live in the `examples/deepbook-predict` package, which CI type-checks with `tsc --noEmit` against `@mysten/sui` version 2.22.1. This document does not execute them against Testnet, so run the [manual verification steps](#verify-on-testnet) before you rely on them.
+
+### 1. Install the SDK
+
+Install the Sui TypeScript SDK. You do not need a Predict-specific package.
+
+```sh npm2yarn
+npm install @mysten/sui
+```
+
+### 2. Request Testnet tokens
+
+You need two assets on Testnet:
+
+- **SUI for gas:** Request it from a [Sui Testnet faucet](/getting-started/onboarding/get-coins).
+- **DUSDC as the quote asset:** Request DUSDC and other Predict assets through the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L).
+
+### 3. Set the configuration block
+
+Keep every onchain ID in one place. These values are Testnet-only and come from the [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) page. They change at Mainnet launch, so never inline them elsewhere.
+
+<ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
+
+Set up a client and a signer next. The following example uses the [gRPC](/develop/accessing-data/grpc) client, which matches the rest of the DeepBook SDK docs.
+
+<ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
+
+### 4. Create a `PredictManager`
+
+Each user creates one `PredictManager` and reuses it. The `create_manager` function shares the manager as a new object, so you read its ID from the transaction effects. Because `create_manager` shares the manager during this transaction, you deposit into it and mint from it in a later transaction, not the same one.
+
+<ImportContent source="examples/deepbook-predict/src/create-manager.ts" mode="code" tag="create-manager" />
+
+### 5. Mint your first binary position
+
+Read a live oracle from the Predict server, then deposit DUSDC and mint one binary position in a single transaction. A binary position is keyed by oracle, expiry, strike, and direction. This example mints an up position with `market_key::up`.
+
+<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
+
+The mint succeeds only when the oracle is live, the quote asset is accepted, the market key matches the oracle, and the manager holds enough deposited DUSDC. For preview amounts, call `get_trade_amounts` before you mint. The [end-to-end Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) covers previews, vertical ranges, redemption, and the liquidity provider flow.
+
+### Verify on Testnet {#verify-on-testnet}
+
+The samples above pass compile checks but this page does not execute them. To confirm them end to end on Testnet:
+
+1. Fund a Testnet address with SUI, then confirm a nonzero balance with `sui client gas`.
+2. Request DUSDC through the token request form, then confirm you own a DUSDC coin with `sui client objects`.
+3. Run `createManager`, then confirm the returned ID resolves with `sui client object MANAGER_ID`.
+4. Fetch a live oracle: `curl https://predict-server.testnet.mystenlabs.com/predicts/PREDICT_OBJECT_ID/oracles`. Confirm at least one oracle reports an active lifecycle state.
+5. Run `mintBinaryUp` with that oracle, a `depositAmount` at or above the mint cost, and a small `quantity`. Confirm the effects report a success status and a `PositionMinted` event.
 
 ## Key features
 
 DeepBook Predict provides the following capabilities:
 
-- **Binary positions:** Users can mint directional positions for an oracle, expiry, strike, and direction.
-- **Vertical ranges:** Users can mint bounded range positions keyed by an oracle, expiry, lower strike, and higher strike.
+- **Binary positions:** Mint directional positions keyed by oracle, expiry, strike, and direction.
+- **Vertical ranges:** Mint bounded range positions keyed by oracle, expiry, lower strike, and higher strike.
 - **Oracle-based pricing:** `OracleSVI` objects track spot, forward, SVI parameters, lifecycle status, and settlement prices.
-- **Shared manager accounts:** Each user reuses a `PredictManager` to hold quote balances, positions, and range quantities.
-- **Vault liquidity:** LPs supply accepted quote assets to the vault and receive `PLP` shares representing a proportional claim on vault value.
-- **Indexed data path:** Applications can use the public Predict server for render-ready market, vault, portfolio, and history data.
-
-## Integration model
-
-Most applications should combine three data sources:
-
-- Use the public Predict server for page rendering, lists, portfolio summaries, vault summaries, and historical data.
-- Sui checkpoint or event streaming supports pages that need low-latency oracle updates.
-- Use direct onchain object reads immediately before or after wallet flows that need confirmation-critical state.
-
-Avoid building the primary UI around raw chain scans. The server already exposes indexed surfaces for market state, portfolio state, vault state, and history.
-
-## User flow
-
-A typical user flow starts with current market data from the public server. After selecting an active oracle and strike, the user creates or finds a `PredictManager`, deposits the enabled quote asset, previews mint and redeem amounts, then submits a transaction for a binary position or vertical range. After confirmation, refresh both the affected onchain objects and the indexed server endpoints backing the current page.
-
-## Liquidity provider flow
-
-Liquidity providers supply accepted quote assets into the shared vault using `predict::supply`. In return, the protocol mints `PLP`, which represents vault shares. LP withdrawals burn `PLP` and return a selected quote asset, subject to current vault value, max payout coverage, and the withdrawal limiter.
-
-## Testnet status
-
-DeepBook Predict is documented here as a Testnet integration surface. Do not reuse package IDs from older Predict experiments. See [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) for the current package, object ID, quote asset, server URL, and source branch. These identifiers are temporary. The team updates them when DeepBook Predict launches on Mainnet.
+- **Shared manager accounts:** Each user reuses one `PredictManager` to hold quote balances, positions, and range quantities.
+- **Vault liquidity:** Liquidity providers supply accepted quote assets to the vault and receive `PLP` shares that represent a proportional claim on vault value.
+- **Indexed data path:** Applications read render-ready market, vault, portfolio, and history data from the public Predict server.
 
 import DocCardList from '@theme/DocCardList';
 

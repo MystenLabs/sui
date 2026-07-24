@@ -1,0 +1,16 @@
+{
+  "name": "deepbook-predict-examples",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Runnable TypeScript examples for the DeepBook Predict docs.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mysten/sui": "2.22.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3"
+  }
+}

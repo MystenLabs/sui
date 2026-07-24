@@ -51,6 +51,16 @@ answer: >-
 
 Every Sui transaction pays for 2 things: **computational execution** and **long-term object storage**. How you source those funds (from coins, address balances, a sponsor, or at zero cost) depends on what the transaction does and who pays.
 
+## Migrate to address balances {#migration-journey}
+
+[Address balances](/onchain-finance/asset-custody/address-balances) replace UTXO-style coin selection with a single address-owned balance per coin type. Moving your app onto them is 3 steps, each covered by a section on this page and single-sourced from the canonical address-balance guides:
+
+1. **Source funds automatically.** Replace manual coin selection with `coinWithBalance`, which draws from address balances first and falls back to coin objects. See [Coin selection with `coinWithBalance`](#coin-selection).
+2. **Drop gas costs where you can.** Peer-to-peer transfers of allowlisted stablecoins qualify for zero-gas execution. See [Gasless stablecoin transfers](#gasless).
+3. **Compose multi-step flows atomically.** Chain swaps, deposits, and transfers into one programmable transaction block. See [Composing DeFi operations](#defi-composition).
+
+You do not have to migrate anything at once. Coin objects and address balances coexist, and the SDK selects between them for you. For what changes at the protocol level, balance-query fields, and backward compatibility, see [Migrating from Coin to Address Balances](/onchain-finance/asset-custody/address-balances/migrate-address-balances). For the full send, withdraw, and gas API across TypeScript, Rust, CLI, and Move, see [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
+
 ## Coin selection with `coinWithBalance` {#coin-selection}
 
 When you build a transaction with the TypeScript SDK, you rarely need to pick individual coin objects. The `coinWithBalance` helper (and the `tx.coin()` shorthand) resolves the required amount automatically:
@@ -58,7 +68,9 @@ When you build a transaction with the TypeScript SDK, you rarely need to pick in
 ```tsx
 import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
 
-const USDC = '0xdba34...::usdc::USDC';
+// Replace with a real coin type. For allowlisted stablecoins, see
+// /develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins
+const USDC = '0xUSDC_PACKAGE::usdc::USDC';
 
 const tx = new Transaction();
 
@@ -124,7 +136,9 @@ The gRPC and GraphQL transports detect eligibility automatically during simulati
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
 
-const USDC = '0xdba34...::usdc::USDC';
+// Replace with a real coin type. For allowlisted stablecoins, see
+// /develop/transaction-payment/gasless-stablecoin-transfers#eligible-stablecoins
+const USDC = '0xUSDC_PACKAGE::usdc::USDC';
 const client = new SuiGrpcClient({ network: 'mainnet', baseUrl: 'https://fullnode.mainnet.sui.io:443' });
 
 const tx = new Transaction();
