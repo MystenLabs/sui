@@ -669,6 +669,42 @@ impl VMDispatchTables {
         })
     }
 
+    /// The `value_depth` of a concrete type — the single measure `Pack`/`PackVariant` need,
+    /// computed without the other three. `ty` is depth-bound by construction.
+    pub(crate) fn value_depth_of(&self, ty: &Type) -> PartialVMResult<u64> {
+        Ok(match ty {
+            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.value_depth_of(inner)?.saturating_add(1)
+            }
+            Type::Datatype(key) => self.virtual_key_size_formula(key)?.value_depth.solve(&[])?,
+            Type::DatatypeInstantiation(inst) => {
+                let (key, args) = &**inst;
+                let arg_depths = args
+                    .iter()
+                    .map(|arg| self.value_depth_of(arg))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                self.virtual_key_size_formula(key)?
+                    .value_depth
+                    .solve(&arg_depths)?
+            }
+            Type::TyParam(_) => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Type parameter should be fully resolved"
+                ));
+            }
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer => 1,
+        })
+    }
+
     /// Check a computed value's `value_depth` against the configured limit (if any).
     fn check_value_depth(&self, value_depth: u64) -> PartialVMResult<()> {
         if let Some(max) = self.vm_config.runtime_limits_config.max_value_nest_depth
@@ -690,9 +726,13 @@ impl VMDispatchTables {
         elem: &ArenaType,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
-        let elem_size = self.arena_type_size_formula(elem)?.solve(ty_args.sizes())?;
-        check_syntactic_limits(elem_size.type_size, elem_size.type_depth)?;
-        self.check_value_depth(elem_size.value_depth.saturating_add(1))
+        let formula = self.arena_type_size_formula(elem)?;
+        let sizes = ty_args.sizes();
+        check_syntactic_limits(
+            formula.solve_type_size(sizes)?,
+            formula.solve_type_depth(sizes)?,
+        )?;
+        self.check_value_depth(formula.solve_value_depth(sizes)?.saturating_add(1))
     }
 
     // -------------------------------------------
@@ -1073,10 +1113,14 @@ impl VMDispatchTables {
         &self,
         term: &ArenaType,
         ty_args: &TypeArguments,
-    ) -> PartialVMResult<(Type, TypeSize)> {
-        let size = self.arena_type_size_formula(term)?.solve(ty_args.sizes())?;
-        check_syntactic_limits(size.type_size, size.type_depth)?;
-        Ok((term.subst_unchecked(ty_args.types())?, size))
+    ) -> PartialVMResult<(Type, u64)> {
+        let formula = self.arena_type_size_formula(term)?;
+        let sizes = ty_args.sizes();
+        // Only the syntactic measures are needed here: the limit check, and `type_size` for the
+        // caller's node budget. The frame's canonical sizes are (re)computed by `TypeArguments`.
+        let type_size = formula.solve_type_size(sizes)?;
+        check_syntactic_limits(type_size, formula.solve_type_depth(sizes)?)?;
+        Ok((term.subst_unchecked(ty_args.types())?, type_size))
     }
 
     /// The [`TypeArguments`] for the callee's frame. Also performs sizing checks.
@@ -1103,8 +1147,8 @@ impl VMDispatchTables {
             .to_ref()
             .iter()
             .map(|term| {
-                let (ty, size) = self.realize_type(term, ty_args)?;
-                charge_nodes(size.type_size)?;
+                let (ty, type_size) = self.realize_type(term, ty_args)?;
+                charge_nodes(type_size)?;
                 Ok(ty)
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
@@ -1223,11 +1267,12 @@ impl VMDispatchTables {
         // value is created. Note this is the exact size of the built type — the running-argument
         // sum a naive guard would use over-counts an argument once per parameter that references
         // it (the `S<T×32>` blow-up: 128 arguments-plus-parameters, but 3041 realized nodes).
-        let result = self
-            .virtual_key_size_formula(datatype_key)?
-            .solve(&param_sizes)?;
-        check_syntactic_limits(result.type_size, result.type_depth)?;
-        self.check_value_depth(result.value_depth)?;
+        let result = self.virtual_key_size_formula(datatype_key)?;
+        check_syntactic_limits(
+            result.solve_type_size(&param_sizes)?,
+            result.solve_type_depth(&param_sizes)?,
+        )?;
+        self.check_value_depth(result.solve_value_depth(&param_sizes)?)?;
         Ok(())
     }
 }
