@@ -1935,7 +1935,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -2041,7 +2041,9 @@ impl AuthorityState {
         let system_object_versions = execution_env
             .assigned_versions
             .system_object_versions
-            .clone();
+            .iter()
+            .map(|(id, version)| (*id, SystemObjectVersion::Exact(*version)))
+            .collect();
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
