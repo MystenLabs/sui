@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:31
    │
  2 │     public struct None() has drop;
@@ -19,7 +19,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:39
    │
  2 │     public struct None() has drop;
@@ -33,7 +33,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:12:16
    │
  2 │     public struct None() has drop;
@@ -47,7 +47,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:12:28
    │
  2 │     public struct None() has drop;
@@ -61,7 +61,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:13:9
    │
  2 │     public struct None() has drop;
@@ -76,7 +76,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:13:15
    │
  2 │     public struct None() has drop;
@@ -90,7 +90,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:14:9
    │
  2 │     public struct None() has drop;
@@ -104,7 +104,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:15:9
    │
  2 │     public struct None() has drop;
@@ -119,7 +119,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:16:23
    │
  2 │     public struct None() has drop;
@@ -133,7 +133,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:17:9
    │
  2 │     public struct None() has drop;
@@ -147,7 +147,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:18:16
    │
  2 │     public struct None() has drop;
@@ -161,7 +161,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:19:13
    │
  2 │     public struct None() has drop;
@@ -175,7 +175,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:20:10
    │
 20 │         (0u64 as $U);
@@ -184,7 +184,7 @@ error[E04003]: built-in operation not supported
 27 │         useless!<None>(X());
    │                  ---- Found: 'a::m::None'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:21:13
    │
  2 │     public struct None() has drop;
@@ -198,7 +198,7 @@ error[E05001]: ability constraint not satisfied
 27 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:27:24
    │
  2 │     public struct None() has drop;

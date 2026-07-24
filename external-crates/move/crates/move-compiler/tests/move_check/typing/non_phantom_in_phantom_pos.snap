@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W02014]: invalid non-phantom type parameter usage
+warning[WC02014]: invalid non-phantom type parameter usage
   ┌─ tests/move_check/typing/non_phantom_in_phantom_pos.move:5:15
   │
 5 │     struct S2<T1, T2> {
@@ -13,7 +13,7 @@ warning[W02014]: invalid non-phantom type parameter usage
   │
   = This warning can be suppressed with '#[allow(missing_phantom)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02014]: invalid non-phantom type parameter usage
+warning[WC02014]: invalid non-phantom type parameter usage
    ┌─ tests/move_check/typing/non_phantom_in_phantom_pos.move:15:15
    │
 15 │     struct S4<T1, T2> {

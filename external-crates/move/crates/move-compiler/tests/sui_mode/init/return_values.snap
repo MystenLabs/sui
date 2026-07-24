@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/return_values.move:5:9
   │
 5 │     fun init(_: &mut tx_context::TxContext): u64 {

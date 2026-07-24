@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: true
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:14:9
    │
 14 │     let y = &mut x;
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:15:14
    │
 13 │     let mut x = 0u64;
@@ -25,7 +25,7 @@ error[E04007]: incompatible types
    │              Invalid mutation. Expected a mutable reference
    │              Expected: '&mut _'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:19:12
    │
 19 │ fun t3() { 'a: { return { return 'a 0u64 } } }
@@ -35,25 +35,25 @@ error[E04007]: incompatible types
    │     │      Invalid return expression
    │     Expected: '()'
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:23:19
    │
 23 │ fun t4() { return continue }
    │                   ^^^^^^^^ Invalid usage of 'continue'. 'continue' can only be used inside a loop body or lambda
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:25:19
    │
 25 │ fun t5() { return break }
    │                   ^^^^^ Invalid usage of 'break'. 'break' can only be used inside a loop body or lambda
 
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:27:20
    │
 27 │ fun t6() { return (break + 5) }
    │                    ^^^^^ Invalid usage of 'break'. 'break' can only be used inside a loop body or lambda
 
-error[E03005]: unbound unscoped name
+error[EC03005]: unbound unscoped name
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:29:19
    │
 29 │ fun t7() { return unnamed_fun() }

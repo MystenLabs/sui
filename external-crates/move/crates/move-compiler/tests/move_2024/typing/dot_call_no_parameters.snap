@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04023]: invalid method call
+error[EC04023]: invalid method call
   ┌─ tests/move_2024/typing/dot_call_no_parameters.move:9:5
   │
 6 │ fun h() {}
@@ -14,7 +14,7 @@ error[E04023]: invalid method call
 9 │     x.h();
   │     ^^^^^ Invalid method call. No known method 'h' on type '0x42::t::X'
 
-error[E04023]: invalid method call
+error[EC04023]: invalid method call
    ┌─ tests/move_2024/typing/dot_call_no_parameters.move:13:5
    │
  6 │ fun h() {}

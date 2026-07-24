@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:17
    │
 13 │             if (return) break;

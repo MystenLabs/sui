@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
   ┌─ tests/move_2024/matching/invalid_match_unit.move:6:16
   │
 3 │     fun x() { }
@@ -14,19 +14,19 @@ error[E04005]: expected a single type
 6 │         match (x()) {
   │                ^^^ Invalid 'match' subject
 
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_match_unit.move:6:16
   │
 6 │         match (x()) {
   │                ^^^ Pattern '_' not covered
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_match_unit.move:7:14
   │
 7 │             () => ()
   │              ^ Invalid pattern
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_2024/matching/invalid_match_unit.move:12:16
    │
  3 │     fun x() { }

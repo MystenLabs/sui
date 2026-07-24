@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02005]: invalid one-time witness usage
+error[ESC02005]: invalid one-time witness usage
    ┌─ tests/sui_mode/one_time_witness/instantiate.move:11:9
    │
 11 │         M { dummy: false }

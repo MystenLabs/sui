@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/deny_unknown.move:2:8
   │
 2 │ #[deny(who_am_i)]

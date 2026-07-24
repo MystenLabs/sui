@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04012]: invalid type for constant
+error[EC04012]: invalid type for constant
    ┌─ tests/move_2024/typing/all_index_paths.move:46:16
    │
 46 │     const VEC: vector<X> = vector[];
@@ -14,7 +14,7 @@ error[E04012]: invalid type for constant
    │                │      Found: 'a::m::X'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
    │                Unpermitted constant type
 
-error[E01013]: invalid 'move' or 'copy'
+error[EC01013]: invalid 'move' or 'copy'
    ┌─ tests/move_2024/typing/all_index_paths.move:63:9
    │
 63 │         copy t.u.vs[n].w.xs[m+1].deref();
@@ -22,7 +22,7 @@ error[E01013]: invalid 'move' or 'copy'
    │         │     
    │         Invalid 'copy' of expression
 
-error[E01013]: invalid 'move' or 'copy'
+error[EC01013]: invalid 'move' or 'copy'
    ┌─ tests/move_2024/typing/all_index_paths.move:64:9
    │
 64 │         copy t.u.vs[n].w.xs[m+1].deref().id();
@@ -30,7 +30,7 @@ error[E01013]: invalid 'move' or 'copy'
    │         │     
    │         Invalid 'copy' of expression
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
    ┌─ tests/move_2024/typing/all_index_paths.move:65:14
    │
 65 │         copy VEC[n+1];
@@ -38,7 +38,7 @@ warning[W04028]: implicit copy of a constant
    │
    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01013]: invalid 'move' or 'copy'
+error[EC01013]: invalid 'move' or 'copy'
    ┌─ tests/move_2024/typing/all_index_paths.move:66:9
    │
 66 │         copy VEC[n+1].id_u64();
@@ -46,7 +46,7 @@ error[E01013]: invalid 'move' or 'copy'
    │         │     
    │         Invalid 'copy' of expression
 
-error[E01013]: invalid 'move' or 'copy'
+error[EC01013]: invalid 'move' or 'copy'
    ┌─ tests/move_2024/typing/all_index_paths.move:67:9
    │
 67 │         copy VEC.id();
@@ -54,43 +54,43 @@ error[E01013]: invalid 'move' or 'copy'
    │         │     
    │         Invalid 'copy' of expression
 
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:84:9
    │
 84 │         move t2.u;
    │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:85:10
    │
 85 │         (move t2.u).vs[2u64];
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:86:10
    │
 86 │         (move t2.u).vs[2u64].w;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:87:10
    │
 87 │         (move t2.u).vs[2u64].w.xs[m+1];
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:88:10
    │
 88 │         (move t2.u).vs[2u64].w.xs[m+1].y;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/all_index_paths.move:89:10
    │
 89 │         (move t2.u).vs[2u64].w.xs[m+1].y.z;
    │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
-error[E01013]: invalid 'move' or 'copy'
+error[EC01013]: invalid 'move' or 'copy'
    ┌─ tests/move_2024/typing/all_index_paths.move:90:9
    │
 90 │         move VEC.id();
@@ -98,7 +98,7 @@ error[E01013]: invalid 'move' or 'copy'
    │         │     
    │         Invalid 'move' of expression
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
     ┌─ tests/move_2024/typing/all_index_paths.move:104:9
     │
  18 │     fun ref_unused(_x: &X) { }
@@ -107,7 +107,7 @@ error[E04004]: expected a single non-reference type
 104 │         &t2.u.vs[2].w.xs[m+1].ref_unused(); // invalid -- trying to borrow `()`
     │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid borrow
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
     ┌─ tests/move_2024/typing/all_index_paths.move:108:10
     │
 108 │         &VEC[n+1];
@@ -115,7 +115,7 @@ warning[W04028]: implicit copy of a constant
     │
     = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
     ┌─ tests/move_2024/typing/all_index_paths.move:109:10
     │
 109 │         &VEC[n+1].id();
@@ -123,7 +123,7 @@ warning[W04028]: implicit copy of a constant
     │
     = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
     ┌─ tests/move_2024/typing/all_index_paths.move:124:9
     │
  18 │     fun ref_unused(_x: &X) { }
@@ -132,7 +132,7 @@ error[E04004]: expected a single non-reference type
 124 │         &mut t2.u.vs[2].w.xs[m+1].ref_unused(); // invalid -- trying to borrow `()`
     │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid borrow
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
     ┌─ tests/move_2024/typing/all_index_paths.move:128:14
     │
 128 │         &mut VEC[n+1];
@@ -140,7 +140,7 @@ warning[W04028]: implicit copy of a constant
     │
     = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
     ┌─ tests/move_2024/typing/all_index_paths.move:129:14
     │
 129 │         &mut VEC[n+1].id();
@@ -148,7 +148,7 @@ warning[W04028]: implicit copy of a constant
     │
     = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
     ┌─ tests/move_2024/typing/all_index_paths.move:145:9
     │
 145 │         VEC[n+1];
@@ -156,7 +156,7 @@ warning[W04028]: implicit copy of a constant
     │
     = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04028]: implicit copy of a constant
+warning[WC04028]: implicit copy of a constant
     ┌─ tests/move_2024/typing/all_index_paths.move:146:9
     │
 146 │         VEC[n+1].id();

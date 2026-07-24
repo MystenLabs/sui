@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/unary_not_invalid.move:7:10
   │
 7 │         !&true;
@@ -15,7 +15,7 @@ error[E04007]: incompatible types
   │          Expected: 'bool'
   │          Given: '&bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/unary_not_invalid.move:8:10
   │
 8 │         !&false;
@@ -25,7 +25,7 @@ error[E04007]: incompatible types
   │          Expected: 'bool'
   │          Given: '&bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/unary_not_invalid.move:9:10
   │
 9 │         !0u64;
@@ -35,7 +35,7 @@ error[E04007]: incompatible types
   │          Expected: 'bool'
   │          Given: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:10:10
    │
 10 │         !1u64;
@@ -45,7 +45,7 @@ error[E04007]: incompatible types
    │          Expected: 'bool'
    │          Given: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:11:10
    │
  6 │     fun t0(r: R) {
@@ -57,7 +57,7 @@ error[E04007]: incompatible types
    │          Invalid argument to '!'
    │          Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:12:10
    │
  6 │     fun t0(r: R) {
@@ -69,7 +69,7 @@ error[E04007]: incompatible types
    │          Invalid argument to '!'
    │          Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:13:10
    │
 13 │         !(0u64, false);
@@ -79,7 +79,7 @@ error[E04007]: incompatible types
    │          Expected: 'bool'
    │          Given: '(u64, bool)'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/unary_not_invalid.move:14:10
    │
 14 │         !();

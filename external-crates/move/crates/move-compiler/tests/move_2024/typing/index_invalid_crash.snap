@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/index_invalid_crash.move:13:5
    │
 12 │ public fun index_by_reference(table: &mut Table<u64, vector<u64>>) {

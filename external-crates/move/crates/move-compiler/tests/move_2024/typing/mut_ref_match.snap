@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09012]: unused 'mut' modifiers
+warning[WC09012]: unused 'mut' modifiers
   ┌─ tests/move_2024/typing/mut_ref_match.move:9:22
   │
 9 │             X::A(mut a) => {

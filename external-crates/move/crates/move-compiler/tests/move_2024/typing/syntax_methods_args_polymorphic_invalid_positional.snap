@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid_positional.move:6:45
   │
 6 │     public fun borrow_a<Q,T>(_s: &A<Q>, _j: T): &Q { abort 0 }
@@ -23,7 +23,7 @@ error[E04034]: 'syntax' method types differ
   = Type parameters must be used the same by position, not name
   = Index operation non-subject parameter types must match exactly
 
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid_positional.move:14:49
    │
 14 │     public fun borrow_b<Q,T>(_s: &B<Q>, _j: Q): &T { abort 0 }
@@ -41,7 +41,7 @@ error[E04034]: 'syntax' method types differ
    = Type parameters must be used the same by position, not name
    = These functions must return the same type, differing only by mutability
 
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid_positional.move:22:34
    │
 22 │     public fun borrow_c<Q,T>(_s: &C<T>, _j: Q): &Q { abort 0 }

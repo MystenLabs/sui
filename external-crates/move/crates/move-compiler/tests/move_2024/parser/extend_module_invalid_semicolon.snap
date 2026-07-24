@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
   ┌─ tests/move_2024/parser/extend_module_invalid_semicolon.move:6:18
   │
 1 │ module a::m;

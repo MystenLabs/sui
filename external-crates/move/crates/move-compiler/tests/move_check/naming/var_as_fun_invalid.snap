@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04029]: invalid function call
+error[EC04029]: invalid function call
   ┌─ tests/move_check/naming/var_as_fun_invalid.move:4:9
   │
 4 │         var();
@@ -13,7 +13,7 @@ error[E04029]: invalid function call
   │
   = Only macro syntax variables, e.g. '$var', may be invoked as functions.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/naming/var_as_fun_invalid.move:4:9
   │
 4 │         var();

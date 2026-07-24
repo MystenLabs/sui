@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
   ┌─ tests/move_2024/naming/var_as_fun_macro.move:3:9
   │
 3 │         $var();

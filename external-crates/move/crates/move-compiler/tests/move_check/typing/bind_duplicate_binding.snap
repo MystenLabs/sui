@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:5:14
   │
 5 │         let (x, x) = (0u64, 0u64); x;
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:5:17
   │
 5 │         let (x, x) = (0u64, 0u64); x;
@@ -21,7 +21,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │              │   
   │              Previously declared here
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:6:14
   │
 6 │         let (f, R{f}, f) = (0u64, R { f: 0 }, 0u64); f;
@@ -29,7 +29,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:6:19
   │
 6 │         let (f, R{f}, f) = (0u64, R { f: 0 }, 0u64); f;
@@ -37,7 +37,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:6:19
   │
 6 │         let (f, R{f}, f) = (0u64, R { f: 0 }, 0u64); f;
@@ -45,7 +45,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │              │     
   │              Previously declared here
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:6:23
   │
 6 │         let (f, R{f}, f) = (0u64, R { f: 0 }, 0u64); f;

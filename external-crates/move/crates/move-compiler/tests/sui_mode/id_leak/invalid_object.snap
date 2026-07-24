@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02007]: invalid object declaration
+error[ESC02007]: invalid object declaration
   ┌─ tests/sui_mode/id_leak/invalid_object.move:2:12
   │
 2 │     struct S has key {}

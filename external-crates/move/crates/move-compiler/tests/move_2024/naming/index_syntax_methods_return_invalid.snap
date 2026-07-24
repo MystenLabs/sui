@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:22:14
    │
 22 │     #[syntax(index)]
@@ -15,7 +15,7 @@ error[E02019]: invalid 'syntax' method type
    │                             │              
    │                             Immutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:27:14
    │
 27 │     #[syntax(index)]
@@ -25,7 +25,7 @@ error[E02019]: invalid 'syntax' method type
    │                             │              
    │                             Immutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:34:14
    │
 34 │     #[syntax(index)]
@@ -35,7 +35,7 @@ error[E02019]: invalid 'syntax' method type
    │                             │              
    │                             Immutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:47:14
    │
 47 │     #[syntax(index)]
@@ -45,7 +45,7 @@ error[E02019]: invalid 'syntax' method type
    │                            │                 
    │                            Mutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:54:14
    │
 54 │     #[syntax(index)]
@@ -55,7 +55,7 @@ error[E02019]: invalid 'syntax' method type
    │                             │                  
    │                             Mutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:61:14
    │
 61 │     #[syntax(index)]
@@ -65,7 +65,7 @@ error[E02019]: invalid 'syntax' method type
    │                             │                  
    │                             Mutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:73:14
    │
 73 │     #[syntax(index)]
@@ -75,7 +75,7 @@ error[E02019]: invalid 'syntax' method type
    │                                │                 
    │                                Immutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:79:14
    │
 79 │     #[syntax(index)]
@@ -85,7 +85,7 @@ error[E02019]: invalid 'syntax' method type
    │                                 │                  
    │                                 Immutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:85:14
    │
 85 │     #[syntax(index)]
@@ -95,7 +95,7 @@ error[E02019]: invalid 'syntax' method type
    │                                 │                  
    │                                 Immutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:95:14
    │
 95 │     #[syntax(index)]
@@ -105,7 +105,7 @@ error[E02019]: invalid 'syntax' method type
    │                                │                     
    │                                Mutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
     ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:101:14
     │
 101 │     #[syntax(index)]

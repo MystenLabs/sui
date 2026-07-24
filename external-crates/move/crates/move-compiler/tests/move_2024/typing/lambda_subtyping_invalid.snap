@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_invalid.move:12:9
    │
  2 │     macro fun imm_arg($f: |&u64| -> u64) {
@@ -17,7 +17,7 @@ error[E04006]: invalid subtype
    │         │            Expected: '&mut u64'
    │         Invalid call of 'a::m::imm_arg'. Invalid argument for parameter '$f'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_invalid.move:13:9
    │
  7 │     macro fun mut_ret($f: || -> &mut u64) {

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_errors.move:16:7
    │
 16 │     #[test(_a=Foo)]
@@ -14,7 +14,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_errors.move:21:7
    │
 20 │     #[test]
@@ -24,7 +24,7 @@ warning[W10007]: issue with attribute value
    │
    = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
-error[E10001]: invalid duplicate attribute
+error[EC10001]: invalid duplicate attribute
    ┌─ tests/move_check/unit_test/multiple_errors.move:21:7
    │
 20 │     #[test]
@@ -32,7 +32,7 @@ error[E10001]: invalid duplicate attribute
 21 │     #[test]
    │       ^^^^ Duplicate attribute 'test' attached to the same item
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_errors.move:26:7
    │
 25 │     #[test]
@@ -42,7 +42,7 @@ warning[W10007]: issue with attribute value
    │
    = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_errors.move:31:5
    │
 31 │     public fun f(_x: u64) { }
@@ -51,7 +51,7 @@ warning[W10007]: issue with attribute value
    = Test functions with arguments have been deprecated
    = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-error[E10001]: invalid duplicate attribute
+error[EC10001]: invalid duplicate attribute
    ┌─ tests/move_check/unit_test/multiple_errors.move:36:7
    │
 35 │     #[expected_failure]

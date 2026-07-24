@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/block_single_expr_invalid.move:4:21
   │
 4 │         ({ 0u64 } : bool);
@@ -15,7 +15,7 @@ error[E04007]: incompatible types
   │            │        Expected: 'bool'
   │            Given: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/block_single_expr_invalid.move:5:22
   │
 5 │         ({ &0u64 } : u64);
@@ -25,7 +25,7 @@ error[E04007]: incompatible types
   │            │         Expected: 'u64'
   │            Given: '&u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/block_single_expr_invalid.move:6:26
   │
 6 │         ({ &mut 0u64 } : ());
@@ -35,7 +35,7 @@ error[E04007]: incompatible types
   │            │             Expected: '()'
   │            Given: '&mut u64'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/block_single_expr_invalid.move:7:9
   │
 2 │     struct R {}
@@ -47,7 +47,7 @@ error[E05001]: ability constraint not satisfied
   │         │           The type '0x8675309::M::R' does not have the ability 'drop'
   │         Cannot ignore values without the 'drop' ability. The value must be used
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/block_single_expr_invalid.move:8:37
   │
 8 │         ({ (0u64, false, false) } : (u64, bool));

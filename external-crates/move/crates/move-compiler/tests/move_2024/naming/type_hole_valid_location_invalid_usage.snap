@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
   ┌─ tests/move_2024/naming/type_hole_valid_location_invalid_usage.move:6:9
   │
 6 │         0u64 as S<_>;
@@ -13,7 +13,7 @@ error[E04003]: built-in operation not supported
   │         │        
   │         Invalid argument to 'as'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
   ┌─ tests/move_2024/naming/type_hole_valid_location_invalid_usage.move:6:19
   │
 6 │         0u64 as S<_>;

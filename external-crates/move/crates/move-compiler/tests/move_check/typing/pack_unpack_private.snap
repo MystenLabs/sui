@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
   ┌─ tests/move_check/typing/pack_unpack_private.move:8:9
   │
 2 │     struct T {}
@@ -14,7 +14,7 @@ error[E04001]: restricted visibility
 8 │         C::T {}
   │         ^^^^^^^ Struct '0x43::C::T' can only be instantiated within its defining module '0x43::C'
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_check/typing/pack_unpack_private.move:11:13
    │
  2 │     struct T {}

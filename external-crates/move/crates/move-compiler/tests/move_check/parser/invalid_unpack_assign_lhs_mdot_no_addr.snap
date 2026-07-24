@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:4:14
   │
 4 │         false::M { f } = 0;
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │              Unexpected '::'
   │              Expected ';'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:7:9
   │
 7 │         0::M { f } = 0;
@@ -23,7 +23,7 @@ error[E03006]: unexpected name in this position
   │         Unexpected module identifier. A module identifier is not a valid type
   │         Expected a module member name
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:10:9
    │
  2 │     fun foo() {
@@ -32,7 +32,7 @@ error[E04005]: expected a single type
 10 │         foo().M { f } = 0;
    │         ^^^^^ Invalid dot access
 
-error[E04009]: expected specific type
+error[EC04009]: expected specific type
    ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:10:9
    │
  2 │     fun foo() {
@@ -41,7 +41,7 @@ error[E04009]: expected specific type
 10 │         foo().M { f } = 0;
    │         ^^^^^^^ Unbound field 'M'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_check/parser/invalid_unpack_assign_lhs_mdot_no_addr.move:10:17
    │
 10 │         foo().M { f } = 0;

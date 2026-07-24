@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/mut_patterns.move:27:17
    │
 26 │             X::A(x, _) | X::B { x } => {
@@ -13,7 +13,7 @@ error[E04024]: invalid usage of immutable variable
 27 │                 x = x + 1;
    │                 ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/mut_patterns.move:27:17
    │
 26 │             X::A(x, _) | X::B { x } => {

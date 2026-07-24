@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_decl.move:6:9
   │
 3 │         let x;
@@ -16,7 +16,7 @@ error[E04024]: invalid usage of immutable variable
 6 │         x = 1;
   │         ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/let_mut_decl.move:14:9
    │
 11 │         let x;
@@ -27,7 +27,7 @@ error[E04024]: invalid usage of immutable variable
 14 │         x = 1;
    │         ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/let_mut_decl.move:21:9
    │
 19 │         let x;

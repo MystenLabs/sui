@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
    ┌─ tests/move_check/dependencies/use_friend_transitive_by_use.move:16:9
    │
  6 │     friend C;

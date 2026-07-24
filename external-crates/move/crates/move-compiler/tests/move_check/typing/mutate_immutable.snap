@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/mutate_immutable.move:5:10
   │
 5 │         *(s: &S) = S { f: 0 };
@@ -15,7 +15,7 @@ error[E04006]: invalid subtype
   │          Invalid mutation. Expected a mutable reference
   │          Expected: '&mut _'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/mutate_immutable.move:6:10
   │
 6 │         *&0u64 = 1u64;
@@ -25,7 +25,7 @@ error[E04006]: invalid subtype
   │          Expected: '&mut _'
   │          Given: '&u64'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_check/typing/mutate_immutable.move:10:10
    │
  9 │         let x_ref: &u64 = x_ref;

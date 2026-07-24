@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:6:18
   │
 6 │         let _m = $s.x; // disallowed
@@ -15,7 +15,7 @@ error[E03006]: unexpected name in this position
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:7:24
   │
 7 │         let _vs = &mut $y; // disallowed
@@ -25,7 +25,7 @@ error[E03006]: unexpected name in this position
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:8:19
   │
 8 │         let _q = &$n; // disallowed
@@ -35,7 +35,7 @@ error[E03006]: unexpected name in this position
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:9:23
   │
 9 │         let _q = copy $n; // disallowed
@@ -45,7 +45,7 @@ error[E03006]: unexpected name in this position
   = Macro parameters are always treated as value expressions, and are not modified by path operations.
     Path operations include 'move', 'copy', '&', '&mut', and field references
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
    ┌─ tests/move_2024/typing/macros_dont_allow_paths.move:10:23
    │
 10 │         let _q = move $n; // disallowed

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:1:9
   │
 1 │ #[allow(ide_path_autocomplete)]

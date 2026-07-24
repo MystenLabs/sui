@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:4:5
   │  
 4 │ ╭     spec schema Foo<T> {
@@ -13,7 +13,7 @@ warning[W00001]: DEPRECATED. will be removed
 6 │ │     }
   │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:11:5
    │  
 11 │ ╭     spec schema Foo<T> {
@@ -21,7 +21,7 @@ warning[W00001]: DEPRECATED. will be removed
 13 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:14:5
    │  
 14 │ ╭     spec schema Foo<T> {
@@ -29,7 +29,7 @@ warning[W00001]: DEPRECATED. will be removed
 16 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:20:5
    │  
 20 │ ╭     spec schema Foo<T> {
@@ -37,7 +37,7 @@ warning[W00001]: DEPRECATED. will be removed
 22 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:27:5
    │  
 27 │ ╭     spec schema Foo<T> {
@@ -45,7 +45,7 @@ warning[W00001]: DEPRECATED. will be removed
 29 │ │     }
    │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_schema_member_conflicts.move:30:5
    │  
 30 │ ╭     spec module {

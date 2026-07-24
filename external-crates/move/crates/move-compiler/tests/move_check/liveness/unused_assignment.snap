@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/liveness/unused_assignment.move:3:13
   │
 3 │         let x = 0u64;
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:7:13
   │
 7 │         let x = 0;
@@ -21,7 +21,7 @@ warning[W09003]: unused assignment
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:8:9
   │
 8 │         x = 0u64;
@@ -29,7 +29,7 @@ warning[W09003]: unused assignment
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/liveness/unused_assignment.move:13:17
    │
 13 │             let x = 0u64;
@@ -37,7 +37,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:21:13
    │
 21 │             x = 0u64;
@@ -45,7 +45,7 @@ warning[W09003]: unused assignment
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:26:13
    │
 26 │         let x = 0;
@@ -53,7 +53,7 @@ warning[W09003]: unused assignment
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:28:13
    │
 28 │             x = 1;
@@ -61,7 +61,7 @@ warning[W09003]: unused assignment
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:30:13
    │
 30 │             x = 2u64;
@@ -69,7 +69,7 @@ warning[W09003]: unused assignment
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:41:13
    │
 41 │             x = 1;

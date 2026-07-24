@@ -5,19 +5,19 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:10
    │
 10 │          Option::Other { mut x: mut y } => y,
    │          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Option::Other'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:26
    │
 10 │          Option::Other { mut x: mut y } => y,
    │                          ^^^ 'mut' modifier can only be used on variable bindings
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:44
    │
  8 │     public fun weird_is_some(o: Option<bool>): bool {
@@ -29,7 +29,7 @@ error[E03009]: unbound variable
    │                                            Unbound variable 'y'
    │                                            Did you mean: 'o'
 
-error[E02010]: invalid declaration name
+error[EC02010]: invalid declaration name
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:11:33
    │
 11 │          Option::Other { x: mut y<u64> } => y,
@@ -37,19 +37,19 @@ error[E02010]: invalid declaration name
    │
    = Type arguments cannot appear on pattern variables
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:10
    │
 12 │          Option::Other { mut x: y } => y,
    │          ^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing pattern for field 'x' in '0x42::m::Option::Other'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:26
    │
 12 │          Option::Other { mut x: y } => y,
    │                          ^^^ 'mut' modifier can only be used on variable bindings
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:40
    │
  8 │     public fun weird_is_some(o: Option<bool>): bool {
@@ -61,19 +61,19 @@ error[E03009]: unbound variable
    │                                        Unbound variable 'y'
    │                                        Did you mean: 'o'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:13:15
    │
 13 │          _x @ mut Option::Some(true) => true,
    │               ^^^ Invalid 'mut' keyword on non-variable pattern
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:14:15
    │
 14 │          _x @ mut Option::Some(false) => false,
    │               ^^^ Invalid 'mut' keyword on non-variable pattern
 
-error[E02010]: invalid declaration name
+error[EC02010]: invalid declaration name
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:15:10
    │
 15 │          mut Option::None => false,

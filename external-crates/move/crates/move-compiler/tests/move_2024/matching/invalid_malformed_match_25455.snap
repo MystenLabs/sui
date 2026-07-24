@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/matching/invalid_malformed_match_25455.move:13:13
    │
 13 │             N::A'x) => 1,
    │             ^^^^ Missing pattern for field '0' in '0x0::M::N::A'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/matching/invalid_malformed_match_25455.move:13:17
    │
 13 │             N::A'x) => 1,
@@ -20,7 +20,7 @@ error[E01002]: unexpected token
    │                 Unexpected ''x'
    │                 Expected '=>'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/matching/invalid_malformed_match_25455.move:14:18
    │
  2 │     public enum C {

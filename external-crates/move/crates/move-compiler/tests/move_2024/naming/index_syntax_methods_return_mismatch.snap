@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:21:14
    │
 21 │     #[syntax(index)]
@@ -15,7 +15,7 @@ error[E02019]: invalid 'syntax' method type
    │                            │             
    │                            Immutable subject type defined here
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:23:9
    │
  7 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
@@ -26,7 +26,7 @@ error[E04006]: invalid subtype
 23 │         vector::borrow(&s.t, i)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid return expression
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:44:14
    │
 44 │     #[syntax(index)]
@@ -36,7 +36,7 @@ error[E02019]: invalid 'syntax' method type
    │                                │                 
    │                                Mutable subject type defined here
 
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:57:41
    │
 57 │     public fun borrow_t(s: &S, i: u64): &u64 {
@@ -50,7 +50,7 @@ error[E04034]: 'syntax' method types differ
    │
    = These functions must return the same type, differing only by mutability
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:78:14
    │
 78 │     #[syntax(index)]
@@ -60,7 +60,7 @@ error[E02019]: invalid 'syntax' method type
    │                                │                 
    │                                Mutable subject type defined here
 
-error[E02019]: invalid 'syntax' method type
+error[EC02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:91:14
    │
 91 │     #[syntax(index)]

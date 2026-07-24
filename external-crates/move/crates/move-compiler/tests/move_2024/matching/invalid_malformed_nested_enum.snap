@@ -5,19 +5,19 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_malformed_nested_enum.move:15:16
    │
 15 │         match (o) {
    │                ^ Pattern 'Outer::X(Inner::P(_))' not covered
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
    ┌─ tests/move_2024/matching/invalid_malformed_nested_enum.move:16:31
    │
 16 │             Outer::X(Inner::P(v0x0::M)) => v,
    │                               ^^^^ Could not resolve the name 'v0x0'
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/matching/invalid_malformed_nested_enum.move:16:44
    │
 14 │     fun f(o: Outer): u64 {
@@ -29,13 +29,13 @@ error[E03009]: unbound variable
    │                                            Unbound variable 'v'
    │                                            Did you mean: 'o'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/matching/invalid_malformed_nested_enum.move:17:13
    │
 17 │             Outer::X Outer::X(Inner::P(v)) => v,
    │             ^^^^^^^^ Missing pattern for field '0' in '0x0::M::Outer::X'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/matching/invalid_malformed_nested_enum.move:17:22
    │
 17 │             Outer::X Outer::X(Inner::P(v)) => v,
@@ -44,7 +44,7 @@ error[E01002]: unexpected token
    │                      Unexpected 'Outer'
    │                      Expected '=>'
 
-error[E03020]: unbound variant
+error[EC03020]: unbound variant
    ┌─ tests/move_2024/matching/invalid_malformed_nested_enum.move:18:22
    │  
  5 │ ╭     public enum Inner {

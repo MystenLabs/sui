@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/hlir/dead_code_guard.move:14:20
    │
 14 │             _ if ({return 0; true}) => 1,

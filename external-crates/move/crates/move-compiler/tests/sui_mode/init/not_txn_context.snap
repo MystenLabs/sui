@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/not_txn_context.move:3:9
   │
 3 │     fun init(_: u64) {
@@ -13,7 +13,7 @@ error[Sui E02003]: invalid 'init' function
   │         │        
   │         Invalid 'init' function declaration
 
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
    ┌─ tests/sui_mode/init/not_txn_context.move:11:9
    │
 11 │     fun init(_: TxContext) {
@@ -21,7 +21,7 @@ error[Sui E02003]: invalid 'init' function
    │         │        
    │         Invalid 'init' function declaration
 
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
    ┌─ tests/sui_mode/init/not_txn_context.move:19:9
    │
 19 │     fun init(_: tx_context::TxContext) {

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_guard_unbound.move:13:16
    │
 13 │         match (e) {
@@ -13,7 +13,7 @@ error[E04036]: non-exhaustive pattern
    │
    = Match arms with guards are not considered for coverage.
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/matching/invalid_guard_unbound.move:14:25
    │
 14 │             E::A(x) if (z > 0) => x,

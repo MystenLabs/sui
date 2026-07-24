@@ -7,7 +7,7 @@ use crate::{
     cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
+        codes::{DiagnosticInfo, DiagnosticSource, DiagnosticsID, Severity, custom},
         filter::FilterName,
     },
     typing::visitor::TypingVisitor,
@@ -186,7 +186,7 @@ lints!(
 );
 
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
-pub const LINT_WARNING_PREFIX: &str = "Lint ";
+pub const LINT_WARNING_PREFIX: DiagnosticSource = DiagnosticSource::Lint;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(

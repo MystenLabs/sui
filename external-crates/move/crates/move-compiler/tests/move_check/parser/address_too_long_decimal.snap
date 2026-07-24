@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01005]: invalid address
+error[EC01005]: invalid address
   ┌─ tests/move_check/parser/address_too_long_decimal.move:1:9
   │
 1 │ address 340282366920938463463374607431768211456123451234512345123451234512345123451234576969869689 {

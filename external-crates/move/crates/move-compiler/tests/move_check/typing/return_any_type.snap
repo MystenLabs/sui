@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/typing/return_any_type.move:5:17
   │
 5 │         0u64 + (return ());
@@ -13,7 +13,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/typing/return_any_type.move:9:13
   │
 9 │         foo(return ());

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/invalid_call_lhs_return.move:3:20
   │
 3 │         (return ())(0, 1);

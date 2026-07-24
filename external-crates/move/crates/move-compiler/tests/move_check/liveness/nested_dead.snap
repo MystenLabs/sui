@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/liveness/nested_dead.move:3:16
   │
 3 │         return return 0 
@@ -13,7 +13,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/liveness/nested_dead.move:7:28
   │
 7 │         if (true) { return abort 0 } else { abort 0 };
@@ -21,7 +21,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/liveness/nested_dead.move:12:23
    │
 12 │         loop { return abort 0 }
@@ -29,7 +29,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/liveness/nested_dead.move:16:28
    │
 16 │         if (true) { return abort 0 } else { return abort 0 } 
@@ -37,7 +37,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/liveness/nested_dead.move:16:52
    │
 16 │         if (true) { return abort 0 } else { return abort 0 } 
@@ -45,7 +45,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/liveness/nested_dead.move:20:21
    │
 20 │         let x = if (return 1) { 0 } else { 1 };
@@ -53,7 +53,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/liveness/nested_dead.move:25:16
    │
 25 │         while (return 0) {

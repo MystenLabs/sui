@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
   ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_deref.move:4:9
   │
 4 │         $_x = 0u64;
@@ -13,7 +13,7 @@ error[E04032]: unable to expand macro function
   │
   = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_deref.move:9:14
   │
 9 │         foo!(*x);

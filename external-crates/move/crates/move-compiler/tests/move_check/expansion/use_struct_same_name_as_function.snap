@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:10:9
    │
  8 │     use 0x2::X::{U, U as U2};
@@ -14,7 +14,7 @@ error[E02001]: duplicate declaration, item, or annotation
 10 │     fun U() {}
    │         ^ Duplicate module member 'U'. Top level names in a namespace must be unique
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:11:9
    │
  8 │     use 0x2::X::{U, U as U2};
@@ -23,7 +23,7 @@ error[E02001]: duplicate declaration, item, or annotation
 11 │     fun U2() {}
    │         ^^ Duplicate module member 'U2'. Top level names in a namespace must be unique
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:15:18
    │
 15 │     use 0x2::X::{R, R as R2};
@@ -31,7 +31,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:15:18
    │
 12 │     fun R() {}
@@ -40,7 +40,7 @@ error[E02001]: duplicate declaration, item, or annotation
 15 │     use 0x2::X::{R, R as R2};
    │                  ^ Duplicate module member 'R'. Top level names in a namespace must be unique
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:15:26
    │
 15 │     use 0x2::X::{R, R as R2};
@@ -48,7 +48,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_struct_same_name_as_function.move:15:26
    │
 13 │     fun R2() {}

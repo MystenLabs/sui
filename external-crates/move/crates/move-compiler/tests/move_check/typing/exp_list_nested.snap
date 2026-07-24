@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
   ┌─ tests/move_check/typing/exp_list_nested.move:6:9
   │
 6 │         (0u64, (S{}, R{}))
@@ -14,7 +14,7 @@ error[E04005]: expected a single type
   │         │      Expected a single type, but found expression list type: '(0x8675309::M::S, 0x8675309::M::R<_>)'
   │         Invalid expression list type argument
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/exp_list_nested.move:6:9
   │
 5 │     fun t0(): (u64, S, R<u64>) {
@@ -25,7 +25,7 @@ error[E04007]: incompatible types
   │         Invalid return expression
   │         Given expression list of length 2: '(u64, (0x8675309::M::S, 0x8675309::M::R<_>))'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
   ┌─ tests/move_check/typing/exp_list_nested.move:6:22
   │
 6 │         (0u64, (S{}, R{}))

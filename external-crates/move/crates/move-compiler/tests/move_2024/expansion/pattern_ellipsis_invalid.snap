@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:10:20
    │
 10 │             X::A { .., .. } => 0,
@@ -15,7 +15,7 @@ error[E03019]: invalid pattern
    │
    = An ellipsis pattern can only appear once in a constructor's pattern.
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:11:20
    │
 11 │             X::B { .., .., .. } => 0,
@@ -26,7 +26,7 @@ error[E03019]: invalid pattern
    │
    = An ellipsis pattern can only appear once in a constructor's pattern.
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:12:20
    │
 12 │             X::B { .., .., x} => x,
@@ -36,7 +36,7 @@ error[E03019]: invalid pattern
    │
    = An ellipsis pattern can only appear once in a constructor's pattern.
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:13:20
    │
 13 │             X::B { .., x, .. } => x,
@@ -46,7 +46,7 @@ error[E03019]: invalid pattern
    │
    = An ellipsis pattern can only appear once in a constructor's pattern.
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:14:18
    │
 14 │             X::C(.., x, ..) => 1,
@@ -56,7 +56,7 @@ error[E03019]: invalid pattern
    │
    = An ellipsis pattern can only appear once in a constructor's pattern.
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:14:22
    │
 14 │             X::C(.., x, ..) => 1,
@@ -64,7 +64,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03019]: invalid pattern
+error[EC03019]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:15:18
    │
 15 │             X::C(.., ..) => 1,

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
   ┌─ tests/move_check/expansion/no_address.move:1:8
   │
 1 │ module M {}

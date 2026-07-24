@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03013]: positional call mismatch
+error[EC03013]: positional call mismatch
   ┌─ tests/move_2024/matching/invalid_extra_args.move:9:23
   │
 3 │         A,
@@ -16,7 +16,7 @@ error[E03013]: positional call mismatch
   │
   = Remove '()' arguments from this instantiation
 
-error[E03013]: positional call mismatch
+error[EC03013]: positional call mismatch
    ┌─ tests/move_2024/matching/invalid_extra_args.move:12:13
    │
  3 │         A,
@@ -27,7 +27,7 @@ error[E03013]: positional call mismatch
    │
    = Remove '()' arguments from this pattern
 
-error[E03013]: positional call mismatch
+error[EC03013]: positional call mismatch
    ┌─ tests/move_2024/matching/invalid_extra_args.move:14:13
    │
  3 │         A,

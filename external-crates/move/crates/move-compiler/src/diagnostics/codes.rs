@@ -15,9 +15,27 @@ pub enum Severity {
     Bug = 4,
 }
 
-/// An optional prefix to distinguish between different types of warnings (internal vs. possibly
-/// multiple externally provided ones).
-pub type ExternalPrefix = Option<&'static str>;
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
+pub enum DiagnosticSource {
+    Compiler,
+    Lint,
+    SuiCompiler,
+    SuiLint,
+}
+
+impl DiagnosticSource {
+    const fn code(self) -> &'static str {
+        match self {
+            Self::Compiler => "C",
+            Self::Lint => "L",
+            Self::SuiCompiler => "SC",
+            Self::SuiLint => "SL",
+        }
+    }
+}
+
+/// Core compiler diagnostics use `None`; other sources carry their explicit source.
+pub type ExternalPrefix = Option<DiagnosticSource>;
 
 /// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] filter key.
 /// When used as the category, matches all categories; when used as the code, matches all codes
@@ -95,10 +113,10 @@ pub(crate) trait DiagnosticCode: Copy {
 
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
-/// `"[{external_prefix}{severity}{category}{code}] {message}"`.
+/// `"[{severity}{source}{category}{code}] {message}"`.
 /// Note, this will panic if `category > 99`
 pub const fn custom(
-    external_prefix: &'static str,
+    source: DiagnosticSource,
     severity: Severity,
     category: u8,
     code: u8,
@@ -109,7 +127,7 @@ pub const fn custom(
         severity,
         category,
         code,
-        external_prefix: Some(external_prefix),
+        external_prefix: Some(source),
         message,
     }
 }
@@ -424,15 +442,12 @@ impl DiagnosticInfo {
         let sev_prefix = match severity {
             Severity::BlockingError | Severity::NonblockingError => "E",
             Severity::Warning => "W",
-            Severity::Note => "I",
+            Severity::Note => "N",
             Severity::Bug => "ICE",
         };
         debug_assert!(category <= 99);
-        let string_code = if let Some(ext) = external_prefix {
-            format!("{ext}{sev_prefix}{category:02}{code:03}")
-        } else {
-            format!("{sev_prefix}{category:02}{code:03}")
-        };
+        let source = external_prefix.unwrap_or(DiagnosticSource::Compiler).code();
+        let string_code = format!("{sev_prefix}{source}{category:02}{code:03}");
         (string_code, message)
     }
 
@@ -469,7 +484,7 @@ impl DiagnosticInfo {
         self.external_prefix.is_some()
     }
 
-    pub fn external_prefix(&self) -> Option<&'static str> {
+    pub fn external_prefix(&self) -> ExternalPrefix {
         self.external_prefix
     }
 }
@@ -492,5 +507,49 @@ impl Severity {
 impl Default for Severity {
     fn default() -> Self {
         Self::MIN
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_compiler_diagnostic_code() {
+        assert_eq!(
+            UnusedItem::MutParam.into_info().render(),
+            (
+                "WC09014".to_owned(),
+                "unused mutable reference '&mut' parameter",
+            )
+        );
+    }
+
+    #[test]
+    fn renders_all_source_and_severity_prefixes() {
+        let cases = [
+            (Severity::NonblockingError, DiagnosticSource::Compiler, "EC"),
+            (Severity::Warning, DiagnosticSource::Lint, "WL"),
+            (Severity::Note, DiagnosticSource::SuiCompiler, "NSC"),
+            (Severity::Bug, DiagnosticSource::SuiLint, "ICESL"),
+        ];
+
+        for (severity, source, prefix) in cases {
+            let info = if source == DiagnosticSource::Compiler {
+                DiagnosticInfo {
+                    severity,
+                    category: 1,
+                    code: 2,
+                    external_prefix: None,
+                    message: "test diagnostic",
+                }
+            } else {
+                custom(source, severity, 1, 2, "test diagnostic")
+            };
+            assert_eq!(
+                info.render(),
+                (format!("{prefix}01002"), "test diagnostic",)
+            );
+        }
     }
 }

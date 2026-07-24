@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02011]: invalid 'friend' declaration
+error[EC02011]: invalid 'friend' declaration
   ┌─ tests/move_check/naming/friend_decl_out_of_account_addr.move:7:5
   │
 7 │     friend 0x2::M;

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09011]: unused constant
+warning[WC09011]: unused constant
   ┌─ tests/move_check/typing/unused_const.move:2:11
   │
 2 │     const UNUSED: u64 = 42;

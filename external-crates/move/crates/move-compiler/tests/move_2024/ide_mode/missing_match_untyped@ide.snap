@@ -5,25 +5,25 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:4:16
   │
 4 │         match (e) {
   │                ^ Unbound variable 'e'
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
   ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:9:16
   │
 9 │         match (e) {
   │                ^ Unbound variable 'e'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
    ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:13
    │
 10 │             E::Two(n) => n
    │             ^ Could not resolve the name 'E'
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/ide_mode/missing_match_untyped.move:10:26
    │
 10 │             E::Two(n) => n

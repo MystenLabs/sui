@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:13:9
    │
 13 │         call!(|| -> X { 0u64 }).foo();
@@ -15,7 +15,7 @@ error[E04007]: incompatible types
    │         │           Expected: 'a::m::X'
    │         Invalid type annotation
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:14:9
    │
 14 │         call!(|| -> &mut u64 { &0u64 });

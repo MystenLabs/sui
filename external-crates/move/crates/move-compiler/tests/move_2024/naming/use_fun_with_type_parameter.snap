@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02017]: invalid 'use fun' declaration
+error[EC02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/naming/use_fun_with_type_parameter.move:3:9
   │
 2 │     fun foo<T>(x: T) {
@@ -13,7 +13,7 @@ error[E02017]: invalid 'use fun' declaration
 3 │         use fun foo as T.foo;
   │         ^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun'. Cannot associate a method with a type parameter
 
-error[E04023]: invalid method call
+error[EC04023]: invalid method call
   ┌─ tests/move_2024/naming/use_fun_with_type_parameter.move:4:9
   │
 2 │     fun foo<T>(x: T) {

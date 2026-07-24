@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/use_inner_scope_invalid_inner.move:4:19
   │
 4 │         if (cond) use 0x2::M;
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │                   Unexpected 'use'
   │                   Expected an expression term
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_check/parser/use_inner_scope_invalid_inner.move:4:28
   │
 4 │         if (cond) use 0x2::M;

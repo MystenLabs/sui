@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-error[Lint E04001]: constant should follow naming convention
+error[EL04001]: constant should follow naming convention
   ┌─ tests/linter/deny_lint_filter.move:4:5
   │
 3 │     #[deny(lint(constant_naming))]

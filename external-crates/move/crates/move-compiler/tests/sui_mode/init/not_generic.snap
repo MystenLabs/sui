@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/not_generic.move:5:9
   │
 5 │     fun init<T>(_ctx: &mut tx_context::TxContext) {

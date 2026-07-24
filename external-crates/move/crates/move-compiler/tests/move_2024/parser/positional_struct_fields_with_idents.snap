@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/positional_struct_fields_with_idents.move:3:23
   │
 3 │     public struct Foo(x: u64) has copy, drop;

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:9:9
    │
  4 │     public(package) fun package() {}
@@ -20,7 +20,7 @@ error[E04001]: restricted visibility
    = This visibility error occurs in a macro body while expanding the macro 'a::m::t0'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:10:9
    │
  3 │     fun private() {}
@@ -35,7 +35,7 @@ error[E04001]: restricted visibility
    = This visibility error occurs in a macro body while expanding the macro 'a::m::t0'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:10:9
    │
  3 │     fun private() {}
@@ -50,7 +50,7 @@ error[E04001]: restricted visibility
    = This visibility error occurs in a macro body while expanding the macro 'a::m::t0'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:14:9
    │
  3 │     fun private() {}
@@ -65,7 +65,7 @@ error[E04001]: restricted visibility
    = This visibility error occurs in a macro body while expanding the macro 'a::m::t1'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:14:9
    │
  3 │     fun private() {}
@@ -80,7 +80,7 @@ error[E04001]: restricted visibility
    = This visibility error occurs in a macro body while expanding the macro 'a::m::t1'
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:30:9
    │
 13 │     public(package) macro fun t1() {

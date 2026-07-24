@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02007]: invalid object declaration
+error[ESC02007]: invalid object declaration
   ┌─ tests/sui_mode/struct_with_key/key_struct_id_field_incorrect_struct_name.move:6:9
   │
 5 │     struct S has key {

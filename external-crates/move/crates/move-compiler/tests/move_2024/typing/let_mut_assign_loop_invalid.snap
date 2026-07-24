@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:4:24
   │
 3 │         let a;
@@ -16,7 +16,7 @@ error[E04024]: invalid usage of immutable variable
   │                        Invalid assignment of immutable variable 'a'
   │                        The variable is assigned multiple times here in a loop
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:9:16
   │
 8 │         let b;
@@ -27,7 +27,7 @@ error[E04024]: invalid usage of immutable variable
   │                Invalid assignment of immutable variable 'b'
   │                The variable is assigned multiple times here in a loop
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:14:24
    │
 13 │         let x;
@@ -38,7 +38,7 @@ error[E04024]: invalid usage of immutable variable
    │                        Invalid assignment of immutable variable 'x'
    │                        The variable is assigned multiple times here in a loop
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:15:9
    │
 13 │         let x;
@@ -48,7 +48,7 @@ error[E04024]: invalid usage of immutable variable
 15 │         x = 1;
    │         ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/typing/let_mut_assign_loop_invalid.move:22:13
    │
 20 │         let x;

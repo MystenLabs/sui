@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid declaration name
+error[EC02010]: invalid declaration name
   ┌─ tests/move_2024/naming/lambda_shadows_function.move:4:22
   │
 4 │     macro fun do<$T>(f: || -> $T): $T {
@@ -15,7 +15,7 @@ error[E02010]: invalid declaration name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
-error[E04029]: invalid function call
+error[EC04029]: invalid function call
   ┌─ tests/move_2024/naming/lambda_shadows_function.move:5:9
   │
 5 │         f()

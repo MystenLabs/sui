@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/matching/counterexample_malformed_match.move:18:9
    │
 18 │         SomeEnum::PositionalFields(_, ) => (),

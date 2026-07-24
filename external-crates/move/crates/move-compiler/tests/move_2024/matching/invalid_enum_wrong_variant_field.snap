@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/matching/invalid_enum_wrong_variant_field.move:14:9
    │
 14 │         E::A(x) => x,

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_2024/matching/invalid_extra_args_2.move:9:29
   │
 9 │         let subject = E::C({abort 0},{abort 0},{abort 0});
@@ -13,7 +13,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03013]: positional call mismatch
+error[EC03013]: positional call mismatch
    ┌─ tests/move_2024/matching/invalid_extra_args_2.move:12:13
    │
  3 │         A,
@@ -24,7 +24,7 @@ error[E03013]: positional call mismatch
    │
    = Remove '()' arguments from this pattern
 
-error[E03013]: positional call mismatch
+error[EC03013]: positional call mismatch
    ┌─ tests/move_2024/matching/invalid_extra_args_2.move:14:13
    │
  3 │         A,

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/dot_call_private.move:16:5
    │
  5 │ fun f(_self: &X) {}
@@ -14,7 +14,7 @@ error[E04001]: restricted visibility
 16 │     x.f();
    │     ^^^^^ Invalid call to internal function '0x42::t::f'
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/typing/dot_call_private.move:17:5
    │
  5 │ fun f(_self: &X) {}

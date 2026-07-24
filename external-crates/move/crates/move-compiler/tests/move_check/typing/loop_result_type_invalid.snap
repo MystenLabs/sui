@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/loop_result_type_invalid.move:11:9
    │
 10 │     fun t0(): X::R {
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
    │         │                 Given: '()'
    │         Invalid return expression
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/loop_result_type_invalid.move:15:9
    │
 14 │     fun t1(): u64 {
@@ -27,7 +27,7 @@ error[E04007]: incompatible types
    │         │                     Given: '()'
    │         Invalid return expression
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/loop_result_type_invalid.move:19:9
    │
 19 │         foo(loop { break })
@@ -39,7 +39,7 @@ error[E04007]: incompatible types
 22 │     fun foo(_: u64) {}
    │                --- Expected: 'u64'
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_check/typing/loop_result_type_invalid.move:25:13
    │
 25 │         let _x = loop { break };
@@ -47,7 +47,7 @@ error[E04005]: expected a single type
    │             │            
    │             Invalid type for local
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/loop_result_type_invalid.move:26:13
    │
 26 │         let (_x, _y) = loop { if (false) break };

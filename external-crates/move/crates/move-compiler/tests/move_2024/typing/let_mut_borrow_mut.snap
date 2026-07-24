@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:7:13
   │
 3 │     public fun t(x: u64, s: S) {
@@ -14,7 +14,7 @@ error[E04024]: invalid usage of immutable variable
 7 │         foo(&mut x);
   │             ^^^^^^ Invalid mutable borrow of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:8:13
   │
 4 │         let y = 0u64;
@@ -23,7 +23,7 @@ error[E04024]: invalid usage of immutable variable
 8 │         foo(&mut y);
   │             ^^^^^^ Invalid mutable borrow of immutable variable 'y'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:9:13
   │
 5 │         let S { f } = s;

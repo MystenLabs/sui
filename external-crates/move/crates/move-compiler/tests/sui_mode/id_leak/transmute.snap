@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E01001]: invalid object construction
+error[ESC01001]: invalid object construction
    ┌─ tests/sui_mode/id_leak/transmute.move:17:19
    │
 17 │         let dog = Dog { id };

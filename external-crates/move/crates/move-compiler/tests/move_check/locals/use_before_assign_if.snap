@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
   ┌─ tests/move_check/locals/use_before_assign_if.move:5:17
   │
 3 │         let x: u64;
@@ -14,7 +14,7 @@ error[E06002]: use of unassigned variable
 5 │         let _ = move x + 1;
   │                 ^^^^^^ Invalid usage of unassigned variable 'x'
 
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
    ┌─ tests/move_check/locals/use_before_assign_if.move:11:17
    │
  9 │         let x: u64;
@@ -23,7 +23,7 @@ error[E06002]: use of unassigned variable
 11 │         let _ = x + 1;
    │                 ^ Invalid usage of unassigned variable 'x'
 
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
    ┌─ tests/move_check/locals/use_before_assign_if.move:17:17
    │
 15 │         let x: u64;

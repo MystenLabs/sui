@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E13002]: feature is deprecated in specified edition
+error[EC13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/parsing/address_weird_formatting.move:1:1
   │
 1 │ address 

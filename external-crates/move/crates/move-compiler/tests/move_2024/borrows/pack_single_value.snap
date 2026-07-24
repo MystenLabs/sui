@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03010]: unbound field
+error[EC03010]: unbound field
   ┌─ tests/move_2024/borrows/pack_single_value.move:5:9
   │
 5 │         A(());

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:6:13
   │
 5 │     fun f(x: Foo) {
@@ -16,19 +16,19 @@ error[E03009]: unbound variable
   │             Invalid assignment. Unbound variable 't'
   │             Did you mean: 'x'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:7:9
   │
 7 │         Foo() = x;
   │         ^^^^^ Missing assignment for field '0' in '0x42::M::Foo'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:7:9
   │
 7 │         Foo() = x;
   │         ^^^^^ Missing assignment for field '1' in '0x42::M::Foo'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:8:9
   │
 5 │     fun f(x: Foo) {
@@ -40,19 +40,19 @@ error[E04007]: incompatible types
   │         Invalid deconstruction assignment
   │         Given: '0x42::M::Bar'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
   │
 9 │         Bar(_, _) = x;
   │         ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
   │
 9 │         Bar(_, _) = x;
   │         ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
   │
 5 │     fun f(x: Foo) {
@@ -64,19 +64,19 @@ error[E04007]: incompatible types
   │         Invalid deconstruction assignment
   │         Given: '0x42::M::Bar'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:13:13
    │
 13 │         let Foo() = x;
    │             ^^^^^ Missing binding for field '0' in '0x42::M::Foo'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:13:13
    │
 13 │         let Foo() = x;
    │             ^^^^^ Missing binding for field '1' in '0x42::M::Foo'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:14:13
    │
 12 │     fun g(x: Foo) {
@@ -88,19 +88,19 @@ error[E04007]: incompatible types
    │             Invalid deconstruction binding
    │             Given: '0x42::M::Bar'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
    │
 15 │         let Bar(c, d) = x;
    │             ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
    │
 15 │         let Bar(c, d) = x;
    │             ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
    │
 12 │     fun g(x: Foo) {
@@ -112,7 +112,7 @@ error[E04007]: incompatible types
    │             Invalid deconstruction binding
    │             Given: '0x42::M::Bar'
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:17
    │
 15 │         let Bar(c, d) = x;
@@ -120,7 +120,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:20
    │
 15 │         let Bar(c, d) = x;
@@ -128,7 +128,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:19:9
    │
 18 │     fun h(x: Bar) {
@@ -139,7 +139,7 @@ error[E04007]: incompatible types
    │         Invalid deconstruction assignment
    │         Given: '0x42::M::Foo'
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:20:13
    │
 18 │     fun h(x: Bar) {
@@ -151,19 +151,19 @@ error[E03009]: unbound variable
    │             Invalid assignment. Unbound variable 't'
    │             Did you mean: 'x'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:21:9
    │
 21 │         Foo() = x;
    │         ^^^^^ Missing assignment for field '0' in '0x42::M::Foo'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:21:9
    │
 21 │         Foo() = x;
    │         ^^^^^ Missing assignment for field '1' in '0x42::M::Foo'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:21:9
    │
 18 │     fun h(x: Bar) {
@@ -175,19 +175,19 @@ error[E04007]: incompatible types
    │         Invalid deconstruction assignment
    │         Given: '0x42::M::Foo'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:22:9
    │
 22 │         Bar(_, _) = x;
    │         ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:22:9
    │
 22 │         Bar(_, _) = x;
    │         ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:26:13
    │
 25 │     fun z(x: Bar) {
@@ -198,7 +198,7 @@ error[E04007]: incompatible types
    │             Invalid deconstruction binding
    │             Given: '0x42::M::Foo'
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:26:17
    │
 26 │         let Foo(t, y) = x;
@@ -206,7 +206,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:26:20
    │
 26 │         let Foo(t, y) = x;
@@ -214,19 +214,19 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:27:13
    │
 27 │         let Foo() = x;
    │             ^^^^^ Missing binding for field '0' in '0x42::M::Foo'
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:27:13
    │
 27 │         let Foo() = x;
    │             ^^^^^ Missing binding for field '1' in '0x42::M::Foo'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:27:13
    │
 25 │     fun z(x: Bar) {
@@ -238,13 +238,13 @@ error[E04007]: incompatible types
    │             Invalid deconstruction binding
    │             Given: '0x42::M::Foo'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:28:13
    │
 28 │         let Bar(_, _) = x;
    │             ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:28:13
    │
 28 │         let Bar(_, _) = x;

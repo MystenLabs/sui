@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:10:9
    │
 10 │         Box<R> { f: R{} };
@@ -15,7 +15,7 @@ error[E05001]: ability constraint not satisfied
    │         Cannot ignore values without the 'drop' ability. The value must be used
    │         The type '0x42::M::Box<0x42::M::R>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:11:9
    │
 11 │         Box<Box<R>> { f: Box { f: R{} } };
@@ -25,7 +25,7 @@ error[E05001]: ability constraint not satisfied
    │         Cannot ignore values without the 'drop' ability. The value must be used
    │         The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:12:9
    │
 12 │         Box<T> { f: t };
@@ -35,7 +35,7 @@ error[E05001]: ability constraint not satisfied
    │         Cannot ignore values without the 'drop' ability. The value must be used
    │         The type '0x42::M::Box<T>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:13:9
    │
 13 │         Box<Box<T>> { f: Box { f: t } };
@@ -45,7 +45,7 @@ error[E05001]: ability constraint not satisfied
    │         Cannot ignore values without the 'drop' ability. The value must be used
    │         The type '0x42::M::Box<0x42::M::Box<T>>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:14:9
    │
 14 │         Pair<S, R> { f1: S{}, f2: R{} };
@@ -55,7 +55,7 @@ error[E05001]: ability constraint not satisfied
    │         Cannot ignore values without the 'drop' ability. The value must be used
    │         The type '0x42::M::Pair<0x42::M::S, 0x42::M::R>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:15:9
    │
 15 │         (Pair<S, R> { f1: S{}, f2: R{} }, 0u64, @0x1);
@@ -65,7 +65,7 @@ error[E05001]: ability constraint not satisfied
    │         Cannot ignore values without the 'drop' ability. The value must be used
    │         The type '(0x42::M::Pair<0x42::M::S, 0x42::M::R>, u64, address)' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:17:9
    │
 17 │         Box<R> { f: R {} } == Box<R> { f: R {} };
@@ -75,7 +75,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x42::M::Box<0x42::M::R>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:17:31
    │
 17 │         Box<R> { f: R {} } == Box<R> { f: R {} };
@@ -85,7 +85,7 @@ error[E05001]: ability constraint not satisfied
    │                               '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                               The type '0x42::M::Box<0x42::M::R>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:18:9
    │
 18 │         Box<Box<R>> { f: Box { f: R {} } } == Box<Box<R>> { f: Box { f: R {} }};
@@ -95,7 +95,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:18:47
    │
 18 │         Box<Box<R>> { f: Box { f: R {} } } == Box<Box<R>> { f: Box { f: R {} }};
@@ -105,7 +105,7 @@ error[E05001]: ability constraint not satisfied
    │                                               '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                                               The type '0x42::M::Box<0x42::M::Box<0x42::M::R>>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:19:9
    │
 19 │         Box<T> { f: t } == Box<T> { f: t };
@@ -115,7 +115,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x42::M::Box<T>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:19:28
    │
 19 │         Box<T> { f: t } == Box<T> { f: t };
@@ -125,7 +125,7 @@ error[E05001]: ability constraint not satisfied
    │                            '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                            The type '0x42::M::Box<T>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:20:9
    │
 20 │         Box<Box<T>> { f: Box { f: t } } == Box<Box<T>> { f: Box { f: t} };
@@ -135,7 +135,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x42::M::Box<0x42::M::Box<T>>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:20:44
    │
 20 │         Box<Box<T>> { f: Box { f: t } } == Box<Box<T>> { f: Box { f: t} };
@@ -145,7 +145,7 @@ error[E05001]: ability constraint not satisfied
    │                                            '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                                            The type '0x42::M::Box<0x42::M::Box<T>>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:21:9
    │
 21 │         Pair<R, S> { f1: R{}, f2: S{} } == Pair<R, S> { f1: R{}, f2: S{} };
@@ -155,7 +155,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x42::M::Pair<0x42::M::R, 0x42::M::S>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:21:44
    │
 21 │         Pair<R, S> { f1: R{}, f2: S{} } == Pair<R, S> { f1: R{}, f2: S{} };

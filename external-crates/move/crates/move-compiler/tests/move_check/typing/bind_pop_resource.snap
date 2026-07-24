@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/bind_pop_resource.move:5:13
   │
 2 │     struct R {}
@@ -16,7 +16,7 @@ error[E05001]: ability constraint not satisfied
   │             │   
   │             Cannot ignore values without the 'drop' ability. The value must be used
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/bind_pop_resource.move:9:14
   │
 2 │     struct R {}
@@ -27,7 +27,7 @@ error[E05001]: ability constraint not satisfied
   │              │       
   │              Cannot ignore values without the 'drop' ability. The value must be used
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/bind_pop_resource.move:9:17
   │
 2 │     struct R {}
@@ -38,7 +38,7 @@ error[E05001]: ability constraint not satisfied
   │                 │       
   │                 Cannot ignore values without the 'drop' ability. The value must be used
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
   ┌─ tests/move_check/typing/bind_pop_resource.move:9:39
   │
 2 │     struct R {}

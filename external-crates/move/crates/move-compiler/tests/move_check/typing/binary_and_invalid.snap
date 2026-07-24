@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/binary_and_invalid.move:8:9
   │
 8 │         0u64 && 1u64;
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
   │         Invalid argument to '&&'
   │         Given: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/binary_and_invalid.move:8:17
   │
 8 │         0u64 && 1u64;
@@ -24,7 +24,7 @@ error[E04007]: incompatible types
   │              │  Given: 'u64'
   │              Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/binary_and_invalid.move:9:9
   │
 9 │         1u64 && false;
@@ -33,7 +33,7 @@ error[E04007]: incompatible types
   │         Invalid argument to '&&'
   │         Given: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:10:18
    │
 10 │         false && 1u64;
@@ -43,7 +43,7 @@ error[E04007]: incompatible types
    │               │  Given: 'u64'
    │               Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:11:9
    │
 11 │         @0x0 && @0x1;
@@ -52,7 +52,7 @@ error[E04007]: incompatible types
    │         Invalid argument to '&&'
    │         Given: 'address'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:11:17
    │
 11 │         @0x0 && @0x1;
@@ -62,7 +62,7 @@ error[E04007]: incompatible types
    │              │  Given: 'address'
    │              Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:12:9
    │
 12 │         (0: u8) && (1: u128);
@@ -71,7 +71,7 @@ error[E04007]: incompatible types
    │         │   Given: 'u8'
    │         Invalid argument to '&&'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:12:20
    │
 12 │         (0: u8) && (1: u128);
@@ -81,7 +81,7 @@ error[E04007]: incompatible types
    │                 │  Invalid argument to '&&'
    │                 Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:13:9
    │
  7 │     fun t0(r: R, s: S) {
@@ -92,7 +92,7 @@ error[E04007]: incompatible types
    │         │  
    │         Invalid argument to '&&'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:13:14
    │
  7 │     fun t0(r: R, s: S) {
@@ -103,7 +103,7 @@ error[E04007]: incompatible types
    │           │   
    │           Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:14:9
    │
  7 │     fun t0(r: R, s: S) {
@@ -114,7 +114,7 @@ error[E04007]: incompatible types
    │         │  
    │         Invalid argument to '&&'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:14:14
    │
  7 │     fun t0(r: R, s: S) {
@@ -125,7 +125,7 @@ error[E04007]: incompatible types
    │           │   
    │           Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:15:9
    │
 15 │         () && ();
@@ -134,7 +134,7 @@ error[E04007]: incompatible types
    │         Invalid argument to '&&'
    │         Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:15:15
    │
 15 │         () && ();
@@ -144,7 +144,7 @@ error[E04007]: incompatible types
    │            │  Given: '()'
    │            Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:16:17
    │
 16 │         true && ();
@@ -154,7 +154,7 @@ error[E04007]: incompatible types
    │              │  Given: '()'
    │              Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:17:9
    │
 17 │         (true, false) && (true, false, true);
@@ -163,7 +163,7 @@ error[E04007]: incompatible types
    │         Invalid argument to '&&'
    │         Given: '(bool, bool)'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:17:26
    │
 17 │         (true, false) && (true, false, true);
@@ -173,7 +173,7 @@ error[E04007]: incompatible types
    │                       │  Given: '(bool, bool, bool)'
    │                       Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:18:9
    │
 18 │         (true, true) && (false, false);
@@ -182,7 +182,7 @@ error[E04007]: incompatible types
    │         Invalid argument to '&&'
    │         Given: '(bool, bool)'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:18:25
    │
 18 │         (true, true) && (false, false);

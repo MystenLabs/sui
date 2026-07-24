@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/typing/loop_result_type.move:19:13
    │
 19 │         foo(loop {})
@@ -13,7 +13,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/typing/loop_result_type.move:25:23
    │
 25 │         let x: X::R = loop { 0u64; };
