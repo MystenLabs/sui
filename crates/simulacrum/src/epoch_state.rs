@@ -123,6 +123,7 @@ impl EpochState {
 
         sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
+            &self.protocol_config,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_object_refs,

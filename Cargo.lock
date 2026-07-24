@@ -14915,6 +14915,7 @@ dependencies = [
  "move-bytecode-verifier-v1",
  "move-bytecode-verifier-v2",
  "move-bytecode-verifier-v3",
+ "move-core-types",
  "move-trace-format",
  "move-vm-config",
  "move-vm-runtime",
