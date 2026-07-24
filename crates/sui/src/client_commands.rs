@@ -114,7 +114,7 @@ use move_package_alt::{
 use move_symbol_pool::Symbol;
 use sui_keys::key_derive;
 use sui_package_alt::{BuildParams, SuiFlavor, find_environment};
-use sui_source_verification::{VerifiedMetadata, verify_built, verify_source};
+use sui_source_verification::{ToolchainSource, VerifiedMetadata, verify_built, verify_source};
 use tracing::{debug, info};
 
 /// Concurrency level for fetching coin metadata for balances.
@@ -637,6 +637,12 @@ pub enum SuiClientCommands {
         /// reading it from the package's publish metadata.
         #[clap(long)]
         toolchain_version: Option<String>,
+
+        /// Rebuild with the `sui` binary at this path instead of downloading a release. Skips
+        /// toolchain-version resolution and the download; cannot be combined with
+        /// `--toolchain-version`.
+        #[clap(long, value_name = "PATH", conflicts_with = "toolchain_version")]
+        toolchain: Option<PathBuf>,
 
         /// Compare the modules already compiled under `<package_path>/build` against the on-chain
         /// package with this id, without rebuilding. Only module bytecode is compared, not linkage.
@@ -1839,6 +1845,7 @@ impl SuiClientCommands {
                 package_path,
                 build_config,
                 toolchain_version,
+                toolchain,
                 verify_only,
             } => {
                 if let Some(on_chain_id) = verify_only {
@@ -1874,10 +1881,14 @@ impl SuiClientCommands {
                             })?;
 
                     let client = context.grpc_client()?;
+                    let toolchain = match toolchain {
+                        Some(path) => ToolchainSource::Binary(path),
+                        None => ToolchainSource::Version(toolchain_version),
+                    };
                     let metadata = verify_source(
                         &package_path,
                         &publication,
-                        toolchain_version,
+                        toolchain,
                         &environment,
                         &client,
                         Some(context.config.path()),
@@ -2423,11 +2434,9 @@ impl Display for SuiClientCommandResult {
                 if let Some(metadata) = metadata {
                     writeln!(writer, "  original ID:       {}", metadata.original_id)?;
                     writeln!(writer, "  published at:      {}", metadata.published_at)?;
-                    writeln!(
-                        writer,
-                        "  toolchain version: {}",
-                        metadata.toolchain_version
-                    )?;
+                    if let Some(version) = &metadata.toolchain_version {
+                        writeln!(writer, "  toolchain version: {version}")?;
+                    }
                     writeln!(
                         writer,
                         "  binary:            {}",
