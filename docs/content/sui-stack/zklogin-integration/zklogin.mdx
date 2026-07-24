@@ -232,6 +232,90 @@ You can verify a zkLogin signature over transaction data or a personal message u
 
 4. **Self-hosted verifier:** Use the [`zklogin-verifier`](https://github.com/MystenLabs/zklogin-verifier) for custom logic.
 
+## Production salt management
+
+The user salt is critical to zkLogin address derivation. If a user loses their salt, they permanently lose access to their zkLogin address and all assets it holds.
+
+:::danger Do not use localStorage for production salt storage
+
+Many zkLogin examples store the salt in `localStorage` for simplicity. If the user clears their browser data, switches devices, or uses a private browsing session, the salt is lost and the address becomes inaccessible. This is not acceptable for production applications that hold real assets.
+
+:::
+
+### Salt service architecture
+
+For production, run a backend salt service that deterministically derives the salt from the user's OAuth identity:
+
+1. The client authenticates with the OAuth provider and receives a JWT.
+2. The client sends the JWT to your salt service.
+3. The salt service extracts `(iss, aud, sub)` from the JWT, verifies the JWT signature, and derives the salt using HKDF with a master secret:
+
+```
+salt = HKDF(master_secret, iss || aud || sub)
+```
+
+4. The salt service returns the salt to the client. The service is stateless. It does not store per-user salts. The master secret and the HKDF derivation guarantee the same `(iss, aud, sub)` always produces the same salt.
+
+### Master secret management
+
+The master secret is the single most sensitive value in a zkLogin deployment. If it is lost, no user can recover their salt. If it is compromised, an attacker can derive any user's salt.
+
+- Store the master secret in a cloud KMS (AWS KMS, GCP Cloud KMS) so it never exists in plaintext outside the HSM.
+- Maintain encrypted backups in a geographically separate location.
+- Implement key rotation with a migration plan: derive salts with the new key and compare against the old key during a transition period.
+
+### Migrating from localStorage
+
+If you initially shipped with localStorage salt storage and need to migrate:
+
+1. When a returning user authenticates, read the salt from localStorage.
+2. Send the user's JWT to the salt service and get the service-derived salt.
+3. If the localStorage salt matches the service-derived salt, migration is complete. The user's address is unchanged.
+4. If they differ (because the localStorage salt was randomly generated, not deterministically derived), the user has two addresses. You must transfer their assets from the old address to the new one and guide them through the transition.
+
+To avoid scenario 4, use deterministic salt derivation from the start, even during development.
+
+## Session lifecycle and renewal
+
+A zkLogin session is bound to an ephemeral key pair that is valid until a specific epoch (`maxEpoch`). After that epoch, any transaction signed with the ephemeral key is rejected by validators.
+
+### Epoch timing
+
+Epochs on Mainnet are approximately 24 hours. Setting `maxEpoch = currentEpoch + 2` gives approximately 48 hours of validity. Shorter sessions are more secure (less time for a compromised ephemeral key to be exploited) but require more frequent renewal.
+
+### Renewal flow
+
+When the session approaches expiry, the application must re-authenticate:
+
+1. Check the current epoch against the session's `maxEpoch`.
+2. If `currentEpoch >= maxEpoch - 1`, prompt the user to re-authenticate with the OAuth provider.
+3. The user logs in again, producing a new JWT.
+4. Generate a new ephemeral key pair with a fresh `maxEpoch`.
+5. Request a new ZK proof from the proving service using the new JWT and ephemeral key.
+
+The user's Sui address does not change. It is derived from `(iss, aud, sub, salt)`, none of which change during renewal.
+
+### Silent renewal
+
+If the OAuth provider supports refresh tokens or session cookies, the application can renew the session without user interaction:
+
+1. Use the refresh token to obtain a new JWT from the OAuth provider.
+2. Generate a new ephemeral key pair.
+3. Request a new ZK proof.
+4. The session continues seamlessly.
+
+Not all providers support silent renewal. Google supports it through offline access; Facebook supports long-lived tokens. Check your provider's documentation.
+
+### Grace period pattern
+
+To avoid transaction failures at the epoch boundary, use overlapping sessions:
+
+1. Before the current session expires (`currentEpoch == maxEpoch - 1`), generate a new ephemeral key pair and proof.
+2. The old key still works for the current epoch.
+3. Switch to the new key for all new transactions.
+4. Any in-flight transactions signed with the old key complete normally as long as they are processed before the epoch ends.
+
+
 ## FAQ
 
 #### What providers is zkLogin compatible with?

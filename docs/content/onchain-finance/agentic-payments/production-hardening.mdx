@@ -1,0 +1,218 @@
+---
+title: Production Hardening
+description: >-
+  Implement kill-switches, idempotent retries, circuit breakers, and monitoring
+  for autonomous payment agents running in production on Sui.
+sidebar_label: Production Hardening
+keywords:
+  - production hardening
+  - kill switch
+  - idempotency
+  - retry safety
+  - circuit breaker
+  - agent monitoring
+  - agent safety
+  - transaction retry
+goal:
+  description: >-
+    Reader can implement kill-switch, retry safety, and idempotency patterns for
+    production agent payments on Sui
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Production hardening
+    stage: Ship
+questions:
+  - How do I add a kill-switch to an agent on Sui?
+  - How do I handle idempotent retries for agent transactions on Sui?
+  - What production safety patterns should I use for payment agents on Sui?
+answer: >-
+  Production payment agents need a kill-switch (both offchain and onchain),
+  idempotent retries that prevent double-spends, circuit breakers that halt on
+  repeated failures, and structured monitoring to detect anomalies.
+---
+
+An agent that moves money in production needs safety mechanisms beyond correct business logic. This page covers operational patterns that prevent runaway spending and ensure graceful recovery from failures.
+
+## Kill-switch
+
+A kill-switch lets you halt all agent operations immediately. Implement two layers: one offchain for instant response, and one onchain as a final safeguard.
+
+### Offchain kill-switch
+
+The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction.
+
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="kill-switch" />
+
+For teams using feature flag services (LaunchDarkly, Unleash, or similar), check the flag instead of an environment variable. This lets you toggle the kill-switch without redeploying.
+
+### Onchain kill-switch
+
+An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the offchain kill-switch fails (agent ignoring the flag, stale config), the onchain check prevents execution.
+
+```move
+module example::admin_config;
+
+const EPaused: u64 = 0;
+const ENotAdmin: u64 = 1;
+
+public struct AdminConfig has key {
+    id: UID,
+    paused: bool,
+    admin: address,
+}
+
+public struct AdminCap has key, store {
+    id: UID,
+}
+
+fun init(ctx: &mut TxContext) {
+    let config = AdminConfig {
+        id: object::new(ctx),
+        paused: false,
+        admin: ctx.sender(),
+    };
+    transfer::share_object(config);
+    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
+}
+
+public fun assert_not_paused(config: &AdminConfig) {
+    assert!(!config.paused, EPaused);
+}
+
+public fun pause(_cap: &AdminCap, config: &mut AdminConfig) {
+    config.paused = true;
+}
+
+public fun unpause(_cap: &AdminCap, config: &mut AdminConfig) {
+    config.paused = false;
+}
+```
+
+Your spending mandate's `execute_spend` function calls `admin_config::assert_not_paused(config)` as its first operation. When the admin pauses the system, every agent transaction aborts immediately.
+
+```move
+public fun execute_spend<T>(
+    config: &AdminConfig,
+    mandate: &mut SpendingMandate,
+    payment: Coin<T>,
+    recipient: address,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    admin_config::assert_not_paused(config);
+    // ... rest of spend logic
+}
+```
+
+## Retry safety
+
+Sui transactions are atomic. They either fully succeed or fully revert. But network issues can make the outcome ambiguous: the transaction might have been submitted but you did not receive the response. Retrying blindly risks double-spending.
+
+### The safe retry pattern
+
+1. **Submit and record the digest.** After calling `signAndExecuteTransaction`, record the transaction digest immediately (in memory or a database).
+
+2. **Wait for confirmation.** Use `waitForTransaction` with the digest to confirm the outcome.
+
+3. **If the wait times out, query before retrying.** If `waitForTransaction` times out, query the digest directly. If the transaction exists onchain, inspect `$kind`: a `Transaction` means it succeeded; a `FailedTransaction` means it executed but reverted (gas was still charged). In either case, do not retry. The transaction is final.
+
+4. **Only retry if the transaction was never submitted.** If the digest does not exist onchain and you received a network error during submission, it is safe to retry.
+
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="safe-execute" />
+
+### Idempotency keys
+
+An idempotency key is a client-generated identifier (typically a UUIDv4) that uniquely represents an operation. Before executing, check if the key has already been processed. This prevents double-spends across process restarts, retries, and duplicate webhook deliveries.
+
+Store idempotency keys in a durable store (database, Redis) with the transaction digest and result. Set a TTL (for example, 7 days) so old keys are eventually cleaned up.
+
+#### Onchain idempotency
+
+For onchain idempotency, the [Payment Kit](/onchain-finance/payment-kit) provides built-in duplicate prevention through `PaymentRegistry`. If you are using a custom Move module, you can implement a similar pattern:
+
+```move
+use sui::table::Table;
+
+public struct ProcessedKeys has key {
+    id: UID,
+    keys: Table<String, bool>,
+}
+
+public fun assert_not_processed(store: &ProcessedKeys, key: &String) {
+    assert!(!store.keys.contains(key), EDuplicateOperation);
+}
+
+public fun mark_processed(store: &mut ProcessedKeys, key: String) {
+    store.keys.add(key, true);
+}
+```
+
+## Circuit breaker
+
+A circuit breaker halts the agent after a configurable number of consecutive failures. This prevents an agent from burning gas on transactions that consistently fail due to an upstream issue.
+
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="circuit-breaker" />
+
+## Rate limiting
+
+Enforce per-agent rate limits to cap how many transactions the agent submits per minute or per hour. This protects against bugs that cause rapid-fire transaction submission.
+
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="rate-limiter" />
+
+## Monitoring checklist
+
+Track these metrics for every production agent:
+
+- **Transaction success rate.** Alert if it drops below 95% over a 5-minute window.
+- **Gas spend per hour.** Alert if it exceeds the expected budget by more than 20%.
+- **Mandate utilization.** Track `remaining_cap` from `SpendExecuted` events. Alert when a mandate is near exhaustion.
+- **Circuit breaker state.** Log when the breaker opens and closes.
+- **Latency.** Measure time from transaction submission to confirmation. Sui finalizes in under a second; sustained latency above 5 seconds indicates an RPC or network issue.
+
+Emit structured logs (JSON) for each transaction attempt:
+
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="structured-log" />
+
+## Testnet to Mainnet checklist
+
+Before switching from Testnet to Mainnet, verify each item. Testnet and Mainnet are independent networks; nothing carries over automatically.
+
+- [ ] **Package addresses.** Republish all Move packages on Mainnet. Update every hardcoded package ID in your application configuration and SDK calls.
+- [ ] **RPC endpoint.** Switch from `https://fullnode.testnet.sui.io:443` to your Mainnet RPC provider. Do not use the public Mainnet endpoint for production traffic. Use a dedicated provider.
+- [ ] **Shared object IDs.** Any shared objects your application depends on (`AdminConfig`, `SpendingMandate`, `Registry`) must be redeployed on Mainnet. Update their object IDs in your configuration.
+- [ ] **Coin type addresses.** Token type addresses differ between networks. For example, USDC has a different package address on Mainnet than Testnet. Verify all coin type strings.
+- [ ] **Gas budgets.** Mainnet gas prices can differ from Testnet. Simulate your transaction on Mainnet before submitting. Use `dryRunTransactionBlock`, GraphQL `simulateTransaction`, or gRPC `TransactionExecutionService.SimulateTransaction` to verify gas budgets are adequate.
+- [ ] **Event monitoring.** Set up gRPC event subscriptions or an indexer pipeline to monitor production transactions. At minimum, alert on failed transactions and unexpected balance changes.
+- [ ] **Spending mandate expiry.** Set shorter expiry windows for Mainnet mandates than you used during Testnet development.
+
+## Security checklist
+
+Before deploying an agent to production:
+
+- [ ] Agent key is stored in a secrets manager or cloud KMS, not in source code or environment files committed to version control
+- [ ] Spending mandate has a short expiry window (hours or days, not months)
+- [ ] Recipient allowlist contains only verified addresses
+  - [ ] Offchain kill-switch is tested and accessible to on-call operators
+  - [ ] Onchain kill-switch (`AdminConfig.paused`) is deployed and the `AdminCap` is secured
+- [ ] Idempotency store is durable (survives process restarts)
+- [ ] Circuit breaker is configured with sensible thresholds
+- [ ] Rate limiter prevents more than N transactions per minute
+- [ ] Monitoring alerts are configured for success rate, gas spend, and mandate utilization
+- [ ] Key rotation procedure is documented and tested
+- [ ] Backup RPC endpoint is configured for failover

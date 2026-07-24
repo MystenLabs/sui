@@ -1,0 +1,136 @@
+---
+title: Recipient Resolution
+description: >-
+  Resolve human-readable names to Sui addresses for payments using SuiNS and
+  custom directory patterns.
+keywords:
+  - SuiNS
+  - name resolution
+  - pay by username
+  - recipient lookup
+  - .sui names
+  - address resolution
+goal:
+  description: >-
+    Reader can resolve human-readable names to Sui addresses for
+    payments using SuiNS or custom directory patterns
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Recipient resolution
+    stage: Payments
+questions:
+  - How do I resolve a .sui name to an address?
+  - How do I implement pay-by-username on Sui?
+  - How do I do reverse name lookup on Sui?
+answer: >-
+  Use the gRPC NameService.LookupName method to resolve SuiNS .sui
+  names to Sui addresses. For reverse lookup, use
+  defaultNameServiceName. For custom identifiers, build an offchain
+  lookup service or an onchain registry.
+---
+
+Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resolution maps human-readable identifiers (SuiNS `.sui` names, email addresses, or application handles) to Sui addresses so users can pay by name.
+
+## SuiNS name resolution
+
+[SuiNS](/sui-stack/suins) is Sui's native name service. Users register `.sui` names (like `alice.sui`) that resolve to their Sui address.
+
+### Resolve a name with the TypeScript SDK
+
+Use the gRPC `NameService.LookupName` method through the SDK:
+
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="resolve-name" />
+
+:::danger Always verify name validity
+
+A `.sui` name can expire and be re-registered by a different user. `LookupName` returns an empty address for expired names. If you cache resolved addresses, re-resolve before each payment to ensure the name still points to the intended recipient.
+
+:::
+
+### Reverse resolution
+
+To display a human-readable name in transaction history or receipts, look up the default name for an address:
+
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="reverse-resolve" />
+
+### Resolve through GraphQL
+
+Use `address(name:)` to resolve a name, or `nameRecord(name:)` to get full record details:
+
+```graphql
+query ResolveName {
+  address(name: "alice.sui") {
+    address
+  }
+}
+```
+
+For reverse lookup, query the `defaultNameRecord` field on an address:
+
+```graphql
+query ReverseLookup {
+  address(address: "0x...") {
+    defaultNameRecord {
+      domain
+    }
+  }
+}
+```
+
+## Custom directory patterns
+
+For applications that need email-to-address or handle-to-address mappings beyond SuiNS, use one of these patterns:
+
+### Off-chain lookup service
+
+Maintain a backend database mapping identifiers to Sui addresses. The client queries the service before building the payment transaction.
+
+```
+User enters "alice@example.com"
+  → App calls backend: GET /api/resolve?email=alice@example.com
+  → Backend returns: { address: "0x..." }
+  → App builds PTB with resolved address
+```
+
+This is the simplest approach and works for any identifier format. The tradeoff is centralization: the lookup service must be available and trusted.
+
+### Onchain registry
+
+For decentralized resolution, deploy a Move module that stores mappings in a shared `Table`:
+
+```move
+module example::directory;
+
+use sui::table::{Self, Table};
+
+public struct Directory has key {
+    id: UID,
+    entries: Table<vector<u8>, address>,
+}
+```
+
+Clients query the registry onchain before building the payment transaction. This avoids trusting a centralized service but requires onchain storage costs for each registration.
+
+## Combining with payments
+
+When building a payment flow, resolve the recipient before constructing the PTB:
+
+<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="pay-by-name" />
+
+For the full payment flow including gas sponsorship and settlement verification, see the [P2P Reference App](/onchain-finance/p2p-reference-app).

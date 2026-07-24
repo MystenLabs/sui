@@ -1,0 +1,74 @@
+---
+title: Funding Wallets
+description: >-
+  Get SUI and tokens into user or agent wallets through on-ramps, exchanges,
+  bridges, and faucets.
+keywords:
+  - funding
+  - fiat
+  - bridge
+  - exchange
+  - faucet
+  - wallet funding
+goal:
+  description: >-
+    Reader can choose a method to fund user or agent wallets with SUI
+    and tokens
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Funding wallets
+    stage: Onboarding
+questions:
+  - How do I get SUI into a wallet?
+  - How do I bridge tokens from Ethereum to Sui?
+answer: >-
+  Fund wallets through exchange withdrawals, cross-chain bridges
+  (Wormhole, Sui Bridge), or
+  Testnet faucets. For agents, use a gas station to sponsor transactions
+  instead of direct funding.
+---
+
+Before users or agents can transact on Sui, their wallets need tokens. Users who already hold SUI on a centralized exchange can withdraw to their Sui wallet address:
+
+1. Copy the Sui address from the wallet.
+2. In the exchange, initiate a withdrawal for SUI on the **Sui network** (not ERC-20 or other wrapped versions).
+3. Paste the Sui address as the withdrawal destination.
+4. The SUI arrives in the wallet after the exchange processes the withdrawal (typically minutes).
+
+## Bridging from other chains
+
+To move assets from Ethereum, Solana, or other blockchains to Sui, use a cross-chain bridge:
+
+- [Wormhole](https://wormhole.com/): supports bridging tokens between Sui and multiple chains including Ethereum, Solana, and others.
+- [Sui Bridge](https://bridge.sui.io/): native bridge between Sui and Ethereum.
+
+Bridged assets arrive as wrapped tokens on Sui. The wrapped token's coin type address differs from the native token's address on the source chain.
+
+## Testnet and Devnet faucets
+
+For development and testing, use the Sui faucet to get free SUI tokens:
+
+- **Testnet and Devnet:** See [Get SUI from Faucet](/getting-started/onboarding/get-coins) for CLI and programmatic faucet access.
+- Faucet tokens have no monetary value and cannot be transferred to Mainnet.
+
+## Funding agent wallets
+
+Agents that operate autonomously have two options for gas:
+
+1. **Direct funding.** Transfer SUI to the agent's address. The agent pays its own gas. Basic, but requires monitoring the agent's balance and topping up periodically.
+2. **Gas sponsorship.** Deploy a [gas station](/onchain-finance/gas-station) that sponsors the agent's transactions. The agent never needs to hold SUI. This is the recommended pattern for production agents because it separates gas management from agent logic.
+
+For agents using spending mandates, the mandate's owner funds the mandate with the tokens the agent  spend. The agent needs gas only if it is not using a gas sponsor. See [Agent Wallet Setup](/onchain-finance/agentic-payments/agent-wallet-setup) for details.

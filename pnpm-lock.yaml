@@ -362,6 +362,73 @@ importers:
         specifier: ^5.5.3
         version: 5.5.3
 
+  examples/onchain-finance/gas-station:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+      express:
+        specifier: ^4.22.1
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.0
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+
+  examples/onchain-finance/production-hardening:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+
+  examples/onchain-finance/settlement:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+
+  examples/onchain-finance/x402-pay-per-request:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+      express:
+        specifier: ^4.22.1
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.0
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+      vitest:
+        specifier: ^2.1
+        version: 2.1.9(@types/node@20.17.46)(lightningcss@1.30.0)
+
   examples/regulated-coin/ts-client:
     dependencies:
       '@mysten/sui':
@@ -5211,9 +5278,6 @@ packages:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
 
-  get-func-name@2.0.2:
-    resolution: {integrity: sha512-8vXOvuE167CtIc3OyItco7N/dpRtBbYOsPsXCz7X/PMnlGjYjSGuZJgM1Y7mmew7BKf9BqvLX2tnOVy1BBUsxQ==}
-
   get-intrinsic@1.2.7:
     resolution: {integrity: sha512-VW6Pxhsrk0KAOqs3WEd0klDiF/+V7gQOpAvY1jVU/LHmaD/kQO4523aiJuikX/QAKYiW6x8Jh+RJej1almdtCA==}
     engines: {node: '>= 0.4'}
@@ -5757,9 +5821,6 @@ packages:
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
-
-  loupe@3.1.1:
-    resolution: {integrity: sha512-edNu/8D5MKVfGVFRhFf8aAxiTM6Wumfz5XsaatSxlD3w4R1d/WEKUTydCdPGbl9K7QG/Ca3GnDV2sIKIpXRQcw==}
 
   loupe@3.2.1:
     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}
@@ -12276,6 +12337,14 @@ snapshots:
     optionalDependencies:
       vite: 5.4.19(@types/node@20.14.10)(lightningcss@1.30.0)
 
+  '@vitest/mocker@2.1.9(vite@5.4.19(@types/node@20.17.46)(lightningcss@1.30.0))':
+    dependencies:
+      '@vitest/spy': 2.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 5.4.19(@types/node@20.17.46)(lightningcss@1.30.0)
+
   '@vitest/pretty-format@2.1.9':
     dependencies:
       tinyrainbow: 1.2.0
@@ -12672,7 +12741,7 @@ snapshots:
       assertion-error: 2.0.1
       check-error: 2.1.1
       deep-eql: 5.0.2
-      loupe: 3.1.1
+      loupe: 3.2.1
       pathval: 2.0.0
 
   chalk@2.4.2:
@@ -13562,7 +13631,7 @@ snapshots:
       etag: 1.8.1
       finalhandler: 1.3.1
       fresh: 0.5.2
-      http-errors: 2.0.0
+      http-errors: 2.0.1
       merge-descriptors: 1.0.3
       methods: 1.1.2
       on-finished: 2.4.1
@@ -13575,7 +13644,7 @@ snapshots:
       send: 0.19.0
       serve-static: 1.16.2
       setprototypeof: 1.2.0
-      statuses: 2.0.1
+      statuses: 2.0.2
       type-is: 1.6.18
       utils-merge: 1.0.1
       vary: 1.1.2
@@ -13719,8 +13788,6 @@ snapshots:
   gensync@1.0.0-beta.2: {}
 
   get-caller-file@2.0.5: {}
-
-  get-func-name@2.0.2: {}
 
   get-intrinsic@1.2.7:
     dependencies:
@@ -14297,10 +14364,6 @@ snapshots:
   loose-envify@1.4.0:
     dependencies:
       js-tokens: 4.0.0
-
-  loupe@3.1.1:
-    dependencies:
-      get-func-name: 2.0.2
 
   loupe@3.2.1: {}
 
@@ -15878,6 +15941,24 @@ snapshots:
       - supports-color
       - terser
 
+  vite-node@2.1.9(@types/node@20.17.46)(lightningcss@1.30.0):
+    dependencies:
+      cac: 6.7.14
+      debug: 4.4.0
+      es-module-lexer: 1.7.0
+      pathe: 1.1.2
+      vite: 5.4.19(@types/node@20.17.46)(lightningcss@1.30.0)
+    transitivePeerDependencies:
+      - '@types/node'
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+
   vite-tsconfig-paths@4.3.2(typescript@5.8.3)(vite@5.4.19(@types/node@20.17.46)(lightningcss@1.30.0)):
     dependencies:
       debug: 4.4.0
@@ -15943,6 +16024,41 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.14.10
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+
+  vitest@2.1.9(@types/node@20.17.46)(lightningcss@1.30.0):
+    dependencies:
+      '@vitest/expect': 2.1.9
+      '@vitest/mocker': 2.1.9(vite@5.4.19(@types/node@20.17.46)(lightningcss@1.30.0))
+      '@vitest/pretty-format': 2.1.9
+      '@vitest/runner': 2.1.9
+      '@vitest/snapshot': 2.1.9
+      '@vitest/spy': 2.1.9
+      '@vitest/utils': 2.1.9
+      chai: 5.3.3
+      debug: 4.4.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      pathe: 1.1.2
+      std-env: 3.10.0
+      tinybench: 2.9.0
+      tinyexec: 0.3.2
+      tinypool: 1.1.1
+      tinyrainbow: 1.2.0
+      vite: 5.4.19(@types/node@20.17.46)(lightningcss@1.30.0)
+      vite-node: 2.1.9(@types/node@20.17.46)(lightningcss@1.30.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 20.17.46
     transitivePeerDependencies:
       - less
       - lightningcss

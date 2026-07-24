@@ -1,0 +1,103 @@
+---
+title: Agentic Payments
+description: >-
+  Build autonomous agents that send, receive, and manage payments on Sui with
+  spending policies, sponsored gas, settlement verification, and production
+  safety patterns.
+keywords:
+  - agentic payments
+  - autonomous agents
+  - agent wallet
+  - spending mandate
+  - settlement verification
+  - production hardening
+  - agent gas sponsorship
+goal:
+  description: >-
+    Reader can navigate the agentic payments documentation to find the right
+    guide for their use case
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Overview
+    stage: Overview
+questions:
+  - What are agentic payments on Sui?
+  - How do I build an autonomous payment agent on Sui?
+  - What documentation covers agentic payment patterns?
+answer: >-
+  Agentic payments on Sui let autonomous backend services sign and submit
+  payment transactions without human interaction, using spending policies,
+  sponsored gas, and settlement verification for safe, bounded operation.
+---
+
+Agentic payments let autonomous backend services sign and submit payment transactions on Sui without human interaction. An agent holds its own key pair, operates within spending policies set by the owner, and uses sponsored gas so it never needs to hold SUI for fees.
+
+Building a payment agent requires four capabilities:
+
+1. **A wallet the agent can use.** The agent needs a key pair it can access programmatically, stored securely and rotatable without downtime.
+
+2. **Spending boundaries.** The agent's owner defines what the agent can spend, to whom, and for how long. These boundaries are enforced onchain so the agent cannot exceed them even if compromised.
+
+3. **Settlement verification.** The agent confirms that each payment is final before releasing goods or services, handling edge cases like timeouts and reverts.
+
+4. **Production safety.** Kill-switches, idempotent retries, and circuit breakers prevent runaway spending and ensure graceful recovery from failures.
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList items={[
+{
+type: 'link',
+label: 'Agent Wallet and Signer Setup',
+href: '/onchain-finance/agentic-payments/agent-wallet-setup',
+description: 'Create and manage a headless keypair for backend agents.',
+},
+{
+type: 'link',
+label: 'Spending Policies and Mandates',
+href: '/onchain-finance/agentic-payments/spending-policies',
+description: 'Enforce onchain spending caps, allowlists, expiry, and revocation.',
+},
+{
+type: 'link',
+label: 'x402 Pay-Per-Request',
+href: '/onchain-finance/x402-pay-per-request',
+description: 'Gate API access behind micropayments using HTTP 402 and challenge-signature binding.',
+},
+{
+type: 'link',
+label: 'Recurring and Streaming Payments',
+href: '/onchain-finance/agentic-payments/recurring-payments',
+description: 'Scheduled agent payments and onchain streaming with linear unlock.',
+},
+{
+type: 'link',
+label: 'Settlement Verification',
+href: '/onchain-finance/agentic-payments/settlement-verification',
+description: 'Verify payment finality before releasing goods or services.',
+},
+{
+type: 'link',
+label: 'Payment Reconciliation',
+href: '/onchain-finance/agentic-payments/payment-reconciliation',
+description: 'Track, query, and reconcile agent payment history against onchain data.',
+},
+{
+type: 'link',
+label: 'Production Hardening',
+href: '/onchain-finance/agentic-payments/production-hardening',
+description: 'Kill-switches, retry safety, idempotency, monitoring, and Mainnet checklist.',
+},
+]} />
+
+These guides assume familiarity with [building transactions](/develop/transactions/ptbs/building-ptb) and [sponsored transactions](/develop/transaction-payment/sponsor-txn). For gas station deployment, see [Self-Hosted Gas Station](/onchain-finance/gas-station). For choosing between payment models, see [Choose Your Payments Model](/onchain-finance/choose-payments-model).

@@ -1,0 +1,206 @@
+---
+title: Payment History and Reconciliation
+description: >-
+  Track, query, and reconcile agent payment history using gRPC queries,
+  event subscriptions, and custom indexer pipelines.
+keywords:
+  - payment history
+  - reconciliation
+  - transaction history
+  - event subscription
+  - indexer
+  - audit
+goal:
+  description: >-
+    Reader can query agent payment history and reconcile local records
+    against onchain transaction data
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Payment reconciliation
+    stage: Operations
+questions:
+  - How do I track payment history for a Sui agent?
+  - How do I reconcile agent payments on Sui?
+  - How do I detect missed or duplicate payments on Sui?
+answer: >-
+  Query transaction history via GraphQL or inspect individual transactions
+  with the gRPC client. Compare local payment records against onchain data
+  to detect missed, duplicate, or failed payments.
+---
+
+Autonomous agents can lose track of payments due to crashes, network timeouts, or retry failures. Payment reconciliation compares the agent's local payment records against onchain transaction history to detect missed, duplicate, or failed payments.
+
+## Querying transaction history
+
+The gRPC API does not provide a "list transactions by sender" endpoint. Instead, use one of these approaches to build a payment history.
+
+### GraphQL query
+
+Query transactions by sender address using GraphQL:
+
+```graphql
+query AgentTransactions($sender: SuiAddress!, $cursor: String) {
+  address(address: $sender) {
+    transactions(first: 50, after: $cursor, relation: SENT) {
+      nodes {
+        digest
+        effects {
+          balanceChanges {
+            nodes {
+              owner { address }
+              amount
+              coinType { repr }
+            }
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+```
+
+### Inspecting individual transactions
+
+When you have a list of transaction digests (from your local database or a GraphQL query), use the gRPC client to inspect each one:
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+
+async function extractPaymentDetails(digest: string) {
+  const result = await client.core.getTransaction({
+    digest,
+    include: { balanceChanges: true, effects: true },
+  });
+
+  if (result.$kind === 'FailedTransaction') {
+    return { status: 'failed', digest };
+  }
+
+  const tx = result.Transaction!;
+  const payments = (tx.balanceChanges ?? [])
+    .filter((change) => BigInt(change.amount) > 0n)
+    .map((change) => ({
+      recipient: change.address,
+      amount: change.amount,
+      coinType: change.coinType,
+    }));
+
+  return { status: 'success', digest, payments };
+}
+```
+
+## Real-time monitoring with checkpoint subscriptions
+
+The gRPC `SubscriptionService.SubscribeCheckpoints` streams new checkpoints as the network finalizes them. Process each checkpoint's transactions to detect payments in real time:
+
+```typescript
+const stream = client.subscriptionService.subscribeCheckpoints({});
+
+for await (const checkpoint of stream.responses) {
+  // Each checkpoint contains transaction digests.
+  // Fetch and inspect transactions relevant to your agent.
+}
+```
+
+For event-level filtering, use a [custom indexer pipeline](/develop/accessing-data/custom-indexer) built on the `sui-indexer-alt` framework. The indexer processes checkpoints and writes matching events to your database.
+
+:::tip Choose the right approach
+
+Use GraphQL queries for batch reconciliation (hourly or daily). Use checkpoint subscriptions for near-real-time monitoring. For production systems at scale, use a [custom indexer pipeline](/develop/accessing-data/custom-indexer).
+
+:::
+
+## Reconciliation algorithm
+
+Compare the agent's local payment database against onchain history:
+
+```typescript
+interface LocalPaymentRecord {
+  id: string;
+  digest: string | null; // null if submission failed
+  amount: bigint;
+  recipient: string;
+  status: 'pending' | 'confirmed' | 'failed';
+}
+
+async function reconcile(
+  localRecords: LocalPaymentRecord[],
+  agentAddress: string,
+) {
+  const onchainTxs = await getAgentTransactions(agentAddress);
+  const onchainDigests = new Set(onchainTxs.map((tx) => tx.digest));
+
+  const discrepancies = [];
+
+  for (const record of localRecords) {
+    if (record.status === 'confirmed' && record.digest && !onchainDigests.has(record.digest)) {
+      // Local says confirmed, but not found onchain
+      discrepancies.push({
+        type: 'missing_onchain',
+        record,
+        action: 'Verify digest and re-query. May need to re-submit.',
+      });
+    }
+
+    if (record.status === 'pending' && record.digest && onchainDigests.has(record.digest)) {
+      // Local says pending, but it's confirmed onchain
+      discrepancies.push({
+        type: 'unacknowledged_confirmation',
+        record,
+        action: 'Update local status to confirmed.',
+      });
+    }
+  }
+
+  // Check for onchain transactions not in local records (unexpected payments)
+  const localDigests = new Set(localRecords.map((r) => r.digest).filter(Boolean));
+  for (const tx of onchainTxs) {
+    if (!localDigests.has(tx.digest)) {
+      discrepancies.push({
+        type: 'unknown_transaction',
+        digest: tx.digest,
+        action: 'Investigate. May be a duplicate retry or unauthorized transaction.',
+      });
+    }
+  }
+
+  return discrepancies;
+}
+```
+
+## Production reconciliation
+
+For production agents processing high volumes, use a [custom indexer](/develop/accessing-data/custom-indexer) built on the `sui-indexer-alt` framework. The indexer continuously processes checkpoints and writes payment data to your database, giving you a complete, queryable history without polling the RPC.
+
+Key design points:
+
+- **Pipeline per event type.** Create a dedicated indexer pipeline for your payment events so it can be scaled independently.
+- **Idempotent writes.** The indexer might reprocess checkpoints. Use `ON CONFLICT` / upsert patterns in your database writes.
+- **Watermark tracking.** The framework tracks which checkpoint each pipeline has processed, so you can verify there are no gaps in your payment history.
+
+See [Accessing Data](/develop/accessing-data) for the full overview of data access options.

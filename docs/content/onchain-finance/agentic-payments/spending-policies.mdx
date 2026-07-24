@@ -1,0 +1,445 @@
+---
+title: Spending Policies and Mandates
+description: >-
+  Implement onchain spending caps, recipient allowlists, expiry, and revocation
+  for autonomous agents using a custom Move module on Sui.
+sidebar_label: Spending Policies
+keywords:
+  - spending mandate
+  - spending cap
+  - agent delegation
+  - allowlist
+  - revocation
+  - expiry
+  - spending policy
+  - agent authorization
+  - capability pattern
+goal:
+  description: >-
+    Reader can implement onchain spending policies for agents using a custom
+    Move module with caps, allowlists, and expiry
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Spending policies
+    stage: Authorization
+questions:
+  - How do I limit what an agent can spend on Sui?
+  - How do I implement spending caps for autonomous agents on Sui?
+  - How do I revoke an agent's spending authority on Sui?
+answer: >-
+  Sui does not ship a built-in spending delegation module. You implement
+  spending mandates as custom Move objects that define per-transaction limits,
+  total caps, recipient allowlists, and time-based expiry, enforced onchain so
+  the agent cannot exceed its bounds even if compromised.
+---
+
+An agent that can sign transactions needs guardrails. A **spending mandate** is an onchain object that defines what the agent can spend, to whom, and for how long. The Move module enforces the mandate, so the agent cannot exceed its bounds even if the backend is compromised.
+
+## Why a custom module
+
+Sui does not ship a built-in spending delegation module. The [closed-loop Token](/onchain-finance/closed-loop-token/spending) system enforces policies on `Token` types, but most payment agents work with `Coin<SUI>` or `Coin<USDC>` (standard coins that are not subject to `TokenPolicy` rules).
+
+In Sui's object model, delegation works differently than ERC-20 allowances. Instead of granting a spender permission on your balance, you create a **capability object** (a `SpendingMandate`) and transfer it to the agent. The agent presents this object when executing payments. The Move module validates the mandate's constraints before allowing the transfer.
+
+## Move module
+
+The following module implements a spending mandate with per-transaction limits, a total spending cap, a recipient allowlist, and time-based expiry.
+
+```move
+module example::spending_mandate;
+
+use sui::clock::Clock;
+use sui::coin::Coin;
+use sui::event;
+
+// === Errors ===
+
+const EExceedsPerTxLimit: u64 = 0;
+const EExceedsTotalCap: u64 = 1;
+const ERecipientNotAllowed: u64 = 2;
+const EMandateExpired: u64 = 3;
+const ENotMandateOwner: u64 = 4;
+
+// === Events ===
+
+public struct MandateCreated has copy, drop {
+    mandate_id: ID,
+    owner: address,
+    agent: address,
+    total_cap: u64,
+    expires_at_ms: u64,
+}
+
+public struct SpendExecuted has copy, drop {
+    mandate_id: ID,
+    agent: address,
+    recipient: address,
+    amount: u64,
+    remaining_cap: u64,
+}
+
+public struct MandateRevoked has copy, drop {
+    mandate_id: ID,
+    owner: address,
+}
+
+// === Objects ===
+
+/// Capability held by the mandate owner. Required to revoke or update the mandate.
+public struct MandateOwnerCap has key, store {
+    id: UID,
+    mandate_id: ID,
+}
+
+/// The spending mandate object, transferred to the agent.
+public struct SpendingMandate has key, store {
+    id: UID,
+    owner: address,
+    agent: address,
+    max_per_tx: u64,
+    total_cap: u64,
+    spent: u64,
+    allowed_recipients: vector<address>,
+    expires_at_ms: u64,
+}
+
+// === Public functions ===
+
+/// Create a new spending mandate. The mandate is transferred to the agent.
+/// The owner receives a `MandateOwnerCap` for administrative control.
+public fun create_mandate(
+    agent: address,
+    max_per_tx: u64,
+    total_cap: u64,
+    allowed_recipients: vector<address>,
+    expires_at_ms: u64,
+    ctx: &mut TxContext,
+): MandateOwnerCap {
+    let owner = ctx.sender();
+    let mandate = SpendingMandate {
+        id: object::new(ctx),
+        owner,
+        agent,
+        max_per_tx,
+        total_cap,
+        spent: 0,
+        allowed_recipients,
+        expires_at_ms,
+    };
+    let mandate_id = object::id(&mandate);
+
+    event::emit(MandateCreated {
+        mandate_id,
+        owner,
+        agent,
+        total_cap,
+        expires_at_ms,
+    });
+
+    transfer::transfer(mandate, agent);
+
+    MandateOwnerCap {
+        id: object::new(ctx),
+        mandate_id,
+    }
+}
+
+/// Execute a spend against the mandate. The agent calls this within a PTB
+/// alongside the actual coin transfer.
+public fun execute_spend<T>(
+    mandate: &mut SpendingMandate,
+    payment: Coin<T>,
+    recipient: address,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    let amount = payment.value();
+
+    // Validate constraints
+    assert!(clock.timestamp_ms() < mandate.expires_at_ms, EMandateExpired);
+    assert!(amount <= mandate.max_per_tx, EExceedsPerTxLimit);
+    assert!(mandate.spent + amount <= mandate.total_cap, EExceedsTotalCap);
+    assert!(mandate.allowed_recipients.contains(&recipient), ERecipientNotAllowed);
+
+    // Update spent counter
+    mandate.spent = mandate.spent + amount;
+
+    let mandate_id = object::id(mandate);
+
+    event::emit(SpendExecuted {
+        mandate_id,
+        agent: ctx.sender(),
+        recipient,
+        amount,
+        remaining_cap: mandate.total_cap - mandate.spent,
+    });
+
+    // Transfer the coin to the recipient
+    transfer::public_transfer(payment, recipient);
+}
+
+/// Revoke a mandate. The owner destroys the mandate, preventing further use.
+/// The agent must present the mandate object for destruction.
+public fun revoke_mandate(
+    cap: &MandateOwnerCap,
+    mandate: SpendingMandate,
+) {
+    assert!(cap.mandate_id == object::id(&mandate), ENotMandateOwner);
+
+    let mandate_id = object::id(&mandate);
+    let owner = mandate.owner;
+
+    event::emit(MandateRevoked { mandate_id, owner });
+
+    let SpendingMandate {
+        id,
+        owner: _,
+        agent: _,
+        max_per_tx: _,
+        total_cap: _,
+        spent: _,
+        allowed_recipients: _,
+        expires_at_ms: _,
+    } = mandate;
+    id.delete();
+}
+
+/// Update the total cap on an existing mandate. Only the owner can call this.
+public fun update_cap(
+    cap: &MandateOwnerCap,
+    mandate: &mut SpendingMandate,
+    new_total_cap: u64,
+) {
+    assert!(cap.mandate_id == object::id(mandate), ENotMandateOwner);
+    mandate.total_cap = new_total_cap;
+}
+
+/// Add a recipient to the allowlist.
+public fun add_recipient(
+    cap: &MandateOwnerCap,
+    mandate: &mut SpendingMandate,
+    recipient: address,
+) {
+    assert!(cap.mandate_id == object::id(mandate), ENotMandateOwner);
+    if (!mandate.allowed_recipients.contains(&recipient)) {
+        mandate.allowed_recipients.push_back(recipient);
+    };
+}
+
+// === View functions ===
+
+public fun remaining_cap(mandate: &SpendingMandate): u64 {
+    mandate.total_cap - mandate.spent
+}
+
+public fun is_expired(mandate: &SpendingMandate, clock: &Clock): bool {
+    clock.timestamp_ms() >= mandate.expires_at_ms
+}
+```
+
+## Creating a mandate (owner side)
+
+The owner creates the mandate and receives a `MandateOwnerCap` for later administration. The function automatically transfers the mandate to the agent's address.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const PACKAGE_ID = '0xYOUR_PACKAGE';
+const ONE_DAY_MS = 86_400_000;
+
+const tx = new Transaction();
+
+// Create a mandate: max 10 SUI per tx, 100 SUI total, expires in 24 hours
+const [ownerCap] = tx.moveCall({
+  target: `${PACKAGE_ID}::spending_mandate::create_mandate`,
+  arguments: [
+    tx.pure.address(agentAddress),
+    tx.pure.u64(10_000_000_000),               // max_per_tx: 10 SUI
+    tx.pure.u64(100_000_000_000),              // total_cap: 100 SUI
+    tx.pure.vector('address', [recipientA, recipientB]),
+    tx.pure.u64(Date.now() + ONE_DAY_MS),      // expires_at_ms
+  ],
+});
+
+// Transfer the MandateOwnerCap to the owner (required — it has no `drop`)
+tx.transferObjects([ownerCap], ownerKeypair.toSuiAddress());
+
+const result = await client.signAndExecuteTransaction({
+  transaction: tx,
+  signer: ownerKeypair,
+});
+```
+
+## Executing a spend (agent side)
+
+The agent reads its `SpendingMandate` object, validates locally, then builds a PTB that calls `execute_spend` with the payment coin.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+// Split the payment coin from gas
+const [paymentCoin] = tx.splitCoins(tx.gas, [amount]);
+
+// Execute the spend through the mandate
+tx.moveCall({
+  target: `${PACKAGE_ID}::spending_mandate::execute_spend`,
+  typeArguments: ['0x2::sui::SUI'],
+  arguments: [
+    tx.object(mandateObjectId),    // SpendingMandate
+    paymentCoin,                   // Coin to send
+    tx.pure.address(recipient),    // Must be in allowlist
+    tx.object('0x6'),              // Clock
+  ],
+});
+
+const result = await client.signAndExecuteTransaction({
+  transaction: tx,
+  signer: agentKeypair,
+});
+```
+
+## Expiry and revocation
+
+### Time-based expiry
+
+The mandate includes an `expires_at_ms` timestamp. The `execute_spend` function checks `clock.timestamp_ms() < expires_at_ms` before every spend. Once the mandate expires, the agent can no longer use it. The owner does not need to take any action.
+
+### Owner-initiated revocation
+
+To revoke a mandate before it expires, the owner must retrieve the mandate object from the agent. In practice, this means the owner requests the agent to present the mandate in a PTB that calls `revoke_mandate`:
+
+```typescript
+const tx = new Transaction();
+
+tx.moveCall({
+  target: `${PACKAGE_ID}::spending_mandate::revoke_mandate`,
+  arguments: [
+    tx.object(mandateOwnerCapId),  // MandateOwnerCap
+    tx.object(mandateObjectId),    // SpendingMandate (agent must sign)
+  ],
+});
+```
+
+Because the agent owns the mandate object, the agent must co-sign this transaction. If the agent is unresponsive or compromised, the mandate still expires at `expires_at_ms`. Set short expiry windows for high-risk agents.
+
+:::tip Emergency kill-switch
+
+For an emergency stop that does not require the agent to cooperate, use a shared `AdminConfig` object with a `paused` flag. The `execute_spend` function checks this flag before processing. See [Production Hardening](/onchain-finance/agentic-payments/production-hardening) for the pattern.
+
+:::
+
+### Renewing a mandate
+
+To extend a mandate, the owner calls `update_cap` to increase the total cap or creates a new mandate with a later expiry. There is no `extend_expiry` function by design. Creating a new mandate with a fresh expiry is safer because it forces the owner to consciously re-authorize the agent.
+
+## Comparison with TokenPolicy
+
+| | SpendingMandate (custom) | TokenPolicy (framework) |
+|---|---|---|
+| **Asset type** | Any `Coin<T>` | `Token<T>` only (closed-loop) |
+| **Enforcement** | Your Move module | Framework `token` module |
+| **Scope** | Per-agent delegation | Per-token-type rules |
+| **Use case** | Agent spending caps | Loyalty points, in-game currency |
+| **Configurable rules** | You define them | Pluggable rule witnesses |
+
+Use `SpendingMandate` when your agent transacts with standard coins (SUI, USDC). Use `TokenPolicy` when you control the token type and want framework-level rule enforcement. See [Closed-Loop Token Spending](/onchain-finance/closed-loop-token/spending) for details.
+
+## Testing the mandate
+
+```move
+#[test]
+fun test_spend_within_limits() {
+    use sui::test_scenario;
+    use sui::clock;
+    use sui::coin;
+    use sui::sui::SUI;
+
+    let owner = @0xA;
+    let agent = @0xB;
+    let recipient = @0xC;
+
+    let mut scenario = test_scenario::begin(owner);
+
+    // Owner creates mandate
+    let owner_cap = create_mandate(
+        agent,
+        10_000_000_000,                // max 10 SUI per tx
+        100_000_000_000,               // 100 SUI total cap
+        vector[recipient],
+        1_000_000_000_000,             // far-future expiry
+        scenario.ctx(),
+    );
+
+    // Agent executes a spend
+    scenario.next_tx(agent);
+    let mut mandate = scenario.take_from_sender<SpendingMandate>();
+    let clock = clock::create_for_testing(scenario.ctx());
+    let payment = coin::mint_for_testing<SUI>(5_000_000_000, scenario.ctx());
+
+    execute_spend(&mut mandate, payment, recipient, &clock, scenario.ctx());
+    assert!(remaining_cap(&mandate) == 95_000_000_000);
+
+    // Clean up
+    test_scenario::return_to_sender(&scenario, mandate);
+    clock.destroy_for_testing();
+    transfer::public_transfer(owner_cap, owner);
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = EExceedsPerTxLimit)]
+fun test_spend_exceeds_per_tx_limit() {
+    use sui::test_scenario;
+    use sui::clock;
+    use sui::coin;
+    use sui::sui::SUI;
+
+    let owner = @0xA;
+    let agent = @0xB;
+    let recipient = @0xC;
+
+    let mut scenario = test_scenario::begin(owner);
+
+    let owner_cap = create_mandate(
+        agent,
+        10_000_000_000,
+        100_000_000_000,
+        vector[recipient],
+        1_000_000_000_000,
+        scenario.ctx(),
+    );
+
+    scenario.next_tx(agent);
+    let mut mandate = scenario.take_from_sender<SpendingMandate>();
+    let clock = clock::create_for_testing(scenario.ctx());
+
+    // Try to spend 20 SUI (exceeds 10 SUI per-tx limit)
+    let payment = coin::mint_for_testing<SUI>(20_000_000_000, scenario.ctx());
+    execute_spend(&mut mandate, payment, recipient, &clock, scenario.ctx());
+
+    // Clean up (unreachable)
+    test_scenario::return_to_sender(&scenario, mandate);
+    clock.destroy_for_testing();
+    transfer::public_transfer(owner_cap, owner);
+    scenario.end();
+}
+```

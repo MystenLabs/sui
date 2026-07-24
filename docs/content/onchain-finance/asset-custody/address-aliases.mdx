@@ -1,0 +1,90 @@
+---
+title: Address Aliases for Asset Custody
+description: >-
+  Use address aliases to allow multiple keys to act as a single Sui address,
+  enabling key rotation and account abstraction without asset migration.
+keywords:
+  - address aliases
+  - account abstraction
+  - key rotation
+  - AddressAliases
+  - alias management
+  - asset custody
+goal:
+  description: >-
+    Reader can use address aliases for key rotation and account
+    abstraction without migrating assets
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What are address aliases on Sui?
+  - How do I rotate keys without migrating assets on Sui?
+  - How do I use address aliases for agent authorization?
+answer: >-
+  Address aliases let you authorize additional Sui addresses to act as
+  your account. Aliases have full sender authority, enabling key rotation
+  without asset migration and agent delegation without object transfers.
+---
+
+Address aliases let you authorize additional Sui addresses to sign transactions on behalf of your account. This page covers how aliases apply to asset custody patterns. For the full API reference and CLI commands, see [Address Aliases](/develop/transactions/transaction-auth/address-aliases).
+
+:::warning
+
+All aliases for a given address have the ability to **unilaterally control or take** all coins, balances, and other resources owned by the address. Be extremely careful when making changes to your aliases.
+
+:::
+
+## Key rotation without asset migration
+
+Traditional key rotation on Sui requires transferring all objects and balances from the old address to the new one. With aliases, assets stay in place:
+
+1. Generate a new keypair (new address).
+2. Add the new address as an alias of the old address:
+   ```sh
+   sui client ptb \
+       --move-call sui::address_alias::add @<ALIASES_OBJECT_ID> @<NEW_ADDRESS> \
+       --gas-budget 50000000
+   ```
+3. Start signing transactions with the new key, setting the sender to the old address.
+4. Optionally remove the old key from the alias set once you've verified the new key works.
+
+No asset migration needed. All objects and balances stay at the original address.
+
+## Agent authorization
+
+Instead of transferring objects to an agent's address, add the agent as an alias. The agent signs transactions as your address, accessing your objects and balances directly. Revoke access at any time by removing the alias:
+
+```sh
+sui client ptb \
+    --move-call sui::address_alias::remove @<ALIASES_OBJECT_ID> @<AGENT_ADDRESS> \
+    --gas-budget 50000000
+```
+
+This is simpler than [spending mandates](/onchain-finance/agentic-payments/spending-policies) but offers no spending limits, since the agent has full authority over the aliased address. Use mandates when you need bounded spending; use aliases when you need full delegation to a trusted key.
+
+## Multisig-to-alias delegation
+
+A multisig account can add a single-key alias for operational speed. The alias has full sender authority. It can do anything the multisig can. Use this pattern only when you trust the alias holder completely. The benefit is that day-to-day transactions can be signed by the alias without gathering multiple signatures.
+
+:::danger Aliases have full authority
+
+An alias address has the same authority as the original address. It can transfer objects, spend balances, and call any function as the aliased address. Only add aliases for keys you fully trust.
+
+:::
+
+## Managing aliases
+
+The `AddressAliasState` singleton object lives at address `0xa`. Use `sui client ptb` to call entry functions in the `sui::address_alias` module. See [Address Aliases](/develop/transactions/transaction-auth/address-aliases) for the complete CLI reference, including `enable`, `add`, `remove`, and `replace_all` commands.
