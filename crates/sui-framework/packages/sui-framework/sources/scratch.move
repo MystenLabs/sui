@@ -22,7 +22,7 @@ public struct Permit<phantom K: copy + drop>() has copy, drop;
 /// Occupies a key's slot while `get_do`, `get_fold`, or their mutable variants have the value of
 /// type `V` removed, so nothing can add to or read the slot while the value is being "borrowed".
 /// Each one carries a transaction-unique id, so a marker cannot be forged to match one in use.
-public struct BorrowMarker<phantom V: drop>(u64) has copy, drop;
+public struct BorrowMarker<phantom V: drop>(u64) has drop;
 
 /// Key for the scratch entry that holds the monotonic counter backing `borrow_marker`.
 public struct BorrowMarkerKey() has copy, drop;
@@ -132,7 +132,7 @@ public fun begin_borrow<K: copy + drop, V: drop>(
 ): (V, BorrowMarker<V>) {
     let value = remove<K, V>(ctx, permit, key);
     let marker = borrow_marker<V>(ctx);
-    add(ctx, permit, key, marker);
+    add(ctx, permit, key, BorrowMarker<V>(marker.0));
     (value, marker)
 }
 

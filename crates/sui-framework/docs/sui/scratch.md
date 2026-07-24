@@ -102,7 +102,7 @@ type <code>V</code> removed, so nothing can add to or read the slot while the va
 Each one carries a transaction-unique id, so a marker cannot be forged to match one in use.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;<b>phantom</b> V: drop&gt; <b>has</b> <b>copy</b>, drop
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;<b>phantom</b> V: drop&gt; <b>has</b> drop
 </code></pre>
 
 
@@ -484,7 +484,7 @@ Aborts with <code><a href="../sui/scratch.md#sui_scratch_EEntryTypeMismatch">EEn
 ): (V, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;) {
     <b>let</b> value = <a href="../sui/scratch.md#sui_scratch_remove">remove</a>&lt;K, V&gt;(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key);
     <b>let</b> marker = <a href="../sui/scratch.md#sui_scratch_borrow_marker">borrow_marker</a>&lt;V&gt;(ctx);
-    <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, marker);
+    <a href="../sui/scratch.md#sui_scratch_add">add</a>(ctx, <a href="../sui/scratch.md#sui_scratch_permit">permit</a>, key, <a href="../sui/scratch.md#sui_scratch_BorrowMarker">BorrowMarker</a>&lt;V&gt;(marker.0));
     (value, marker)
 }
 </code></pre>
