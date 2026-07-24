@@ -30,10 +30,9 @@ pub(crate) struct KvMetrics {
     pub kv_bt_read_rows_started_total: IntCounterVec,
     pub kv_bt_chunk_rows_returned_count: IntCounterVec,
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
-    pub kv_bt_flow_control_enabled: IntGaugeVec,
-    pub kv_bt_flow_control_target_qps: GaugeVec,
-    pub kv_bt_flow_control_demand_qps: GaugeVec,
-    pub kv_bt_flow_control_latency_brake: GaugeVec,
+    pub kv_bt_flow_control_limited: IntGaugeVec,
+    pub kv_bt_flow_control_effective_qps: GaugeVec,
+    pub kv_bt_flow_control_observed_start_qps: GaugeVec,
     pub kv_bt_flow_control_write_latency_ms: GaugeVec,
     pub kv_bt_flow_control_write_latency_baseline_ms: GaugeVec,
     pub kv_bt_flow_control_throttle_ms: HistogramVec,
@@ -176,30 +175,23 @@ impl KvMetrics {
                 registry,
             )
             .unwrap(),
-            kv_bt_flow_control_enabled: register_int_gauge_vec_with_registry!(
-                "kv_bt_flow_control_enabled",
-                "Whether BigTable adaptive batch-write admission throttling is active",
+            kv_bt_flow_control_limited: register_int_gauge_vec_with_registry!(
+                "kv_bt_flow_control_limited",
+                "Whether BigTable batch-write admission has a finite effective rate limit",
                 &["client"],
                 registry,
             )
             .unwrap(),
-            kv_bt_flow_control_target_qps: register_gauge_vec_with_registry!(
-                "kv_bt_flow_control_target_qps",
-                "Current target MutateRows requests per second from BigTable flow control",
+            kv_bt_flow_control_effective_qps: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_effective_qps",
+                "Effective MutateRows admission limit in requests per second",
                 &["client"],
                 registry,
             )
             .unwrap(),
-            kv_bt_flow_control_demand_qps: register_gauge_vec_with_registry!(
-                "kv_bt_flow_control_demand_qps",
-                "Observed MutateRows demand in requests per second between BigTable flow-control rate evaluations",
-                &["client"],
-                registry,
-            )
-            .unwrap(),
-            kv_bt_flow_control_latency_brake: register_gauge_vec_with_registry!(
-                "kv_bt_flow_control_latency_brake",
-                "Latency-brake multiplier applied to the BigTable flow-control target rate (1.0 = fully released)",
+            kv_bt_flow_control_observed_start_qps: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_observed_start_qps",
+                "MutateRows start rate from the most recently completed flow-control observation",
                 &["client"],
                 registry,
             )
@@ -213,7 +205,7 @@ impl KvMetrics {
             .unwrap(),
             kv_bt_flow_control_write_latency_baseline_ms: register_gauge_vec_with_registry!(
                 "kv_bt_flow_control_write_latency_baseline_ms",
-                "Learned healthy-baseline MutateRows RPC latency for the flow-control latency brake",
+                "Learned healthy-baseline MutateRows RPC latency used for flow-control classification",
                 &["client"],
                 registry,
             )

@@ -31,6 +31,7 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use tonic::Code;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
@@ -41,6 +42,7 @@ use channel_pool::ChannelPool;
 use channel_pool::ChannelPrimer;
 pub use channel_pool::PoolConfig;
 use flow_control::BatchWriteFlowController;
+use flow_control::is_overload_error;
 
 use crate::CheckpointData;
 use crate::EpochData;
@@ -148,7 +150,7 @@ pub struct BigTableClient {
 
 impl BigTableClient {
     pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
-        Self::new_for_host(host, instance_id, "local").await
+        Self::new_for_host(host, instance_id, "local", false).await
     }
 
     /// Create a client connected to a specific host.
@@ -157,6 +159,7 @@ impl BigTableClient {
         host: String,
         instance_id: String,
         client_name: &str,
+        batch_write_flow_control: bool,
     ) -> Result<Self> {
         let endpoint = Channel::from_shared(format!("http://{host}"))?;
         let pool =
@@ -165,14 +168,17 @@ impl BigTableClient {
             pool,
             "https://www.googleapis.com/auth/bigtable.data".to_string(),
             None,
-            bigtable_features_header(false),
+            bigtable_features_header(batch_write_flow_control),
         );
+        let client_name = client_name.to_string();
+        let flow_controller = batch_write_flow_control
+            .then(|| BatchWriteFlowController::new(client_name.clone(), None));
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
-            client_name: client_name.to_string(),
+            client_name,
             metrics: None,
-            flow_controller: None,
+            flow_controller,
             app_profile_id: None,
         })
     }
@@ -270,20 +276,6 @@ impl BigTableClient {
             flow_controller,
             app_profile_id,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_batch_write_flow_control(mut self) -> Self {
-        self.flow_controller = Some(BatchWriteFlowController::new(
-            self.client_name.clone(),
-            None,
-        ));
-        self
-    }
-
-    #[cfg(test)]
-    pub(crate) fn flow_controller(&self) -> Option<&Arc<BatchWriteFlowController>> {
-        self.flow_controller.as_ref()
     }
 
     /// Fetch transactions with an optional column filter for partial reads.
@@ -686,32 +678,41 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        if let Some(flow_controller) = &self.flow_controller {
-            flow_controller.acquire().await;
-        }
-        let write_started = Instant::now();
+        let write_admission = match &self.flow_controller {
+            Some(flow_controller) => Some(flow_controller.admit_rpc().await),
+            None => None,
+        };
         let mut response = match self.client.clone().mutate_rows(request).await {
             Ok(response) => response.into_inner(),
             Err(status) => {
-                if let Some(flow_controller) = &self.flow_controller {
-                    flow_controller.on_error(&status);
+                if let Some(write_admission) = write_admission {
+                    write_admission.fail(status.code());
                 }
                 return Err(status.into());
             }
         };
         let mut failed_keys: Vec<MutationError> = Vec::new();
+        let mut overload_error = None;
 
         loop {
             match response.message().await {
                 Ok(Some(part)) => {
-                    if let Some(flow_controller) = &self.flow_controller {
-                        flow_controller.on_response(part.rate_limit_info.as_ref());
+                    if let Some(write_admission) = write_admission.as_ref() {
+                        write_admission.on_server_feedback(part.rate_limit_info.as_ref());
                     }
                     for entry in part.entries {
-                        if let Some(status) = entry.status
-                            && status.code != 0
-                            && let Some(key) = row_keys.get(entry.index as usize)
-                        {
+                        let Some(status) = entry.status else {
+                            continue;
+                        };
+                        if status.code == 0 {
+                            continue;
+                        }
+
+                        let code = Code::from_i32(status.code);
+                        if overload_error.is_none() && is_overload_error(code) {
+                            overload_error = Some(code);
+                        }
+                        if let Some(key) = row_keys.get(entry.index as usize) {
                             failed_keys.push(MutationError {
                                 key: key.clone(),
                                 code: status.code,
@@ -722,15 +723,19 @@ impl BigTableClient {
                 }
                 Ok(None) => break,
                 Err(status) => {
-                    if let Some(flow_controller) = &self.flow_controller {
-                        flow_controller.on_error(&status);
+                    if let Some(write_admission) = write_admission {
+                        write_admission.fail(status.code());
                     }
                     return Err(status.into());
                 }
             }
         }
-        if let Some(flow_controller) = &self.flow_controller {
-            flow_controller.record_write_latency(write_started.elapsed());
+        if let Some(write_admission) = write_admission {
+            if let Some(code) = overload_error {
+                write_admission.fail(code);
+            } else {
+                write_admission.complete();
+            }
         }
 
         if !failed_keys.is_empty() {
@@ -2225,6 +2230,7 @@ fn column_exists_filter(column: &str) -> RowFilter {
 
 #[cfg(test)]
 mod tests {
+    use crate::bigtable::mock_server::ExpectedCall;
     use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
     use futures::{TryStreamExt, stream};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -2235,8 +2241,12 @@ mod tests {
         Ok((Bytes::from(sequence.to_be_bytes().to_vec()), Vec::new()))
     }
 
-    #[tokio::test]
-    async fn mutate_rows_rate_limit_hint_drives_flow_control_end_to_end() {
+    #[tokio::test(start_paused = true)]
+    async fn mutate_rows_starts_capped_and_applies_decrease_end_to_end() {
+        const OBSERVED_STARTS: usize = 10;
+        const MIN_INITIAL_BATCH_TIME: Duration = Duration::from_millis(900);
+        const MIN_REDUCED_RATE_INTERVAL: Duration = Duration::from_millis(140);
+
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
         let make_entry = || {
@@ -2247,12 +2257,14 @@ mod tests {
             )
         };
 
-        let mut client =
-            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "flow-control")
-                .await
-                .unwrap()
-                .with_batch_write_flow_control();
-        let controller = client.flow_controller().unwrap().clone();
+        let mut client = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "flow-control",
+            true,
+        )
+        .await
+        .unwrap();
         mock.set_mutate_rows_rate_limit_info(Some(RateLimitInfo {
             period: Some(prost_types::Duration {
                 seconds: 1,
@@ -2266,30 +2278,31 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        assert!(controller.is_rate_limit_active());
-        assert_eq!(controller.current_qps(), 7.0);
 
-        client
-            .write_entries("flow-control", [make_entry()])
-            .await
-            .unwrap();
-        assert_eq!(controller.current_qps(), 7.0);
+        let initial_batch_started_at = tokio::time::Instant::now();
+        let writes = (0..OBSERVED_STARTS).map(|_| {
+            let mut client = client.clone();
+            let entry = make_entry();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        futures::future::try_join_all(writes).await.unwrap();
+        assert!(
+            initial_batch_started_at.elapsed() >= MIN_INITIAL_BATCH_TIME,
+            "initial batch completed in {:?}",
+            initial_batch_started_at.elapsed()
+        );
 
-        mock.set_mutate_rows_rate_limit_info(Some(RateLimitInfo {
-            period: Some(prost_types::Duration {
-                seconds: 1,
-                nanos: 0,
-            }),
-            factor: 2.0,
-        }))
-        .await;
         tokio::time::sleep(Duration::from_millis(1100)).await;
         client
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        assert!(controller.is_rate_limit_active());
-        assert_eq!(controller.current_qps(), 7.0);
+        let reduced_rate_started_at = tokio::time::Instant::now();
+        client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap();
+        assert!(reduced_rate_started_at.elapsed() >= MIN_REDUCED_RATE_INTERVAL);
 
         mock.set_mutate_rows_rate_limit_info(None).await;
         tokio::time::sleep(Duration::from_millis(1100)).await;
@@ -2297,18 +2310,85 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        assert!(!controller.is_rate_limit_active());
-        assert_eq!(controller.current_qps(), 7.0);
-
-        let mut default_client =
-            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "default-off")
-                .await
-                .unwrap();
-        assert!(default_client.flow_controller().is_none());
-        default_client
+        let persisted_rate_started_at = tokio::time::Instant::now();
+        client
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
+        assert!(persisted_rate_started_at.elapsed() >= MIN_REDUCED_RATE_INTERVAL);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn partial_overload_error_reduces_rate_without_server_feedback() {
+        const OBSERVED_STARTS: usize = 10;
+        const EARLY_ARRIVAL_WINDOW: Duration = Duration::from_millis(120);
+        const ROW_KEY: &[u8] = b"overloaded-row";
+
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        mock.expect(ExpectedCall {
+            row_keys: vec![ROW_KEY],
+            failures: HashMap::from([(0, Code::ResourceExhausted as i32)]),
+        })
+        .await;
+        let (addr, _handle) = mock.start().await.unwrap();
+        let make_entry = || {
+            tables::make_entry(
+                Bytes::from_static(ROW_KEY),
+                [("col", Bytes::from_static(b"value"))],
+                None,
+            )
+        };
+        let mut client = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "partial-overload",
+            true,
+        )
+        .await
+        .unwrap();
+
+        let error = client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap_err();
+        let partial = error.downcast_ref::<PartialWriteError>().unwrap();
+        assert_eq!(partial.failed_keys[0].code, Code::ResourceExhausted as i32);
+
+        let writes = (0..OBSERVED_STARTS).map(|_| {
+            let mut client = client.clone();
+            let entry = make_entry();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        futures::future::try_join_all(writes).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap();
+        let first_gate = mock.pause_next_mutate_rows().await;
+        let first_write = tokio::spawn({
+            let mut client = client.clone();
+            let entry = make_entry();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        first_gate.wait_for_arrival().await;
+
+        let mut second_write = tokio::spawn({
+            let mut client = client.clone();
+            let entry = make_entry();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        assert!(
+            tokio::time::timeout(EARLY_ARRIVAL_WINDOW, &mut second_write)
+                .await
+                .is_err(),
+            "second request was admitted at the initial 10 QPS rate"
+        );
+
+        first_gate.release();
+        first_write.await.unwrap().unwrap();
+        second_write.await.unwrap().unwrap();
     }
 
     fn decode_sequence_only(key: Bytes, _cells: Vec<(Bytes, Bytes)>) -> Result<(u64, u64)> {
@@ -2416,7 +2496,7 @@ mod tests {
         let registry = Registry::new();
         let host = addr.to_string();
         let name = "empty-client";
-        let mut client = BigTableClient::new_for_host(host, "test".into(), name)
+        let mut client = BigTableClient::new_for_host(host, "test".into(), name, false)
             .await
             .unwrap();
         client.metrics = Some(KvMetrics::new(&registry));
@@ -2542,9 +2622,10 @@ mod tests {
     async fn get_transactions_stream_splits_digest_batches_at_max() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
-        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
-            .await
-            .unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
 
         let n = MAX_TX_DIGESTS_PER_REQUEST + 1;
         let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
@@ -2576,9 +2657,10 @@ mod tests {
     async fn get_transactions_stream_empty_digest_list_issues_no_read() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
-        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
-            .await
-            .unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
 
         let stream = client
             .get_transactions_stream(Vec::new(), None)

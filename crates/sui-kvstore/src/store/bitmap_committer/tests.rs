@@ -91,7 +91,7 @@ async fn setup_without_init_watermark() -> (MockBigtableServer, BigTableStore, B
     let mock = MockBigtableServer::new();
     let (addr, handle) = mock.start().await.unwrap();
     std::mem::forget(handle);
-    let client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
+    let client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
         .await
         .unwrap();
     let store = BigTableStore::new(client.clone());

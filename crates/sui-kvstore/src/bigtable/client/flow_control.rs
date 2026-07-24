@@ -1,51 +1,49 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Adaptive Bigtable batch-write flow control keeps batch traffic within recently exercised
-//! capacity. Bigtable's rate hints regulate write throughput, but demand-backed increases can
-//! outpace node autoscaling and tablet rebalancing, degrading latency for reads that share the
-//! cluster before the server sends a decrease. Decreases apply immediately, while increases
-//! require demand near the current target. When `MutateRows` latency rises above its learned
-//! healthy baseline, a latency brake lowers admission and pauses upward growth until autoscaling
-//! catches up. Sustained idle targets decay toward observed demand so bursts cannot inherit an
-//! untested rate.
+//! Bigtable batch-write flow control starts configured clients at a conservative `MutateRows`
+//! admission rate, then derives later limits from observed RPC starts. Server decreases,
+//! qualifying RPC errors, and write latency contribute feedback to complete observation windows.
+//! Rate increases require both an absolute-safe latency and a healthy relative baseline.
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use tokio::time::Instant;
 use tonic::Code;
-use tonic::Status;
 use tracing::info;
 
 use crate::bigtable::metrics::KvMetrics;
 use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
 
-const DEFAULT_QPS: f64 = 10.0;
 const DEFAULT_PERIOD: Duration = Duration::from_secs(10);
+const OBSERVATION_WINDOW: Duration = Duration::from_secs(1);
+const LATENCY_EVALUATION_PERIOD: Duration = Duration::from_secs(10);
+const INITIAL_QPS: f64 = 10.0;
 const MIN_QPS: f64 = 0.1;
 const MAX_QPS: f64 = 100_000.0;
 const MIN_FACTOR: f64 = 0.7;
 const MAX_FACTOR: f64 = 1.3;
-const UPWARD_UTILIZATION_THRESHOLD: f64 = 0.8;
-const IDLE_UTILIZATION_THRESHOLD: f64 = 0.2;
-const IDLE_EVALS_BEFORE_DECAY: u32 = 6;
-const IDLE_DECAY_FACTOR: f64 = 0.7;
-const MIN_UTILIZATION_WINDOW: Duration = Duration::from_secs(1);
-const LATENCY_BRAKE_MIN: f64 = 0.1;
-const LATENCY_BRAKE_CUT_FACTOR: f64 = 0.7;
-const LATENCY_BRAKE_RELEASE_FACTOR: f64 = 1.05;
+const HEALTHY_RECOVERY_FACTOR: f64 = 1.05;
 const ELEVATED_LATENCY_RATIO: f64 = 1.5;
+// Never learn a multi-second startup as healthy. One second is the maximum completion time this
+// controller treats as safe while probing upward.
+const MAX_HEALTHY_WRITE_LATENCY_MICROS: f64 = 1_000_000.0;
 const SEVERE_LATENCY_RATIO: f64 = 3.0;
 const BASELINE_EWMA_ALPHA: f64 = 0.2;
 const BASELINE_STALE_EVALS: u32 = 90;
 const BASELINE_STALE_ALPHA: f64 = 0.05;
 const MIN_WINDOW_SAMPLES: u64 = 5;
 
+pub(super) fn is_overload_error(code: Code) -> bool {
+    matches!(
+        code,
+        Code::DeadlineExceeded | Code::Unavailable | Code::ResourceExhausted
+    )
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum WriteLatencyCondition {
     Healthy,
     Elevated,
@@ -56,7 +54,10 @@ fn classify_write_latency(
     window_avg_micros: f64,
     baseline_micros: Option<f64>,
 ) -> WriteLatencyCondition {
-    if baseline_micros.is_some_and(|baseline| window_avg_micros > SEVERE_LATENCY_RATIO * baseline) {
+    if window_avg_micros > MAX_HEALTHY_WRITE_LATENCY_MICROS
+        || baseline_micros
+            .is_some_and(|baseline| window_avg_micros > SEVERE_LATENCY_RATIO * baseline)
+    {
         WriteLatencyCondition::Severe
     } else if baseline_micros
         .is_some_and(|baseline| window_avg_micros > ELEVATED_LATENCY_RATIO * baseline)
@@ -67,23 +68,123 @@ fn classify_write_latency(
     }
 }
 
-struct UpdateState {
-    next_update_time: Instant,
-    window_started_at: Instant,
-    underutilized_evals: u32,
+struct ObservationWindow {
+    started_at: Instant,
+    rpc_starts: u64,
+}
+
+#[derive(Default)]
+struct PendingFeedback {
+    server_factor: Option<f64>,
+    local_factor: Option<f64>,
+    server_period: Option<Duration>,
+}
+
+impl PendingFeedback {
+    fn combined_factor(&self) -> Option<f64> {
+        match (self.server_factor, self.local_factor) {
+            (Some(server_factor), Some(local_factor)) => Some(server_factor.min(local_factor)),
+            (Some(server_factor), None) => Some(server_factor),
+            (None, Some(local_factor)) => Some(local_factor),
+            (None, None) => None,
+        }
+    }
+
+    fn allows_growth(&self) -> bool {
+        self.local_factor
+            .is_some_and(|local_factor| local_factor > 1.0)
+    }
+
+    fn discard_growth_feedback(&mut self) {
+        if !self.allows_growth() {
+            return;
+        }
+        self.server_factor = self.server_factor.filter(|factor| *factor <= 1.0);
+        self.local_factor = self.local_factor.filter(|factor| *factor <= 1.0);
+        self.server_period = self.server_factor.and(self.server_period);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.server_factor.is_none() && self.local_factor.is_none()
+    }
+}
+
+struct ControllerState {
+    effective_qps: f64,
+    // Rate changes invalidate sleeping reservations and latency samples from the prior rate.
+    rate_generation: u64,
+    next_permit_at: Instant,
+    observation: Option<ObservationWindow>,
+    pending: PendingFeedback,
+    next_server_update_at: Instant,
+    next_latency_evaluation_at: Instant,
+    latency_total_micros: u64,
+    latency_samples: u64,
     baseline_write_latency_micros: Option<f64>,
     non_healthy_evals: u32,
 }
 
+impl ControllerState {
+    fn restart_or_close_empty_observation(&mut self, now: Instant) {
+        self.pending.discard_growth_feedback();
+        if self.pending.is_empty() {
+            self.observation = None;
+            return;
+        }
+        self.observation
+            .as_mut()
+            .expect("observed feedback window disappeared")
+            .started_at = now;
+    }
+
+    fn reserve_permit(&mut self, now: Instant) -> PermitReservation {
+        let permit_interval = Duration::from_secs_f64(1.0 / self.effective_qps);
+        let permit_at = self.next_permit_at.max(now);
+        self.next_permit_at = permit_at + permit_interval;
+        PermitReservation {
+            wait: permit_at.saturating_duration_since(now),
+            rate_generation: self.rate_generation,
+        }
+    }
+
+    fn complete_reservation(&mut self, reservation: PermitReservation) -> bool {
+        if reservation.rate_generation != self.rate_generation {
+            return false;
+        }
+        if let Some(observation) = self.observation.as_mut() {
+            observation.rpc_starts = observation.rpc_starts.saturating_add(1);
+        }
+        true
+    }
+}
+
+struct RateUpdate {
+    observed_start_qps: f64,
+    effective_qps: f64,
+}
+
+#[must_use = "write admissions must be completed with the RPC outcome"]
+pub(crate) struct WriteAdmission<'a> {
+    flow_controller: &'a BatchWriteFlowController,
+    started_at: Instant,
+    rate_generation: u64,
+}
+
+#[derive(Clone, Copy)]
+struct PermitReservation {
+    wait: Duration,
+    rate_generation: u64,
+}
+
+struct LatencyEvaluation {
+    window_avg_micros: f64,
+    baseline_micros: Option<f64>,
+    condition: WriteLatencyCondition,
+    started_observation: bool,
+}
+
 pub(crate) struct BatchWriteFlowController {
-    rate_limit_active: AtomicBool,
-    target_qps: AtomicU64,
-    update_state: Mutex<UpdateState>,
-    window_requests: AtomicU64,
-    latency_brake: AtomicU64,
-    window_latency_total_micros: AtomicU64,
-    window_latency_samples: AtomicU64,
-    next_permit_at: Mutex<Instant>,
+    state: Mutex<ControllerState>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
 }
@@ -92,292 +193,294 @@ impl BatchWriteFlowController {
     pub(crate) fn new(client_name: String, metrics: Option<Arc<KvMetrics>>) -> Arc<Self> {
         let now = Instant::now();
         let controller = Arc::new(Self {
-            rate_limit_active: AtomicBool::new(false),
-            target_qps: AtomicU64::new(DEFAULT_QPS.to_bits()),
-            update_state: Mutex::new(UpdateState {
-                next_update_time: now,
-                window_started_at: now,
-                underutilized_evals: 0,
+            state: Mutex::new(ControllerState {
+                effective_qps: INITIAL_QPS,
+                rate_generation: 0,
+                next_permit_at: now,
+                observation: None,
+                pending: PendingFeedback::default(),
+                next_server_update_at: now,
+                next_latency_evaluation_at: now + LATENCY_EVALUATION_PERIOD,
+                latency_total_micros: 0,
+                latency_samples: 0,
                 baseline_write_latency_micros: None,
                 non_healthy_evals: 0,
             }),
-            window_requests: AtomicU64::new(0),
-            latency_brake: AtomicU64::new(1.0f64.to_bits()),
-            window_latency_total_micros: AtomicU64::new(0),
-            window_latency_samples: AtomicU64::new(0),
-            next_permit_at: Mutex::new(now),
             client_name,
             metrics,
         });
 
+        if let Some(metrics) = &controller.metrics {
+            metrics
+                .kv_bt_flow_control_limited
+                .with_label_values(&[&controller.client_name])
+                .set(1);
+            metrics
+                .kv_bt_flow_control_effective_qps
+                .with_label_values(&[&controller.client_name])
+                .set(INITIAL_QPS);
+            metrics
+                .kv_bt_flow_control_observed_start_qps
+                .with_label_values(&[&controller.client_name])
+                .set(0.0);
+        }
         info!(
-            "Batch write flow control: admission throttling initialized inactive at {DEFAULT_QPS} QPS"
+            effective_qps = INITIAL_QPS,
+            "Batch write flow control: admission initialized"
         );
         controller
     }
 
-    pub(crate) async fn acquire(&self) {
-        self.window_requests.fetch_add(1, Ordering::Relaxed);
-        if !self.rate_limit_active.load(Ordering::Relaxed) {
-            return;
-        }
-
-        let qps = (self.current_qps_value() * self.current_latency_brake_value()).max(MIN_QPS);
-        let permit_interval = Duration::from_secs_f64(1.0 / qps);
-        let wait = {
-            let mut next_permit_at = self
-                .next_permit_at
-                .lock()
-                .expect("flow-control admission mutex poisoned");
-            let now = Instant::now();
-            let wait = next_permit_at.saturating_duration_since(now);
-            *next_permit_at = (*next_permit_at).max(now) + permit_interval;
-            wait
-        };
-
-        if let Some(metrics) = &self.metrics {
-            metrics
-                .kv_bt_flow_control_throttle_ms
-                .with_label_values(&[&self.client_name])
-                .observe(wait.as_secs_f64() * 1_000.0);
-        }
-
-        tokio::time::sleep(wait).await;
-    }
-
-    pub(crate) fn on_response(&self, info: Option<&RateLimitInfo>) {
-        let Some(info) = info.filter(|info| {
-            info.factor > 0.0
-                && info
-                    .period
-                    .as_ref()
-                    .is_some_and(|period| period.seconds > 0)
-        }) else {
-            self.try_deactivate_rate_limit();
-            return;
-        };
-
-        let period = Duration::from_secs(
-            info.period
-                .as_ref()
-                .expect("validated rate limit info has a period")
-                .seconds as u64,
-        );
-        self.update_qps(info.factor, period, true);
-    }
-
-    pub(crate) fn on_error(&self, status: &Status) {
-        if !matches!(
-            status.code(),
-            Code::DeadlineExceeded | Code::Unavailable | Code::ResourceExhausted
-        ) {
-            return;
-        }
-
-        self.increment_rate_update("error-signal");
-        self.update_qps(MIN_FACTOR, DEFAULT_PERIOD, false);
-    }
-
-    fn update_qps(&self, factor: f64, period: Duration, from_server_hint: bool) {
-        let capped_factor = factor.clamp(MIN_FACTOR, MAX_FACTOR);
-        let now = Instant::now();
-        let mut state = self
-            .update_state
-            .lock()
-            .expect("flow-control update mutex poisoned");
-        if from_server_hint {
-            self.activate_rate_limit();
-        }
-        if now < state.next_update_time {
-            self.increment_rate_update("rejected");
-            return;
-        }
-
-        // Each decision consumes one update period, keeping demand windows at least one period
-        // long after the first evaluation.
-        let requests = self.window_requests.swap(0, Ordering::Relaxed);
-        let elapsed = now
-            .saturating_duration_since(state.window_started_at)
-            .max(MIN_UTILIZATION_WINDOW);
-        let demand_qps = requests as f64 / elapsed.as_secs_f64();
-        state.window_started_at = now;
-        state.next_update_time = now + period;
-        if let Some(metrics) = &self.metrics {
-            metrics
-                .kv_bt_flow_control_demand_qps
-                .with_label_values(&[&self.client_name])
-                .set(demand_qps);
-        }
-
-        // Load before swapping so sparse traffic remains accumulated until there are enough
-        // samples for a meaningful latency window.
-        let samples = self.window_latency_samples.load(Ordering::Relaxed);
-        if samples >= MIN_WINDOW_SAMPLES {
-            let samples = self.window_latency_samples.swap(0, Ordering::Relaxed);
-            let total_micros = self.window_latency_total_micros.swap(0, Ordering::Relaxed);
-            let window_avg_micros = total_micros as f64 / samples as f64;
-            let latency_condition =
-                classify_write_latency(window_avg_micros, state.baseline_write_latency_micros);
-            let latency_brake = self.current_latency_brake_value();
-
-            match latency_condition {
-                WriteLatencyCondition::Severe => {
-                    state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
-                    let latency_brake_cut =
-                        (latency_brake * LATENCY_BRAKE_CUT_FACTOR).max(LATENCY_BRAKE_MIN);
-                    self.latency_brake
-                        .store(latency_brake_cut.to_bits(), Ordering::Relaxed);
-                    self.increment_rate_update("latency-brake-cut");
-                    info!(
-                        window_avg_ms = window_avg_micros / 1_000.0,
-                        latency_brake = latency_brake_cut,
-                        "Batch write flow control: latency brake engaged"
-                    );
-                }
-                WriteLatencyCondition::Elevated => {
-                    state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
-                    if state.non_healthy_evals >= BASELINE_STALE_EVALS
-                        && let Some(baseline) = state.baseline_write_latency_micros.as_mut()
-                    {
-                        *baseline += BASELINE_STALE_ALPHA * (window_avg_micros - *baseline);
-                    }
-                }
-                WriteLatencyCondition::Healthy => {
-                    state.non_healthy_evals = 0;
-                    let baseline = state
-                        .baseline_write_latency_micros
-                        .get_or_insert(window_avg_micros);
-                    *baseline += BASELINE_EWMA_ALPHA * (window_avg_micros - *baseline);
-                    if latency_brake < 1.0 {
-                        let released_latency_brake =
-                            (latency_brake * LATENCY_BRAKE_RELEASE_FACTOR).min(1.0);
-                        self.latency_brake
-                            .store(released_latency_brake.to_bits(), Ordering::Relaxed);
-                        self.increment_rate_update("latency-brake-release");
-                    }
-                }
+    pub(crate) async fn admit_rpc(&self) -> WriteAdmission<'_> {
+        let mut total_wait = Duration::ZERO;
+        loop {
+            let (rate_update, reservation) = {
+                let mut state = self
+                    .state
+                    .lock()
+                    .expect("flow-control state mutex poisoned");
+                let now = Instant::now();
+                let rate_update = Self::finish_observation_if_ready(&mut state, now);
+                let reservation = state.reserve_permit(now);
+                (rate_update, reservation)
+            };
+            if let Some(rate_update) = rate_update {
+                self.emit_rate_update_telemetry(rate_update);
             }
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .kv_bt_flow_control_latency_brake
-                    .with_label_values(&[&self.client_name])
-                    .set(self.current_latency_brake_value());
-                metrics
-                    .kv_bt_flow_control_write_latency_ms
-                    .with_label_values(&[&self.client_name])
-                    .set(window_avg_micros / 1_000.0);
-                if let Some(baseline) = state.baseline_write_latency_micros {
+            total_wait = total_wait.saturating_add(reservation.wait);
+            if !reservation.wait.is_zero() {
+                tokio::time::sleep(reservation.wait).await;
+            }
+
+            let (rate_update, admitted) = {
+                let mut state = self
+                    .state
+                    .lock()
+                    .expect("flow-control state mutex poisoned");
+                let now = Instant::now();
+                let rate_update = Self::finish_observation_if_ready(&mut state, now);
+                let admitted = state.complete_reservation(reservation);
+                (rate_update, admitted)
+            };
+            if let Some(rate_update) = rate_update {
+                self.emit_rate_update_telemetry(rate_update);
+            }
+            if admitted {
+                if let Some(metrics) = &self.metrics {
                     metrics
-                        .kv_bt_flow_control_write_latency_baseline_ms
+                        .kv_bt_flow_control_throttle_ms
                         .with_label_values(&[&self.client_name])
-                        .set(baseline / 1_000.0);
+                        .observe(total_wait.as_secs_f64() * 1_000.0);
                 }
+                return WriteAdmission {
+                    flow_controller: self,
+                    started_at: Instant::now(),
+                    rate_generation: reservation.rate_generation,
+                };
             }
         }
-
-        let current_qps = self.current_qps_value();
-        let utilization = demand_qps / current_qps;
-
-        if capped_factor < 1.0 {
-            self.set_rate(
-                (current_qps * capped_factor).clamp(MIN_QPS, MAX_QPS),
-                "applied",
-            );
-            return;
-        }
-
-        if utilization >= UPWARD_UTILIZATION_THRESHOLD {
-            if self.current_latency_brake_value() < 1.0 {
-                state.underutilized_evals = 0;
-                self.increment_rate_update("latency-braked");
-                info!(
-                    factor,
-                    "Batch write flow control: upward hint frozen while latency brake engaged"
-                );
-                return;
-            }
-            state.underutilized_evals = 0;
-            self.set_rate(
-                (current_qps * capped_factor).clamp(MIN_QPS, MAX_QPS),
-                "applied",
-            );
-            return;
-        }
-
-        if utilization < IDLE_UTILIZATION_THRESHOLD {
-            state.underutilized_evals = state.underutilized_evals.saturating_add(1);
-        } else if state.underutilized_evals < IDLE_EVALS_BEFORE_DECAY {
-            state.underutilized_evals = 0;
-        }
-
-        // Once sustained idleness starts decay, continue toward the demand floor through the
-        // middle utilization band. A binding target resets this state in the branch above.
-        if state.underutilized_evals >= IDLE_EVALS_BEFORE_DECAY {
-            let floor = DEFAULT_QPS.max(demand_qps / UPWARD_UTILIZATION_THRESHOLD);
-            let decayed = (current_qps * IDLE_DECAY_FACTOR).max(floor);
-            if decayed < current_qps {
-                self.set_rate(decayed, "idle-decay");
-                return;
-            }
-        }
-
-        self.increment_rate_update("suppressed");
-        info!(
-            demand_qps,
-            target_qps = current_qps,
-            factor,
-            "Batch write flow control: upward hint suppressed (target not tested by demand)"
-        );
     }
 
-    fn set_rate(&self, new_qps: f64, kind: &'static str) {
-        let old_qps = self.current_qps_value();
-        self.target_qps.store(new_qps.to_bits(), Ordering::Relaxed);
-        info!(
-            old_qps,
-            new_qps, kind, "Batch write flow control: target rate updated"
-        );
+    fn finish_observation_if_ready(
+        state: &mut ControllerState,
+        now: Instant,
+    ) -> Option<RateUpdate> {
+        let observation = state.observation.as_ref()?;
+        let elapsed = now.saturating_duration_since(observation.started_at);
+        if elapsed < OBSERVATION_WINDOW {
+            return None;
+        }
+        if observation.rpc_starts == 0 {
+            state.restart_or_close_empty_observation(now);
+            return None;
+        }
+
+        let observed_start_qps = observation.rpc_starts as f64 / elapsed.as_secs_f64();
+        let factor = state
+            .pending
+            .combined_factor()
+            .expect("an observation requires pending feedback");
+        let growth_allowed = state.pending.allows_growth();
+        let candidate_qps = (observed_start_qps * factor).clamp(MIN_QPS, MAX_QPS);
+        let effective_qps = if growth_allowed {
+            candidate_qps
+        } else {
+            candidate_qps.min(state.effective_qps)
+        };
+        if effective_qps != state.effective_qps {
+            state.effective_qps = effective_qps;
+            state.rate_generation = state.rate_generation.saturating_add(1);
+            state.latency_total_micros = 0;
+            state.latency_samples = 0;
+            state.next_latency_evaluation_at = now + LATENCY_EVALUATION_PERIOD;
+            state.next_permit_at = now;
+        }
+        if state.pending.server_factor.is_some() {
+            state.next_server_update_at =
+                now + state.pending.server_period.unwrap_or(DEFAULT_PERIOD);
+        }
+        state.observation = None;
+        state.pending = PendingFeedback::default();
+
+        Some(RateUpdate {
+            observed_start_qps,
+            effective_qps,
+        })
+    }
+
+    fn emit_rate_update_telemetry(&self, rate_update: RateUpdate) {
         if let Some(metrics) = &self.metrics {
             metrics
-                .kv_bt_flow_control_target_qps
+                .kv_bt_flow_control_effective_qps
                 .with_label_values(&[&self.client_name])
-                .set(new_qps);
+                .set(rate_update.effective_qps);
+            metrics
+                .kv_bt_flow_control_observed_start_qps
+                .with_label_values(&[&self.client_name])
+                .set(rate_update.observed_start_qps);
         }
-        self.increment_rate_update(kind);
+        self.increment_rate_update("applied");
+        info!(
+            observed_start_qps = rate_update.observed_start_qps,
+            effective_qps = rate_update.effective_qps,
+            "Batch write flow control: effective rate updated"
+        );
     }
 
-    fn activate_rate_limit(&self) {
-        if !self.rate_limit_active.swap(true, Ordering::Relaxed) {
-            info!("Batch write flow control: admission throttling activated");
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .kv_bt_flow_control_enabled
-                    .with_label_values(&[&self.client_name])
-                    .set(1);
-            }
+    fn on_server_feedback(&self, info: Option<&RateLimitInfo>) {
+        let Some((factor, period)) = Self::validated_server_feedback(info) else {
+            return;
+        };
+        let (rate_update, started_observation, server_feedback_rejected) = {
+            let mut state = self
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            let now = Instant::now();
+            let rate_update = Self::finish_observation_if_ready(&mut state, now);
+            let server_feedback_allowed = now >= state.next_server_update_at;
+            let healthy_growth_pending = state.pending.allows_growth();
+            let (started_observation, server_feedback_rejected) =
+                if server_feedback_allowed && (factor <= 1.0 || healthy_growth_pending) {
+                    (
+                        Self::queue_server_feedback(&mut state, now, factor, period),
+                        false,
+                    )
+                } else {
+                    (false, true)
+                };
+            (rate_update, started_observation, server_feedback_rejected)
+        };
+        if let Some(rate_update) = rate_update {
+            self.emit_rate_update_telemetry(rate_update);
+        }
+        if started_observation {
+            self.emit_observation_started_telemetry();
+        }
+        if server_feedback_rejected {
+            self.emit_server_feedback_rejected_telemetry();
         }
     }
 
-    fn try_deactivate_rate_limit(&self) {
-        let now = Instant::now();
-        let update_state = self
-            .update_state
-            .lock()
-            .expect("flow-control update mutex poisoned");
-        if now <= update_state.next_update_time {
+    fn complete_error(&self, code: Code) {
+        if !is_overload_error(code) {
             return;
         }
 
-        if self.rate_limit_active.swap(false, Ordering::Relaxed) {
-            info!("Batch write flow control: admission throttling deactivated");
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .kv_bt_flow_control_enabled
-                    .with_label_values(&[&self.client_name])
-                    .set(0);
-            }
-            self.increment_rate_update("disabled");
+        let (rate_update, started_observation, server_feedback_rejected) = {
+            let mut state = self
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            let now = Instant::now();
+            let rate_update = Self::finish_observation_if_ready(&mut state, now);
+            let server_feedback_allowed = now >= state.next_server_update_at;
+            let (started_observation, server_feedback_rejected) = if server_feedback_allowed {
+                (
+                    Self::queue_server_feedback(&mut state, now, MIN_FACTOR, DEFAULT_PERIOD),
+                    false,
+                )
+            } else {
+                (false, true)
+            };
+            (rate_update, started_observation, server_feedback_rejected)
+        };
+        if let Some(rate_update) = rate_update {
+            self.emit_rate_update_telemetry(rate_update);
         }
+        if started_observation {
+            self.emit_observation_started_telemetry();
+        }
+        if server_feedback_rejected {
+            self.emit_server_feedback_rejected_telemetry();
+        }
+    }
+
+    fn validated_server_feedback(info: Option<&RateLimitInfo>) -> Option<(f64, Duration)> {
+        let info = info?;
+        if !info.factor.is_finite() || info.factor <= 0.0 {
+            return None;
+        }
+        let period = info.period.as_ref()?;
+        if period.seconds < 0 || !(0..1_000_000_000).contains(&period.nanos) {
+            return None;
+        }
+        let period = Duration::new(period.seconds as u64, period.nanos as u32);
+        if period.is_zero() {
+            return None;
+        }
+        Some((info.factor.clamp(MIN_FACTOR, MAX_FACTOR), period))
+    }
+
+    fn queue_server_feedback(
+        state: &mut ControllerState,
+        now: Instant,
+        factor: f64,
+        period: Duration,
+    ) -> bool {
+        let started_observation = state.observation.is_none();
+        state.pending.server_factor = Some(
+            state
+                .pending
+                .server_factor
+                .map_or(factor, |pending| pending.min(factor)),
+        );
+        state.pending.server_period = Some(
+            state
+                .pending
+                .server_period
+                .map_or(period, |pending| pending.max(period)),
+        );
+        state.observation.get_or_insert(ObservationWindow {
+            started_at: now,
+            rpc_starts: 0,
+        });
+        started_observation
+    }
+
+    fn queue_local_feedback(state: &mut ControllerState, now: Instant, factor: f64) -> bool {
+        let started_observation = state.observation.is_none();
+        state.pending.local_factor = Some(
+            state
+                .pending
+                .local_factor
+                .map_or(factor, |pending| pending.min(factor)),
+        );
+        state.observation.get_or_insert(ObservationWindow {
+            started_at: now,
+            rpc_starts: 0,
+        });
+        started_observation
+    }
+
+    fn emit_observation_started_telemetry(&self) {
+        self.increment_rate_update("pending");
+        info!("Batch write flow control: feedback observation started");
+    }
+
+    fn emit_server_feedback_rejected_telemetry(&self) {
+        self.increment_rate_update("rejected");
+        info!("Batch write flow control: server feedback rejected");
     }
 
     fn increment_rate_update(&self, kind: &str) {
@@ -389,327 +492,722 @@ impl BatchWriteFlowController {
         }
     }
 
-    fn current_qps_value(&self) -> f64 {
-        f64::from_bits(self.target_qps.load(Ordering::Relaxed))
+    fn evaluate_latency_if_ready(
+        state: &mut ControllerState,
+        now: Instant,
+    ) -> Option<LatencyEvaluation> {
+        if now < state.next_latency_evaluation_at || state.latency_samples < MIN_WINDOW_SAMPLES {
+            return None;
+        }
+
+        let window_avg_micros = state.latency_total_micros as f64 / state.latency_samples as f64;
+        state.latency_total_micros = 0;
+        state.latency_samples = 0;
+        state.next_latency_evaluation_at = now + LATENCY_EVALUATION_PERIOD;
+
+        let condition =
+            classify_write_latency(window_avg_micros, state.baseline_write_latency_micros);
+        let local_factor = match condition {
+            WriteLatencyCondition::Severe => {
+                state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
+                Some(MIN_FACTOR)
+            }
+            WriteLatencyCondition::Elevated => {
+                state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
+                if state.non_healthy_evals >= BASELINE_STALE_EVALS
+                    && let Some(baseline) = state.baseline_write_latency_micros.as_mut()
+                {
+                    *baseline += BASELINE_STALE_ALPHA * (window_avg_micros - *baseline);
+                }
+                Some(1.0)
+            }
+            WriteLatencyCondition::Healthy => {
+                state.non_healthy_evals = 0;
+                let had_baseline = state.baseline_write_latency_micros.is_some();
+                let baseline = state
+                    .baseline_write_latency_micros
+                    .get_or_insert(window_avg_micros);
+                *baseline += BASELINE_EWMA_ALPHA * (window_avg_micros - *baseline);
+                had_baseline.then_some(HEALTHY_RECOVERY_FACTOR)
+            }
+        };
+        let started_observation =
+            local_factor.is_some_and(|factor| Self::queue_local_feedback(state, now, factor));
+
+        Some(LatencyEvaluation {
+            window_avg_micros,
+            baseline_micros: state.baseline_write_latency_micros,
+            condition,
+            started_observation,
+        })
     }
 
-    fn current_latency_brake_value(&self) -> f64 {
-        f64::from_bits(self.latency_brake.load(Ordering::Relaxed))
-    }
+    fn complete_stream(&self, rate_generation: u64, elapsed: Duration) {
+        let (rate_update, latency_evaluation) = {
+            let mut state = self
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            let now = Instant::now();
+            let rate_update = Self::finish_observation_if_ready(&mut state, now);
+            let latency_evaluation = if rate_generation != state.rate_generation {
+                None
+            } else {
+                let elapsed_micros = elapsed.as_micros().min(u64::MAX as u128) as u64;
+                state.latency_total_micros =
+                    state.latency_total_micros.saturating_add(elapsed_micros);
+                state.latency_samples = state.latency_samples.saturating_add(1);
+                Self::evaluate_latency_if_ready(&mut state, now)
+            };
+            (rate_update, latency_evaluation)
+        };
 
-    pub(crate) fn record_write_latency(&self, elapsed: Duration) {
-        self.window_latency_total_micros
-            .fetch_add(elapsed.as_micros() as u64, Ordering::Relaxed);
-        self.window_latency_samples.fetch_add(1, Ordering::Relaxed);
+        if let Some(rate_update) = rate_update {
+            self.emit_rate_update_telemetry(rate_update);
+        }
+        if latency_evaluation
+            .as_ref()
+            .is_some_and(|evaluation| evaluation.started_observation)
+        {
+            self.emit_observation_started_telemetry();
+        }
+        if let Some(latency_evaluation) = latency_evaluation {
+            if let Some(metrics) = &self.metrics {
+                metrics
+                    .kv_bt_flow_control_write_latency_ms
+                    .with_label_values(&[&self.client_name])
+                    .set(latency_evaluation.window_avg_micros / 1_000.0);
+                if let Some(baseline_micros) = latency_evaluation.baseline_micros {
+                    metrics
+                        .kv_bt_flow_control_write_latency_baseline_ms
+                        .with_label_values(&[&self.client_name])
+                        .set(baseline_micros / 1_000.0);
+                }
+            }
+            if latency_evaluation.condition == WriteLatencyCondition::Severe {
+                info!(
+                    window_avg_ms = latency_evaluation.window_avg_micros / 1_000.0,
+                    "Batch write flow control: severe write latency observed"
+                );
+            }
+        }
     }
 
     #[cfg(test)]
-    pub(crate) fn current_latency_brake(&self) -> f64 {
-        self.current_latency_brake_value()
+    pub(crate) fn effective_qps(&self) -> f64 {
+        self.state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .effective_qps
+    }
+}
+
+impl WriteAdmission<'_> {
+    pub(crate) fn on_server_feedback(&self, info: Option<&RateLimitInfo>) {
+        self.flow_controller.on_server_feedback(info);
     }
 
-    #[cfg(test)]
-    pub(crate) fn is_rate_limit_active(&self) -> bool {
-        self.rate_limit_active.load(Ordering::Relaxed)
+    pub(crate) fn complete(self) {
+        self.flow_controller
+            .complete_stream(self.rate_generation, self.started_at.elapsed());
     }
 
-    #[cfg(test)]
-    pub(crate) fn current_qps(&self) -> f64 {
-        self.current_qps_value()
+    pub(crate) fn fail(self, code: Code) {
+        self.flow_controller.complete_error(code);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use prometheus::Registry;
+
     use super::*;
 
     fn rate_limit_info(factor: f64, period: Duration) -> RateLimitInfo {
+        raw_rate_limit_info(
+            factor,
+            period.as_secs() as i64,
+            period.subsec_nanos() as i32,
+        )
+    }
+
+    fn raw_rate_limit_info(factor: f64, seconds: i64, nanos: i32) -> RateLimitInfo {
         RateLimitInfo {
-            period: Some(prost_types::Duration {
-                seconds: period.as_secs() as i64,
-                nanos: period.subsec_nanos() as i32,
-            }),
+            period: Some(prost_types::Duration { seconds, nanos }),
             factor,
         }
     }
 
-    fn assert_qps(controller: &BatchWriteFlowController, expected: f64) {
-        let actual = controller.current_qps();
+    fn assert_effective_qps(controller: &BatchWriteFlowController, expected: f64) {
+        let actual = controller.effective_qps();
         assert!(
             (actual - expected).abs() < 1e-9,
             "expected {expected} QPS, got {actual}"
         );
     }
 
-    fn seed_demand(controller: &BatchWriteFlowController, requests: u64) {
-        controller
-            .window_requests
-            .fetch_add(requests, Ordering::Relaxed);
+    fn set_effective_qps_fixture(controller: &BatchWriteFlowController, effective_qps: f64) {
+        let mut state = controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned");
+        state.effective_qps = effective_qps;
+        state.next_permit_at = Instant::now();
     }
 
-    fn seed_latency(controller: &BatchWriteFlowController, samples: u64, each: Duration) {
+    #[derive(Debug, PartialEq)]
+    struct ControllerSnapshot {
+        effective_qps: f64,
+        observation: Option<(Instant, u64)>,
+        server_factor: Option<f64>,
+        local_factor: Option<f64>,
+        server_period: Option<Duration>,
+    }
+
+    fn observation_snapshot(controller: &BatchWriteFlowController) -> ControllerSnapshot {
+        let state = controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned");
+        ControllerSnapshot {
+            effective_qps: state.effective_qps,
+            observation: state
+                .observation
+                .as_ref()
+                .map(|window| (window.started_at, window.rpc_starts)),
+            server_factor: state.pending.server_factor,
+            local_factor: state.pending.local_factor,
+            server_period: state.pending.server_period,
+        }
+    }
+
+    fn pending_local_factor(controller: &BatchWriteFlowController) -> Option<f64> {
         controller
-            .window_latency_total_micros
-            .fetch_add(samples * each.as_micros() as u64, Ordering::Relaxed);
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .pending
+            .local_factor
+    }
+
+    fn baseline_micros(controller: &BatchWriteFlowController) -> Option<f64> {
         controller
-            .window_latency_samples
-            .fetch_add(samples, Ordering::Relaxed);
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .baseline_write_latency_micros
+    }
+
+    fn latency_samples(controller: &BatchWriteFlowController) -> u64 {
+        controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .latency_samples
+    }
+
+    fn make_latency_evaluation_ready(controller: &BatchWriteFlowController) {
+        controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .next_latency_evaluation_at = Instant::now();
+    }
+
+    fn current_admission(controller: &BatchWriteFlowController) -> WriteAdmission<'_> {
+        let rate_generation = controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .rate_generation;
+        WriteAdmission {
+            flow_controller: controller,
+            started_at: Instant::now(),
+            rate_generation,
+        }
+    }
+
+    fn admission_with_elapsed(
+        controller: &BatchWriteFlowController,
+        elapsed: Duration,
+    ) -> WriteAdmission<'_> {
+        let mut admission = current_admission(controller);
+        admission.started_at = Instant::now()
+            .checked_sub(elapsed)
+            .expect("paused test clock should allow the requested latency");
+        admission
+    }
+
+    fn fail_admission(controller: &BatchWriteFlowController, code: Code) {
+        current_admission(controller).fail(code);
+    }
+
+    fn record_latency_samples(
+        controller: &BatchWriteFlowController,
+        samples: u64,
+        latency: Duration,
+    ) {
+        for _ in 0..samples {
+            admission_with_elapsed(controller, latency).complete();
+        }
+    }
+
+    fn learn_healthy_baseline(controller: &BatchWriteFlowController) {
+        make_latency_evaluation_ready(controller);
+        record_latency_samples(controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        assert_eq!(baseline_micros(controller), Some(20_000.0));
+        assert_eq!(pending_local_factor(controller), None);
+    }
+
+    async fn admit_rpcs(controller: &Arc<BatchWriteFlowController>, count: usize) {
+        for _ in 0..count {
+            drop(controller.admit_rpc().await);
+        }
+    }
+
+    async fn advance_observation_to_boundary(controller: &BatchWriteFlowController) {
+        let started_at = controller
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned")
+            .observation
+            .as_ref()
+            .expect("expected an active observation")
+            .started_at;
+        let elapsed = Instant::now().saturating_duration_since(started_at);
+        if elapsed < OBSERVATION_WINDOW {
+            tokio::time::advance(OBSERVATION_WINDOW - elapsed).await;
+        }
+    }
+
+    fn finish_ready_observation(controller: &BatchWriteFlowController) {
+        let rate_update = {
+            let mut state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            BatchWriteFlowController::finish_observation_if_ready(&mut state, Instant::now())
+        };
+        if let Some(rate_update) = rate_update {
+            controller.emit_rate_update_telemetry(rate_update);
+        }
+    }
+
+    async fn finish_observation(controller: &BatchWriteFlowController) {
+        advance_observation_to_boundary(controller).await;
+        finish_ready_observation(controller);
+    }
+
+    fn apply_ready_server_decrease(controller: &BatchWriteFlowController) {
+        let now = Instant::now();
+        {
+            let mut state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            state.observation = Some(ObservationWindow {
+                started_at: now
+                    .checked_sub(OBSERVATION_WINDOW)
+                    .expect("paused test clock should allow a one-second lookback"),
+                rpc_starts: INITIAL_QPS as u64,
+            });
+            state.pending.server_factor = Some(MIN_FACTOR);
+            state.pending.server_period = Some(DEFAULT_PERIOD);
+        }
+        finish_ready_observation(controller);
+    }
+
+    fn rate_update_count(metrics: &KvMetrics, client: &str, kind: &str) -> u64 {
+        metrics
+            .kv_bt_flow_control_rate_updates
+            .with_label_values(&[client, kind])
+            .get()
     }
 
     #[tokio::test(start_paused = true)]
-    async fn starts_inactive_and_acquire_returns_immediately() {
+    async fn starts_at_initial_rate_and_records_only_admitted_rpcs() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        assert!(!controller.is_rate_limit_active());
-        assert_qps(&controller, DEFAULT_QPS);
+        assert_effective_qps(&controller, INITIAL_QPS);
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
 
-        let before = Instant::now();
-        controller.acquire().await;
-        assert_eq!(Instant::now(), before);
+        drop(controller.admit_rpc().await);
+        let second_admission = tokio::spawn({
+            let controller = controller.clone();
+            async move {
+                drop(controller.admit_rpc().await);
+            }
+        });
+        tokio::task::yield_now().await;
+
+        tokio::time::advance(Duration::from_millis(99)).await;
+        tokio::task::yield_now().await;
+        assert!(!second_admission.is_finished());
+        assert_eq!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .as_ref()
+                .expect("feedback should open an observation")
+                .rpc_starts,
+            1
+        );
+
+        tokio::time::advance(Duration::from_millis(1)).await;
+        second_admission.await.unwrap();
+        assert_eq!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .as_ref()
+                .expect("feedback should open an observation")
+                .rpc_starts,
+            2
+        );
     }
 
     #[tokio::test(start_paused = true)]
-    async fn clamps_lower_and_upper_factors() {
+    async fn server_decrease_waits_for_complete_bootstrap_observation() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
+        assert_effective_qps(&controller, INITIAL_QPS);
+
+        admit_rpcs(&controller, 10).await;
+        assert_effective_qps(&controller, INITIAL_QPS);
+        finish_observation(&controller).await;
+
+        assert_effective_qps(&controller, 7.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn server_factor_is_clamped_when_queued() {
         let lower = BatchWriteFlowController::new("lower".to_owned(), None);
-        lower.on_response(Some(&rate_limit_info(0.3, DEFAULT_PERIOD)));
-        assert!(lower.is_rate_limit_active());
-        assert_qps(&lower, DEFAULT_QPS * MIN_FACTOR);
+        lower.on_server_feedback(Some(&rate_limit_info(0.3, DEFAULT_PERIOD)));
+        assert_eq!(
+            lower
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .pending
+                .server_factor,
+            Some(MIN_FACTOR)
+        );
+        drop(lower.admit_rpc().await);
+        tokio::time::advance(Duration::from_secs(10)).await;
+        finish_ready_observation(&lower);
+        assert_effective_qps(&lower, MIN_QPS);
 
         let upper = BatchWriteFlowController::new("upper".to_owned(), None);
-        seed_demand(&upper, 1_000);
-        upper.on_response(Some(&rate_limit_info(2.0, DEFAULT_PERIOD)));
-        assert!(upper.is_rate_limit_active());
-        assert_qps(&upper, DEFAULT_QPS * MAX_FACTOR);
+        learn_healthy_baseline(&upper);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&upper, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        upper.on_server_feedback(Some(&rate_limit_info(2.0, DEFAULT_PERIOD)));
+        assert_eq!(
+            upper
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .pending
+                .server_factor,
+            Some(MAX_FACTOR)
+        );
     }
 
     #[tokio::test(start_paused = true)]
-    async fn rejects_updates_within_period_and_applies_at_period_boundary() {
+    async fn pending_feedback_uses_most_restrictive_factor() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        let first_qps = DEFAULT_QPS * MAX_FACTOR;
-        assert_qps(&controller, first_qps);
+        controller.on_server_feedback(Some(&rate_limit_info(1.0, Duration::from_secs(1))));
+        fail_admission(&controller, Code::Unavailable);
+        {
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            assert_eq!(state.pending.server_factor, Some(MIN_FACTOR));
+            assert_eq!(state.pending.server_period, Some(DEFAULT_PERIOD));
+        }
 
-        controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, first_qps);
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
 
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, first_qps * MIN_FACTOR);
+        assert_effective_qps(&controller, 7.0);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn target_qps_stays_within_floor_and_ceiling() {
-        let decreasing = BatchWriteFlowController::new("decreasing".to_owned(), None);
-        for _ in 0..32 {
-            decreasing.on_response(Some(&rate_limit_info(0.01, DEFAULT_PERIOD)));
-            assert!(decreasing.current_qps() >= MIN_QPS);
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        assert_qps(&decreasing, MIN_QPS);
+    async fn upward_feedback_requires_fresh_healthy_latency() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert_effective_qps(&controller, INITIAL_QPS);
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_none()
+        );
 
-        let increasing = BatchWriteFlowController::new("increasing".to_owned(), None);
-        for _ in 0..64 {
-            seed_demand(&increasing, 2_000_000);
-            increasing.on_response(Some(&rate_limit_info(10.0, DEFAULT_PERIOD)));
-            assert!(increasing.current_qps() <= MAX_QPS);
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        assert_qps(&increasing, MAX_QPS);
+        learn_healthy_baseline(&controller);
+        controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_none()
+        );
+
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+
+        assert_effective_qps(&controller, INITIAL_QPS * HEALTHY_RECOVERY_FACTOR);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn invalid_hints_deactivate_after_period_and_valid_hint_reactivates() {
+    async fn zero_start_window_retains_pending_feedback() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        set_effective_qps_fixture(&controller, 50.0);
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
+
+        tokio::time::advance(OBSERVATION_WINDOW).await;
+        finish_ready_observation(&controller);
+        assert_effective_qps(&controller, 50.0);
+        {
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            assert_eq!(state.pending.server_factor, Some(MIN_FACTOR));
+            assert_eq!(
+                state
+                    .observation
+                    .as_ref()
+                    .expect("zero-start feedback should restart its observation")
+                    .rpc_starts,
+                0
+            );
+        }
+
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 7.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn healthy_growth_feedback_expires_after_empty_window() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+
+        tokio::time::advance(OBSERVATION_WINDOW).await;
+        finish_ready_observation(&controller);
+        {
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            assert!(state.observation.is_none());
+            assert!(state.pending.local_factor.is_none());
+            assert!(state.pending.server_factor.is_none());
+        }
+        assert_effective_qps(&controller, INITIAL_QPS);
+
+        controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_none()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn late_feedback_starts_a_new_observation_after_server_period() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        let period = Duration::from_secs(1);
+        controller.on_server_feedback(Some(&rate_limit_info(1.0, period)));
+        admit_rpcs(&controller, 10).await;
+
+        advance_observation_to_boundary(&controller).await;
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, period)));
+        assert_effective_qps(&controller, INITIAL_QPS);
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_none()
+        );
+
+        tokio::time::advance(period).await;
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, period)));
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_some()
+        );
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 7.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn missing_and_invalid_hints_are_no_ops() {
+        let controller = BatchWriteFlowController::new("invalid".to_owned(), None);
+        set_effective_qps_fixture(&controller, 42.0);
+        controller.on_server_feedback(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
+        let expected = observation_snapshot(&controller);
+
         let invalid_hints = [
             None,
             Some(rate_limit_info(0.0, DEFAULT_PERIOD)),
-            Some(rate_limit_info(1.0, Duration::ZERO)),
+            Some(rate_limit_info(f64::NAN, DEFAULT_PERIOD)),
+            Some(rate_limit_info(f64::INFINITY, DEFAULT_PERIOD)),
+            Some(RateLimitInfo {
+                period: None,
+                factor: 1.0,
+            }),
+            Some(raw_rate_limit_info(1.0, -1, 0)),
+            Some(raw_rate_limit_info(1.0, 0, -1)),
+            Some(raw_rate_limit_info(1.0, 0, 1_000_000_000)),
+            Some(raw_rate_limit_info(1.0, 0, 0)),
         ];
-
         for invalid_hint in invalid_hints {
-            let controller = BatchWriteFlowController::new("test".to_owned(), None);
-            controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
-            assert!(controller.is_rate_limit_active());
-            let retained_qps = controller.current_qps();
-
-            controller.on_response(invalid_hint.as_ref());
-            assert!(controller.is_rate_limit_active());
-            assert_qps(&controller, retained_qps);
-
-            tokio::time::advance(DEFAULT_PERIOD + Duration::from_nanos(1)).await;
-            controller.on_response(invalid_hint.as_ref());
-            assert!(!controller.is_rate_limit_active());
-            assert_qps(&controller, retained_qps);
-
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            assert!(controller.is_rate_limit_active());
-            assert_qps(&controller, retained_qps);
+            controller.on_server_feedback(invalid_hint.as_ref());
+            assert_eq!(observation_snapshot(&controller), expected);
         }
+
+        let nanos_only = BatchWriteFlowController::new("nanos".to_owned(), None);
+        set_effective_qps_fixture(&nanos_only, 42.0);
+        nanos_only.on_server_feedback(Some(&raw_rate_limit_info(1.0, 0, 1)));
+        let state = nanos_only
+            .state
+            .lock()
+            .expect("flow-control state mutex poisoned");
+        assert_eq!(state.effective_qps, 42.0);
+        assert_eq!(state.pending.server_period, Some(Duration::from_nanos(1)));
+        assert!(state.observation.is_some());
     }
 
     #[tokio::test(start_paused = true)]
-    async fn valid_hint_update_reactivates_after_deactivation_wins_lock() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+    async fn server_feedback_respects_period() {
+        let registry = Registry::new();
+        let metrics = KvMetrics::new(&registry);
+        let controller = BatchWriteFlowController::new("period".to_owned(), Some(metrics.clone()));
+        assert_eq!(
+            metrics
+                .kv_bt_flow_control_limited
+                .with_label_values(&["period"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .kv_bt_flow_control_effective_qps
+                .with_label_values(&["period"])
+                .get(),
+            INITIAL_QPS
+        );
+        assert_eq!(
+            metrics
+                .kv_bt_flow_control_observed_start_qps
+                .with_label_values(&["period"])
+                .get(),
+            0.0
+        );
 
-        tokio::time::advance(Duration::from_millis(1)).await;
-        controller.activate_rate_limit();
-        controller.try_deactivate_rate_limit();
-        assert!(!controller.is_rate_limit_active());
+        let period = Duration::from_secs(2);
+        controller.on_server_feedback(Some(&rate_limit_info(1.0, period)));
+        assert_eq!(rate_update_count(&metrics, "period", "pending"), 1);
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 10.0);
+        assert_eq!(rate_update_count(&metrics, "period", "applied"), 1);
 
-        controller.update_qps(0.9, DEFAULT_PERIOD, true);
-        assert!(controller.is_rate_limit_active());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, period)));
+        fail_admission(&controller, Code::ResourceExhausted);
+        assert_eq!(rate_update_count(&metrics, "period", "rejected"), 2);
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_none()
+        );
 
-        controller.try_deactivate_rate_limit();
-        assert!(controller.is_rate_limit_active());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        controller.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, period)));
+        assert_eq!(rate_update_count(&metrics, "period", "pending"), 2);
+        assert_effective_qps(&controller, 10.0);
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 7.0);
+        assert_eq!(rate_update_count(&metrics, "period", "applied"), 2);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn qualifying_errors_cut_rate_without_activating() {
+    async fn only_qualifying_errors_queue_feedback() {
         for code in [
             Code::DeadlineExceeded,
             Code::Unavailable,
             Code::ResourceExhausted,
         ] {
-            let controller = BatchWriteFlowController::new("test".to_owned(), None);
-            controller.on_error(&Status::new(code, "transient"));
-            assert!(!controller.is_rate_limit_active());
-            assert_qps(&controller, DEFAULT_QPS * MIN_FACTOR);
-        }
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn non_qualifying_error_does_not_change_rate() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        controller.on_error(&Status::not_found("missing"));
-        assert!(!controller.is_rate_limit_active());
-        assert_qps(&controller, DEFAULT_QPS);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn upward_hint_suppressed_without_demand_then_applies_with_demand() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert!(controller.is_rate_limit_active());
-        assert_qps(&controller, DEFAULT_QPS);
-
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, DEFAULT_QPS * MAX_FACTOR);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn suppressed_hint_consumes_update_period() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, DEFAULT_QPS);
-
-        tokio::time::advance(DEFAULT_PERIOD + Duration::from_nanos(1)).await;
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, DEFAULT_QPS * MAX_FACTOR);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn sustained_underutilization_decays_target_to_demand_floor() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        controller
-            .target_qps
-            .store(5_000.0f64.to_bits(), Ordering::Relaxed);
-        controller.activate_rate_limit();
-        tokio::time::advance(DEFAULT_PERIOD).await;
-
-        for _ in 0..16 {
-            seed_demand(&controller, 800);
-            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        assert_qps(&controller, 100.0);
-
-        seed_demand(&controller, 800);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, 130.0);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn decay_without_demand_floors_at_default_qps() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        controller
-            .target_qps
-            .store(100.0f64.to_bits(), Ordering::Relaxed);
-        controller.activate_rate_limit();
-        tokio::time::advance(DEFAULT_PERIOD).await;
-
-        for _ in 0..12 {
-            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        assert_qps(&controller, DEFAULT_QPS);
-
-        for _ in 0..3 {
-            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-            assert_qps(&controller, DEFAULT_QPS);
-        }
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn mid_band_utilization_resets_idle_counter() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        controller
-            .target_qps
-            .store(100.0f64.to_bits(), Ordering::Relaxed);
-        controller.activate_rate_limit();
-        tokio::time::advance(DEFAULT_PERIOD).await;
-
-        for _ in 0..3 {
-            seed_demand(&controller, 100);
-            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
+            let controller = BatchWriteFlowController::new("error".to_owned(), None);
+            fail_admission(&controller, code);
+            {
+                let state = controller
+                    .state
+                    .lock()
+                    .expect("flow-control state mutex poisoned");
+                assert_eq!(state.pending.server_factor, Some(MIN_FACTOR));
+                assert_eq!(state.pending.server_period, Some(DEFAULT_PERIOD));
+                assert_eq!(state.latency_samples, 0);
+                assert!(state.observation.is_some());
+            }
+            admit_rpcs(&controller, 10).await;
+            finish_observation(&controller).await;
+            assert_effective_qps(&controller, 7.0);
         }
 
-        seed_demand(&controller, 500);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        tokio::time::advance(DEFAULT_PERIOD).await;
-
-        for _ in 0..5 {
-            seed_demand(&controller, 100);
-            controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        assert_qps(&controller, 100.0);
-
-        seed_demand(&controller, 100);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, 70.0);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn decrease_applies_when_underutilized() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        controller
-            .target_qps
-            .store(100.0f64.to_bits(), Ordering::Relaxed);
-        controller.activate_rate_limit();
-        tokio::time::advance(DEFAULT_PERIOD).await;
-
-        controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, 70.0);
+        let controller = BatchWriteFlowController::new("other-error".to_owned(), None);
+        fail_admission(&controller, Code::NotFound);
+        assert_effective_qps(&controller, INITIAL_QPS);
+        assert!(
+            controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned")
+                .observation
+                .is_none()
+        );
     }
 
     #[tokio::test(start_paused = true)]
     async fn spaces_permits_without_burst_credit() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
-        controller
-            .target_qps
-            .store(2.0f64.to_bits(), Ordering::Relaxed);
-        controller.activate_rate_limit();
+        set_effective_qps_fixture(&controller, 2.0);
+        tokio::time::advance(Duration::from_secs(10)).await;
 
-        controller.acquire().await;
+        drop(controller.admit_rpc().await);
         let first_permit = Instant::now();
-        controller.acquire().await;
+        drop(controller.admit_rpc().await);
         let second_permit = Instant::now();
 
         assert_eq!(
@@ -719,218 +1217,169 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn latency_brake_engages_on_severe_window_and_throttles_admission() {
+    async fn queued_permits_are_rescheduled_after_decrease() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        drop(controller.admit_rpc().await);
 
-        for _ in 0..2 {
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-
-        seed_latency(&controller, 10, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!(
-            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
-        );
-
-        controller
-            .target_qps
-            .store(2.0f64.to_bits(), Ordering::Relaxed);
-        controller.acquire().await;
-        let first_permit = Instant::now();
-        controller.acquire().await;
-        let second_permit = Instant::now();
-
-        let permit_spacing = second_permit.duration_since(first_permit);
-        let expected_spacing = Duration::from_secs_f64(1.0 / (2.0 * LATENCY_BRAKE_CUT_FACTOR));
-        assert!(
-            permit_spacing >= expected_spacing
-                && permit_spacing < expected_spacing + Duration::from_millis(1),
-            "expected permit spacing within 1 ms above {expected_spacing:?}, got {permit_spacing:?}"
-        );
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn elevated_window_holds_latency_brake_and_baseline() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-
-        for _ in 0..2 {
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-
-        seed_latency(&controller, 10, Duration::from_millis(40));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert_eq!(controller.current_latency_brake(), 1.0);
-        assert_eq!(
-            controller
-                .update_state
-                .lock()
-                .expect("flow-control update mutex poisoned")
-                .baseline_write_latency_micros,
-            Some(20_000.0)
-        );
-
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_latency(&controller, 10, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!(
-            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
-        );
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn latency_brake_releases_slowly_on_healthy_windows() {
-        let controller = BatchWriteFlowController::new("test".to_owned(), None);
-
-        for _ in 0..2 {
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        for _ in 0..2 {
-            seed_latency(&controller, 10, Duration::from_millis(200));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-
-        let mut expected_latency_brake = LATENCY_BRAKE_CUT_FACTOR * LATENCY_BRAKE_CUT_FACTOR;
-        assert!((controller.current_latency_brake() - expected_latency_brake).abs() < f64::EPSILON);
-
-        for healthy_eval in 1..=15 {
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            expected_latency_brake =
-                (expected_latency_brake * LATENCY_BRAKE_RELEASE_FACTOR).min(1.0);
-            assert!(
-                (controller.current_latency_brake() - expected_latency_brake).abs() < f64::EPSILON
-            );
-            if healthy_eval < 15 {
-                assert!(controller.current_latency_brake() < 1.0);
+        let first_queued = tokio::spawn({
+            let controller = controller.clone();
+            async move {
+                drop(controller.admit_rpc().await);
+                Instant::now()
             }
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-        assert_eq!(controller.current_latency_brake(), 1.0);
+        });
+        tokio::task::yield_now().await;
+        let second_queued = tokio::spawn({
+            let controller = controller.clone();
+            async move {
+                drop(controller.admit_rpc().await);
+                Instant::now()
+            }
+        });
+        tokio::task::yield_now().await;
+
+        apply_ready_server_decrease(&controller);
+        assert_effective_qps(&controller, INITIAL_QPS * MIN_FACTOR);
+
+        tokio::time::advance(Duration::from_millis(200)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(
+            usize::from(first_queued.is_finished()) + usize::from(second_queued.is_finished()),
+            1
+        );
+
+        tokio::time::advance(Duration::from_millis(200)).await;
+        let first_start = first_queued.await.unwrap();
+        let second_start = second_queued.await.unwrap();
+        let spacing = if first_start < second_start {
+            second_start.duration_since(first_start)
+        } else {
+            first_start.duration_since(second_start)
+        };
+        assert!(spacing >= Duration::from_secs_f64(1.0 / (INITIAL_QPS * MIN_FACTOR)));
     }
 
     #[tokio::test(start_paused = true)]
-    async fn upward_hint_frozen_while_latency_braked() {
+    async fn stale_rate_generation_latency_is_ignored() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        let stale_admission = controller.admit_rpc().await;
+        apply_ready_server_decrease(&controller);
+        make_latency_evaluation_ready(&controller);
 
-        for _ in 0..2 {
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
+        stale_admission.complete();
+        assert_eq!(latency_samples(&controller), 0);
+        assert_eq!(baseline_micros(&controller), None);
 
-        seed_latency(&controller, 10, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!(controller.current_latency_brake() < 1.0);
-
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, DEFAULT_QPS);
-
-        for _ in 0..15 {
-            tokio::time::advance(DEFAULT_PERIOD).await;
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        }
-        assert_eq!(controller.current_latency_brake(), 1.0);
-        assert_qps(&controller, DEFAULT_QPS);
-
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, DEFAULT_QPS * MAX_FACTOR);
+        admission_with_elapsed(&controller, Duration::from_millis(20)).complete();
+        assert_eq!(latency_samples(&controller), 1);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn sparse_windows_accumulate_until_sample_floor() {
+    async fn severe_latency_reduces_observed_rate_limit() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(200));
+        assert_eq!(pending_local_factor(&controller), Some(MIN_FACTOR));
+        assert_effective_qps(&controller, INITIAL_QPS);
 
-        seed_latency(&controller, 10, Duration::from_millis(20));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        tokio::time::advance(DEFAULT_PERIOD).await;
-
-        seed_latency(&controller, 3, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert_eq!(controller.current_latency_brake(), 1.0);
-        assert_eq!(controller.window_latency_samples.load(Ordering::Relaxed), 3);
-
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        seed_latency(&controller, 2, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!(
-            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
-        );
-        assert_eq!(controller.window_latency_samples.load(Ordering::Relaxed), 0);
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 7.0);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn server_decrease_applies_while_latency_braked() {
+    async fn unsafe_absolute_latency_never_becomes_baseline_or_authorizes_growth() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_secs(5));
 
-        seed_latency(&controller, 10, Duration::from_millis(20));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        tokio::time::advance(DEFAULT_PERIOD).await;
+        assert_eq!(baseline_micros(&controller), None);
+        assert_eq!(pending_local_factor(&controller), Some(MIN_FACTOR));
+        assert_effective_qps(&controller, INITIAL_QPS);
 
-        seed_latency(&controller, 10, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        assert!(
-            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
-        );
+        admit_rpcs(&controller, 10).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 7.0);
+    }
 
-        tokio::time::advance(DEFAULT_PERIOD).await;
-        controller.on_response(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
-        assert_qps(&controller, DEFAULT_QPS * MIN_FACTOR);
-        assert!(
-            (controller.current_latency_brake() - LATENCY_BRAKE_CUT_FACTOR).abs() < f64::EPSILON
-        );
+    #[tokio::test(start_paused = true)]
+    async fn elevated_latency_reanchors_to_observed_rate() {
+        let controller = BatchWriteFlowController::new("local".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        set_effective_qps_fixture(&controller, 100.0);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
+        assert_eq!(pending_local_factor(&controller), Some(1.0));
+        assert_eq!(baseline_micros(&controller), Some(20_000.0));
+        admit_rpcs(&controller, 20).await;
+        finish_observation(&controller).await;
+        assert_effective_qps(&controller, 20.0);
+
+        let with_server = BatchWriteFlowController::new("server".to_owned(), None);
+        learn_healthy_baseline(&with_server);
+        set_effective_qps_fixture(&with_server, 100.0);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        with_server.on_server_feedback(Some(&rate_limit_info(MIN_FACTOR, DEFAULT_PERIOD)));
+        record_latency_samples(&with_server, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
+        admit_rpcs(&with_server, 20).await;
+        finish_observation(&with_server).await;
+        assert_effective_qps(&with_server, 14.0);
+        assert_eq!(baseline_micros(&with_server), Some(20_000.0));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn healthy_latency_recovers_without_overriding_server_feedback() {
+        let local = BatchWriteFlowController::new("local".to_owned(), None);
+        learn_healthy_baseline(&local);
+        set_effective_qps_fixture(&local, 100.0);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&local, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        assert_eq!(pending_local_factor(&local), Some(HEALTHY_RECOVERY_FACTOR));
+        admit_rpcs(&local, 20).await;
+        finish_observation(&local).await;
+        assert_effective_qps(&local, 21.0);
+
+        let with_server = BatchWriteFlowController::new("server".to_owned(), None);
+        learn_healthy_baseline(&with_server);
+        set_effective_qps_fixture(&with_server, 100.0);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+        record_latency_samples(&with_server, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+        with_server.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
+        admit_rpcs(&with_server, 20).await;
+        finish_observation(&with_server).await;
+        assert_effective_qps(&with_server, 21.0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sparse_latency_samples_accumulate_until_floor() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+
+        record_latency_samples(&controller, 3, Duration::from_millis(200));
+        assert_eq!(latency_samples(&controller), 3);
+        assert_eq!(pending_local_factor(&controller), None);
+
+        record_latency_samples(&controller, 2, Duration::from_millis(200));
+        assert_eq!(latency_samples(&controller), 0);
+        assert_eq!(pending_local_factor(&controller), Some(MIN_FACTOR));
     }
 
     #[tokio::test(start_paused = true)]
     async fn stale_elevated_baseline_drifts_until_healthy() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
-
-        for _ in 0..2 {
-            seed_latency(&controller, 10, Duration::from_millis(20));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            tokio::time::advance(DEFAULT_PERIOD).await;
-        }
-
-        seed_latency(&controller, 10, Duration::from_millis(200));
-        seed_demand(&controller, 1_000);
-        controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-        let cut_latency_brake = controller.current_latency_brake();
+        learn_healthy_baseline(&controller);
 
         let mut reached_healthy = false;
         for _ in 0..BASELINE_STALE_EVALS + 10 {
-            tokio::time::advance(DEFAULT_PERIOD).await;
-            seed_latency(&controller, 10, Duration::from_millis(40));
-            seed_demand(&controller, 1_000);
-            controller.on_response(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
-            if controller.current_latency_brake() > cut_latency_brake {
+            tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
+            record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
+            let state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            if state.non_healthy_evals == 0 {
                 reached_healthy = true;
                 break;
             }
@@ -940,10 +1389,6 @@ mod tests {
             reached_healthy,
             "stale elevated baseline never reached healthy"
         );
-        assert!(
-            (controller.current_latency_brake() - cut_latency_brake * LATENCY_BRAKE_RELEASE_FACTOR)
-                .abs()
-                < f64::EPSILON
-        );
+        assert!(baseline_micros(&controller).is_some_and(|baseline| baseline > 20_000.0));
     }
 }
