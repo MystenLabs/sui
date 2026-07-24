@@ -7,4 +7,3 @@ pub mod tracing;
 pub mod values;
 pub mod vm;
 pub use crate::jit::execution::ast::Type;
-pub use crate::jit::execution::ast::TypeSubst;

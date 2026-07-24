@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     execution::{
-        TypeSubst as _,
         dispatch_tables::VMDispatchTables,
         interpreter::locals::{BaseHeap, BaseHeapId},
         values::Value,
@@ -65,12 +64,13 @@ impl ValueFrame {
     ) -> VMResult<Self> {
         let mut frame = Self::empty();
         let fun = vm.find_function(original_id, function_name, &ty_args)?;
-        let arg_types = fun
-            .parameters
-            .into_iter()
-            .map(|ty| ty.subst(&ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
+        // `find_function` already substitutes `ty_args` into the parameter types, so they are
+        // concrete here — no second substitution is needed.
+        let arg_types = fun.parameters;
+        debug_assert!(
+            !arg_types.iter().any(Self::has_free_type_parameter),
+            "parameter types must be fully substituted before deserialization"
+        );
         frame
             .deserialize_args(&vm.virtual_tables, arg_types, serialized_args)
             .map_err(|e| e.finish(Location::Undefined))?;
@@ -139,6 +139,28 @@ impl ValueFrame {
             .collect::<PartialVMResult<Vec<_>>>()?;
         self.values.extend(deserialized_args);
         Ok(())
+    }
+
+    /// Whether a runtime type still mentions a type parameter — used only to assert that types
+    /// have been fully substituted before deserialization.
+    fn has_free_type_parameter(ty: &Type) -> bool {
+        match ty {
+            Type::TyParam(_) => true,
+            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::has_free_type_parameter(inner)
+            }
+            Type::DatatypeInstantiation(inst) => inst.1.iter().any(Self::has_free_type_parameter),
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer
+            | Type::Datatype(_) => false,
+        }
     }
 }
 
