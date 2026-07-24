@@ -14,4 +14,4 @@ error[E04001]: restricted visibility
 7 │     const D: u64 = C_ZERO + 1;
   │                    ^^^^^^ Invalid access of '0x42::t::C_ZERO'
   │
-  = With the '2024.alpha' edition, a constant declared 'public(package)' can be accessed from other modules in its package
+  = cross-module constant accesses are not supported by current edition 'legacy'; the '2024.alpha' edition supports this feature
