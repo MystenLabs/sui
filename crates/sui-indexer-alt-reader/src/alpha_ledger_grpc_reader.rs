@@ -92,6 +92,22 @@ impl AlphaLedgerGrpcReader {
         drain_list_stream("ListTransactions", stream).await
     }
 
+    pub async fn list_events(
+        &self,
+        request: proto::ListEventsRequest,
+    ) -> anyhow::Result<StreamPage<proto::Event>> {
+        let stream = self
+            .client
+            .clone()
+            .ledger_client()
+            .list_events(self.request(request))
+            .await
+            .context("ListEvents stream open failed")?
+            .into_inner();
+
+        drain_list_stream("ListEvents", stream).await
+    }
+
     /// Create a gRPC request, optionally with the grpc-timeout header if configured.
     fn request<T>(&self, input: T) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);
@@ -211,23 +227,40 @@ impl TryFrom<proto::ListTransactionsResponse> for FrameKind<ExecutedTransaction>
     type Error = anyhow::Error;
 
     fn try_from(response: proto::ListTransactionsResponse) -> anyhow::Result<Self> {
-        let payload = response.transaction;
-        let cursor = response.watermark.and_then(|w| w.cursor);
-        let end_reason = response.end.map(|e| e.reason());
-
-        if payload.is_none() && cursor.is_none() && end_reason.is_none() {
-            return Ok(FrameKind::Unknown);
-        }
-        if payload.is_some() && cursor.is_none() {
-            bail!("Item frame missing watermark.cursor");
-        }
-
-        Ok(FrameKind::Frame {
-            payload,
-            cursor,
-            end_reason,
-        })
+        classify_frame(response.transaction, response.watermark, response.end)
     }
+}
+
+impl TryFrom<proto::ListEventsResponse> for FrameKind<proto::Event> {
+    type Error = anyhow::Error;
+
+    fn try_from(response: proto::ListEventsResponse) -> anyhow::Result<Self> {
+        classify_frame(response.event, response.watermark, response.end)
+    }
+}
+
+/// Classify a raw list-stream response into a [`FrameKind`], given its payload field. Per-API
+/// implementations only select which response field is the payload.
+fn classify_frame<T>(
+    payload: Option<T>,
+    watermark: Option<proto::Watermark>,
+    end: Option<proto::QueryEnd>,
+) -> anyhow::Result<FrameKind<T>> {
+    let cursor = watermark.and_then(|w| w.cursor);
+    let end_reason = end.map(|e| e.reason());
+
+    if payload.is_none() && cursor.is_none() && end_reason.is_none() {
+        return Ok(FrameKind::Unknown);
+    }
+    if payload.is_some() && cursor.is_none() {
+        bail!("Item frame missing watermark.cursor");
+    }
+
+    Ok(FrameKind::Frame {
+        payload,
+        cursor,
+        end_reason,
+    })
 }
 
 async fn drain_list_stream<R, T, S>(
