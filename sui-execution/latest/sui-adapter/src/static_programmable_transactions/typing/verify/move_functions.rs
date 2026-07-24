@@ -7,8 +7,9 @@ use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typi
 use move_binary_format::file_format::Visibility;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
+use sui_types::base_types::TxContextKind;
 use sui_types::error::ExecutionErrorTrait;
-use sui_types::execution_status::ExecutionErrorKind;
+use sui_types::execution_status::{CommandArgumentError, ExecutionErrorKind};
 use sui_verifier::private_generics_verifier_v2;
 
 /// Checks the following
@@ -18,6 +19,8 @@ use sui_verifier::private_generics_verifier_v2;
 /// - no references returned from move calls
 ///    - Can be disabled under certain execution modes
 ///    - Can be disabled via a feature flag
+/// - valid `TxContext` usage in the signature
+///    - Gated by a feature flag
 pub fn verify<Mode: ExecutionMode>(
     env: &Env<Mode>,
     txn: &T::Transaction,
@@ -52,6 +55,7 @@ fn command<Mode: ExecutionMode>(
 
 /// Checks a move call for
 /// - valid signature (no references in return type)
+/// - valid `TxContext` usage in the signature
 /// - valid visibility
 /// - private generics rules
 fn move_call<Mode: ExecutionMode>(env: &Env<Mode>, call: &T::MoveCall) -> Result<(), Mode::Error> {
@@ -60,6 +64,7 @@ fn move_call<Mode: ExecutionMode>(env: &Env<Mode>, call: &T::MoveCall) -> Result
         arguments: _,
     } = call;
     check_signature::<Mode>(env, function)?;
+    check_tx_context::<Mode>(env, function)?;
     check_private_generics_v2(&function.original_mid, function.name.as_ident_str())?;
     check_visibility::<Mode>(env, function)?;
     Ok(())
@@ -91,6 +96,73 @@ fn check_signature<Mode: ExecutionMode>(
 
     for (idx, ty) in function.signature.return_.iter().enumerate() {
         check_return_type::<Mode, Mode::Error>(idx, ty)?;
+    }
+    Ok(())
+}
+
+/// Checks `TxContext` usage in the function's signature:
+/// - In the parameters, `TxContext` can appear at most once as `&mut TxContext`, or any number of
+///   times as `&TxContext`. It can never be taken by value.
+/// - It can never appear in return position, meaning it can never become a result of a command.
+///
+/// These rules apply to the instantiated signature, so they cover generic parameters and return
+/// types instantiated with `TxContext`. Unlike the reference rules in `check_signature`, they are
+/// enforced under all execution modes.
+fn check_tx_context<Mode: ExecutionMode>(
+    env: &Env<Mode>,
+    function: &T::LoadedFunction,
+) -> Result<(), Mode::Error> {
+    if !env.protocol_config.ptb_tx_context_restrictions() {
+        return Ok(());
+    }
+    let mut first_mut_idx = None;
+    let mut num_tx_context_refs = 0usize;
+    for (idx, param) in function.signature.parameters.iter().enumerate() {
+        match param.is_tx_context() {
+            TxContextKind::Mutable => {
+                num_tx_context_refs = num_tx_context_refs.saturating_add(1);
+                if first_mut_idx.is_none() {
+                    first_mut_idx = Some(idx);
+                }
+            }
+            TxContextKind::Immutable => {
+                num_tx_context_refs = num_tx_context_refs.saturating_add(1);
+            }
+            TxContextKind::None => {
+                if param.is_tx_context_by_value() {
+                    return Err(Mode::Error::new_with_source(
+                        ExecutionErrorKind::command_argument_error(
+                            CommandArgumentError::TypeMismatch,
+                            checked_as!(idx, u16)?,
+                        ),
+                        "TxContext cannot be taken by value",
+                    ));
+                }
+            }
+        }
+    }
+    if let Some(mut_idx) = first_mut_idx
+        && num_tx_context_refs > 1
+    {
+        return Err(Mode::Error::new_with_source(
+            ExecutionErrorKind::command_argument_error(
+                CommandArgumentError::InvalidReferenceArgument,
+                checked_as!(mut_idx, u16)?,
+            ),
+            "&mut TxContext must be the only TxContext parameter when it is used mutably",
+        ));
+    }
+    for (idx, return_ty) in function.signature.return_.iter().enumerate() {
+        let is_tx_context =
+            return_ty.is_tx_context() != TxContextKind::None || return_ty.is_tx_context_by_value();
+        if is_tx_context {
+            return Err(Mode::Error::new_with_source(
+                ExecutionErrorKind::InvalidPublicFunctionReturnType {
+                    idx: checked_as!(idx, u16)?,
+                },
+                "TxContext cannot be returned from a Move call",
+            ));
+        }
     }
     Ok(())
 }
