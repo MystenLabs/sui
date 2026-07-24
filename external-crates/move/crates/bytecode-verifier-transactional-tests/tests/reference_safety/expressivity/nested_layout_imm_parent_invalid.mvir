@@ -118,3 +118,54 @@ label b0:
 }
 
 }
+
+//# publish
+mvir 0x6::swap_enum_with_field_borrow {
+
+public enum E has drop {
+    A { value: u64 },
+    B { value: u64 },
+}
+
+fun t(v: &mut vector<Self::E>) {
+    let v_alias: &mut vector<Self::E>;
+    let v_imm: &vector<Self::E>;
+    let elem_imm: &Self::E;
+    let field_imm: &u64;
+label b0:
+    v_alias = copy(v);
+    // The old checker rejects here, before reaching the unsafe swap through the alias.
+    v_imm = freeze(copy(v));
+    elem_imm = vec_imm_borrow<Self::E>(move(v_imm), 0);
+    &E::A { value: field_imm } = move(elem_imm);
+    // Moving an enum element can invalidate its variant-field reference.
+    vec_swap<Self::E>(copy(v_alias), 0, 1);
+    _ = *move(field_imm);
+    _ = move(v_alias);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x7::swap_vector_with_element_borrow {
+
+fun t(outer: &mut vector<vector<u64>>) {
+    let outer_alias: &mut vector<vector<u64>>;
+    let outer_imm: &vector<vector<u64>>;
+    let inner_imm: &vector<u64>;
+    let elem_imm: &u64;
+label b0:
+    outer_alias = copy(outer);
+    // The old checker rejects here, before reaching the unsafe swap through the alias.
+    outer_imm = freeze(copy(outer));
+    inner_imm = vec_imm_borrow<vector<u64>>(move(outer_imm), 0);
+    elem_imm = vec_imm_borrow<u64>(move(inner_imm), 0);
+    // Moving an inner vector can invalidate a reference into that vector.
+    vec_swap<vector<u64>>(copy(outer_alias), 0, 1);
+    _ = *move(elem_imm);
+    _ = move(outer_alias);
+    return;
+}
+
+}

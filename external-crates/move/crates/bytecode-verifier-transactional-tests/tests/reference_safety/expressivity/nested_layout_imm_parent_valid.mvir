@@ -104,3 +104,27 @@ label b0:
 }
 
 }
+
+//# publish
+mvir 0x6::swap_nonflat_with_imm_alias {
+
+public enum E has drop {
+    A { value: u64 },
+    B { value: u64 },
+}
+
+fun t(v: &mut vector<Self::E>) {
+    let v_alias: &mut vector<Self::E>;
+    let v_imm: &vector<Self::E>;
+label b0:
+    v_alias = copy(v);
+    // The old checker rejects this immutable alias while v_alias is live.
+    v_imm = freeze(copy(v));
+    // With no element extension, swapping through the mutable alias cannot dangle a reference.
+    vec_swap<Self::E>(copy(v_alias), 0, 1);
+    _ = vec_len<Self::E>(move(v_imm));
+    _ = move(v_alias);
+    return;
+}
+
+}
