@@ -324,6 +324,7 @@ mod tests {
     use sui_types::digests::CheckpointDigest;
     use sui_types::object::Object;
     use sui_types::object::Owner;
+    use sui_types::storage::RpcIndexes;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;

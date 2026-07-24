@@ -15,14 +15,14 @@ store only as the persisted result of a read.
 ## Who holds whom
 
 `ServiceManager` opens and owns the durable pieces; `ForkStore` orchestrates policy over
-them; `RpcReader` and Simulacrum are the two consumers standing in front of it.
+them and is what both consumers stand on: it implements the RPC storage traits for
+`RpcService` and `SimulatorStore` for Simulacrum.
 
 ```mermaid
 flowchart TD
-    rpcsvc["RpcService (sui-rpc-api)"] --> reader[RpcReader]
-    sim["Simulacrum (executor)"] --> fs[ForkStore]
-    reader -->|fork-policy reads| fs
-    reader -->|stock-only reads| stock["RpcStoreReader (stock)"]
+    rpcsvc["RpcService (sui-rpc-api)"] -->|RPC storage traits| fs[ForkStore]
+    sim["Simulacrum (executor)"] -->|SimulatorStore| fs
+    fs -->|stock-only reads| stock["RpcStoreReader (stock)"]
     fs --> ls[LocalStore]
     fs --> rs[RemoteSource]
     fs --> inv[InventoryInitializer]
@@ -47,14 +47,18 @@ flowchart TD
 
 ### RPC routing
 
-`RpcReader` is a thin router: everything the fork has policy for goes to `ForkStore`
-(which is itself local-first), and only the surfaces the fork has no policy for touch the
-stock reader directly.
+`ForkStore`'s RPC trait impls are a thin router: everything the fork has policy for
+resolves through the store's own local-first helpers, and only the surfaces the fork has
+no policy for touch the stock reader directly. The stock reader it uses is the one cached
+inside its `LocalStore` (`local_store().reader()`) — so in the *ownership* sense
+everything goes through `ForkStore`. The arrows below show the *policy* sense instead:
+whose logic answers the read. A stock-only read borrows the reader through the store but
+runs none of the store's policy.
 
 ```mermaid
 flowchart TD
-    req[incoming gRPC read] --> route{RpcReader}
-    route -->|"fork policy: objects, transactions,<br/>checkpoints, owner and coin indexes"| fs[ForkStore]
+    req[incoming gRPC read] --> route{"ForkStore RPC trait impls"}
+    route -->|"fork policy: objects, transactions,<br/>checkpoints, owner and coin indexes"| fs["fork-policy helpers"]
     route -->|"stock-only: events, full contents, committees,<br/>epoch info, layouts, ledger and bitmap indexes"| stock[RpcStoreReader]
     route -->|"hybrid: chain identifier,<br/>highest indexed checkpoint"| hybrid[stock first, fork fallback]
     hybrid --> stock

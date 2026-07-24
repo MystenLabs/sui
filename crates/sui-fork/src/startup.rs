@@ -40,7 +40,6 @@ use crate::metadata::MetadataStore;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
-use crate::rpc::reader::RpcReader;
 use crate::seed::SeedInput;
 use crate::seed::ensure_seed_manifest_matches;
 use crate::seed::save_seed_manifest_objects;
@@ -221,7 +220,8 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
 }
 
 /// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to
-/// `rpc_addr`, backed by `RpcReader`, then blocks on Ctrl+C.
+/// `rpc_addr`, backed by the `ForkStore`'s RPC trait impls, then blocks on
+/// Ctrl+C.
 pub async fn run(
     context: Context,
     subscription_handle: SubscriptionServiceHandle,
@@ -232,10 +232,10 @@ pub async fn run(
         let sim = context.simulacrum().read().await;
         sim.store().clone()
     };
-    let reader: Arc<dyn RpcStateReader> = Arc::new(RpcReader::new(store));
+    let reader: Arc<dyn RpcStateReader> = Arc::new(store);
 
     // Serve through `sui-rpc-api`'s `RpcService` directly (the fork does not
-    // depend on `sui-rpc-node`). The rpc-store-backed `RpcReader` is the
+    // depend on `sui-rpc-node`). The `ForkStore` itself is the
     // `RpcStateReader`, with the fork admin service and executor attached.
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-fork", version));

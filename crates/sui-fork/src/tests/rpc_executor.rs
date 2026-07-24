@@ -53,7 +53,6 @@ use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
 use crate::rpc::executor::ForkedTransactionExecutor;
-use crate::rpc::reader::RpcReader;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 use crate::test_support::absent_objects_gql_server;
@@ -446,7 +445,7 @@ async fn test_tx_execution_indexes_checkpoint_in_rpc_store() {
 }
 
 #[tokio::test]
-async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
+async fn test_rpc_reads_serve_indexed_post_fork_data_from_rpc_store() {
     let mut harness = TestHarness::new_with_services().await;
     let signed_tx = harness.build_transfer_tx(1_000);
     let expected_digest = *signed_tx.digest();
@@ -474,21 +473,15 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
         .expect("timed out waiting for indexed checkpoint broadcast")
         .expect("checkpoint channel closed");
 
-    let empty_store = ForkStore::new_for_testing(
-        harness.temp.path().join("empty-rpc-reader-store"),
+    let reader = ForkStore::new_for_testing(
+        harness.temp.path().join("empty-rpc-read-store"),
         harness.context.services().unwrap().local_store(),
     );
-    let reader = RpcReader::new(empty_store);
 
-    assert!(
-        reader
-            .get_checkpoint_by_sequence_number(checkpoint_seq)
-            .is_some()
-    );
-    assert!(reader.get_transaction(&expected_digest).is_some());
+    assert!(ReadStore::get_checkpoint_by_sequence_number(&reader, checkpoint_seq).is_some());
+    assert!(ReadStore::get_transaction(&reader, &expected_digest).is_some());
     assert_eq!(
-        *reader
-            .get_transaction_effects(&expected_digest)
+        *ReadStore::get_transaction_effects(&reader, &expected_digest)
             .expect("effects should be indexed")
             .transaction_digest(),
         expected_digest,
@@ -499,8 +492,8 @@ async fn test_fork_rpc_reader_serves_indexed_post_fork_data_from_rpc_store() {
         .expect("output objects should be populated")
     {
         assert!(
-            reader.get_object(&object.id()).is_some(),
-            "output object {} should be readable through RpcReader",
+            ObjectStore::get_object(&reader, &object.id()).is_some(),
+            "output object {} should be readable through the RPC read surface",
             object.id(),
         );
     }
