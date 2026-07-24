@@ -6,4 +6,7 @@ module Usage::usage {
 
     // ...nor in function bodies
     public fun max(): u64 { defn::MAX }
+
+    // the generated constant function is not nameable from source
+    public fun call_generated(): u64 { defn::_const_MAX() }
 }
