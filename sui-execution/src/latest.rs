@@ -4,14 +4,15 @@
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use std::collections::BTreeMap;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ConsensusObjectVersion, ObjectID, SuiAddress, SystemObjectVersion, TxContext},
+    base_types::{
+        ConsensusObjectVersion, SuiAddress, SystemObjectVersion, SystemObjectVersions, TxContext,
+    },
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -74,7 +75,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+        system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -93,10 +94,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
                 input_objects,
-                system_object_versions
-                    .into_iter()
-                    .map(|(id, version)| (id, SystemObjectVersion::Exact(version)))
-                    .collect(),
+                system_object_versions.map(SystemObjectVersion::Exact),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -128,7 +126,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+        system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -147,10 +145,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
                 input_objects,
-                system_object_versions
-                    .into_iter()
-                    .map(|(id, version)| (id, SystemObjectVersion::Exact(version)))
-                    .collect(),
+                system_object_versions.map(SystemObjectVersion::Exact),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -199,7 +194,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                sui_types::implicitly_read_system_objects_at_latest_version(),
+                SystemObjectVersions::all_latest(),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -219,7 +214,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                sui_types::implicitly_read_system_objects_at_latest_version(),
+                SystemObjectVersions::all_latest(),
                 gas,
                 gas_status,
                 transaction_kind,

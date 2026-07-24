@@ -1937,7 +1937,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+        system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,

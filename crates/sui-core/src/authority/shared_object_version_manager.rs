@@ -16,6 +16,7 @@ use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SystemObjectVersions;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
@@ -48,13 +49,13 @@ pub struct AssignedVersions {
     /// commit this transaction belongs to). The accumulator root qualifies because it is written at
     /// the end of every commit, so there is always a well-defined prior version to read from. More
     /// system objects will be added over time.
-    pub system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+    pub system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
 }
 
 impl AssignedVersions {
     pub fn new(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
+        system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
     ) -> Self {
         Self {
             shared_object_versions,
@@ -72,25 +73,19 @@ impl AssignedVersions {
     ) -> Self {
         Self::new(
             shared_object_versions,
-            accumulator_version
-                .map(|v| {
-                    (
-                        SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                        ConsensusObjectVersion {
-                            initial_shared_version: sui_types::object::OBJECT_START_VERSION,
-                            version: v,
-                        },
-                    )
-                })
-                .into_iter()
-                .collect(),
+            SystemObjectVersions {
+                accumulator_version: accumulator_version.map(|v| ConsensusObjectVersion {
+                    initial_shared_version: sui_types::object::OBJECT_START_VERSION,
+                    version: v,
+                }),
+            },
         )
     }
 
     /// The accumulator root version this transaction reads, if any.
     pub fn accumulator_version(&self) -> Option<SequenceNumber> {
         self.system_object_versions
-            .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .accumulator_version
             .map(|v| v.version)
     }
 
@@ -401,48 +396,37 @@ impl SharedObjVerManager {
             // explicit input. A cancelled transaction records special sentinel versions (e.g.
             // CONGESTED) for its declared inputs; those may land in this map, which is harmless —
             // a cancelled transaction never enters Move execution, so its entries are never read.
-            let mut system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion> =
-                IMPLICITLY_READ_SYSTEM_OBJECTS
-                    .iter()
-                    .filter_map(|id| accessed_versions.get(id).map(|version| (*id, *version)))
-                    .map(|(id, version)| {
-                        let initial_shared_version = epoch_store
-                            .epoch_start_config()
-                            .system_object_initial_shared_version(id)
-                            .expect("system object must be registered in the epoch start config");
-                        (
-                            id,
-                            ConsensusObjectVersion {
-                                initial_shared_version,
-                                version,
-                            },
-                        )
-                    })
-                    .collect();
+            let root_version_from_effects = accessed_versions
+                .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .copied();
             // The accumulator root version is needed even when the transaction doesn't read it in
             // execution (e.g. coin-reservation rewriting), so always write the version
             // reconstructed from the settlement transaction. A version harvested from effects must
             // agree with it, unless it is a cancelled sentinel, which this overwrite corrects.
-            if let Some(v) = *accumulator_version {
-                let initial_shared_version = epoch_store
-                    .epoch_start_config()
-                    .accumulator_root_obj_initial_shared_version()
-                    .expect(
-                        "accumulator root initial shared version must be set when an accumulator version is assigned",
-                    );
-                let prev = system_object_versions.insert(
-                    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            let root_version = if let Some(v) = *accumulator_version {
+                debug_assert!(
+                    root_version_from_effects.is_none_or(|p| p == v || p.is_cancelled()),
+                    "accumulator root version from effects {root_version_from_effects:?} disagrees \
+                     with the reconstructed accumulator version {v:?}"
+                );
+                Some(v)
+            } else {
+                root_version_from_effects
+            };
+            let system_object_versions = SystemObjectVersions {
+                accumulator_version: root_version.map(|version| {
+                    let initial_shared_version = epoch_store
+                        .epoch_start_config()
+                        .accumulator_root_obj_initial_shared_version()
+                        .expect(
+                            "accumulator root initial shared version must be set when its version is assigned",
+                        );
                     ConsensusObjectVersion {
                         initial_shared_version,
-                        version: v,
-                    },
-                );
-                debug_assert!(
-                    prev.is_none_or(|p| p.version == v || p.version.is_cancelled()),
-                    "accumulator root version from effects {prev:?} disagrees with the \
-                     reconstructed accumulator version {v:?}"
-                );
-            }
+                        version,
+                    }
+                }),
+            };
             let tx_key = cert.key();
             trace!(
                 ?tx_key,
@@ -484,11 +468,9 @@ impl SharedObjVerManager {
             None
         };
         // The accumulator root is the only system object read implicitly during execution today.
-        let system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion> =
-            accumulator_version
-                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-                .into_iter()
-                .collect();
+        let system_object_versions = SystemObjectVersions {
+            accumulator_version,
+        };
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.

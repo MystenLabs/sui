@@ -73,8 +73,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        _system_object_versions: std::collections::BTreeMap<
-            sui_types::base_types::ObjectID,
+        _system_object_versions: sui_types::base_types::SystemObjectVersions<
             sui_types::base_types::ConsensusObjectVersion,
         >,
         gas: GasData,
@@ -197,8 +196,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        _system_object_versions: std::collections::BTreeMap<
-            sui_types::base_types::ObjectID,
+        _system_object_versions: sui_types::base_types::SystemObjectVersions<
             sui_types::base_types::ConsensusObjectVersion,
         >,
         gas: GasData,

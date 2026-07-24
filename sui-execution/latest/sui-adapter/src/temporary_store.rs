@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::{SystemObjectVersion, VersionDigest};
+use sui_types::base_types::{SystemObjectVersion, SystemObjectVersions, VersionDigest};
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
@@ -30,7 +30,7 @@ use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -104,7 +104,7 @@ pub struct TemporaryStore<'backing> {
     /// recorded version; `check_system_object_available` consults this map. Every system object read
     /// during execution must appear here — querying one that is absent is an invariant violation
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
-    system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+    system_object_versions: SystemObjectVersions<SystemObjectVersion>,
 
     /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
     /// digest) at which they were read. Recorded by `check_system_object_available` and
@@ -124,7 +124,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+        system_object_versions: SystemObjectVersions<SystemObjectVersion>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -177,7 +177,11 @@ impl<'backing> TemporaryStore<'backing> {
     /// read so it can be emitted into effects and reproduced on replay.
     pub fn check_system_object_available(&self, object_id: &ObjectID) {
         // Every system object read during execution must have an assigned version.
-        let consensus_version = self.system_object_versions.get(object_id).copied().unwrap();
+        let consensus_version = if *object_id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+            self.system_object_versions.accumulator_version.unwrap()
+        } else {
+            panic!("unknown implicitly read system object {object_id}")
+        };
         let object_at_required = self
             .store
             .load_implicitly_read_system_object(object_id, consensus_version);
