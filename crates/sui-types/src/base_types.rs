@@ -236,7 +236,7 @@ pub struct ConsensusObjectVersion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemObjectVersion {
     Exact(ConsensusObjectVersion),
-    ExactOrLatest(SequenceNumber),
+    Latest,
 }
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins

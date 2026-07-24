@@ -13,6 +13,11 @@ pub trait ObjectStore {
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
 
+    /// Load an implicitly read system object at the given version.
+    /// The version will be exact in normal execution, but in other cases the store can fall back
+    /// to the latest version to ensure a result is always available.
+    /// Below is the default implementation that works for all the store except the main store,
+    /// which is implemented in the writeback cache.
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
@@ -27,9 +32,8 @@ pub trait ObjectStore {
                         exact.version
                     )
                 }),
-            SystemObjectVersion::ExactOrLatest(v) => self
-                .get_object_by_key(object_id, v)
-                .or_else(|| self.get_object(object_id))
+            SystemObjectVersion::Latest => self
+                .get_object(object_id)
                 .unwrap_or_else(|| panic!("system object {object_id} does not exist")),
         }
     }

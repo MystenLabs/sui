@@ -212,20 +212,7 @@ pub(crate) fn execute_one_transaction(
         }
     };
 
-    // The versions the transaction's system (consensus) objects were sequenced against, recovered
-    // from its effects (mirrors the per-transaction map a live node assigns). Cancelled inputs carry
-    // no live version and are excluded above, so only mutated/read-only entries remain.
-    let system_object_versions = executed
-        .effects
-        .input_consensus_objects()
-        .into_iter()
-        .filter_map(|ico| match ico {
-            InputConsensusObject::Mutate((id, v, _))
-            | InputConsensusObject::ReadOnly((id, v, _)) => Some((id, v)),
-            _ => None,
-        })
-        .map(|(id, v)| (id, SystemObjectVersion::ExactOrLatest(v)))
-        .collect();
+    let system_object_versions = sui_types::implicitly_read_system_objects_at_latest_version();
 
     let gas_data = txn_data.gas_data().clone();
     let signer = txn_data.sender();

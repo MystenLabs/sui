@@ -164,6 +164,14 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 /// this set. Extend this as more implicitly-read system objects arise.
 pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[SUI_ACCUMULATOR_ROOT_OBJECT_ID];
 
+pub fn implicitly_read_system_objects_at_latest_version()
+-> std::collections::BTreeMap<ObjectID, base_types::SystemObjectVersion> {
+    IMPLICITLY_READ_SYSTEM_OBJECTS
+        .iter()
+        .map(|id| (*id, base_types::SystemObjectVersion::Latest))
+        .collect()
+}
+
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
 }

@@ -510,9 +510,8 @@ impl WritebackCache {
         );
         let exact_version = match system_object_version {
             SystemObjectVersion::Exact(exact) => exact,
-            SystemObjectVersion::ExactOrLatest(version) => {
-                return ObjectCacheRead::get_object_by_key(self, object_id, version)
-                    .or_else(|| ObjectCacheRead::get_object(self, object_id))
+            SystemObjectVersion::Latest => {
+                return ObjectCacheRead::get_object(self, object_id)
                     .unwrap_or_else(|| panic!("system object {object_id} does not exist"));
             }
         };

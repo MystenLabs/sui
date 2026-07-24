@@ -140,7 +140,7 @@ pub fn execute_transaction_to_effects(
             &epoch,
             epoch_start_timestamp,
             input_objects,
-            std::collections::BTreeMap::new(),
+            sui_types::implicitly_read_system_objects_at_latest_version(),
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),

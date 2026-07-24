@@ -193,8 +193,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                sui_types::implicitly_read_system_objects_at_latest_version(),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -214,8 +213,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                sui_types::implicitly_read_system_objects_at_latest_version(),
                 gas,
                 gas_status,
                 transaction_kind,
