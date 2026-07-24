@@ -527,18 +527,26 @@ impl WritebackCache {
             version,
         };
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
-                "get_implicitly_read_system_object_blocking",
-                &[key],
-                move |_keys| {
-                    // In the case of dry-run/simulate, it is theoretically possible that the object's
-                    // required version gets pruned by the time we get here.
-                    // To ensure liveness, we use >= for the version comparison to ensure that we always return.
-                    let resolved = ObjectCacheRead::get_object(self, object_id)
-                        .is_some_and(|latest| latest.version() >= version);
-                    vec![if resolved { Some(()) } else { None }]
-                },
-            ))
+            tokio::runtime::Handle::current().block_on(async {
+                let released = crate::execution_driver::release_execution_permit_for_wait();
+                self.object_notify_read
+                    .read(
+                        "get_implicitly_read_system_object_blocking",
+                        &[key],
+                        move |_keys| {
+                            // In the case of dry-run/simulate, it is theoretically possible that the object's
+                            // required version gets pruned by the time we get here.
+                            // To ensure liveness, we use >= for the version comparison to ensure that we always return.
+                            let resolved = ObjectCacheRead::get_object(self, object_id)
+                                .is_some_and(|latest| latest.version() >= version);
+                            vec![if resolved { Some(()) } else { None }]
+                        },
+                    )
+                    .await;
+                if let Some(released) = released {
+                    released.reacquire().await;
+                }
+            })
         });
         self.metrics
             .implicit_system_object_read_wait_latency

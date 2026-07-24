@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 
-use mysten_common::{fatal, random::get_rng};
+use mysten_common::{debug_fatal, fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
-use tokio::sync::{Semaphore, mpsc::UnboundedReceiver, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc::UnboundedReceiver, oneshot};
 use tracing::{Instrument, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
@@ -20,6 +20,51 @@ use crate::execution_scheduler::PendingCertificate;
 mod execution_driver_tests;
 
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
+
+pub(crate) struct ExecutionPermit {
+    semaphore: Arc<Semaphore>,
+    permit: Mutex<Option<OwnedSemaphorePermit>>,
+}
+
+impl ExecutionPermit {
+    pub(crate) fn new(semaphore: Arc<Semaphore>) -> Self {
+        Self {
+            semaphore,
+            permit: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn store(&self, permit: OwnedSemaphorePermit) {
+        let prev = self.permit.lock().unwrap().replace(permit);
+        assert!(prev.is_none(), "execution permit stored twice");
+    }
+}
+
+tokio::task_local! {
+    pub(crate) static EXECUTION_PERMIT: Arc<ExecutionPermit>;
+}
+
+pub(crate) struct ReleasedExecutionPermit(Arc<ExecutionPermit>);
+
+impl ReleasedExecutionPermit {
+    pub(crate) async fn reacquire(self) {
+        let permit = self.0.semaphore.clone().acquire_owned().await.unwrap();
+        self.0.store(permit);
+    }
+}
+
+pub(crate) fn release_execution_permit_for_wait() -> Option<ReleasedExecutionPermit> {
+    EXECUTION_PERMIT
+        .try_with(|slot| {
+            if slot.permit.lock().unwrap().take().is_some() {
+                Some(ReleasedExecutionPermit(slot.clone()))
+            } else {
+                debug_fatal!("execution permit slot is empty at release");
+                None
+            }
+        })
+        .unwrap_or(None)
+}
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
@@ -107,12 +152,13 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         let epoch_store_clone = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
+        let execution_permit = Arc::new(ExecutionPermit::new(limit.clone()));
+        spawn_monitored_task!(epoch_store.within_alive_epoch(EXECUTION_PERMIT.scope(execution_permit.clone(), async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _executing_guard = executing_guard;
             // hold semaphore permit until task completes. unwrap ok because we never close
             // the semaphore in this context.
-            let _guard = limit.acquire_owned().await.unwrap();
+            execution_permit.store(limit.acquire_owned().await.unwrap());
 
             if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
                 authority
@@ -160,6 +206,6 @@ pub async fn execution_process(
                         .inc();
                 }
             }
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
+        }).instrument(error_span!("execution_driver", tx_digest = ?digest))));
     }
 }
