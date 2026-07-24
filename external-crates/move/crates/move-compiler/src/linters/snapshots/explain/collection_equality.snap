@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: explanation.to_string()
+---
+collection_equality (W99005): possibly useless collections compare
+
+Sui collections — `Bag`, `ObjectBag`, `Table`, `ObjectTable`, `LinkedTable`, `TableVec`, `VecMap`,
+and `VecSet` — have no meaningful `==`. The UID-backed ones (`Bag`, `Table`, …) compare by their
+internal handle, not contents; `VecMap`/`VecSet` compare their backing vector, so equal contents in
+a different insertion order compare unequal. Either way `==`/`!=` rarely means what it looks like.
+
+This lint is on by default.
+
+## Example
+
+Flagged:
+
+```move
+public fun bag_eq(bag1: &Bag, bag2: &Bag): bool {
+    bag1 == bag2
+}
+```
+
+Suggested:
+
+```move
+// compare the state you care about, not the collection handle
+public fun bag_eq(bag1: &Bag, bag2: &Bag): bool {
+    bag1.length() == bag2.length()
+}
+```
+
+Suppress a specific case with `#[allow(lint(collection_equality))]`.

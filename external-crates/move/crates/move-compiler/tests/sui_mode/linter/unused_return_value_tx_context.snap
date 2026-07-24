@@ -14,3 +14,4 @@ warning[Lint W02013]: return value of a non-mutating call is discarded
    = 'TxContext' is not considered a mutable reference input for the purposes of this lint.
    = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
    = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unused_return_value` for more information

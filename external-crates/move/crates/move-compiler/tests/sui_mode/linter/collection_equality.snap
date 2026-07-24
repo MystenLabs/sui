@@ -13,6 +13,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::bag::Bag' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:19:14
@@ -22,6 +23,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::object_bag::ObjectBag' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:23:16
@@ -31,6 +33,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::table::Table' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:30:16
@@ -40,6 +43,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::object_table::ObjectTable' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:37:16
@@ -49,6 +53,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::linked_table::LinkedTable' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:41:16
@@ -58,6 +63,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::table_vec::TableVec' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:45:14
@@ -67,6 +73,7 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::vec_map::VecMap' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information
 
 warning[Lint W99005]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:49:14
@@ -76,3 +83,4 @@ warning[Lint W99005]: possibly useless collections compare
    │
    = Equality for collections of type 'sui::vec_set::VecSet' IS NOT a structural check based on content
    = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain collection_equality` for more information

@@ -15,6 +15,7 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                        ^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information
 
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:46:40
@@ -29,6 +30,7 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                        ^ Freezing an object of type 'IndirectWrapper' also freezes all objects wrapped in its field 's'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information
 
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:51:40
@@ -40,6 +42,7 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                        ^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information
 
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:55:40
@@ -51,6 +54,7 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                        ^ Freezing an object of type 'GenWrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information
 
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:59:40
@@ -65,6 +69,7 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                        ^ Freezing an object of type 'IndirectGenWrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information
 
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:63:40
@@ -76,6 +81,7 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information
 
 warning[Lint W99004]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:63:73
@@ -87,3 +93,4 @@ warning[Lint W99004]: attempting to freeze wrapped objects
    │                                                                         ^^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
    = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain freeze_wrapped` for more information

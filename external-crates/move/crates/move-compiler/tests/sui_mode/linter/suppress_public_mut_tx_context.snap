@@ -15,3 +15,4 @@ warning[Lint W99011]: it will not be possible to call this function
    │
    = Due to restrictions in PTB execution if there is a mutable reference to a TxContext, it must be unique. This means that there cannot be another usage of the transaction context (either '&TxContext' or '&mut TxContext') in the function parameters. This function will not be callable on Sui
    = This warning can be suppressed with '#[allow(lint(uncallable_function))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain uncallable_function` for more information

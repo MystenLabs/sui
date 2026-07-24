@@ -12,6 +12,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                     ^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:37:17
@@ -20,6 +21,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:37:20
@@ -28,6 +30,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                    ^^^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:45:21
@@ -36,6 +39,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                     ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the inner expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:45:24
@@ -44,6 +48,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                        ^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:50:21
@@ -52,6 +57,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                     ^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:54:21
@@ -60,6 +66,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                     ^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:59:17
@@ -68,6 +75,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:66:17
@@ -76,6 +84,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:71:17
@@ -84,3 +93,4 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information

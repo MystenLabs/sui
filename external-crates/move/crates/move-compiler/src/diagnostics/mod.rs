@@ -112,6 +112,26 @@ pub struct Migration {
 // Diagnostic Reporting
 //**************************************************************************************************
 
+/// Command shown in the per-lint `run `<cmd> --explain <name>`` hint. Defaults to `move lint`; a
+/// driver that wraps the CLI under another name overrides it (the Sui CLI sets `sui move lint`).
+const DEFAULT_EXPLAIN_COMMAND: &str = "move lint";
+static EXPLAIN_COMMAND: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Override the command named in the `--explain` hint. Idempotent; the first call wins.
+pub fn set_explain_command(command: impl Into<String>) {
+    let _ = EXPLAIN_COMMAND.set(command.into());
+}
+
+/// The command a driver exposes for lints (`move lint` by default, or whatever a driver registered
+/// via [`set_explain_command`], e.g. `sui move lint`). Used to phrase `--explain`/`--list` hints
+/// consistently with how the tool is actually invoked.
+pub fn explain_command() -> &'static str {
+    EXPLAIN_COMMAND
+        .get()
+        .map(String::as_str)
+        .unwrap_or(DEFAULT_EXPLAIN_COMMAND)
+}
+
 pub fn report_diagnostics(files: &MappedFiles, diags: Diagnostics) -> ! {
     let should_exit = true;
     report_diagnostics_impl(files, diags, should_exit);
@@ -284,6 +304,16 @@ fn render_diagnostic_text(
         mut notes,
     } = diag;
     let mut diag = csr::diagnostic::Diagnostic::new(info.severity().into_codespan_severity());
+    // Attach an `--explain` hint to every lint diagnostic that has an explanation.
+    // `info.render()` below consumes `info`, so read its id first.
+    if info.external_prefix() == Some(crate::linters::LINT_WARNING_PREFIX)
+        && let Some(name) = crate::linters::docs::explained_lint_name(info.category(), info.code())
+    {
+        notes.push(format!(
+            "run `{} --explain {name}` for more information",
+            explain_command(),
+        ));
+    }
     let (code, message) = info.render();
     diag = diag.with_code(code);
     diag = diag.with_message(message.to_string());

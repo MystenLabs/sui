@@ -1,0 +1,30 @@
+A by-value struct defined in this module that has the `store` ability can already be transferred,
+shared, or frozen by anyone through the `public_*` API. Routing it through the private
+`transfer`/`share_object`/`freeze_object` therefore cannot enforce any custom policy — callers just
+bypass it.
+
+This lint is on by default.
+
+## When it's OK
+
+If the type keeps `store`, call the honest `public_*` variant. If the policy must actually hold,
+remove `store` so the private variant is the only path.
+
+## Example
+
+Flagged:
+
+```move
+// `S1` has `key` + `store`, so callers can already freeze it via `public_freeze_object`
+public fun custom_freeze(o: S1) {
+    transfer::freeze_object(o)
+}
+```
+
+Suggested:
+
+```move
+public fun custom_freeze(o: S1) {
+    transfer::public_freeze_object(o)
+}
+```

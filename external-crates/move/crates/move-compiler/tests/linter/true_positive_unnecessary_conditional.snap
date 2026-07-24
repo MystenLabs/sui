@@ -12,6 +12,7 @@ warning[Lint W01007]: 'if' expression can be removed
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected an unnecessary conditional expression 'if (cond)'. Consider using the condition directly, i.e. 'cond'
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_conditional` for more information
 
 warning[Lint W01007]: 'if' expression can be removed
   ┌─ tests/linter/true_positive_unnecessary_conditional.move:5:9
@@ -20,6 +21,7 @@ warning[Lint W01007]: 'if' expression can be removed
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Detected an unnecessary conditional expression 'if (cond)'. Consider using the condition directly, i.e. '!cond'
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_conditional` for more information
 
 warning[Lint W01007]: 'if' expression can be removed
   ┌─ tests/linter/true_positive_unnecessary_conditional.move:9:9
@@ -32,6 +34,7 @@ warning[Lint W01007]: 'if' expression can be removed
   │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_conditional` for more information
 
 warning[Lint W01007]: 'if' expression can be removed
    ┌─ tests/linter/true_positive_unnecessary_conditional.move:10:9
@@ -44,6 +47,7 @@ warning[Lint W01007]: 'if' expression can be removed
    │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_conditional` for more information
 
 warning[Lint W01007]: 'if' expression can be removed
    ┌─ tests/linter/true_positive_unnecessary_conditional.move:11:9
@@ -56,3 +60,4 @@ warning[Lint W01007]: 'if' expression can be removed
    │         Detected a redundant conditional expression 'if (..) v else v', where each branch results in the same value 'v'. Consider using the value directly
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_conditional` for more information

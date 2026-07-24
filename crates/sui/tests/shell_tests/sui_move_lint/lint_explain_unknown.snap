@@ -1,0 +1,17 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# An unrecognized lint is an error that points the user at `--list`.
+sui move --client.config $CONFIG lint --explain not_a_real_lint
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+unknown lint `not_a_real_lint`; run `sui move lint --list` to see every lint
+
+----- stderr -----

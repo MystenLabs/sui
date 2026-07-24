@@ -11,7 +11,16 @@ use std::path::Path;
 /// Run Move linters on the package at `path`. If no path is provided defaults to current directory.
 #[derive(Parser)]
 #[clap(name = "lint")]
-pub struct Lint;
+pub struct Lint {
+    /// Print an explanation for a lint and exit, without building the package. Accepts a lint name
+    /// (e.g. `share_owned`) or its code (e.g. `W99000`).
+    #[clap(long, value_name = "CODE")]
+    pub explain: Option<String>,
+
+    /// List every lint with its group and summary, and exit.
+    #[clap(long)]
+    pub list: bool,
+}
 
 impl Lint {
     pub async fn execute<F: MoveFlavor>(
@@ -20,6 +29,25 @@ impl Lint {
         mut config: BuildConfig,
         flavor: F,
     ) -> anyhow::Result<()> {
+        if self.list {
+            let command = move_compiler::diagnostics::explain_command();
+            print!("{}", move_compiler::linters::docs::LintIndex { command });
+            return Ok(());
+        }
+
+        if let Some(query) = self.explain.as_deref() {
+            match move_compiler::linters::docs::find_lint(query) {
+                Some(explanation) => print!("{explanation}"),
+                None => {
+                    anyhow::bail!(
+                        "unknown lint `{query}`; run `{} --list` to see every lint",
+                        move_compiler::diagnostics::explain_command()
+                    )
+                }
+            }
+            return Ok(());
+        }
+
         let rerooted_path = reroot_path(path)?;
         let env = find_env(&rerooted_path, &config, &flavor)?;
 
