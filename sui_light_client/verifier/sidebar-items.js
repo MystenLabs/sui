@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["extract_verified_effects_and_events","get_verified_checkpoint","get_verified_effects_and_events","get_verified_object"]};

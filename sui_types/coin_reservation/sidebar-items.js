@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["COIN_RESERVATION_MAGIC"],"fn":["encode_object_ref","mask_or_unmask_id"],"struct":["CoinReservationResolver","ParsedDigest","ParsedDigestError","ParsedObjectRefWithdrawal"],"trait":["CoinReservationResolverTrait"]};

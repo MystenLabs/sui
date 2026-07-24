@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A canonical `prometheus::core::Collector` that exposes the RocksDB integer properties surfaced by `Db::cf_metrics` as labeled `IntGauge`s, one set of gauges per registered column family."><title>sui_consistent_store::metrics - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_consistent_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.96.1 (31fca3adb 2026-06-26)" data-channel="1.96.1" data-search-js="search-b5634cc7.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module metrics</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sui_consistent_store/index.html">sui_<wbr>consistent_<wbr>store</a><span class="version">1.77.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module metrics</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#registering" title="Registering">Registering</a></li><li><a href="#liveness" title="Liveness">Liveness</a></li><li><a href="#sampling-cadence" title="Sampling cadence">Sampling cadence</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sui_<wbr>consistent_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sui_consistent_store</a></div><h1>Module <span>metrics</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sui_consistent_store/metrics.rs.html#4-530">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A canonical [<code>prometheus::core::Collector</code>] that exposes the
+RocksDB integer properties surfaced by
+<a href="../db/struct.Db.html#method.cf_metrics" title="method sui_consistent_store::db::Db::cf_metrics"><code>Db::cf_metrics</code></a> as labeled
+<code>IntGauge</code>s, one set of gauges per registered column family.</p>
+<h2 id="registering"><a class="doc-anchor" href="#registering">§</a>Registering</h2>
+<p>Register on a [<code>prometheus::Registry</code>] the same way you would
+any other collector:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prometheus::Registry;
+<span class="kw">use </span>sui_consistent_store::Db;
+<span class="kw">use </span>sui_consistent_store::DbOptions;
+<span class="kw">use </span>sui_consistent_store::Schema;
+<span class="kw">use </span>sui_consistent_store::metrics::ColumnFamilyStatsCollector;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>EmptySchema;
+
+<span class="kw">impl </span>Schema <span class="kw">for </span>EmptySchema {
+    <span class="kw">fn </span>cfs(<span class="kw">_</span>: <span class="kw-2">&amp;</span>sui_consistent_store::CfOptionsResolver) -&gt; Vec&lt;sui_consistent_store::CfDescriptor&gt; {
+        <span class="macro">vec!</span>[]
+    }
+    <span class="kw">fn </span>open(<span class="kw">_</span>: <span class="kw-2">&amp;</span>Db) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, sui_consistent_store::error::OpenError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>)
+    }
+}
+
+<span class="kw">let </span>dir = tempfile::tempdir().unwrap();
+<span class="kw">let </span>(db, _schema) = Db::open::&lt;EmptySchema&gt;(dir.path(), DbOptions::default()).unwrap();
+<span class="kw">let </span>registry = Registry::new();
+<span class="kw">let </span>collector = ColumnFamilyStatsCollector::new(<span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>db);
+registry.register(Box::new(collector)).unwrap();</code></pre></div><h2 id="liveness"><a class="doc-anchor" href="#liveness">§</a>Liveness</h2>
+<p>The collector holds a <a href="../db/struct.DbRef.html" title="struct sui_consistent_store::db::DbRef"><code>DbRef</code></a> (weak handle), so
+registering it does not keep the underlying database open. If
+every strong <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a> handle has been dropped by the
+time Prometheus scrapes, every gauge is reset to <code>-1</code> so
+dashboards see the database is gone rather than stale-looking
+values.</p>
+<h2 id="sampling-cadence"><a class="doc-anchor" href="#sampling-cadence">§</a>Sampling cadence</h2>
+<p>Sampling happens on Prometheus scrape: every
+<code>collect()</code> walks every column family in the underlying <a href="../db/struct.Db.html" title="struct sui_consistent_store::db::Db"><code>Db</code></a>
+and reads each property. This is cheap (each property is one
+RocksDB API call) but not free, so a tight scrape interval over
+many CFs has a measurable cost.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ColumnFamilyStatsCollector.html" title="struct sui_consistent_store::metrics::ColumnFamilyStatsCollector">Column<wbr>Family<wbr>Stats<wbr>Collector</a></dt><dd>A [<code>prometheus::core::Collector</code>] that emits per-column-family
+RocksDB integer properties as labeled <code>IntGauge</code>s.</dd></dl></section></div></main></body></html>

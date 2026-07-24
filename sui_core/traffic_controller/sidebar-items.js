@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_DRAIN_TIMEOUT_SECS","METRICS_INTERVAL_SECS"],"enum":["Acl"],"fn":["parse_ip"],"mod":["metrics","nodefw_client","nodefw_test_server","policies"],"struct":["Blocklists","TrafficController","TrafficSim","TrafficSimMetrics"]};

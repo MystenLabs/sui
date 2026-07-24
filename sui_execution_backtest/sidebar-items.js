@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MIGRATIONS"],"enum":["StatusFilter","StoreKind"],"fn":["derive_task_from_git","main","run_backtest","run_git"],"mod":["context","execute","grpc","handler","ingestion","ndjson_store","rows","schema","store"],"struct":["Args","BacktestPlan"]};

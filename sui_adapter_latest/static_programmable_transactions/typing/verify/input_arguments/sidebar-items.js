@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_coin_send_funds","is_valid_pure_type","is_valid_receiving","verify"]};

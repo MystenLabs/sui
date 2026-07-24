@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_consensus_commit_summary"],"struct":["ConsensusCommitSummary"]};

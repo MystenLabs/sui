@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Ergonomic constructors for the transaction and event filter DNF types."><title>sui_rpc_api::proto::sui::rpc::v2::filter - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../../../../../" data-static-root-path="../../../../../../static.files/" data-current-crate="sui_rpc_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.96.1 (31fca3adb 2026-06-26)" data-channel="1.96.1" data-search-js="search-b5634cc7.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module filter</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../../sui_rpc_api/index.html">sui_<wbr>rpc_<wbr>api</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module filter</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#modules">Module Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sui_<wbr>rpc_<wbr>api::<wbr>proto::<wbr>sui::<wbr>rpc::<wbr>v2</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../../../index.html">sui_rpc_api</a>::<wbr><a href="../../../../index.html">proto</a>::<wbr><a href="../../../index.html">sui</a>::<wbr><a href="../../index.html">rpc</a>::<wbr><a href="../index.html">v2</a></div><h1>Module <span>filter</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Ergonomic constructors for the transaction and event filter DNF types.</p>
+<p>The generated <a href="../struct.TransactionFilter.html" title="struct sui_rpc_api::proto::sui::rpc::v2::TransactionFilter"><code>TransactionFilter</code></a> and <a href="../struct.EventFilter.html" title="struct sui_rpc_api::proto::sui::rpc::v2::EventFilter"><code>EventFilter</code></a> messages model a
+filter in disjunctive normal form: a filter is an OR of terms, each term is
+an AND of literals, and each literal is a predicate that may be negated.
+Building even the simplest filter by hand therefore means nesting three
+levels of message plus a single-field predicate wrapper. The helpers in this
+module collapse that nesting so the common cases read as one expression.</p>
+<p>The predicate constructors live in the <a href="transaction/index.html" title="mod sui_rpc_api::proto::sui::rpc::v2::filter::transaction"><code>transaction</code></a> and <a href="event/index.html" title="mod sui_rpc_api::proto::sui::rpc::v2::filter::event"><code>event</code></a>
+submodules (one function per predicate kind) because the generated messages
+already expose the natural names – <code>sender</code>, <code>affected_object</code>, and so on
+– as field accessors. Each constructor returns a plain, un-negated literal,
+so a term whose literals are all positive can be written from bare
+constructor calls; call <a href="../struct.TransactionLiteral.html#method.negate" title="method sui_rpc_api::proto::sui::rpc::v2::TransactionLiteral::negate"><code>TransactionLiteral::negate</code></a> (or the event
+equivalent) to require instead that a predicate not match.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>A transaction filter, from the simplest predicate up to a full DNF
+expression:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+<span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+<span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::filter::transaction <span class="kw">as </span>tx;
+<span class="kw">use </span>sui_sdk_types::Address;
+
+<span class="kw">let </span>a = Address::ZERO;
+<span class="kw">let </span>o = Address::TWO;
+
+<span class="comment">// Match transactions sent by `a`.
+</span><span class="kw">let _ </span>= TransactionFilter::matching(tx::sender(a));
+
+<span class="comment">// Match transactions that were sent by `a` and also touched object `o`.
+</span><span class="kw">let _ </span>= TransactionFilter::all([tx::sender(a), tx::affected_object(o)]);
+
+<span class="comment">// Match `(sender = a AND NOT package_write) OR (affected_object = o)`.
+</span><span class="kw">let _ </span>= TransactionFilter::any([
+    TransactionTerm::all([tx::sender(a), tx::package_write().negate()]),
+    TransactionTerm::all([tx::affected_object(o)]),
+]);</code></pre></div>
+<p>Event filters use the <a href="event/index.html" title="mod sui_rpc_api::proto::sui::rpc::v2::filter::event"><code>event</code></a> submodule and the same combinators:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::EventFilter;
+<span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::filter::event <span class="kw">as </span>ev;
+<span class="kw">use </span>sui_sdk_types::Address;
+<span class="kw">use </span>sui_sdk_types::Identifier;
+
+<span class="kw">let </span>a = Address::ZERO;
+<span class="kw">let </span>coin_module: Identifier = <span class="string">"coin"</span>.parse().unwrap();
+
+<span class="comment">// Match events emitted by transactions sent by `a` from the `0x2::coin`
+// module.
+</span><span class="kw">let _ </span>= EventFilter::all([ev::sender(a), ev::emit_module((Address::TWO, coin_module))]);</code></pre></div>
+<p>Move-path and type predicates take typed components as readily as strings,
+so callers never have to hand-format a <code>::</code>-delimited path:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>sui_rpc::proto::sui::rpc::v2::filter::transaction <span class="kw">as </span>tx;
+<span class="kw">use </span>sui_sdk_types::Address;
+<span class="kw">use </span>sui_sdk_types::Identifier;
+<span class="kw">use </span>sui_sdk_types::StructTag;
+
+<span class="kw">let </span>package = Address::TWO;
+<span class="kw">let </span>module: Identifier = <span class="string">"coin"</span>.parse().unwrap();
+<span class="kw">let </span>function: Identifier = <span class="string">"mint"</span>.parse().unwrap();
+
+<span class="comment">// Each of these builds a Move-call predicate at a different specificity.
+</span><span class="kw">let _ </span>= tx::move_call(package); <span class="comment">// whole package
+</span><span class="kw">let _ </span>= tx::move_call((package, module.clone())); <span class="comment">// package::module
+</span><span class="kw">let _ </span>= tx::move_call((package, module, function)); <span class="comment">// exact function
+</span><span class="kw">let _ </span>= tx::move_call(<span class="string">"0x2::coin::mint"</span>); <span class="comment">// or a raw path string
+
+// Event-type predicates accept a `StructTag`, a `TypeTag`, or a string.
+</span><span class="kw">let </span>coin = StructTag::new(
+    package,
+    <span class="string">"coin"</span>.parse().unwrap(),
+    <span class="string">"Coin"</span>.parse().unwrap(),
+    Vec::new(),
+);
+<span class="kw">let _ </span>= tx::event_type(coin);
+<span class="kw">let _ </span>= tx::event_type(<span class="string">"0x2::coin::Coin"</span>);</code></pre></div></div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="event/index.html" title="mod sui_rpc_api::proto::sui::rpc::v2::filter::event">event</a></dt><dd>Predicate constructors for <a href="../struct.EventFilter.html" title="struct sui_rpc_api::proto::sui::rpc::v2::EventFilter"><code>EventFilter</code></a>.</dd><dt><a class="mod" href="transaction/index.html" title="mod sui_rpc_api::proto::sui::rpc::v2::filter::transaction">transaction</a></dt><dd>Predicate constructors for <a href="../struct.TransactionFilter.html" title="struct sui_rpc_api::proto::sui::rpc::v2::TransactionFilter"><code>TransactionFilter</code></a>.</dd></dl></section></div></main></body></html>

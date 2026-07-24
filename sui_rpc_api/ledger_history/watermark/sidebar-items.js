@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NaturalRangeEnd","ScanTerminal"],"fn":["advance_covered_bound_before_checkpoint","boundary_cursor_cp","boundary_watermark","item_watermark","merge_covered_checkpoint_bound","scan_frontier_cursor_cp"]};
