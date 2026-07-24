@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/constants/invalid_cross_module_different_address.move:16:16
+   │
+ 8 │ public(package) const MAX: u64 = 100;
+   │ --------------- A 'public(package)' constant can only be accessed from the same address and package as module '0x42::a' in package '<unknown package>'. This access is from address '0x43' in package '<unknown package>'
+   ·
+16 │ const D: u64 = a::MAX;
+   │                ^^^^^^ Invalid access of 'public(package)' visible constant '0x42::a::MAX'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/constants/invalid_cross_module_different_address.move:18:25
+   │
+ 8 │ public(package) const MAX: u64 = 100;
+   │ --------------- A 'public(package)' constant can only be accessed from the same address and package as module '0x42::a' in package '<unknown package>'. This access is from address '0x43' in package '<unknown package>'
+   ·
+18 │ public fun max(): u64 { a::MAX }
+   │                         ^^^^^^ Invalid access of 'public(package)' visible constant '0x42::a::MAX'

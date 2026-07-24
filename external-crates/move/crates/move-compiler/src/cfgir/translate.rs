@@ -50,11 +50,14 @@ pub(super) struct CFGIRDebugFlags {
     pub(super) print_optimized_blocks: bool,
 }
 
-struct Context<'env> {
-    env: &'env CompilationEnv,
+pub(super) struct Context<'env> {
+    pub(super) env: &'env CompilationEnv,
     info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
+    /// compiler-generated functions returning constants used cross-module, synthesized at the
+    /// end of typing
+    pub(super) constant_fns: BTreeMap<(ModuleIdent, ConstantName), FunctionName>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -70,6 +73,7 @@ impl<'env> Context<'env> {
             reporter,
             info,
             current_package: None,
+            constant_fns: BTreeMap::new(),
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
@@ -164,6 +168,17 @@ pub fn program(
     } = prog;
 
     let mut context = Context::new(compilation_env, &info);
+    context.constant_fns = hmodules
+        .key_cloned_iter()
+        .flat_map(|(mident, mdef)| {
+            mdef.constants
+                .key_cloned_iter()
+                .filter_map(move |(cname, cdef)| {
+                    let constant_fn = cdef.constant_fn_name?;
+                    Some(((mident, cname), constant_fn))
+                })
+        })
+        .collect();
 
     let modules = modules(&mut context, hmodules);
     set_constant_value_types(&info, &modules);
@@ -199,14 +214,20 @@ fn modules(
     context: &mut Context,
     hmodules: UniqueMap<ModuleIdent, H::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, G::ModuleDefinition> {
+    // Process modules in dependency order so that a constant's cross-module dependencies are
+    // already evaluated when the constant is folded.
+    let mut hmodules = hmodules.into_iter().collect::<Vec<_>>();
+    hmodules.sort_by_key(|(_, mdef)| mdef.dependency_order);
+    let mut constant_values: BTreeMap<(ModuleIdent, ConstantName), Value> = BTreeMap::new();
     let modules = hmodules
         .into_iter()
-        .map(|(mname, m)| module(context, mname, m));
+        .map(|(mname, m)| module(context, &mut constant_values, mname, m));
     UniqueMap::maybe_from_iter(modules).unwrap()
 }
 
 fn module(
     context: &mut Context,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module_ident: ModuleIdent,
     mdef: H::ModuleDefinition,
 ) -> (ModuleIdent, G::ModuleDefinition) {
@@ -224,7 +245,7 @@ fn module(
     } = mdef;
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, module_ident, hconstants);
+    let constants = constants(context, constant_values, module_ident, hconstants);
     let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.pop_warning_filter_scope();
     context.current_package = None;
@@ -251,6 +272,7 @@ fn module(
 
 fn constants(
     context: &mut Context,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     mut consts: UniqueMap<ConstantName, H::Constant>,
 ) -> UniqueMap<ConstantName, G::Constant> {
@@ -260,10 +282,10 @@ fn constants(
     for (name, constant) in consts.key_cloned_iter() {
         let deps = dependent_constants(constant);
         graph.add_node(name);
-        for dep in deps {
-            // Only add edges for constants defined in this module; cross-module constants
-            // are already resolved and don't need dependency tracking here.
-            if consts.contains_key(&dep) {
+        for (dep_module, dep) in deps {
+            // Only add edges for constants defined in this module; cross-module dependencies
+            // are satisfied by processing modules in dependency order.
+            if dep_module == module && consts.contains_key(&dep) {
                 graph.add_edge(dep, name, ());
             }
         }
@@ -344,10 +366,9 @@ fn constants(
         .collect();
 
     let mut out_map = UniqueMap::new();
-    let mut constant_values = UniqueMap::new();
     for constant_name in sorted.into_iter() {
         let cdef = consts.remove(&constant_name).unwrap();
-        let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
+        let new_cdef = constant(context, constant_values, module, constant_name, cdef);
         out_map
             .add(constant_name, new_cdef)
             .expect("ICE constant name collision");
@@ -356,8 +377,8 @@ fn constants(
     out_map
 }
 
-fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
-    fn dep_exp(set: &mut BTreeSet<ConstantName>, exp: &H::Exp) {
+fn dependent_constants(constant: &H::Constant) -> BTreeSet<(ModuleIdent, ConstantName)> {
+    fn dep_exp(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, exp: &H::Exp) {
         use H::UnannotatedExp_ as E;
         match &exp.exp.value {
             E::UnresolvedError
@@ -377,14 +398,14 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
                     dep_exp(set, arg);
                 }
             }
-            E::Constant(c) => {
-                set.insert(*c);
+            E::Constant(m, c) => {
+                set.insert((*m, *c));
             }
             _ => panic!("ICE typing should have rejected exp in const"),
         }
     }
 
-    fn dep_cmd(set: &mut BTreeSet<ConstantName>, command: &H::Command_) {
+    fn dep_cmd(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, command: &H::Command_) {
         use H::Command_ as C;
         match command {
             C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
@@ -402,7 +423,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         }
     }
 
-    fn dep_stmt(set: &mut BTreeSet<ConstantName>, stmt: &H::Statement_) {
+    fn dep_stmt(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, stmt: &H::Statement_) {
         use H::Statement_ as S;
         match stmt {
             S::Command(cmd) => dep_cmd(set, &cmd.value),
@@ -439,7 +460,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         }
     }
 
-    fn dep_block(set: &mut BTreeSet<ConstantName>, block: &H::Block) {
+    fn dep_block(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, block: &H::Block) {
         for entry in block {
             dep_stmt(set, &entry.value);
         }
@@ -453,7 +474,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
 
 fn constant(
     context: &mut Context,
-    constant_values: &mut UniqueMap<ConstantName, Value>,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     name: ConstantName,
     c: H::Constant,
@@ -465,6 +486,7 @@ fn constant(
         loc,
         signature,
         value: (locals, block),
+        constant_fn_name: _,
     } = c;
 
     context.push_warning_filter_scope(warning_filter.clone());
@@ -484,9 +506,13 @@ fn constant(
             exp: sp!(_, H::UnannotatedExp_::Value(value)),
             ..
         }) => {
-            constant_values
-                .add(name, value.clone())
-                .expect("ICE constant name collision");
+            let prev = constant_values.insert((module, name), value.clone());
+            ice_assert!(
+                context.reporter,
+                prev.is_none(),
+                loc,
+                "constant name collision"
+            );
             Some(move_value_from_value(value))
         }
         _ => None,
@@ -508,7 +534,7 @@ const CANNOT_FOLD: &str =
 
 fn constant_(
     context: &mut Context,
-    constant_values: &UniqueMap<ConstantName, Value>,
+    constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     module: ModuleIdent,
     name: ConstantName,
     full_loc: Loc,
@@ -692,7 +718,8 @@ fn function_body(
     assert!(context.named_blocks.is_empty());
     let b_ = match tb_ {
         HB::Native => GB::Native,
-        HB::Defined { locals, body } => {
+        HB::Defined { locals, mut body } => {
+            super::constants::rewrite_constant_calls(context, module, &mut body);
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
@@ -734,7 +761,7 @@ fn function_body(
                     context.current_package,
                     signature,
                     &locals,
-                    &UniqueMap::new(),
+                    &BTreeMap::new(),
                     &mut cfg,
                 );
                 if context.debug.print_optimized_blocks {

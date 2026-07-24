@@ -99,7 +99,9 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                         context.add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
                         sp(loc, UNRESOLVED_ERROR_TYPE.clone())
                     }
-                    TI::Fun(_, _) if !context.in_macro_function => {
+                    TI::Fun(_, _)
+                        if context.definition_kind != core::DefinitionKind::MacroFunction =>
+                    {
                         // catch this here for better location infomration (the tvar instead of the fun)
                         unexpected_lambda_type(context, ty.loc);
                         sp(loc, UNRESOLVED_ERROR_TYPE.clone())
@@ -137,7 +139,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 (ty, true)
             }
             TI::Fun(args, result) => {
-                if context.in_macro_function {
+                if context.definition_kind == core::DefinitionKind::MacroFunction {
                     let mut changed = false;
 
                     let (new_args, args_changed) = types_recur(context, args);

@@ -109,6 +109,8 @@ pub struct Constant {
     pub loc: Loc,
     pub signature: BaseType,
     pub value: (UniqueMap<Var, (Mutability, SingleType)>, Block),
+    /// The compiler-generated function that returns this constant for cross-module calls
+    pub constant_fn_name: Option<FunctionName>,
 }
 
 //**************************************************************************************************
@@ -385,7 +387,7 @@ pub enum UnannotatedExp_ {
         from_user: bool,
         var: Var,
     },
-    Constant(ConstantName),
+    Constant(ModuleIdent, ConstantName),
     ErrorConstant {
         line_number_loc: Loc,
         error_constant: Option<ConstantName>,
@@ -1205,6 +1207,7 @@ impl AstDebug for (ConstantName, &Constant) {
                 loc: _loc,
                 signature,
                 value,
+                constant_fn_name: _,
             },
         ) = self;
         warning_filter.ast_debug(w);
@@ -1531,7 +1534,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("copy@");
                 v.ast_debug(w)
             }
-            E::Constant(c) => w.write(format!("{}", c)),
+            E::Constant(m, c) => w.write(format!("{}::{}", m, c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }

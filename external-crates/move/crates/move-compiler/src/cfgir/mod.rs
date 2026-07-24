@@ -12,6 +12,7 @@ mod remove_no_ops;
 pub(crate) mod translate;
 pub mod visitor;
 
+pub(crate) mod constants;
 mod optimize;
 
 use crate::{

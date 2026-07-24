@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:9:34
+  │
+9 │ public(package) const BAD: u64 = 1 / 0;
+  │                                  ^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:15:23
+   │
+15 │ public(package) const X: u64 = Y + 1;
+   │                       ^ Constant definitions form a circular dependency: X, Y
+16 │ const Y: u64 = X + 1;
+   │       - Cyclic constant defined here
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:25:16
+   │
+25 │ const D: u64 = a::BAD + c::X;
+   │                ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value

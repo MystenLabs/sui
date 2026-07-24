@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:24:27
+   │
+12 │ const SECRET: u64 = 7;
+   │       ------ The constant '0x42::a::SECRET' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package
+   ·
+24 │ public fun steal(): u64 { a::SECRET }
+   │                           ^^^^^^^^^ Invalid access of '0x42::a::SECRET'
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:27:5
+   │
+27 │     a::
+   │     ^^^ Incomplete name in this position. Expected an identifier after '::'

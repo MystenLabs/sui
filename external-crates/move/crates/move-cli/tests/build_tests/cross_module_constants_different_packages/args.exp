@@ -1,0 +1,39 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Defn
+BUILDING Usage
+warning[W09011]: unused constant
+  ┌─ ./sources/usage.move:5:11
+  │
+5 │     const DOUBLE: u64 = defn::MAX * 2;
+  │           ^^^^^^ The constant 'DOUBLE' is never used. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04001]: restricted visibility
+  ┌─ ./sources/usage.move:5:25
+  │
+5 │     const DOUBLE: u64 = defn::MAX * 2;
+  │                         ^^^^^^^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
+  │
+  ┌─ defn/sources/defn.move:2:5
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
+
+error[E04001]: restricted visibility
+  ┌─ ./sources/usage.move:8:29
+  │
+8 │     public fun max(): u64 { defn::MAX }
+  │                             ^^^^^^^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
+  │
+  ┌─ defn/sources/defn.move:2:5
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
+
+error[E03003]: unbound module member
+   ┌─ ./sources/usage.move:11:40
+   │
+11 │     public fun call_generated(): u64 { defn::_const_MAX() }
+   │                                        ^^^^^^^^^^^^^^^^ Invalid module access. Unbound function '_const_MAX' in module 'Defn::defn'
+

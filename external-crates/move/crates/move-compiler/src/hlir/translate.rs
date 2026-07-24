@@ -527,8 +527,10 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         index,
         attributes,
         loc,
+        visibility: _,
         signature: tsignature,
         value: tvalue,
+        constant_fn_name,
     } = cdef;
     context.push_warning_filter_scope(warning_filter.clone());
     let signature = base_type(&context.reporter, &tsignature);
@@ -552,6 +554,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         loc,
         signature,
         value: (locals, body),
+        constant_fn_name,
     }
 }
 
@@ -1468,7 +1471,7 @@ fn value(
             make_exp(new_unit)
         }
         E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
-        E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
+        E::Constant(m, c) => make_exp(HE::Constant(m, c)),
         E::ErrorConstant {
             line_number_loc,
             error_constant,

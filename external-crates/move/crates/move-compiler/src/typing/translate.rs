@@ -67,8 +67,10 @@ pub fn program(
     } = prog;
 
     let all_macro_definitions = extract_macros(compilation_env, &nmodules, &pre_compiled_lib);
-    let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
+    let (mut modules, needed_constant_functions) =
+        modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
+    generate_constant_functions(compilation_env, &mut modules, needed_constant_functions);
     dependency_ordering::program(compilation_env, &mut modules);
     recursive_datatypes::modules(compilation_env, &modules);
     infinite_instantiations::modules(compilation_env, &modules);
@@ -188,7 +190,10 @@ fn modules(
     info: &mut NamingProgramInfo,
     all_macro_definitions: &UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     mut modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
-) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
+) -> (
+    UniqueMap<ModuleIdent, T::ModuleDefinition>,
+    BTreeMap<(ModuleIdent, ConstantName), Loc>,
+) {
     let global_use_funs = global_use_funs(info);
     // We validate the syntax methods first so that processing syntax method forms later are
     // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
@@ -209,8 +214,9 @@ fn modules(
     let typed_modules = Mutex::new(UniqueMap::new());
     let all_new_friends = Mutex::new(BTreeMap::new());
     let used_module_members = Mutex::new(BTreeMap::new());
+    let all_needed_constant_functions = Mutex::new(BTreeMap::new());
     modules.into_par_iter().for_each(|(ident, mdef)| {
-        let (typed_mdef, new_friends, used_members) = module(
+        let (typed_mdef, new_friends, used_members, needed_constant_fns) = module(
             compilation_env,
             info,
             &global_use_funs,
@@ -242,6 +248,10 @@ fn modules(
                 .or_insert_with(BTreeSet::new)
                 .extend(members);
         }
+        all_needed_constant_functions
+            .lock()
+            .unwrap()
+            .extend(needed_constant_fns);
     });
     let mut typed_modules = typed_modules.into_inner().unwrap();
     let all_new_friends = all_new_friends.into_inner().unwrap();
@@ -305,7 +315,8 @@ fn modules(
         unused_module_members(compilation_env, &used_module_members, mident, mdef);
     }
 
-    typed_modules
+    let all_needed_constant_functions = all_needed_constant_functions.into_inner().unwrap();
+    (typed_modules, all_needed_constant_functions)
 }
 
 fn module<'env>(
@@ -319,6 +330,7 @@ fn module<'env>(
     T::ModuleDefinition,
     BTreeSet<(ModuleIdent, Loc)>,
     BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    BTreeMap<(ModuleIdent, ConstantName), Loc>,
 ) {
     enum Member<S, E, C, F> {
         Struct(S),
@@ -364,6 +376,7 @@ fn module<'env>(
     let new_friends = Mutex::new(BTreeSet::new());
     let used_members = Mutex::new(BTreeMap::new());
     let used_methods = Mutex::new(BTreeSet::new());
+    let needed_constant_functions = Mutex::new(BTreeMap::new());
     nstructs
         .into_par_iter()
         .map(Member::Struct)
@@ -390,8 +403,13 @@ fn module<'env>(
                     functions.lock().unwrap().add(name, f).unwrap();
                 }
             };
-            let (cur_new_friends, cur_used_members, cur_used_methods) = context.finish();
+            let (cur_new_friends, cur_used_members, cur_used_methods, cur_needed_constant_fns) =
+                context.finish();
             new_friends.lock().unwrap().extend(cur_new_friends);
+            needed_constant_functions
+                .lock()
+                .unwrap()
+                .extend(cur_needed_constant_fns);
             let mut used_members = used_members.lock().unwrap();
             for (mident, members) in cur_used_members {
                 used_members
@@ -408,6 +426,7 @@ fn module<'env>(
     let new_friends = new_friends.into_inner().unwrap();
     let used_members = used_members.into_inner().unwrap();
     let used_methods = used_methods.into_inner().unwrap();
+    let needed_constant_functions = needed_constant_functions.into_inner().unwrap();
 
     let use_funs = context.finish_use_funs_scope(&used_methods);
     let typed_module = T::ModuleDefinition {
@@ -429,7 +448,12 @@ fn module<'env>(
         constants,
         functions,
     };
-    (typed_module, new_friends, used_members)
+    (
+        typed_module,
+        new_friends,
+        used_members,
+        needed_constant_functions,
+    )
 }
 
 fn finalize_ide_info(context: &mut Context) {
@@ -464,7 +488,11 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.current_function = Some(name);
-    context.in_macro_function = macro_.is_some();
+    context.definition_kind = if macro_.is_some() {
+        core::DefinitionKind::MacroFunction
+    } else {
+        core::DefinitionKind::Function
+    };
     process_attributes(context, &attributes);
     let compiled_visibility =
         match public_testing_visibility(context.env(), context.current_package(), &name, entry) {
@@ -484,7 +512,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     };
     finalize_ide_info(context);
     context.current_function = None;
-    context.in_macro_function = false;
+    context.definition_kind = core::DefinitionKind::Function;
     context.pop_warning_filter_scope();
     T::Function {
         doc,
@@ -579,6 +607,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
 
 fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) -> T::Constant {
     assert!(context.constraints.is_empty());
+    context.definition_kind = core::DefinitionKind::Constant;
 
     let N::Constant {
         doc,
@@ -586,6 +615,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: nvalue,
     } = nconstant;
@@ -629,8 +659,108 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: *value,
+        constant_fn_name: None,
+    }
+}
+
+//**************************************************************************************************
+// Constant Function Generation
+//**************************************************************************************************
+
+/// Synthesizes `public(package)` constant functions for constants that are used in the function
+/// bodies of other modules. Constants live in the constant pool of their defining module, so a
+/// cross-module use cannot be compiled as a constant load; instead it is lowered (during CFGIR
+/// translation) to a call of a constant function, synthesized here in the defining module. The
+/// functions are created on demand: a constant only referenced within its own module (or only in
+/// other modules' constant definitions, which are resolved by constant folding) gets none. Since
+/// `public(package)` functions are not part of the upgrade-compatibility surface, the generated
+/// functions may appear and disappear across package versions as usage changes.
+///
+/// The set of needed constant functions is recorded by `core::make_constant_type` as constant
+/// references are type-checked (which covers macro-expanded code, since expansions are typed at
+/// their call sites), alongside the friend records that make the generated `public(package)`
+/// functions callable from the using modules.
+fn generate_constant_functions(
+    env: &CompilationEnv,
+    modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
+    needed: BTreeMap<(ModuleIdent, ConstantName), Loc>,
+) {
+    let mut by_module: BTreeMap<ModuleIdent, BTreeSet<ConstantName>> = BTreeMap::new();
+    for ((mident, cname), loc) in needed {
+        if modules.contains_key(&mident) {
+            by_module.entry(mident).or_default().insert(cname);
+        } else {
+            // The constant's module is outside the current compilation (e.g. pre-compiled), so
+            // no function can be generated for it
+            let msg = format!(
+                "Invalid access of '{}::{}'. Constants defined in modules outside of the \
+                 current compilation cannot be accessed from other modules",
+                mident, cname
+            );
+            env.diagnostic_reporter_at_top_level()
+                .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
+        }
+    }
+    for (mident, constants) in by_module {
+        let mdef = modules.get_mut(&mident).unwrap();
+        synthesize_constant_functions(mident, mdef, constants);
+    }
+}
+
+fn synthesize_constant_functions(
+    mident: ModuleIdent,
+    mdef: &mut T::ModuleDefinition,
+    constants: BTreeSet<ConstantName>,
+) {
+    let next_index = mdef
+        .functions
+        .iter()
+        .map(|(_, _, fdef)| fdef.index + 1)
+        .max()
+        .unwrap_or(0);
+    for (i, cname) in constants.into_iter().enumerate() {
+        // The name is guaranteed unique: name validation (expansion/name_validation.rs) rejects
+        // user-defined module members starting with '_' in every member namespace, and constant
+        // names are unique within the module. It is a valid bytecode identifier as long as the
+        // constant name is one.
+        let fn_symbol = Symbol::from(format!("_const_{}", cname));
+        let cdef = mdef.constants.get_mut(&cname).unwrap();
+        let loc = cdef.loc;
+        let fname = FunctionName(sp(loc, fn_symbol));
+        cdef.constant_fn_name = Some(fname);
+        let signature = N::FunctionSignature {
+            type_parameters: vec![],
+            parameters: vec![],
+            return_type: cdef.signature.clone(),
+        };
+        let body_exp = T::exp(
+            cdef.signature.clone(),
+            sp(loc, T::UnannotatedExp_::Constant(mident, cname)),
+        );
+        let seq_items = VecDeque::from([sp(loc, T::SequenceItem_::Seq(Box::new(body_exp)))]);
+        let body = sp(
+            loc,
+            T::FunctionBody_::Defined((N::UseFuns::new(0), seq_items)),
+        );
+        let fdef = T::Function {
+            doc: DocComment::empty(),
+            warning_filter: crate::diagnostics::filter::empty_filter_scope(),
+            index: next_index + i,
+            attributes: UniqueMap::new(),
+            loc,
+            visibility: Visibility::Package(loc),
+            compiled_visibility: Visibility::Package(loc),
+            entry: None,
+            macro_: None,
+            signature,
+            body,
+        };
+        mdef.functions
+            .add(fname, fdef)
+            .expect("ICE generated constant function name should be unique in the module");
     }
 }
 
@@ -4310,6 +4440,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             index: _,
             attributes,
             defined_loc,
+            visibility: _,
             signature: _,
             value: _,
         } = context.constant_info(module_ident, constant_name).clone();
@@ -4324,6 +4455,19 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
                 )));
                 return;
             };
+            if !context.is_current_module(module_ident) {
+                let msg = format!(
+                    "Invalid use of '#[error]' constant '{}::{}' in {}",
+                    module_ident, constant_name, abort_or_assert_str
+                );
+                let defined_msg =
+                    "'#[error]' constants can only be used in the module that defines them";
+                context.add_diag(diag!(
+                    TypeSafety::InvalidErrorUsage,
+                    (*const_loc, msg),
+                    (defined_loc, defined_msg)
+                ));
+            }
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,
                 error_constant: Some(*constant_name),
