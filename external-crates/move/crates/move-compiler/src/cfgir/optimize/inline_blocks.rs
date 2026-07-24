@@ -22,7 +22,7 @@ pub fn optimize(
     _reporter: &DiagnosticReporter,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = optimize_(cfg.start_block(), cfg.blocks_mut());

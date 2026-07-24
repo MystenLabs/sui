@@ -24,7 +24,7 @@ pub fn optimize(
     reporter: &DiagnosticReporter,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let context = Context {
@@ -54,7 +54,7 @@ pub fn optimize(
 struct Context<'a> {
     #[allow(dead_code)]
     reporter: &'a DiagnosticReporter<'a>,
-    constants: &'a BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constants: &'a BTreeMap<(ModuleIdent, ConstantName), Value>,
 }
 
 //**************************************************************************************************
@@ -113,7 +113,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let E::Constant(module, name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = context.constants.get(module).and_then(|cs| cs.get(name)) {
+            if let Some(value) = context.constants.get(&(*module, *name)) {
                 *e_ = E::Value(value.clone());
                 true
             } else {

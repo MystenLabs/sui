@@ -634,7 +634,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         visibility,
         signature,
         value: *value,
-        getter_name: None,
+        constant_fn_name: None,
     }
 }
 

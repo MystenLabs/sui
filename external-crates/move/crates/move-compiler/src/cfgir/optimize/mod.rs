@@ -26,7 +26,7 @@ pub type Optimization = fn(
     &DiagnosticReporter,
     &FunctionSignature,
     &UniqueMap<Var, (Mutability, SingleType)>,
-    &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    &BTreeMap<(ModuleIdent, ConstantName), Value>,
     &mut MutForwardCFG,
 ) -> bool;
 
@@ -52,7 +52,7 @@ pub fn optimize(
     package: Option<Symbol>,
     signature: &FunctionSignature,
     locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
+    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) {
     let mut count = 0;
