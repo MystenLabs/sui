@@ -1066,12 +1066,16 @@ impl TonicManager {
             });
         let deadline = Instant::now() + Duration::from_secs(20);
         let server = loop {
-            let _rt_guard = dedicated_rt.as_ref().map(|rt| rt.enter());
-            match sui_http::Builder::new()
-                .config(http_config.clone())
-                .tls_config(tls_server_config.clone())
-                .serve(self.own_address, consensus_service.clone())
-            {
+            // Scope the runtime guard to the synchronous serve() call only, so it
+            // is not held across the retry sleep await (guard is not Send).
+            let serve_result = {
+                let _rt_guard = dedicated_rt.as_ref().map(|rt| rt.enter());
+                sui_http::Builder::new()
+                    .config(http_config.clone())
+                    .tls_config(tls_server_config.clone())
+                    .serve(self.own_address, consensus_service.clone())
+            };
+            match serve_result {
                 Ok(server) => break server,
                 Err(err) => {
                     warn!("Error starting consensus server: {err:?}");
