@@ -2005,6 +2005,7 @@
                 "object_record_new_uid_cost_base": {
                   "u64": "52"
                 },
+                "object_record_new_uid_from_hash_cost_base": null,
                 "object_runtime_max_num_cached_objects": {
                   "u64": "1000"
                 },
