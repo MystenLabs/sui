@@ -6,7 +6,6 @@
 
 pub(crate) mod executor;
 pub(crate) mod forking_service;
-pub(crate) mod reader;
 
 #[cfg(test)]
 #[path = "../tests/rpc_executor.rs"]
