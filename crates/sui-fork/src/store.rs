@@ -9,14 +9,13 @@ use std::sync::RwLockWriteGuard;
 use anyhow::Context as _;
 use anyhow::anyhow;
 use anyhow::bail;
-use sui_rpc_store::RpcStoreReader;
-use sui_rpc_store::schema::objects::Status;
-use sui_rpc_store::schema::objects::TombstoneKind;
-
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
+use sui_rpc_store::RpcStoreReader;
+use sui_rpc_store::schema::objects::Status;
+use sui_rpc_store::schema::objects::TombstoneKind;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
@@ -629,76 +628,35 @@ impl ForkStore {
     }
 }
 
-fn to_storage_error(err: anyhow::Error) -> StorageError {
-    StorageError::custom(err.to_string())
-}
-
-/// Validate that a child object loaded for `parent` is actually owned by it.
-///
-/// Shared by the fallible child read (RPC path) and the `RuntimeObjectResolver`
-/// impl (execution path), which differ only in how lookup errors surface.
-fn check_child_object_owner(
-    parent: &ObjectID,
-    child: &ObjectID,
-    child_object: Object,
-) -> SuiResult<Object> {
-    if child_object.owner != sui_types::object::Owner::ObjectOwner((*parent).into()) {
-        return Err(sui_types::error::SuiErrorKind::InvalidChildObjectAccess {
-            object: *child,
-            given_parent: *parent,
-            actual_owner: child_object.owner.clone(),
-        }
-        .into());
+/// RPC-side helpers; the RPC storage trait impls below are the only callers.
+impl ForkStore {
+    /// The stock reader over the fork's local `sui-rpc-store`, for reads the
+    /// fork has no policy for.
+    fn stock_reader(&self) -> &RpcStoreReader {
+        self.local_store().reader()
     }
-    Ok(child_object)
-}
 
-/// Received-object checks: owner and exact version; mismatches surface as `None`.
-fn check_received_object(
-    owner: &ObjectID,
-    receive_object_at_version: SequenceNumber,
-    object: Object,
-) -> Option<Object> {
-    if object.owner != sui_types::object::Owner::AddressOwner((*owner).into()) {
-        return None;
+    /// Chain identifier for the forked network: known networks use their
+    /// fixed identifiers; custom networks derive one from the fork checkpoint
+    /// digest.
+    fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
+        let id = match self.chain() {
+            Chain::Mainnet => get_mainnet_chain_identifier(),
+            Chain::Testnet => get_testnet_chain_identifier(),
+            Chain::Unknown => {
+                let checkpoint =
+                    ForkStore::get_checkpoint_by_sequence_number(self, self.forked_at_checkpoint())
+                        .map_err(to_storage_error)?
+                        .ok_or_else(|| {
+                            StorageError::missing(
+                                "forked checkpoint missing -- cannot derive chain identifier",
+                            )
+                        })?;
+                ChainIdentifier::from(*checkpoint.digest())
+            }
+        };
+        Ok(id)
     }
-    if object.version() != receive_object_at_version {
-        return None;
-    }
-    Some(object)
-}
-
-/// Converts effect removals into object tombstones for the RPC store.
-fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<ObjectRemoval> {
-    effects
-        .deleted()
-        .into_iter()
-        .map(|object_ref| ObjectRemoval {
-            object_id: object_ref.0,
-            version: object_ref.1,
-            kind: TombstoneKind::Deleted,
-        })
-        .chain(
-            effects
-                .unwrapped_then_deleted()
-                .into_iter()
-                .map(|object_ref| ObjectRemoval {
-                    object_id: object_ref.0,
-                    version: object_ref.1,
-                    kind: TombstoneKind::Deleted,
-                }),
-        )
-        .chain(
-            effects
-                .wrapped()
-                .into_iter()
-                .map(|object_ref| ObjectRemoval {
-                    object_id: object_ref.0,
-                    version: object_ref.1,
-                    kind: TombstoneKind::Wrapped,
-                }),
-        )
-        .collect()
 }
 
 // ============================================================================
@@ -970,37 +928,6 @@ impl SimulatorStore for ForkStore {
 // without a version: a stock reverse scan over the fork's sparse `objects` CF
 // would serve cached history as current, so latest-semantics reads go through
 // the store's `LiveState`-backed path (see the `ObjectStore` impl above).
-
-/// RPC-side helpers; the trait impls below are the only callers.
-impl ForkStore {
-    /// The stock reader over the fork's local `sui-rpc-store`, for reads the
-    /// fork has no policy for.
-    fn stock_reader(&self) -> &RpcStoreReader {
-        self.local_store().reader()
-    }
-
-    /// Chain identifier for the forked network: known networks use their
-    /// fixed identifiers; custom networks derive one from the fork checkpoint
-    /// digest.
-    fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
-        let id = match self.chain() {
-            Chain::Mainnet => get_mainnet_chain_identifier(),
-            Chain::Testnet => get_testnet_chain_identifier(),
-            Chain::Unknown => {
-                let checkpoint =
-                    ForkStore::get_checkpoint_by_sequence_number(self, self.forked_at_checkpoint())
-                        .map_err(to_storage_error)?
-                        .ok_or_else(|| {
-                            StorageError::missing(
-                                "forked checkpoint missing -- cannot derive chain identifier",
-                            )
-                        })?;
-                ChainIdentifier::from(*checkpoint.digest())
-            }
-        };
-        Ok(id)
-    }
-}
 
 impl ReadStore for ForkStore {
     /// Reads committee information from committed `sui-rpc-store` data.
@@ -1320,6 +1247,78 @@ impl RpcIndexes for ForkStore {
             descending,
         )
     }
+}
+
+fn to_storage_error(err: anyhow::Error) -> StorageError {
+    StorageError::custom(err.to_string())
+}
+
+/// Validate that a child object loaded for `parent` is actually owned by it.
+///
+/// Shared by the fallible child read (RPC path) and the `RuntimeObjectResolver`
+/// impl (execution path), which differ only in how lookup errors surface.
+fn check_child_object_owner(
+    parent: &ObjectID,
+    child: &ObjectID,
+    child_object: Object,
+) -> SuiResult<Object> {
+    if child_object.owner != sui_types::object::Owner::ObjectOwner((*parent).into()) {
+        return Err(sui_types::error::SuiErrorKind::InvalidChildObjectAccess {
+            object: *child,
+            given_parent: *parent,
+            actual_owner: child_object.owner.clone(),
+        }
+        .into());
+    }
+    Ok(child_object)
+}
+
+/// Received-object checks: owner and exact version; mismatches surface as `None`.
+fn check_received_object(
+    owner: &ObjectID,
+    receive_object_at_version: SequenceNumber,
+    object: Object,
+) -> Option<Object> {
+    if object.owner != sui_types::object::Owner::AddressOwner((*owner).into()) {
+        return None;
+    }
+    if object.version() != receive_object_at_version {
+        return None;
+    }
+    Some(object)
+}
+
+/// Converts effect removals into object tombstones for the RPC store.
+fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<ObjectRemoval> {
+    effects
+        .deleted()
+        .into_iter()
+        .map(|object_ref| ObjectRemoval {
+            object_id: object_ref.0,
+            version: object_ref.1,
+            kind: TombstoneKind::Deleted,
+        })
+        .chain(
+            effects
+                .unwrapped_then_deleted()
+                .into_iter()
+                .map(|object_ref| ObjectRemoval {
+                    object_id: object_ref.0,
+                    version: object_ref.1,
+                    kind: TombstoneKind::Deleted,
+                }),
+        )
+        .chain(
+            effects
+                .wrapped()
+                .into_iter()
+                .map(|object_ref| ObjectRemoval {
+                    object_id: object_ref.0,
+                    version: object_ref.1,
+                    kind: TombstoneKind::Wrapped,
+                }),
+        )
+        .collect()
 }
 
 /// Runs the fork-policy fallback only when the stock rpc-store read reports
