@@ -525,10 +525,12 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let loaded_system_objects = self.loaded_system_objects.borrow().clone();
         let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
             shared_object_refs,
             loaded_per_epoch_config_objects,
             &object_changes,
+            loaded_system_objects,
         );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
