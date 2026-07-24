@@ -15,6 +15,7 @@ use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::CheckpointToken;
 use crate::api::types::event::Event;
+use crate::api::types::event::EventTimestamp;
 use crate::api::types::event::EventToken;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::transaction::Transaction;
@@ -206,7 +207,7 @@ impl Subscription {
                                         native,
                                         transaction_digest: digest,
                                         sequence_number: idx as u64,
-                                        timestamp_ms,
+                                        timestamp: EventTimestamp::Known(timestamp_ms),
                                     },
                                 ));
                             }

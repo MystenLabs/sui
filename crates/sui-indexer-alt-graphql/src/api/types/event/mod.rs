@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -15,11 +14,11 @@ use async_graphql::connection::PageInfo;
 use diesel::prelude::QueryableByName;
 use diesel::sql_types::BigInt;
 use itertools::Itertools;
+use move_core_types::identifier::Identifier;
 use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -28,10 +27,12 @@ use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
+use sui_sdk_types::Event as SdkEvent;
 use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
+use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
@@ -96,19 +97,24 @@ pub(crate) struct Event {
     /// Position of this event within the transaction's events list (0-indexed)
     pub(crate) sequence_number: u64,
     /// Timestamp of the checkpoint that includes the transaction containing this event.
-    pub(crate) timestamp_ms: Option<u64>,
+    pub(crate) timestamp: EventTimestamp,
+}
+
+/// Where the timestamp of the checkpoint containing the event's transaction comes from.
+#[derive(Clone, Copy)]
+pub(crate) enum EventTimestamp {
+    /// Timestamp known at construction time. `None` when the transaction is not part of a
+    /// checkpoint (simulated or just-executed transactions).
+    Known(Option<u64>),
+    /// Timestamp not resolved yet (events hydrated from the gRPC scan stream); the emitting
+    /// transaction's contents are loaded on demand if the timestamp is requested.
+    Lazy,
 }
 
 /// Custom `Connection` for events to support partially-filled pages.
 pub(crate) struct EventConnection {
     pub edges: Vec<Edge<String, Event, EmptyFields>>,
     pub page_info: PageInfo,
-}
-
-/// Events and shared timestamp for one transaction, hydrated from the KV store.
-struct TxEventContents {
-    events: Vec<NativeEvent>,
-    timestamp_ms: Option<u64>,
 }
 
 #[Object]
@@ -151,8 +157,28 @@ impl Event {
     /// All events from the same transaction share the same timestamp.
     ///
     /// `null` for simulated/executed transactions as they are not included in a checkpoint.
-    async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
-        Some(DateTime::from_ms(self.timestamp_ms? as i64))
+    async fn timestamp(&self, ctx: &Context<'_>) -> Option<Result<DateTime, RpcError>> {
+        async {
+            let timestamp_ms = match self.timestamp {
+                EventTimestamp::Known(timestamp_ms) => timestamp_ms,
+                EventTimestamp::Lazy => {
+                    let kv_loader: &KvLoader = ctx.data()?;
+                    kv_loader
+                        .load_one_transaction(self.transaction_digest)
+                        .await
+                        .context("Failed to fetch transaction contents")?
+                        .and_then(|contents| contents.timestamp_ms())
+                }
+            };
+
+            let Some(timestamp_ms) = timestamp_ms else {
+                return Ok(None);
+            };
+
+            Ok(Some(DateTime::from_ms(timestamp_ms as i64)?))
+        }
+        .await
+        .transpose()
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
@@ -204,7 +230,7 @@ impl Event {
         query_limits::rich::debit(ctx)?;
 
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
-            return Self::paginate_grpc(ctx, reader, scope, page, filter).await;
+            return Self::paginate_grpc(reader, scope, page, filter).await;
         }
 
         let pg_reader: &PgReader = ctx.data()?;
@@ -267,7 +293,6 @@ impl Event {
     /// Serve event pagination by streaming gRPC. Returns pages that may be partially filled,
     /// with valid cursors if there are more pages to paginate through.
     async fn paginate_grpc(
-        ctx: &Context<'_>,
         reader: &AlphaLedgerGrpcReader,
         scope: Scope,
         page: Page<CEvent>,
@@ -319,8 +344,17 @@ impl Event {
         });
 
         let mut request = v2::ListEventsRequest::default();
-        // Position only — event contents and timestamps hydrate in a batch via `KvLoader`.
-        request.read_mask = Some(FieldMask::from_paths(["transaction_digest", "event_index"]));
+        // Everything the GraphQL node needs rides on the stream item: the event envelope and its
+        // position (the timestamp resolves lazily via the emitting transaction's contents).
+        request.read_mask = Some(FieldMask::from_paths([
+            "contents",
+            "event_type",
+            "package_id",
+            "module",
+            "sender",
+            "transaction_digest",
+            "event_index",
+        ]));
         request.start_checkpoint = Some(*cp_bounds.start());
         // `cp_bounds` end is inclusive; the request bound is exclusive.
         request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
@@ -332,11 +366,7 @@ impl Event {
             .await
             .context("Failed to list events")?;
 
-        // TODO: we could just select `contents`, `package_id`, `module`, `sender`,
-        // `transaction_digest`, `event_index`, `checkpoint`, covering all bases of the graphql
-        // event field except the timestamp_ms which comes from checkpoint ...
-        let contents = load_event_contents(ctx, &result.items).await?;
-        build_grpc_connection(scope, &page, result, &contents)
+        build_grpc_connection(scope, &page, result)
     }
 }
 
@@ -472,10 +502,12 @@ impl From<Connection<String, Event>> for EventConnection {
     }
 }
 
-/// The position a `ListEvents` stream item points at: the emitting transaction's digest and the
-/// event's index in that transaction's events list.
-fn item_position(payload: &v2::Event) -> Result<(TransactionDigest, u32), RpcError> {
-    let digest = payload
+/// Hydrate an `Event` node from a `ListEvents` stream item. The read mask requests everything the
+/// node needs — the event envelope and its position — so no KV lookup is required; a missing field
+/// is an internal inconsistency.
+fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
+    // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
+    let transaction_digest = payload
         .transaction_digest
         .as_deref()
         .context("ListEvents item missing transaction digest")?
@@ -486,51 +518,34 @@ fn item_position(payload: &v2::Event) -> Result<(TransactionDigest, u32), RpcErr
         .event_index
         .context("ListEvents item missing event index")?;
 
-    Ok((digest, event_index))
-}
+    let event = SdkEvent::try_from(payload).context("Failed to convert ListEvents item")?;
 
-/// Batch-hydrate the contents of the transactions the stream items point at. Stream items carry
-/// only the event's position; contents and timestamps come from the KV store, keyed by the
-/// transaction digest.
-async fn load_event_contents(
-    ctx: &Context<'_>,
-    items: &[PageItem<v2::Event>],
-) -> Result<HashMap<TransactionDigest, TxEventContents>, RpcError> {
-    let kv_loader: &KvLoader = ctx.data()?;
+    let native = NativeEvent {
+        package_id: event.package_id.into(),
+        transaction_module: Identifier::new(event.module.as_str())
+            .context("Failed to convert module identifier")?,
+        sender: event.sender.into(),
+        type_: struct_tag_sdk_to_core(event.type_).context("Failed to convert event type")?,
+        contents: event.contents,
+    };
 
-    let digests = items
-        .iter()
-        .map(|item| Ok(item_position(&item.payload)?.0))
-        .collect::<Result<Vec<_>, RpcError>>()?;
-
-    let contents = kv_loader
-        .load_many_transaction_events(digests)
-        .await
-        .context("Failed to load transaction events")?;
-
-    contents
-        .into_iter()
-        .map(|(digest, contents)| {
-            Ok((
-                digest,
-                TxEventContents {
-                    events: contents.events().context("Failed to deserialize events")?,
-                    timestamp_ms: contents.timestamp_ms(),
-                },
-            ))
-        })
-        .collect()
+    Ok(Event {
+        scope,
+        native: Arc::new(native),
+        transaction_digest,
+        sequence_number: event_index as u64,
+        timestamp: EventTimestamp::Lazy,
+    })
 }
 
 /// Build an `EventConnection` from draining a bitmap-scan page, hydrating each edge's event from
-/// `contents`.
+/// the stream item itself.
 ///
 /// Edges are returned in ascending order.
 fn build_grpc_connection(
     scope: Scope,
     page: &Page<CEvent>,
     result: StreamPage<v2::Event>,
-    contents: &HashMap<TransactionDigest, TxEventContents>,
 ) -> Result<EventConnection, RpcError> {
     // TODO: This and transaction::build_grpc_connection can eventually be refactored. A closure
     // that translates from the PageItem to Node is the only difference. Cursor encoding is covered
@@ -551,23 +566,7 @@ fn build_grpc_connection(
 
     let mut edges = Vec::with_capacity(items.len());
     for item in items {
-        let (digest, event_index) = item_position(&item.payload)?;
-        let tx_events = contents.get(&digest).context("Failed to get events")?;
-        let native = tx_events
-            .events
-            .get(event_index as usize)
-            .with_context(|| {
-                format!("Event index {event_index} out of bounds for transaction {digest}")
-            })?;
-
-        let event = Event {
-            scope: scope.clone(),
-            native: Arc::new(native.clone()),
-            transaction_digest: digest,
-            sequence_number: event_index as u64,
-            timestamp_ms: tx_events.timestamp_ms,
-        };
-
+        let event = event_from_stream_item(scope.clone(), &item.payload)?;
         edges.push(Edge::new(encode_grpc_cursor(&item.cursor)?, event));
     }
 
@@ -603,9 +602,9 @@ mod tests {
     use fastcrypto::encoding::Base58;
     use fastcrypto::encoding::Base64 as B64;
     use fastcrypto::encoding::Encoding;
-    use move_core_types::identifier::Identifier;
-    use move_core_types::language_storage::StructTag;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
     use sui_types::base_types::ObjectID;
+    use sui_types::parse_sui_struct_tag;
 
     use crate::pagination::PageLimits;
 
@@ -628,39 +627,21 @@ mod tests {
     /// Build a synthetic `PageItem` pointing at `event_index` of the zero-digest
     /// transaction, with the provided resume cursor.
     fn ev_item(event_index: u32, cursor: CursorToken) -> PageItem<v2::Event> {
+        let mut contents = v2::Bcs::default();
+        contents.value = Some(Default::default());
+
         let mut payload = v2::Event::default();
         payload.transaction_digest = Some(Base58::encode(TransactionDigest::default().inner()));
         payload.event_index = Some(event_index);
+        payload.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
+        payload.module = Some("m".to_string());
+        payload.sender = Some(NativeSuiAddress::ZERO.to_string());
+        payload.event_type = Some("0x0::m::T".to_string());
+        payload.contents = Some(contents);
         PageItem {
             payload,
             cursor: cursor.encode(),
         }
-    }
-
-    fn native_event() -> NativeEvent {
-        NativeEvent {
-            package_id: ObjectID::ZERO,
-            transaction_module: Identifier::new("m").unwrap(),
-            sender: NativeSuiAddress::ZERO,
-            type_: StructTag {
-                address: ObjectID::ZERO.into(),
-                module: Identifier::new("m").unwrap(),
-                name: Identifier::new("T").unwrap(),
-                type_params: vec![],
-            },
-            contents: vec![],
-        }
-    }
-
-    /// Hydrated contents for the zero-digest transaction with `n` events.
-    fn contents_for(n: usize) -> HashMap<TransactionDigest, TxEventContents> {
-        HashMap::from([(
-            TransactionDigest::default(),
-            TxEventContents {
-                events: (0..n).map(|_| native_event()).collect(),
-                timestamp_ms: Some(1_234),
-            },
-        )])
     }
 
     /// The GraphQL cursor string that `build_grpc_connection` mints for raw server cursor
@@ -762,8 +743,7 @@ mod tests {
             None,
         );
 
-        let conn =
-            build_grpc_connection(scope, &page, result, &HashMap::new()).expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(conn.edges.is_empty());
         assert!(!conn.page_info.has_previous_page);
         assert!(conn.page_info.has_next_page);
@@ -786,8 +766,7 @@ mod tests {
             None,
         );
 
-        let conn =
-            build_grpc_connection(scope, &page, result, &HashMap::new()).expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(conn.edges.is_empty());
         assert!(conn.page_info.has_previous_page);
         assert!(!conn.page_info.has_next_page);
@@ -819,8 +798,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(3))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 3);
         // `CheckpointBound` means the range was exhausted — no forward continuation.
         assert!(!conn.page_info.has_next_page);
@@ -836,12 +814,51 @@ mod tests {
             "non-empty page should anchor end_cursor on last edge, not stream watermark"
         );
 
-        // Nodes carry the hydrated position and shared timestamp.
+        // Nodes carry the hydrated position and envelope; timestamps resolve lazily.
         for (i, edge) in conn.edges.iter().enumerate() {
             assert_eq!(edge.node.sequence_number, i as u64);
             assert_eq!(edge.node.transaction_digest, TransactionDigest::default());
-            assert_eq!(edge.node.timestamp_ms, Some(1_234));
+            assert_eq!(edge.node.native.package_id, ObjectID::ZERO);
+            assert_eq!(
+                edge.node.native.type_,
+                parse_sui_struct_tag("0x0::m::T").unwrap()
+            );
+            assert!(matches!(edge.node.timestamp, EventTimestamp::Lazy));
         }
+    }
+
+    /// The read mask requests the full event envelope, so an item missing one of its fields
+    /// is an internal inconsistency, not an empty result.
+    #[test]
+    fn missing_payload_field_errors() {
+        let scope = Scope::for_tests();
+        let page = forward_page(10);
+
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        item.payload.contents = None;
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![item],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+        assert!(
+            build_grpc_connection(scope.clone(), &page, result).is_err(),
+            "missing event contents should error"
+        );
+
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        item.payload.sender = None;
+        let result = StreamPage::<v2::Event>::for_test(
+            vec![item],
+            None,
+            None,
+            Some(v2::QueryEndReason::CheckpointBound),
+        );
+        assert!(
+            build_grpc_connection(scope, &page, result).is_err(),
+            "missing sender should error"
+        );
     }
 
     #[test]
@@ -858,8 +875,7 @@ mod tests {
             Some(v2::QueryEndReason::ItemLimit),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(2))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 2);
         assert!(
             conn.page_info.has_next_page,
@@ -883,8 +899,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(3))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert_eq!(conn.edges.len(), 3);
         // After reversal, the *first* edge corresponds to the *lowest* position from the
         // stream — i.e. the last item the stream emitted (event index 0).
@@ -920,8 +935,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(2))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(
             conn.page_info.has_previous_page,
             "after cursor set → hasPreviousPage"
@@ -949,8 +963,7 @@ mod tests {
             Some(v2::QueryEndReason::CheckpointBound),
         );
 
-        let conn = build_grpc_connection(scope, &page, result, &contents_for(2))
-            .expect("connection built");
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
         assert!(
             conn.page_info.has_next_page,
             "before cursor set → hasNextPage"
@@ -958,35 +971,6 @@ mod tests {
         assert!(
             !conn.page_info.has_previous_page,
             "CheckpointBound → no hasPreviousPage"
-        );
-    }
-
-    /// An item pointing at a transaction the KV store did not return (or an out-of-bounds
-    /// event index) is an internal inconsistency, not an empty result.
-    #[test]
-    fn missing_contents_errors() {
-        let scope = Scope::for_tests();
-        let page = forward_page(10);
-        let result = StreamPage::<v2::Event>::for_test(
-            vec![ev_item(0, CursorToken::item(ev_position(1, 1, 0)))],
-            None,
-            None,
-            Some(v2::QueryEndReason::CheckpointBound),
-        );
-        assert!(
-            build_grpc_connection(scope.clone(), &page, result, &HashMap::new()).is_err(),
-            "missing transaction contents should error"
-        );
-
-        let result = StreamPage::<v2::Event>::for_test(
-            vec![ev_item(5, CursorToken::item(ev_position(1, 1, 5)))],
-            None,
-            None,
-            Some(v2::QueryEndReason::CheckpointBound),
-        );
-        assert!(
-            build_grpc_connection(scope, &page, result, &contents_for(2)).is_err(),
-            "out-of-bounds event index should error"
         );
     }
 }
