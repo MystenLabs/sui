@@ -2693,20 +2693,21 @@ impl AuthorityPerEpochStore {
         None
     }
 
-    /// Number of GCP-issuer `(JwkId, JWK)` pairs that have already reached quorum this epoch
-    /// (whether or not they were ultimately activated; a same-batch conflict or cap decision
-    /// permanently resolves that key for the rest of the epoch since it will never reach
-    /// quorum "for the first time" again).
+    /// Number of GCP-issuer `(JwkId, JWK)` pairs that have *actually been activated* this
+    /// epoch. Deliberately does not consult the JWK quorum aggregator (which also considers a
+    /// key "quorate" even when it was never activated, e.g. same-batch conflicts or candidates
+    /// dropped by the `max_gcp_active_jwks` cap): counting those would let non-activated keys
+    /// wrongly consume cap headroom. Instead this counts entries in the `active_jwks` table
+    /// (in-memory queued + persisted), which `activate_gcp_jwks` only ever writes to for keys
+    /// it actually activates. See `ConsensusOutputQuarantine::count_active_gcp_jwks` for the
+    /// restart/replay-safety argument.
     ///
     /// Callers that are about to record new votes (which can themselves cause GCP keys to
     /// reach quorum) must call this *before* recording those votes, since `record_jwk_vote`
-    /// mutates the same underlying aggregator this reads from; see `activate_gcp_jwks`.
-    pub(crate) fn count_active_gcp_jwks(&self) -> u64 {
-        self.jwk_aggregator
-            .lock()
-            .quorate_keys()
-            .filter(|(id, _)| id.iss == sui_types::gcp_attestation::GCP_ISSUER)
-            .count() as u64
+    /// mutates the same underlying aggregator that quorum detection reads from; see
+    /// `activate_gcp_jwks`.
+    pub(crate) fn count_active_gcp_jwks(&self) -> SuiResult<u64> {
+        self.consensus_quarantine.read().count_active_gcp_jwks(self)
     }
 
     /// Groups GCP-issuer `(JwkId, JWK)` pairs that newly reached quorum within a single

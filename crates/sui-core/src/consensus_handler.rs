@@ -2113,7 +2113,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // across the whole batch in `activate_gcp_jwks`.
         // Sampled before recording any of this batch's votes: `record_jwk_vote` mutates the
         // same underlying quorum aggregator this counts, so the baseline must be taken first.
-        let active_gcp_jwks_before_batch = self.epoch_store.count_active_gcp_jwks();
+        let active_gcp_jwks_before_batch = self
+            .epoch_store
+            .count_active_gcp_jwks()
+            .expect("Unrecoverable error in consensus handler");
         let mut newly_quorate_gcp_jwks = Vec::new();
         for (authority_name, jwk_id, jwk) in new_jwks {
             if let Some(candidate) = self.epoch_store.record_jwk_vote(
@@ -5008,6 +5011,12 @@ mod tests {
     /// Rotating a GCP key across two separate activation batches (rounds) is not a conflict:
     /// each round's batch has only one candidate for the id, even though it differs from a key
     /// that was activated for the same id in an earlier round.
+    ///
+    /// This activation-layer permissiveness is intentional, but it means both the old and new
+    /// `ActiveJwk` can legitimately exist within the same epoch. The execution-time `JwkMap`
+    /// (in `sui-move-natives`) does not get to see "which one is newer" -- see
+    /// `same_epoch_same_kid_rotation_fails_closed_rather_than_trusting_either_key` in that
+    /// crate for the corresponding fail-closed guarantee if both ever reach it together.
     #[tokio::test(flavor = "current_thread")]
     async fn gcp_jwk_activation_allows_rotation_across_batches() {
         let state = TestAuthorityBuilder::new()
@@ -5050,6 +5059,152 @@ mod tests {
             0,
             "rotation across separate batches must not be treated as a conflict"
         );
+    }
+
+    /// Regression test for `count_active_gcp_jwks`: keys that reach quorum but are dropped due
+    /// to a same-batch conflict must not consume `max_gcp_active_jwks` cap headroom. A prior
+    /// implementation counted every key that ever reached quorum in the aggregator (including
+    /// conflicted ones), which could wrongly report the cap as full and reject perfectly good
+    /// later candidates.
+    #[tokio::test(flavor = "current_thread")]
+    async fn gcp_jwk_activation_cap_accounting_ignores_same_batch_conflicts_across_batches() {
+        let mut config = protocol_config_with_gcp_consensus_validation(true);
+        config.set_max_gcp_active_jwks_for_testing(2);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let (conflict_id, conflict_jwk_a) = gcp_jwk_fixture("conflict-kid", 0x03);
+        let (_, conflict_jwk_b) = gcp_jwk_fixture("conflict-kid", 0x05);
+        let (ok_id, ok_jwk) = gcp_jwk_fixture("ok-kid", 0x07);
+
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        // Round 1: one conflicting id (2 distinct keys reach quorum together -> 0 activated)
+        // plus one clean id that activates normally. Only 1 of the 2 cap slots is genuinely
+        // used, even though 3 distinct (id, jwk) pairs reached quorum in the aggregator.
+        let tx_conflict_a =
+            ConsensusTransaction::new_jwk_fetched(state.name, conflict_id.clone(), conflict_jwk_a);
+        let tx_conflict_b =
+            ConsensusTransaction::new_jwk_fetched(state.name, conflict_id.clone(), conflict_jwk_b);
+        let tx_ok =
+            ConsensusTransaction::new_jwk_fetched(state.name, ok_id.clone(), ok_jwk.clone());
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                vec![tx_conflict_a, tx_conflict_b, tx_ok],
+                1,
+                1_000,
+                1,
+            ))
+            .await;
+        assert_eq!(setup.metrics.gcp_jwk_activation_conflicts.get(), 1);
+        assert_eq!(setup.metrics.gcp_jwk_activation_cap_exceeded.get(), 0);
+
+        // Round 2: a brand-new id must still be able to activate, since only 1 of the 2 cap
+        // slots was actually consumed by round 1.
+        let (next_id, next_jwk) = gcp_jwk_fixture("next-kid", 0x09);
+        let tx_next =
+            ConsensusTransaction::new_jwk_fetched(state.name, next_id.clone(), next_jwk.clone());
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(vec![tx_next], 2, 2_000, 2))
+            .await;
+
+        let active_round2 = epoch_store.get_new_jwks(2).unwrap();
+        assert!(
+            active_round2
+                .iter()
+                .any(|a| a.jwk_id == next_id && a.jwk == next_jwk),
+            "a conflicted key from an earlier batch must not consume cap headroom: {active_round2:?}"
+        );
+        assert_eq!(
+            setup.metrics.gcp_jwk_activation_cap_exceeded.get(),
+            0,
+            "the cap must not appear full just because conflicting keys once reached quorum"
+        );
+    }
+
+    /// Regression test for `count_active_gcp_jwks`: a key dropped purely because of the
+    /// `max_gcp_active_jwks` cap (no conflict) must also not itself count towards that cap for
+    /// later batches, and `count_active_gcp_jwks` must report the number of keys that were
+    /// actually activated, not the number that merely reached quorum.
+    #[tokio::test(flavor = "current_thread")]
+    async fn gcp_jwk_activation_cap_accounting_ignores_cap_dropped_keys() {
+        let mut config = protocol_config_with_gcp_consensus_validation(true);
+        config.set_max_gcp_active_jwks_for_testing(2);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let (id1, jwk1) = gcp_jwk_fixture("kid-1", 0x03);
+        let (id2, jwk2) = gcp_jwk_fixture("kid-2", 0x05);
+        let (id3, jwk3) = gcp_jwk_fixture("kid-3", 0x07);
+        assert!(id1 < id2 && id2 < id3, "fixture ids must sort as expected");
+
+        let tx1 = ConsensusTransaction::new_jwk_fetched(state.name, id1, jwk1);
+        let tx2 = ConsensusTransaction::new_jwk_fetched(state.name, id2, jwk2);
+        let tx3 = ConsensusTransaction::new_jwk_fetched(state.name, id3, jwk3);
+
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                vec![tx1, tx2, tx3],
+                1,
+                1_000,
+                1,
+            ))
+            .await;
+
+        assert_eq!(setup.metrics.gcp_jwk_activation_cap_exceeded.get(), 1);
+        assert_eq!(
+            epoch_store.count_active_gcp_jwks().unwrap(),
+            2,
+            "only the 2 keys that fit under the cap were actually activated; the cap-dropped \
+             key must not inflate the actual-activation count"
+        );
+    }
+
+    /// Complement to the two tests above: successfully activated keys (unlike conflicted or
+    /// cap-dropped ones) *do* genuinely consume cap headroom across batches.
+    #[tokio::test(flavor = "current_thread")]
+    async fn gcp_jwk_activation_cap_accounting_counts_successful_activations_across_batches() {
+        let mut config = protocol_config_with_gcp_consensus_validation(true);
+        config.set_max_gcp_active_jwks_for_testing(1);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let (id1, jwk1) = gcp_jwk_fixture("kid-1", 0x03);
+        let tx1 = ConsensusTransaction::new_jwk_fetched(state.name, id1, jwk1);
+
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(vec![tx1], 1, 1_000, 1))
+            .await;
+        assert_eq!(epoch_store.count_active_gcp_jwks().unwrap(), 1);
+
+        let (id2, jwk2) = gcp_jwk_fixture("kid-2", 0x05);
+        let tx2 = ConsensusTransaction::new_jwk_fetched(state.name, id2.clone(), jwk2);
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(vec![tx2], 2, 2_000, 2))
+            .await;
+
+        let active_round2 = epoch_store.get_new_jwks(2).unwrap();
+        assert!(
+            active_round2.iter().all(|a| a.jwk_id != id2),
+            "the single cap slot was already consumed by round 1's real activation: {active_round2:?}"
+        );
+        assert_eq!(setup.metrics.gcp_jwk_activation_cap_exceeded.get(), 1);
     }
 
     /// Generic (non-GCP) issuers must never be routed through GCP activation grouping, even

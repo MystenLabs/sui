@@ -483,7 +483,7 @@ where
                     ))
                 })?;
             let current_epoch = tx_context.borrow().epoch();
-            let max_age_epochs = env.protocol_config.max_age_of_gcp_jwk_in_epochs();
+            let max_age_epochs = max_age_of_gcp_jwk_in_epochs(env.protocol_config);
             JwkMap::from_active_jwks(inner.active_jwks, current_epoch, max_age_epochs)
         } else {
             sui_move_natives::JwkMap::default()
@@ -2647,6 +2647,19 @@ fn check_module_compatibility(
     })
 }
 
+/// The maximum age, in epochs, of a GCP-issuer `ActiveJwk` before the execution-time `JwkMap`
+/// treats it as stale. `max_age_of_gcp_jwk_in_epochs` was only added to the protocol config at
+/// version 134, but `enable_gcp_attestation` (which gates whether this is read at all) was
+/// already turned on at version 133. Using the plain `max_age_of_gcp_jwk_in_epochs()` accessor
+/// would panic on any binary running with `enable_gcp_attestation` active at v133, since the
+/// field is `None` at that version. Fall back to "no staleness" (`u64::MAX`) instead, which
+/// matches pre-v134 behavior (no age-based exclusion existed yet).
+fn max_age_of_gcp_jwk_in_epochs(protocol_config: &ProtocolConfig) -> u64 {
+    protocol_config
+        .max_age_of_gcp_jwk_in_epochs_as_option()
+        .unwrap_or(u64::MAX)
+}
+
 /// Assert the type inferred matches the object's type. This has already been done during loading,
 /// but is checked again as an invariant. This may be removed safely at a later time if needed.
 fn assert_expected_move_object_type(
@@ -2742,4 +2755,44 @@ fn assert_expected_data_type(
         assert_expected_type(actual_ty, expected_ty)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod gcp_jwk_max_age_tests {
+    use super::max_age_of_gcp_jwk_in_epochs;
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+    /// Regression test: protocol version 133 turns on `enable_gcp_attestation` (on
+    /// Unknown/devnet), but `max_age_of_gcp_jwk_in_epochs` is not introduced until version 134.
+    /// Binaries running an active v133 network must never panic when GCP attestation is
+    /// enabled; calling `max_age_of_gcp_jwk_in_epochs()` directly would panic via `.expect(..)`
+    /// because the field is `None` at this version.
+    #[test]
+    fn v133_active_gcp_attestation_does_not_panic_on_missing_max_age() {
+        let config = ProtocolConfig::get_for_version(ProtocolVersion::new(133), Chain::Unknown);
+        assert!(
+            config.enable_gcp_attestation(),
+            "v133 must have enable_gcp_attestation on for Chain::Unknown"
+        );
+        assert_eq!(
+            config.max_age_of_gcp_jwk_in_epochs_as_option(),
+            None,
+            "max_age_of_gcp_jwk_in_epochs must not exist yet at v133"
+        );
+
+        // Must not panic, and must fall back to "no staleness" pre-v134 behavior.
+        assert_eq!(max_age_of_gcp_jwk_in_epochs(&config), u64::MAX);
+    }
+
+    /// At v134, the real configured value must be used (not the fallback).
+    #[test]
+    fn v134_uses_configured_max_age() {
+        let config = ProtocolConfig::get_for_version(ProtocolVersion::new(134), Chain::Unknown);
+        assert_eq!(
+            config.max_age_of_gcp_jwk_in_epochs_as_option(),
+            Some(1),
+            "v134 sets max_age_of_gcp_jwk_in_epochs to 1 on all chains"
+        );
+        assert_eq!(max_age_of_gcp_jwk_in_epochs(&config), 1);
+    }
 }
