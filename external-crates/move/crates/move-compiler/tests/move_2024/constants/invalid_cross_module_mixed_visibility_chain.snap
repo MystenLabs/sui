@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/constants/cross_module_mixed_visibility_chain.move:30:16
+   ┌─ tests/move_2024/constants/invalid_cross_module_mixed_visibility_chain.move:30:16
    │
 19 │ const B: u64 = a::A + 1;
    │       - The constant '0x42::b::B' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package

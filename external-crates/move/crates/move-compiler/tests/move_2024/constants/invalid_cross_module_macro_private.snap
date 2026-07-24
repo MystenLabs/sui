@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04001]: restricted visibility
-   ┌─ tests/move_2024/constants/cross_module_macro_private.move:12:5
+   ┌─ tests/move_2024/constants/invalid_cross_module_macro_private.move:12:5
    │
  9 │ const SECRET: u64 = 42;
    │       ------ The constant '0x42::a::SECRET' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package

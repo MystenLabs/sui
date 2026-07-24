@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E04035]: invalid constant usage in error context
-   ┌─ tests/move_2024/constants/cross_module_error_const.move:19:11
+   ┌─ tests/move_2024/constants/invalid_cross_module_error_const.move:19:11
    │
 10 │ public(package) const ENotFound: vector<u8> = b"not found";
    │                       --------- '#[error]' constants can only be used in the module that defines them
@@ -15,7 +15,7 @@ error[E04035]: invalid constant usage in error context
    │           ^^^^^^^^^^^^ Invalid use of '#[error]' constant '0x42::a::ENotFound' in abort
 
 error[E04035]: invalid constant usage in error context
-   ┌─ tests/move_2024/constants/cross_module_error_const.move:23:19
+   ┌─ tests/move_2024/constants/invalid_cross_module_error_const.move:23:19
    │
 10 │ public(package) const ENotFound: vector<u8> = b"not found";
    │                       --------- '#[error]' constants can only be used in the module that defines them
