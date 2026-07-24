@@ -111,6 +111,11 @@ const SUI_DISPLAY_REGISTRY_CREATE: FunctionIdent = (
     ident_str!("display_registry"),
     ident_str!("create"),
 );
+const SUI_PACKAGE_CONFIG_CREATE: FunctionIdent = (
+    SUI_FRAMEWORK_ADDRESS,
+    ident_str!("package_config"),
+    ident_str!("create"),
+);
 const SUI_ALIAS_CREATE: FunctionIdent = (
     SUI_FRAMEWORK_ADDRESS,
     ident_str!("address_alias"),
@@ -137,6 +142,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_ACCUMULATOR_CREATE,
     SUI_COIN_REGISTRY_CREATE,
     SUI_DISPLAY_REGISTRY_CREATE,
+    SUI_PACKAGE_CONFIG_CREATE,
     SUI_ALIAS_CREATE,
     SUI_FORWARDING_ADDRESS_CREATE,
 ];
