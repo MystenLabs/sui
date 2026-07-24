@@ -41,6 +41,9 @@ impl ExecutionPermit {
 }
 
 tokio::task_local! {
+    /// This is used to pass down the permit to the execution task, so that when a transaction is blocked,
+    /// the permit can be released and reacquired when the transaction is unblocked.
+    /// This ensures that blocked transactions never starve other transactions.
     pub(crate) static EXECUTION_PERMIT: Arc<ExecutionPermit>;
 }
 
@@ -56,6 +59,7 @@ impl ReleasedExecutionPermit {
 pub(crate) fn release_execution_permit_for_wait() -> Option<ReleasedExecutionPermit> {
     EXECUTION_PERMIT
         .try_with(|slot| {
+            // Drop the permit by discarding the result.
             if slot.permit.lock().unwrap().take().is_some() {
                 Some(ReleasedExecutionPermit(slot.clone()))
             } else {
@@ -63,6 +67,8 @@ pub(crate) fn release_execution_permit_for_wait() -> Option<ReleasedExecutionPer
                 None
             }
         })
+        // The EXECUTION_PERMIT is only available in the scope if the task is scheduled from execution driver.
+        // In other cases such as dry-run/simulate, this is expected to be None.
         .unwrap_or(None)
 }
 
@@ -76,7 +82,10 @@ pub async fn execution_process(
     info!("Starting pending certificates execution process.");
 
     // Rate limit concurrent executions to # of cpus.
-    let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    let normal_limit = Arc::new(Semaphore::new(num_cpus::get()));
+    // This is an optimization to speed up the execution of transactions that mutate an implicitly-read system object.
+    // These transactions help unblock other transactions that read the same object.
+    // Give them a dedicated permit pool so they execute as fast as possible.
     let system_object_writer_limit = Arc::new(Semaphore::new(num_cpus::get()));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
@@ -133,12 +142,6 @@ pub async fn execution_process(
             continue;
         }
 
-        // Transactions that mutate an implicitly-read system object draw from a dedicated
-        // permit pool: executions can block waiting for such an object to reach its required
-        // version, and the transaction that writes that version must never queue behind them.
-        // TODO: Add a test for the anti-starvation behavior (writers keep executing while
-        // parked user executions hold every user permit) once execution actually blocks on
-        // implicitly-read system objects.
         let limit = if certificate
             .data()
             .transaction_data()
@@ -147,7 +150,7 @@ pub async fn execution_process(
         {
             system_object_writer_limit.clone()
         } else {
-            limit.clone()
+            normal_limit.clone()
         };
 
         // Certificate execution can take significant time, so run it in a separate task.
@@ -156,7 +159,7 @@ pub async fn execution_process(
         spawn_monitored_task!(epoch_store.within_alive_epoch(EXECUTION_PERMIT.scope(execution_permit.clone(), async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _executing_guard = executing_guard;
-            // hold semaphore permit until task completes. unwrap ok because we never close
+            // Hold semaphore permit until task completes. Unwrap is ok because we never close
             // the semaphore in this context.
             execution_permit.store(limit.acquire_owned().await.unwrap());
 

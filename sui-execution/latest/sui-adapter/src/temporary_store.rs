@@ -184,7 +184,7 @@ impl<'backing> TemporaryStore<'backing> {
         let Some(consensus_version) = self.system_object_versions.get(object_id).copied() else {
             debug_fatal!("system object {object_id} read without an assigned version");
             return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
                     format!("system object {object_id} read without an assigned version"),
                 ),
             );
@@ -199,7 +199,7 @@ impl<'backing> TemporaryStore<'backing> {
                 "system object {object_id} not found at required version {required_version}"
             );
             return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
                     format!(
                         "system object {object_id} not found at required version {required_version}"
                     ),
