@@ -3,7 +3,7 @@
 
 use std::{
     sync::{Arc, Weak},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use consensus_config::{
@@ -614,7 +614,20 @@ where
             network_manager,
         ));
 
-        let dag_state_owners = dag_state.strong_count();
+        // Canceled tasks should wait to report cancellation on next poll, but they report from
+        // their JoinHandles immediately under msim. Their futures and captured references are
+        // only dropped when the executor next processes the canceled tasks. Sleeping (instead
+        // of yielding) ensures this task resumes only after the pending drops have run.
+        // In production tokio, a canceled task's future is guaranteed to have been dropped when
+        // its JoinHandle resolves, so the loop exits on the first check.
+        let mut dag_state_owners = dag_state.strong_count();
+        for _ in 0..5 {
+            if dag_state_owners == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            dag_state_owners = dag_state.strong_count();
+        }
         if dag_state_owners != 0 {
             debug_fatal!(
                 "DagState still has {} owner(s) after stopping ConsensusAuthority",
