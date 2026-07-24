@@ -417,6 +417,8 @@ export default {
       link: { type: 'doc', id: 'onchain-finance/deepbook/index' },
       items: [
         'onchain-finance/deepbook/deepbookv3/design',
+        'onchain-finance/deepbook/deepbookv3/fees-and-funding',
+        'onchain-finance/deepbook/deepbookv3/spot-workflow',
         {
           type: 'category',
           label: 'DeepBookV3',
