@@ -585,6 +585,222 @@ pub(crate) mod address_owned_objects_query {
     }
 }
 
+pub(crate) mod object_inventory_query {
+    use anyhow::Context;
+    use anyhow::Error;
+    use anyhow::anyhow;
+    use cynic::QueryBuilder as _;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::ObjectRef;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::ObjectDigest;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    use crate::gql::GraphQLClient;
+    use crate::gql::queries::schema;
+
+    const PAGE_SIZE: i32 = 50;
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub(crate) struct InventoryObject {
+        pub(crate) object_ref: ObjectRef,
+    }
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct ObjectInventoryArgs {
+        pub sequence_number: Option<u64>,
+        pub filter: ObjectFilter,
+        pub first: Option<i32>,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::InputObject, Clone, Debug)]
+    #[cynic(
+        graphql_type = "ObjectFilter",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectFilter {
+        pub owner: Option<SuiAddress>,
+        pub owner_kind: Option<OwnerKind>,
+        #[cynic(rename = "type")]
+        pub type_: Option<String>,
+    }
+
+    #[derive(cynic::Enum, Clone, Copy, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) enum OwnerKind {
+        Address,
+        Object,
+        Shared,
+        Immutable,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectInventoryArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Query {
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectInventoryArgs",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Checkpoint {
+        query: Option<ScopedQuery>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectInventoryArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ScopedQuery {
+        #[arguments(first: $first, after: $after, filter: $filter)]
+        objects: Option<ObjectConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectInventoryArgs",
+        graphql_type = "ObjectConnection",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectConnection {
+        nodes: Vec<Object>,
+        page_info: PageInfo,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct PageInfo {
+        has_next_page: bool,
+        end_cursor: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct Object {
+        address: SuiAddress,
+        version: Option<u64>,
+        digest: Option<String>,
+    }
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    pub(crate) async fn query_object_owner(
+        owner: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<InventoryObject>, Error> {
+        query(
+            ObjectFilter {
+                owner: Some(SuiAddress(owner.to_string())),
+                owner_kind: Some(OwnerKind::Object),
+                type_: None,
+            },
+            checkpoint,
+            client,
+        )
+        .await
+    }
+
+    pub(crate) async fn query_type(
+        type_filter: String,
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<InventoryObject>, Error> {
+        query(
+            ObjectFilter {
+                owner: None,
+                owner_kind: None,
+                type_: Some(type_filter),
+            },
+            checkpoint,
+            client,
+        )
+        .await
+    }
+
+    async fn query(
+        filter: ObjectFilter,
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<InventoryObject>, Error> {
+        let mut entries = Vec::new();
+        let mut cursor = None;
+
+        loop {
+            let operation = Query::build(ObjectInventoryArgs {
+                sequence_number: Some(checkpoint),
+                filter: filter.clone(),
+                first: Some(PAGE_SIZE),
+                after: cursor,
+            });
+            let response = client
+                .run_query(&operation)
+                .await
+                .with_context(|| format!("failed to query object inventory at {checkpoint}"))?;
+
+            let data = response.data.ok_or_else(|| {
+                anyhow!(
+                    "missing data in object inventory response at checkpoint {checkpoint}: {:?}",
+                    response.errors,
+                )
+            })?;
+            let checkpoint_data = data
+                .checkpoint
+                .ok_or_else(|| anyhow!("checkpoint {checkpoint} not found for object inventory"))?;
+            let scoped_query = checkpoint_data
+                .query
+                .ok_or_else(|| anyhow!("missing checkpoint-scoped query for object inventory"))?;
+
+            let Some(objects) = scoped_query.objects else {
+                return Ok(entries);
+            };
+
+            for node in objects.nodes {
+                entries.push(decode_object(node)?);
+            }
+
+            if !objects.page_info.has_next_page {
+                break;
+            }
+            cursor = objects.page_info.end_cursor;
+        }
+
+        Ok(entries)
+    }
+
+    fn decode_object(node: Object) -> Result<InventoryObject, Error> {
+        let object_id = node
+            .address
+            .0
+            .parse::<ObjectID>()
+            .with_context(|| format!("invalid inventory object id {}", node.address.0))?;
+        let digest = node
+            .digest
+            .ok_or_else(|| anyhow!("inventory object {object_id} is missing digest"))?
+            .parse::<ObjectDigest>()
+            .with_context(|| format!("invalid inventory object digest for {object_id}"))?;
+        let version = node
+            .version
+            .ok_or_else(|| anyhow!("inventory object {object_id} is missing version"))?;
+
+        Ok(InventoryObject {
+            object_ref: (object_id, SequenceNumber::from_u64(version), digest),
+        })
+    }
+}
+
 pub(crate) mod object_seed_query {
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SequenceNumber;
@@ -1291,7 +1507,6 @@ pub(crate) mod object_query {
             ObjectKey {
                 address: SuiAddress(key.object_id.to_string()),
                 version: match key.version_query {
-                    VersionQuery::Version(v) => Some(v),
                     VersionQuery::VersionAtCheckpoint {
                         version,
                         checkpoint,
@@ -1323,15 +1538,6 @@ pub(crate) mod object_query {
         #[test]
         fn object_key_from_version_query_sets_only_selected_bound() {
             let object_id = ObjectID::random();
-
-            let version_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::Version(7),
-            });
-            assert_eq!(version_key.address.0, object_id.to_string());
-            assert_eq!(version_key.version, Some(7));
-            assert_eq!(version_key.root_version, None);
-            assert_eq!(version_key.at_checkpoint, None);
 
             let root_version_key = ObjectKey::from(GqlObjectKey {
                 object_id,

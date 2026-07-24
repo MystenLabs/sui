@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Fork manifest and seed resolution for lazy owned-object index initialization.
+//! Fork manifest and seed resolution for seed-bounded owned-object tracking.
 //!
 //! The manifest is written for every initialized fork directory. Address and explicit object
-//! seeds resolve lightweight object-ref metadata at the fork checkpoint. Full object BCS is fetched
-//! later when an object read or lazy owned-object index initialization needs it.
+//! seeds resolve lightweight object-ref metadata at the fork checkpoint. Full object BCS is
+//! saved into `sui-rpc-store` during startup so address-owned RPC indexes are bounded by
+//! seed input plus local execution.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -22,10 +23,11 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::DataStore;
+use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::GraphQLClient;
 use crate::gql::ObjectSeedMetadata;
+use crate::metadata::MetadataStore;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
@@ -47,6 +49,15 @@ pub(crate) struct SeedEntry {
 pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
+    /// Addresses whose owned objects were enumerated *completely* at the fork
+    /// checkpoint to produce this manifest. Seeding one of these addresses is
+    /// the same full scan the lazy read-time inventory initialization would
+    /// run, so saving the manifest also marks their owner inventories
+    /// complete. Absent in manifests written before this field existed
+    /// (`serde(default)`), in which case reads fall back to lazy
+    /// initialization.
+    #[serde(default)]
+    pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
 }
 
@@ -55,6 +66,7 @@ impl SeedManifest {
         Self {
             network,
             checkpoint,
+            addresses: Vec::new(),
             entries: Vec::new(),
         }
     }
@@ -76,11 +88,11 @@ impl From<AddressOwnedObject> for SeedEntry {
 }
 
 /// Reject seed inputs that would overwrite or reinterpret an existing manifest.
-pub(crate) fn ensure_seed_policy(data_store: &DataStore, input: &SeedInput) -> Result<(), Error> {
-    if data_store.local().seed_manifest_exists() && !input.is_empty() {
+pub(crate) fn ensure_seed_policy(local: &MetadataStore, input: &SeedInput) -> Result<(), Error> {
+    if local.seed_manifest_exists() && !input.is_empty() {
         bail!(
             "A seed manifest already exists at {}. To fork the same checkpoint with different seeds, use a different --data-dir.",
-            data_store.local().seed_manifest_path().display(),
+            local.seed_manifest_path().display(),
         );
     }
     Ok(())
@@ -115,29 +127,59 @@ pub(crate) fn ensure_seed_manifest_matches(
 
 /// Load or create the seed manifest for the current fork directory.
 pub(crate) async fn prepare_seed_manifest(
-    data_store: &DataStore,
+    store: &ForkStore,
     network: String,
     input: &SeedInput,
 ) -> Result<SeedManifest, Error> {
-    if data_store.local().seed_manifest_exists() {
+    if store.metadata().seed_manifest_exists() {
         if !input.is_empty() {
             bail!(
                 "A seed manifest already exists at {}. To fork the same checkpoint with different seeds, use a different --data-dir.",
-                data_store.local().seed_manifest_path().display(),
+                store.metadata().seed_manifest_path().display(),
             );
         }
-        let manifest = data_store.local().read_seed_manifest()?;
-        ensure_seed_manifest_matches(&manifest, &network, Some(data_store.forked_at_checkpoint()))?;
+        let manifest = store.metadata().read_seed_manifest()?;
+        ensure_seed_manifest_matches(&manifest, &network, Some(store.forked_at_checkpoint()))?;
         return Ok(manifest);
     }
 
     let manifest = if input.is_empty() {
-        SeedManifest::empty(network, data_store.forked_at_checkpoint())
+        SeedManifest::empty(network, store.forked_at_checkpoint())
     } else {
-        resolve_seeds(input, network, data_store).await?
+        resolve_seeds(input, network, store).await?
     };
-    data_store.local().write_seed_manifest(&manifest)?;
+    store.metadata().write_seed_manifest(&manifest)?;
     Ok(manifest)
+}
+
+/// Materialize every manifest entry into the rpc-store, then mark the
+/// manifest's fully-scanned addresses as having a complete owner inventory.
+///
+/// An address seed is resolved with the same complete owned-objects scan that
+/// lazy read-time inventory initialization would run, so once its entries are
+/// saved (with index rows) the address's inventory *is* initialized;
+/// recording the marker keeps owner-scoped reads from re-running the
+/// identical remote scan. Markers are written only after every entry is
+/// durably saved — a crash in between simply falls back to lazy
+/// initialization. Explicit object-id seeds never mark their owners: they are
+/// not a complete scan.
+pub(crate) fn save_seed_manifest_objects(
+    store: &ForkStore,
+    manifest: &SeedManifest,
+) -> Result<(), Error> {
+    let object_refs: Vec<_> = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.object_ref)
+        .collect();
+    store.save_address_owned_seed_objects(&object_refs)?;
+
+    for address in &manifest.addresses {
+        store
+            .metadata()
+            .mark_address_owner_inventory_complete(*address)?;
+    }
+    Ok(())
 }
 
 fn dedupe_addresses(addresses: &[SuiAddress]) -> Vec<SuiAddress> {
@@ -158,17 +200,15 @@ fn dedupe_object_ids(object_ids: &[ObjectID]) -> Vec<ObjectID> {
         .collect()
 }
 
-fn ensure_address_seeding_available(
-    gql: &GraphQLClient,
-    checkpoint: CheckpointSequenceNumber,
-) -> Result<(), Error> {
-    let lowest_available = gql.get_lowest_available_checkpoint_objects()?;
-    if checkpoint < lowest_available {
-        bail!(
-            "address seeding is unavailable at checkpoint {checkpoint}; object ownership enumeration is available starting at checkpoint {lowest_available}. Use --object for older checkpoints.",
-        );
-    }
-    Ok(())
+/// Returns the lowest checkpoint at which the remote can still enumerate
+/// object ownership.
+///
+/// The remote only retains ownership enumeration for a recent window of
+/// checkpoints (`serviceConfig.availableRange` for objects — roughly the last
+/// hour on the hosted GraphQL endpoints). Fork checkpoints below this bound
+/// cannot be address-seeded; genuine query failures surface as errors.
+fn lowest_enumerable_checkpoint(gql: &GraphQLClient) -> Result<CheckpointSequenceNumber, Error> {
+    gql.get_lowest_available_checkpoint_objects()
 }
 
 async fn resolve_address_seed(
@@ -220,17 +260,37 @@ async fn resolve_object_seeds(
 async fn resolve_seeds(
     input: &SeedInput,
     network: String,
-    data_store: &DataStore,
+    store: &ForkStore,
 ) -> Result<SeedManifest, Error> {
-    let checkpoint = data_store.forked_at_checkpoint();
+    let checkpoint = store.forked_at_checkpoint();
     let mut entries = BTreeMap::new();
 
-    if !input.addresses.is_empty() {
-        ensure_address_seeding_available(data_store.gql(), checkpoint)?;
-    }
-
-    for address in dedupe_addresses(&input.addresses) {
-        let address_entries = resolve_address_seed(data_store.gql(), address, checkpoint).await?;
+    // Address seeds are ignored (not fatal) when the fork checkpoint is older
+    // than the remote's ownership-enumeration window: the scan is impossible,
+    // but explicit object seeds still work. The skipped addresses must NOT be
+    // recorded in the manifest — recording them would mark their owner
+    // inventories complete without a scan ever having run.
+    let addresses = if input.addresses.is_empty() {
+        Vec::new()
+    } else {
+        let lowest_available = lowest_enumerable_checkpoint(store.gql())?;
+        if checkpoint < lowest_available {
+            warn!(
+                addresses = ?input.addresses,
+                checkpoint,
+                lowest_available,
+                "ignoring --address seeds: checkpoint {checkpoint} is older than the remote's \
+                 object-ownership window (available from checkpoint {lowest_available}, roughly \
+                 the last hour). If the object IDs are known, seed them directly with --object \
+                 instead.",
+            );
+            Vec::new()
+        } else {
+            dedupe_addresses(&input.addresses)
+        }
+    };
+    for address in addresses.iter().copied() {
+        let address_entries = resolve_address_seed(store.gql(), address, checkpoint).await?;
         if address_entries.is_empty() {
             warn!(%address, checkpoint, "address seed resolved no owned objects");
         }
@@ -243,31 +303,60 @@ async fn resolve_seeds(
         .into_iter()
         .filter(|object_id| !entries.contains_key(object_id))
         .collect();
-    for entry in resolve_object_seeds(data_store.gql(), checkpoint, &remaining_object_ids).await? {
+    for entry in resolve_object_seeds(store.gql(), checkpoint, &remaining_object_ids).await? {
         entries.insert(entry.object_ref.0, entry);
     }
 
     Ok(SeedManifest {
         network,
         checkpoint,
+        addresses,
         entries: entries.into_values().collect(),
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use serde_json::json;
     use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::CheckpointDigest;
     use sui_types::object::Object;
     use sui_types::object::Owner;
+    use sui_types::storage::RpcIndexes;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
     use wiremock::matchers::body_partial_json;
+    use wiremock::matchers::body_string_contains;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
+    use crate::services::ServiceManager;
+
     use super::*;
+
+    fn test_data_store_with_remote(
+        root: &Path,
+        gql_url: String,
+        forked_at_checkpoint: CheckpointSequenceNumber,
+    ) -> (ForkStore, ServiceManager) {
+        let services = ServiceManager::open(
+            root,
+            "custom".to_owned(),
+            forked_at_checkpoint,
+            CheckpointDigest::new([9; 32]).into(),
+        )
+        .expect("service manager should open");
+        let store = ForkStore::new_for_testing_with_remote(
+            root.to_path_buf(),
+            gql_url,
+            forked_at_checkpoint,
+            services.local_store(),
+        );
+        (store, services)
+    }
 
     fn object_seed_response_body(
         object: &Object,
@@ -340,11 +429,8 @@ mod tests {
     #[tokio::test]
     async fn prepare_seed_manifest_writes_empty_manifest_without_seed_input() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let store = DataStore::new_for_testing_with_remote(
-            temp.path().to_path_buf(),
-            "http://localhost:1".to_owned(),
-            11,
-        );
+        let (store, _services) =
+            test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
 
         let manifest = prepare_seed_manifest(&store, "custom".to_owned(), &SeedInput::default())
             .await
@@ -355,10 +441,11 @@ mod tests {
             SeedManifest {
                 network: "custom".to_owned(),
                 checkpoint: 11,
+                addresses: Vec::new(),
                 entries: Vec::new(),
             }
         );
-        assert_eq!(store.local().read_seed_manifest().unwrap(), manifest);
+        assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
     }
 
     #[tokio::test]
@@ -371,8 +458,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let err = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -390,7 +476,7 @@ mod tests {
                 || err.contains("Failed to read response")
                 || err.contains("Missing data")
         );
-        assert!(!store.local().seed_manifest_exists());
+        assert!(!store.metadata().seed_manifest_exists());
     }
 
     #[tokio::test]
@@ -423,8 +509,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -440,14 +525,6 @@ mod tests {
         assert_eq!(
             manifest.entries[0].object_ref,
             object.compute_object_reference()
-        );
-        assert!(
-            store
-                .local()
-                .get_object_at_version(&object.id(), object.version().value())
-                .expect("local object lookup should not fail")
-                .is_none(),
-            "explicit object seeding should not cache BCS",
         );
 
         let requests = server
@@ -497,8 +574,7 @@ mod tests {
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
         let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
@@ -515,48 +591,241 @@ mod tests {
             manifest.entries[0].object_ref,
             object.compute_object_reference()
         );
-        assert!(
-            store
-                .local()
-                .get_object_at_version(&object.id(), object.version().value())
-                .expect("local object lookup should not fail")
-                .is_none(),
-            "explicit object seeding should not cache BCS",
-        );
     }
 
     #[tokio::test]
-    async fn prepare_seed_manifest_rejects_address_seed_before_object_available_range() {
+    async fn prepare_seed_manifest_skips_address_seed_before_object_available_range() {
+        // Fork checkpoint 11 is below the remote's ownership-enumeration
+        // window (available from 12): address seeds are warned about and
+        // ignored — not fatal — while explicit object seeds still resolve.
         let server = MockServer::start().await;
+        let skipped_address = SuiAddress::random_for_testing_only();
+        let owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::AddressOwner(owner),
+        );
+
         Mock::given(method("POST"))
             .and(path("/"))
+            .and(body_string_contains("availableRange"))
             .respond_with(ResponseTemplate::new(200).set_body_json(available_range_response(12)))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "atCheckpoint": 11,
+                    }]
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(object_seed_response_body(
+                    &object,
+                    owner,
+                    "AddressOwner",
+                )),
+            )
             .mount(&server)
             .await;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let store =
-            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
-        let err = prepare_seed_manifest(
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![SuiAddress::random_for_testing_only()],
+                addresses: vec![skipped_address],
+                object_ids: vec![object.id()],
+            },
+        )
+        .await
+        .expect("out-of-window address seed should be skipped, not fatal");
+
+        // The skipped address is NOT recorded as fully scanned (recording it
+        // would wrongly mark its owner inventory complete), while the object
+        // seed still lands.
+        assert!(manifest.addresses.is_empty());
+        assert_eq!(manifest.entries.len(), 1);
+        assert_eq!(
+            manifest.entries[0].object_ref,
+            object.compute_object_reference()
+        );
+        assert!(
+            !store
+                .metadata()
+                .address_owner_inventory_complete(skipped_address)
+                .unwrap(),
+            "skipped address must not be marked inventory-complete",
+        );
+    }
+
+    fn address_objects_response(objects: &[&Object]) -> serde_json::Value {
+        json!({
+            "data": {
+                "checkpoint": {
+                    "query": {
+                        "address": {
+                            "objects": {
+                                "nodes": objects
+                                    .iter()
+                                    .map(|object| {
+                                        json!({
+                                            "address": object.id().to_string(),
+                                            "version": object.version().value(),
+                                            "digest": object.digest().to_string(),
+                                        })
+                                    })
+                                    .collect::<Vec<_>>(),
+                                "pageInfo": {
+                                    "hasNextPage": false,
+                                    "endCursor": null,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    async fn mock_address_objects(
+        server: &MockServer,
+        checkpoint: u64,
+        owner: SuiAddress,
+        objects: &[&Object],
+    ) {
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": checkpoint,
+                    "address": owner.to_string(),
+                    "after": null,
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(address_objects_response(objects)),
+            )
+            .mount(server)
+            .await;
+    }
+
+    #[test]
+    fn seed_manifest_without_addresses_field_deserializes_with_empty_addresses() {
+        // Manifests written before the `addresses` field existed must keep
+        // loading; their owners simply fall back to lazy inventory init.
+        let manifest: SeedManifest = serde_json::from_value(json!({
+            "network": "testnet",
+            "checkpoint": 42,
+            "entries": [],
+        }))
+        .expect("pre-addresses manifest should deserialize");
+        assert!(manifest.addresses.is_empty());
+    }
+
+    #[tokio::test]
+    async fn prepare_seed_manifest_records_fully_scanned_addresses() {
+        let server = MockServer::start().await;
+        let owner = SuiAddress::random_for_testing_only();
+        let empty_owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::AddressOwner(owner),
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_string_contains("availableRange"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(available_range_response(0)))
+            .mount(&server)
+            .await;
+        mock_address_objects(&server, 11, owner, &[&object]).await;
+        mock_address_objects(&server, 11, empty_owner, &[]).await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
+            &store,
+            "custom".to_owned(),
+            &SeedInput {
+                addresses: vec![owner, empty_owner],
                 object_ids: vec![],
             },
         )
         .await
-        .expect_err("address seed should fail before object available range");
+        .expect("seed manifest should resolve");
 
-        assert!(err.to_string().contains("address seeding is unavailable"));
-        assert!(!store.local().seed_manifest_exists());
+        // Both requested addresses are recorded as fully scanned — including
+        // the one that owns nothing — and the manifest round-trips.
+        let mut expected = vec![owner, empty_owner];
+        expected.sort();
+        assert_eq!(manifest.addresses, expected);
+        assert_eq!(manifest.entries.len(), 1);
         assert_eq!(
-            server
-                .received_requests()
-                .await
-                .expect("wiremock should record requests")
-                .len(),
-            1,
+            manifest.entries[0].object_ref,
+            object.compute_object_reference()
+        );
+        assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
+    }
+
+    #[tokio::test]
+    async fn save_seed_manifest_objects_marks_seeded_address_inventories_complete() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, _services) =
+            test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
+        let owner = SuiAddress::random_for_testing_only();
+        let empty_owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::AddressOwner(owner),
+        );
+        store
+            .local_store()
+            .save_object_version_only(&object)
+            .unwrap();
+
+        let manifest = SeedManifest {
+            network: "custom".to_owned(),
+            checkpoint: 11,
+            addresses: vec![owner, empty_owner],
+            entries: vec![SeedEntry {
+                object_ref: object.compute_object_reference(),
+            }],
+        };
+        save_seed_manifest_objects(&store, &manifest).expect("seed save should succeed");
+
+        for address in [owner, empty_owner] {
+            assert!(
+                store
+                    .metadata()
+                    .address_owner_inventory_complete(address)
+                    .unwrap(),
+                "seeded address should be marked inventory-complete",
+            );
+        }
+
+        // The GraphQL endpoint is unreachable, so these owner-scoped reads
+        // only succeed if the marker prevents a second full owner scan.
+        let infos: Vec<_> = store
+            .owned_objects_iter(owner, None, None)
+            .expect("seeded owner read should not re-scan the remote")
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].object_id, object.id());
+        assert_eq!(
+            store
+                .owned_objects_iter(empty_owner, None, None)
+                .expect("empty seeded owner read should not re-scan the remote")
+                .count(),
+            0,
         );
     }
 }

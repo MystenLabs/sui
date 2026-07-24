@@ -4,19 +4,18 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
 use anyhow::bail;
-use itertools::Itertools as _;
-use tracing::info;
-
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
+use sui_rpc_store::RpcStoreReader;
+use sui_rpc_store::schema::objects::Status;
+use sui_rpc_store::schema::objects::TombstoneKind;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
@@ -52,6 +51,7 @@ use sui_types::storage::EpochInfo;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
@@ -61,94 +61,79 @@ use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::error::Error as StorageError;
+use sui_types::storage::error::Kind as StorageErrorKind;
 use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
 use typed_store_error::TypedStoreError;
 
-use crate::CheckpointRead;
 use crate::GraphQLClient;
-use crate::Node;
-use crate::ObjectKey;
-use crate::ObjectRead;
 use crate::TransactionInfo;
-use crate::TransactionRead;
-use crate::VersionQuery;
-use crate::filesystem::BoundedObjectLookup;
-use crate::filesystem::FilesystemStore;
-use crate::filesystem::ObjectLatestState;
-use crate::filesystem::OwnedObjectEntry;
+use crate::inventory::InventoryInitializer;
+use crate::local_store::LocalStore;
+use crate::local_store::ObjectRemoval;
+use crate::metadata::MetadataStore;
+use crate::pending::PendingCheckpointBuffer;
+use crate::remote::RemoteSource;
 
-/// A data store for Sui data, combining a shared local filesystem cache with a remote GraphQL
-/// endpoint for historical reads. Pre-fork data is fetched on demand and cached locally; post-fork
-/// data (written by the executor) lives on disk only.
+/// The fork's state store: reads check `LocalStore` first and fall back to
+/// `RemoteSource` (pinned at the fork checkpoint), persisting fetched
+/// pre-fork data back into the local store. The metadata sidecar keeps fork
+/// metadata and completion markers for remote inventory scans.
 ///
 /// Cloned stores share the same inner state and local snapshot guard, so RPC readers and the local
-/// executor coordinate multi-file filesystem snapshots.
+/// executor coordinate index initialization.
 ///
 /// Implements [`SimulatorStore`] so it can be passed directly into
-/// [`simulacrum::Simulacrum::new_from_custom_state`].
+/// [`simulacrum::Simulacrum::new_from_custom_state`], and the upstream RPC
+/// storage traits (`ReadStore`, `RpcStateReader`, `RpcIndexes`) so the same
+/// store backs the `sui-rpc-api` `RpcService`.
 #[derive(Clone)]
-pub struct DataStore {
-    inner: Arc<DataStoreInner>,
+pub struct ForkStore {
+    inner: Arc<ForkStoreInner>,
 }
 
-struct DataStoreInner {
+struct ForkStoreInner {
     forked_at_checkpoint: CheckpointSequenceNumber,
-    gql: GraphQLClient,
-    local: FilesystemStore,
-    /// Protects multi-file filesystem snapshots between executor writes and cloned RPC readers.
-    local_snapshot_lock: RwLock<()>,
+    /// Checkpoint-pinned GraphQL access to the forked-from chain; owns all
+    /// pre/post-fork remote-read policy.
+    remote: RemoteSource,
+    metadata: MetadataStore,
+    local_store: LocalStore,
+    /// Lazy full-enumeration initializer for the owner/type indexes.
+    inventory: InventoryInitializer,
+    /// Staging for the in-flight checkpoint; see [`PendingCheckpointBuffer`].
+    pending: PendingCheckpointBuffer,
+    /// Coordinates index initialization and local object writes across cloned
+    /// stores; the same lock is shared with `inventory`.
+    local_snapshot_lock: Arc<RwLock<()>>,
 }
 
-/// Source of an object removal emitted by transaction effects.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RemovedObjectKind {
-    /// The object moved directly from live to deleted.
-    Deleted,
-    /// The object moved directly from live to wrapped.
-    Wrapped,
-    /// The object was unwrapped and deleted in the same transaction.
-    UnwrappedThenDeleted,
-}
-
-/// Object version paired with the current-state removal kind that produced it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct RemovedObject {
-    object_id: ObjectID,
-    version: SequenceNumber,
-    kind: RemovedObjectKind,
-}
-
-impl DataStore {
-    /// Create a new `DataStore` for the given network, anchored at `forked_at_checkpoint`.
-    ///
-    /// The local filesystem cache root is selected by `FilesystemStore`. The GraphQL client is
-    /// constructed eagerly but no remote requests are made until reads happen.
-    pub async fn new(
-        node: Node,
-        forked_at_checkpoint: CheckpointSequenceNumber,
-        version: &str,
-        data_dir: Option<std::path::PathBuf>,
-    ) -> Result<Self, anyhow::Error> {
-        let gql = GraphQLClient::new(node.clone(), version)?;
-        let local = FilesystemStore::new(&node, forked_at_checkpoint, data_dir)?;
-
-        Ok(Self::from_parts(forked_at_checkpoint, gql, local))
-    }
-
-    fn from_parts(
+impl ForkStore {
+    pub(crate) fn from_parts(
         forked_at_checkpoint: CheckpointSequenceNumber,
         gql: GraphQLClient,
-        local: FilesystemStore,
+        metadata: MetadataStore,
+        local_store: LocalStore,
     ) -> Self {
+        let remote = RemoteSource::new(gql, forked_at_checkpoint);
+        let local_snapshot_lock = Arc::new(RwLock::new(()));
+        let inventory = InventoryInitializer::new(
+            remote.clone(),
+            metadata.clone(),
+            local_store.clone(),
+            local_snapshot_lock.clone(),
+        );
         Self {
-            inner: Arc::new(DataStoreInner {
+            inner: Arc::new(ForkStoreInner {
                 forked_at_checkpoint,
-                gql,
-                local,
-                local_snapshot_lock: RwLock::new(()),
+                remote,
+                metadata,
+                local_store,
+                inventory,
+                pending: PendingCheckpointBuffer::new(),
+                local_snapshot_lock,
             }),
         }
     }
@@ -159,14 +144,7 @@ impl DataStore {
 
     /// Return the chain (mainnet/testnet/devnet/unknown) this store is connected to.
     pub fn chain(&self) -> Chain {
-        self.inner.gql.chain()
-    }
-
-    fn read_local_snapshot(&self) -> StorageResult<RwLockReadGuard<'_, ()>> {
-        self.inner
-            .local_snapshot_lock
-            .read()
-            .map_err(|_| StorageError::custom("local snapshot lock poisoned"))
+        self.inner.remote.gql().chain()
     }
 
     fn write_local_snapshot(&self) -> anyhow::Result<RwLockWriteGuard<'_, ()>> {
@@ -177,106 +155,96 @@ impl DataStore {
     }
 
     pub(crate) fn gql(&self) -> &GraphQLClient {
-        &self.inner.gql
+        self.inner.remote.gql()
     }
 
-    pub(crate) fn local(&self) -> &FilesystemStore {
-        &self.inner.local
+    pub(crate) fn metadata(&self) -> &MetadataStore {
+        &self.inner.metadata
     }
 
-    /// Get a checkpoint summary by sequence number. Tries the local filesystem first. If it's a
-    /// miss, then fetches it from remote if it's at or before the fork checkpoint and caches it
-    /// locally for next time.
+    pub(crate) fn local_store(&self) -> &LocalStore {
+        &self.inner.local_store
+    }
+
+    /// Get a checkpoint summary by sequence number. The RPC store is the
+    /// durable history store; pre-fork misses are fetched from GraphQL and
+    /// persisted there.
     pub(crate) fn get_checkpoint_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
-        if let Some(checkpoint) = self
-            .inner
-            .local
-            .get_checkpoint_by_sequence_number(sequence)?
-        {
-            info!("Found checkpoint {sequence} in local filesystem");
+        let local_store = self.local_store();
+        let reader = local_store.reader();
+        if let Some(checkpoint) = ReadStore::get_checkpoint_by_sequence_number(reader, sequence) {
             return Ok(Some(checkpoint));
         }
-        if sequence > self.inner.forked_at_checkpoint {
-            info!(
-                "Checkpoint requested for sequence {sequence} > forked_at_checkpoint {}, returning None",
-                self.inner.forked_at_checkpoint
-            );
-            return Ok(None);
-        }
         Ok(self
-            .fetch_and_cache_checkpoint(sequence)?
+            .fetch_and_save_checkpoint(sequence)?
             .map(|(checkpoint, _)| checkpoint))
     }
 
-    /// Get checkpoint contents by sequence number, with the same local-first
+    /// Get checkpoint contents by sequence number, with the same rpc-store
     /// remote-fallback policy as [`Self::get_checkpoint_by_sequence_number`].
     pub(crate) fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<CheckpointContents>> {
-        if let Some(contents) = self
-            .inner
-            .local
-            .get_checkpoint_contents_by_sequence_number(sequence)?
+        let local_store = self.local_store();
+        let reader = local_store.reader();
+        if let Some(contents) =
+            ReadStore::get_checkpoint_contents_by_sequence_number(reader, sequence)
         {
             return Ok(Some(contents));
         }
-        if sequence > self.inner.forked_at_checkpoint {
-            return Ok(None);
-        }
         Ok(self
-            .fetch_and_cache_checkpoint(sequence)?
+            .fetch_and_save_checkpoint(sequence)?
             .map(|(_, contents)| contents))
     }
 
-    /// Look up a checkpoint summary by its digest. Local only: the GraphQL
-    /// checkpoint query is keyed by sequence number, so there is no remote
-    /// fallback for digest lookups.
+    /// Look up a checkpoint summary by its digest. RPC-store only: the
+    /// GraphQL checkpoint query is keyed by sequence number, so there is no
+    /// remote fallback for digest lookups.
     pub(crate) fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
-        self.inner.local.get_checkpoint_by_digest(digest)
+        let local_store = self.local_store();
+        Ok(ReadStore::get_checkpoint_by_digest(
+            local_store.reader(),
+            digest,
+        ))
     }
 
-    /// Look up checkpoint contents by their digest. Local only: contents are
-    /// content-addressed on disk, but the remote GraphQL schema does not
-    /// expose a contents-by-digest query, so there is no fallback path.
+    /// Look up checkpoint contents by their digest from the RPC store.
     pub(crate) fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> anyhow::Result<Option<CheckpointContents>> {
-        self.inner.local.get_checkpoint_contents_by_digest(digest)
+        self.local_store().get_checkpoint_contents_by_digest(digest)
     }
 
-    /// Return the highest checkpoint summary cached locally. This never
+    /// Return the highest checkpoint summary persisted in the RPC store. This never
     /// consults the remote endpoint — the local executor is the source of
     /// truth for "latest" in a forked network.
+    ///
+    /// Only a `Missing` read maps to `Ok(None)`; other storage errors
+    /// propagate so a store failure cannot masquerade as "no checkpoint yet".
     pub(crate) fn get_highest_verified_checkpoint(
         &self,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
-        self.inner.local.get_highest_verified_checkpoint()
+        let reader = self.local_store().reader();
+        match ReadStore::get_highest_verified_checkpoint(reader) {
+            Ok(checkpoint) => Ok(Some(checkpoint)),
+            Err(err) if err.kind() == StorageErrorKind::Missing => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 
-    /// Eagerly populate the cache with the startup (forked-at) checkpoint so
-    /// any bootstrap failure surfaces now instead of on first access.
-    pub(crate) fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
-        self.get_checkpoint_by_sequence_number(self.inner.forked_at_checkpoint)?
-            .ok_or_else(|| {
-                anyhow!(
-                    "checkpoint {} not found on remote",
-                    self.inner.forked_at_checkpoint
-                )
-            })?;
-        Ok(())
-    }
-
-    /// Get the highest checkpoint sequence number available on disk.
+    /// Get the highest checkpoint sequence number available in the RPC store.
     pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.inner.local.get_highest_checkpoint_sequence_number()
+        self.local_store()
+            .highest_checkpoint_sequence()?
+            .ok_or_else(|| anyhow!("no checkpoint persisted yet"))
     }
 
     /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
@@ -284,7 +252,7 @@ impl DataStore {
     pub(crate) fn get_lowest_available_checkpoint(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.inner.gql.get_lowest_available_checkpoint()
+        self.inner.remote.lowest_available_checkpoint()
     }
 
     /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
@@ -292,346 +260,235 @@ impl DataStore {
     pub(crate) fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.inner.gql.get_lowest_available_checkpoint_objects()
+        self.inner.remote.lowest_available_checkpoint_objects()
     }
 
-    /// Fetch checkpoint summary and contents from the remote GraphQL endpoint and persist them to
-    /// disk. Shared by the sequence-keyed cache-aware getters.
-    fn fetch_and_cache_checkpoint(
+    fn fetch_and_save_checkpoint(
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
-        let Some((checkpoint, contents)) = self.inner.gql.get_checkpoint(Some(sequence))? else {
+        let Some((checkpoint, contents)) = self.inner.remote.checkpoint(sequence)? else {
             return Ok(None);
         };
-        // Write contents first: they're content-addressed (idempotent), so
-        // if the summary write fails afterward the contents are harmless
-        // orphans and the next request retries cleanly. The reverse order
-        // would leave a summary on disk pointing to missing contents.
-        self.inner.local.write_checkpoint_contents(&contents)?;
-        self.inner.local.write_checkpoint_summary(&checkpoint)?;
+        self.save_checkpoint(&checkpoint, &contents)?;
         Ok(Some((checkpoint, contents)))
     }
 
-    /// Get the object at the latest version available on disk. If not found, it will fetch the
-    /// object at the forked checkpoint from remote rpc and save it to disk for future use. Returns
-    /// `None` in the latter case.
+    pub(crate) fn save_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: &CheckpointContents,
+    ) -> anyhow::Result<()> {
+        self.local_store().save_checkpoint(checkpoint, contents)
+    }
+
+    /// Get the latest known object. If not found locally, fetch the object at the forked checkpoint
+    /// from remote GraphQL and persist it for future use.
     pub(crate) fn get_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         self.get_latest_object(object_id)
     }
 
-    /// Get the object at the specified version. It will first try to load from disk, and if not
-    /// found, it will fetch from remote rpc by making a query to fetch this version at the forked
-    /// checkpoint. If none is found, it will return None. If the object is successfully fetched
-    /// from remote rpc, it will be saved to disk for future use before returning the object.
+    /// Get the object at the specified version. It first tries local saved state and falls
+    /// back to a checkpoint-scoped remote query. Successfully fetched objects are persisted
+    /// locally before being returned.
     pub(crate) fn get_object_at_version(
         &self,
         object_id: &ObjectID,
         version: u64,
     ) -> anyhow::Result<Option<Object>> {
-        if let Some(object) = self.inner.local.get_object_at_version(object_id, version)? {
-            return Ok(Some(object));
+        let local_store = self.local_store();
+        let sequence = SequenceNumber::from_u64(version);
+        match local_store.get_object_at_version(*object_id, sequence)? {
+            Some(Status::Live(object)) => return Ok(Some(object)),
+            Some(Status::Tombstone(_)) => return Ok(None),
+            None => {}
         }
 
-        let object =
-            self.get_object_from_remote(object_id, Some(version), self.forked_at_checkpoint())?;
-
+        let object = self.inner.remote.object_at_version(object_id, version)?;
         if let Some(ref object) = object {
-            let _local_snapshot_guard = self.write_local_snapshot()?;
-            self.inner.local.write_object(object)?;
+            local_store.save_object_version_only(object)?;
         }
 
         Ok(object)
     }
 
     /// Get the latest object version at or below the given root version.
+    ///
+    /// TODO(fork): this trusts the highest *local* row at or below the bound,
+    /// which is only the true highest-≤-bound if the local history is complete
+    /// below the bound. A sparse cache polluted by an exact-historical-version
+    /// read (e.g. an RPC client fetching an old dynamic-field version) can hold
+    /// a lower live row than the chain's true highest-≤-bound; that stale row
+    /// then wins here without the remote ever being consulted. Reachable from
+    /// `read_child_object` on both the RPC and the executor paths, so it can
+    /// skew execution, not just reads. Candidate fix (undecided): short-circuit
+    /// only on live-state authority (`Live(v)` with `v <= bound`) or on an
+    /// authoritative tombstone; otherwise query the remote `RootVersion(bound)`
+    /// and take the max-version of the remote result and the local candidate.
+    /// Optionally let executor-driven bounds (always the parent's current root
+    /// version, which Lamport-dominates the child) set the live pointer on
+    /// fetch so each child pays the remote round-trip once. Tracked in
+    /// design/storage.md § "Known gaps".
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
         version_bound: SequenceNumber,
     ) -> anyhow::Result<Option<Object>> {
-        match self
-            .inner
-            .local
-            .get_object_lt_or_eq_version(object_id, version_bound.value())?
-        {
-            BoundedObjectLookup::Hit(object) => return Ok(Some(object)),
-            BoundedObjectLookup::NegativeHit => return Ok(None),
-            BoundedObjectLookup::Miss => {}
+        let local_store = self.local_store();
+        match local_store.get_object_at_or_before(*object_id, version_bound)? {
+            Some((_, Status::Live(object))) => return Ok(Some(object)),
+            Some((_, Status::Tombstone(_))) => return Ok(None),
+            None => {}
         }
 
-        let mut objects = self.inner.gql.get_objects(&[ObjectKey {
-            object_id: *object_id,
-            version_query: VersionQuery::RootVersion(version_bound.value()),
-        }])?;
-        let object = objects.pop().flatten().map(|(object, _)| object);
-
+        let object = self
+            .inner
+            .remote
+            .object_at_or_before(object_id, version_bound.value())?;
         if let Some(ref object) = object {
-            let _local_snapshot_guard = self.write_local_snapshot()?;
-            self.inner.local.write_object(object)?;
+            local_store.save_object_version_only(object)?;
         }
 
         Ok(object)
     }
 
     /// Local-first lookup for the latest known version of an object. Falls back to a remote
-    /// `AtCheckpoint(forked_at_checkpoint)` query and caches the result on disk.
+    /// `AtCheckpoint(forked_at_checkpoint)` query and persists the result in the RPC store.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
-        if self
-            .inner
-            .local
-            .object_latest_state(object_id)?
-            .is_some_and(ObjectLatestState::is_removed)
-        {
-            return Ok(None);
+        let local_store = self.local_store();
+        match local_store.get_latest_object_status(*object_id)? {
+            Some((_, Status::Live(object))) => return Ok(Some(object)),
+            Some((_, Status::Tombstone(_))) => return Ok(None),
+            None => {}
         }
 
-        if let Some(object) = self.inner.local.get_latest_object(object_id)? {
-            return Ok(Some(object));
-        }
-
-        // if not found, load from remote rpc at forked checkpoint and save it to disk for future
-        // use
-        let object = self.get_object_from_remote(object_id, None, self.forked_at_checkpoint())?;
-
+        let object = self.inner.remote.latest_object(object_id)?;
         if let Some(ref object) = object {
-            let _local_snapshot_guard = self.write_local_snapshot()?;
-            self.inner.local.write_object(object)?;
+            local_store.save_live_object_if_current(object)?;
         }
 
         Ok(object)
     }
 
-    /// Get the object at the specified checkpoint from remote rpc. If version is `None`, latest
-    /// version at that checkpoint will be returned. Otherwise, the object at the specified version
-    /// will be returned if it existed at that checkpoint.
-    fn get_object_from_remote(
+    pub(crate) fn read_child_object_fallible(
         &self,
-        object_id: &ObjectID,
-        version: Option<u64>,
-        checkpoint: CheckpointSequenceNumber,
-    ) -> anyhow::Result<Option<Object>> {
-        let version_query = if let Some(version) = version {
-            VersionQuery::VersionAtCheckpoint {
-                version,
-                checkpoint,
-            }
-        } else {
-            VersionQuery::AtCheckpoint(checkpoint)
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let Some(child_object) = self
+            .get_object_lt_or_eq_version(child, child_version_upper_bound)
+            .map_err(|err| format!("failed to read child object {child}: {err:#}"))?
+        else {
+            return Ok(None);
         };
-
-        let objects = self.inner.gql.get_objects(&[ObjectKey {
-            object_id: *object_id,
-            version_query,
-        }])?;
-
-        Ok(objects
-            .into_iter()
-            .next()
-            .flatten()
-            .map(|(object, _)| object))
+        check_child_object_owner(parent, child, child_object).map(Some)
     }
 
-    /// Get a signed transaction by digest. First tries the local filesystem, and on miss it falls
-    /// back to the remote GraphQL endpoint. If the transaction is found remotely and is at or
-    /// before the fork checkpoint, then it is saved to disk before being returned. Transactions
-    /// produced by the local executor are always on disk.
-    ///
-    /// Note that currently historical reads do not include events, whereas local execution does
-    /// write events to disk.
+    pub(crate) fn get_object_received_at_version_fallible(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let Some(recv_object) = self.get_object(receiving_object_id).map_err(|err| {
+            format!("failed to read received object {receiving_object_id}: {err:#}")
+        })?
+        else {
+            return Ok(None);
+        };
+        Ok(check_received_object(
+            owner,
+            receive_object_at_version,
+            recv_object,
+        ))
+    }
+
+    /// Get a signed transaction by digest from the RPC store. Pre-fork misses
+    /// are fetched from GraphQL and persisted there.
     pub(crate) fn get_transaction(
         &self,
         digest: &TransactionDigest,
     ) -> anyhow::Result<Option<VerifiedTransaction>> {
-        if let Some(transaction) = self.inner.local.get_transaction(digest)? {
-            return Ok(Some(transaction));
+        let reader = self.local_store().reader();
+        if let Some(transaction) = ReadStore::get_transaction(reader, digest) {
+            return Ok(Some((*transaction).clone()));
         }
         Ok(self
-            .fetch_and_cache_transaction(digest)?
+            .fetch_and_save_transaction(digest)?
             .map(|info| info.transaction))
     }
 
-    /// Get the checkpoint that finalized a transaction. Local-only: the checkpoint
-    /// file is written alongside the transaction by both the remote-fetch path
-    /// and the post-fork executor path.
+    /// Get the checkpoint that finalized a transaction from RPC-store metadata.
     pub(crate) fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
-        if let Some(seq) = self.inner.local.get_transaction_checkpoint(digest)? {
-            return Ok(Some(seq));
+        let reader = self.local_store().reader();
+        if let Some(sequence) = ReadStore::get_transaction_checkpoint(reader, digest) {
+            return Ok(Some(sequence));
         }
-        // If the checkpoint file is missing but the transaction itself hasn't
-        // been fetched yet, try fetching it — that will also write the
-        // checkpoint file as a side-effect.
         Ok(self
-            .fetch_and_cache_transaction(digest)?
+            .fetch_and_save_transaction(digest)?
             .map(|info| info.checkpoint))
     }
 
-    /// Get transaction effects by digest, with the same local-first remote-fallback
+    /// Get transaction effects by digest, with the same RPC-store remote-fallback
     /// policy as [`Self::get_transaction`].
     pub(crate) fn get_transaction_effects(
         &self,
         digest: &TransactionDigest,
     ) -> anyhow::Result<Option<TransactionEffects>> {
-        if let Some(effects) = self.inner.local.get_transaction_effects(digest)? {
+        let reader = self.local_store().reader();
+        if let Some(effects) = ReadStore::get_transaction_effects(reader, digest) {
             return Ok(Some(effects));
         }
         Ok(self
-            .fetch_and_cache_transaction(digest)?
+            .fetch_and_save_transaction(digest)?
             .map(|info| info.effects))
     }
 
-    /// Fetch a transaction and its effects from the remote GraphQL endpoint and persist both halves
-    /// to disk. Shared by [`Self::get_transaction`] and [`Self::get_transaction_effects`] so a
-    /// single remote round-trip is used.
+    /// Fetch a transaction and its effects from the remote GraphQL endpoint and persist them
+    /// into the RPC store. Shared by [`Self::get_transaction`] and
+    /// [`Self::get_transaction_effects`] so a single remote round-trip is used.
     ///
-    /// Pre-fork guard: transaction digests aren't ordered, so we can't reject post-fork requests
-    /// up front the way [`Self::get_checkpoint_by_sequence_number`] does. Instead we check
-    /// `info.checkpoint` on the remote response and drop anything executed strictly after
-    /// `forked_at_checkpoint` so our fork doesn't silently absorb upstream activity that
-    /// happened after the fork point.
-    fn fetch_and_cache_transaction(
+    /// The post-fork drop guard lives in [`RemoteSource::transaction`].
+    fn fetch_and_save_transaction(
         &self,
         digest: &TransactionDigest,
     ) -> anyhow::Result<Option<TransactionInfo>> {
-        let Some(info) = self
-            .inner
-            .gql
-            .transaction_data_and_effects(&digest.base58_encode())?
-        else {
+        let Some(info) = self.inner.remote.transaction(digest)? else {
             return Ok(None);
         };
-        if info.checkpoint > self.inner.forked_at_checkpoint {
-            return Ok(None);
-        }
-        self.inner
-            .local
-            .write_transaction(digest, &info.transaction)?;
-        self.inner
-            .local
-            .write_transaction_effects(digest, &info.effects)?;
-        self.inner
-            .local
-            .write_transaction_checkpoint(digest, info.checkpoint)?;
 
-        // Fetch and persist events separately — they require paginated queries.
-        // Best-effort: if the events fetch fails we still want the transaction
-        // and effects cached, so log the error and fall back to empty events.
-        let events = match self
-            .inner
-            .gql
-            .get_transaction_events(&digest.base58_encode())
-        {
-            Ok(Some(events)) => events,
-            Ok(None) => TransactionEvents::default(),
-            Err(err) => {
-                tracing::warn!(
-                    %digest,
-                    "failed to fetch transaction events, storing empty: {err:#}",
-                );
-                TransactionEvents::default()
-            }
+        let local_store = self.local_store();
+        let checkpoint = self
+            .get_checkpoint_by_sequence_number(info.checkpoint)?
+            .ok_or_else(|| anyhow!("checkpoint {} not found on remote", info.checkpoint))?;
+        let contents = self
+            .get_checkpoint_contents_by_sequence_number(info.checkpoint)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "checkpoint {} contents not found on remote",
+                    info.checkpoint
+                )
+            })?;
+        local_store.save_checkpoint(&checkpoint, &contents)?;
+
+        let events = if info.effects.events_digest().is_some() {
+            self.inner.remote.transaction_events(digest)?
+        } else {
+            TransactionEvents::default()
         };
-        self.inner.local.write_transaction_events(digest, &events)?;
+        local_store.save_transaction(
+            &checkpoint,
+            &contents,
+            &info.transaction,
+            &info.effects,
+            &events,
+        )?;
 
         Ok(Some(info))
-    }
-
-    /// Look up the checkpoint sequence number that references the given contents
-    /// digest by scanning the highest persisted checkpoint. Called from
-    /// `insert_checkpoint_contents` to build the tx→checkpoint reverse mapping.
-    fn checkpoint_sequence_for_contents(
-        &self,
-        contents_digest: &CheckpointContentsDigest,
-    ) -> Option<CheckpointSequenceNumber> {
-        // The summary persisted by the immediately preceding `insert_checkpoint`
-        // call is typically the highest checkpoint. Read it back and verify the
-        // content_digest matches.
-        let checkpoint = self.inner.local.get_highest_verified_checkpoint().ok()??;
-        if checkpoint.data().content_digest == *contents_digest {
-            return Some(checkpoint.data().sequence_number);
-        }
-        None
-    }
-
-    fn ensure_owned_object_index_initialized(&self) -> anyhow::Result<()> {
-        if self.inner.local.owned_object_index_exists() {
-            return Ok(());
-        }
-
-        let _local_snapshot_guard = self.write_local_snapshot()?;
-        if self.inner.local.owned_object_index_exists() {
-            return Ok(());
-        }
-
-        if let Some(checkpoint) = self.inner.local.get_highest_verified_checkpoint()?
-            && checkpoint.data().sequence_number > self.forked_at_checkpoint()
-        {
-            bail!(
-                "owned-object index is missing while local checkpoints have advanced past the fork checkpoint; refusing to rebuild stale seed state",
-            );
-        }
-
-        let mut entries = BTreeMap::new();
-        if self.inner.local.seed_manifest_exists() {
-            let manifest = self.inner.local.read_seed_manifest()?;
-            if manifest.checkpoint != self.forked_at_checkpoint() {
-                bail!(
-                    "Seed manifest checkpoint {} does not match requested checkpoint {}. Use a different --data-dir.",
-                    manifest.checkpoint,
-                    self.forked_at_checkpoint(),
-                );
-            }
-
-            let keys: Vec<_> = manifest
-                .entries
-                .iter()
-                .map(|entry| ObjectKey {
-                    object_id: entry.object_ref.0,
-                    version_query: VersionQuery::VersionAtCheckpoint {
-                        version: entry.object_ref.1.value(),
-                        checkpoint: self.forked_at_checkpoint(),
-                    },
-                })
-                .collect();
-            let objects = self
-                .inner
-                .gql
-                .get_objects(&keys)
-                .context("failed to fetch seeded objects for owned-object index")?;
-
-            for (seed_entry, object) in manifest.entries.iter().zip_eq(objects) {
-                let Some((object, _)) = object else {
-                    bail!(
-                        "seeded object {} version {} was not found at fork checkpoint {}",
-                        seed_entry.object_ref.0,
-                        seed_entry.object_ref.1.value(),
-                        self.forked_at_checkpoint(),
-                    );
-                };
-                let entry = OwnedObjectEntry::from_object(&object).with_context(|| {
-                    format!(
-                        "seeded object {} is not an address-owned Move object",
-                        seed_entry.object_ref.0,
-                    )
-                })?;
-                if entry.object_ref != seed_entry.object_ref {
-                    bail!(
-                        "seeded object {} metadata does not match fetched object at fork checkpoint {}",
-                        seed_entry.object_ref.0,
-                        self.forked_at_checkpoint(),
-                    );
-                }
-
-                self.inner.local.write_object(&object)?;
-                entries.insert(entry.object_ref.0, entry);
-            }
-        }
-
-        let entries: Vec<_> = entries.into_values().collect();
-        self.inner.local.write_owned_object_entries(&entries)
     }
 
     /// Persist local object writes and current-state removals, then update the address-owned
@@ -639,88 +496,28 @@ impl DataStore {
     fn apply_object_updates(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
-        removed_objects: Vec<RemovedObject>,
+        removed_objects: Vec<ObjectRemoval>,
     ) -> anyhow::Result<()> {
-        self.ensure_owned_object_index_initialized()
-            .context("failed to initialize owned-object index")?;
         let _local_snapshot_guard = self
             .write_local_snapshot()
             .context("failed to lock local snapshot for object update")?;
-        let removed_object_ids: Vec<_> = removed_objects
-            .iter()
-            .map(|removed| removed.object_id)
-            .collect();
 
-        for removed in &removed_objects {
-            match removed.kind {
-                RemovedObjectKind::Deleted => self
-                    .inner
-                    .local
-                    .mark_object_as_deleted(removed.object_id, removed.version)
-                    .with_context(|| {
-                        format!(
-                            "failed to mark object {} deleted on disk",
-                            removed.object_id
-                        )
-                    })?,
-                RemovedObjectKind::Wrapped => self
-                    .inner
-                    .local
-                    .mark_object_as_wrapped(removed.object_id, removed.version)
-                    .with_context(|| {
-                        format!(
-                            "failed to mark object {} wrapped on disk",
-                            removed.object_id
-                        )
-                    })?,
-                RemovedObjectKind::UnwrappedThenDeleted => self
-                    .inner
-                    .local
-                    .mark_object_as_unwrapped_then_deleted(removed.object_id, removed.version)
-                    .with_context(|| {
-                        format!(
-                            "failed to mark object {} unwrapped-then-deleted on disk",
-                            removed.object_id
-                        )
-                    })?,
-            }
-        }
-
-        for object in written_objects.values() {
-            self.inner
-                .local
-                .write_live_object(object)
-                .with_context(|| format!("failed to write object {} to disk", object.id()))?;
-        }
-
-        let mut indexable_written_objects = Vec::new();
-        for object in written_objects.values() {
-            if self
-                .inner
-                .local
-                .object_latest_state(&object.id())
-                .with_context(|| format!("failed to read object {} latest state", object.id()))?
-                != Some(ObjectLatestState::Deleted)
-            {
-                indexable_written_objects.push(object);
-            }
-        }
-
-        self.inner
-            .local
-            .apply_owned_object_index_updates(&removed_object_ids, indexable_written_objects)
-            .context("failed to update owned-object index")
+        self.local_store()
+            .apply_local_object_diff(&written_objects, &removed_objects)
     }
 
-    /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
+    /// Construct a `ForkStore` for tests, backed by an explicit local root and a fake (unused)
     /// GraphQL endpoint. The remote client is constructed but never called because tests should
-    /// pre-populate the local cache with the data they need.
+    /// pre-populate the attached RPC store with the data they need.
     #[cfg(test)]
-    pub(crate) fn new_for_testing(root: std::path::PathBuf) -> Self {
-        let gql = GraphQLClient::new(Node::Custom("http://localhost:1".to_string()), "test")
-            .expect("graphql store with localhost url should construct");
-        let local = FilesystemStore::new_with_root(root);
-        Self::from_parts(0, gql, local)
+    pub(crate) fn new_for_testing(root: std::path::PathBuf, local_store: LocalStore) -> Self {
+        let gql = GraphQLClient::new(
+            crate::Node::Custom("http://localhost:1".to_string()),
+            "test",
+        )
+        .expect("graphql store with localhost url should construct");
+        let metadata = MetadataStore::new_with_root(root);
+        Self::from_parts(0, gql, metadata, local_store)
     }
 
     /// Test-only constructor that lets callers point the GraphQL client at an arbitrary URL
@@ -730,135 +527,165 @@ impl DataStore {
         root: std::path::PathBuf,
         gql_url: String,
         forked_at_checkpoint: CheckpointSequenceNumber,
+        local_store: LocalStore,
     ) -> Self {
-        let gql = GraphQLClient::new(Node::Custom(gql_url), "test")
+        let gql = GraphQLClient::new(crate::Node::Custom(gql_url), "test")
             .expect("graphql store with custom url should construct");
-        let local = FilesystemStore::new_with_root(root);
-        Self::from_parts(forked_at_checkpoint, gql, local)
+        let metadata = MetadataStore::new_with_root(root);
+        Self::from_parts(forked_at_checkpoint, gql, metadata, local_store)
     }
 
-    /// Get owned objects for an address, optionally filtered by object type and paginated with a
-    /// cursor.
-    fn get_owned_objects(
+    /// Read the seed/local address-owner index from the RPC store.
+    pub(crate) fn get_owned_object_infos(
         &self,
         owner: SuiAddress,
         object_type: Option<StructTag>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        self.get_owned_object_infos(owner, object_type, cursor)
+        let local_store = self.local_store();
+        let iter =
+            RpcIndexes::owned_objects_iter(local_store.reader(), owner, object_type, cursor)?;
+        iter.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| StorageError::custom(e.to_string()))
     }
 
-    /// Initialize the owned-object index when needed, then read complete indexed RPC metadata.
-    fn get_owned_object_infos(
+    pub(crate) fn save_address_owned_seed_objects(
         &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        self.ensure_owned_object_index_initialized()
-            .map_err(|e| StorageError::custom(e.to_string()))?;
-        let entries = {
-            let _local_snapshot_guard = self.read_local_snapshot()?;
-            self.inner
-                .local
-                .get_owned_object_entries()
-                .map_err(|e| StorageError::custom(e.to_string()))?
+        object_refs: &[ObjectRef],
+    ) -> anyhow::Result<()> {
+        let local_store = self.local_store();
+        let mut missing = Vec::new();
+
+        for object_ref in object_refs {
+            match local_store.get_object_at_version(object_ref.0, object_ref.1)? {
+                Some(Status::Live(object)) => {
+                    if object.compute_object_reference() != *object_ref {
+                        bail!(
+                            "seed object {} metadata does not match persisted object at version {}",
+                            object_ref.0,
+                            object_ref.1.value(),
+                        );
+                    }
+                    local_store.save_address_owned_seed_object(&object)?;
+                }
+                Some(Status::Tombstone(_)) => bail!(
+                    "seed object {} version {} is stored as removed",
+                    object_ref.0,
+                    object_ref.1.value(),
+                ),
+                None => missing.push(*object_ref),
+            }
+        }
+
+        let objects = self
+            .inner
+            .remote
+            .objects_at_fork(&missing, "seed objects")?;
+        for object in objects {
+            local_store.save_address_owned_seed_object(&object)?;
+        }
+
+        Ok(())
+    }
+
+    /// Seal the staged checkpoint matching `contents` into the rpc-store:
+    /// summary and contents first, then every staged transaction it references,
+    /// and finally drop the staged entries. Idempotent when the contents are
+    /// already persisted.
+    fn save_pending_checkpoint_contents(
+        &self,
+        contents: &CheckpointContents,
+    ) -> anyhow::Result<()> {
+        let local_store = self.local_store();
+        if local_store
+            .get_checkpoint_contents_by_digest(contents.digest())?
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let checkpoint = self.inner.pending.checkpoint_for_contents(contents)?;
+        local_store.save_checkpoint(&checkpoint, contents)?;
+
+        let staged = self
+            .inner
+            .pending
+            .staged_transactions_for(&checkpoint, contents)?;
+        for transaction in &staged {
+            local_store.save_transaction(
+                &checkpoint,
+                contents,
+                &transaction.transaction,
+                &transaction.effects,
+                &transaction.events,
+            )?;
+        }
+
+        self.inner.pending.clear_sealed(
+            &checkpoint,
+            staged.iter().map(|transaction| transaction.digest),
+        )
+    }
+}
+
+/// RPC-side helpers; the RPC storage trait impls below are the only callers.
+impl ForkStore {
+    /// The stock reader over the fork's local `sui-rpc-store`, for reads the
+    /// fork has no policy for.
+    fn stock_reader(&self) -> &RpcStoreReader {
+        self.local_store().reader()
+    }
+
+    /// Chain identifier for the forked network: known networks use their
+    /// fixed identifiers; custom networks derive one from the fork checkpoint
+    /// digest.
+    fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
+        let id = match self.chain() {
+            Chain::Mainnet => get_mainnet_chain_identifier(),
+            Chain::Testnet => get_testnet_chain_identifier(),
+            Chain::Unknown => {
+                let checkpoint =
+                    ForkStore::get_checkpoint_by_sequence_number(self, self.forked_at_checkpoint())
+                        .map_err(to_storage_error)?
+                        .ok_or_else(|| {
+                            StorageError::missing(
+                                "forked checkpoint missing -- cannot derive chain identifier",
+                            )
+                        })?;
+                ChainIdentifier::from(*checkpoint.digest())
+            }
         };
-        let cursor_object_id = cursor.map(|cursor| cursor.object_id);
-
-        Ok(entries
-            .into_iter()
-            .filter(|entry| entry.owner == owner)
-            // `RpcIndexes` cursors are lower bounds. The v2 RPC layer stores
-            // the first not-yet-returned item in the page token and expects
-            // the next iterator to include it.
-            .filter(|entry| cursor_object_id.is_none_or(|id| entry.object_ref.0 >= id))
-            .filter(|entry| {
-                object_type
-                    .as_ref()
-                    .is_none_or(|filter| struct_tag_filter_matches(filter, &entry.object_type))
-            })
-            .map(|entry| OwnedObjectInfo {
-                owner: entry.owner,
-                object_type: entry.object_type,
-                balance: entry.balance,
-                object_id: entry.object_ref.0,
-                version: entry.object_ref.1,
-            })
-            .collect())
+        Ok(id)
     }
-}
-
-/// Check if the these two `StructTag`s match for the purposes of owned-object filtering. The filter
-/// may have empty type parameters, in which case they are ignored and only the address, module, and
-/// name are compared.
-///
-/// This allows a wildcard filter like `0x2::coin::Coin` to match all versions of the `Coin` struct,
-/// regardless of the type parameter (e.g., `0x2::coin::Coin<0x1::sui::SUI>`).
-fn struct_tag_filter_matches(filter: &StructTag, candidate: &StructTag) -> bool {
-    filter.address == candidate.address
-        && filter.module.as_ident_str() == candidate.module.as_ident_str()
-        && filter.name.as_ident_str() == candidate.name.as_ident_str()
-        && (filter.type_params.is_empty()
-            || filter.type_params.as_slice() == candidate.type_params.as_slice())
-}
-
-/// Preserve effect removal categories before passing removals through `update_objects`, whose trait
-/// signature does not distinguish deleted, wrapped, or unwrapped-then-deleted objects.
-fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<RemovedObject> {
-    effects
-        .deleted()
-        .into_iter()
-        .map(|object_ref| RemovedObject {
-            object_id: object_ref.0,
-            version: object_ref.1,
-            kind: RemovedObjectKind::Deleted,
-        })
-        .chain(
-            effects
-                .unwrapped_then_deleted()
-                .into_iter()
-                .map(|object_ref| RemovedObject {
-                    object_id: object_ref.0,
-                    version: object_ref.1,
-                    kind: RemovedObjectKind::UnwrappedThenDeleted,
-                }),
-        )
-        .chain(
-            effects
-                .wrapped()
-                .into_iter()
-                .map(|object_ref| RemovedObject {
-                    object_id: object_ref.0,
-                    version: object_ref.1,
-                    kind: RemovedObjectKind::Wrapped,
-                }),
-        )
-        .collect()
 }
 
 // ============================================================================
 // SimulatorStore super-traits
 // ============================================================================
 
-/// Object reads delegate to the inherent `DataStore::get_object` / `get_object_at_version`,
-/// which provide local-first lookups with remote fallback. Errors are swallowed and surfaced
-/// as `None` because the trait signature does not allow propagating them.
-impl ObjectStore for DataStore {
+/// Object reads delegate to the inherent `ForkStore::get_object` / `get_object_at_version`,
+/// which provide local-first lookups with remote fallback. The trait signature cannot
+/// propagate errors, so failures are logged before being surfaced as `None`.
+impl ObjectStore for ForkStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.get_object(object_id).ok().flatten()
+        self.get_object(object_id).unwrap_or_else(|err| {
+            tracing::warn!(%object_id, "latest-object read failed: {err:#}");
+            None
+        })
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         self.get_object_at_version(object_id, version.value())
-            .ok()
-            .flatten()
+            .unwrap_or_else(|err| {
+                tracing::warn!(%object_id, ?version, "versioned object read failed: {err:#}");
+                None
+            })
     }
 }
 
 /// Package reads go through the standard `load_package_object_from_object_store` helper, which
 /// validates that the resolved object is actually a Move package.
-impl BackingPackageStore for DataStore {
+impl BackingPackageStore for ForkStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         load_package_object_from_object_store(self, package_id)
     }
@@ -866,38 +693,23 @@ impl BackingPackageStore for DataStore {
 
 /// `ParentSync` is only required by older protocol versions and is never called by the executor
 /// for the protocol versions we target. Calling it indicates a misconfiguration.
-impl ParentSync for DataStore {
+impl ParentSync for ForkStore {
     fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         panic!("Never called in newer protocol versions")
     }
 }
 
-impl RuntimeObjectResolver for DataStore {
+/// Both methods go through the fallible helpers: a store or remote failure
+/// must surface as an error rather than read as "object not found", which
+/// execution would otherwise durably commit as a wrong result.
+impl RuntimeObjectResolver for ForkStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let child_object = match self
-            .get_object_lt_or_eq_version(child, child_version_upper_bound)
-            .ok()
-            .flatten()
-        {
-            None => return Ok(None),
-            Some(obj) => obj,
-        };
-
-        if child_object.owner != sui_types::object::Owner::ObjectOwner((*parent).into()) {
-            return Err(sui_types::error::SuiErrorKind::InvalidChildObjectAccess {
-                object: *child,
-                given_parent: *parent,
-                actual_owner: child_object.owner.clone(),
-            }
-            .into());
-        }
-
-        Ok(Some(child_object))
+        self.read_child_object_fallible(parent, child, child_version_upper_bound)
     }
 
     fn get_object_received_at_version(
@@ -907,16 +719,11 @@ impl RuntimeObjectResolver for DataStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        let Some(recv_object) = self.get_object(receiving_object_id).ok().flatten() else {
-            return Ok(None);
-        };
-        if recv_object.owner != sui_types::object::Owner::AddressOwner((*owner).into()) {
-            return Ok(None);
-        }
-        if recv_object.version() != receive_object_at_version {
-            return Ok(None);
-        }
-        Ok(Some(recv_object))
+        self.get_object_received_at_version_fallible(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+        )
     }
 }
 
@@ -924,24 +731,28 @@ impl RuntimeObjectResolver for DataStore {
 // SimulatorStore
 // ============================================================================
 
-impl SimulatorStore for DataStore {
+/// Write methods are fail-stop: the trait cannot surface errors, and executing
+/// past a failed persist would silently diverge the executor's in-memory view
+/// from durable fork state. Crashing is strictly safer than continuing on top
+/// of unpersisted state.
+impl SimulatorStore for ForkStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        DataStore::get_checkpoint_by_sequence_number(self, sequence_number)
+        ForkStore::get_checkpoint_by_sequence_number(self, sequence_number)
             .ok()
             .flatten()
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        DataStore::get_checkpoint_by_digest(self, digest)
+        ForkStore::get_checkpoint_by_digest(self, digest)
             .ok()
             .flatten()
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        DataStore::get_highest_verified_checkpoint(self)
+        ForkStore::get_highest_verified_checkpoint(self)
             .ok()
             .flatten()
     }
@@ -950,7 +761,7 @@ impl SimulatorStore for DataStore {
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        DataStore::get_checkpoint_contents_by_digest(self, digest)
+        ForkStore::get_checkpoint_contents_by_digest(self, digest)
             .ok()
             .flatten()
     }
@@ -960,21 +771,18 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        DataStore::get_transaction(self, digest).ok().flatten()
+        ForkStore::get_transaction(self, digest).ok().flatten()
     }
 
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
-        DataStore::get_transaction_effects(self, digest)
+        ForkStore::get_transaction_effects(self, digest)
             .ok()
             .flatten()
     }
 
     fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
-        self.inner
-            .local
-            .get_transaction_events(digest)
-            .ok()
-            .flatten()
+        let local_store = self.local_store();
+        ReadStore::get_events(local_store.reader(), digest)
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
@@ -1023,63 +831,19 @@ impl SimulatorStore for DataStore {
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
         let sequence = checkpoint.data().sequence_number;
-        // Pre-fork summary was persisted at seed time; skip rewrites.
-        if self
-            .inner
-            .local
-            .get_checkpoint_by_sequence_number(sequence)
-            .ok()
-            .flatten()
-            .is_some()
-        {
+        let local_store = self.local_store();
+        if ReadStore::get_checkpoint_by_sequence_number(local_store.reader(), sequence).is_some() {
             return;
         }
-        if let Err(err) = self.inner.local.write_checkpoint_summary(&checkpoint) {
-            tracing::error!(
-                sequence_number = sequence,
-                "failed to persist checkpoint summary: {err:?}",
-            );
+        if let Err(err) = self.inner.pending.record_checkpoint(checkpoint) {
+            panic!("failed to record pending checkpoint {sequence}: {err:?}");
         }
     }
 
     fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
-        // Contents are content-addressed, so writes are independent of the
-        // summary that references them. Idempotent: re-writing the same
-        // digest is a no-op.
         let digest = *contents.digest();
-        if self
-            .inner
-            .local
-            .get_checkpoint_contents_by_digest(&digest)
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            return;
-        }
-        if let Err(err) = self.inner.local.write_checkpoint_contents(&contents) {
-            tracing::error!(
-                contents_digest = %digest,
-                "failed to persist checkpoint contents: {err:?}",
-            );
-        }
-
-        // Build the tx_digest → checkpoint reverse mapping. The summary
-        // (persisted by the preceding `insert_checkpoint` call) carries the
-        // sequence number we need.
-        if let Some(sequence) = self.checkpoint_sequence_for_contents(&digest) {
-            for exec_digest in contents.iter() {
-                if let Err(err) = self
-                    .inner
-                    .local
-                    .write_transaction_checkpoint(&exec_digest.transaction, sequence)
-                {
-                    tracing::error!(
-                        tx_digest = %exec_digest.transaction,
-                        "failed to persist transaction checkpoint: {err:?}",
-                    );
-                }
-            }
+        if let Err(err) = self.save_pending_checkpoint_contents(&contents) {
+            panic!("failed to persist checkpoint contents {digest}: {err:?}");
         }
     }
 
@@ -1100,54 +864,27 @@ impl SimulatorStore for DataStore {
         self.insert_transaction_effects(effects);
         self.insert_events(&tx_digest, events);
         if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
-            tracing::error!(
-                tx_digest = %tx_digest,
-                "failed to persist transaction object updates: {err:?}",
-            );
+            panic!("failed to persist transaction object updates for {tx_digest}: {err:?}");
         }
     }
 
     fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
         let digest = *transaction.digest();
-        if let Err(err) = self
-            .inner
-            .local
-            .write_transaction(&digest, &transaction)
-            .with_context(|| format!("failed to persist transaction {digest} to disk"))
-        {
-            tracing::error!(
-                tx_digest = %digest,
-                "failed to persist transaction: {err:?}",
-            );
+        if let Err(err) = self.inner.pending.record_transaction(transaction) {
+            panic!("failed to record pending transaction {digest}: {err:?}");
         }
     }
 
     fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
         let digest = *effects.transaction_digest();
-        if let Err(err) = self
-            .inner
-            .local
-            .write_transaction_effects(&digest, &effects)
-            .with_context(|| format!("failed to persist transaction {digest} effects to disk"))
-        {
-            tracing::error!(
-                tx_digest = %digest,
-                "failed to persist transaction effects: {err:?}",
-            );
+        if let Err(err) = self.inner.pending.record_effects(effects) {
+            panic!("failed to record pending transaction effects for {digest}: {err:?}");
         }
     }
 
     fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
-        if let Err(err) = self
-            .inner
-            .local
-            .write_transaction_events(tx_digest, &events)
-            .with_context(|| format!("failed to persist transaction {tx_digest} events to disk"))
-        {
-            tracing::error!(
-                tx_digest = %tx_digest,
-                "failed to persist transaction events: {err:?}",
-            );
+        if let Err(err) = self.inner.pending.record_events(*tx_digest, events) {
+            panic!("failed to record pending transaction events for {tx_digest}: {err:?}");
         }
     }
 
@@ -1158,14 +895,14 @@ impl SimulatorStore for DataStore {
     ) {
         let removed_objects = deleted_objects
             .into_iter()
-            .map(|(object_id, version, _digest)| RemovedObject {
+            .map(|(object_id, version, _digest)| ObjectRemoval {
                 object_id,
                 version,
-                kind: RemovedObjectKind::Deleted,
+                kind: TombstoneKind::Deleted,
             })
             .collect();
         if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
-            tracing::error!("failed to persist object updates: {err:?}");
+            panic!("failed to persist object updates: {err:?}");
         }
     }
 
@@ -1175,165 +912,206 @@ impl SimulatorStore for DataStore {
 }
 
 // ============================================================================
-// ReadStore / RpcStateReader
+// RPC storage traits
 // ============================================================================
+//
+// The fork serves RPC directly through `sui-rpc-api` (it does not use
+// `sui-rpc-node`): [`crate::startup`] hands the store to `RpcService` as its
+// `RpcStateReader`. These impls are the routing table between fork policy and
+// the stock rpc-store reader: every read the fork has policy for resolves
+// through the local-first, remote-fallback helpers above, while surfaces the
+// fork keeps no policy for -- events, full checkpoint contents, committees,
+// epoch info, struct layouts, and the ledger/bitmap indexes, all written by
+// the embedded indexer -- are served straight from the stock reader.
+//
+// The one read the stock reader could answer but must not is `get_object`
+// without a version: a stock reverse scan over the fork's sparse `objects` CF
+// would serve cached history as current, so latest-semantics reads go through
+// the store's `LiveState`-backed path (see the `ObjectStore` impl above).
 
-impl ReadStore for DataStore {
-    fn get_committee(&self, _epoch: sui_types::committee::EpochId) -> Option<Arc<Committee>> {
-        todo!("ReadStore::get_committee on forked DataStore")
+impl ReadStore for ForkStore {
+    /// Reads committee information from committed `sui-rpc-store` data.
+    fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
+        self.stock_reader().get_committee(epoch)
     }
 
+    /// Reads the latest checkpoint from the local rpc-store. This never
+    /// consults the remote endpoint -- the local executor is the source of
+    /// truth for "latest" in a forked network.
     fn get_latest_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        self.get_highest_verified_checkpoint()
-            .map_err(|e| StorageError::custom(e.to_string()))?
+        ForkStore::get_highest_verified_checkpoint(self)
+            .map_err(to_storage_error)?
             .ok_or_else(|| StorageError::missing("no checkpoint persisted yet"))
     }
 
+    /// Reads the highest verified checkpoint: the fork's local tip.
     fn get_highest_verified_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        DataStore::get_highest_verified_checkpoint(self)
-            .map_err(|e| StorageError::custom(e.to_string()))?
-            .ok_or_else(|| StorageError::missing("no checkpoint persisted yet"))
+        self.get_latest_checkpoint()
     }
 
+    /// Reads the highest synced checkpoint: also the fork's local tip.
     fn get_highest_synced_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
-        // A fork has no concept of an "unsynced" checkpoint — anything we hold
-        // locally was either pre-fetched at startup or produced by the local
-        // executor, so highest-synced collapses to highest-verified.
-        DataStore::get_highest_verified_checkpoint(self)
-            .map_err(|e| StorageError::custom(e.to_string()))?
+        ForkStore::get_highest_verified_checkpoint(self)
+            .map_err(to_storage_error)?
             .ok_or_else(|| {
                 StorageError::missing(
-                    "no checkpoint persisted yet — cannot determine highest synced checkpoint",
+                    "no checkpoint persisted yet -- cannot determine highest synced checkpoint",
                 )
             })
     }
 
-    /// This will be called for most requests to correctly fetch the earliest checkpoint at which
-    /// transactions and checkpoint data are available. The GraphQL endpoint is the source of truth
-    /// for this.
+    /// Returns the remote chain's lowest available checkpoint.
+    ///
+    /// This value is not derived from the fork's local store.
     fn get_lowest_available_checkpoint(&self) -> StorageResult<CheckpointSequenceNumber> {
-        DataStore::get_lowest_available_checkpoint(self)
-            .map_err(|e| StorageError::custom(e.to_string()))
+        ForkStore::get_lowest_available_checkpoint(self).map_err(to_storage_error)
     }
 
+    /// Reads a checkpoint summary by checkpoint digest; rpc-store only (the
+    /// GraphQL checkpoint query is keyed by sequence number).
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        DataStore::get_checkpoint_by_digest(self, digest)
-            .ok()
-            .flatten()
+        optional_store_read(
+            "checkpoint digest lookup",
+            ForkStore::get_checkpoint_by_digest(self, digest),
+        )
     }
 
+    /// Reads a checkpoint summary by sequence number, persisting pre-fork
+    /// rows fetched from the remote.
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        info!("Requested checkpoint {} through gRPC", sequence_number);
-        DataStore::get_checkpoint_by_sequence_number(self, sequence_number)
-            .ok()
-            .flatten()
+        optional_store_read(
+            "checkpoint sequence lookup",
+            ForkStore::get_checkpoint_by_sequence_number(self, sequence_number),
+        )
     }
 
+    /// Reads checkpoint contents by content digest.
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        DataStore::get_checkpoint_contents_by_digest(self, digest)
-            .ok()
-            .flatten()
+        optional_store_read(
+            "checkpoint contents digest lookup",
+            ForkStore::get_checkpoint_contents_by_digest(self, digest),
+        )
     }
 
+    /// Reads checkpoint contents by sequence number, with the same remote
+    /// fallback as the summary read.
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<CheckpointContents> {
-        DataStore::get_checkpoint_contents_by_sequence_number(self, sequence_number)
-            .ok()
-            .flatten()
+        optional_store_read(
+            "checkpoint contents sequence lookup",
+            ForkStore::get_checkpoint_contents_by_sequence_number(self, sequence_number),
+        )
     }
 
+    /// Reads a transaction by digest, persisting pre-fork rows fetched from
+    /// the remote.
     fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
-        SimulatorStore::get_transaction(self, tx_digest).map(Arc::new)
+        optional_store_read(
+            "transaction lookup",
+            ForkStore::get_transaction(self, tx_digest),
+        )
+        .map(Arc::new)
     }
 
+    /// Reads transaction effects by digest, with the same remote fallback as
+    /// the transaction read.
     fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
-        SimulatorStore::get_transaction_effects(self, tx_digest)
+        optional_store_read(
+            "transaction effects lookup",
+            ForkStore::get_transaction_effects(self, tx_digest),
+        )
     }
 
-    fn get_events(&self, tx_digest: &TransactionDigest) -> Option<TransactionEvents> {
-        SimulatorStore::get_transaction_events(self, tx_digest)
+    /// Reads transaction events from the rpc-store only. Events are saved
+    /// with their transaction rows and the fork keeps no separate copy, so a
+    /// fork-side fallback would just repeat the same lookup.
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
+        self.stock_reader().get_events(event_digest)
     }
 
+    /// Reads unchanged runtime-loaded objects from committed `sui-rpc-store`
+    /// data only; the fork does not synthesize this execution cache.
     fn get_unchanged_loaded_runtime_objects(
         &self,
-        _digest: &TransactionDigest,
-    ) -> Option<Vec<sui_types::storage::ObjectKey>> {
-        None
+        digest: &TransactionDigest,
+    ) -> Option<Vec<ObjectKey>> {
+        self.stock_reader()
+            .get_unchanged_loaded_runtime_objects(digest)
     }
 
+    /// Reads the checkpoint sequence that finalized a transaction.
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> Option<CheckpointSequenceNumber> {
-        DataStore::get_transaction_checkpoint(self, digest)
-            .ok()
-            .flatten()
+        optional_store_read(
+            "transaction checkpoint lookup",
+            ForkStore::get_transaction_checkpoint(self, digest),
+        )
     }
 
+    /// Reads full checkpoint contents from committed `sui-rpc-store` data
+    /// only; the fork exposes checkpoint summaries and contents, not full
+    /// checkpoint payloads.
     fn get_full_checkpoint_contents(
         &self,
-        _sequence_number: Option<CheckpointSequenceNumber>,
-        _digest: &CheckpointContentsDigest,
+        sequence_number: Option<CheckpointSequenceNumber>,
+        digest: &CheckpointContentsDigest,
     ) -> Option<VersionedFullCheckpointContents> {
-        todo!("ReadStore::get_full_checkpoint_contents on forked DataStore")
+        self.stock_reader()
+            .get_full_checkpoint_contents(sequence_number, digest)
     }
 }
 
-impl RpcStateReader for DataStore {
+impl RpcStateReader for ForkStore {
+    /// Returns the lowest checkpoint with object data on the remote chain;
+    /// availability metadata, not fork-local state.
     fn get_lowest_available_checkpoint_objects(&self) -> StorageResult<CheckpointSequenceNumber> {
-        DataStore::get_lowest_available_checkpoint_objects(self)
-            .map_err(|e| StorageError::custom(e.to_string()))
+        ForkStore::get_lowest_available_checkpoint_objects(self).map_err(to_storage_error)
     }
 
+    /// Genuinely hybrid: the stock read serves the framework `chain_ids`
+    /// table seeded at open, while the fallback derives the identifier from
+    /// the fork checkpoint for custom networks.
     fn get_chain_identifier(&self) -> StorageResult<ChainIdentifier> {
-        // Map concrete `Chain` enum onto the canonical chain identifier so
-        // clients see this fork as the network it's based on. Devnet/custom
-        // forks fall back to the forked checkpoint's digest because those
-        // chains don't have a stable on-disk identifier.
-        let id = match self.chain() {
-            Chain::Mainnet => get_mainnet_chain_identifier(),
-            Chain::Testnet => get_testnet_chain_identifier(),
-            Chain::Unknown => {
-                let checkpoint =
-                    ReadStore::get_checkpoint_by_sequence_number(self, self.forked_at_checkpoint())
-                        .ok_or_else(|| {
-                            StorageError::missing(
-                                "forked checkpoint missing — cannot derive chain identifier",
-                            )
-                        })?;
-                ChainIdentifier::from(*checkpoint.digest())
-            }
-        };
-        Ok(id)
+        fallback_on_missing(self.stock_reader().get_chain_identifier(), || {
+            self.chain_identifier()
+        })
     }
 
-    fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
+    /// Exposes the store as the RPC index provider.
+    fn indexes(&self) -> Option<&dyn RpcIndexes> {
         Some(self)
     }
 
+    /// Reads a struct layout from `sui-rpc-store`.
     fn get_struct_layout_with_overlay(
         &self,
-        _struct_tag: &StructTag,
-        _overlay: &ObjectSet,
+        struct_tag: &StructTag,
+        overlay: &ObjectSet,
     ) -> StorageResult<Option<MoveTypeLayout>> {
-        Ok(None)
+        self.stock_reader()
+            .get_struct_layout_with_overlay(struct_tag, overlay)
     }
 }
 
-impl RpcIndexes for DataStore {
-    fn get_epoch_info(&self, _epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
-        // TODO: For now, we don't really need it. To be added later
-        StorageResult::Ok(None)
+impl RpcIndexes for ForkStore {
+    /// Reads epoch index metadata from `sui-rpc-store`.
+    fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
+        RpcIndexes::get_epoch_info(self.stock_reader(), epoch)
     }
 
+    /// Initialize and iterate address-owned objects from the RPC-store owner
+    /// index. The remote scan is checkpoint-bounded and recorded in the
+    /// metadata store so repeated owner queries read the local index.
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
@@ -1341,96 +1119,232 @@ impl RpcIndexes for DataStore {
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
-        let infos = self.get_owned_objects(owner, object_type, cursor)?;
-        Ok(Box::new(
-            infos
-                .into_iter()
-                .map(Ok::<OwnedObjectInfo, TypedStoreError>),
-        ))
+        self.inner
+            .inventory
+            .ensure_address_owner(owner)
+            .map_err(to_storage_error)?;
+        RpcIndexes::owned_objects_iter(self.stock_reader(), owner, object_type, cursor)
     }
 
+    /// Initialize and iterate the object-owned children of `parent`, with the
+    /// same checkpoint-bounded remote scan as the owner index.
     fn dynamic_field_iter(
         &self,
-        _parent: ObjectID,
-        _cursor: Option<DynamicFieldKey>,
+        parent: ObjectID,
+        cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        todo!("not supported yet")
+        self.inner
+            .inventory
+            .ensure_object_owner(parent)
+            .map_err(to_storage_error)?;
+        RpcIndexes::dynamic_field_iter(self.stock_reader(), parent, cursor)
     }
 
-    fn get_coin_info(&self, _coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
-        todo!("not supported yet")
+    /// Initialize the type indexes needed to assemble RPC coin metadata.
+    fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        self.inner
+            .inventory
+            .ensure_coin_info(coin_type)
+            .map_err(to_storage_error)?;
+        RpcIndexes::get_coin_info(self.stock_reader(), coin_type)
     }
 
+    /// Initialize address inventory and read an address balance from the
+    /// RPC-store balance index.
     fn get_balance(
         &self,
-        _owner: &SuiAddress,
-        _coin_type: &StructTag,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
     ) -> StorageResult<Option<BalanceInfo>> {
-        todo!("not supported yet")
+        self.inner
+            .inventory
+            .ensure_address_owner(*owner)
+            .map_err(to_storage_error)?;
+        RpcIndexes::get_balance(self.stock_reader(), owner, coin_type)
     }
 
+    /// Initialize address inventory and iterate address balances from the
+    /// RPC-store balance index.
     fn balance_iter(
         &self,
-        _owner: &SuiAddress,
-        _cursor: Option<(SuiAddress, StructTag)>,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
     ) -> StorageResult<BalanceIterator<'_>> {
-        todo!("not supported yet")
+        self.inner
+            .inventory
+            .ensure_address_owner(*owner)
+            .map_err(to_storage_error)?;
+        RpcIndexes::balance_iter(self.stock_reader(), owner, cursor)
     }
 
+    /// Iterates package versions from committed `sui-rpc-store` indexes.
     fn package_versions_iter(
         &self,
-        _original_id: ObjectID,
-        _cursor: Option<u64>,
+        original_id: ObjectID,
+        cursor: Option<u64>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
     {
-        todo!("not supported yet")
+        RpcIndexes::package_versions_iter(self.stock_reader(), original_id, cursor)
     }
 
+    /// Genuinely hybrid: the stock read serves the indexer watermark, while
+    /// the fallback reports the highest persisted checkpoint before the
+    /// indexer has written its first watermark.
     fn get_highest_indexed_checkpoint_seq_number(
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
-        Ok(self.get_highest_checkpoint().ok())
+        match RpcIndexes::get_highest_indexed_checkpoint_seq_number(self.stock_reader())? {
+            Some(sequence) => Ok(Some(sequence)),
+            None => Ok(self.get_highest_checkpoint().ok()),
+        }
     }
 
-    fn ledger_tx_seq_digest(&self, _tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
-        Err(StorageError::custom(
-            "ledger history indexes are not supported by fork store",
-        ))
+    /// Reads the transaction sequence-to-digest index from `sui-rpc-store`.
+    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        RpcIndexes::ledger_tx_seq_digest(self.stock_reader(), tx_seq)
     }
 
+    /// Iterates transaction sequence-to-digest rows from `sui-rpc-store`.
     fn ledger_tx_seq_digest_iter(
         &self,
-        _start: u64,
-        _end_exclusive: u64,
-        _descending: bool,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
     ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
-        Err(StorageError::custom(
-            "ledger history indexes are not supported by fork store",
-        ))
+        RpcIndexes::ledger_tx_seq_digest_iter(self.stock_reader(), start, end_exclusive, descending)
     }
 
+    /// Iterates transaction bitmap buckets from `sui-rpc-store`.
     fn transaction_bitmap_bucket_iter(
         &self,
-        _dimension_key: Vec<u8>,
-        _start_bucket: u64,
-        _end_bucket_exclusive: u64,
-        _descending: bool,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
-        Err(StorageError::custom(
-            "ledger history indexes are not supported by fork store",
-        ))
+        RpcIndexes::transaction_bitmap_bucket_iter(
+            self.stock_reader(),
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
     }
 
+    /// Iterates event bitmap buckets from `sui-rpc-store`.
     fn event_bitmap_bucket_iter(
         &self,
-        _dimension_key: Vec<u8>,
-        _start_bucket: u64,
-        _end_bucket_exclusive: u64,
-        _descending: bool,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
     ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
-        Err(StorageError::custom(
-            "ledger history indexes are not supported by fork store",
-        ))
+        RpcIndexes::event_bitmap_bucket_iter(
+            self.stock_reader(),
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+}
+
+fn to_storage_error(err: anyhow::Error) -> StorageError {
+    StorageError::custom(err.to_string())
+}
+
+/// Validate that a child object loaded for `parent` is actually owned by it.
+///
+/// Shared by the fallible child read (RPC path) and the `RuntimeObjectResolver`
+/// impl (execution path), which differ only in how lookup errors surface.
+fn check_child_object_owner(
+    parent: &ObjectID,
+    child: &ObjectID,
+    child_object: Object,
+) -> SuiResult<Object> {
+    if child_object.owner != sui_types::object::Owner::ObjectOwner((*parent).into()) {
+        return Err(sui_types::error::SuiErrorKind::InvalidChildObjectAccess {
+            object: *child,
+            given_parent: *parent,
+            actual_owner: child_object.owner.clone(),
+        }
+        .into());
+    }
+    Ok(child_object)
+}
+
+/// Received-object checks: owner and exact version; mismatches surface as `None`.
+fn check_received_object(
+    owner: &ObjectID,
+    receive_object_at_version: SequenceNumber,
+    object: Object,
+) -> Option<Object> {
+    if object.owner != sui_types::object::Owner::AddressOwner((*owner).into()) {
+        return None;
+    }
+    if object.version() != receive_object_at_version {
+        return None;
+    }
+    Some(object)
+}
+
+/// Converts effect removals into object tombstones for the RPC store.
+fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<ObjectRemoval> {
+    effects
+        .deleted()
+        .into_iter()
+        .map(|object_ref| ObjectRemoval {
+            object_id: object_ref.0,
+            version: object_ref.1,
+            kind: TombstoneKind::Deleted,
+        })
+        .chain(
+            effects
+                .unwrapped_then_deleted()
+                .into_iter()
+                .map(|object_ref| ObjectRemoval {
+                    object_id: object_ref.0,
+                    version: object_ref.1,
+                    kind: TombstoneKind::Deleted,
+                }),
+        )
+        .chain(
+            effects
+                .wrapped()
+                .into_iter()
+                .map(|object_ref| ObjectRemoval {
+                    object_id: object_ref.0,
+                    version: object_ref.1,
+                    kind: TombstoneKind::Wrapped,
+                }),
+        )
+        .collect()
+}
+
+/// Runs the fork-policy fallback only when the stock rpc-store read reports
+/// missing data.
+fn fallback_on_missing<T>(
+    result: StorageResult<T>,
+    fallback: impl FnOnce() -> StorageResult<T>,
+) -> StorageResult<T> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(err) if err.kind() == StorageErrorKind::Missing => fallback(),
+        Err(err) => Err(err),
+    }
+}
+
+/// Converts a fallible fork-policy read into an optional trait response.
+///
+/// The storage traits using this helper return `Option`, so store errors are
+/// logged and treated as absent data.
+fn optional_store_read<T>(context: &'static str, result: anyhow::Result<Option<T>>) -> Option<T> {
+    match result {
+        Ok(value) => value,
+        Err(err) => {
+            tracing::warn!(context, error = ?err, "fork-state read failed");
+            None
+        }
     }
 }
 
@@ -1445,3 +1359,7 @@ mod execution_tests;
 #[cfg(test)]
 #[path = "tests/store_transaction_fallback.rs"]
 mod transaction_fallback_tests;
+
+#[cfg(test)]
+#[path = "tests/store_rpc_traits.rs"]
+mod rpc_traits_tests;
