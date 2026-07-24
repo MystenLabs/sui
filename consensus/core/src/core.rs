@@ -25,6 +25,7 @@ use crate::{
     CommitConsumerArgs, TransactionClient,
     block_verifier::NoopBlockVerifier,
     storage::{Store, WriteBatch, mem_store::MemStore},
+    transaction::{TransactionConsumer, TransactionConsumerPool},
 };
 use crate::{
     ancestor::AncestorStateManager,
@@ -42,7 +43,7 @@ use crate::{
     leader_scoring::ReputationScores,
     proposer::{ProposalLeaderWaiter, Proposer, ValidatorProposer},
     round_tracker::RoundTracker,
-    transaction::TransactionConsumer,
+    transaction::TransactionPool,
     transaction_vote_tracker::TransactionVoteTracker,
     universal_committer::{
         UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
@@ -85,7 +86,7 @@ impl Core {
     pub(crate) fn new_validator(
         context: Arc<Context>,
         leader_schedule: Arc<LeaderSchedule>,
-        transaction_consumer: TransactionConsumer,
+        transaction_pool: Arc<dyn TransactionPool>,
         transaction_vote_tracker: TransactionVoteTracker,
         block_manager: BlockManager,
         commit_observer: CommitObserver,
@@ -163,7 +164,7 @@ impl Core {
         let proposer = Some(Box::new(ValidatorProposer::new(
             dag_state.clone(),
             context.clone(),
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_signer,
             last_known_proposed_round,
@@ -1050,8 +1051,11 @@ impl CoreTestFixture {
         );
         let (transaction_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let transaction_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
@@ -1076,7 +1080,7 @@ impl CoreTestFixture {
         let core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
@@ -1140,8 +1144,11 @@ mod test {
         let store = Arc::new(MemStore::new());
         let (_transaction_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let transaction_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
@@ -1159,7 +1166,7 @@ mod test {
                 // If it's round 1, that one will be committed later on, and it's our "own" block, then subscribe to listen for the block status.
                 if round == 1 && index == context.own_index {
                     let subscription =
-                        transaction_consumer.subscribe_for_block_status_testing(block.reference());
+                        transaction_pool.subscribe_for_block_status_testing(block.reference());
                     block_status_subscriptions.push(subscription);
                 }
 
@@ -1214,7 +1221,7 @@ mod test {
         let _core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
@@ -1573,8 +1580,11 @@ mod test {
         let store = Arc::new(MemStore::new());
         let (_transaction_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let transaction_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         let dag_str = "DAG {
@@ -1610,7 +1620,7 @@ mod test {
         for block in dag_builder.blocks(1..=5) {
             if block.author() == context.own_index {
                 let subscription =
-                    transaction_consumer.subscribe_for_block_status_testing(block.reference());
+                    transaction_pool.subscribe_for_block_status_testing(block.reference());
                 block_status_subscriptions.push(subscription);
             }
         }
@@ -1664,7 +1674,7 @@ mod test {
         let _core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker,
             block_manager,
             commit_observer,
@@ -2890,8 +2900,11 @@ mod test {
 
         let (_transaction_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let transaction_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
@@ -2914,7 +2927,7 @@ mod test {
         let mut core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,

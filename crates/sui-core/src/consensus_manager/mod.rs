@@ -353,6 +353,7 @@ impl ConsensusManager {
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
+            None,
             commit_consumer,
             registry.clone(),
             *boot_counter,

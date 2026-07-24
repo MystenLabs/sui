@@ -399,7 +399,7 @@ mod test {
         leader_schedule::LeaderSchedule,
         round_tracker::RoundTracker,
         storage::{Store, WriteBatch, mem_store::MemStore},
-        transaction::{TransactionClient, TransactionConsumer},
+        transaction::{TransactionClient, TransactionConsumer, TransactionConsumerPool},
         transaction_vote_tracker::TransactionVoteTracker,
     };
 
@@ -413,8 +413,11 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let transaction_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
@@ -438,7 +441,7 @@ mod test {
         let core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker,
             block_manager,
             commit_observer,
@@ -504,8 +507,11 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let transaction_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
@@ -530,7 +536,7 @@ mod test {
         let core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker,
             block_manager,
             commit_observer,

@@ -123,7 +123,13 @@ impl TransactionConsumer {
     // and `max_num_transactions_in_block` parameters specified via protocol config.
     // This returns one or more transactions to be included in the block and a callback to acknowledge the inclusion of those transactions.
     // Also returns a `LimitReached` enum to indicate which limit type has been reached.
-    pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce(BlockRef)>, LimitReached) {
+    pub(crate) fn next(
+        &mut self,
+    ) -> (
+        Vec<Transaction>,
+        Box<dyn FnOnce(BlockRef) + Send>,
+        LimitReached,
+    ) {
         let mut transactions = Vec::new();
         let mut acks = Vec::new();
         let mut total_bytes = 0;
@@ -448,6 +454,77 @@ impl TransactionClient {
             .tap_err(|e| error!("Submit transactions failed with {:?}", e))
             .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))?;
         Ok(included_in_block_ack_receive)
+    }
+}
+
+/// `TransactionPool` supplies transactions for block proposals, as an alternative to
+/// submitting transactions through `TransactionClient`. Like `TransactionVerifier`, the
+/// implementation can be provided by Sui and passed into `ConsensusAuthority::start()`.
+pub trait TransactionPool: Send + Sync + 'static {
+    /// Called by the proposer while building a block. Takes transactions to include, up to
+    /// `max_count` transactions and `max_bytes` total serialized bytes. Returns the
+    /// transactions in block order, an ack callback the proposer invokes with the created
+    /// block's reference after the block is durably created, and which limit stopped the
+    /// take. Dropping the callback without invoking it means the transactions have not been
+    /// included in a block, and the implementation may make them available to take again.
+    fn take(
+        &self,
+        max_count: usize,
+        max_bytes: usize,
+    ) -> (
+        Vec<Transaction>,
+        Box<dyn FnOnce(BlockRef) + Send>,
+        LimitReached,
+    );
+
+    /// Called from the commit path with this authority's own committed block refs and the
+    /// current GC round. Own blocks at rounds <= `gc_round` that are not committed are GC'ed
+    /// and will never commit.
+    fn notify_committed(&self, own_committed_blocks: Vec<BlockRef>, gc_round: Round);
+}
+
+/// Adapts the channel-based `TransactionConsumer` to the `TransactionPool` interface, for
+/// transactions submitted through `TransactionClient`.
+pub(crate) struct TransactionConsumerPool {
+    consumer: Mutex<TransactionConsumer>,
+}
+
+impl TransactionConsumerPool {
+    pub(crate) fn new(consumer: TransactionConsumer) -> Self {
+        Self {
+            consumer: Mutex::new(consumer),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn subscribe_for_block_status_testing(
+        &self,
+        block_ref: BlockRef,
+    ) -> oneshot::Receiver<BlockStatus> {
+        self.consumer
+            .lock()
+            .subscribe_for_block_status_testing(block_ref)
+    }
+}
+
+impl TransactionPool for TransactionConsumerPool {
+    // TransactionConsumer enforces the same max limits internally via protocol config.
+    fn take(
+        &self,
+        _max_count: usize,
+        _max_bytes: usize,
+    ) -> (
+        Vec<Transaction>,
+        Box<dyn FnOnce(BlockRef) + Send>,
+        LimitReached,
+    ) {
+        self.consumer.lock().next()
+    }
+
+    fn notify_committed(&self, own_committed_blocks: Vec<BlockRef>, gc_round: Round) {
+        self.consumer
+            .lock()
+            .notify_own_blocks_status(own_committed_blocks, gc_round);
     }
 }
 
