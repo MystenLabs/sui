@@ -6,9 +6,8 @@
 //! References in constant definitions do not go through this: they are resolved by constant
 //! folding.
 // TODO(cross-module-constants): this is one of several hand-rolled HLIR/typed-AST walkers
-// (`dependent_constants`, the collector in `typing/generate_constant_functions.rs`, and the
-// dependency-ordering walker). There is no mutable HLIR visitor today; consider a shared
-// walker if another one appears.
+// (`dependent_constants` and the dependency-ordering walker). There is no mutable HLIR visitor
+// today; consider a shared walker if another one appears.
 
 use super::translate::Context;
 use crate::{expansion::ast::ModuleIdent, hlir::ast as H, ice};
