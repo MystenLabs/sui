@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/multi_value_reference_result.move:14:9
+   │
+10 │         mut_refs($x, $y)
+   │                  --  -- [2] Argument
+   │                  │    
+   │                  [1] Argument
+   ·
+14 │         through!(x, y)
+   │         ^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::through)
+   │
+   = Frame transitions (test):
+       14: `through!(x, y)`
+           [] -> [0:MacroBody(through), 1:Argument]
+       14: `through!(x, y)`
+           [0:MacroBody(through), 1:Argument] -> [0:MacroBody(through), 2:Argument]
+       10: `mut_refs($x, $y)`
+           [0:MacroBody(through), 2:Argument] -> [0:MacroBody(through)]
+       14: `through!(x, y)`
+           [0:MacroBody(through)] -> []

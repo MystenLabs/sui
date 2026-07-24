@@ -1,0 +1,106 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+{
+  "constant_map": {},
+  "definition_location": {"file_hash": "0x..a7d0f", "start": 88, "end": 92},
+  "enum_map": {},
+  "from_file_path": null,
+  "function_map": {
+    "0": {
+      "code_map": {
+        "0": {"file_hash": "0x..a7d0f", "start": 226, "end": 228},
+        "1": {"file_hash": "0x..a7d0f", "start": 489, "end": 490},
+        "2": {"file_hash": "0x..a7d0f", "start": 487, "end": 488},
+        "3": {"file_hash": "0x..a7d0f", "start": 501, "end": 502},
+        "4": {"file_hash": "0x..a7d0f", "start": 383, "end": 385},
+        "5": {"file_hash": "0x..a7d0f", "start": 377, "end": 380},
+        "6": {"file_hash": "0x..a7d0f", "start": 398, "end": 401},
+        "7": {"file_hash": "0x..a7d0f", "start": 404, "end": 407},
+        "8": {"file_hash": "0x..a7d0f", "start": 402, "end": 403},
+        "9": {"file_hash": "0x..a7d0f", "start": 529, "end": 530},
+        "10": {"file_hash": "0x..a7d0f", "start": 527, "end": 528},
+        "11": {"file_hash": "0x..a7d0f", "start": 505, "end": 531},
+        "12": {"file_hash": "0x..a7d0f", "start": 501, "end": 502},
+        "13": {"file_hash": "0x..a7d0f", "start": 505, "end": 531},
+        "14": {"file_hash": "0x..a7d0f", "start": 503, "end": 504},
+        "15": {"file_hash": "0x..a7d0f", "start": 501, "end": 531}
+      },
+      "definition_location": {"file_hash": "0x..a7d0f", "start": 431, "end": 435},
+      "is_native": false,
+      "labels": {
+        "0": 0
+      },
+      "locals": [
+        ["%#3", {"file_hash": "0x..a7d0f", "start": 505, "end": 531}],
+        ["%#5", {"file_hash": "0x..a7d0f", "start": 501, "end": 502}],
+        ["ret#1#3", {"file_hash": "0x..a7d0f", "start": 377, "end": 380}]
+      ],
+      "location": {"file_hash": "0x..a7d0f", "start": 420, "end": 537},
+      "macro_frame_info": [
+        {
+          "call_loc": {"file_hash": "0x..a7d0f", "start": 467, "end": 491},
+          "kind": {
+            "MacroBody": {
+              "function_name": "apply_simple",
+              "module_addr": "0000000000000000000000000000000000000000000000000000000000000041",
+              "module_name": "m"
+            }
+          },
+          "parent_index": null,
+          "source_loc": {"file_hash": "0x..a7d0f", "start": 160, "end": 251}
+        },
+        {
+          "call_loc": {"file_hash": "0x..a7d0f", "start": 238, "end": 245},
+          "kind": "Lambda",
+          "parent_index": 0,
+          "source_loc": {"file_hash": "0x..a7d0f", "start": 481, "end": 490}
+        },
+        {
+          "call_loc": {"file_hash": "0x..a7d0f", "start": 505, "end": 531},
+          "kind": {
+            "MacroBody": {
+              "function_name": "apply_computed",
+              "module_addr": "0000000000000000000000000000000000000000000000000000000000000041",
+              "module_name": "m"
+            }
+          },
+          "parent_index": null,
+          "source_loc": {"file_hash": "0x..a7d0f", "start": 315, "end": 414}
+        },
+        {
+          "call_loc": {"file_hash": "0x..a7d0f", "start": 395, "end": 408},
+          "kind": "Lambda",
+          "parent_index": 2,
+          "source_loc": {"file_hash": "0x..a7d0f", "start": 521, "end": 530}
+        }
+      ],
+      "macro_frame_map": [
+        [0, 0],
+        [1, 1],
+        [3, null],
+        [4, 2],
+        [9, 3],
+        [11, null]
+      ],
+      "nops": {},
+      "parameters": [
+        ["p#0#0", {"file_hash": "0x..a7d0f", "start": 436, "end": 437}]
+      ],
+      "returns": [
+        {"file_hash": "0x..a7d0f", "start": 445, "end": 448}
+      ],
+      "type_parameters": []
+    }
+  },
+  "module_name": [
+    "0000000000000000000000000000000000000000000000000000000000000041",
+    "m"
+  ],
+  "struct_map": {},
+  "version": 3
+}

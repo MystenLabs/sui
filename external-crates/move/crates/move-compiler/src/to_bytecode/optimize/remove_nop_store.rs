@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::BlockSyntaxInfo;
 use crate::parser::ast::FunctionName;
 use move_ir_types::ast as IR;
 use std::collections::BTreeSet;
@@ -13,10 +14,13 @@ pub fn optimize(
     _loop_heads: &BTreeSet<IR::BlockLabel_>,
     _locals: &mut Vec<(IR::Var, IR::Type)>,
     blocks: &mut IR::BytecodeBlocks,
+    block_info: &mut BlockSyntaxInfo,
 ) -> bool {
     let mut changed = false;
-    for (_lbl, block) in blocks {
+    for (block_idx, (_lbl, block)) in blocks.iter_mut().enumerate() {
         let mut new_block = vec![];
+        // track surviving syntax info when instruction pairs are removed
+        let mut new_info = vec![];
         let mut i = 0;
         while i < block.len() {
             match (&block[i], block.get(i + 1)) {
@@ -28,11 +32,13 @@ pub fn optimize(
                 }
                 (instr, _) => {
                     new_block.push(instr.clone());
+                    new_info.push(block_info[block_idx][i].clone());
                     i += 1
                 }
             }
         }
         *block = new_block;
+        block_info[block_idx] = new_info;
     }
 
     changed
