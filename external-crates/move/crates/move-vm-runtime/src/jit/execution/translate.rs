@@ -572,14 +572,10 @@ fn datatypes(
             let name = resolve_member_name(context, &struct_.def_vtable_key);
             let defining_id = defining_id(context, version_id, &struct_.def_vtable_key)?;
             let original_id = module_original_id;
-            let size_formula = ArenaTypeSizeFormula::for_datatype(
-                checked_as!(struct_.type_parameters.len(), u16)?,
-                struct_.fields.iter(),
-                0,
-                &context.package_arena,
-            )?;
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
+            let size_formula =
+                ArenaTypeSizeFormula::from_datatype(&datatype_info, &context.package_arena)?;
             let name = context.interner.intern_identifier(&name);
             let descriptor = DatatypeDescriptor::new(
                 name,
@@ -598,16 +594,9 @@ fn datatypes(
             let name = resolve_member_name(context, &enum_.def_vtable_key);
             let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
             let original_id = module_original_id;
-            let size_formula = ArenaTypeSizeFormula::for_datatype(
-                checked_as!(enum_.type_parameters.len(), u16)?,
-                enum_
-                    .variants
-                    .iter()
-                    .flat_map(|variant| variant.fields.iter()),
-                enum_.variants.len() as u64,
-                &context.package_arena,
-            )?;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
+            let size_formula =
+                ArenaTypeSizeFormula::from_datatype(&datatype_info, &context.package_arena)?;
             let name = context.interner.intern_identifier(&name);
             let descriptor = DatatypeDescriptor::new(
                 name,

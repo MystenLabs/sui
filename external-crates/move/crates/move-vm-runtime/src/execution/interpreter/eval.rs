@@ -1182,7 +1182,7 @@ fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> Partial
     else {
         return Ok(());
     };
-    if run_context.vtables.type_size_of(ty)?.value_depth > max_depth {
+    if run_context.vtables.value_depth_of(ty)? > max_depth {
         return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
     }
     Ok(())
