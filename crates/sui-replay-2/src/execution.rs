@@ -23,10 +23,10 @@ use std::{
 use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    base_types::{ConsensusObjectVersion, ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     gas::SuiGasStatus,
@@ -129,6 +129,30 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
+    let system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion> = expected_effects
+        .accessed_consensus_objects()
+        .into_iter()
+        .filter_map(|ico| match ico {
+            InputConsensusObject::Mutate((id, version, _))
+            | InputConsensusObject::ReadOnly((id, version, _)) => Some((id, version)),
+            _ => None,
+        })
+        .filter(|(id, _)| sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id))
+        .map(|(id, version)| {
+            let initial_shared_version = sui_types::storage::ObjectStore::get_object_by_key(&store, &id, version)
+                .and_then(|object| object.owner().start_version())
+                .unwrap_or_else(|| {
+                    panic!("system object {id} at version {version} must be a consensus object in the replay store")
+                });
+            (
+                id,
+                ConsensusObjectVersion {
+                    initial_shared_version,
+                    version,
+                },
+            )
+        })
+        .collect();
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
@@ -140,7 +164,7 @@ pub fn execute_transaction_to_effects(
             &epoch,
             epoch_start_timestamp,
             input_objects,
-            sui_types::implicitly_read_system_objects_at_latest_version(),
+            system_object_versions,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),

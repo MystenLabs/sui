@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use move_core_types::language_storage::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
+use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::SystemObjectVersion;
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
@@ -128,7 +128,7 @@ struct PreparedTx {
     /// its recorded effects. The executor loads each system object at exactly this version and
     /// treats a system read with no assigned version as an invariant violation, so it must cover
     /// every such object the transaction touched.
-    system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+    system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
     gas_data: GasData,
     gas_status: SuiGasStatus,
     txn_kind: TransactionKind,
@@ -212,7 +212,34 @@ pub(crate) fn execute_one_transaction(
         }
     };
 
-    let system_object_versions = sui_types::implicitly_read_system_objects_at_latest_version();
+    let system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion> = executed
+        .effects
+        .accessed_consensus_objects()
+        .into_iter()
+        .filter_map(|ico| match ico {
+            InputConsensusObject::Mutate((id, v, _))
+            | InputConsensusObject::ReadOnly((id, v, _)) => Some((id, v)),
+            _ => None,
+        })
+        .filter(|(id, _)| sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id))
+        .map(|(id, version)| {
+            let initial_shared_version =
+                sui_types::storage::ObjectStore::get_object_by_key(store, &id, version)
+                    .and_then(|object| object.owner().start_version())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "system object {id} at version {version} must be a consensus object in the scan store"
+                        )
+                    });
+            (
+                id,
+                ConsensusObjectVersion {
+                    initial_shared_version,
+                    version,
+                },
+            )
+        })
+        .collect();
 
     let gas_data = txn_data.gas_data().clone();
     let signer = txn_data.sender();

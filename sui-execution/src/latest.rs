@@ -11,7 +11,7 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, SystemObjectVersion, TxContext},
+    base_types::{ConsensusObjectVersion, ObjectID, SuiAddress, SystemObjectVersion, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -74,7 +74,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -93,7 +93,10 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
                 input_objects,
-                system_object_versions,
+                system_object_versions
+                    .into_iter()
+                    .map(|(id, version)| (id, SystemObjectVersion::Exact(version)))
+                    .collect(),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -125,7 +128,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
+        system_object_versions: BTreeMap<ObjectID, ConsensusObjectVersion>,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -144,7 +147,10 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
                 input_objects,
-                system_object_versions,
+                system_object_versions
+                    .into_iter()
+                    .map(|(id, version)| (id, SystemObjectVersion::Exact(version)))
+                    .collect(),
                 gas,
                 gas_status,
                 transaction_kind,
