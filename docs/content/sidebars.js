@@ -102,6 +102,7 @@ export default {
         items: [
             'develop/manage-packages/move-package-management',
             'develop/manage-packages/automated-address-management',
+            'develop/manage-packages/source-verification',
         ]
       },      
       {
@@ -448,6 +449,7 @@ export default {
                 'onchain-finance/deepbook/deepbookv3-sdk/flash-loans',
                 'onchain-finance/deepbook/deepbookv3-sdk/swaps',
                 'onchain-finance/deepbook/deepbookv3-sdk/staking-governance',
+                'onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook',
               ],
             },
           ],
@@ -493,6 +495,7 @@ export default {
           label: 'Predict',
           link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-predict/deepbook-predict' },
           items: [
+            'onchain-finance/deepbook/deepbook-predict/tutorial',
             'onchain-finance/deepbook/deepbook-predict/design',
             {
               type: 'category',

@@ -1,7 +1,0 @@
-[package]
-name = "c"
-version = "0.0.1"
-implicit-dependencies = false
-
-[addresses]
-c = "$RUNTIME_ID"
