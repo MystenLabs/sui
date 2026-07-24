@@ -64,6 +64,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Instant;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
@@ -71,7 +72,8 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use sui_types::base_types::{
-    EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
+    ConsensusObjectVersion, EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber,
+    VerifiedExecutionData,
 };
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
@@ -495,6 +497,63 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
+    /// Reads an implicitly read system object at the given version.
+    /// If it's not available yet, it will block until it is.
+    /// In normal execution, this function should always return a Some(object).
+    /// In the case of dry-run/simulate, it is possible, though unlikely, that it can return None.
+    pub(crate) fn get_implicitly_read_system_object_blocking(
+        &self,
+        object_id: &ObjectID,
+        consensus_version: ConsensusObjectVersion,
+    ) -> Option<Object> {
+        assert!(
+            sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
+            "{object_id} is not an implicitly read system object"
+        );
+        let ConsensusObjectVersion {
+            initial_shared_version,
+            version,
+        } = consensus_version;
+        if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
+            return Some(object);
+        }
+        self.metrics
+            .implicit_system_object_read_waits
+            .with_label_values(&[object_id.to_string().as_str()])
+            .inc();
+        let wait_start = Instant::now();
+        let key = InputKey::VersionedObject {
+            id: FullObjectID::Consensus((*object_id, initial_shared_version)),
+            version,
+        };
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let released = crate::execution_driver::release_execution_permit_for_wait();
+                self.object_notify_read
+                    .read(
+                        "get_implicitly_read_system_object_blocking",
+                        &[key],
+                        move |_keys| {
+                            vec![if self.object_exists_by_key(object_id, version) {
+                                Some(())
+                            } else {
+                                None
+                            }]
+                        },
+                    )
+                    .await;
+                if let Some(released) = released {
+                    released.reacquire().await;
+                }
+            })
+        });
+        self.metrics
+            .implicit_system_object_read_wait_latency
+            .with_label_values(&[object_id.to_string().as_str()])
+            .observe(wait_start.elapsed().as_secs_f64());
+        ObjectCacheRead::get_object_by_key(self, object_id, version)
+    }
+
     pub fn new(
         config: &ExecutionCacheConfig,
         store: Arc<AuthorityStore>,
@@ -1957,38 +2016,6 @@ impl ObjectCacheRead for WritebackCache {
             )
             .map(|_| ())
             .boxed()
-    }
-
-    fn notify_read_system_object_at_version<'a>(
-        &'a self,
-        full_object_id: FullObjectID,
-        version: SequenceNumber,
-    ) -> BoxFuture<'a, ()> {
-        // Object writes notify on `InputKey::VersionedObject { full_id, version }`. The caller passes
-        // the full id (with the consensus object's stable initial shared version), so the registered
-        // key matches the key the write at `version` will notify on without re-reading the object.
-        let object_id = full_object_id.id();
-        let key = InputKey::VersionedObject {
-            id: full_object_id,
-            version,
-        };
-        async move {
-            let keys = [key];
-            self.object_notify_read
-                .read(
-                    "notify_read_system_object_at_version",
-                    &keys,
-                    move |_keys| {
-                        vec![if self.object_exists_by_key(&object_id, version) {
-                            Some(())
-                        } else {
-                            None
-                        }]
-                    },
-                )
-                .await;
-        }
-        .boxed()
     }
 }
 

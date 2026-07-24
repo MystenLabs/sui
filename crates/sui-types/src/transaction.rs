@@ -1879,6 +1879,16 @@ impl TransactionKind {
         )
     }
 
+    pub fn mutates_implicitly_read_system_object(&self) -> bool {
+        self.shared_input_objects().any(|obj| {
+            let mutates = match obj.mutability {
+                SharedObjectMutability::Immutable => false,
+                SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => true,
+            };
+            mutates && crate::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(&obj.id)
+        })
+    }
+
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
         matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
             && self.shared_input_objects().any(|obj| {

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
@@ -48,14 +47,7 @@ impl TransactionOutputs {
             runtime_packages_loaded_from_db: _,
             lamport_version,
             accumulator_running_max_withdraws: _,
-            retry_request,
         } = inner_temporary_store;
-
-        // A transaction that requested a retry is never committed: the authority discards its
-        // effects and re-enqueues it, so it must not reach the commit path.
-        if let Some(retry_request) = &retry_request {
-            debug_fatal!("a transaction requesting a retry must not be committed: {retry_request}");
-        }
 
         let tx_digest = *transaction.digest();
 

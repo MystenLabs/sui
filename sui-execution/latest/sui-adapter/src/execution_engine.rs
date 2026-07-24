@@ -49,7 +49,7 @@ mod checked {
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::base_types::{ObjectID, SequenceNumber, SystemObjectVersion};
     use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
     use sui_types::bridge::{
         BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME, BRIDGE_MODULE_NAME,
@@ -150,7 +150,7 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,

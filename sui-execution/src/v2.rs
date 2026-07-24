@@ -75,7 +75,7 @@ impl executor::Executor for Executor {
         input_objects: CheckedInputObjects,
         _system_object_versions: std::collections::BTreeMap<
             sui_types::base_types::ObjectID,
-            sui_types::base_types::SequenceNumber,
+            sui_types::base_types::SystemObjectVersion,
         >,
         gas: GasData,
         gas_status: SuiGasStatus,
@@ -199,7 +199,7 @@ impl executor::Executor for Executor {
         input_objects: CheckedInputObjects,
         _system_object_versions: std::collections::BTreeMap<
             sui_types::base_types::ObjectID,
-            sui_types::base_types::SequenceNumber,
+            sui_types::base_types::SystemObjectVersion,
         >,
         gas: GasData,
         gas_status: SuiGasStatus,

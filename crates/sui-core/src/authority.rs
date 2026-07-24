@@ -74,7 +74,6 @@ use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
-use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -279,13 +278,6 @@ pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
     total_effects: IntCounter,
-    /// Number of times a transaction was re-enqueued because a system object it read during
-    /// execution had not yet caught up locally to the version it was sequenced against, keyed by
-    /// the unavailable system object's ID.
-    system_object_unavailable_retries: IntCounterVec,
-    /// Wall-clock seconds a retried transaction waited for the required system object to catch up
-    /// locally before it was re-enqueued for execution, keyed by the system object's ID.
-    system_object_unavailable_retry_wait_latency: HistogramVec,
     // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
     sponsored_tx: IntCounter,
@@ -440,23 +432,6 @@ impl AuthorityMetrics {
             total_effects: register_int_counter_with_registry!(
                 "total_transaction_effects",
                 "Total number of transaction effects produced",
-                registry,
-            )
-            .unwrap(),
-            system_object_unavailable_retries: register_int_counter_vec_with_registry!(
-                "system_object_unavailable_retries",
-                "Number of transaction executions retried because a system object read during \
-                 execution had not yet caught up locally to the required version",
-                &["object_id"],
-                registry,
-            )
-            .unwrap(),
-            system_object_unavailable_retry_wait_latency: register_histogram_vec_with_registry!(
-                "system_object_unavailable_retry_wait_latency",
-                "Seconds a retried transaction waited for a system object to catch up locally \
-                 before being re-enqueued for execution",
-                &["object_id"],
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -1958,7 +1933,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SystemObjectVersion>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -2000,59 +1975,6 @@ impl AuthorityState {
             timings,
             execution_error,
         )
-    }
-
-    /// Spawns a task that waits until `object_id` reaches `version` (the version this transaction
-    /// requires), then re-enqueues `certificate` for execution. Used by the retry-on-not-ready path
-    /// when execution reports that a required system object had not yet caught up to the version
-    /// this transaction was sequenced against.
-    fn wait_for_system_object_and_reenqueue(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        object_id: ObjectID,
-        version: SequenceNumber,
-        execution_env: &ExecutionEnv,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        self.metrics
-            .system_object_unavailable_retries
-            .with_label_values(&[object_id.to_string().as_str()])
-            .inc();
-        // Recover the object's initial shared version from the epoch start config (every system
-        // object is registered there) to form the full key the object cache waits on.
-        let init_shared_version = epoch_store
-            .epoch_start_config()
-            .system_object_initial_shared_version(object_id)
-            .expect("system object must be registered in the epoch start config");
-        let full_object_id = FullObjectID::Consensus((object_id, init_shared_version));
-        let cache_reader = self.get_object_cache_reader().clone();
-        let scheduler = self.execution_scheduler.clone();
-        let cert = certificate.clone();
-        let execution_env = execution_env.clone();
-        let epoch_store = epoch_store.clone();
-        let metrics = self.metrics.clone();
-        tokio::task::spawn(async move {
-            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
-            let _ = epoch_store
-                .within_alive_epoch(async move {
-                    let wait_start = Instant::now();
-                    cache_reader
-                        .notify_read_system_object_at_version(full_object_id, version)
-                        .await;
-                    // Observe only after the read resolves, so a wait cut short by epoch change
-                    // (which cancels this future) is not recorded as a completed wait.
-                    metrics
-                        .system_object_unavailable_retry_wait_latency
-                        .with_label_values(&[object_id.to_string().as_str()])
-                        .observe(wait_start.elapsed().as_secs_f64());
-                    scheduler.send_transaction_for_execution(
-                        &cert,
-                        execution_env,
-                        tokio::time::Instant::now(),
-                    );
-                })
-                .await;
-        });
     }
 
     /// execute_certificate validates the transaction input, and executes the certificate,
@@ -2113,12 +2035,13 @@ impl AuthorityState {
             &execution_env.funds_withdraw_status,
         );
         // Versions of system objects this transaction may read during execution, each at the version
-        // it was sequenced against. Execution gates reads on these (and records a retry if an object
-        // has not caught up); see `TemporaryStore::check_system_object_available`.
+        // it was sequenced against. See `TemporaryStore::check_system_object_available`.
         let system_object_versions = execution_env
             .assigned_versions
             .system_object_versions
-            .clone();
+            .iter()
+            .map(|(id, version)| (*id, SystemObjectVersion::Exact(*version)))
+            .collect();
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
@@ -2168,39 +2091,6 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
-
-        // Execution recorded that a system object it read had not yet caught up to the version this
-        // transaction requires. The effects it produced are not usable; discard them, wait for that
-        // object to reach the required version, then re-enqueue so execution runs again against the
-        // caught-up state.
-        if let Some(ExecutionRetryError::SystemObjectUnavailable { object_id, version }) =
-            inner_temp_store.retry_request.as_ref()
-        {
-            assert_reachable!("retry on unavailable system object");
-            self.wait_for_system_object_and_reenqueue(
-                certificate,
-                *object_id,
-                *version,
-                &execution_env,
-                epoch_store,
-            );
-            return ExecutionOutput::RetryLater;
-        }
-
-        // Reaching here means no retry request was recorded, so the system-object-unavailable
-        // unwind must not have happened either: the two are minted together, and this transient,
-        // node-local condition must never reach committed effects — doing so would fork this node
-        // from validators that have caught up.
-        if let Err(err) = &execution_error_opt {
-            assert!(
-                !matches!(
-                    err.kind(),
-                    ExecutionErrorKind::SystemObjectNotAvailableLocally
-                ),
-                "transaction {tx_digest} unwound with SystemObjectNotAvailableLocally but \
-                 recorded no retry request",
-            );
-        }
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()

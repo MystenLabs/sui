@@ -430,20 +430,6 @@ pub trait ObjectCacheRead: Send + Sync {
         receiving_keys: &'a HashSet<InputKey>,
         epoch: EpochId,
     ) -> BoxFuture<'a, ()>;
-
-    /// Wait until the object identified by `full_object_id` has been committed at exactly
-    /// `version`; returns immediately if that version has already been committed. The caller must
-    /// pass a version that is guaranteed to be written (e.g. a consensus-assigned system object
-    /// version, which some transaction always writes) — the wait is keyed on that exact version,
-    /// not on the object reaching it. Used by the retry-on-not-ready path: when execution finds a
-    /// required system object not yet caught up, the transaction is re-enqueued once this resolves.
-    /// The caller passes the full object id (with the stable initial shared version of a consensus
-    /// object) so the implementation can register the wait directly without re-reading the object.
-    fn notify_read_system_object_at_version<'a>(
-        &'a self,
-        full_object_id: FullObjectID,
-        version: SequenceNumber,
-    ) -> BoxFuture<'a, ()>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {
@@ -728,6 +714,14 @@ macro_rules! implement_storage_traits {
                 version: sui_types::base_types::VersionNumber,
             ) -> Option<Object> {
                 ObjectCacheRead::get_object_by_key(self, object_id, version)
+            }
+
+            fn get_implicitly_read_system_object_blocking(
+                &self,
+                object_id: &ObjectID,
+                version: sui_types::base_types::ConsensusObjectVersion,
+            ) -> Option<Object> {
+                $implementor::get_implicitly_read_system_object_blocking(self, object_id, version)
             }
         }
 
