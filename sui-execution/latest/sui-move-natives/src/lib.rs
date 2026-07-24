@@ -438,6 +438,60 @@ mod jwk_map_tests {
         assert!(map.get("kid-a").is_some());
     }
 
+    /// Documents the fail-closed contract at the consensus/execution boundary for a GCP key
+    /// rotation that happens within a single epoch.
+    ///
+    /// At the consensus layer, `activate_gcp_jwks` explicitly permits this: a new, distinct
+    /// key reaching quorum for a `kid` that was already activated in an earlier round/batch of
+    /// the same epoch is *not* treated as a same-batch conflict (see
+    /// `gcp_jwk_activation_allows_rotation_across_batches` in `sui-core`'s
+    /// `consensus_handler.rs`), so both the old and new `ActiveJwk` can legitimately exist for
+    /// the same epoch.
+    ///
+    /// `JwkMap` does not know (or trust) which one of two same-kid entries is "older" or
+    /// "authoritative" -- it has only the flattened list handed to it at execution setup. If
+    /// both ever end up in that list together (whatever the reason: replay ordering, a future
+    /// change to how `AuthenticatorStateUpdate` merges entries, etc.), `JwkMap` must preserve
+    /// fail-closed semantics and refuse to arbitrarily pick one, exactly like any other
+    /// same-kid conflict. There is currently no code path in this crate that safely resolves
+    /// "replace old key with new key for the same kid," so this test intentionally asserts the
+    /// conservative (kid absent) outcome rather than picking either key.
+    #[test]
+    fn same_epoch_same_kid_rotation_fails_closed_rather_than_trusting_either_key() {
+        let old_key = jwk("n-old", "AQAB");
+        let new_key = jwk("n-new", "AQAB");
+        let epoch = 7;
+
+        // Old-then-new order (mirrors chronological activation order across rounds)...
+        let map_old_then_new = JwkMap::from_active_jwks(
+            vec![
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", old_key.clone(), epoch),
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", new_key.clone(), epoch),
+            ],
+            epoch,
+            NO_STALENESS,
+        );
+        assert!(
+            map_old_then_new.get("rotating-kid").is_none(),
+            "same-epoch same-kid rotation must fail closed, not silently trust the newer key"
+        );
+
+        // ... and new-then-old order must be symmetric: JwkMap's fail-closed behavior must not
+        // depend on which of the two rotated keys happens to appear first in the input list.
+        let map_new_then_old = JwkMap::from_active_jwks(
+            vec![
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", new_key, epoch),
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", old_key, epoch),
+            ],
+            epoch,
+            NO_STALENESS,
+        );
+        assert!(
+            map_new_then_old.get("rotating-kid").is_none(),
+            "fail-closed outcome must not depend on input ordering"
+        );
+    }
+
     #[test]
     fn stale_entry_does_not_conflict_with_fresh_entry_for_same_kid() {
         // A stale key sharing a kid with a fresh key must not poison the fresh one: staleness
