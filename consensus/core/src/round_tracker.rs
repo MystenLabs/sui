@@ -406,6 +406,7 @@ mod test {
         let block = VerifiedBlock::new_for_test(test_block);
         round_tracker.update_from_verified_block(&ExtendedBlock {
             block,
+            compressed_once: Default::default(),
             excluded_ancestors: vec![BlockRef::new(
                 8,
                 AuthorityIndex::new_for_test(1),
@@ -425,6 +426,7 @@ mod test {
         let block = VerifiedBlock::new_for_test(test_block);
         round_tracker.update_from_verified_block(&ExtendedBlock {
             block,
+            compressed_once: Default::default(),
             excluded_ancestors: vec![BlockRef::new(
                 8,
                 AuthorityIndex::new_for_test(1),
