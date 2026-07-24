@@ -150,11 +150,17 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     ) -> ConsensusResult<()> {
         fail_point_async!("consensus-rpc-response");
 
+        let recv_timer = std::time::Instant::now();
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // TODO: dedup block verifications, here and with fetched blocks.
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block.block).map_err(ConsensusError::MalformedBlock)?;
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_deserialize_latency
+            .observe(recv_timer.elapsed().as_secs_f64());
 
         // Reject blocks not produced by the peer.
         if peer != signed_block.author() {
@@ -202,6 +208,21 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .inc();
             })?;
 
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_verify_latency
+            .observe(recv_timer.elapsed().as_secs_f64());
+        let block_age_ms = self
+            .context
+            .clock
+            .timestamp_utc_ms()
+            .saturating_sub(verified_block.timestamp_ms());
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_block_age
+            .observe(block_age_ms as f64 / 1000.0);
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
 
