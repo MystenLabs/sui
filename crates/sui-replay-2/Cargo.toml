@@ -43,6 +43,9 @@ tracing.workspace = true
 zstd.workspace = true
 indicatif.workspace = true
 
+[dev-dependencies]
+sui-protocol-config.workspace = true
+
 [features]
 tracing = [
     "sui-types/tracing",
