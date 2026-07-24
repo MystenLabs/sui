@@ -38,13 +38,14 @@
 use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
     execution::dispatch_tables::{VMDispatchTables, VirtualTableKey},
-    jit::execution::ast::ArenaType,
+    jit::execution::ast::{ArenaType, Datatype},
     shared::{
         constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
         vm_pointer::VMPointer,
     },
 };
 use move_binary_format::{
+    checked_as,
     errors::{PartialVMError, PartialVMResult},
     partial_vm_error,
 };
@@ -365,11 +366,30 @@ impl PartialTypeSizeFormula {
     /// `TypeSize` all-`2`, the size of `vector<u64>`.
     pub(crate) fn solve(&self, args: &[TypeSize]) -> PartialVMResult<TypeSize> {
         Ok(TypeSize {
-            type_size: self.type_size.solve(&project(args, |s| s.type_size))?,
-            type_depth: self.type_depth.solve(&project(args, |s| s.type_depth))?,
-            value_depth: self.value_depth.solve(&project(args, |s| s.value_depth))?,
-            layout_size: self.layout_size.solve(&project(args, |s| s.layout_size))?,
+            type_size: self.solve_type_size(args)?,
+            type_depth: self.solve_type_depth(args)?,
+            value_depth: self.solve_value_depth(args)?,
+            layout_size: self.solve_layout_size(args)?,
         })
+    }
+
+    // Per-measure solves, for the call sites that only need one measure and would otherwise
+    // compute (and discard) the other three.
+
+    pub(crate) fn solve_type_size(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
+        self.type_size.solve(&project(args, |s| s.type_size))
+    }
+
+    pub(crate) fn solve_type_depth(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
+        self.type_depth.solve(&project(args, |s| s.type_depth))
+    }
+
+    pub(crate) fn solve_value_depth(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
+        self.value_depth.solve(&project(args, |s| s.value_depth))
+    }
+
+    pub(crate) fn solve_layout_size(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
+        self.layout_size.solve(&project(args, |s| s.layout_size))
     }
 
     /// Substitute a formula for each parameter (positionally): run each measure's flat-form
@@ -412,9 +432,9 @@ fn project<T, U>(items: &[T], f: impl Fn(&T) -> U) -> Vec<U> {
 /// `layout_size_coeff` are how the field folds into the two through-field measures.
 #[derive(Debug)]
 pub(crate) struct ArenaApply {
-    pub(crate) field_type: VMPointer<ArenaType>,
-    pub(crate) value_depth_offset: u64,
-    pub(crate) layout_size_coeff: u64,
+    field_type: VMPointer<ArenaType>,
+    value_depth_offset: u64,
+    layout_size_coeff: u64,
 }
 
 /// A datatype's four size formulae over its own type parameters, built at JIT time.
@@ -431,57 +451,148 @@ pub(crate) struct ArenaTypeSizeFormula {
 }
 
 impl ArenaTypeSizeFormula {
-    /// Build a datatype's formulae from its field types (for enums, the fields of every
-    /// variant). `num_params` is the datatype's type-parameter count; `extra_layout_nodes` is
-    /// the flat layout overhead beyond the datatype's own node — one per variant for enums,
-    /// zero for structs.
-    pub(crate) fn for_datatype<'a>(
-        num_params: u16,
-        field_types: impl Iterator<Item = &'a ArenaType>,
-        extra_layout_nodes: u64,
+    /// Build a datatype's size formulae straight from its definition. A struct folds in its own
+    /// fields; an enum folds in the fields of every variant and counts one extra layout node per
+    /// variant.
+    pub(crate) fn from_datatype(
+        datatype: &Datatype,
         arena: &ArenaBuilder,
     ) -> PartialVMResult<ArenaTypeSizeFormula> {
-        // The datatype instantiated over its own parameters, `S<T0..Tn>`: one node plus each
-        // parameter, one level deep.
-        let type_size = LinearForm {
-            constant: 1,
-            terms: (0..num_params)
-                .map(|param| LinearTerm {
-                    param,
-                    coefficient: 1,
-                })
-                .collect(),
-        };
-        let type_depth = MaxPlusForm {
-            constant: 1,
-            terms: (0..num_params)
-                .map(|param| MaxPlusTerm { param, offset: 1 })
-                .collect(),
-        };
+        // Build the formulae from a datatype's type-parameter count, its (flattened) field types,
+        // and its `extra_layout_nodes` (one per variant for enums, zero for structs).
+        fn from_fields<'a>(
+            num_params: u16,
+            field_types: impl Iterator<Item = &'a ArenaType>,
+            extra_layout_nodes: u64,
+            arena: &ArenaBuilder,
+        ) -> PartialVMResult<ArenaTypeSizeFormula> {
+            // Fold one field (at `prefix_depth` value-nesting levels below the datatype) into the
+            // through-field forms. `prefix_depth` starts at 1 (a direct field sits one level below
+            // the datatype itself). Datatype-application fields become symbolic `ArenaApply`s.
+            fn visit_field(
+                ty: &ArenaType,
+                prefix_depth: u64,
+                value_depth_local: &mut MaxPlusForm,
+                layout_size_local: &mut LinearForm,
+                apps: &mut Vec<ArenaApply>,
+            ) {
+                match ty {
+                    ArenaType::TyParam(idx) => {
+                        match value_depth_local.terms.iter_mut().find(|t| t.param == *idx) {
+                            Some(existing) => existing.offset = existing.offset.max(prefix_depth),
+                            None => value_depth_local.terms.push(MaxPlusTerm {
+                                param: *idx,
+                                offset: prefix_depth,
+                            }),
+                        }
+                        match layout_size_local.terms.iter_mut().find(|t| t.param == *idx) {
+                            Some(existing) => {
+                                existing.coefficient = existing.coefficient.saturating_add(1)
+                            }
+                            None => layout_size_local.terms.push(LinearTerm {
+                                param: *idx,
+                                coefficient: 1,
+                            }),
+                        }
+                    }
+                    ArenaType::Vector(inner)
+                    | ArenaType::Reference(inner)
+                    | ArenaType::MutableReference(inner) => {
+                        value_depth_local.constant = value_depth_local
+                            .constant
+                            .max(prefix_depth.saturating_add(1));
+                        layout_size_local.constant = layout_size_local.constant.saturating_add(1);
+                        visit_field(
+                            inner,
+                            prefix_depth.saturating_add(1),
+                            value_depth_local,
+                            layout_size_local,
+                            apps,
+                        );
+                    }
+                    ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
+                        apps.push(ArenaApply {
+                            field_type: VMPointer::from_ref(ty),
+                            value_depth_offset: prefix_depth,
+                            layout_size_coeff: 1,
+                        });
+                    }
+                    _ => {
+                        value_depth_local.constant = value_depth_local
+                            .constant
+                            .max(prefix_depth.saturating_add(1));
+                        layout_size_local.constant = layout_size_local.constant.saturating_add(1);
+                    }
+                }
+            }
 
-        // Through-field: the datatype contributes one value-nesting level and one layout node
-        // (plus the flat overhead); each field sits one level below it.
-        let mut value_depth_local = MaxPlusForm::constant(1);
-        let mut layout_size_local = LinearForm::constant(1u64.saturating_add(extra_layout_nodes));
-        let mut apps = vec![];
-        for field in field_types {
-            visit_field(
-                field,
-                1,
-                &mut value_depth_local,
-                &mut layout_size_local,
-                &mut apps,
-            );
+            // The datatype instantiated over its own parameters, `S<T0..Tn>`: one node plus each
+            // parameter, one level deep.
+            let type_size = LinearForm {
+                constant: 1,
+                terms: (0..num_params)
+                    .map(|param| LinearTerm {
+                        param,
+                        coefficient: 1,
+                    })
+                    .collect(),
+            };
+            let type_depth = MaxPlusForm {
+                constant: 1,
+                terms: (0..num_params)
+                    .map(|param| MaxPlusTerm { param, offset: 1 })
+                    .collect(),
+            };
+
+            // Through-field: the datatype contributes one value-nesting level and one layout node
+            // (plus the flat overhead); each field sits one level below it.
+            let mut value_depth_local = MaxPlusForm::constant(1);
+            let mut layout_size_local =
+                LinearForm::constant(1u64.saturating_add(extra_layout_nodes));
+            let mut apps = vec![];
+            for field in field_types {
+                visit_field(
+                    field,
+                    1,
+                    &mut value_depth_local,
+                    &mut layout_size_local,
+                    &mut apps,
+                );
+            }
+            value_depth_local.canonicalize();
+            layout_size_local.canonicalize();
+            Ok(ArenaTypeSizeFormula {
+                type_size,
+                type_depth,
+                value_depth_local,
+                layout_size_local,
+                apps: arena.alloc_vec(apps.into_iter())?,
+            })
         }
-        value_depth_local.canonicalize();
-        layout_size_local.canonicalize();
-        Ok(ArenaTypeSizeFormula {
-            type_size,
-            type_depth,
-            value_depth_local,
-            layout_size_local,
-            apps: arena.alloc_vec(apps.into_iter())?,
-        })
+
+        match datatype {
+            Datatype::Struct(struct_) => {
+                let struct_ = struct_.to_ref();
+                from_fields(
+                    checked_as!(struct_.type_parameters.len(), u16)?,
+                    struct_.fields.iter(),
+                    0,
+                    arena,
+                )
+            }
+            Datatype::Enum(enum_) => {
+                let enum_ = enum_.to_ref();
+                from_fields(
+                    checked_as!(enum_.type_parameters.len(), u16)?,
+                    enum_
+                        .variants
+                        .iter()
+                        .flat_map(|variant| variant.fields.iter()),
+                    enum_.variants.len() as u64,
+                    arena,
+                )
+            }
+        }
     }
 
     /// Resolve this datatype's formula against a linkage (the vtable is the env), yielding a flat
@@ -508,63 +619,5 @@ impl ArenaTypeSizeFormula {
             value_depth,
             layout_size,
         })
-    }
-}
-
-/// Fold one field (at `prefix_depth` value-nesting levels below the datatype) into the
-/// through-field forms. `prefix_depth` starts at 1 (a direct field sits one level below the
-/// datatype itself). Datatype-application fields become symbolic [`ArenaApply`]s.
-fn visit_field(
-    ty: &ArenaType,
-    prefix_depth: u64,
-    value_depth_local: &mut MaxPlusForm,
-    layout_size_local: &mut LinearForm,
-    apps: &mut Vec<ArenaApply>,
-) {
-    match ty {
-        ArenaType::TyParam(idx) => {
-            match value_depth_local.terms.iter_mut().find(|t| t.param == *idx) {
-                Some(existing) => existing.offset = existing.offset.max(prefix_depth),
-                None => value_depth_local.terms.push(MaxPlusTerm {
-                    param: *idx,
-                    offset: prefix_depth,
-                }),
-            }
-            match layout_size_local.terms.iter_mut().find(|t| t.param == *idx) {
-                Some(existing) => existing.coefficient = existing.coefficient.saturating_add(1),
-                None => layout_size_local.terms.push(LinearTerm {
-                    param: *idx,
-                    coefficient: 1,
-                }),
-            }
-        }
-        ArenaType::Vector(inner)
-        | ArenaType::Reference(inner)
-        | ArenaType::MutableReference(inner) => {
-            value_depth_local.constant = value_depth_local
-                .constant
-                .max(prefix_depth.saturating_add(1));
-            layout_size_local.constant = layout_size_local.constant.saturating_add(1);
-            visit_field(
-                inner,
-                prefix_depth.saturating_add(1),
-                value_depth_local,
-                layout_size_local,
-                apps,
-            );
-        }
-        ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
-            apps.push(ArenaApply {
-                field_type: VMPointer::from_ref(ty),
-                value_depth_offset: prefix_depth,
-                layout_size_coeff: 1,
-            });
-        }
-        _ => {
-            value_depth_local.constant = value_depth_local
-                .constant
-                .max(prefix_depth.saturating_add(1));
-            layout_size_local.constant = layout_size_local.constant.saturating_add(1);
-        }
     }
 }
