@@ -2230,7 +2230,7 @@ fn column_exists_filter(column: &str) -> RowFilter {
 
 #[cfg(test)]
 mod tests {
-    use crate::bigtable::mock_server::ExpectedCall;
+    use crate::bigtable::mock_server::{ExpectedCall, MockBigtableServer};
     use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
     use futures::{TryStreamExt, stream};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -2241,11 +2241,44 @@ mod tests {
         Ok((Bytes::from(sequence.to_be_bytes().to_vec()), Vec::new()))
     }
 
-    #[tokio::test(start_paused = true)]
+    async fn assert_consecutive_writes_are_spaced(
+        mock: &MockBigtableServer,
+        client: &BigTableClient,
+        entry: Entry,
+        early_arrival_window: Duration,
+    ) {
+        let first_gate = mock.pause_next_mutate_rows().await;
+        let second_gate = mock.pause_next_mutate_rows().await;
+        let first_write = tokio::spawn({
+            let mut client = client.clone();
+            let entry = entry.clone();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        first_gate.wait_for_arrival().await;
+
+        let second_write = tokio::spawn({
+            let mut client = client.clone();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        assert!(
+            tokio::time::timeout(early_arrival_window, second_gate.wait_for_arrival())
+                .await
+                .is_err(),
+            "second request arrived before the reduced-rate interval"
+        );
+
+        first_gate.release();
+        first_write.await.unwrap().unwrap();
+        second_gate.wait_for_arrival().await;
+        second_gate.release();
+        second_write.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
     async fn mutate_rows_starts_capped_and_applies_decrease_end_to_end() {
         const OBSERVED_STARTS: usize = 10;
         const MIN_INITIAL_BATCH_TIME: Duration = Duration::from_millis(900);
-        const MIN_REDUCED_RATE_INTERVAL: Duration = Duration::from_millis(140);
+        const EARLY_ARRIVAL_WINDOW: Duration = Duration::from_millis(120);
 
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
@@ -2297,12 +2330,8 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        let reduced_rate_started_at = tokio::time::Instant::now();
-        client
-            .write_entries("flow-control", [make_entry()])
-            .await
-            .unwrap();
-        assert!(reduced_rate_started_at.elapsed() >= MIN_REDUCED_RATE_INTERVAL);
+        assert_consecutive_writes_are_spaced(&mock, &client, make_entry(), EARLY_ARRIVAL_WINDOW)
+            .await;
 
         mock.set_mutate_rows_rate_limit_info(None).await;
         tokio::time::sleep(Duration::from_millis(1100)).await;
@@ -2310,15 +2339,11 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        let persisted_rate_started_at = tokio::time::Instant::now();
-        client
-            .write_entries("flow-control", [make_entry()])
-            .await
-            .unwrap();
-        assert!(persisted_rate_started_at.elapsed() >= MIN_REDUCED_RATE_INTERVAL);
+        assert_consecutive_writes_are_spaced(&mock, &client, make_entry(), EARLY_ARRIVAL_WINDOW)
+            .await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn partial_overload_error_reduces_rate_without_server_feedback() {
         const OBSERVED_STARTS: usize = 10;
         const EARLY_ARRIVAL_WINDOW: Duration = Duration::from_millis(120);
@@ -2366,29 +2391,8 @@ mod tests {
             .write_entries("flow-control", [make_entry()])
             .await
             .unwrap();
-        let first_gate = mock.pause_next_mutate_rows().await;
-        let first_write = tokio::spawn({
-            let mut client = client.clone();
-            let entry = make_entry();
-            async move { client.write_entries("flow-control", [entry]).await }
-        });
-        first_gate.wait_for_arrival().await;
-
-        let mut second_write = tokio::spawn({
-            let mut client = client.clone();
-            let entry = make_entry();
-            async move { client.write_entries("flow-control", [entry]).await }
-        });
-        assert!(
-            tokio::time::timeout(EARLY_ARRIVAL_WINDOW, &mut second_write)
-                .await
-                .is_err(),
-            "second request was admitted at the initial 10 QPS rate"
-        );
-
-        first_gate.release();
-        first_write.await.unwrap().unwrap();
-        second_write.await.unwrap().unwrap();
+        assert_consecutive_writes_are_spaced(&mock, &client, make_entry(), EARLY_ARRIVAL_WINDOW)
+            .await;
     }
 
     fn decode_sequence_only(key: Bytes, _cells: Vec<(Bytes, Bytes)>) -> Result<(u64, u64)> {

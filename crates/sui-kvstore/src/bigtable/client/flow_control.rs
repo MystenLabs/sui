@@ -26,6 +26,7 @@ const MAX_QPS: f64 = 100_000.0;
 const MIN_FACTOR: f64 = 0.7;
 const MAX_FACTOR: f64 = 1.3;
 const HEALTHY_RECOVERY_FACTOR: f64 = 1.05;
+const UPWARD_UTILIZATION_THRESHOLD: f64 = 0.8;
 const ELEVATED_LATENCY_RATIO: f64 = 1.5;
 // Never learn a multi-second startup as healthy. One second is the maximum completion time this
 // controller treats as safe while probing upward.
@@ -48,6 +49,39 @@ enum WriteLatencyCondition {
     Healthy,
     Elevated,
     Severe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LatencyFeedback {
+    Decrease,
+    Reanchor,
+    Increase,
+}
+
+impl LatencyFeedback {
+    fn factor(self) -> f64 {
+        match self {
+            Self::Decrease => MIN_FACTOR,
+            Self::Reanchor => 1.0,
+            Self::Increase => HEALTHY_RECOVERY_FACTOR,
+        }
+    }
+
+    fn reanchors_to_observed(self) -> bool {
+        matches!(self, Self::Decrease | Self::Reanchor)
+    }
+
+    fn allows_growth(self) -> bool {
+        self == Self::Increase
+    }
+
+    fn more_conservative(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Decrease, _) | (_, Self::Decrease) => Self::Decrease,
+            (Self::Reanchor, _) | (_, Self::Reanchor) => Self::Reanchor,
+            (Self::Increase, Self::Increase) => Self::Increase,
+        }
+    }
 }
 
 fn classify_write_latency(
@@ -76,23 +110,42 @@ struct ObservationWindow {
 #[derive(Default)]
 struct PendingFeedback {
     server_factor: Option<f64>,
-    local_factor: Option<f64>,
+    latency_feedback: Option<LatencyFeedback>,
     server_period: Option<Duration>,
 }
 
 impl PendingFeedback {
     fn combined_factor(&self) -> Option<f64> {
-        match (self.server_factor, self.local_factor) {
-            (Some(server_factor), Some(local_factor)) => Some(server_factor.min(local_factor)),
+        let latency_factor = self.latency_feedback.map(LatencyFeedback::factor);
+        match (self.server_factor, latency_factor) {
+            (Some(server_factor), Some(latency_factor)) => Some(server_factor.min(latency_factor)),
             (Some(server_factor), None) => Some(server_factor),
-            (None, Some(local_factor)) => Some(local_factor),
+            (None, Some(latency_factor)) => Some(latency_factor),
             (None, None) => None,
         }
     }
 
     fn allows_growth(&self) -> bool {
-        self.local_factor
-            .is_some_and(|local_factor| local_factor > 1.0)
+        self.latency_feedback
+            .is_some_and(LatencyFeedback::allows_growth)
+    }
+
+    fn growth_factor(&self) -> Option<f64> {
+        let latency_feedback = self
+            .latency_feedback
+            .filter(|feedback| feedback.allows_growth())?;
+        match self.server_factor {
+            Some(server_factor) if server_factor <= 1.0 => None,
+            Some(server_factor) => Some(server_factor),
+            None => Some(latency_feedback.factor()),
+        }
+    }
+
+    fn reanchors_to_observed(&self) -> bool {
+        self.server_factor.is_some_and(|factor| factor < 1.0)
+            || self
+                .latency_feedback
+                .is_some_and(LatencyFeedback::reanchors_to_observed)
     }
 
     fn discard_growth_feedback(&mut self) {
@@ -100,12 +153,14 @@ impl PendingFeedback {
             return;
         }
         self.server_factor = self.server_factor.filter(|factor| *factor <= 1.0);
-        self.local_factor = self.local_factor.filter(|factor| *factor <= 1.0);
+        self.latency_feedback = self
+            .latency_feedback
+            .filter(|feedback| !feedback.allows_growth());
         self.server_period = self.server_factor.and(self.server_period);
     }
 
     fn is_empty(&self) -> bool {
-        self.server_factor.is_none() && self.local_factor.is_none()
+        self.server_factor.is_none() && self.latency_feedback.is_none()
     }
 }
 
@@ -296,16 +351,25 @@ impl BatchWriteFlowController {
         }
 
         let observed_start_qps = observation.rpc_starts as f64 / elapsed.as_secs_f64();
+        let current_qps = state.effective_qps;
+        let utilization = observed_start_qps / current_qps;
         let factor = state
             .pending
             .combined_factor()
             .expect("an observation requires pending feedback");
-        let growth_allowed = state.pending.allows_growth();
-        let candidate_qps = (observed_start_qps * factor).clamp(MIN_QPS, MAX_QPS);
-        let effective_qps = if growth_allowed {
-            candidate_qps
+        let reanchor_to_observed = state.pending.reanchors_to_observed();
+        // A paced one-second window can omit a boundary start. It proves utilization, but growth
+        // compounds from the current limit rather than the sampled start rate.
+        let effective_qps = if reanchor_to_observed {
+            (observed_start_qps * factor)
+                .clamp(MIN_QPS, MAX_QPS)
+                .min(current_qps)
+        } else if utilization >= UPWARD_UTILIZATION_THRESHOLD {
+            state.pending.growth_factor().map_or(current_qps, |factor| {
+                (current_qps * factor).clamp(MIN_QPS, MAX_QPS)
+            })
         } else {
-            candidate_qps.min(state.effective_qps)
+            current_qps
         };
         if effective_qps != state.effective_qps {
             state.effective_qps = effective_qps;
@@ -458,13 +522,17 @@ impl BatchWriteFlowController {
         started_observation
     }
 
-    fn queue_local_feedback(state: &mut ControllerState, now: Instant, factor: f64) -> bool {
+    fn queue_latency_feedback(
+        state: &mut ControllerState,
+        now: Instant,
+        feedback: LatencyFeedback,
+    ) -> bool {
         let started_observation = state.observation.is_none();
-        state.pending.local_factor = Some(
+        state.pending.latency_feedback = Some(
             state
                 .pending
-                .local_factor
-                .map_or(factor, |pending| pending.min(factor)),
+                .latency_feedback
+                .map_or(feedback, |pending| pending.more_conservative(feedback)),
         );
         state.observation.get_or_insert(ObservationWindow {
             started_at: now,
@@ -480,14 +548,13 @@ impl BatchWriteFlowController {
 
     fn emit_server_feedback_rejected_telemetry(&self) {
         self.increment_rate_update("rejected");
-        info!("Batch write flow control: server feedback rejected");
     }
 
     fn increment_rate_update(&self, kind: &str) {
         if let Some(metrics) = &self.metrics {
             metrics
                 .kv_bt_flow_control_rate_updates
-                .with_label_values(&[&self.client_name, kind])
+                .with_label_values(&[self.client_name.as_str(), kind])
                 .inc();
         }
     }
@@ -507,10 +574,10 @@ impl BatchWriteFlowController {
 
         let condition =
             classify_write_latency(window_avg_micros, state.baseline_write_latency_micros);
-        let local_factor = match condition {
+        let latency_feedback = match condition {
             WriteLatencyCondition::Severe => {
                 state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
-                Some(MIN_FACTOR)
+                Some(LatencyFeedback::Decrease)
             }
             WriteLatencyCondition::Elevated => {
                 state.non_healthy_evals = state.non_healthy_evals.saturating_add(1);
@@ -519,7 +586,7 @@ impl BatchWriteFlowController {
                 {
                     *baseline += BASELINE_STALE_ALPHA * (window_avg_micros - *baseline);
                 }
-                Some(1.0)
+                Some(LatencyFeedback::Reanchor)
             }
             WriteLatencyCondition::Healthy => {
                 state.non_healthy_evals = 0;
@@ -528,11 +595,11 @@ impl BatchWriteFlowController {
                     .baseline_write_latency_micros
                     .get_or_insert(window_avg_micros);
                 *baseline += BASELINE_EWMA_ALPHA * (window_avg_micros - *baseline);
-                had_baseline.then_some(HEALTHY_RECOVERY_FACTOR)
+                had_baseline.then_some(LatencyFeedback::Increase)
             }
         };
-        let started_observation =
-            local_factor.is_some_and(|factor| Self::queue_local_feedback(state, now, factor));
+        let started_observation = latency_feedback
+            .is_some_and(|feedback| Self::queue_latency_feedback(state, now, feedback));
 
         Some(LatencyEvaluation {
             window_avg_micros,
@@ -660,7 +727,7 @@ mod tests {
         effective_qps: f64,
         observation: Option<(Instant, u64)>,
         server_factor: Option<f64>,
-        local_factor: Option<f64>,
+        latency_feedback: Option<LatencyFeedback>,
         server_period: Option<Duration>,
     }
 
@@ -676,18 +743,18 @@ mod tests {
                 .as_ref()
                 .map(|window| (window.started_at, window.rpc_starts)),
             server_factor: state.pending.server_factor,
-            local_factor: state.pending.local_factor,
+            latency_feedback: state.pending.latency_feedback,
             server_period: state.pending.server_period,
         }
     }
 
-    fn pending_local_factor(controller: &BatchWriteFlowController) -> Option<f64> {
+    fn pending_latency_feedback(controller: &BatchWriteFlowController) -> Option<LatencyFeedback> {
         controller
             .state
             .lock()
             .expect("flow-control state mutex poisoned")
             .pending
-            .local_factor
+            .latency_feedback
     }
 
     fn baseline_micros(controller: &BatchWriteFlowController) -> Option<f64> {
@@ -756,7 +823,7 @@ mod tests {
         make_latency_evaluation_ready(controller);
         record_latency_samples(controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
         assert_eq!(baseline_micros(controller), Some(20_000.0));
-        assert_eq!(pending_local_factor(controller), None);
+        assert_eq!(pending_latency_feedback(controller), None);
     }
 
     async fn admit_rpcs(controller: &Arc<BatchWriteFlowController>, count: usize) {
@@ -795,6 +862,25 @@ mod tests {
 
     async fn finish_observation(controller: &BatchWriteFlowController) {
         advance_observation_to_boundary(controller).await;
+        finish_ready_observation(controller);
+    }
+
+    fn finish_observation_with_starts(controller: &BatchWriteFlowController, rpc_starts: u64) {
+        let now = Instant::now();
+        {
+            let mut state = controller
+                .state
+                .lock()
+                .expect("flow-control state mutex poisoned");
+            let observation = state
+                .observation
+                .as_mut()
+                .expect("expected an active observation");
+            observation.started_at = now
+                .checked_sub(OBSERVATION_WINDOW)
+                .expect("paused test clock should allow a one-second lookback");
+            observation.rpc_starts = rpc_starts;
+        }
         finish_ready_observation(controller);
     }
 
@@ -937,7 +1023,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn upward_feedback_requires_fresh_healthy_latency() {
+    async fn upward_server_feedback_requires_fresh_healthy_latency() {
         let controller = BatchWriteFlowController::new("test".to_owned(), None);
         controller.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
         assert_effective_qps(&controller, INITIAL_QPS);
@@ -967,7 +1053,40 @@ mod tests {
         admit_rpcs(&controller, 10).await;
         finish_observation(&controller).await;
 
+        assert_effective_qps(&controller, INITIAL_QPS * MAX_FACTOR);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn healthy_growth_multiplies_current_limit_not_observed_starts() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+
+        finish_observation_with_starts(&controller, 9);
+
         assert_effective_qps(&controller, INITIAL_QPS * HEALTHY_RECOVERY_FACTOR);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn healthy_growth_requires_eighty_percent_utilization() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        learn_healthy_baseline(&controller);
+        make_latency_evaluation_ready(&controller);
+        record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
+
+        finish_observation_with_starts(&controller, 7);
+
+        assert_effective_qps(&controller, INITIAL_QPS);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn neutral_server_feedback_does_not_lower_rate_from_observation_undercount() {
+        let controller = BatchWriteFlowController::new("test".to_owned(), None);
+        controller.on_server_feedback(Some(&rate_limit_info(1.0, DEFAULT_PERIOD)));
+        finish_observation_with_starts(&controller, 9);
+
+        assert_effective_qps(&controller, INITIAL_QPS);
     }
 
     #[tokio::test(start_paused = true)]
@@ -1016,7 +1135,7 @@ mod tests {
                 .lock()
                 .expect("flow-control state mutex poisoned");
             assert!(state.observation.is_none());
-            assert!(state.pending.local_factor.is_none());
+            assert!(state.pending.latency_feedback.is_none());
             assert!(state.pending.server_factor.is_none());
         }
         assert_effective_qps(&controller, INITIAL_QPS);
@@ -1280,7 +1399,10 @@ mod tests {
         learn_healthy_baseline(&controller);
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(200));
-        assert_eq!(pending_local_factor(&controller), Some(MIN_FACTOR));
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Decrease)
+        );
         assert_effective_qps(&controller, INITIAL_QPS);
 
         admit_rpcs(&controller, 10).await;
@@ -1295,7 +1417,10 @@ mod tests {
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_secs(5));
 
         assert_eq!(baseline_micros(&controller), None);
-        assert_eq!(pending_local_factor(&controller), Some(MIN_FACTOR));
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Decrease)
+        );
         assert_effective_qps(&controller, INITIAL_QPS);
 
         admit_rpcs(&controller, 10).await;
@@ -1310,7 +1435,10 @@ mod tests {
         set_effective_qps_fixture(&controller, 100.0);
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&controller, MIN_WINDOW_SAMPLES, Duration::from_millis(40));
-        assert_eq!(pending_local_factor(&controller), Some(1.0));
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Reanchor)
+        );
         assert_eq!(baseline_micros(&controller), Some(20_000.0));
         admit_rpcs(&controller, 20).await;
         finish_observation(&controller).await;
@@ -1329,16 +1457,19 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn healthy_latency_recovers_without_overriding_server_feedback() {
+    async fn healthy_latency_uses_local_recovery_without_capping_server_growth() {
         let local = BatchWriteFlowController::new("local".to_owned(), None);
         learn_healthy_baseline(&local);
         set_effective_qps_fixture(&local, 100.0);
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&local, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
-        assert_eq!(pending_local_factor(&local), Some(HEALTHY_RECOVERY_FACTOR));
-        admit_rpcs(&local, 20).await;
+        assert_eq!(
+            pending_latency_feedback(&local),
+            Some(LatencyFeedback::Increase)
+        );
+        admit_rpcs(&local, 90).await;
         finish_observation(&local).await;
-        assert_effective_qps(&local, 21.0);
+        assert_effective_qps(&local, 100.0 * HEALTHY_RECOVERY_FACTOR);
 
         let with_server = BatchWriteFlowController::new("server".to_owned(), None);
         learn_healthy_baseline(&with_server);
@@ -1346,9 +1477,9 @@ mod tests {
         tokio::time::advance(LATENCY_EVALUATION_PERIOD).await;
         record_latency_samples(&with_server, MIN_WINDOW_SAMPLES, Duration::from_millis(20));
         with_server.on_server_feedback(Some(&rate_limit_info(MAX_FACTOR, DEFAULT_PERIOD)));
-        admit_rpcs(&with_server, 20).await;
+        admit_rpcs(&with_server, 90).await;
         finish_observation(&with_server).await;
-        assert_effective_qps(&with_server, 21.0);
+        assert_effective_qps(&with_server, 100.0 * MAX_FACTOR);
     }
 
     #[tokio::test(start_paused = true)]
@@ -1359,11 +1490,14 @@ mod tests {
 
         record_latency_samples(&controller, 3, Duration::from_millis(200));
         assert_eq!(latency_samples(&controller), 3);
-        assert_eq!(pending_local_factor(&controller), None);
+        assert_eq!(pending_latency_feedback(&controller), None);
 
         record_latency_samples(&controller, 2, Duration::from_millis(200));
         assert_eq!(latency_samples(&controller), 0);
-        assert_eq!(pending_local_factor(&controller), Some(MIN_FACTOR));
+        assert_eq!(
+            pending_latency_feedback(&controller),
+            Some(LatencyFeedback::Decrease)
+        );
     }
 
     #[tokio::test(start_paused = true)]
