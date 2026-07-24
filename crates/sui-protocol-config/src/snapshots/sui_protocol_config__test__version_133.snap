@@ -168,6 +168,7 @@ feature_flags:
   validator_metadata_verify_v2: true
   defer_unpaid_amplification: true
   defer_owned_object_double_spend: true
+  allowed_proposers: true
   randomize_checkpoint_tx_limit_in_tests: true
   gasless_transaction_drop_safety: true
   merge_randomness_into_checkpoint: true

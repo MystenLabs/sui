@@ -54,6 +54,11 @@ ActiveJwk:
 AdditionalConsensusStateDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
+AllowedProposers:
+  STRUCT:
+    - epoch: U64
+    - proposers:
+        SEQ: U32
 Argument:
   ENUM:
     0:
@@ -1305,6 +1310,23 @@ TransactionExpiration:
           - chain:
               TYPENAME: ChainIdentifier
           - nonce: U32
+    3:
+      Validity:
+        STRUCT:
+          - min_epoch:
+              OPTION: U64
+          - max_epoch:
+              OPTION: U64
+          - min_timestamp:
+              OPTION: U64
+          - max_timestamp:
+              OPTION: U64
+          - chain:
+              TYPENAME: ChainIdentifier
+          - nonce: U32
+          - allowed_proposers:
+              OPTION:
+                TYPENAME: AllowedProposers
 TransactionKind:
   ENUM:
     0:

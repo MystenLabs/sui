@@ -1769,7 +1769,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // Check for unpaid amplification before other deferral checks.
         // SIP-45: Paid amplification allows (gas_price / RGP + 1) submissions.
         // Transactions with more duplicates than paid for are deferred.
-        if protocol_config.defer_unpaid_amplification() {
+        //
+        // A transaction that names its proposers has already had its amplification bounded by
+        // validity_check, which sizes the proposer set against the gas price, so there is nothing
+        // left to charge for here. A set recorded for another epoch is ignored and so bounds
+        // nothing, leaving the transaction subject to deferral like any other.
+        if protocol_config.defer_unpaid_amplification()
+            && !transaction
+                .tx()
+                .transaction_data()
+                .expiration()
+                .restricts_proposers(self.epoch_store.epoch())
+        {
             let occurrence_count = state
                 .occurrence_counts
                 .get(&tx_digest)

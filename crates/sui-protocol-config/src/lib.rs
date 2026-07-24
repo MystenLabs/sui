@@ -374,6 +374,7 @@ const MAINNET_USDB: &str =
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
 // Version 133: Add `package::original_package_id` and its native costs.
+//              Enable allowed_proposers on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1141,6 +1142,11 @@ struct FeatureFlags {
     // in the same commit attempted to lock the same object (double-spend attempt).
     #[serde(skip_serializing_if = "is_false")]
     defer_owned_object_double_spend: bool,
+
+    // If true, `TransactionExpiration::Validity` is accepted, allowing a transaction to
+    // restrict which validators may propose it in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    allowed_proposers: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -4568,6 +4574,9 @@ impl ProtocolConfig {
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
                         Some(package_read_cost_per_byte);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.allowed_proposers = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

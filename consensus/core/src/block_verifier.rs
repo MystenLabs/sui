@@ -204,7 +204,10 @@ impl BlockVerifier for SignedBlockVerifier {
             self.vote(&verified_block)?
         } else {
             self.transaction_verifier
-                .verify_batch(&verified_block.transactions_data())
+                .verify_batch(
+                    &verified_block.reference(),
+                    &verified_block.transactions_data(),
+                )
                 .map_err(|e| ConsensusError::InvalidTransaction(e.to_string()))?;
             vec![]
         };
@@ -255,7 +258,11 @@ mod test {
 
     impl TransactionVerifier for TxnSizeVerifier {
         // Fails verification if any transaction is < 4 bytes.
-        fn verify_batch(&self, transactions: &[&[u8]]) -> Result<(), ValidationError> {
+        fn verify_batch(
+            &self,
+            _block_ref: &BlockRef,
+            transactions: &[&[u8]],
+        ) -> Result<(), ValidationError> {
             for txn in transactions {
                 if txn.len() < 4 {
                     return Err(ValidationError::InvalidTransaction(format!(
