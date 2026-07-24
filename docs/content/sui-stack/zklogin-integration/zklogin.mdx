@@ -304,7 +304,7 @@ For production, run a backend salt service that deterministically derives the sa
 salt = HKDF(master_secret, iss || aud || sub)
 ```
 
-4. The salt service returns the salt to the client. The service is stateless — it does not store per-user salts. The master secret and the HKDF derivation guarantee the same `(iss, aud, sub)` always produces the same salt.
+4. The salt service returns the salt to the client. The service is stateless. It does not store per-user salts. The master secret and the HKDF derivation guarantee the same `(iss, aud, sub)` always produces the same salt.
 
 ### Master secret management
 
@@ -320,7 +320,7 @@ If you initially shipped with localStorage salt storage and need to migrate:
 
 1. When a returning user authenticates, read the salt from localStorage.
 2. Send the user's JWT to the salt service and get the service-derived salt.
-3. If the localStorage salt matches the service-derived salt, migration is complete — the user's address is unchanged.
+3. If the localStorage salt matches the service-derived salt, migration is complete. The user's address is unchanged.
 4. If they differ (because the localStorage salt was randomly generated, not deterministically derived), the user has two addresses. You must transfer their assets from the old address to the new one and guide them through the transition.
 
 To avoid scenario 4, use deterministic salt derivation from the start, even during development.
@@ -343,7 +343,7 @@ When the session approaches expiry, the application must re-authenticate:
 4. Generate a new ephemeral key pair with a fresh `maxEpoch`.
 5. Request a new ZK proof from the proving service using the new JWT and ephemeral key.
 
-The user's Sui address does not change — it is derived from `(iss, aud, sub, salt)`, none of which change during renewal.
+The user's Sui address does not change. It is derived from `(iss, aud, sub, salt)`, none of which change during renewal.
 
 ### Silent renewal
 

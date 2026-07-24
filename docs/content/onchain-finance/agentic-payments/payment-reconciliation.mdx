@@ -116,7 +116,7 @@ async function extractPaymentDetails(digest: string) {
 
 ## Real-time monitoring with checkpoint subscriptions
 
-The gRPC `SubscriptionService.SubscribeCheckpoints` streams new checkpoints as they are finalized. Process each checkpoint's transactions to detect payments in real time:
+The gRPC `SubscriptionService.SubscribeCheckpoints` streams new checkpoints as the network finalizes them. Process each checkpoint's transactions to detect payments in real time:
 
 ```typescript
 const stream = client.subscriptionService.subscribeCheckpoints({});
@@ -200,7 +200,7 @@ For production agents processing high volumes, use a [custom indexer](/develop/a
 Key design points:
 
 - **Pipeline per event type.** Create a dedicated indexer pipeline for your payment events so it can be scaled independently.
-- **Idempotent writes.** The indexer may reprocess checkpoints. Use `ON CONFLICT` / upsert patterns in your database writes.
+- **Idempotent writes.** The indexer might reprocess checkpoints. Use `ON CONFLICT` / upsert patterns in your database writes.
 - **Watermark tracking.** The framework tracks which checkpoint each pipeline has processed, so you can verify there are no gaps in your payment history.
 
 See [Accessing Data](/develop/accessing-data) for the full overview of data access options.

@@ -49,7 +49,7 @@ answer: >-
   the agent cannot exceed its bounds even if compromised.
 ---
 
-An agent that can sign transactions needs guardrails. A **spending mandate** is an onchain object that defines what the agent can spend, to whom, and for how long. The mandate is enforced in Move, so the agent cannot exceed its bounds even if the backend is compromised.
+An agent that can sign transactions needs guardrails. A **spending mandate** is an onchain object that defines what the agent can spend, to whom, and for how long. The Move module enforces the mandate, so the agent cannot exceed its bounds even if the backend is compromised.
 
 ## Why a custom module
 
@@ -255,7 +255,7 @@ public fun is_expired(mandate: &SpendingMandate, clock: &Clock): bool {
 
 ## Creating a mandate (owner side)
 
-The owner creates the mandate and receives a `MandateOwnerCap` for later administration. The mandate is automatically transferred to the agent's address.
+The owner creates the mandate and receives a `MandateOwnerCap` for later administration. The function automatically transfers the mandate to the agent's address.
 
 ```typescript
 import { Transaction } from '@mysten/sui/transactions';
@@ -321,7 +321,7 @@ const result = await client.signAndExecuteTransaction({
 
 ### Time-based expiry
 
-The mandate includes an `expires_at_ms` timestamp. The `execute_spend` function checks `clock.timestamp_ms() < expires_at_ms` before every spend. Once the mandate expires, the agent can no longer use it. No action is needed from the owner.
+The mandate includes an `expires_at_ms` timestamp. The `execute_spend` function checks `clock.timestamp_ms() < expires_at_ms` before every spend. Once the mandate expires, the agent can no longer use it. The owner does not need to take any action.
 
 ### Owner-initiated revocation
 

@@ -52,8 +52,8 @@ Before users or agents can transact on Sui, their wallets need tokens. Users who
 
 To move assets from Ethereum, Solana, or other blockchains to Sui, use a cross-chain bridge:
 
-- [Wormhole](https://wormhole.com/) — supports bridging tokens between Sui and multiple chains including Ethereum, Solana, and others.
-- [Sui Bridge](https://bridge.sui.io/) — native bridge between Sui and Ethereum.
+- [Wormhole](https://wormhole.com/): supports bridging tokens between Sui and multiple chains including Ethereum, Solana, and others.
+- [Sui Bridge](https://bridge.sui.io/): native bridge between Sui and Ethereum.
 
 Bridged assets arrive as wrapped tokens on Sui. The wrapped token's coin type address differs from the native token's address on the source chain.
 
@@ -68,7 +68,7 @@ For development and testing, use the Sui faucet to get free SUI tokens:
 
 Agents that operate autonomously have two options for gas:
 
-1. **Direct funding.** Transfer SUI to the agent's address. The agent pays its own gas. Simple but requires monitoring the agent's balance and topping up periodically.
+1. **Direct funding.** Transfer SUI to the agent's address. The agent pays its own gas. Basic, but requires monitoring the agent's balance and topping up periodically.
 2. **Gas sponsorship.** Deploy a [gas station](/onchain-finance/gas-station) that sponsors the agent's transactions. The agent never needs to hold SUI. This is the recommended pattern for production agents because it separates gas management from agent logic.
 
-For agents using spending mandates, the mandate's owner funds the mandate with the tokens the agent will spend. The agent needs gas only if it is not using a gas sponsor. See [Agent Wallet Setup](/onchain-finance/agentic-payments/agent-wallet-setup) for details.
+For agents using spending mandates, the mandate's owner funds the mandate with the tokens the agent  spend. The agent needs gas only if it is not using a gas sponsor. See [Agent Wallet Setup](/onchain-finance/agentic-payments/agent-wallet-setup) for details.

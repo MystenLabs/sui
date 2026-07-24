@@ -73,11 +73,11 @@ sui client ptb \
     --gas-budget 50000000
 ```
 
-This is simpler than [spending mandates](/onchain-finance/agentic-payments/spending-policies) but offers no spending limits — the agent has full authority over the aliased address. Use mandates when you need bounded spending; use aliases when you need full delegation to a trusted key.
+This is simpler than [spending mandates](/onchain-finance/agentic-payments/spending-policies) but offers no spending limits, since the agent has full authority over the aliased address. Use mandates when you need bounded spending; use aliases when you need full delegation to a trusted key.
 
 ## Multisig-to-alias delegation
 
-A multisig account can add a single-key alias for operational speed. The alias has full sender authority — it can do anything the multisig can. Use this pattern only when you trust the alias holder completely. The benefit is that day-to-day transactions can be signed by the alias without gathering multiple signatures.
+A multisig account can add a single-key alias for operational speed. The alias has full sender authority. It can do anything the multisig can. Use this pattern only when you trust the alias holder completely. The benefit is that day-to-day transactions can be signed by the alias without gathering multiple signatures.
 
 :::danger Aliases have full authority
 

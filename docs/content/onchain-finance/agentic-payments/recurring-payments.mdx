@@ -2,7 +2,7 @@
 title: Recurring and Streaming Payments
 description: >-
   Implement recurring payment schedules and streaming payment flows on Sui
-  using off-chain schedulers and onchain streaming objects.
+  using offchain schedulers and onchain streaming objects.
 keywords:
   - recurring payments
   - streaming payments
@@ -12,7 +12,7 @@ keywords:
 goal:
   description: >-
     Reader can implement recurring or streaming payment patterns on Sui
-    using off-chain schedulers or onchain streaming objects
+    using offchain schedulers or onchain streaming objects
   requires:
     - has_frontmatter:
         - title
@@ -38,16 +38,16 @@ questions:
   - What is a streaming payment on Sui?
   - How do I build a subscription payment system on Sui?
 answer: >-
-  Sui has no native recurring payments. Use an off-chain scheduler with a
+  Sui has no native recurring payments. Use an offchain scheduler with a
   spending mandate for periodic payments, or lock funds in a shared
   StreamPayment object with a linear unlock schedule.
 ---
 
-Sui does not have native recurring payments — there is no cron system or auto-debit mechanism that pulls funds from an account on a schedule. Instead, you implement recurring payments using an off-chain scheduler that triggers onchain transactions, or a prepaid streaming object that the recipient claims from over time.
+Sui does not have native recurring payments. There is no cron system or auto-debit mechanism that pulls funds from an account on a schedule. Instead, you implement recurring payments using an offchain scheduler that triggers onchain transactions, or a prepaid streaming object that the recipient claims from over time.
 
 ## Pattern 1: Scheduled agent payments
 
-An off-chain agent or cron job executes a payment transaction at each interval. The agent operates under a [spending mandate](/onchain-finance/agentic-payments/spending-policies) that authorizes periodic withdrawals up to a cap.
+An offchain agent or cron job executes a payment transaction at each interval. The agent operates under a [spending mandate](/onchain-finance/agentic-payments/spending-policies) that authorizes periodic withdrawals up to a cap.
 
 ```mermaid
 sequenceDiagram
@@ -65,7 +65,7 @@ sequenceDiagram
 
 ### Implementation
 
-The agent runs a simple loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge):
+The agent runs a basic loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge):
 
 ```typescript
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -122,7 +122,7 @@ If the scheduler might fire twice (at-least-once delivery), track each payment p
 
 ## Pattern 2: Prepaid streaming
 
-Lock funds in a shared onchain object with a linear unlock schedule. The recipient claims the unlocked portion at any time. No off-chain agent is needed after the initial deposit.
+Lock funds in a shared onchain object with a linear unlock schedule. The recipient claims the unlocked portion at any time. No offchain agent is needed after the initial deposit.
 
 ### Move module
 
@@ -202,7 +202,7 @@ public fun claim(
 }
 
 /// Cancel the stream. Vested-but-unclaimed funds go to the recipient;
-/// unvested funds are returned to the sender.
+/// unvested funds return to the sender.
 public fun cancel(
     stream: StreamPayment,
     clock: &Clock,
@@ -254,7 +254,7 @@ public fun cancel(
 
 ### Advantages and tradeoffs
 
-- **Advantages:** No off-chain infrastructure needed after creation. The recipient claims on their own schedule. On cancellation, vested-but-unclaimed funds go to the recipient and only unvested funds return to the sender.
+- **Advantages:** No offchain infrastructure needed after creation. The recipient claims on their own schedule. On cancellation, vested-but-unclaimed funds go to the recipient and only unvested funds return to the sender.
 - **Tradeoffs:** Requires upfront capital to fund the entire stream. The sender cannot change the rate after creation (cancel and recreate instead). Uses a shared object, which adds consensus overhead.
 
 ## Choosing between patterns
