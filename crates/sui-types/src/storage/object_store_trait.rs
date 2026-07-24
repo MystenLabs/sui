@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::ObjectKey;
-use crate::base_types::{ConsensusObjectVersion, ObjectID, ObjectRef, VersionNumber};
+use crate::base_types::{ObjectID, ObjectRef, SystemObjectVersion, VersionNumber};
 use crate::object::Object;
 use crate::storage::WriteKind;
 use std::collections::BTreeMap;
@@ -16,9 +16,22 @@ pub trait ObjectStore {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
-        version: ConsensusObjectVersion,
-    ) -> Option<Object> {
-        self.get_object_by_key(object_id, version.version)
+        version: SystemObjectVersion,
+    ) -> Object {
+        match version {
+            SystemObjectVersion::Exact(exact) => self
+                .get_object_by_key(object_id, exact.version)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "system object {object_id} not found at required version {}",
+                        exact.version
+                    )
+                }),
+            SystemObjectVersion::ExactOrLatest(v) => self
+                .get_object_by_key(object_id, v)
+                .or_else(|| self.get_object(object_id))
+                .unwrap_or_else(|| panic!("system object {object_id} does not exist")),
+        }
     }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
@@ -44,8 +57,8 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
-        version: ConsensusObjectVersion,
-    ) -> Option<Object> {
+        version: SystemObjectVersion,
+    ) -> Object {
         (*self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 
@@ -70,8 +83,8 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
-        version: ConsensusObjectVersion,
-    ) -> Option<Object> {
+        version: SystemObjectVersion,
+    ) -> Object {
         (**self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 
@@ -96,8 +109,8 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
-        version: ConsensusObjectVersion,
-    ) -> Option<Object> {
+        version: SystemObjectVersion,
+    ) -> Object {
         (**self).get_implicitly_read_system_object_blocking(object_id, version)
     }
 

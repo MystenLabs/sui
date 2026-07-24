@@ -73,7 +73,7 @@ use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use sui_types::base_types::{
     ConsensusObjectVersion, EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber,
-    VerifiedExecutionData,
+    SystemObjectVersion, VerifiedExecutionData,
 };
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
@@ -499,23 +499,29 @@ macro_rules! check_cache_entry_by_latest {
 impl WritebackCache {
     /// Reads an implicitly read system object at the given version.
     /// If it's not available yet, it will block until it is.
-    /// In normal execution, this function should always return a Some(object).
-    /// In the case of dry-run/simulate, it is possible, though unlikely, that it can return None.
     pub(crate) fn get_implicitly_read_system_object_blocking(
         &self,
         object_id: &ObjectID,
-        consensus_version: ConsensusObjectVersion,
-    ) -> Option<Object> {
+        system_object_version: SystemObjectVersion,
+    ) -> Object {
         assert!(
             sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
             "{object_id} is not an implicitly read system object"
         );
+        let exact_version = match system_object_version {
+            SystemObjectVersion::Exact(exact) => exact,
+            SystemObjectVersion::ExactOrLatest(version) => {
+                return ObjectCacheRead::get_object_by_key(self, object_id, version)
+                    .or_else(|| ObjectCacheRead::get_object(self, object_id))
+                    .unwrap_or_else(|| panic!("system object {object_id} does not exist"));
+            }
+        };
         let ConsensusObjectVersion {
             initial_shared_version,
             version,
-        } = consensus_version;
+        } = exact_version;
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
-            return Some(object);
+            return object;
         }
         self.metrics
             .implicit_system_object_read_waits
@@ -548,7 +554,12 @@ impl WritebackCache {
             .implicit_system_object_read_wait_latency
             .with_label_values(&[object_id.to_string().as_str()])
             .observe(wait_start.elapsed().as_secs_f64());
-        ObjectCacheRead::get_object_by_key(self, object_id, version)
+        ObjectCacheRead::get_object_by_key(self, object_id, version).unwrap_or_else(|| {
+            mysten_common::fatal!(
+                "system object {object_id} not found at version {version} after its write was \
+                 committed"
+            )
+        })
     }
 
     pub fn new(

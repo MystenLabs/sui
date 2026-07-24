@@ -11,7 +11,9 @@ use sui_framework::BuiltInFramework;
 use sui_move_build::BuildConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::base_types::{ConsensusObjectVersion, ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{
+    ConsensusObjectVersion, ObjectID, SequenceNumber, SuiAddress, SystemObjectVersion,
+};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::InputKey;
 use tempfile::tempdir;
@@ -327,16 +329,13 @@ async fn test_get_implicitly_read_system_object_blocking() {
     let blocked = tokio::spawn({
         let cache = cache.clone();
         async move {
-            cache
-                .as_ref()
-                .get_implicitly_read_system_object_blocking(
-                    &object_id,
-                    ConsensusObjectVersion {
-                        initial_shared_version: init_version,
-                        version: target_version,
-                    },
-                )
-                .unwrap()
+            cache.as_ref().get_implicitly_read_system_object_blocking(
+                &object_id,
+                SystemObjectVersion::Exact(ConsensusObjectVersion {
+                    initial_shared_version: init_version,
+                    version: target_version,
+                }),
+            )
         }
     });
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -356,16 +355,13 @@ async fn test_get_implicitly_read_system_object_blocking() {
         .unwrap();
     assert_eq!(object.version(), target_version);
 
-    let object = cache
-        .as_ref()
-        .get_implicitly_read_system_object_blocking(
-            &object_id,
-            ConsensusObjectVersion {
-                initial_shared_version: init_version,
-                version: target_version,
-            },
-        )
-        .unwrap();
+    let object = cache.as_ref().get_implicitly_read_system_object_blocking(
+        &object_id,
+        SystemObjectVersion::Exact(ConsensusObjectVersion {
+            initial_shared_version: init_version,
+            version: target_version,
+        }),
+    );
     assert_eq!(object.version(), target_version);
 }
 
@@ -397,16 +393,13 @@ async fn test_execution_permit_released_while_blocked() {
         let cache = cache.clone();
         async move {
             let _permit_guard = set_execution_permit(Box::new(permit));
-            cache
-                .as_ref()
-                .get_implicitly_read_system_object_blocking(
-                    &object_id,
-                    ConsensusObjectVersion {
-                        initial_shared_version: init_version,
-                        version: target_version,
-                    },
-                )
-                .unwrap()
+            cache.as_ref().get_implicitly_read_system_object_blocking(
+                &object_id,
+                SystemObjectVersion::Exact(ConsensusObjectVersion {
+                    initial_shared_version: init_version,
+                    version: target_version,
+                }),
+            )
         }
     });
     tokio::time::sleep(Duration::from_millis(500)).await;

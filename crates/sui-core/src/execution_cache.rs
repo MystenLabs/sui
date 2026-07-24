@@ -719,8 +719,8 @@ macro_rules! implement_storage_traits {
             fn get_implicitly_read_system_object_blocking(
                 &self,
                 object_id: &ObjectID,
-                version: sui_types::base_types::ConsensusObjectVersion,
-            ) -> Option<Object> {
+                version: sui_types::base_types::SystemObjectVersion,
+            ) -> Object {
                 $implementor::get_implicitly_read_system_object_blocking(self, object_id, version)
             }
         }

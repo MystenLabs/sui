@@ -189,43 +189,9 @@ impl<'backing> TemporaryStore<'backing> {
                 ),
             );
         };
-        let object_at_required = match consensus_version {
-            SystemObjectVersion::Exact(exact_version) => {
-                let required_version = exact_version.version;
-                let Some(object) = self
-                    .store
-                    .get_implicitly_read_system_object_blocking(object_id, exact_version)
-                else {
-                    debug_fatal!(
-                        "system object {object_id} not found at required version {required_version}"
-                    );
-                    return Err(
-                        PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
-                            format!(
-                                "system object {object_id} not found at required version {required_version}"
-                            ),
-                        ),
-                    );
-                };
-                object
-            }
-            SystemObjectVersion::ExactOrLatest(version) => {
-                let object = self
-                    .store
-                    .get_object_by_key(object_id, version)
-                    .or_else(|| self.store.get_object(object_id));
-                let Some(object) = object else {
-                    return Err(
-                        PartialVMError::new(StatusCode::FAILED_TO_LOAD_SYSTEM_OBJECT).with_message(
-                            format!(
-                                "system object {object_id} not found at version {version} or latest"
-                            ),
-                        ),
-                    );
-                };
-                object
-            }
-        };
+        let object_at_required = self
+            .store
+            .get_implicitly_read_system_object_blocking(object_id, consensus_version);
 
         // Available: record the read at `required_version` (which is what the transaction depends
         // on and reads) so it can be emitted into effects as a read-only consensus object and
