@@ -67,9 +67,10 @@ pub fn program(
     } = prog;
 
     let all_macro_definitions = extract_macros(compilation_env, &nmodules, &pre_compiled_lib);
-    let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
+    let (mut modules, needed_constant_functions) =
+        modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
-    generate_constant_functions::program(compilation_env, &mut modules);
+    generate_constant_functions::program(compilation_env, &mut modules, needed_constant_functions);
     dependency_ordering::program(compilation_env, &mut modules);
     recursive_datatypes::modules(compilation_env, &modules);
     infinite_instantiations::modules(compilation_env, &modules);
@@ -189,7 +190,10 @@ fn modules(
     info: &mut NamingProgramInfo,
     all_macro_definitions: &UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     mut modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
-) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
+) -> (
+    UniqueMap<ModuleIdent, T::ModuleDefinition>,
+    BTreeMap<(ModuleIdent, ConstantName), Loc>,
+) {
     let global_use_funs = global_use_funs(info);
     // We validate the syntax methods first so that processing syntax method forms later are
     // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
@@ -210,8 +214,9 @@ fn modules(
     let typed_modules = Mutex::new(UniqueMap::new());
     let all_new_friends = Mutex::new(BTreeMap::new());
     let used_module_members = Mutex::new(BTreeMap::new());
+    let all_needed_constant_functions = Mutex::new(BTreeMap::new());
     modules.into_par_iter().for_each(|(ident, mdef)| {
-        let (typed_mdef, new_friends, used_members) = module(
+        let (typed_mdef, new_friends, used_members, needed_constant_fns) = module(
             compilation_env,
             info,
             &global_use_funs,
@@ -243,6 +248,10 @@ fn modules(
                 .or_insert_with(BTreeSet::new)
                 .extend(members);
         }
+        all_needed_constant_functions
+            .lock()
+            .unwrap()
+            .extend(needed_constant_fns);
     });
     let mut typed_modules = typed_modules.into_inner().unwrap();
     let all_new_friends = all_new_friends.into_inner().unwrap();
@@ -306,7 +315,8 @@ fn modules(
         unused_module_members(compilation_env, &used_module_members, mident, mdef);
     }
 
-    typed_modules
+    let all_needed_constant_functions = all_needed_constant_functions.into_inner().unwrap();
+    (typed_modules, all_needed_constant_functions)
 }
 
 fn module<'env>(
@@ -320,6 +330,7 @@ fn module<'env>(
     T::ModuleDefinition,
     BTreeSet<(ModuleIdent, Loc)>,
     BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    BTreeMap<(ModuleIdent, ConstantName), Loc>,
 ) {
     enum Member<S, E, C, F> {
         Struct(S),
@@ -365,6 +376,7 @@ fn module<'env>(
     let new_friends = Mutex::new(BTreeSet::new());
     let used_members = Mutex::new(BTreeMap::new());
     let used_methods = Mutex::new(BTreeSet::new());
+    let needed_constant_functions = Mutex::new(BTreeMap::new());
     nstructs
         .into_par_iter()
         .map(Member::Struct)
@@ -391,8 +403,13 @@ fn module<'env>(
                     functions.lock().unwrap().add(name, f).unwrap();
                 }
             };
-            let (cur_new_friends, cur_used_members, cur_used_methods) = context.finish();
+            let (cur_new_friends, cur_used_members, cur_used_methods, cur_needed_constant_fns) =
+                context.finish();
             new_friends.lock().unwrap().extend(cur_new_friends);
+            needed_constant_functions
+                .lock()
+                .unwrap()
+                .extend(cur_needed_constant_fns);
             let mut used_members = used_members.lock().unwrap();
             for (mident, members) in cur_used_members {
                 used_members
@@ -409,6 +426,7 @@ fn module<'env>(
     let new_friends = new_friends.into_inner().unwrap();
     let used_members = used_members.into_inner().unwrap();
     let used_methods = used_methods.into_inner().unwrap();
+    let needed_constant_functions = needed_constant_functions.into_inner().unwrap();
 
     let use_funs = context.finish_use_funs_scope(&used_methods);
     let typed_module = T::ModuleDefinition {
@@ -430,7 +448,12 @@ fn module<'env>(
         constants,
         functions,
     };
-    (typed_module, new_friends, used_members)
+    (
+        typed_module,
+        new_friends,
+        used_members,
+        needed_constant_functions,
+    )
 }
 
 fn finalize_ide_info(context: &mut Context) {
@@ -465,7 +488,11 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.current_function = Some(name);
-    context.in_macro_function = macro_.is_some();
+    context.definition_kind = if macro_.is_some() {
+        core::DefinitionKind::MacroFunction
+    } else {
+        core::DefinitionKind::Function
+    };
     process_attributes(context, &attributes);
     let compiled_visibility =
         match public_testing_visibility(context.env(), context.current_package(), &name, entry) {
@@ -485,7 +512,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     };
     finalize_ide_info(context);
     context.current_function = None;
-    context.in_macro_function = false;
+    context.definition_kind = core::DefinitionKind::Function;
     context.pop_warning_filter_scope();
     T::Function {
         doc,
@@ -580,6 +607,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
 
 fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) -> T::Constant {
     assert!(context.constraints.is_empty());
+    context.definition_kind = core::DefinitionKind::Constant;
 
     let N::Constant {
         doc,
