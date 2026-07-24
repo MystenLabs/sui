@@ -161,6 +161,17 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .node_metrics
             .handle_send_block_deserialize_latency
             .observe(recv_timer.elapsed().as_secs_f64());
+        let pre_receive_age_s = self
+            .context
+            .clock
+            .timestamp_utc_ms()
+            .saturating_sub(signed_block.timestamp_ms()) as f64
+            / 1000.0;
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_pre_receive_age
+            .observe(pre_receive_age_s);
 
         // Reject blocks not produced by the peer.
         if peer != signed_block.author() {
@@ -182,8 +193,25 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // Reject blocks failing parsing and validations.
         let block_verifier = self.block_verifier.clone();
         let serialized = serialized_block.block.clone();
+        let verify_spawned = std::time::Instant::now();
+        let queue_wait_hist = self
+            .context
+            .metrics
+            .node_metrics
+            .handle_send_block_verify_queue_wait
+            .clone();
+        let exec_hist = self
+            .context
+            .metrics
+            .node_metrics
+            .handle_send_block_verify_exec
+            .clone();
         let (verified_block, reject_txn_votes) = tokio::task::spawn_blocking(move || {
-            block_verifier.verify_and_vote(signed_block, serialized)
+            queue_wait_hist.observe(verify_spawned.elapsed().as_secs_f64());
+            let exec_start = std::time::Instant::now();
+            let result = block_verifier.verify_and_vote(signed_block, serialized);
+            exec_hist.observe(exec_start.elapsed().as_secs_f64());
+            result
         })
         .await
         .expect("verify_and_vote blocking task panicked")
@@ -294,16 +322,53 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // The block is verified and current, so record own votes on the block
         // before sending the block to Core.
         if self.context.protocol_config.transaction_voting_enabled() {
+            let vote_timer = std::time::Instant::now();
             self.transaction_vote_tracker
                 .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+            self.context
+                .metrics
+                .node_metrics
+                .handle_send_block_vote_record_latency
+                .observe(vote_timer.elapsed().as_secs_f64());
         }
 
         // Send the block to Core to try accepting it into the DAG.
+        let core_timer = std::time::Instant::now();
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block.clone()])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+        let core_dispatch_s = core_timer.elapsed().as_secs_f64();
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_core_dispatch_latency
+            .observe(core_dispatch_s);
+        let age_accepted_s = self
+            .context
+            .clock
+            .timestamp_utc_ms()
+            .saturating_sub(verified_block.timestamp_ms()) as f64
+            / 1000.0;
+        self.context
+            .metrics
+            .node_metrics
+            .handle_send_block_age_accepted
+            .observe(age_accepted_s);
+        // Tail-sampled ledger trace: slow blocks always, plus ~1/256 of all blocks.
+        if age_accepted_s > 0.5 || (block_ref.round % 251) == 0 {
+            info!(
+                "block_ledger block={} peer={} size={} pre_receive_s={:.4} total_handle_s={:.4} core_dispatch_s={:.4} age_accepted_s={:.4}",
+                block_ref,
+                peer_hostname,
+                verified_block.serialized().len(),
+                pre_receive_age_s,
+                recv_timer.elapsed().as_secs_f64(),
+                core_dispatch_s,
+                age_accepted_s,
+            );
+        }
 
         // Schedule fetching missing ancestors from this peer in the background.
         if !missing_ancestors.is_empty() {
