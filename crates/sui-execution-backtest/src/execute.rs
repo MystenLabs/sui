@@ -8,7 +8,6 @@
 use std::collections::BTreeMap;
 
 use move_core_types::language_storage::TypeTag;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::SuiAddress;
@@ -212,38 +211,7 @@ pub(crate) fn execute_one_transaction(
         }
     };
 
-    let accumulator_version = executed
-        .effects
-        .accessed_consensus_objects()
-        .into_iter()
-        .find_map(|ico| match ico {
-            InputConsensusObject::Mutate((id, v, _)) | InputConsensusObject::ReadOnly((id, v, _))
-                if id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
-            {
-                Some(v)
-            }
-            _ => None,
-        })
-        .map(|version| {
-            let initial_shared_version = sui_types::storage::ObjectStore::get_object_by_key(
-                store,
-                &SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                version,
-            )
-            .and_then(|object| object.owner().start_version())
-            .unwrap_or_else(|| {
-                panic!(
-                    "accumulator root at version {version} must be a consensus object in the scan store"
-                )
-            });
-            ConsensusObjectVersion {
-                initial_shared_version,
-                version,
-            }
-        });
-    let system_object_versions = SystemObjectVersions {
-        accumulator_version,
-    };
+    let system_object_versions = SystemObjectVersions::from_effects(&executed.effects, store);
 
     let gas_data = txn_data.gas_data().clone();
     let signer = txn_data.sender();

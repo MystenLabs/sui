@@ -7,11 +7,13 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
+use crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use crate::base_types::{
-    ConsensusObjectSequenceKey, FullObjectID, FullObjectRef, SuiAddress, TransactionDigest,
-    VersionNumber,
+    ConsensusObjectSequenceKey, ConsensusObjectVersion, FullObjectID, FullObjectRef, SuiAddress,
+    SystemObjectVersions, TransactionDigest, VersionNumber,
 };
 use crate::committee::EpochId;
+use crate::effects::InputConsensusObject;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError, SuiErrorKind};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
@@ -793,6 +795,40 @@ pub fn get_transaction_output_objects(
 }
 
 // Returns an iterator over the ObjectKey's of objects read or written by this transaction
+impl SystemObjectVersions<ConsensusObjectVersion> {
+    pub fn from_effects(effects: &TransactionEffects, store: &dyn ObjectStore) -> Self {
+        let accumulator_version = effects
+            .accessed_consensus_objects()
+            .into_iter()
+            .find_map(|ico| match ico {
+                InputConsensusObject::Mutate((id, version, _))
+                | InputConsensusObject::ReadOnly((id, version, _))
+                    if id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
+                {
+                    Some(version)
+                }
+                _ => None,
+            })
+            .map(|version| {
+                let initial_shared_version = store
+                    .get_object_by_key(&SUI_ACCUMULATOR_ROOT_OBJECT_ID, version)
+                    .and_then(|object| object.owner().start_version())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "accumulator root at version {version} must be a consensus object in the store"
+                        )
+                    });
+                ConsensusObjectVersion {
+                    initial_shared_version,
+                    version,
+                }
+            });
+        SystemObjectVersions {
+            accumulator_version,
+        }
+    }
+}
+
 pub fn get_transaction_object_set(
     transaction: &TransactionData,
     effects: &TransactionEffects,

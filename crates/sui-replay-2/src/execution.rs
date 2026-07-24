@@ -22,15 +22,11 @@ use std::{
 };
 use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{
-    base_types::{
-        ConsensusObjectVersion, ObjectID, ObjectRef, SequenceNumber, SystemObjectVersions,
-        VersionNumber,
-    },
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SystemObjectVersions, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI},
+    effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     gas::SuiGasStatus,
@@ -133,35 +129,7 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
-    let accumulator_version = expected_effects
-        .accessed_consensus_objects()
-        .into_iter()
-        .find_map(|ico| match ico {
-            InputConsensusObject::Mutate((id, version, _))
-            | InputConsensusObject::ReadOnly((id, version, _))
-                if id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
-            {
-                Some(version)
-            }
-            _ => None,
-        })
-        .map(|version| {
-            let initial_shared_version =
-                sui_types::storage::ObjectStore::get_object_by_key(&store, &SUI_ACCUMULATOR_ROOT_OBJECT_ID, version)
-                    .and_then(|object| object.owner().start_version())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "accumulator root at version {version} must be a consensus object in the replay store"
-                        )
-                    });
-            ConsensusObjectVersion {
-                initial_shared_version,
-                version,
-            }
-        });
-    let system_object_versions = SystemObjectVersions {
-        accumulator_version,
-    };
+    let system_object_versions = SystemObjectVersions::from_effects(&expected_effects, &store);
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
