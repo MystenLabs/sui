@@ -57,17 +57,7 @@ A kill-switch lets you halt all agent operations immediately. Implement two laye
 
 The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction.
 
-```typescript
-function assertNotPaused() {
-  if (process.env.AGENT_PAUSED === 'true') {
-    throw new Error('Agent is paused via kill-switch');
-  }
-}
-
-// Check before every transaction
-assertNotPaused();
-const result = await client.signAndExecuteTransaction({ transaction: tx, signer });
-```
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="kill-switch" />
 
 For teams using feature flag services (LaunchDarkly, Unleash, or similar), check the flag instead of an environment variable. This lets you toggle the kill-switch without redeploying.
 
@@ -144,37 +134,7 @@ Sui transactions are atomic. They either fully succeed or fully revert. But netw
 
 4. **Only retry if the transaction was never submitted.** If the digest does not exist onchain and you received a network error during submission, it is safe to retry.
 
-```typescript
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-async function safeExecute(
-  client: SuiGrpcClient,
-  tx: Transaction,
-  signer: Ed25519Keypair,
-  idempotencyKey: string,
-  db: IdempotencyStore,
-) {
-  // Check if this operation already succeeded
-  const existing = await db.get(idempotencyKey);
-  if (existing) {
-    return existing;
-  }
-
-  const result = await signer.signAndExecuteTransaction({ transaction: tx, client });
-
-  if (result.$kind === 'FailedTransaction') {
-    throw new Error(`Transaction failed: ${result.FailedTransaction.status.error?.message}`);
-  }
-
-  // Record success
-  await db.set(idempotencyKey, result.Transaction);
-
-  // Wait for indexing
-  await client.waitForTransaction({ digest: result.Transaction.digest });
-
-  return result.Transaction;
-}
-```
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="safe-execute" />
 
 ### Idempotency keys
 
@@ -207,87 +167,13 @@ public fun mark_processed(store: &mut ProcessedKeys, key: String) {
 
 A circuit breaker halts the agent after a configurable number of consecutive failures. This prevents an agent from burning gas on transactions that consistently fail due to an upstream issue.
 
-```typescript
-class CircuitBreaker {
-  private failures = 0;
-  private lastFailure = 0;
-
-  constructor(
-    private maxFailures: number = 5,
-    private resetAfterMs: number = 60_000,
-  ) {}
-
-  recordSuccess() {
-    this.failures = 0;
-  }
-
-  recordFailure() {
-    this.failures++;
-    this.lastFailure = Date.now();
-  }
-
-  isOpen(): boolean {
-    // Reset if enough time has passed since the last failure
-    if (this.failures > 0 && Date.now() - this.lastFailure > this.resetAfterMs) {
-      this.failures = 0;
-      return false;
-    }
-    return this.failures >= this.maxFailures;
-  }
-}
-
-// Usage
-const breaker = new CircuitBreaker(5, 60_000);
-
-async function executeWithBreaker(tx: Transaction) {
-  if (breaker.isOpen()) {
-    throw new Error('Circuit breaker open — too many consecutive failures');
-  }
-
-  try {
-    const result = await client.signAndExecuteTransaction({ transaction: tx, signer });
-    breaker.recordSuccess();
-    return result;
-  } catch (error) {
-    breaker.recordFailure();
-    throw error;
-  }
-}
-```
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="circuit-breaker" />
 
 ## Rate limiting
 
 Enforce per-agent rate limits to cap how many transactions the agent submits per minute or per hour. This protects against bugs that cause rapid-fire transaction submission.
 
-```typescript
-class RateLimiter {
-  private timestamps: number[] = [];
-
-  constructor(
-    private maxRequests: number,
-    private windowMs: number,
-  ) {}
-
-  tryAcquire(): boolean {
-    const now = Date.now();
-    this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
-
-    if (this.timestamps.length >= this.maxRequests) {
-      return false;
-    }
-
-    this.timestamps.push(now);
-    return true;
-  }
-}
-
-// Allow at most 10 transactions per minute
-const limiter = new RateLimiter(10, 60_000);
-
-if (!limiter.tryAcquire()) {
-  throw new Error('Rate limit exceeded');
-}
-```
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="rate-limiter" />
 
 ## Monitoring checklist
 
@@ -301,18 +187,7 @@ Track these metrics for every production agent:
 
 Emit structured logs (JSON) for each transaction attempt:
 
-```typescript
-console.log(JSON.stringify({
-  event: 'tx_attempt',
-  agent: agentAddress,
-  idempotencyKey,
-  digest: result?.$kind === 'Transaction' ? result.Transaction.digest : undefined,
-  status: result?.$kind === 'Transaction' ? 'success' : 'failure',
-  amount,
-  recipient,
-  timestamp: new Date().toISOString(),
-}));
-```
+<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="structured-log" />
 
 ## Testnet to Mainnet checklist
 
