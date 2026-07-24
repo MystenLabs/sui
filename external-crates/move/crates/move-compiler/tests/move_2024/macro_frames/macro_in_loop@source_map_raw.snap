@@ -1,0 +1,81 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+{
+  "constant_map": {},
+  "definition_location": {"file_hash": "0x..42f51", "start": 53, "end": 57},
+  "enum_map": {},
+  "from_file_path": null,
+  "function_map": {
+    "0": {
+      "code_map": {
+        "0": {"file_hash": "0x..42f51", "start": 165, "end": 166},
+        "1": {"file_hash": "0x..42f51", "start": 157, "end": 162},
+        "2": {"file_hash": "0x..42f51", "start": 183, "end": 184},
+        "3": {"file_hash": "0x..42f51", "start": 187, "end": 189},
+        "4": {"file_hash": "0x..42f51", "start": 185, "end": 186},
+        "5": {"file_hash": "0x..42f51", "start": 176, "end": 227},
+        "7": {"file_hash": "0x..42f51", "start": 214, "end": 215},
+        "8": {"file_hash": "0x..42f51", "start": 107, "end": 108},
+        "9": {"file_hash": "0x..42f51", "start": 105, "end": 106},
+        "10": {"file_hash": "0x..42f51", "start": 205, "end": 206},
+        "11": {"file_hash": "0x..42f51", "start": 176, "end": 227},
+        "12": {"file_hash": "0x..42f51", "start": 237, "end": 238}
+      },
+      "definition_location": {"file_hash": "0x..42f51", "start": 131, "end": 135},
+      "is_native": false,
+      "labels": {
+        "0": 0,
+        "1": 2,
+        "3": 7,
+        "4": 12
+      },
+      "locals": [
+        ["i#1#0", {"file_hash": "0x..42f51", "start": 161, "end": 162}]
+      ],
+      "location": {"file_hash": "0x..42f51", "start": 120, "end": 244},
+      "macro_color_map": [
+        [0, null],
+        [7, 1],
+        [8, 0],
+        [10, null]
+      ],
+      "macro_frame_info": [
+        {
+          "call_loc": {"file_hash": "0x..42f51", "start": 209, "end": 216},
+          "kind": {
+            "MacroBody": {
+              "function_name": "inc",
+              "module_addr": "0000000000000000000000000000000000000000000000000000000000000041",
+              "module_name": "m"
+            }
+          },
+          "parent_index": null,
+          "source_loc": {"file_hash": "0x..42f51", "start": 64, "end": 114}
+        },
+        {
+          "call_loc": {"file_hash": "0x..42f51", "start": 102, "end": 104},
+          "kind": "Argument",
+          "parent_index": 0,
+          "source_loc": {"file_hash": "0x..42f51", "start": 214, "end": 215}
+        }
+      ],
+      "nops": {},
+      "parameters": [],
+      "returns": [
+        {"file_hash": "0x..42f51", "start": 139, "end": 142}
+      ],
+      "type_parameters": []
+    }
+  },
+  "module_name": [
+    "0000000000000000000000000000000000000000000000000000000000000041",
+    "m"
+  ],
+  "struct_map": {},
+  "version": 3
+}

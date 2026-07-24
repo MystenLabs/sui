@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{canonicalize_handles, context::*, optimize};
+use super::{canonicalize_handles, context::*, macro_frame_diagnostics, optimize};
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{ast as G, translate::move_value_from_value_},
@@ -23,8 +23,12 @@ use crate::{
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{
-        ide::IDEInfo, known_attributes::AttributeKind_, program_info::ModuleInfo,
-        unique_map::UniqueMap, *,
+        ide::IDEInfo,
+        known_attributes::AttributeKind_,
+        macro_frames::{ExpansionColor, MacroInfo},
+        program_info::ModuleInfo,
+        unique_map::UniqueMap,
+        *,
     },
 };
 use move_binary_format::file_format as F;
@@ -337,6 +341,7 @@ fn module(
         | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
+    let function_color_data = std::mem::take(&mut context.function_color_data);
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
         datatype_declarations,
@@ -367,7 +372,7 @@ fn module(
         functions,
     };
     let deps: Vec<&F::CompiledModule> = vec![];
-    let (mut module, source_map) =
+    let (mut module, mut source_map) =
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
             Err(e) => {
@@ -378,6 +383,19 @@ fn module(
                 return None;
             }
         };
+    populate_macro_frame_info(&mut source_map, &module, &function_color_data);
+    if compilation_env
+        .modes()
+        .contains(&Symbol::from(macro_frames::MACRO_FRAMES_MODE))
+    {
+        macro_frame_diagnostics::emit_macro_frame_diagnostics(
+            reporter,
+            &source_map,
+            &module,
+            compilation_env.mapped_files(),
+        );
+    }
+    compact_macro_color_maps(&mut source_map);
     canonicalize_handles::in_module(&mut module, &address_names(dependency_orderings.keys()));
     let function_infos = module_function_infos(&module, &source_map, &collected_function_infos);
     let module = NamedCompiledModule {
@@ -395,6 +413,120 @@ fn module(
         named_module: module,
         function_infos,
     })
+}
+
+/// After compilation, populate macro_frame_info on the source map by walking
+/// the `Arc<MacroInfo>` parent chains from per-instruction expansion colors.
+fn populate_macro_frame_info(
+    source_map: &mut SourceMap,
+    compiled_module: &F::CompiledModule,
+    function_color_data: &BTreeMap<Symbol, Vec<ExpansionColor>>,
+) {
+    use move_bytecode_source_map::source_map::MacroFrameInfoEntry;
+    use std::collections::HashMap as StdHashMap;
+
+    for (fdef_idx, fsm) in source_map.function_source_maps_mut() {
+        let func_idx = fdef_idx as usize;
+        if func_idx >= compiled_module.function_defs.len() {
+            continue;
+        }
+        let fdef = &compiled_module.function_defs[func_idx];
+        let fhandle = &compiled_module.function_handles[fdef.function.0 as usize];
+        let fname_str = compiled_module.identifiers[fhandle.name.0 as usize].as_str();
+        let fname_sym = Symbol::from(fname_str);
+
+        let color_data = match function_color_data.get(&fname_sym) {
+            Some(data) => data,
+            None => continue,
+        };
+
+        // The color data is indexed by bytecode offset, which relies on the
+        // IR compiler emitting exactly one instruction per IR bytecode. If
+        // the counts ever diverge, drop this function's macro frame info —
+        // missing debug info is better than misattributed frames.
+        let code_len = fdef.code.as_ref().map_or(0, |code| code.code.len());
+        if color_data.len() != code_len {
+            debug_assert!(
+                false,
+                "color metadata instruction count mismatch in {}: bytecode has {} instructions, colors has {} entries",
+                fname_str,
+                code_len,
+                color_data.len(),
+            );
+            continue;
+        }
+
+        // Collect all unique MacroInfo nodes (by Arc pointer identity)
+        // including ancestors reachable via parent chains.
+        let mut ptr_to_index: StdHashMap<*const MacroInfo, u32> = StdHashMap::new();
+        let mut ordered_nodes: Vec<Arc<MacroInfo>> = Vec::new();
+
+        fn register_node(
+            node: &Arc<MacroInfo>,
+            ptr_to_index: &mut StdHashMap<*const MacroInfo, u32>,
+            ordered_nodes: &mut Vec<Arc<MacroInfo>>,
+        ) {
+            let ptr = Arc::as_ptr(node);
+            if ptr_to_index.contains_key(&ptr) {
+                return;
+            }
+            // Register ancestors first so parent indices are always lower.
+            if let Some(ref parent) = node.parent {
+                register_node(parent, ptr_to_index, ordered_nodes);
+            }
+            let index = ordered_nodes.len() as u32;
+            ptr_to_index.insert(ptr, index);
+            ordered_nodes.push(Arc::clone(node));
+        }
+
+        // Register nodes from post-optimization instruction colors.
+        for node in color_data.iter().flatten() {
+            register_node(node, &mut ptr_to_index, &mut ordered_nodes);
+        }
+
+        if ordered_nodes.is_empty() {
+            continue;
+        }
+
+        // Build MacroFrameInfoEntry records.
+        fsm.macro_frame_info = ordered_nodes
+            .iter()
+            .map(|node| {
+                let parent_index = node
+                    .parent
+                    .as_ref()
+                    .map(|p| *ptr_to_index.get(&Arc::as_ptr(p)).unwrap());
+                MacroFrameInfoEntry {
+                    kind: node.kind.clone(),
+                    source_loc: node.source_loc,
+                    call_loc: node.call_loc,
+                    parent_index,
+                }
+            })
+            .collect();
+
+        // Build macro_color_map: instruction offset → frame index.
+        fsm.macro_color_map = color_data
+            .iter()
+            .enumerate()
+            .map(|(offset, color)| {
+                let index = color
+                    .as_ref()
+                    .map(|node| *ptr_to_index.get(&Arc::as_ptr(node)).unwrap());
+                (offset as F::CodeOffset, index)
+            })
+            .collect();
+    }
+}
+
+/// Compact stored macro-color maps into segment maps after diagnostics have
+/// consumed the full per-instruction color data.
+fn compact_macro_color_maps(source_map: &mut SourceMap) {
+    for (_, fsm) in source_map.function_source_maps_mut() {
+        for (offset, frame_idx) in std::mem::take(&mut fsm.macro_color_map) {
+            fsm.add_color_mapping(offset, frame_idx);
+        }
+    }
 }
 
 /// Generate a mapping from numerical address and module name to named address, for modules whose
@@ -861,16 +993,19 @@ fn function_body(
     blocks.sort_by_key(|(lbl, _)| *lbl);
 
     let mut bytecode_blocks = Vec::new();
+    let mut block_colors: optimize::BlockColors = Vec::new();
     for (idx, (lbl, basic_block)) in blocks.into_iter().enumerate() {
         // first idx should be the start label
         assert!(idx != 0 || lbl == start);
         assert!(idx == bytecode_blocks.len());
 
+        context.current_block_colors = Vec::new();
         let mut code = IR::BytecodeBlock::new();
         for cmd in basic_block {
             command(context, &mut code, cmd);
         }
         bytecode_blocks.push((label(lbl), code));
+        block_colors.push(std::mem::take(&mut context.current_block_colors));
     }
 
     let loop_heads = block_info
@@ -878,7 +1013,26 @@ fn function_body(
         .filter(|(_lbl, info)| matches!(info, G::BlockInfo::LoopHead(_)))
         .map(|(lbl, _)| label(lbl))
         .collect();
-    optimize::code(f, &loop_heads, &mut locals, &mut bytecode_blocks);
+    optimize::code(
+        f,
+        &loop_heads,
+        &mut locals,
+        &mut bytecode_blocks,
+        &mut block_colors,
+    );
+
+    let instruction_count = bytecode_blocks
+        .iter()
+        .map(|(_, block)| block.len())
+        .sum::<usize>();
+    let flat_colors: Vec<ExpansionColor> = block_colors.into_iter().flatten().collect();
+    debug_assert!(
+        instruction_count == flat_colors.len(),
+        "color metadata instruction count mismatch: bytecode has {} instructions, colors has {} entries",
+        instruction_count,
+        flat_colors.len(),
+    );
+    context.function_color_data.insert(f.0.value, flat_colors);
 
     (locals, bytecode_blocks)
 }
@@ -1046,9 +1200,19 @@ fn label(lbl: H::Label) -> IR::BlockLabel_ {
     IR::BlockLabel_(format!("{}", lbl).into())
 }
 
-fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): H::Command) {
+fn push_instr(context: &mut Context, code: &mut IR::BytecodeBlock, instr: IR::Bytecode) {
+    code.push(instr);
+    context.current_block_colors.push(context.color.clone());
+}
+
+fn command(
+    context: &mut Context,
+    code: &mut IR::BytecodeBlock,
+    csp!(loc, color, cmd_): H::Command,
+) {
     use H::Command_ as C;
     use IR::Bytecode_ as B;
+    context.color = color;
     match cmd_ {
         C::Assign(_, ls, e) => {
             exp(context, code, e);
@@ -1057,31 +1221,31 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
         C::Mutate(eref, ervalue) => {
             exp(context, code, *ervalue);
             exp(context, code, *eref);
-            code.push(sp(loc, B::WriteRef));
+            push_instr(context, code, sp(loc, B::WriteRef));
         }
         C::Abort(_, ecode) => {
             exp(context, code, ecode);
-            code.push(sp(loc, B::Abort));
+            push_instr(context, code, sp(loc, B::Abort));
         }
         C::Return { exp: e, .. } => {
             exp(context, code, e);
-            code.push(sp(loc, B::Ret));
+            push_instr(context, code, sp(loc, B::Ret));
         }
         C::IgnoreAndPop { pop_num, exp: e } => {
             exp(context, code, e);
             for _ in 0..pop_num {
-                code.push(sp(loc, B::Pop));
+                push_instr(context, code, sp(loc, B::Pop));
             }
         }
-        C::Jump { target, .. } => code.push(sp(loc, B::Branch(label(target)))),
+        C::Jump { target, .. } => push_instr(context, code, sp(loc, B::Branch(label(target)))),
         C::JumpIf {
             cond,
             if_true,
             if_false,
         } => {
             exp(context, code, cond);
-            code.push(sp(loc, B::BrFalse(label(if_false))));
-            code.push(sp(loc, B::Branch(label(if_true))));
+            push_instr(context, code, sp(loc, B::BrFalse(label(if_false))));
+            push_instr(context, code, sp(loc, B::Branch(label(if_true))));
         }
         C::VariantSwitch {
             subject,
@@ -1094,7 +1258,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
                 .into_iter()
                 .map(|(variant, arm_lbl)| (context.variant_name(variant), sp(loc, label(arm_lbl))))
                 .collect::<Vec<_>>();
-            code.push(sp(loc, B::VariantSwitch(name, arms)));
+            push_instr(context, code, sp(loc, B::VariantSwitch(name, arms)));
         }
         C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
@@ -1118,56 +1282,60 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
     use H::LValue_ as L;
     use IR::Bytecode_ as B;
     match l_ {
-        L::Ignore => code.push(sp(loc, B::Pop)),
+        L::Ignore => push_instr(context, code, sp(loc, B::Pop)),
         L::Var {
             var: v,
             unused_assignment,
             ty,
         } => {
             if unused_assignment && ty.value.abilities(loc).has_ability_(Ability_::Drop) {
-                code.push(sp(loc, B::Pop));
+                push_instr(context, code, sp(loc, B::Pop));
             } else {
-                code.push(sp(loc, B::StLoc(var(v))));
+                push_instr(context, code, sp(loc, B::StLoc(var(v))));
             }
         }
 
         L::Unpack(s, tys, field_ls) if field_ls.is_empty() => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Unpack(n, base_types(context, tys))));
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Unpack(n, btys)));
             // Pop off false
-            code.push(sp(loc, B::Pop));
+            push_instr(context, code, sp(loc, B::Pop));
         }
 
         L::Unpack(s, tys, field_ls) => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Unpack(n, base_types(context, tys))));
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Unpack(n, btys)));
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
 
         L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) if field_ls.is_empty() => {
             let n = context.enum_definition_name(context.current_module().unwrap(), e);
-            code.push(sp(
-                loc,
-                B::UnpackVariant(
-                    n,
-                    context.variant_name(v),
-                    base_types(context, tys),
-                    convert_unpack_type(unpack_type),
+            let vn = context.variant_name(v);
+            let btys = base_types(context, tys);
+            push_instr(
+                context,
+                code,
+                sp(
+                    loc,
+                    B::UnpackVariant(n, vn, btys, convert_unpack_type(unpack_type)),
                 ),
-            ));
+            );
         }
         L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) => {
             let n = context.enum_definition_name(context.current_module().unwrap(), e);
-            code.push(sp(
-                loc,
-                B::UnpackVariant(
-                    n,
-                    context.variant_name(v),
-                    base_types(context, tys),
-                    convert_unpack_type(unpack_type),
+            let vn = context.variant_name(v);
+            let btys = base_types(context, tys);
+            push_instr(
+                context,
+                code,
+                sp(
+                    loc,
+                    B::UnpackVariant(n, vn, btys, convert_unpack_type(unpack_type)),
                 ),
-            ));
+            );
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
@@ -1191,7 +1359,9 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
     use Value_ as V;
-    let sp!(loc, e_) = e.exp;
+    let saved_color = context.color.clone();
+    context.color = e.exp.color.clone().unwrap_or_else(|| saved_color.clone());
+    let csp!(loc, _, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),
         E::UnresolvedError => panic!("ICE should not have reached compilation if there are errors"),
@@ -1218,14 +1388,17 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     B::LdConst(ty, move_value_from_value_(v_))
                 }
             };
-            code.push(sp(loc, ld_value));
+            push_instr(context, code, sp(loc, ld_value));
         }
         E::Move { var: v, .. } => {
-            code.push(sp(loc, B::MoveLoc(var(v))));
+            push_instr(context, code, sp(loc, B::MoveLoc(var(v))));
         }
-        E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
+        E::Copy { var: v, .. } => push_instr(context, code, sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
+        E::Constant(c) => {
+            let cn = context.constant_name(c);
+            push_instr(context, code, sp(loc, B::LdNamedConst(cn)))
+        }
 
         E::ErrorConstant {
             line_number_loc,
@@ -1242,14 +1415,19 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             // record the line number essentially.
             let line_number = std::cmp::min(line_no, u16::MAX as usize) as u16;
 
-            code.push(sp(
-                loc,
-                B::ErrorConstant {
-                    line_number,
-                    error_code,
-                    constant: error_constant.map(|n| context.constant_name(n)),
-                },
-            ));
+            let constant = error_constant.map(|n| context.constant_name(n));
+            push_instr(
+                context,
+                code,
+                sp(
+                    loc,
+                    B::ErrorConstant {
+                        line_number,
+                        error_code,
+                        constant,
+                    },
+                ),
+            );
         }
 
         E::ModuleCall(mcall) => {
@@ -1268,23 +1446,23 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Freeze(er) => {
             exp(context, code, *er);
-            code.push(sp(loc, B::FreezeRef));
+            push_instr(context, code, sp(loc, B::FreezeRef));
         }
 
         E::Dereference(er) => {
             exp(context, code, *er);
-            code.push(sp(loc, B::ReadRef));
+            push_instr(context, code, sp(loc, B::ReadRef));
         }
 
         E::UnaryExp(op, er) => {
             exp(context, code, *er);
-            unary_op(code, op);
+            unary_op(context, code, op);
         }
 
         E::BinopExp(el, op, er) => {
             exp(context, code, *el);
             exp(context, code, *er);
-            binary_op(code, op);
+            binary_op(context, code, op);
         }
 
         E::Pack(s, tys, field_args) if field_args.is_empty() => {
@@ -1292,10 +1470,11 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             // empty structs have a dummy field of type 'bool' added
 
             // Push on fake field
-            code.push(sp(loc, B::LdFalse));
+            push_instr(context, code, sp(loc, B::LdFalse));
 
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Pack(n, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Pack(n, btys)))
         }
 
         E::Pack(s, tys, field_args) => {
@@ -1303,14 +1482,16 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 exp(context, code, earg);
             }
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
-            code.push(sp(loc, B::Pack(n, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Pack(n, btys)))
         }
 
         E::PackVariant(e, v, tys, field_args) if field_args.is_empty() => {
             // unlike structs, empty fields _are_ allowed in the bytecode
             let e = context.enum_definition_name(context.current_module().unwrap(), e);
             let v = context.variant_name(v);
-            code.push(sp(loc, B::PackVariant(e, v, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::PackVariant(e, v, btys)))
         }
 
         E::PackVariant(e, v, tys, field_args) => {
@@ -1319,7 +1500,8 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             }
             let e = context.enum_definition_name(context.current_module().unwrap(), e);
             let v = context.variant_name(v);
-            code.push(sp(loc, B::PackVariant(e, v, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::PackVariant(e, v, btys)))
         }
 
         E::Vector(_, n, bt, args) => {
@@ -1327,7 +1509,11 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             for arg in args {
                 exp(context, code, arg);
             }
-            code.push(sp(loc, B::VecPack(ty, n.try_into().unwrap())))
+            push_instr(
+                context,
+                code,
+                sp(loc, B::VecPack(ty, n.try_into().unwrap())),
+            )
         }
 
         E::Multiple(es) => {
@@ -1344,7 +1530,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             } else {
                 B::ImmBorrowField(n, tys, field(f))
             };
-            code.push(sp(loc, instr));
+            push_instr(context, code, sp(loc, instr));
         }
 
         E::BorrowLocal(mut_, v) => {
@@ -1353,7 +1539,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             } else {
                 B::ImmBorrowLoc(var(v))
             };
-            code.push(sp(loc, instr));
+            push_instr(context, code, sp(loc, instr));
         }
 
         E::Cast(el, sp!(_, bt_)) => {
@@ -1370,9 +1556,10 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     panic!("ICE type checking failed. unexpected cast")
                 }
             };
-            code.push(sp(loc, instr));
+            push_instr(context, code, sp(loc, instr));
         }
     }
+    context.color = saved_color;
 }
 
 fn module_call(
@@ -1385,53 +1572,65 @@ fn module_call(
 ) {
     use IR::Bytecode_ as B;
     match fake_natives::resolve_builtin(&mident, &fname) {
-        Some(mk_bytecode) => code.push(sp(loc, mk_bytecode(base_types(context, tys)))),
+        Some(mk_bytecode) => {
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, mk_bytecode(btys)))
+        }
         _ => {
             let (m, n) = context.qualified_function_name(&mident, fname);
-            code.push(sp(loc, B::Call(m, n, base_types(context, tys))))
+            let btys = base_types(context, tys);
+            push_instr(context, code, sp(loc, B::Call(m, n, btys)))
         }
     }
 }
 
-fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
+fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
     use IR::Bytecode_ as B;
     use UnaryOp_ as O;
-    code.push(sp(
-        loc,
-        match op_ {
-            O::Not => B::Not,
-        },
-    ));
+    push_instr(
+        context,
+        code,
+        sp(
+            loc,
+            match op_ {
+                O::Not => B::Not,
+            },
+        ),
+    );
 }
 
-fn binary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
+fn binary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): BinOp) {
     use BinOp_ as O;
     use IR::Bytecode_ as B;
-    code.push(sp(
-        loc,
-        match op_ {
-            O::Add => B::Add,
-            O::Sub => B::Sub,
-            O::Mul => B::Mul,
-            O::Mod => B::Mod,
-            O::Div => B::Div,
-            O::BitOr => B::BitOr,
-            O::BitAnd => B::BitAnd,
-            O::Xor => B::Xor,
-            O::Shl => B::Shl,
-            O::Shr => B::Shr,
+    push_instr(
+        context,
+        code,
+        sp(
+            loc,
+            match op_ {
+                O::Add => B::Add,
+                O::Sub => B::Sub,
+                O::Mul => B::Mul,
+                O::Mod => B::Mod,
+                O::Div => B::Div,
+                O::BitOr => B::BitOr,
+                O::BitAnd => B::BitAnd,
+                O::Xor => B::Xor,
+                O::Shl => B::Shl,
+                O::Shr => B::Shr,
 
-            O::And => B::And,
-            O::Or => B::Or,
+                O::And => B::And,
+                O::Or => B::Or,
 
-            O::Eq => B::Eq,
-            O::Neq => B::Neq,
+                O::Eq => B::Eq,
+                O::Neq => B::Neq,
 
-            O::Lt => B::Lt,
-            O::Gt => B::Gt,
+                O::Lt => B::Lt,
+                O::Gt => B::Gt,
 
-            O::Le => B::Le,
-            O::Ge => B::Ge,
-        },
-    ));
+                O::Le => B::Le,
+                O::Ge => B::Ge,
+            },
+        ),
+    );
 }

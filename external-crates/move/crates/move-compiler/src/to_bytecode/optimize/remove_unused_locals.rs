@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::BlockColors;
 use crate::parser::ast::FunctionName;
 use move_ir_types::ast as IR;
 use std::collections::BTreeSet;
@@ -12,6 +13,7 @@ pub fn optimize(
     _loop_heads: &BTreeSet<IR::BlockLabel_>,
     locals: &mut Vec<(IR::Var, IR::Type)>,
     blocks: &mut IR::BytecodeBlocks,
+    _colors: &mut BlockColors,
 ) -> bool {
     let mut unused = locals
         .iter()

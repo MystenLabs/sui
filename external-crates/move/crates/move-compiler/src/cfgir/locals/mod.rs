@@ -216,7 +216,7 @@ fn unused_let_muts<T>(
 //**************************************************************************************************
 
 #[growing_stack]
-fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
+fn command(context: &mut Context, csp!(loc, _, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
         C::Assign(case, ls, e) => {

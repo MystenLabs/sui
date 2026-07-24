@@ -721,7 +721,7 @@ mod check_valid_constant {
             // Valid cases
             //*****************************************
             E::Unit { .. } | E::Value(_) | E::Move { .. } | E::Copy { .. } => return,
-            E::Block(seq) => {
+            E::Block(_, seq) => {
                 sequence(context, seq);
                 return;
             }
@@ -800,7 +800,7 @@ mod check_valid_constant {
                 exp(context, eloop);
                 "'loop' expressions are"
             }
-            E::NamedBlock(_, seq) => {
+            E::NamedBlock(_, _, seq) => {
                 sequence(context, seq);
                 "named 'block' expressions are"
             }
@@ -1923,8 +1923,31 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         NE::Block(N::Block {
             name,
             from_macro_argument,
+            expansion_color,
             seq: nseq,
         }) => {
+            let saved_ec = context.current_expansion_color.clone();
+            // Only update for macro-related blocks (ec != None). Regular code
+            // blocks (ec = None) are transparent — they must not reset the
+            // inherited expansion color from an enclosing macro/lambda block.
+            //
+            // Consider:
+            //
+            //   macro fun id($x: u64): u64 { $x }
+            //   macro fun apply($f: |u64| -> u64): u64 { $f(1) }
+            //   fun test(p: u64): u64 {
+            //       apply!(|x| if (x > p) { id!(x) } else { 0 })
+            //   }
+            //
+            // The if-branch inside the lambda body is a compiler-generated
+            // Block(ec=None). Without this guard it would reset
+            // current_expansion_color to None, so when id!() is expanded the
+            // MacroBody frame gets parent=None instead of the Lambda's
+            // info, breaking the parent frame chain.
+            // See test: macro_frames/expansion_assign.
+            if expansion_color.is_some() {
+                context.current_expansion_color = expansion_color.clone();
+            }
             context.maybe_enter_macro_argument(from_macro_argument, nseq.0.color);
             let seq = sequence(context, nseq);
             let seq_ty = sequence_type(&seq).clone();
@@ -1940,11 +1963,15 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 } else {
                     seq_ty
                 };
-                (sp(eloc, final_type.value), TE::NamedBlock(name, seq))
+                (
+                    sp(eloc, final_type.value),
+                    TE::NamedBlock(name, expansion_color, seq),
+                )
             } else {
-                (seq_ty, TE::Block(seq))
+                (seq_ty, TE::Block(expansion_color, seq))
             };
             context.maybe_exit_macro_argument(eloc, from_macro_argument);
+            context.current_expansion_color = saved_ec;
             res
         }
         NE::Lambda(_) => {
@@ -4890,7 +4917,7 @@ fn expand_macro(
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let use_funs = N::UseFuns::new(context.current_call_color());
-            let block = TE::Block((use_funs, seq));
+            let block = TE::Block(context.current_expansion_color.clone(), (use_funs, seq));
             if context.env().ide_mode() {
                 // The first stack entry is the outermost macro call. Argument
                 // frames can appear inside that call stack, but never as the
@@ -4992,6 +5019,7 @@ fn convert_macro_arg_to_block(context: &mut Context, sp!(loc, ne_): N::Exp) -> N
             let block = N::Block {
                 name: None,
                 from_macro_argument: None,
+                expansion_color: None,
                 seq,
             };
             N::Exp_::Block(block)

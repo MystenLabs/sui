@@ -154,6 +154,7 @@ pub struct Context<'env, 'outer> {
     // for generating new variables during match compilation
     next_match_var_id: usize,
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
+    pub current_expansion_color: macro_frames::ExpansionColor,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
     /// True only while speculatively typing an IDE macro body with diagnostics thrown away.
@@ -331,9 +332,10 @@ fn pop_use_funs_scope(use_funs: &mut Vec<UseFunsScope>) -> N::UseFuns {
         UseFunsScope_::Outer(_, _) => panic!("ICE outer scope should never be popped"),
         UseFunsScope_::Local(use_funs) => use_funs,
     };
+    let color = color.unwrap_or(0);
     N::UseFuns {
         resolved: use_funs,
-        color: color.unwrap_or(0),
+        color,
         implicit_candidates: UniqueMap::new(),
     }
 }
@@ -546,6 +548,7 @@ impl<'env> ModuleContext<'env> {
             used_module_members: BTreeMap::new(),
             next_match_var_id: 0,
             use_funs,
+            current_expansion_color: None,
             current_function: None,
             in_macro_function: false,
             ide_typing_macro_body: false,
@@ -1050,6 +1053,10 @@ impl<'env, 'outer> Context<'env, 'outer> {
 
     pub fn current_call_color(&self) -> Color {
         self.use_funs.last().unwrap().color.unwrap()
+    }
+
+    pub fn current_expansion_color(&self) -> &macro_frames::ExpansionColor {
+        &self.current_expansion_color
     }
 
     pub fn add_ability_constraint(

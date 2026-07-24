@@ -16,6 +16,7 @@ use crate::{
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
+    shared::macro_frames::ExpansionColor,
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use cfgir::ast::LoopInfo;
@@ -481,7 +482,7 @@ fn constant(
     );
     let value = match final_value {
         Some(H::Exp {
-            exp: sp!(_, H::UnannotatedExp_::Value(value)),
+            exp: csp!(_, _, H::UnannotatedExp_::Value(value)),
             ..
         }) => {
             constant_values
@@ -577,7 +578,7 @@ fn constant_(
     }
     let mut optimized_block = blocks.remove(&start).unwrap();
     let return_cmd = optimized_block.pop_back().unwrap();
-    for sp!(cloc, cmd_) in &optimized_block {
+    for csp!(cloc, _, cmd_) in &optimized_block {
         let e = match cmd_ {
             C::IgnoreAndPop { exp, .. } => exp,
             _ => {
@@ -845,7 +846,7 @@ fn finalize_blocks(
 #[growing_stack]
 fn statement(
     context: &mut Context,
-    sp!(sloc, stmt): H::Statement,
+    csp!(sloc, color, stmt): H::Statement,
     mut current_block: BasicBlock,
 ) -> (BasicBlock, BlockList) {
     use H::{Command_ as C, Statement_ as S};
@@ -859,8 +860,9 @@ fn statement(
             let false_label = context.new_label();
             let phi_label = context.new_label();
 
-            let test_block = VecDeque::from([sp(
+            let test_block = VecDeque::from([csp(
                 sloc,
+                color.clone(),
                 C::JumpIf {
                     cond: *test,
                     if_true: true_label,
@@ -870,11 +872,11 @@ fn statement(
 
             let (true_entry_block, true_blocks) = block_(
                 context,
-                with_last(if_block, make_jump(sloc, phi_label, false)),
+                with_last(if_block, make_jump(sloc, color.clone(), phi_label, false)),
             );
             let (false_entry_block, false_blocks) = block_(
                 context,
-                with_last(else_block, make_jump(sloc, phi_label, false)),
+                with_last(else_block, make_jump(sloc, color, phi_label, false)),
             );
 
             let new_blocks = [(true_label, true_entry_block)]
@@ -905,7 +907,7 @@ fn statement(
                     let arm_label = context.new_label();
                     let (arm_entry_block, arm_entry_blocks) = block_(
                         context,
-                        with_last(arm_block, make_jump(sloc, phi_label, false)),
+                        with_last(arm_block, make_jump(sloc, color.clone(), phi_label, false)),
                     );
                     let mut blocks = [(arm_label, arm_entry_block)]
                         .into_iter()
@@ -918,8 +920,9 @@ fn statement(
 
             arm_blocks.push((phi_label, current_block));
 
-            let test_block = VecDeque::from([sp(
+            let test_block = VecDeque::from([csp(
                 sloc,
+                color,
                 C::VariantSwitch {
                     subject,
                     enum_name,
@@ -939,11 +942,12 @@ fn statement(
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::While);
             let body_label = context.new_label();
 
-            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
+            let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
             let (initial_test_block, test_blocks) = {
-                let test_jump = sp(
+                let test_jump = csp(
                     sloc,
+                    color.clone(),
                     C::JumpIf {
                         cond: *test,
                         if_true: body_label,
@@ -955,7 +959,7 @@ fn statement(
 
             let (body_entry_block, body_blocks) = block_(
                 context,
-                with_last(body, make_jump(sloc, start_label, false)),
+                with_last(body, make_jump(sloc, color, start_label, false)),
             );
 
             context.exit_named_block(&name);
@@ -977,11 +981,11 @@ fn statement(
         } => {
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::Loop);
 
-            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
+            let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
             let (body_entry_block, body_blocks) = block_(
                 context,
-                with_last(body, make_jump(sloc, start_label, false)),
+                with_last(body, make_jump(sloc, color, start_label, false)),
             );
 
             context.exit_named_block(&name);
@@ -997,10 +1001,12 @@ fn statement(
         S::NamedBlock { name, block: body } => {
             let (start_label, end_label) = context.enter_named_block(name, NamedBlockType::Named);
 
-            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
+            let entry_block = VecDeque::from([make_jump(sloc, color.clone(), start_label, false)]);
 
-            let (body_entry_block, body_blocks) =
-                block_(context, with_last(body, make_jump(sloc, end_label, false)));
+            let (body_entry_block, body_blocks) = block_(
+                context,
+                with_last(body, make_jump(sloc, color, end_label, false)),
+            );
 
             context.exit_named_block(&name);
 
@@ -1012,14 +1018,14 @@ fn statement(
 
             (entry_block, new_blocks)
         }
-        S::Command(sp!(cloc, C::Break(name))) => {
+        S::Command(csp!(cloc, color, C::Break(name))) => {
             // Discard the current block because it's dead code.
-            let break_jump = make_jump(cloc, context.named_block_end_label(&name), true);
+            let break_jump = make_jump(cloc, color, context.named_block_end_label(&name), true);
             (VecDeque::from([break_jump]), vec![])
         }
-        S::Command(sp!(cloc, C::Continue(name))) => {
+        S::Command(csp!(cloc, color, C::Continue(name))) => {
             // Discard the current block because it's dead code.
-            let jump = make_jump(cloc, context.named_block_start_label(&name), true);
+            let jump = make_jump(cloc, color, context.named_block_start_label(&name), true);
             (VecDeque::from([jump]), vec![])
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
@@ -1033,19 +1039,23 @@ fn statement(
     }
 }
 
-fn with_last(mut block: H::Block, sp!(loc, cmd): H::Command) -> H::Block {
+fn with_last(mut block: H::Block, csp!(loc, color, cmd): H::Command) -> H::Block {
     match block.iter().last() {
-        Some(sp!(_, H::Statement_::Command(cmd))) if cmd.value.is_hlir_terminal() => block,
+        Some(csp!(_, _, H::Statement_::Command(cmd))) if cmd.value.is_hlir_terminal() => block,
         _ => {
-            let stmt = sp(loc, H::Statement_::Command(sp(loc, cmd)));
+            let stmt = csp(
+                loc,
+                color.clone(),
+                H::Statement_::Command(csp(loc, color, cmd)),
+            );
             block.push_back(stmt);
             block
         }
     }
 }
 
-fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
-    sp(loc, H::Command_::Jump { target, from_user })
+fn make_jump(loc: Loc, color: ExpansionColor, target: Label, from_user: bool) -> H::Command {
+    csp(loc, color, H::Command_::Jump { target, from_user })
 }
 
 // Added to dodge a clippy complaint

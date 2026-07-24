@@ -13,8 +13,8 @@ use crate::{
         FunctionName, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
-        unique_map::UniqueMap,
+        ColorSpanned, Name, NumericalAddress, OptColorSpanned, TName, ast_debug::*,
+        program_info::TypingProgramInfo, unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;
@@ -235,7 +235,7 @@ pub enum Statement_ {
         block: Block,
     },
 }
-pub type Statement = Spanned<Statement_>;
+pub type Statement = ColorSpanned<Statement_>;
 
 pub type Block = VecDeque<Statement>;
 
@@ -278,7 +278,7 @@ pub enum Command_ {
         arms: Vec<(VariantName, Label)>,
     },
 }
-pub type Command = Spanned<Command_>;
+pub type Command = ColorSpanned<Command_>;
 
 // TODO: replace this with the `move_ir_types` one when possible.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -418,7 +418,7 @@ pub enum UnannotatedExp_ {
 
     UnresolvedError,
 }
-pub type UnannotatedExp = Spanned<UnannotatedExp_>;
+pub type UnannotatedExp = OptColorSpanned<UnannotatedExp_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
@@ -1484,7 +1484,16 @@ impl AstDebug for Value_ {
 impl AstDebug for Exp {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Exp { ty, exp } = self;
-        w.annotate(|w| exp.ast_debug(w), ty)
+        if let Some(c) = &exp.color {
+            // compact frame-chain rendering — the derived Debug of the Arc
+            // chain is too verbose for nested macros
+            let frames = match c {
+                Some(info) => info.debug_chain(),
+                None => "[]".to_string(),
+            };
+            w.write(&format!("(color={frames}) "));
+        }
+        w.annotate(|w| exp.value.ast_debug(w), ty)
     }
 }
 

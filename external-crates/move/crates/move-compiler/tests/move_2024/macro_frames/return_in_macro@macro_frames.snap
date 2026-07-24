@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/return_in_macro.move:15:9
+   │
+ 8 │         if ($a < $b) {
+   │             --   -- [2] Argument
+   │             │     
+   │             [1] Argument
+ 9 │             return ($a)
+   │                     -- [3] Argument
+10 │         };
+11 │         $b
+   │         -- [4] Argument
+   ·
+15 │         min!(x, y)
+   │         ^^^^^^^^^^ [0] MacroBody(0x41::m::min)
+   │
+   = Frame transitions (test):
+       15: `min!(x, y)`
+           [] -> [0:MacroBody(min), 1:Argument]
+       15: `min!(x, y)`
+           [0:MacroBody(min), 1:Argument] -> [0:MacroBody(min), 2:Argument]
+       8: `if ($a < $b) {`
+           [0:MacroBody(min), 2:Argument] -> [0:MacroBody(min)]
+       15: `min!(x, y)`
+           [0:MacroBody(min)] -> [0:MacroBody(min), 3:Argument]
+       15: `min!(x, y)`
+           [0:MacroBody(min), 3:Argument] -> []
+       9: `return ($a)`
+           [] -> [0:MacroBody(min)]
+       15: `min!(x, y)`
+           [0:MacroBody(min)] -> [0:MacroBody(min), 4:Argument]
+       15: `min!(x, y)`
+           [0:MacroBody(min), 4:Argument] -> []

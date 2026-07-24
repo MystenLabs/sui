@@ -105,8 +105,8 @@ fn is_simple_deref_ref_exp(exp: &Exp) -> bool {
         | TE::Match(_, _)
         | TE::VariantMatch(_, _, _)
         | TE::Loop { .. }
-        | TE::NamedBlock(_, _)
-        | TE::Block(_)
+        | TE::NamedBlock(_, _, _)
+        | TE::Block(_, _)
         | TE::Dereference(_)
         | TE::UnaryExp(_, _)
         | TE::BinopExp(_, _, _, _)

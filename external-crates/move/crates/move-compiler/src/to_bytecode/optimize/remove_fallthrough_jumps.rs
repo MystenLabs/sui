@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::BlockColors;
 use crate::parser::ast::FunctionName;
 use move_ir_types::ast::{self as IR};
 use std::collections::{BTreeSet, HashMap};
@@ -16,15 +17,17 @@ pub fn optimize(
     loop_heads: &BTreeSet<IR::BlockLabel_>,
     _locals: &mut Vec<(IR::Var, IR::Type)>,
     blocks: &mut IR::BytecodeBlocks,
+    colors: &mut BlockColors,
 ) -> bool {
-    let fall_through_removed = remove_fall_through(loop_heads, blocks);
-    let block_removed = remove_empty_blocks(blocks);
+    let fall_through_removed = remove_fall_through(loop_heads, blocks, colors);
+    let block_removed = remove_empty_blocks(blocks, colors);
     fall_through_removed || block_removed
 }
 
 fn remove_fall_through(
     loop_heads: &BTreeSet<IR::BlockLabel_>,
     blocks: &mut IR::BytecodeBlocks,
+    colors: &mut BlockColors,
 ) -> bool {
     use IR::Bytecode_ as B;
     let mut changed = false;
@@ -36,31 +39,38 @@ fn remove_fall_through(
             continue;
         }
 
-        let remove_last =
-            matches!(&block.last().unwrap().value, B::Branch(lbl) if lbl == next_block);
+        let remove_last = matches!(
+            &block.last().unwrap().value,
+            B::Branch(lbl) if lbl == next_block
+        );
         if remove_last {
             changed = true;
             block.pop();
+            colors[idx].pop(); // keep colors in sync
         }
     }
     changed
 }
 
-fn remove_empty_blocks(blocks: &mut IR::BytecodeBlocks) -> bool {
+fn remove_empty_blocks(blocks: &mut IR::BytecodeBlocks, colors: &mut BlockColors) -> bool {
     let mut label_map = HashMap::new();
     let mut cur_label = None;
     let mut removed = false;
     let old_blocks = std::mem::take(blocks);
-    for (label, block) in old_blocks.into_iter().rev() {
+    // Keep colors in sync with blocks
+    let old_colors = std::mem::take(colors);
+    for ((label, block), block_colors) in old_blocks.into_iter().zip(old_colors).rev() {
         if block.is_empty() {
             removed = true;
         } else {
             cur_label = Some(label.clone());
-            blocks.push((label.clone(), block))
+            blocks.push((label.clone(), block));
+            colors.push(block_colors);
         }
         label_map.insert(label, cur_label.clone().unwrap());
     }
     blocks.reverse();
+    colors.reverse();
 
     if removed {
         super::remap_labels(blocks, &label_map);

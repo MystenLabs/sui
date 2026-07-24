@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/unit_macro.move:10:9
+   │
+ 6 │         assert!($cond, 0);
+   │                 ----- [1,3] Argument
+   ·
+10 │         check!(v > 0);
+   │         ^^^^^^^^^^^^^ [0] MacroBody(0x41::m::check)
+11 │         check!(v < 100);
+   │         --------------- [2] MacroBody(0x41::m::check)
+   │
+   = Frame transitions (test):
+       10: `check!(v > 0);`
+           [] -> [0:MacroBody(check), 1:Argument]
+       6: `assert!($cond, 0);`
+           [0:MacroBody(check), 1:Argument] -> [0:MacroBody(check)]
+       11: `check!(v < 100);`
+           [0:MacroBody(check)] -> [2:MacroBody(check), 3:Argument]
+       6: `assert!($cond, 0);`
+           [2:MacroBody(check), 3:Argument] -> [2:MacroBody(check)]
+       11: `check!(v < 100);`
+           [2:MacroBody(check)] -> []
