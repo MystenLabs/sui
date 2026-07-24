@@ -39,6 +39,15 @@ module 0x2::E {
     }
 }
 
+module 0x2::J {
+    // Generic enum with two variants: exercises `extra_layout_nodes` (one per variant) and
+    // parameter folding across variants.
+    public enum E<T> has copy, drop {
+        A(T),
+        B(T, u64),
+    }
+}
+
 module 0x2::F {
     public struct S<T> has copy, drop {
         f1: T,
