@@ -45,7 +45,7 @@ public fun add<Name: copy + drop + store, Value: store>(
     let hash = hash_type_and_key(object_addr, name);
     assert!(!has_child_object(object_addr, hash), EFieldAlreadyExists);
     let field = Field {
-        id: object::new_uid_from_hash(hash),
+        id: object::new_uid_from_hash(object_addr, hash),
         name,
         value,
     };
