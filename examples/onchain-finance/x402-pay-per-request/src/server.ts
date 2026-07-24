@@ -3,7 +3,7 @@
 
 import crypto from 'node:crypto';
 import express from 'express';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { SuiClient } from '@mysten/sui/client';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 
 // docs::#config
@@ -11,10 +11,7 @@ const PAYMENT_RECIPIENT = '0xYOUR_SERVER_ADDRESS';
 const PRICE_MIST = 1_000_000n; // 0.001 SUI
 const COIN_TYPE = '0x2::sui::SUI';
 
-const client = new SuiGrpcClient({
-	baseUrl: 'https://fullnode.mainnet.sui.io:443',
-	network: 'mainnet',
-});
+const client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443' });
 // docs::/#config
 
 // docs::#challenge-store
@@ -81,28 +78,19 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 	}
 
 	try {
-		// 3. Verify the challenge signature to recover the signer's address.
+		// 3. Verify the challenge signature to recover the signer's public key.
 		//    This proves the requester controls the private key.
 		const challengeBytes = new TextEncoder().encode(challengeId);
-		const signerAddress = await verifyPersonalMessageSignature(
-			challengeBytes,
-			challengeSignature,
-		);
+		const publicKey = await verifyPersonalMessageSignature(challengeBytes, challengeSignature);
+		const signerAddress = publicKey.toSuiAddress();
 
 		// 4. Fetch the transaction and verify the sender matches the signer
-		const result = await client.core.getTransaction({
+		const txResponse = await client.getTransactionBlock({
 			digest,
-			include: { balanceChanges: true, transaction: true },
+			options: { showBalanceChanges: true, showInput: true },
 		});
 
-		if (result.$kind === 'FailedTransaction') {
-			res.status(402).json({ error: 'Transaction failed' });
-			return;
-		}
-
-		const tx = result.Transaction!;
-
-		if (tx.transaction?.sender !== signerAddress) {
+		if (txResponse.transaction?.data.sender !== signerAddress) {
 			res.status(403).json({
 				error: 'Transaction sender does not match challenge signer',
 			});
@@ -110,13 +98,17 @@ const verifyPayment: express.RequestHandler = async (req, res, next) => {
 		}
 
 		// 5. Verify the server received the expected amount
-		const balanceChanges = tx.balanceChanges ?? [];
-		const received = balanceChanges.find(
-			(change) =>
-				change.address === PAYMENT_RECIPIENT &&
+		const balanceChanges = txResponse.balanceChanges ?? [];
+		const received = balanceChanges.find((change) => {
+			const owner = change.owner;
+			return (
+				typeof owner === 'object' &&
+				'AddressOwner' in owner &&
+				owner.AddressOwner === PAYMENT_RECIPIENT &&
 				change.coinType === COIN_TYPE &&
-				BigInt(change.amount) >= PRICE_MIST,
-		);
+				BigInt(change.amount) >= PRICE_MIST
+			);
+		});
 
 		if (!received) {
 			res.status(402).json({ error: 'Payment not found or insufficient amount' });
