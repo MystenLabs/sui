@@ -11,7 +11,10 @@ use consensus_types::block::Round;
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
-use tokio::{task::JoinHandle, time::sleep};
+use tokio::{
+    task::JoinHandle,
+    time::{sleep, timeout},
+};
 use tracing::{debug, error, info};
 
 use crate::{
@@ -22,6 +25,13 @@ use crate::{
     network::{ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
+
+/// Reconnect if no block is received from the stream for this long. A healthy peer proposes
+/// blocks multiple times per second, and (re)subscribing to a peer that has proposed before
+/// immediately yields at least its last proposed block, so timeouts and reconnections stay rare
+/// unless the peer is not proposing. This primarily guards against streams that die without
+/// surfacing a transport error, e.g. a peer whose runtime stalls while its connections stay open.
+const SUBSCRIPTION_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
 /// when subscription streams break. Blocks returned from the peer are sent to the authority
@@ -215,8 +225,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .set(1);
 
             'stream: loop {
-                match blocks.next().await {
-                    Some(block) => {
+                match timeout(SUBSCRIPTION_IDLE_TIMEOUT, blocks.next()).await {
+                    Ok(Some(block)) => {
                         context
                             .metrics
                             .node_metrics
@@ -249,10 +259,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         retries = 0;
                         backoff.reset();
                     }
-                    None => {
+                    Ok(None) => {
                         debug!(
                             "Subscription to blocks from peer {} {} ended",
                             peer, peer_hostname
+                        );
+                        retries += 1;
+                        break 'stream;
+                    }
+                    Err(_) => {
+                        info!(
+                            "Subscription to blocks from peer {} {} made no progress for {:?}",
+                            peer, peer_hostname, SUBSCRIPTION_IDLE_TIMEOUT
                         );
                         retries += 1;
                         break 'stream;
@@ -282,12 +300,27 @@ mod test {
     struct SubscriberTestClient {
         // Records the `last_received` round passed to each subscribe_blocks() call.
         subscribe_calls: Mutex<Vec<Round>>,
+        // Interval between blocks on the returned stream. None keeps the stream open
+        // forever without yielding any block.
+        block_interval: Option<Duration>,
     }
 
     impl SubscriberTestClient {
         fn new() -> Self {
+            Self::new_with_block_interval(Duration::from_millis(1))
+        }
+
+        fn new_pending() -> Self {
             Self {
                 subscribe_calls: Mutex::new(Vec::new()),
+                block_interval: None,
+            }
+        }
+
+        fn new_with_block_interval(interval: Duration) -> Self {
+            Self {
+                subscribe_calls: Mutex::new(Vec::new()),
+                block_interval: Some(interval),
             }
         }
 
@@ -314,8 +347,11 @@ mod test {
             _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
             self.subscribe_calls.lock().push(last_received);
-            let block_stream = stream::unfold((), |_| async {
-                sleep(Duration::from_millis(1)).await;
+            let Some(interval) = self.block_interval else {
+                return Ok(Box::pin(stream::pending()));
+            };
+            let block_stream = stream::unfold((), move |_| async move {
+                sleep(interval).await;
                 let block = ExtendedSerializedBlock {
                     block: Bytes::from(vec![1u8; 8]),
                     excluded_ancestors: vec![],
@@ -405,6 +441,67 @@ mod test {
                 }
             );
         }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_reconnects_when_stream_makes_no_progress() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let network_client = Arc::new(SubscriberTestClient::new_pending());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service,
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        tokio::time::sleep(SUBSCRIPTION_IDLE_TIMEOUT + Duration::from_millis(1)).await;
+
+        assert!(
+            network_client.subscribe_calls().len() >= 2,
+            "an idle subscription should be re-established"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn subscriber_stays_subscribed_when_stream_progresses_within_idle_timeout() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        // Blocks arrive slower than from a healthy peer but within the idle timeout, so the
+        // timeout must reset on every received block and never tear down the subscription.
+        let network_client = Arc::new(SubscriberTestClient::new_with_block_interval(
+            SUBSCRIPTION_IDLE_TIMEOUT - Duration::from_secs(1),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            dag_state,
+        );
+
+        let peer = context.committee.to_authority_index(2).unwrap();
+        subscriber.subscribe(peer);
+
+        tokio::time::sleep(SUBSCRIPTION_IDLE_TIMEOUT * 4).await;
+
+        assert_eq!(
+            network_client.subscribe_calls().len(),
+            1,
+            "a stream that keeps delivering blocks within the idle timeout should not be re-established"
+        );
+        assert!(
+            !authority_service.lock().handle_send_block.is_empty(),
+            "blocks from the slow stream should have been processed"
+        );
     }
 
     // Regression test: `last_received` must be recomputed from DagState before each connection
