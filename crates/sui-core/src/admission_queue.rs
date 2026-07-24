@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Gas-price priority queue admitting user transactions to consensus under load.
+//!
+//! See `consensus_submission_pipeline.md` (same directory) for the end-to-end
+//! submission dataflow and behaviors; keep it in sync with behavior changes here.
+
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use arc_swap::ArcSwap;
@@ -400,10 +405,9 @@ impl AdmissionQueueManager {
 }
 
 /// Shared handle to a live admission queue. Holds the manager (for spawning a
-/// fresh per-epoch actor on reconfig), the per-epoch `ArcSwap` handle, and the
-/// cached (config-derived) bypass threshold. Cloned cheaply by `Arc`; passed
-/// both to `ValidatorService` (for hot-path routing) and through
-/// `ValidatorComponents` (for epoch rotation).
+/// fresh per-epoch actor on reconfig) and the per-epoch `ArcSwap` handle. Cloned
+/// cheaply by `Arc`; passed both to `ValidatorService` (for hot-path routing)
+/// and through `ValidatorComponents` (for epoch rotation).
 #[derive(Clone)]
 pub struct AdmissionQueueContext {
     manager: Arc<AdmissionQueueManager>,
