@@ -372,6 +372,9 @@ const MAINNET_USDB: &str =
 //              function signatures with `&mut TxContext` + any `&mut _` return
 //              that have no non-`TxContext` `&mut U` parameter.
 // Version 132: Enable defer_owned_object_double_spend on devnet.
+//              Enable ptb_tx_context_restrictions: `TxContext` may appear in a
+//              PTB Move call signature at most once mutably or any number of
+//              times immutably (never by value), and never in return position.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1032,6 +1035,13 @@ struct FeatureFlags {
     // safety mechanism there.
     #[serde(skip_serializing_if = "is_false")]
     framework_tx_context_mut_restrictions: bool,
+
+    // If true, the static PTB verifier restricts `TxContext` in Move call
+    // signatures: it may appear at most once as `&mut TxContext`, or any
+    // number of times as `&TxContext`, never by value, and never in return
+    // position (it can never become a PTB result).
+    #[serde(skip_serializing_if = "is_false")]
+    ptb_tx_context_restrictions: bool,
 
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -4562,6 +4572,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                     }
+                    cfg.feature_flags.ptb_tx_context_restrictions = true;
                 }
                 // Use this template when making changes:
                 //
