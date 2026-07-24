@@ -74,18 +74,18 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in mutated");
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.transaction.digest()], 5)
-            .await;
+        ctx.wait_for_txns(&[response.transaction.digest()]).await;
 
         let counter_object = ObjectChecker::new(counter_id)
             .owner(Owner::Shared {
                 initial_shared_version: initial_counter_version,
             })
-            .check_into_object(ctx.get_fullnode_client())
+            .check_into_object(&ctx.get_grpc_client())
             .await;
 
         assert_eq!(
-            counter_object.version, counter_version,
+            counter_object.version(),
+            counter_version,
             "Expect sequence number to be 2"
         );
 

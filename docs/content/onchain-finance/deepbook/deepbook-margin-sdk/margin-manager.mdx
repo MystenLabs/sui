@@ -1,19 +1,53 @@
 ---
 title: Margin Manager SDK
 sidebar_label: Margin Manager
-description: Learn how to use the DeepBook Margin SDK to manage margin accounts and leveraged positions.
+description: >-
+  Learn how to use the DeepBook Margin SDK to manage margin accounts and
+  leveraged positions.
 keywords:
-  [
-    margin manager,
-    margin trading,
-    leveraged trading,
-    borrow,
-    repay,
-    liquidation,
-    deposit,
-    withdraw,
-    deepbook margin sdk,
-  ]
+  - margin manager
+  - margin trading
+  - leveraged trading
+  - borrow
+  - repay
+  - liquidation
+  - deposit
+  - withdraw
+  - deepbook margin sdk
+goal:
+  description: >-
+    Developer can use the DeepBook Margin SDK to manage margin accounts and
+    leveraged positions
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Needs more API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'Margin SDK: Manager'
+    stage: Margin
+questions:
+  - How do I use the Margin Manager SDK?
+  - What is Margin Manager SDK in Sui?
+  - What methods does the Margin Manager SDK provide?
+answer: >-
+  Managing margin accounts is essential for leveraged trading on DeepBook. The
+  Margin Manager SDK provides functions for creating margin managers, depositing
+  collateral, borrowing assets, and managing risk.
 ---
 
 Managing margin accounts is essential for leveraged trading on DeepBook. The Margin Manager SDK provides functions for creating margin managers, depositing collateral, borrowing assets, and managing risk.

@@ -60,6 +60,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             deprecate_global_storage_ops: true,
             disable_entry_point_signature_check: true,
             switch_to_regex_reference_safety: false,
+            framework_tx_context_mut_restrictions: false,
             disallow_jump_orphans: false,
             max_generic_instantiation_type_nodes_per_function: None,
             max_generic_instantiation_type_nodes_per_module: None,

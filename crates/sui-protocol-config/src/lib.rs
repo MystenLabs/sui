@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 130;
+const MAX_PROTOCOL_VERSION: u64 = 132;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -366,6 +366,12 @@ const MAINNET_USDB: &str =
 //              from transaction effects instead of running-max withdraw amounts.
 //              Add the `sui::scratch` per-transaction ephemeral store and its native costs.
 //              Enable zklogin v2 verify (with v1 fallback) for devnet only.
+//              Add an epoch close deadline failsafe for deferred transactions.
+// Version 131: Enable sharing transaction deny configs between validators via consensus.
+//              Enable tx_context_restrictions_verifier: reject system-package
+//              function signatures with `&mut TxContext` + any `&mut _` return
+//              that have no non-`TxContext` `&mut U` parameter.
+// Version 132: Enable defer_owned_object_double_spend on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1018,6 +1024,15 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     allow_references_in_ptbs: bool,
 
+    // If true, the tx_context_restrictions_verifier pass runs at Move module
+    // publish time and rejects system-package signatures with `&mut TxContext`
+    // + any `&mut _` return that have no non-`TxContext` `&mut U` parameter.
+    // User packages are exempt: they can express the same shape through
+    // generic instantiation, so PTB arity and auto-injection checks are the
+    // safety mechanism there.
+    #[serde(skip_serializing_if = "is_false")]
+    framework_tx_context_mut_restrictions: bool,
+
     // Enable display registry protocol
     #[serde(skip_serializing_if = "is_false")]
     enable_display_registry: bool,
@@ -1112,6 +1127,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     defer_unpaid_amplification: bool,
 
+    // If true, defer transactions that won an owned object lock when other transactions
+    // in the same commit attempted to lock the same object (double-spend attempt).
+    #[serde(skip_serializing_if = "is_false")]
+    defer_owned_object_double_spend: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
 
@@ -1159,6 +1179,10 @@ struct FeatureFlags {
     // runs but a violation panics so unexpected violations surface during rollout.
     #[serde(skip_serializing_if = "is_false")]
     enforce_address_balance_change_invariant: bool,
+
+    // If true, validators may broadcast `UpdateTransactionDenyConfig` consensus messages.
+    #[serde(skip_serializing_if = "is_false")]
+    share_transaction_deny_config_in_consensus: bool,
 
     // Enables more granular post-execution checks.
     #[serde(skip_serializing_if = "is_false")]
@@ -1937,6 +1961,8 @@ pub struct ProtocolConfig {
     // The cutoff value for the MED outlier detection
     // scoring_decision_cutoff_value: Option<f64>,
     /// === Execution Version ===
+    // custom_setter: see `set_execution_version_for_testing`, which forbids downgrades.
+    #[custom_setter]
     execution_version: Option<u64>,
 
     // Dictates the threshold (percentage of stake) that is used to calculate the "bad" nodes to be
@@ -1987,6 +2013,12 @@ pub struct ProtocolConfig {
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// Time after the scheduled epoch end (`next_reconfiguration_timestamp_ms`) at which epoch
+    /// close stops waiting for deferred transactions to drain: the epoch is closed even if
+    /// deferred transactions remain unscheduled. They are abandoned and can be resubmitted in the
+    /// next epoch. When unset, epoch close waits indefinitely.
+    epoch_close_deadline_ms: Option<u64>,
 
     /// DEPRECATED. Do not use.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
@@ -2888,6 +2920,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_narwhal_commit: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            epoch_close_deadline_ms: None,
 
             max_txn_cost_overage_per_object_in_commit: None,
 
@@ -4505,6 +4539,7 @@ impl ProtocolConfig {
                 130 => {
                     cfg.feature_flags.record_net_unsettled_object_withdraws = true;
                     cfg.feature_flags.enable_init_on_upgrade = true;
+                    cfg.epoch_close_deadline_ms = Some(120_000);
                     cfg.scratch_add_cost_base = Some(13);
                     cfg.scratch_read_cost_base = Some(13);
                     cfg.scratch_read_value_cost = Some(1);
@@ -4517,6 +4552,15 @@ impl ProtocolConfig {
                     // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
+                    }
+                }
+                131 => {
+                    cfg.feature_flags.share_transaction_deny_config_in_consensus = true;
+                    cfg.feature_flags.framework_tx_context_mut_restrictions = true;
+                }
+                132 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.defer_owned_object_double_spend = true;
                     }
                 }
                 // Use this template when making changes:
@@ -4629,6 +4673,7 @@ impl ProtocolConfig {
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
             switch_to_regex_reference_safety: false,
+            framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),
         }
     }
@@ -4739,6 +4784,22 @@ impl ProtocolConfig {
 // This is only needed for feature_flags. Please suffix each setter with `_for_testing`.
 // Non-feature_flags should already have test setters defined through macros.
 impl ProtocolConfig {
+    // Hand-written (the field is marked #[custom_setter]) to forbid downgrades: an executor
+    // older than the config's protocol version can't link the frameworks of later versions —
+    // its natives tables are frozen. Upgrades are allowed for replay's executor override.
+    pub fn set_execution_version_for_testing(&mut self, val: u64) {
+        let current = self.execution_version.unwrap_or(0);
+        assert!(
+            val >= current,
+            "cannot downgrade execution_version from {current} to {val}: running an old \
+             executor against a newer protocol config/framework is unsupported. To test \
+             frozen executor behavior, start from the last protocol version of that executor \
+             instead, so genesis loads the matching framework snapshot (see \
+             test_address_balance_gas_v3_accumulator_sign)."
+        );
+        self.execution_version = Some(val);
+    }
+
     // Not generated by the feature-flags derive because zklogin_circuit_mode is a u64
     // flag (the macro only generates setters for bool flags).
     pub fn set_zklogin_circuit_mode_for_testing(&mut self, val: u64) {
@@ -5028,6 +5089,23 @@ mod test {
 
         prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
         assert_eq!(prot.max_arguments(), 456);
+    }
+
+    #[test]
+    fn test_execution_version_setter_allows_upgrade() {
+        let mut prot = ProtocolConfig::get_for_max_version_UNSAFE();
+        let current = prot.execution_version();
+        prot.set_execution_version_for_testing(current);
+        prot.set_execution_version_for_testing(current + 1);
+        assert_eq!(prot.execution_version(), current + 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot downgrade execution_version")]
+    fn test_execution_version_setter_panics_on_downgrade() {
+        let mut prot = ProtocolConfig::get_for_max_version_UNSAFE();
+        let current = prot.execution_version();
+        prot.set_execution_version_for_testing(current - 1);
     }
 
     #[test]

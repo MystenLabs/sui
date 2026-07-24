@@ -79,9 +79,11 @@ fn tx_events_paginated<'e>(
         };
 
         for ev_sequence_number in bounds {
+            // Loop index into this transaction's events: bounded by `max_num_event_emit`
+            // (protocol config, VM-enforced), far below u32::MAX.
             let event_cursor = EventCursor {
                 tx_sequence_number,
-                ev_sequence_number: ev_sequence_number as u64,
+                ev_sequence_number: ev_sequence_number as u32,
             };
 
             let native = &events[ev_sequence_number];

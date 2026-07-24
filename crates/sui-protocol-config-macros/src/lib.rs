@@ -50,8 +50,11 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 ///
 /// Scalar (`u16`/`u32`/`u64`/`bool`) fields continue to feed `ProtocolConfigValue` / `attr_map`
 /// for back-compat with existing consumers. Non-scalar fields appear only in `render`. Add
-/// `#[skip_accessor]` to keep a field internal and out of every generated surface.
-#[proc_macro_derive(ProtocolConfigAccessors, attributes(skip_accessor))]
+/// `#[skip_accessor]` to keep a field internal and out of every generated surface. Add
+/// `#[custom_setter]` to suppress the generated `set_x_for_testing` so the struct can provide a
+/// hand-written one (e.g. to validate the new value); the `from_str` setter and
+/// `set_attr_for_testing` still route through it by name.
+#[proc_macro_derive(ProtocolConfigAccessors, attributes(skip_accessor, custom_setter))]
 pub fn accessors_macro(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
@@ -255,10 +258,17 @@ fn expand_field(f: &AccessorField) -> ExpandedField {
             self.#field_name.clone()
         }
     };
-    let common_setters = quote! {
-        pub fn #test_setter_name(&mut self, val: #inner_type) {
-            self.#field_name = Some(val);
+    let typed_setter = if f.custom_setter {
+        quote! {}
+    } else {
+        quote! {
+            pub fn #test_setter_name(&mut self, val: #inner_type) {
+                self.#field_name = Some(val);
+            }
         }
+    };
+    let common_setters = quote! {
+        #typed_setter
 
         pub fn #test_un_setter_name(&mut self) {
             self.#field_name = None;
@@ -328,6 +338,9 @@ struct AccessorField {
     /// `ProtocolConfigValue` variant ident (`u16`/`u32`/`u64`/`bool`). `None` for non-scalar
     /// fields, which never appear in `ProtocolConfigValue`.
     scalar_variant: Option<syn::Ident>,
+    /// `#[custom_setter]` — the struct hand-writes `set_x_for_testing` instead of the derive
+    /// emitting the plain field assignment.
+    custom_setter: bool,
 }
 
 fn parse_accessor_field(field: &syn::Field) -> Option<AccessorField> {
@@ -360,11 +373,17 @@ fn parse_accessor_field(field: &syn::Field) -> Option<AccessorField> {
 
     let scalar_variant = inferred_scalar_variant_ident(&inner_type);
 
+    let custom_setter = field
+        .attrs
+        .iter()
+        .any(|attr| attr.path.is_ident("custom_setter"));
+
     Some(AccessorField {
         field_name,
         field_type: field_type.clone(),
         inner_type,
         scalar_variant,
+        custom_setter,
     })
 }
 

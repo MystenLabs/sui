@@ -2,27 +2,49 @@
 title: BalanceManager
 description: Learn about the balance manager and how it works.
 keywords:
-  [
-    balancemanager,
-    balance manager,
-    manage balances,
-    balances for different assets,
-    deepbook,
-    deepbookv3,
-    create balance manager,
-    balance manager with custom owner,
-    mint trade cap,
-    trade cap,
-    tradecap,
-    DepositCap,
-    WithdrawCap,
-    deposit cap,
-    withdraw cap,
-    deposit funds,
-    withdraw funds,
-    generate a TradeProof,
-    tradeproof,
-  ]
+  - balancemanager
+  - balance manager
+  - manage balances
+  - balances for different assets
+  - deepbook
+  - deepbookv3
+  - create balance manager
+  - balance manager with custom owner
+  - mint trade cap
+  - trade cap
+  - tradecap
+  - DepositCap
+  - WithdrawCap
+  - deposit cap
+  - withdraw cap
+  - deposit funds
+  - withdraw funds
+  - generate a TradeProof
+  - tradeproof
+goal:
+  description: Reader can learn about the balance manager and how it works
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Balance manager
+    stage: DeFi Primitives
+questions:
+  - What is BalanceManager in Sui?
+  - How does balancemanager work on Sui?
+  - Why should I use balancemanager?
+answer: Learn about the balance manager and how it works.
 ---
 
 The `BalanceManager` shared object holds all balances for different assets. To perform trades, pass a combination of `BalanceManager` and `TradeProof` into a [pool](/onchain-finance/deepbook/deepbookv3/design#pool). `TradeProof`s are generated in one of two ways, either by the `BalanceManager` owner directly, or by any `TradeCap` owner. The owner can generate a `TradeProof` without the risk of equivocation. The `TradeCap` owner, because it's an owned object, risks equivocation when generating a `TradeProof`. Generally, a high frequency trading engine trades as the default owner.

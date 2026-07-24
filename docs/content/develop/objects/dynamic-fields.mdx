@@ -1,7 +1,56 @@
 ---
 title: Dynamic Fields
-description: Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.
-keywords: [ dynamic fields, dynamic object fields, adding dynamic fields, field names, adding dynamic object fields, accessing dynamic fields, accessing dynamic object fields, deleting an object with dynamic fields ]
+description: >-
+  Dynamic fields and dynamic object fields on Sui are added and removed
+  dynamically, affect gas only when accessed, and store heterogeneous values.
+keywords:
+  - dynamic fields
+  - dynamic object fields
+  - adding dynamic fields
+  - field names
+  - adding dynamic object fields
+  - accessing dynamic fields
+  - accessing dynamic object fields
+  - deleting an object with dynamic fields
+goal:
+  description: >-
+    Reader understands dynamic fields and dynamic object fields on Sui are added
+    and removed dynamically
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Dynamic fields
+    stage: Environment
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Dynamic fields for metadata
+    stage: Ship
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Dynamic fields for versioning
+    stage: Agent Write
+questions:
+  - What is Dynamic Fields in Sui?
+  - How do I add dynamic fields?
+  - How does dynamic fields work on Sui?
+answer: >-
+  There are various ways to use object fields to store primitive data and other
+  objects, such as wrapping, but there are a few limitations to these:.
 ---
 
 There are various ways to use object fields to store primitive data and other objects, such as wrapping, but there are a few limitations to these:

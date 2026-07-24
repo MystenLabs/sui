@@ -1,0 +1,281 @@
+---
+title: Transaction and CLI Cookbook for DeepBook
+sidebar_label: Transaction and CLI Cookbook
+description: >-
+  Copy-paste programmable transaction block templates for DeepBook workflows,
+  with both sui client ptb CLI invocations and the TypeScript Transaction
+  equivalent: split, merge, transfer, move calls, deposit and place order, and
+  flash loans.
+keywords:
+  - ptb
+  - programmable transaction block
+  - sui client ptb
+  - deepbook
+  - balance manager
+  - flash loan
+  - cli
+  - transaction
+goal:
+  description: >-
+    Reader can build common DeepBook PTBs from copy-paste CLI and TypeScript
+    templates and avoid the most common CLI syntax errors.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I build a PTB with the Sui CLI?
+  - How do I quote type arguments and object IDs in sui client ptb?
+  - How do I deposit and place a DeepBook order in one transaction?
+  - How do I write a DeepBook flash loan PTB?
+answer: >-
+  Build DeepBook programmable transaction blocks from copy-paste templates. The
+  sui client ptb CLI uses @-prefixed object IDs, angle-bracket type arguments,
+  and quoted arrays. The TypeScript SDK builds the same flows, including deposit
+  plus place order in one transaction and flash loan borrow and repay.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Build common DeepBook [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) from reusable templates for both the [`sui client ptb` CLI](/references/cli/ptb) and the TypeScript SDK. These templates start with the syntax rules that cause the most CLI errors, then cover coin operations, generic Move calls, and DeepBook flows.
+
+CLI examples are verified against `sui` version 1.62.0. DeepBook Move argument order is verified against the [DeepBookV3 sources](https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook/sources). Generic TypeScript samples pass compile checks against `@mysten/sui` version 2.22.1. The DeepBook SDK samples follow the documented [DeepBookV3 SDK](/onchain-finance/deepbook/deepbookv3-sdk) usage. None are executed in this document, so dry-run each command before you rely on it.
+
+:::tip
+
+Use `sui client ptb --preview` to print the PTB commands without executing, and `--dry-run` to estimate gas and catch errors before you sign.
+
+:::
+
+## Most common `sui client ptb` errors
+
+Most `sui client ptb` failures come from 3 formatting rules. Get these right and the rest follows.
+
+### Object IDs need an `@` prefix
+
+The CLI treats a bare `0x...` value as a number, not an object. Prefix every object ID, address, and gas coin ID with `@`.
+
+```sh
+$ sui client ptb \
+    --transfer-objects "[@$OBJECT_ID]" @$RECIPIENT \
+    --gas-budget 10000000
+```
+
+Referencing `$OBJECT_ID` without `@` makes the command fail to resolve the object.
+
+### Type arguments go in angle brackets
+
+Type arguments belong in `<...>`, comma-delimited for multiple types. Quote the whole value so your shell does not interpret the brackets.
+
+```sh
+$ sui client ptb \
+    --move-call "$PACKAGE::vault::deposit" "<0x2::sui::SUI>" @$VAULT @$COIN \
+    --gas-budget 10000000
+```
+
+For 2 type arguments, use `"<0x2::sui::SUI, $QUOTE_TYPE>"`.
+
+### Quote arrays so your shell does not expand them
+
+In zsh and some other shells, `[ ]` triggers globbing. Wrap every array in quotes.
+
+```sh
+$ sui client ptb \
+    --split-coins gas "[1000, 5000]" \
+    --assign coins \
+    --transfer-objects "[coins.0, coins.1]" @$RECIPIENT \
+    --gas-budget 10000000
+```
+
+Use `--assign` to name a command result, then index into it with `.0`, `.1`, and so on.
+
+## Split, merge, and transfer coins
+
+<Tabs groupId="ptb-interface">
+<TabItem value="cli" label="CLI">
+
+Split 2 coins from the gas coin and transfer them:
+
+```sh
+$ sui client ptb \
+    --split-coins gas "[1000, 5000]" \
+    --assign coins \
+    --transfer-objects "[coins.0, coins.1]" @$RECIPIENT \
+    --gas-budget 10000000
+```
+
+Merge coins into a primary coin:
+
+```sh
+$ sui client ptb \
+    --merge-coins @$PRIMARY_COIN "[@$COIN_1, @$COIN_2]" \
+    --gas-budget 10000000
+```
+
+</TabItem>
+<TabItem value="ts" label="TypeScript">
+
+```ts
+import { Transaction } from '@mysten/sui/transactions';
+
+// Split from the gas coin and transfer the new coins.
+const tx = new Transaction();
+const [a, b] = tx.splitCoins(tx.gas, [1000, 5000]);
+tx.transferObjects([a, b], RECIPIENT);
+
+// Merge several coins into one.
+const merge = new Transaction();
+merge.mergeCoins(merge.object(PRIMARY_COIN), [merge.object(COIN_1), merge.object(COIN_2)]);
+```
+
+</TabItem>
+</Tabs>
+
+## Move call with object and type arguments
+
+<Tabs groupId="ptb-interface">
+<TabItem value="cli" label="CLI">
+
+```sh
+$ sui client ptb \
+    --move-call "$PACKAGE::vault::deposit" "<0x2::sui::SUI>" @$VAULT 1000 \
+    --gas-budget 10000000
+```
+
+</TabItem>
+<TabItem value="ts" label="TypeScript">
+
+```ts
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+tx.moveCall({
+	target: `${PACKAGE}::vault::deposit`,
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [tx.object(VAULT), tx.pure.u64(1000)],
+});
+```
+
+</TabItem>
+</Tabs>
+
+## DeepBook: deposit and place an order in one PTB
+
+Get the DeepBookV3 package ID, pool, and coin types from [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information). Set `DEEPBOOK` to the DeepBookV3 package ID. Do not use the CLI `deepbook` name alias, which resolves to the legacy DeepBook address, not DeepBookV3.
+
+Placing an order requires a trade proof and takes 13 typed arguments. The TypeScript SDK generates the proof and encodes the arguments for you, so it is the recommended path. Deposit into the `BalanceManager` and place the order in the same transaction so both settle atomically.
+
+<Tabs groupId="ptb-interface">
+<TabItem value="ts" label="TypeScript (SDK)">
+
+```tsx
+import { Transaction } from '@mysten/sui/transactions';
+
+// `client` is a Sui client extended with the deepbook() plugin.
+// See the DeepBookV3 SDK page for setup.
+const tx = new Transaction();
+
+// 1. Deposit into the balance manager.
+tx.add(client.deepbook.balanceManager.depositIntoManager('MANAGER_1', 'DBUSDC', 100));
+
+// 2. Place a limit bid in the same PTB.
+tx.add(
+	client.deepbook.placeLimitOrder({
+		poolKey: 'SUI_DBUSDC',
+		balanceManagerKey: 'MANAGER_1',
+		clientOrderId: '1',
+		price: 2.5,
+		quantity: 10,
+		isBid: true,
+		payWithDeep: true,
+	}),
+);
+```
+
+See [Balance Manager](/onchain-finance/deepbook/deepbookv3-sdk/balance-manager) and [Orders](/onchain-finance/deepbook/deepbookv3-sdk/orders) for the full parameter set and cancel and modify calls.
+
+</TabItem>
+<TabItem value="cli" label="CLI">
+
+Depositing into a `BalanceManager` is a single move call to `balance_manager::deposit<T>(manager, coin)`:
+
+```sh
+$ sui client ptb \
+    --move-call "$DEEPBOOK::balance_manager::deposit" "<$COIN_TYPE>" @$MANAGER @$COIN \
+    --gas-budget 10000000
+```
+
+Placing an order from the CLI is impractical: `pool::place_limit_order` needs a `TradeProof` from `balance_manager::generate_proof_as_owner` plus 13 typed arguments (client order ID, order type, self-matching option, price, quantity, `is_bid`, `pay_with_deep`, expiration, the `0x6` clock, and the 2 pool type arguments). Use the TypeScript SDK for order placement.
+
+</TabItem>
+</Tabs>
+
+## DeepBook: flash loan borrow and repay
+
+A flash loan returns a `FlashLoan` hot potato that you must return in the same transaction, or the whole transaction aborts. `borrow_flashloan_base` returns `(Coin<Base>, FlashLoan)`. `return_flashloan_base` takes the pool, the repaid coin, and the `FlashLoan`.
+
+<Tabs groupId="ptb-interface">
+<TabItem value="ts" label="TypeScript (SDK)">
+
+```tsx
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+// Borrow base asset. `flashLoan` is the hot potato you must return.
+const [base, flashLoan] = tx.add(client.deepbook.flashLoans.borrowBaseAsset('DEEP_SUI', 1000));
+
+// ... use `base` here, for example swap it through another pool ...
+
+// Repay in the same PTB. The remaining coin returns to you.
+const remainder = tx.add(
+	client.deepbook.flashLoans.returnBaseAsset('DEEP_SUI', 1000, base, flashLoan),
+);
+tx.transferObjects([remainder], SENDER);
+```
+
+See [Flash Loans](/onchain-finance/deepbook/deepbookv3-sdk/flash-loans) for the quote-asset variants.
+
+</TabItem>
+<TabItem value="cli" label="CLI">
+
+The borrow and return calls both take the 2 pool type arguments `<$BASE, $QUOTE>`:
+
+```sh
+$ sui client ptb \
+    --move-call "$DEEPBOOK::pool::borrow_flashloan_base" "<$BASE, $QUOTE>" @$POOL 1000 \
+    --assign loan \
+    --move-call "$OTHER_PKG::router::swap" "<$BASE, $QUOTE>" @$OTHER_POOL loan.0 \
+    --assign swapped \
+    --move-call "$DEEPBOOK::pool::return_flashloan_base" "<$BASE, $QUOTE>" @$POOL swapped loan.1 \
+    --gas-budget 20000000
+```
+
+`loan.0` is the borrowed `Coin<Base>` and `loan.1` is the `FlashLoan`. The middle move call stands in for whatever you do with the borrowed funds. The repaid coin passed to `return_flashloan_base` must cover the borrowed amount.
+
+</TabItem>
+</Tabs>
+
+:::caution
+
+The flash loan CLI template above has its flag syntax verified against `sui` 1.62.0 and its argument order verified against the DeepBookV3 `pool.move` sources, but this document does not execute it end to end. Dry-run it with `--dry-run` against a real pool and coin types before you rely on it.
+
+:::
+
+## Verify before you execute
+
+1. Add `--preview` to any command to print its PTB commands without executing.
+2. Add `--dry-run` to estimate gas and surface argument or type errors.
+3. For DeepBook object IDs and coin and pool keys, see [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information) and the [DeepBookV3 SDK](/onchain-finance/deepbook/deepbookv3-sdk) constants.

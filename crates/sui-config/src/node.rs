@@ -5,7 +5,7 @@ use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
-use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::transaction_deny_config::{PeerDenySyncConfig, TransactionDenyConfig};
 use crate::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use crate::verifier_signing_config::VerifierSigningConfig;
 use anyhow::Result;
@@ -170,6 +170,12 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
+
+    /// Configuration for sharing recommended `TransactionDenyConfig` settings with allowlisted
+    /// peers via consensus. Off by default; the empty allowlist + both flags = false means
+    /// no behavior change versus prior versions.
+    #[serde(default)]
+    pub peer_deny_sync_config: PeerDenySyncConfig,
 
     /// Whether dev-inspect transaction execution is disabled on this node.
     #[serde(default)]
@@ -338,10 +344,24 @@ fn default_congestion_log_max_files() -> u32 {
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ForkCrashBehavior {
-    #[serde(rename = "await-fork-recovery")]
+    /// On a detected fork, clear the local fork state and re-execute against the canonical
+    /// certified checkpoint. Recovery only proceeds when (1) the fork was recorded by a
+    /// different binary version than the one now running — the binary that forked would
+    /// deterministically fork again, so the node halts until a corrected binary is deployed —
+    /// and (2) a certified checkpoint covering the forked checkpoint or transaction is verified
+    /// in the local store — proof that the network already sealed the canonical outcome, so
+    /// re-deriving cannot equivocate on an undecided result. Forks failing either condition
+    /// halt the node awaiting a new binary or operator intervention.
+    #[serde(rename = "recover-once-per-version")]
     #[default]
+    RecoverOncePerVersion,
+
+    /// Halt at startup awaiting operator intervention (e.g. supplying
+    /// canonical checkpoint digests).
+    #[serde(rename = "await-fork-recovery")]
     AwaitForkRecovery,
-    /// Return an error instead of blocking forever. This is primarily for testing.
+
+    /// Return an error instead of halting. This is primarily for testing.
     #[serde(rename = "return-error")]
     ReturnError,
 }

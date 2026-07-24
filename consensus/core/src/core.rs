@@ -25,6 +25,7 @@ use crate::{
     CommitConsumerArgs, TransactionClient,
     block_verifier::NoopBlockVerifier,
     storage::{Store, WriteBatch, mem_store::MemStore},
+    transaction::{TransactionConsumer, TransactionConsumerPool},
 };
 use crate::{
     ancestor::AncestorStateManager,
@@ -42,7 +43,7 @@ use crate::{
     leader_scoring::ReputationScores,
     proposer::{ProposalLeaderWaiter, Proposer, ValidatorProposer},
     round_tracker::RoundTracker,
-    transaction::TransactionConsumer,
+    transaction::TransactionPool,
     transaction_vote_tracker::TransactionVoteTracker,
     universal_committer::{
         UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
@@ -85,7 +86,7 @@ impl Core {
     pub(crate) fn new_validator(
         context: Arc<Context>,
         leader_schedule: Arc<LeaderSchedule>,
-        transaction_consumer: TransactionConsumer,
+        transaction_pool: Arc<dyn TransactionPool>,
         transaction_vote_tracker: TransactionVoteTracker,
         block_manager: BlockManager,
         commit_observer: CommitObserver,
@@ -163,7 +164,7 @@ impl Core {
         let proposer = Some(Box::new(ValidatorProposer::new(
             dag_state.clone(),
             context.clone(),
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_signer,
             last_known_proposed_round,
@@ -247,23 +248,6 @@ impl Core {
         .recover_observer()
     }
 
-    fn recover_observer(mut self) -> Self {
-        let _s = self
-            .context
-            .metrics
-            .node_metrics
-            .scope_processing_time
-            .with_label_values(&["Core::recover_observer"])
-            .start_timer();
-
-        // Try to commit, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
-
-        self.try_signal_new_round();
-
-        self
-    }
-
     fn recover_validator(mut self) -> Self {
         let _s = self
             .context
@@ -314,6 +298,27 @@ impl Core {
         );
 
         self
+    }
+
+    fn recover_observer(mut self) -> Self {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::recover_observer"])
+            .start_timer();
+
+        // Try to commit, since they may not have run after the last storage write.
+        self.try_commit(vec![]).unwrap();
+
+        self.try_signal_new_round();
+
+        self
+    }
+
+    pub(crate) async fn stop(&mut self) {
+        self.commit_observer.stop().await;
     }
 
     /// Calls `BlockManager::try_accept_blocks` and broadcasts each accepted block to any active
@@ -1044,8 +1049,13 @@ impl CoreTestFixture {
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
                 .with_num_commits_per_schedule(10),
         );
-        let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (transaction_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
@@ -1070,7 +1080,7 @@ impl CoreTestFixture {
         let core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
@@ -1122,7 +1132,7 @@ mod test {
         storage::{Store, WriteBatch, mem_store::MemStore},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        transaction::{BlockStatus, TransactionClient},
+        transaction::{BlockStatus, Priority, TransactionClient},
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -1132,8 +1142,13 @@ mod test {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
@@ -1151,7 +1166,7 @@ mod test {
                 // If it's round 1, that one will be committed later on, and it's our "own" block, then subscribe to listen for the block status.
                 if round == 1 && index == context.own_index {
                     let subscription =
-                        transaction_consumer.subscribe_for_block_status_testing(block.reference());
+                        transaction_pool.subscribe_for_block_status_testing(block.reference());
                     block_status_subscriptions.push(subscription);
                 }
 
@@ -1206,7 +1221,7 @@ mod test {
         let _core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,
@@ -1374,7 +1389,7 @@ mod test {
             index += 1;
             let _w = fixture
                 .transaction_client
-                .submit_no_wait(vec![transaction])
+                .submit_no_wait(vec![transaction], Priority::Normal)
                 .await
                 .unwrap();
 
@@ -1409,6 +1424,26 @@ mod test {
                     .context
                     .protocol_config
                     .max_transactions_in_block_bytes()
+        );
+        assert_eq!(
+            fixture
+                .core
+                .context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_bytes
+                .get_sample_count(),
+            1
+        );
+        assert_eq!(
+            fixture
+                .core
+                .context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_bytes
+                .get_sample_sum(),
+            total as f64
         );
 
         // genesis blocks should be referenced
@@ -1490,6 +1525,38 @@ mod test {
         let transaction_vote = transaction_votes.first().unwrap();
         assert_eq!(transaction_vote.block_ref, block_2.reference());
         assert_eq!(transaction_vote.rejects, vec![1, 4]);
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_blocks
+                .get_sample_count(),
+            2
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_blocks
+                .get_sample_sum(),
+            1.0
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_entries
+                .get_sample_count(),
+            2
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_transaction_vote_entries
+                .get_sample_sum(),
+            2.0
+        );
 
         // Flush the DAG state to storage.
         dag_state.write().flush();
@@ -1511,8 +1578,13 @@ mod test {
         let context = Arc::new(context);
 
         let store = Arc::new(MemStore::new());
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         let dag_str = "DAG {
@@ -1548,7 +1620,7 @@ mod test {
         for block in dag_builder.blocks(1..=5) {
             if block.author() == context.own_index {
                 let subscription =
-                    transaction_consumer.subscribe_for_block_status_testing(block.reference());
+                    transaction_pool.subscribe_for_block_status_testing(block.reference());
                 block_status_subscriptions.push(subscription);
             }
         }
@@ -1602,7 +1674,7 @@ mod test {
         let _core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker,
             block_manager,
             commit_observer,
@@ -2826,8 +2898,13 @@ mod test {
                 .with_num_commits_per_schedule(10),
         );
 
-        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
-        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (_transaction_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
@@ -2850,7 +2927,7 @@ mod test {
         let mut core = Core::new_validator(
             context.clone(),
             leader_schedule,
-            transaction_consumer,
+            transaction_pool,
             transaction_vote_tracker.clone(),
             block_manager,
             commit_observer,

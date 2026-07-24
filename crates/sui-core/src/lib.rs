@@ -52,6 +52,7 @@ pub mod streamer;
 pub mod subscription_handler;
 pub mod test_utils;
 pub mod traffic_controller;
+pub mod transaction_deny_config_manager;
 pub mod transaction_driver;
 mod transaction_input_loader;
 pub mod transaction_orchestrator;
@@ -64,6 +65,9 @@ pub mod validator_client_monitor;
 mod congestion_control_tests;
 #[path = "unit_tests/consensus_test_utils.rs"]
 pub mod consensus_test_utils;
+#[cfg(test)]
+#[path = "unit_tests/double_spend_deferral_tests.rs"]
+mod double_spend_deferral_tests;
 #[cfg(test)]
 #[path = "unit_tests/move_package_publish_tests.rs"]
 mod move_package_publish_tests;

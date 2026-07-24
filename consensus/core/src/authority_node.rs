@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Weak},
+    time::Instant,
+};
 
 use consensus_config::{
     Committee, ConsensusProtocolConfig, NetworkKeyPair, NetworkPublicKey, Parameters,
@@ -9,6 +12,7 @@ use consensus_config::{
 };
 use consensus_types::block::Round;
 use itertools::Itertools;
+use mysten_common::debug_fatal;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
@@ -41,7 +45,10 @@ use crate::{
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
-    transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
+    transaction::{
+        TransactionClient, TransactionConsumer, TransactionConsumerPool, TransactionPool,
+        TransactionVerifier,
+    },
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -64,6 +71,9 @@ impl ConsensusAuthority {
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
+        // When provided, the proposer takes transactions from this pool and the
+        // `TransactionClient` submission path is unused. Only relevant for validator nodes.
+        transaction_pool: Option<Arc<dyn TransactionPool>>,
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         // A counter that keeps track of how many times the consensus authority has been booted while the process
@@ -83,6 +93,7 @@ impl ConsensusAuthority {
                     network_keypair,
                     clock,
                     transaction_verifier,
+                    transaction_pool,
                     commit_consumer,
                     registry,
                     boot_counter,
@@ -142,10 +153,10 @@ enum SubscriberType<N: NetworkManager> {
 }
 
 impl<N: NetworkManager> SubscriberType<N> {
-    fn stop(&self) {
+    async fn stop(&self) {
         match self {
-            SubscriberType::Validator(subscriber) => subscriber.stop(),
-            SubscriberType::Observer(subscriber) => subscriber.stop(),
+            SubscriberType::Validator(subscriber) => subscriber.stop().await,
+            SubscriberType::Observer(subscriber) => subscriber.stop().await,
         }
     }
 }
@@ -159,12 +170,18 @@ where
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
     store: Arc<RocksDBStore>,
+    // Only use for verification and logging during shutdown.
+    // To avoid keeping the DagState alive at the end of shutdown, this is only a weak reference.
+    dag_state: Weak<RwLock<DagState>>,
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     subscriber: SubscriberType<N>,
+    // Network proxies hold ObserverService weakly, so AuthorityNode keeps the service alive until
+    // the network servers have stopped.
+    observer_service: Option<Arc<ObserverService>>,
     network_manager: N,
 }
 
@@ -182,6 +199,7 @@ where
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
+        transaction_pool: Option<Arc<dyn TransactionPool>>,
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
@@ -253,8 +271,23 @@ where
             .protocol_version
             .set(context.protocol_config.protocol_version() as i64);
 
-        let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
-        let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
+        let (tx_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let transaction_pool: Arc<dyn TransactionPool> = match transaction_pool {
+            // With an external pool, the TransactionClient path is unused. The channel
+            // receiver is dropped so accidental client submissions fail fast instead of
+            // hanging.
+            Some(pool) => {
+                drop(tx_receiver);
+                drop(priority_tx_receiver);
+                pool
+            }
+            None => Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+                tx_receiver,
+                priority_tx_receiver,
+                context.clone(),
+            ))),
+        };
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
@@ -338,7 +371,7 @@ where
             Core::new_validator(
                 context.clone(),
                 leader_schedule,
-                tx_consumer,
+                transaction_pool,
                 transaction_vote_tracker.clone(),
                 block_manager,
                 commit_observer,
@@ -404,7 +437,7 @@ where
             store.clone(),
         ));
 
-        let (subscriber, round_prober_handle) = if context.is_validator() {
+        let (subscriber, round_prober_handle, observer_service) = if context.is_validator() {
             let authority_service = Arc::new(AuthorityService::new(
                 context.clone(),
                 block_verifier.clone(),
@@ -449,7 +482,7 @@ where
             );
 
             // Start the observer server if the observer server is enabled in the parameters.
-            if context.parameters.observer.is_server_enabled() {
+            let observer_service = if context.parameters.observer.is_server_enabled() {
                 let observer_service = Arc::new(ObserverService::new(
                     context.clone(),
                     core_dispatcher.clone(),
@@ -463,11 +496,18 @@ where
                     randomness_signature_handler.clone(),
                 ));
                 network_manager
-                    .start_observer_server(observer_service)
+                    .start_observer_server(observer_service.clone())
                     .await;
-            }
+                Some(observer_service)
+            } else {
+                None
+            };
 
-            (SubscriberType::Validator(s), round_prober_handle)
+            (
+                SubscriberType::Validator(s),
+                round_prober_handle,
+                observer_service,
+            )
         } else {
             // Observer node: subscribe to specified peer(s) using ObserverSubscriber
             let observer_client = network_manager.observer_client();
@@ -494,7 +534,7 @@ where
             );
 
             network_manager
-                .start_observer_server(observer_service)
+                .start_observer_server(observer_service.clone())
                 .await;
 
             // Subscribe to peers specified in the configuration
@@ -515,7 +555,11 @@ where
                 observer_subscriber.subscribe(peer_id);
             }
 
-            (SubscriberType::Observer(observer_subscriber), None)
+            (
+                SubscriberType::Observer(observer_subscriber),
+                None,
+                Some(observer_service),
+            )
         };
 
         info!(
@@ -529,47 +573,75 @@ where
             transaction_client: Arc::new(tx_client),
             synchronizer,
             store,
+            dag_state: Arc::downgrade(&dag_state),
             commit_syncer_handle,
             round_prober_handle,
             leader_timeout_handle,
             core_thread_handle,
             subscriber,
+            observer_service,
             network_manager,
         }
     }
 
-    pub(crate) async fn stop(mut self) {
+    pub(crate) async fn stop(self) {
+        let Self {
+            context,
+            start_time,
+            transaction_client,
+            synchronizer,
+            store,
+            dag_state,
+            commit_syncer_handle,
+            round_prober_handle,
+            leader_timeout_handle,
+            core_thread_handle,
+            subscriber,
+            observer_service,
+            mut network_manager,
+        } = self;
+
         info!(
             "Stopping authority. Total run time: {:?}",
-            self.start_time.elapsed()
+            start_time.elapsed()
         );
 
         // First shutdown components calling into Core.
-        if let Err(e) = self.synchronizer.stop().await {
-            if e.is_panic() {
-                std::panic::resume_unwind(e.into_panic());
-            }
-            warn!(
-                "Failed to stop synchronizer when shutting down consensus: {:?}",
-                e
-            );
-        };
-        self.commit_syncer_handle.stop().await;
-        if let Some(round_prober_handle) = self.round_prober_handle {
+        synchronizer.stop().await;
+        commit_syncer_handle.stop().await;
+        if let Some(round_prober_handle) = round_prober_handle {
             round_prober_handle.stop().await;
         }
-        self.leader_timeout_handle.stop().await;
+        leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
-        self.core_thread_handle.stop().await;
+        core_thread_handle.stop().await;
         // Stop block subscriptions before stopping network server.
-        self.subscriber.stop();
-        self.network_manager.stop().await;
+        subscriber.stop().await;
+        network_manager.stop().await;
 
-        self.context
+        context
             .metrics
             .node_metrics
             .uptime
-            .observe(self.start_time.elapsed().as_secs_f64());
+            .observe(start_time.elapsed().as_secs_f64());
+
+        drop((
+            context,
+            transaction_client,
+            synchronizer,
+            store,
+            subscriber,
+            observer_service,
+            network_manager,
+        ));
+
+        let dag_state_owners = dag_state.strong_count();
+        if dag_state_owners != 0 {
+            debug_fatal!(
+                "DagState still has {} owner(s) after stopping ConsensusAuthority",
+                dag_state_owners
+            );
+        }
     }
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
@@ -643,7 +715,7 @@ mod tests {
     use crate::{
         CommittedSubDag,
         block::{BlockAPI as _, GENESIS_ROUND},
-        transaction::NoopTransactionVerifier,
+        transaction::{NoopTransactionVerifier, Priority},
     };
 
     #[rstest]
@@ -677,6 +749,7 @@ mod tests {
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
+            None,
             commit_consumer,
             registry,
             0,
@@ -719,6 +792,7 @@ mod tests {
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
+            None,
             commit_consumer,
             registry,
             0,
@@ -835,6 +909,7 @@ mod tests {
             observer_network_keypair,
             Arc::new(Clock::default()),
             Arc::new(NoopTransactionVerifier {}),
+            None,
             observer_commit_consumer,
             Registry::new(),
             0,
@@ -855,7 +930,7 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(vec![txn])
+                .submit(vec![txn], Priority::Normal)
                 .await
                 .unwrap();
         }
@@ -1036,7 +1111,7 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(vec![txn])
+                .submit(vec![txn], Priority::Normal)
                 .await
                 .unwrap();
         }
@@ -1271,6 +1346,7 @@ mod tests {
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
+            None,
             commit_consumer,
             registry,
             boot_counter,

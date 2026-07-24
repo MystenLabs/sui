@@ -306,11 +306,12 @@ impl ConsensusAdapter {
             )?;
         }
 
-        rx_consensus_positions.await.map_err(|e| {
-            SuiError::from(SuiErrorKind::FailedToSubmitToConsensus(format!(
-                "Failed to get consensus position: {e}"
-            )))
-        })?
+        rx_consensus_positions.await.unwrap_or_else(|_| {
+            // The sender is dropped without a reply only when within_alive_epoch
+            // cancels the submission task at epoch end.
+            self.metrics.num_rejected_cert_in_epoch_boundary.inc();
+            Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into())
+        })
     }
 
     pub fn recover_end_of_publish(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
@@ -747,26 +748,6 @@ impl ConsensusAdapter {
             guard.processed_method.method_name()
         );
 
-        // After a user transaction or soft bundle submission,
-        // send EndOfPublish if the epoch is closing.
-        // EndOfPublish can also be sent during consensus commit handling, checkpoint execution and recovery.
-        if transactions[0].is_user_transaction()
-            && epoch_store.should_send_end_of_publish()
-            && !epoch_store.protocol_config().timestamp_based_epoch_close()
-        {
-            // sending message outside of any locks scope
-            if let Err(err) = self.submit(
-                ConsensusTransaction::new_end_of_publish(self.authority),
-                None,
-                epoch_store,
-                None,
-                None,
-            ) {
-                warn!("Error when sending end of publish message: {:?}", err);
-            } else {
-                info!(epoch=?epoch_store.epoch(), "Sending EndOfPublish message to consensus");
-            }
-        }
         self.metrics
             .sequencing_certificate_success
             .with_label_values(&[tx_type])
@@ -1021,9 +1002,9 @@ impl ConsensusOverloadChecker for NoopConsensusOverloadChecker {
 }
 
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
-    /// This method is called externally to begin reconfiguration
-    /// It sets reconfig state to reject new certificates from user.
-    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained.
+    /// This method is called externally to begin reconfiguration.
+    /// It persists a reconfig state that rejects new user transactions,
+    /// then immediately submits an EndOfPublish message to consensus.
     fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
         {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
@@ -1031,7 +1012,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 // Allow caller to call this method multiple times
                 return;
             }
-            epoch_store.close_user_certs(reconfig_guard);
+            epoch_store.close_user_certs_for_manual_epoch_close(reconfig_guard);
         }
         if epoch_store.should_send_end_of_publish() {
             if let Err(err) = self.submit(

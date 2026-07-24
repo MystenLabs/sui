@@ -1,7 +1,45 @@
 ---
 title: Database Snapshots
-description: Database snapshots of the Sui network enable full node operators a way to bootstrap a full node without having to execute all the transactions that occurred after genesis.
-keywords: [ node snapshots, database snapshots, full node snapshots, formal snapshots, rocksdb, rocksdb snapshot, restoring a node, restoring a full node, restoring from snapshot, managed snapshots, enabling snapshots ]
+description: >-
+  Database snapshots of the Sui network enable full node operators a way to
+  bootstrap a full node without having to execute all the transactions that
+  occurred after genesis.
+keywords:
+  - node snapshots
+  - database snapshots
+  - full node snapshots
+  - formal snapshots
+  - rocksdb
+  - rocksdb snapshot
+  - restoring a node
+  - restoring a full node
+  - restoring from snapshot
+  - managed snapshots
+  - enabling snapshots
+goal:
+  description: >-
+    Operator understands database snapshots of the Sui network enable full node
+    operators a way to bootstrap a full node
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I use Sui database snapshots?
+  - How do I restore a Sui node from a snapshot?
+  - Where can I download Sui node snapshots?
+answer: >-
+  Database snapshots of the Sui network enable full node operators a way to
+  bootstrap a full node without having to execute all the transactions that
+  occurred after genesis.
 ---
 
 Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for full node operators.

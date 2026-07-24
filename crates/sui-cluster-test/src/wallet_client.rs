@@ -6,17 +6,20 @@ use crate::cluster::new_wallet_context_from_cluster;
 use super::Cluster;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
+use sui_rpc_api::Client as GrpcClient;
 use sui_sdk::wallet_context::WalletContext;
-use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::transaction::TransactionData;
-use tracing::{Instrument, info, info_span};
+use tracing::{Instrument, info_span};
 
+/// Wraps a `WalletContext` for the test user. The wallet context already caches
+/// a gRPC client (`WalletContext::grpc_client`) that talks to the fullnode over
+/// the public gRPC services (`LedgerService`, `StateService`,
+/// `TransactionExecutionService`), so we do not build a separate JSON-RPC client.
 pub struct WalletClient {
     wallet_context: WalletContext,
     address: SuiAddress,
-    fullnode_client: SuiClient,
 }
 
 #[allow(clippy::borrowed_box)]
@@ -28,14 +31,9 @@ impl WalletClient {
             .await
             .instrument(info_span!("init_wallet_context_for_test_user"));
 
-        let rpc_url = String::from(cluster.fullnode_url());
-        info!("Use fullnode rpc: {}", &rpc_url);
-        let fullnode_client = SuiClientBuilder::default().build(rpc_url).await.unwrap();
-
         Self {
             wallet_context: wallet_context.into_inner(),
             address,
-            fullnode_client,
         }
     }
 
@@ -51,8 +49,13 @@ impl WalletClient {
         self.address
     }
 
-    pub fn get_fullnode_client(&self) -> &SuiClient {
-        &self.fullnode_client
+    /// Returns a fresh (owned, cheaply cloned) gRPC client backed by the wallet's
+    /// cached connection. All network reads and execution in the suite go through
+    /// this client rather than the retired full JSON-RPC contract.
+    pub fn grpc_client(&self) -> GrpcClient {
+        self.wallet_context
+            .grpc_client()
+            .expect("wallet context should expose a gRPC client")
     }
 
     pub async fn sign(&self, txn_data: &TransactionData, desc: &str) -> Signature {

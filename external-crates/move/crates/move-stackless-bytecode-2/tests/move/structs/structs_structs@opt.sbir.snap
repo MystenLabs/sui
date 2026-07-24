@@ -1,16 +1,16 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/tests.rs
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
 ---
   Module: structs
     Function: unpack (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1 = Unpack(reg_0)
-        Return(reg_1)
+        reg_0 : 0x0::structs::Foo = Move(lcl_0)
+        reg_1 : u64 = Unpack<Foo>(reg_0 : 0x0::structs::Foo)
+        Return(reg_1 : u64)
 
 
     Function: unpack_bar (entry: LBL_0)
       Label LBL_0:
-        reg_0 = Move(lcl_0)
-        reg_1, reg_2 = Unpack(reg_0)
-        Return(reg_2, reg_1)
+        reg_0 : 0x0::structs::Bar = Move(lcl_0)
+        reg_1 : u64, reg_2 : u64 = Unpack<Bar>(reg_0 : 0x0::structs::Bar)
+        Return(reg_1 : u64, reg_2 : u64)

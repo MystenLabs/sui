@@ -1,7 +1,53 @@
 ---
 title: Query the Pool
-description: A Pool is a shared object that represents a unique market pair, such as SUI/USDC. 
-keywords: [ deepbook, deepbookv3, pool, balancemanager, tradeproof, query a pool, query pool, whitelist status, base quantity against quote, quote quantity against base, DEEP fees, input token fees, quote quantity against quote or base, check fee required, reserve mid price, reserve pool mid price ]
+description: >-
+  A Pool is a shared object that represents a unique market pair, such as
+  SUI/USDC.
+keywords:
+  - deepbook
+  - deepbookv3
+  - pool
+  - balancemanager
+  - tradeproof
+  - query a pool
+  - query pool
+  - whitelist status
+  - base quantity against quote
+  - quote quantity against base
+  - DEEP fees
+  - input token fees
+  - quote quantity against quote or base
+  - check fee required
+  - reserve mid price
+  - reserve pool mid price
+goal:
+  description: >-
+    Reader can query pool state such as orders, balances, and quantities via the
+    DeepBookV3 pool read API
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Pool querying
+    stage: DeFi Primitives
+questions:
+  - How do I query the pool?
+  - What is Query the Pool in Sui?
+  - Why should I use query the pool?
+answer: >-
+  A Pool is a shared object that represents a unique market pair, such as
+  SUI/USDC.
 ---
 
 The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](/onchain-finance/deepbook/deepbookv3/design#pool) to learn more about the structure of pools.

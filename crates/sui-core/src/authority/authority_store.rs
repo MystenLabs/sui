@@ -17,10 +17,8 @@ use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
-use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_types::error::SuiErrorKind;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -33,14 +31,10 @@ use sui_types::{base_types::SequenceNumber, fp_ensure};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::traits::Map;
-use typed_store::{
-    TypedStoreError,
-    rocks::{DBBatch, DBMap},
-};
+use typed_store::{TypedStoreError, rocks::DBBatch};
 
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -334,6 +328,15 @@ impl AuthorityStore {
             .get(digest)
     }
 
+    pub fn multi_get_unchanged_loaded_runtime_objects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<Vec<ObjectKey>>>, TypedStoreError> {
+        self.perpetual_tables
+            .unchanged_loaded_runtime_objects
+            .multi_get(digests)
+    }
+
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
@@ -571,14 +574,6 @@ impl AuthorityStore {
             std::iter::once((ObjectKey::from(object_ref), store_object)),
         )?;
 
-        // Update the index
-        if object.get_single_owner().is_some() {
-            // Only initialize lock for address owned objects.
-            if !object.is_child_object() {
-                self.initialize_live_object_markers_impl(&mut write_batch, &[object_ref], false)?;
-            }
-        }
-
         write_batch.write()?;
 
         Ok(())
@@ -598,18 +593,6 @@ impl AuthorityStore {
             ref_and_objects
                 .iter()
                 .map(|(oref, o)| (ObjectKey::from(oref), get_store_object((*o).clone()))),
-        )?;
-
-        let non_child_object_refs: Vec<_> = ref_and_objects
-            .iter()
-            .filter(|(_, object)| !object.is_child_object())
-            .map(|(oref, _)| *oref)
-            .collect();
-
-        self.initialize_live_object_markers_impl(
-            &mut batch,
-            &non_child_object_refs,
-            false, // is_force_reset
         )?;
 
         batch.write()?;
@@ -664,22 +647,12 @@ impl AuthorityStore {
         for object in objects {
             match object {
                 LiveObject::Normal(object) => {
-                    let store_object_wrapper = get_store_object(object.clone());
+                    let object_key = ObjectKey::from(object.compute_object_reference());
+                    let store_object_wrapper = get_store_object(object);
                     batch.insert_batch(
                         &perpetual_db.objects,
-                        std::iter::once((
-                            ObjectKey::from(object.compute_object_reference()),
-                            store_object_wrapper,
-                        )),
+                        std::iter::once((object_key, store_object_wrapper)),
                     )?;
-                    if !object.is_child_object() {
-                        Self::initialize_live_object_markers(
-                            &perpetual_db.live_owned_object_markers,
-                            &mut batch,
-                            &[object.compute_object_reference()],
-                            true, // is_force_reset
-                        )?;
-                    }
                 }
                 LiveObject::Wrapped(object_key) => {
                     batch.insert_batch(
@@ -761,8 +734,6 @@ impl AuthorityStore {
             written,
             events,
             unchanged_loaded_runtime_objects,
-            locks_to_delete,
-            new_locks_to_init,
             ..
         } = tx_outputs;
 
@@ -833,12 +804,6 @@ impl AuthorityStore {
             )?;
         }
 
-        self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
-
-        // Note: deletes locks for received objects as well (but not for objects that were in
-        // `Receiving` arguments which were not received)
-        self.delete_live_object_markers(write_batch, locks_to_delete)?;
-
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
         Ok(())
@@ -853,75 +818,6 @@ impl AuthorityStore {
             [(tx.digest(), tx.clone().into_unsigned().serializable_ref())],
         )?;
         batch.write()?;
-        Ok(())
-    }
-
-    /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
-    /// Returns SuiErrorKind::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
-    fn initialize_live_object_markers_impl(
-        &self,
-        write_batch: &mut DBBatch,
-        objects: &[ObjectRef],
-        is_force_reset: bool,
-    ) -> SuiResult {
-        AuthorityStore::initialize_live_object_markers(
-            &self.perpetual_tables.live_owned_object_markers,
-            write_batch,
-            objects,
-            is_force_reset,
-        )
-    }
-
-    pub fn initialize_live_object_markers(
-        live_object_marker_table: &DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
-        write_batch: &mut DBBatch,
-        objects: &[ObjectRef],
-        is_force_reset: bool,
-    ) -> SuiResult {
-        trace!(?objects, "initialize_locks");
-
-        if !is_force_reset {
-            let live_object_markers = live_object_marker_table.multi_get(objects)?;
-            // If any live_object_markers exist and are not None, return errors for them
-            // Note we don't check if there is a pre-existing lock. this is because initializing the live
-            // object marker will not overwrite the lock and cause the validator to equivocate.
-            let existing_live_object_markers: Vec<ObjectRef> = live_object_markers
-                .iter()
-                .zip_debug_eq(objects)
-                .filter_map(|(lock_opt, objref)| {
-                    lock_opt.clone().flatten().map(|_tx_digest| *objref)
-                })
-                .collect();
-            if !existing_live_object_markers.is_empty() {
-                info!(
-                    ?existing_live_object_markers,
-                    "Cannot initialize live_object_markers because some exist already"
-                );
-                return Err(SuiErrorKind::ObjectLockAlreadyInitialized {
-                    refs: existing_live_object_markers,
-                }
-                .into());
-            }
-        }
-
-        write_batch.insert_batch(
-            live_object_marker_table,
-            objects.iter().map(|obj_ref| (obj_ref, None)),
-        )?;
-        Ok(())
-    }
-
-    /// Removes locks for a given list of ObjectRefs.
-    fn delete_live_object_markers(
-        &self,
-        write_batch: &mut DBBatch,
-        objects: &[ObjectRef],
-    ) -> SuiResult {
-        trace!(?objects, "delete_locks");
-        write_batch.delete_batch(
-            &self.perpetual_tables.live_owned_object_markers,
-            objects.iter(),
-        )?;
         Ok(())
     }
 
@@ -1581,12 +1477,8 @@ pub enum ObjectLockStatus {
     LockedAtDifferentVersion { locked_ref: ObjectRef },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LockDetailsWrapperDeprecated {
-    V1(LockDetailsV1Deprecated),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LockDetailsV1Deprecated {
     pub epoch: EpochId,
     pub tx_digest: TransactionDigest,

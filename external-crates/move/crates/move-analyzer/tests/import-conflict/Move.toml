@@ -1,0 +1,6 @@
+[package]
+name = "ImportConflict"
+edition = "2024.beta"
+
+[addresses]
+ImportConflict = "0xCAFE3"

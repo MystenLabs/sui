@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use futures::StreamExt;
 use futures::stream::BoxStream;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
@@ -34,6 +35,8 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
+use crate::metrics::ListRequestMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::LedgerBitmapKind;
@@ -45,6 +48,7 @@ use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
+use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
@@ -54,6 +58,20 @@ use super::ledger_read::get_tx_seq_digest_rows;
 use super::ledger_read::remaining_range_after;
 use super::ledger_read::sequence_frontier_checkpoint;
 use super::ledger_read::validate_checkpoint_bounds;
+use super::object_set::fetch_object_sets_for_chunk;
+use super::object_set::mask_requests_object_set;
+
+const METHOD: &str = "list_transactions";
+
+fn resolution(read_mask: &FieldMaskTree) -> &'static str {
+    if mask_requests_object_set(read_mask) {
+        "full_objects"
+    } else if should_render_transaction_contents(read_mask) {
+        "full"
+    } else {
+        "digest"
+    }
+}
 
 pub(crate) type ListTransactionsStream =
     BoxStream<'static, Result<ListTransactionsResponse, RpcError>>;
@@ -73,6 +91,13 @@ pub(crate) async fn list_transactions(
         request.read_mask,
         read_mask_defaults::TRANSACTION,
     )?;
+    let mut request_metrics = ListRequestMetrics::new(
+        service
+            .list_metrics
+            .as_ref()
+            .map(|metrics| metrics.stream_metrics(METHOD, resolution(&read_mask))),
+        started,
+    );
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_transactions();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
@@ -97,6 +122,7 @@ pub(crate) async fn list_transactions(
     };
 
     let terminal_options = options.clone();
+    let chunk_metrics = request_metrics.chunk_metrics();
     Ok(async_stream::try_stream! {
         let render_contents = should_render_transaction_contents(&read_mask);
         let mut scan = ChunkedScan::new(
@@ -107,6 +133,7 @@ pub(crate) async fn list_transactions(
             move |state, args: ChunkArgs| {
                 spawn_transaction_chunk(
                     service.clone(),
+                    chunk_metrics.clone(),
                     state,
                     read_mask.clone(),
                     options.clone(),
@@ -129,18 +156,26 @@ pub(crate) async fn list_transactions(
             {
                 covered_checkpoint_bound = Some(checkpoint);
             }
-            if response.transaction.is_some()
-                && scan.produced() == limit_items
-                && scan.exhausted()
-            {
+            let is_data = response.transaction.is_some();
+            let ends_at_item_limit =
+                is_data && scan.produced() == limit_items && scan.exhausted();
+            if ends_at_item_limit {
                 let mut end = QueryEnd::default();
                 end.reason = Some(QueryEndReason::ItemLimit as i32);
                 response.end = Some(end);
+                request_metrics.finish_success(
+                    QueryEndReason::ItemLimit,
+                    filtered.then(|| scan.bitmap_buckets_evaluated()),
+                );
             }
+            request_metrics.observe_frame(&response, is_data);
+            let yield_started = request_metrics.yield_clock();
             yield response;
+            request_metrics.observe_yield_wait(yield_started);
         }
 
         let produced = scan.produced();
+        let bitmap_buckets_evaluated = filtered.then(|| scan.bitmap_buckets_evaluated());
         let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
         let terminal_reason = super::query_end::effective_terminal_reason(
             produced,
@@ -150,7 +185,12 @@ pub(crate) async fn list_transactions(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            yield end_response(terminal_watermark, terminal_reason);
+            let response = end_response(terminal_watermark, terminal_reason);
+            request_metrics.observe_frame(&response, false);
+            request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
+            let yield_started = request_metrics.yield_clock();
+            yield response;
+            request_metrics.observe_yield_wait(yield_started);
         }
         info!(
             filtered,
@@ -167,6 +207,7 @@ pub(crate) async fn list_transactions(
 
 fn spawn_transaction_chunk(
     service: RpcService,
+    metrics: Option<ListStreamMetrics>,
     state: TransactionScanState,
     read_mask: FieldMaskTree,
     options: QueryOptions,
@@ -177,7 +218,7 @@ fn spawn_transaction_chunk(
     render_contents: bool,
     cancel: CancellationToken,
 ) -> JoinHandle<Result<TransactionChunkDone, RpcError>> {
-    tokio::task::spawn_blocking(move || {
+    spawn_list_chunk(metrics, move |metrics| {
         next_transaction_chunk(
             service,
             state,
@@ -189,6 +230,7 @@ fn spawn_transaction_chunk(
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
+            metrics,
         )
     })
 }
@@ -231,6 +273,7 @@ fn next_transaction_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<TransactionChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let mut remaining_scan_budget = scan_budget;
@@ -430,6 +473,7 @@ fn next_transaction_chunk(
         entry_checkpoint,
         render_contents,
         cancel,
+        metrics,
     )?;
     let produced = items.len();
     if let Some(watermark) = scan_watermark {
@@ -497,21 +541,22 @@ fn render_transaction_rows(
     entry_checkpoint: u64,
     render_contents: bool,
     cancel: &CancellationToken,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListTransactionsResponse>, RpcError> {
-    let mut transaction_reads = if render_contents {
-        let digests = rows
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut transaction_reads_and_objects = if render_contents {
+        let items = rows
             .iter()
-            .map(|row| {
-                let digest: Digest = row.digest.into();
-                digest
-            })
-            .collect::<Vec<_>>();
-        service
-            .reader
-            .multi_get_transaction_reads(&digests)?
-            .into_iter()
+            .map(|row| (row.digest.into(), row.checkpoint_number))
+            .collect::<Vec<(Digest, u64)>>();
+        let reads = service.reader.multi_get_transaction_reads(&items)?;
+        let object_sets = fetch_object_sets_for_chunk(&service.reader, &reads, read_mask)?;
+        reads.into_iter().zip_debug_eq(object_sets)
     } else {
-        Vec::new().into_iter()
+        Vec::new().into_iter().zip_debug_eq(Vec::new())
     };
 
     let mut items = Vec::with_capacity(rows.len());
@@ -522,6 +567,7 @@ fn render_transaction_rows(
         if cancel.is_cancelled() {
             return Err(cancelled());
         }
+        let render_started = metrics.map(|_| Instant::now());
         checkpoint_boundary = advance_covered_bound_before_checkpoint(
             checkpoint_boundary,
             row.checkpoint_number,
@@ -536,12 +582,13 @@ fn render_transaction_rows(
             checkpoint_boundary,
         );
         let response = if render_contents {
-            let transaction_read = transaction_reads
+            let (transaction_read, object_set) = transaction_reads_and_objects
                 .next()
-                .expect("transaction reads match tx_seq rows");
+                .expect("transaction reads and object sets match tx_seq rows");
             let transaction = render_executed_transaction(
                 service,
                 transaction_read,
+                &object_set,
                 row.checkpoint_number,
                 read_mask,
             )?;
@@ -557,6 +604,9 @@ fn render_transaction_rows(
             transaction_item_response(watermark, transaction, row.tx_offset, read_mask)
         };
         items.push(response);
+        if let (Some(metrics), Some(render_started)) = (metrics, render_started) {
+            metrics.observe_render(render_started.elapsed());
+        }
     }
     Ok(items)
 }
@@ -647,6 +697,30 @@ mod tests {
             proto.ordering = Some(Ordering::Descending as i32);
         }
         QueryOptions::transactions_from_proto(Some(&proto), 100, 100).unwrap()
+    }
+
+    #[test]
+    fn resolution_uses_validated_read_mask() {
+        use sui_rpc::field::FieldMask;
+        use sui_rpc::field::FieldMaskUtil;
+
+        for (mask, expected) in [
+            ("digest", "digest"),
+            ("transaction", "full"),
+            ("objects", "full_objects"),
+            ("objects.objects.object_id", "full_objects"),
+            ("balance_changes", "full_objects"),
+            ("effects", "full_objects"),
+            ("transaction,effects", "full_objects"),
+        ] {
+            let read_mask = read_mask_defaults::validate_read_mask::<ExecutedTransaction>(
+                Some(FieldMask::from_str(mask)),
+                read_mask_defaults::TRANSACTION,
+            )
+            .unwrap();
+
+            assert_eq!(resolution(&read_mask), expected, "read mask: {mask}");
+        }
     }
 
     #[test]

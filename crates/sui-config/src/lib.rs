@@ -15,7 +15,6 @@ pub mod dynamic_transaction_signing_checks;
 pub mod genesis;
 pub mod local_ip_utils;
 pub mod node;
-pub mod node_config_metrics;
 pub mod object_storage_config;
 pub mod p2p;
 pub mod rpc_config;

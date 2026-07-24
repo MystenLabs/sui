@@ -149,10 +149,114 @@ async fn execute_programmable(
     super::execute_transaction(&mut client, &transaction).await
 }
 
+async fn submit_programmable(
+    cluster: &TestCluster,
+    sender: SuiAddress,
+    builder: ProgrammableTransactionBuilder,
+) -> String {
+    let gas = gas_object(cluster, sender).await;
+    let gas_price = cluster.wallet.get_reference_gas_price().await.unwrap();
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        gas_price,
+    );
+    let signed_transaction = cluster.wallet.sign_transaction(&data).await;
+    let expected_digest = signed_transaction.digest().to_string();
+
+    let mut transaction = v2::Transaction::default();
+    transaction.bcs = Some(v2::Bcs::serialize(signed_transaction.transaction_data()).unwrap());
+    let mut request = v2::ExecuteTransactionRequest::default();
+    request.transaction = Some(transaction);
+    request.signatures = signed_transaction
+        .tx_signatures()
+        .iter()
+        .map(|signature| {
+            let mut message = v2::UserSignature::default();
+            message.bcs = Some(v2::Bcs::from(signature.as_ref().to_owned()));
+            message
+        })
+        .collect();
+    request.read_mask = Some(FieldMask::from_paths(["digest"]));
+
+    let mut client =
+        v2::transaction_execution_service_client::TransactionExecutionServiceClient::connect(
+            cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
+    let response = client
+        .execute_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        response.transaction().digest.as_deref(),
+        Some(expected_digest.as_str())
+    );
+    expected_digest
+}
+
 async fn transfer_self(cluster: &TestCluster, sender: SuiAddress) -> ExecutedTransaction {
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(sender, None);
     execute_programmable(cluster, sender, builder).await
+}
+
+fn object_keys(transaction: &ExecutedTransaction) -> Vec<(String, u64)> {
+    let objects = &transaction
+        .objects
+        .as_ref()
+        .expect("objects should be populated when requested")
+        .objects;
+    assert!(
+        !objects.is_empty(),
+        "requested object set should be non-empty"
+    );
+    objects
+        .iter()
+        .map(|object| {
+            (
+                object
+                    .object_id
+                    .clone()
+                    .expect("object_id should be populated when requested"),
+                object
+                    .version
+                    .expect("version should be populated when requested"),
+            )
+        })
+        .collect()
+}
+
+fn assert_identity_only_object_mask(transaction: &ExecutedTransaction) {
+    let objects = &transaction
+        .objects
+        .as_ref()
+        .expect("objects should be populated when requested")
+        .objects;
+    assert!(
+        !objects.is_empty(),
+        "requested object set should be non-empty"
+    );
+    for object in objects {
+        assert!(object.object_id.is_some());
+        assert!(object.version.is_some());
+        assert!(object.bcs.is_none());
+        assert!(object.digest.is_none());
+        assert!(object.owner.is_none());
+        assert!(object.object_type.is_none());
+        assert!(object.has_public_transfer.is_none());
+        assert!(object.contents.is_none());
+        assert!(object.package.is_none());
+        assert!(object.previous_transaction.is_none());
+        assert!(object.storage_rebate.is_none());
+        assert!(object.json.is_none());
+        assert!(object.balance.is_none());
+        assert!(object.display.is_none());
+    }
 }
 
 /// Fold a watermark into the non-decreasing checkpoint tracker, asserting
@@ -169,6 +273,26 @@ fn assert_checkpoint_monotone(last: &mut Option<u64>, watermark: &v2::Watermark)
     }
 }
 
+fn payload_message_count(cluster: &TestCluster, item_type: &str) -> u64 {
+    let metric_families = cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.prometheus_metrics_for_testing());
+    metric_families
+        .iter()
+        .find(|family| family.name() == "subscription_payload_messages")
+        .and_then(|family| {
+            family.get_metric().iter().find(|metric| {
+                metric
+                    .get_label()
+                    .iter()
+                    .any(|label| label.name() == "type" && label.value() == item_type)
+            })
+        })
+        .map(|metric| metric.counter.value() as u64)
+        .unwrap_or(0)
+}
+
 #[sim_test]
 async fn subscribe_transactions_sender_filter() {
     let cluster = subscription_cluster().await;
@@ -176,7 +300,15 @@ async fn subscribe_transactions_sender_filter() {
 
     let mut client = alpha_subscription_client(&cluster).await;
     let mut request = v2::SubscribeTransactionsRequest::default();
-    request.read_mask = Some(FieldMask::from_paths(["digest", "transaction_index"]));
+    request.read_mask = Some(FieldMask::from_paths([
+        "digest",
+        "transaction.digest",
+        "effects.transaction_digest",
+        "transaction_index",
+        "objects.objects.object_id",
+        "objects.objects.version",
+        "balance_changes",
+    ]));
     request.filter = Some(sender_tx_filter(sender, false));
     let mut stream = client
         .subscribe_transactions(request)
@@ -185,7 +317,28 @@ async fn subscribe_transactions_sender_filter() {
         .into_inner();
 
     let tx = transfer_self(&cluster, sender).await;
-    let expected_digest = tx.digest().to_owned();
+    let execution_digest = tx.digest.as_deref().expect("executed tx has a digest");
+    let execution_transaction_digest = tx
+        .transaction
+        .as_ref()
+        .expect("executed tx has a transaction")
+        .digest
+        .as_deref()
+        .expect("executed transaction has a digest");
+    let execution_effects_digest = tx
+        .effects
+        .as_ref()
+        .expect("executed tx has effects")
+        .transaction_digest
+        .as_deref()
+        .expect("executed effects have a transaction digest");
+    assert_eq!(execution_transaction_digest, execution_digest);
+    assert_eq!(execution_effects_digest, execution_digest);
+    assert!(
+        !tx.balance_changes.is_empty(),
+        "execution response should contain balance changes"
+    );
+    let expected_digest = execution_digest.to_owned();
 
     let mut last_hi = None;
     let mut found = false;
@@ -201,15 +354,79 @@ async fn subscribe_transactions_sender_filter() {
             continue;
         };
         assert!(transaction.transaction_index.is_some());
+        assert_identity_only_object_mask(transaction);
+        assert_eq!(
+            object_keys(transaction),
+            object_keys(&tx),
+            "subscription objects should match the execution response"
+        );
+        assert!(!transaction.balance_changes.is_empty());
+        assert_eq!(transaction.balance_changes, tx.balance_changes);
         let digest = transaction
             .digest
             .as_deref()
             .expect("digest requested in read mask");
-        assert_eq!(digest, expected_digest, "only sender-filtered items");
+        let nested_transaction_digest = transaction
+            .transaction
+            .as_ref()
+            .expect("transaction requested in read mask")
+            .digest
+            .as_deref()
+            .expect("transaction digest requested in read mask");
+        let effects_transaction_digest = transaction
+            .effects
+            .as_ref()
+            .expect("effects requested in read mask")
+            .transaction_digest
+            .as_deref()
+            .expect("effects transaction digest requested in read mask");
+        assert_eq!(
+            digest,
+            expected_digest.as_str(),
+            "only sender-filtered items"
+        );
+        assert_eq!(nested_transaction_digest, expected_digest.as_str());
+        assert_eq!(effects_transaction_digest, expected_digest.as_str());
         found = true;
         break;
     }
     assert!(found, "transfer should arrive on the filtered stream");
+    drop(stream);
+
+    let mut request = v2::SubscribeTransactionsRequest::default();
+    request.read_mask = Some(FieldMask::from_paths(["objects"]));
+    request.filter = Some(sender_tx_filter(sender, false));
+    let mut objects_stream = client
+        .subscribe_transactions(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let second_tx = transfer_self(&cluster, sender).await;
+    let objects_transaction = loop {
+        let frame = objects_stream
+            .next()
+            .await
+            .expect("objects-only subscription should remain open")
+            .unwrap();
+        if let Some(transaction) = frame.transaction {
+            break transaction;
+        }
+    };
+
+    assert_eq!(
+        object_keys(&objects_transaction),
+        object_keys(&second_tx),
+        "objects-only subscription should match the execution response"
+    );
+    assert!(objects_transaction.digest.is_none());
+    assert!(objects_transaction.transaction.is_none());
+    assert!(objects_transaction.signatures.is_empty());
+    assert!(objects_transaction.effects.is_none());
+    assert!(objects_transaction.events.is_none());
+    assert!(objects_transaction.checkpoint.is_none());
+    assert!(objects_transaction.timestamp.is_none());
+    assert!(objects_transaction.balance_changes.is_empty());
+    assert!(objects_transaction.transaction_index.is_none());
 }
 
 #[sim_test]
@@ -388,6 +605,7 @@ async fn subscribe_events_filtered() {
     let expected_digest = tx.digest().to_owned();
     let tx_checkpoint = tx.checkpoint.expect("executed tx has a checkpoint");
 
+    let mut saw_start_frame = false;
     loop {
         let frame = stream.next().await.expect("stream open").unwrap();
         let watermark = frame.watermark.as_ref().expect("frame watermark");
@@ -396,8 +614,17 @@ async fn subscribe_events_filtered() {
             "frame watermark carries a cursor"
         );
         let Some(proto_event) = frame.event.as_ref() else {
+            assert!(
+                watermark.checkpoint.is_some(),
+                "event start and progress frames carry checkpoint coverage"
+            );
+            saw_start_frame = true;
             continue;
         };
+        assert!(
+            saw_start_frame,
+            "filtered event subscription delivers its start frame before a matching event"
+        );
         assert_eq!(
             proto_event.transaction_digest.as_deref(),
             Some(&*expected_digest)
@@ -514,10 +741,9 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
         start_watermark.cursor.is_some(),
         "start frame carries a resume cursor"
     );
-    assert_eq!(
-        start_watermark.checkpoint, None,
-        "start frame has not fully covered a checkpoint in the subscription interval"
-    );
+    let start_checkpoint = start_watermark
+        .checkpoint
+        .expect("start frame covers the checkpoint before subscription entry");
 
     let mut ticks = Vec::new();
     while ticks.len() < 3 {
@@ -534,6 +760,11 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
             .expect("ascending stream sets checkpoint");
         ticks.push(checkpoint);
     }
+    assert!(
+        ticks[0] > start_checkpoint,
+        "periodic ticks must advance beyond the start boundary: {start_checkpoint} -> {}",
+        ticks[0]
+    );
     assert!(
         ticks.windows(2).all(|pair| pair[0] < pair[1]),
         "tick boundaries must strictly increase: {ticks:?}"
@@ -709,13 +940,13 @@ async fn filtered_subscription_first_frame_is_progress_only() {
             .is_some_and(|watermark| watermark.cursor.is_some()),
         "transaction start frame carries a watermark and cursor"
     );
-    assert_eq!(
+    assert!(
         transaction_start
             .watermark
             .as_ref()
-            .and_then(|watermark| watermark.checkpoint),
-        None,
-        "the start-frame watermark has not fully covered a checkpoint in the subscription interval",
+            .and_then(|watermark| watermark.checkpoint)
+            .is_some(),
+        "transaction start frame covers the checkpoint before subscription entry",
     );
 
     let checkpoint_start = checkpoints
@@ -796,4 +1027,137 @@ async fn subscribe_with_invalid_filter_is_rejected() {
         .await
         .expect_err("empty filter terms must be rejected");
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
+}
+
+#[sim_test]
+async fn subscription_payload_metric_records_emitted_items() {
+    let cluster = subscription_cluster().await;
+    let package_sender = cluster.get_address_0();
+    let sender = cluster.get_address_2();
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/rpc/data/ledger_history/event/emit_test_event");
+    let (pkg, _) = super::publish_package(&cluster, package_sender, path).await;
+    let module = format!("{}::emit_test_event", pkg.to_canonical_string(true));
+
+    let mut client = alpha_subscription_client(&cluster).await;
+    let mut checkpoint_request = v2::SubscribeCheckpointsRequest::default();
+    checkpoint_request.filter = Some(sender_tx_filter(sender, false));
+    let mut checkpoints = client
+        .subscribe_checkpoints(checkpoint_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let mut transaction_request = v2::SubscribeTransactionsRequest::default();
+    transaction_request.filter = Some(sender_tx_filter(sender, false));
+    let mut transactions = client
+        .subscribe_transactions(transaction_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let mut event_request = v2::SubscribeEventsRequest::default();
+    event_request.filter = Some(emit_module_event_filter(&module));
+    let mut events = client
+        .subscribe_events(event_request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let checkpoint_start = checkpoints
+        .next()
+        .await
+        .expect("checkpoint stream open")
+        .unwrap();
+    assert!(checkpoint_start.checkpoint.is_none());
+
+    let transaction_start = transactions
+        .next()
+        .await
+        .expect("transaction stream open")
+        .unwrap();
+    assert!(transaction_start.transaction.is_none());
+
+    let event_start = events.next().await.expect("event stream open").unwrap();
+    assert!(event_start.event.is_none());
+
+    let checkpoint_baseline = payload_message_count(&cluster, "checkpoint");
+    let transaction_baseline = payload_message_count(&cluster, "transaction");
+    let event_baseline = payload_message_count(&cluster, "event");
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    for _ in 0..2 {
+        builder.programmable_move_call(
+            pkg,
+            move_core_types::identifier::Identifier::new("emit_test_event").unwrap(),
+            move_core_types::identifier::Identifier::new("emit_test_event").unwrap(),
+            vec![],
+            vec![],
+        );
+    }
+    let expected_digest = submit_programmable(&cluster, sender, builder).await;
+
+    let checkpoint = loop {
+        let frame = checkpoints
+            .next()
+            .await
+            .expect("checkpoint stream open")
+            .unwrap();
+        if let Some(checkpoint) = frame.checkpoint {
+            break checkpoint;
+        }
+    };
+    assert!(checkpoint.sequence_number.is_some());
+
+    let transaction = loop {
+        let frame = transactions
+            .next()
+            .await
+            .expect("transaction stream open")
+            .unwrap();
+        if let Some(transaction) = frame.transaction {
+            break transaction;
+        }
+    };
+    assert_eq!(transaction.digest.as_deref(), Some(&*expected_digest));
+
+    let mut emitted_events = 0;
+    while emitted_events < 2 {
+        let frame = events.next().await.expect("event stream open").unwrap();
+        if frame.event.is_some() {
+            emitted_events += 1;
+        }
+    }
+
+    let checkpoint_delta = payload_message_count(&cluster, "checkpoint") - checkpoint_baseline;
+    let transaction_delta = payload_message_count(&cluster, "transaction") - transaction_baseline;
+    let event_delta = payload_message_count(&cluster, "event") - event_baseline;
+    assert_eq!(checkpoint_delta, 1);
+    assert_eq!(transaction_delta, 1);
+    assert_eq!(event_delta, 2);
+}
+
+#[sim_test]
+async fn subscription_payload_metric_excludes_progress_frames() {
+    let cluster = subscription_cluster().await;
+    let mut client = alpha_subscription_client(&cluster).await;
+    let mut request = v2::SubscribeCheckpointsRequest::default();
+    request.filter = Some(sender_tx_filter(cluster.get_address_0(), false));
+    let mut checkpoints = client
+        .subscribe_checkpoints(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let checkpoint_baseline = payload_message_count(&cluster, "checkpoint");
+
+    let progress = checkpoints
+        .next()
+        .await
+        .expect("checkpoint stream open")
+        .unwrap();
+    assert!(progress.checkpoint.is_none());
+    assert_eq!(
+        payload_message_count(&cluster, "checkpoint"),
+        checkpoint_baseline
+    );
 }

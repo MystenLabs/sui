@@ -89,12 +89,43 @@ impl Merge<&crate::full_checkpoint_content::ExecutedTransaction> for ExecutedTra
         source: &crate::full_checkpoint_content::ExecutedTransaction,
         mask: &FieldMaskTree,
     ) {
-        if mask.contains(ExecutedTransaction::DIGEST_FIELD) {
-            self.digest = Some(source.transaction.digest().to_string());
+        use crate::effects::TransactionEffectsAPI;
+
+        let transaction_mask = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD);
+        let top_level_digest_selected = mask.contains(ExecutedTransaction::DIGEST_FIELD);
+        let nested_digest_selected = transaction_mask
+            .as_ref()
+            .is_some_and(|submask| submask.contains(Transaction::DIGEST_FIELD.name));
+        let (top_level_digest_string, nested_digest_string) =
+            match (top_level_digest_selected, nested_digest_selected) {
+                (false, false) => (None, None),
+                (true, false) => (
+                    Some(source.effects.transaction_digest().base58_encode()),
+                    None,
+                ),
+                (false, true) => (
+                    None,
+                    Some(source.effects.transaction_digest().base58_encode()),
+                ),
+                (true, true) => {
+                    let digest_string = source.effects.transaction_digest().base58_encode();
+                    (Some(digest_string.clone()), Some(digest_string))
+                }
+            };
+
+        if top_level_digest_selected {
+            self.digest = top_level_digest_string;
         }
 
-        if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD) {
-            self.transaction = Some(Transaction::merge_from(&source.transaction, &submask));
+        if let Some(submask) = transaction_mask {
+            let mut transaction = Transaction::default();
+            merge_transaction_data(
+                &mut transaction,
+                &source.transaction,
+                nested_digest_string,
+                &submask,
+            );
+            self.transaction = Some(transaction);
         }
 
         if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD) {
@@ -2208,37 +2239,47 @@ impl From<crate::transaction::TransactionData> for Transaction {
 
 impl Merge<&crate::transaction::TransactionData> for Transaction {
     fn merge(&mut self, source: &crate::transaction::TransactionData, mask: &FieldMaskTree) {
-        if mask.contains(Self::BCS_FIELD.name) {
-            let mut bcs = Bcs::serialize(&source).unwrap();
-            bcs.name = Some("TransactionData".to_owned());
-            self.bcs = Some(bcs);
-        }
+        merge_transaction_data(self, source, None, mask);
+    }
+}
 
-        if mask.contains(Self::DIGEST_FIELD.name) {
-            self.digest = Some(source.digest().to_string());
-        }
+fn merge_transaction_data(
+    message: &mut Transaction,
+    source: &crate::transaction::TransactionData,
+    precomputed_digest_string: Option<String>,
+    mask: &FieldMaskTree,
+) {
+    if mask.contains(Transaction::BCS_FIELD.name) {
+        let mut bcs = Bcs::serialize(&source).unwrap();
+        bcs.name = Some("TransactionData".to_owned());
+        message.bcs = Some(bcs);
+    }
 
-        if mask.contains(Self::VERSION_FIELD.name) {
-            self.version = Some(1);
-        }
+    if mask.contains(Transaction::DIGEST_FIELD.name) {
+        message.digest =
+            Some(precomputed_digest_string.unwrap_or_else(|| source.digest().base58_encode()));
+    }
 
-        let crate::transaction::TransactionData::V1(source) = source;
+    if mask.contains(Transaction::VERSION_FIELD.name) {
+        message.version = Some(1);
+    }
 
-        if mask.contains(Self::KIND_FIELD.name) {
-            self.kind = Some(source.kind.clone().into());
-        }
+    let crate::transaction::TransactionData::V1(source) = source;
 
-        if mask.contains(Self::SENDER_FIELD.name) {
-            self.sender = Some(source.sender.to_string());
-        }
+    if mask.contains(Transaction::KIND_FIELD.name) {
+        message.kind = Some(source.kind.clone().into());
+    }
 
-        if mask.contains(Self::GAS_PAYMENT_FIELD.name) {
-            self.gas_payment = Some((&source.gas_data).into());
-        }
+    if mask.contains(Transaction::SENDER_FIELD.name) {
+        message.sender = Some(source.sender.to_string());
+    }
 
-        if mask.contains(Self::EXPIRATION_FIELD.name) {
-            self.expiration = Some(source.expiration.into());
-        }
+    if mask.contains(Transaction::GAS_PAYMENT_FIELD.name) {
+        message.gas_payment = Some((&source.gas_data).into());
+    }
+
+    if mask.contains(Transaction::EXPIRATION_FIELD.name) {
+        message.expiration = Some(source.expiration.into());
     }
 }
 

@@ -1103,3 +1103,127 @@ async fn try_request_add_validator(
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 }
+
+// Tests the epoch close deadline failsafe end-to-end: deferred transactions that no loader
+// will ever schedule (injected to simulate an invariant-breaking bug) block the epoch from
+// closing until the deadline, at which point every validator abandons them, fires the
+// expected debug_fatal, and the cluster still reconfigures. An abandoned transaction can
+// then be resubmitted in the new epoch.
+//
+// The injected state is deliberately DIVERGENT — every validator gets a different
+// transaction under a different deferral key. A bug that breaks deferred-transaction
+// scheduling cannot be assumed to corrupt every validator identically, and the failsafe
+// must not let local deferred state leak into consensus-critical output. Successful
+// checkpoint certification (and hence the epoch change) is the proof: if the forced close
+// surfaced any of the divergent state into checkpoint contents, no 2f+1 quorum could form
+// on one checkpoint digest and the epoch change would never certify.
+#[cfg(msim)]
+#[sim_test]
+async fn test_epoch_close_deadline_unsticks_divergent_stuck_deferred_transactions() {
+    use mysten_common::register_debug_fatal_handler;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use sui_core::authority::transaction_deferral::DeferralKey;
+    use sui_types::executable_transaction::{
+        VerifiedExecutableTransaction, VerifiedExecutableTransactionWithAliases,
+    };
+    use sui_types::transaction::VerifiedTransaction;
+
+    telemetry_subscribers::init_for_testing();
+
+    let deadline_fired = Arc::new(AtomicUsize::new(0));
+    let deadline_fired_clone = deadline_fired.clone();
+    register_debug_fatal_handler!(
+        "Epoch close deadline reached with unscheduled deferred transactions",
+        move || {
+            deadline_fired_clone.fetch_add(1, Ordering::Relaxed);
+        }
+    );
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.set_epoch_close_deadline_ms_for_testing(5_000);
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(20_000)
+        .build()
+        .await;
+
+    let (sender, gas) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    // One distinct transaction per validator (different transfer amounts yield different
+    // digests; they share a gas object, but only one is ever actually executed).
+    let num_validators = test_cluster.swarm.active_validators().count();
+    let mut txs = Vec::new();
+    for i in 0..num_validators {
+        let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+            .transfer_sui(Some(1 + i as u64), sender)
+            .build();
+        txs.push(test_cluster.wallet.sign_transaction(&tx_data).await);
+    }
+
+    // Inject each transaction as a deferred entry no loader will pick up (far-future
+    // ConsensusRound key) on its validator, while still in epoch 0 — a different
+    // transaction under a different key on every validator.
+    for (i, node) in test_cluster.swarm.active_validators().enumerate() {
+        let tx = txs[i].clone();
+        node.get_node_handle().unwrap().with(|node| {
+            let epoch_store = node.state().epoch_store_for_testing();
+            assert_eq!(
+                epoch_store.epoch(),
+                0,
+                "must inject before the epoch closes"
+            );
+            let executable = VerifiedExecutableTransaction::new_from_consensus(
+                VerifiedTransaction::new_unchecked(tx),
+                epoch_store.epoch(),
+            );
+            epoch_store.insert_deferred_transactions_for_test(
+                DeferralKey::new_for_consensus_round(u64::MAX, 1 + i as u64),
+                vec![VerifiedExecutableTransactionWithAliases::no_aliases(
+                    executable,
+                )],
+            );
+        });
+    }
+
+    // Without the deadline failsafe the epoch can never close and this times out; with a
+    // divergence bug in the failsafe, checkpoint certification would stall and this would
+    // also time out.
+    test_cluster
+        .wait_for_epoch_with_timeout(Some(1), Duration::from_secs(120))
+        .await;
+
+    // Exactly one firing per validator: the deadline reports abandonment only on the close
+    // edge, and post-close commits (which keep flowing until the epoch change) must not
+    // re-fire it.
+    assert_eq!(
+        deadline_fired.load(Ordering::Relaxed),
+        num_validators,
+        "the epoch close deadline debug_fatal must fire exactly once per validator"
+    );
+
+    // The abandoned transactions were dropped, not executed: no validator has effects for
+    // the transaction it abandoned.
+    for (i, node) in test_cluster.swarm.active_validators().enumerate() {
+        let digest = *txs[i].digest();
+        node.get_node_handle().unwrap().with(|node| {
+            assert!(
+                node.state()
+                    .get_transaction_cache_reader()
+                    .get_executed_effects(&digest)
+                    .is_none()
+            );
+        });
+    }
+
+    // The abandoned transaction was never executed, so it can be resubmitted as-is in the
+    // new epoch.
+    test_cluster.execute_transaction(txs.pop().unwrap()).await;
+}

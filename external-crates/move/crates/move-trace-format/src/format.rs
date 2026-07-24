@@ -3,7 +3,7 @@
 
 // IDEA: Post trace analysis -- report when values are dropped.
 
-use crate::interface::{Tracer, Writer};
+use crate::interface::{EventFilter, Tracer, Writer};
 use crate::tracers::nop::NopTracer;
 use crate::value::SerializableMoveValue;
 use move_binary_format::{
@@ -327,10 +327,14 @@ impl MoveTraceBuilder {
         }
     }
 
-    /// Whether the tracer wants effect events. If false, the VM tracer can skip the expensive
-    /// value conversion work needed to build effects.
-    pub fn wants_effects(&self) -> bool {
-        self.tracer.wants_effects()
+    /// Get the instruction filter for the given instruction and program counter. This is used to
+    /// determine whether the tracer wants to receive effect events for this instruction.
+    pub fn instruction_filter<I: Into<Opcodes>>(
+        &self,
+        instruction: I,
+        pc: u16,
+    ) -> Option<EventFilter> {
+        self.tracer.instruction_filter(&instruction.into(), pc)
     }
 
     /// Consume the `MoveTraceBuilder` and return the `MoveTrace` that has been built by it.

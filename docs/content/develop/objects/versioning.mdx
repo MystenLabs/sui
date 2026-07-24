@@ -1,8 +1,49 @@
 ---
 title: Object Versioning
 sidebar_label: Versioning
-description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
-keywords: ['object versioning', 'Lamport timestamps', 'fastpath', 'consensus objects', 'object ownership', 'dynamic fields', 'wrapped objects', 'Sui objects']
+description: >-
+  Sui provides `Table` and `Bag` collections built using dynamic fields, but
+  with additional support to count the number of entries they contain to protect
+  against accidental deletion when non-empty.
+keywords:
+  - object versioning
+  - Lamport timestamps
+  - fastpath
+  - consensus objects
+  - object ownership
+  - dynamic fields
+  - wrapped objects
+  - Sui objects
+goal:
+  description: >-
+    Reader understands how Sui versions objects by (ID, version) and the
+    fastpath versus consensus versioning paths
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Object Versioning in Sui?
+  - How does object versioning work on Sui?
+  - Why should I use object versioning?
+answer: >-
+  Sui provides `Table` and `Bag` collections built using dynamic fields, but
+  with additional support to count the number of entries they contain to protect
+  against accidental deletion when non-empty.
 ---
 
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.

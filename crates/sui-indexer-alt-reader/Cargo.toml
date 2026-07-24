@@ -9,6 +9,9 @@ edition = "2024"
 [lints]
 workspace = true
 
+[features]
+testing = []
+
 [dependencies]
 anyhow.workspace = true
 async-graphql = { workspace = true, features = ["dataloader"] }

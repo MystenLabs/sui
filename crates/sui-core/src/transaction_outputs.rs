@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::base_types::{FullObjectID, ObjectRef};
+use sui_types::base_types::FullObjectID;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
@@ -25,8 +25,6 @@ pub struct TransactionOutputs {
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
     pub wrapped: Vec<ObjectKey>,
     pub deleted: Vec<ObjectKey>,
-    pub locks_to_delete: Vec<ObjectRef>,
-    pub new_locks_to_init: Vec<ObjectRef>,
     pub written: WrittenObjects,
 }
 
@@ -41,7 +39,7 @@ impl TransactionOutputs {
         let InnerTemporaryStore {
             input_objects,
             stream_ended_consensus_objects,
-            mutable_inputs,
+            mutable_inputs: _,
             written,
             events,
             accumulator_events,
@@ -73,7 +71,7 @@ impl TransactionOutputs {
         // removals from consensus in the marker table. For deleted entries in the marker table we
         // need to make sure we don't accidentally overwrite entries.
         let markers: Vec<_> = {
-            let received = received_objects.clone().map(|objref| {
+            let received = received_objects.map(|objref| {
                 (
                     // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
                     FullObjectKey::new(FullObjectID::new(objref.0, None), objref.1),
@@ -161,25 +159,6 @@ impl TransactionOutputs {
                 .collect()
         };
 
-        let locks_to_delete: Vec<_> = mutable_inputs
-            .into_iter()
-            .filter_map(|(id, ((version, digest), owner))| {
-                owner.is_address_owned().then_some((id, version, digest))
-            })
-            .chain(received_objects)
-            .collect();
-
-        let new_locks_to_init: Vec<_> = written
-            .values()
-            .filter_map(|new_object| {
-                if new_object.is_address_owned() {
-                    Some(new_object.compute_object_reference())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
         let deleted = effects
             .deleted()
             .into_iter()
@@ -198,8 +177,6 @@ impl TransactionOutputs {
             markers,
             wrapped,
             deleted,
-            locks_to_delete,
-            new_locks_to_init,
             written,
         }
     }
@@ -222,8 +199,6 @@ impl TransactionOutputs {
             markers: vec![],
             wrapped: vec![],
             deleted: vec![],
-            locks_to_delete: vec![],
-            new_locks_to_init: vec![],
             written: WrittenObjects::new(),
         }
     }

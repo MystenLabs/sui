@@ -1,0 +1,185 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== conflict.move ========================================================
+-- test 0 -------------------
+use line: 9, use_col: 9
+Unit '0xCAFE3'
+Unit 'ImportConflict'
+Module 'Self'
+Module 'another_dep'
+    TARGET     : '(use ImportConflict::another_dep)'
+    ADDITIONAL EDIT: 'use ImportConflict::another_dep;
+
+    '
+Module 'ImportConflict'
+    INSERT TEXT: 'ImportConflict::ImportConflict'
+    TARGET     : '(ImportConflict::ImportConflict)'
+Module 'UpperDep'
+    INSERT TEXT: 'ImportConflict::UpperDep'
+    TARGET     : '(ImportConflict::UpperDep)'
+Struct 'UpperDep'
+Method 'address_conflict()'
+    INSERT TEXT: 'address_conflict()'
+    TARGET     : '(ImportConflict::conflict::address_conflict)'
+    TYPE       : 'fun ()'
+Method 'member_alias_conflict()'
+    INSERT TEXT: 'member_alias_conflict()'
+    TARGET     : '(ImportConflict::conflict::member_alias_conflict)'
+    TYPE       : 'fun ()'
+Method 'member_name_conflict()'
+    INSERT TEXT: 'member_name_conflict()'
+    TARGET     : '(ImportConflict::conflict::member_name_conflict)'
+    TYPE       : 'fun ()'
+Method 'module_alias_conflict()'
+    INSERT TEXT: 'module_alias_conflict()'
+    TARGET     : '(ImportConflict::conflict::module_alias_conflict)'
+    TYPE       : 'fun ()'
+Method 'pub_pkg()'
+    INSERT TEXT: 'ImportConflict::ImportConflict::pub_pkg()'
+    TARGET     : '(ImportConflict::ImportConflict::pub_pkg)'
+    TYPE       : 'fun ()'
+Method 'pub_upper()'
+    INSERT TEXT: 'ImportConflict::UpperDep::pub_upper()'
+    TARGET     : '(ImportConflict::UpperDep::pub_upper)'
+    TYPE       : 'fun ()'
+Struct 'UpperDepStruct'
+    TARGET     : '(use ImportConflict::UpperDep::UpperDepStruct)'
+    ADDITIONAL EDIT: 'use ImportConflict::UpperDep::UpperDepStruct;
+
+    '
+
+-- test 1 -------------------
+use line: 16, use_col: 9
+Unit '0xCAFE3'
+Unit 'ImportConflict'
+Module 'Self'
+Module 'UpperDep'
+Module 'ImportConflict'
+    INSERT TEXT: 'ImportConflict::ImportConflict'
+    TARGET     : '(ImportConflict::ImportConflict)'
+Module 'UpperDep'
+    INSERT TEXT: 'ImportConflict::UpperDep'
+    TARGET     : '(ImportConflict::UpperDep)'
+Method 'address_conflict()'
+    INSERT TEXT: 'address_conflict()'
+    TARGET     : '(ImportConflict::conflict::address_conflict)'
+    TYPE       : 'fun ()'
+Method 'member_alias_conflict()'
+    INSERT TEXT: 'member_alias_conflict()'
+    TARGET     : '(ImportConflict::conflict::member_alias_conflict)'
+    TYPE       : 'fun ()'
+Method 'member_name_conflict()'
+    INSERT TEXT: 'member_name_conflict()'
+    TARGET     : '(ImportConflict::conflict::member_name_conflict)'
+    TYPE       : 'fun ()'
+Method 'module_alias_conflict()'
+    INSERT TEXT: 'module_alias_conflict()'
+    TARGET     : '(ImportConflict::conflict::module_alias_conflict)'
+    TYPE       : 'fun ()'
+Method 'pub_pkg()'
+    INSERT TEXT: 'ImportConflict::ImportConflict::pub_pkg()'
+    TARGET     : '(ImportConflict::ImportConflict::pub_pkg)'
+    TYPE       : 'fun ()'
+Method 'pub_upper()'
+    INSERT TEXT: 'ImportConflict::UpperDep::pub_upper()'
+    TARGET     : '(ImportConflict::UpperDep::pub_upper)'
+    TYPE       : 'fun ()'
+Struct 'AnotherDepStruct'
+    TARGET     : '(use ImportConflict::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: 'use ImportConflict::another_dep::AnotherDepStruct;
+
+    '
+Struct 'UpperDepStruct'
+    TARGET     : '(use ImportConflict::UpperDep::UpperDepStruct)'
+    ADDITIONAL EDIT: 'use ImportConflict::UpperDep::UpperDepStruct;
+
+    '
+
+-- test 2 -------------------
+use line: 23, use_col: 17
+Unit '0xCAFE3'
+Unit 'ImportConflict'
+Module 'Self'
+Module 'another_dep'
+    TARGET     : '(use ImportConflict::another_dep)'
+    ADDITIONAL EDIT: 'use ImportConflict::another_dep;
+
+    '
+Module 'ImportConflict'
+    INSERT TEXT: 'ImportConflict::ImportConflict'
+    TARGET     : '(ImportConflict::ImportConflict)'
+Module 'UpperDep'
+    TARGET     : '(use ImportConflict::UpperDep)'
+    ADDITIONAL EDIT: 'use ImportConflict::UpperDep;
+
+    '
+Struct 'UpperDepStruct'
+Struct 'UpperDepStruct'
+    INSERT TEXT: 'ImportConflict::UpperDep::UpperDepStruct'
+    TARGET     : '(ImportConflict::UpperDep::UpperDepStruct)'
+Keyword 'u8'
+Keyword 'u16'
+Keyword 'u32'
+Keyword 'u64'
+Keyword 'u128'
+Keyword 'u256'
+Keyword 'bool'
+Keyword 'vector'
+Keyword 'address'
+
+-- test 3 -------------------
+use line: 28, use_col: 9
+Unit '0xCAFE3'
+Unit 'ImportConflict'
+Module 'Self'
+Module 'another_dep'
+    TARGET     : '(use ImportConflict::another_dep)'
+    ADDITIONAL EDIT: 'use ImportConflict::another_dep;
+
+    '
+Module 'ImportConflict'
+    INSERT TEXT: 'ImportConflict::ImportConflict'
+    TARGET     : '(ImportConflict::ImportConflict)'
+Module 'UpperDep'
+    TARGET     : '(use ImportConflict::UpperDep)'
+    ADDITIONAL EDIT: 'use ImportConflict::UpperDep;
+
+    '
+Method 'address_conflict()'
+    INSERT TEXT: 'address_conflict()'
+    TARGET     : '(ImportConflict::conflict::address_conflict)'
+    TYPE       : 'fun ()'
+Method 'member_alias_conflict()'
+    INSERT TEXT: 'member_alias_conflict()'
+    TARGET     : '(ImportConflict::conflict::member_alias_conflict)'
+    TYPE       : 'fun ()'
+Method 'member_name_conflict()'
+    INSERT TEXT: 'member_name_conflict()'
+    TARGET     : '(ImportConflict::conflict::member_name_conflict)'
+    TYPE       : 'fun ()'
+Method 'module_alias_conflict()'
+    INSERT TEXT: 'module_alias_conflict()'
+    TARGET     : '(ImportConflict::conflict::module_alias_conflict)'
+    TYPE       : 'fun ()'
+Method 'pub_pkg()'
+    INSERT TEXT: 'ImportConflict::ImportConflict::pub_pkg()'
+    TARGET     : '(ImportConflict::ImportConflict::pub_pkg)'
+    TYPE       : 'fun ()'
+Method 'pub_upper()'
+    INSERT TEXT: 'UpperDep::pub_upper()'
+    TARGET     : '(use ImportConflict::UpperDep)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: 'use ImportConflict::UpperDep;
+
+    '
+Struct 'AnotherDepStruct'
+    TARGET     : '(use ImportConflict::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: 'use ImportConflict::another_dep::AnotherDepStruct;
+
+    '
+Struct 'UpperDepStruct'
+    TARGET     : '(use ImportConflict::UpperDep::UpperDepStruct)'
+    ADDITIONAL EDIT: 'use ImportConflict::UpperDep::UpperDepStruct;
+
+    '

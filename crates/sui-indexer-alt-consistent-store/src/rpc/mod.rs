@@ -17,6 +17,7 @@ use metrics::RpcMetrics;
 use middleware::metrics::MakeMetricsHandler;
 use middleware::panic::CatchPanicLayer;
 use middleware::version::Version;
+use mysten_network::request_log::GrpcRequestLogLayer;
 use prometheus::Registry;
 use sui_futures::service::Service;
 use sui_http::middleware::callback::CallbackLayer;
@@ -80,6 +81,10 @@ pub(crate) struct RpcService<'d> {
     reflection_v1: tonic_reflection::server::Builder<'d>,
     reflection_v1alpha: tonic_reflection::server::Builder<'d>,
 
+    /// The same file descriptor sets, retained to build the request-log middleware's descriptor
+    /// pool, so it cannot drift from what the reflection service exposes.
+    file_descriptor_sets: Vec<&'d [u8]>,
+
     /// Names of gRPC services and associated readiness futures registered with this instance.
     service_futures: Vec<(&'static str, BoxFuture<'static, ()>)>,
 
@@ -126,6 +131,7 @@ impl<'d> RpcService<'d> {
             version,
             reflection_v1: tonic_reflection::server::Builder::configure(),
             reflection_v1alpha: tonic_reflection::server::Builder::configure(),
+            file_descriptor_sets: vec![],
             service_futures: vec![],
             router: Router::new(),
             metrics: Arc::new(RpcMetrics::new(registry)),
@@ -138,6 +144,7 @@ impl<'d> RpcService<'d> {
         self.reflection_v1alpha = self
             .reflection_v1alpha
             .register_encoded_file_descriptor_set(fds);
+        self.file_descriptor_sets.push(fds);
         self
     }
 
@@ -165,10 +172,19 @@ impl<'d> RpcService<'d> {
             version,
             reflection_v1,
             reflection_v1alpha,
+            file_descriptor_sets,
             service_futures,
             mut router,
             metrics,
         } = self;
+
+        let request_log = GrpcRequestLogLayer::from_encoded_file_descriptor_sets(
+            file_descriptor_sets
+                .iter()
+                .copied()
+                .chain([tonic_health::pb::FILE_DESCRIPTOR_SET]),
+        )
+        .context("Failed to build request-log descriptor pool")?;
 
         let reflection_v1 = reflection_v1
             .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
@@ -192,6 +208,7 @@ impl<'d> RpcService<'d> {
         router = add_service(router, reflection_v1alpha);
         router = add_service(router, health_service);
         router = router
+            .layer(request_log)
             .layer(CallbackLayer::new(MakeMetricsHandler::new(metrics.clone())))
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
@@ -296,4 +313,20 @@ where
     S::Error: Send + Into<BoxError>,
 {
     router.route_service(&format!("/{}/{{*rest}}", S::NAME), s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `run` builds the request-log layer's descriptor pool from the registered file descriptor
+    /// sets plus `tonic_health`'s, so they must always merge into one valid pool.
+    #[test]
+    fn request_log_pool_builds_from_registered_file_descriptor_sets() {
+        GrpcRequestLogLayer::from_encoded_file_descriptor_sets([
+            sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET,
+            tonic_health::pb::FILE_DESCRIPTOR_SET,
+        ])
+        .unwrap();
+    }
 }

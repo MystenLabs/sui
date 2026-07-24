@@ -6,6 +6,9 @@ publish = false
 edition = "2024"
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
@@ -21,6 +24,7 @@ futures.workspace = true
 move-core-types.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
+mysten-network.workspace = true
 sui-http.workspace = true
 prometheus.workspace = true
 prost-types.workspace = true

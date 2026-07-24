@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -45,6 +48,7 @@ zstd.workspace = true
 
 move-core-types.workspace = true
 mysten-common.workspace = true
+mysten-network.workspace = true
 
 bin-version.workspace = true
 sui-http.workspace = true

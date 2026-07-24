@@ -88,7 +88,7 @@ If tests fail non-trivially, stop and report.
 
 ## Step 6 — Clippy
 
-Run `cargo xclippy -D warnings`. Fix all warnings and errors. Stage changes but do not commit yet — they will be amended in Step 9.
+Run `cargo xclippy -- -D warnings`. Fix all warnings and errors. Stage changes but do not commit yet — they will be amended in Step 9.
 Repeat until clean. If a clippy issue is non-trivial to fix, stop and report.
 
 ## Step 7 — Format

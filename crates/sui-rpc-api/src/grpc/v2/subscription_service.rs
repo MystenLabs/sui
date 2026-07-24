@@ -20,6 +20,8 @@
 //! end: when the subscription actor drops a subscriber (lag or backpressure),
 //! the stream simply closes and the client reconnects, backfilling via List.
 
+use std::time::Instant;
+
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_inverted_index::BitmapQuery;
 use sui_rpc::field::FieldMaskTree;
@@ -28,6 +30,7 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint;
 use sui_rpc::proto::sui::rpc::v2::Event as ProtoEvent;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2::ObjectSet as ProtoObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::SubscribeEventsRequest;
@@ -38,6 +41,7 @@ use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 use sui_rpc_cursor::Position;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::effects::TransactionEffectsAPI;
 use tokio::sync::mpsc;
 use tonic::codegen::BoxStream;
 
@@ -50,6 +54,8 @@ use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::merge_covered_checkpoint_bound;
+use crate::metrics::SubscriptionFrameKind;
+use crate::metrics::SubscriptionStreamMetrics;
 use crate::read_mask_defaults;
 use crate::subscription::SubscriptionKind;
 use crate::subscription::SubscriptionSpec;
@@ -67,7 +73,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::CHECKPOINT,
         )?;
         let query = compile_transaction_filter(self, request.filter.as_ref())?;
-        let mut receiver = register(
+        let (mut receiver, stream_metrics) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Checkpoints,
@@ -79,18 +85,23 @@ impl SubscriptionService for RpcService {
         let response = Box::pin(async_stream::stream! {
             while let Some(update) = receiver.recv().await {
                 let mut response = SubscribeCheckpointsResponse::default();
-                match update {
+                let frame_kind = match update {
                     SubscriptionUpdate::Matched(matched) => {
                         let cp = matched.checkpoint.summary.sequence_number;
                         response.cursor = Some(cp);
                         response.checkpoint =
                             Some(render_checkpoint_message(&matched.checkpoint, &read_mask));
+                        SubscriptionFrameKind::Payload
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, .. } => {
                         response.cursor = Some(cp);
+                        SubscriptionFrameKind::Watermark
                     }
-                }
+                };
+                stream_metrics.observe_frame(&response, frame_kind);
+                let yielded_at = Instant::now();
                 yield Ok(response);
+                stream_metrics.observe_yield_wait(yielded_at.elapsed());
             }
         });
 
@@ -107,7 +118,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::TRANSACTION,
         )?;
         let query = compile_transaction_filter(self, request.filter.as_ref())?;
-        let mut receiver = register(
+        let (mut receiver, stream_metrics) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Transactions,
@@ -116,6 +127,7 @@ impl SubscriptionService for RpcService {
         )
         .await?;
 
+        let service = self.clone();
         let options = QueryOptions::subscription();
         let response = Box::pin(async_stream::stream! {
             let mut boundary: Option<u64> = None;
@@ -146,6 +158,7 @@ impl SubscriptionService for RpcService {
                             );
                             let mut response = SubscribeTransactionsResponse::default();
                             response.transaction = Some(render_transaction_message(
+                                &service,
                                 checkpoint,
                                 i as usize,
                                 &read_mask,
@@ -157,19 +170,22 @@ impl SubscriptionService for RpcService {
                                 },
                                 boundary,
                             ));
+                            stream_metrics.observe_frame(
+                                &response,
+                                SubscriptionFrameKind::Payload,
+                            );
+                            let yielded_at = Instant::now();
                             yield Ok(response);
+                            stream_metrics.observe_yield_wait(yielded_at.elapsed());
                         }
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, tx_hi } => {
-                        // Checkpoint `cp` is fully delivered; the resume cursor lands
-                        // on the first transaction of `cp + 1`. The synthetic start
-                        // tick establishes only the cursor.
-                        let entry_checkpoint =
-                            *entry_checkpoint.get_or_insert(cp.saturating_add(1));
-                        if cp >= entry_checkpoint {
-                            boundary =
-                                merge_covered_checkpoint_bound(boundary, cp, &options);
-                        }
+                        record_watermark_tick_coverage(
+                            &mut boundary,
+                            &mut entry_checkpoint,
+                            cp,
+                            &options,
+                        );
                         let mut response = SubscribeTransactionsResponse::default();
                         response.watermark = Some(boundary_watermark(
                             Position::Transactions {
@@ -178,7 +194,13 @@ impl SubscriptionService for RpcService {
                             },
                             boundary,
                         ));
+                        stream_metrics.observe_frame(
+                            &response,
+                            SubscriptionFrameKind::Watermark,
+                        );
+                        let yielded_at = Instant::now();
                         yield Ok(response);
+                        stream_metrics.observe_yield_wait(yielded_at.elapsed());
                     }
                 }
             }
@@ -197,7 +219,7 @@ impl SubscriptionService for RpcService {
             read_mask_defaults::EVENT,
         )?;
         let query = compile_event_filter(self, request.filter.as_ref())?;
-        let mut receiver = register(
+        let (mut receiver, stream_metrics) = register(
             self,
             SubscriptionSpec {
                 kind: SubscriptionKind::Events,
@@ -246,7 +268,7 @@ impl SubscriptionService for RpcService {
                             }
                             if read_mask.contains(ProtoEvent::TRANSACTION_DIGEST_FIELD.name) {
                                 proto_event.transaction_digest =
-                                    Some(tx.transaction.digest().to_string());
+                                    Some(tx.effects.transaction_digest().base58_encode());
                             }
                             if read_mask.contains(ProtoEvent::TRANSACTION_INDEX_FIELD.name) {
                                 proto_event.transaction_index = Some(tx_idx as u64);
@@ -264,16 +286,22 @@ impl SubscriptionService for RpcService {
                                 },
                                 boundary,
                             ));
+                            stream_metrics.observe_frame(
+                                &response,
+                                SubscriptionFrameKind::Payload,
+                            );
+                            let yielded_at = Instant::now();
                             yield Ok(response);
+                            stream_metrics.observe_yield_wait(yielded_at.elapsed());
                         }
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, tx_hi } => {
-                        let entry_checkpoint =
-                            *entry_checkpoint.get_or_insert(cp.saturating_add(1));
-                        if cp >= entry_checkpoint {
-                            boundary =
-                                merge_covered_checkpoint_bound(boundary, cp, &options);
-                        }
+                        record_watermark_tick_coverage(
+                            &mut boundary,
+                            &mut entry_checkpoint,
+                            cp,
+                            &options,
+                        );
                         let mut response = SubscribeEventsResponse::default();
                         response.watermark = Some(boundary_watermark(
                             Position::Events {
@@ -283,7 +311,13 @@ impl SubscriptionService for RpcService {
                             },
                             boundary,
                         ));
+                        stream_metrics.observe_frame(
+                            &response,
+                            SubscriptionFrameKind::Watermark,
+                        );
+                        let yielded_at = Instant::now();
                         yield Ok(response);
+                        stream_metrics.observe_yield_wait(yielded_at.elapsed());
                     }
                 }
             }
@@ -318,17 +352,46 @@ fn render_checkpoint_message(
     checkpoint_message
 }
 
+fn transaction_objects<'a>(
+    transaction: &'a sui_types::full_checkpoint_content::ExecutedTransaction,
+    checkpoint_objects: &'a sui_types::full_checkpoint_content::ObjectSet,
+) -> impl Iterator<Item = &'a sui_types::object::Object> + 'a {
+    sui_types::storage::get_transaction_object_set(
+        &transaction.transaction,
+        &transaction.effects,
+        &transaction.unchanged_loaded_runtime_objects,
+    )
+    .into_iter()
+    .filter_map(move |key| checkpoint_objects.get(&key))
+}
+
 /// Render one `ExecutedTransaction` message from live executed-checkpoint
 /// data. The nested-transaction `merge_from` does not set `checkpoint` /
 /// `timestamp` (the checkpoint-level merge does), so set them here, along
 /// with `balance_changes` which needs the checkpoint's `ObjectSet`.
 fn render_transaction_message(
+    service: &RpcService,
     checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
     index: usize,
     read_mask: &FieldMaskTree,
 ) -> ExecutedTransaction {
     let tx = &checkpoint.transactions[index];
     let mut message = ExecutedTransaction::merge_from(tx, read_mask);
+
+    if let Some(object_mask) = read_mask
+        .subtree(ExecutedTransaction::OBJECTS_FIELD)
+        .and_then(|submask| submask.subtree(ProtoObjectSet::OBJECTS_FIELD))
+    {
+        message.objects = Some(
+            ProtoObjectSet::default().with_objects(
+                transaction_objects(tx, &checkpoint.object_set)
+                    .map(|object| {
+                        service.render_object_to_proto(object, &object_mask, &checkpoint.object_set)
+                    })
+                    .collect(),
+            ),
+        );
+    }
 
     if read_mask.contains(ExecutedTransaction::CHECKPOINT_FIELD) {
         message.checkpoint = Some(checkpoint.summary.sequence_number);
@@ -349,6 +412,23 @@ fn render_transaction_message(
     }
 
     message
+}
+
+/// Fold a subscription progress tick into the stream's checkpoint coverage.
+/// A filtered subscription's first tick names the checkpoint immediately before
+/// its entry checkpoint; later ticks name checkpoints the actor fully processed.
+/// Both establish a safe covered boundary.
+fn record_watermark_tick_coverage(
+    covered_checkpoint_bound: &mut Option<u64>,
+    entry_checkpoint: &mut Option<u64>,
+    checkpoint: u64,
+    options: &QueryOptions,
+) {
+    if entry_checkpoint.is_none() {
+        *entry_checkpoint = Some(checkpoint.saturating_add(1));
+    }
+    *covered_checkpoint_bound =
+        merge_covered_checkpoint_bound(*covered_checkpoint_bound, checkpoint, options);
 }
 
 fn compile_transaction_filter(
@@ -374,13 +454,78 @@ fn compile_event_filter(
 async fn register(
     service: &RpcService,
     spec: SubscriptionSpec,
-) -> Result<mpsc::Receiver<SubscriptionUpdate>, tonic::Status> {
+) -> Result<
+    (
+        mpsc::Receiver<SubscriptionUpdate>,
+        SubscriptionStreamMetrics,
+    ),
+    tonic::Status,
+> {
     let handle = service
         .subscription_service_handle
         .as_ref()
         .ok_or_else(|| tonic::Status::unimplemented("subscription service not enabled"))?;
-    handle
+    let kind = spec.kind;
+    let receiver = handle
         .register_subscription(spec)
         .await
-        .ok_or_else(|| tonic::Status::unavailable("too many existing subscriptions"))
+        .ok_or_else(|| tonic::Status::unavailable("subscription service is unavailable"))?;
+    let stream_metrics = handle.stream_metrics(kind);
+    Ok((receiver, stream_metrics))
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use super::*;
+    #[test]
+    fn initial_watermark_tick_covers_checkpoint_before_entry() {
+        let options = QueryOptions::subscription();
+        let mut covered_checkpoint_bound = None;
+        let mut entry_checkpoint = None;
+
+        record_watermark_tick_coverage(
+            &mut covered_checkpoint_bound,
+            &mut entry_checkpoint,
+            41,
+            &options,
+        );
+        let watermark = boundary_watermark(
+            Position::Transactions {
+                checkpoint: 42,
+                tx_seq: 100,
+            },
+            covered_checkpoint_bound,
+        );
+
+        assert_eq!(entry_checkpoint, Some(42));
+        assert_eq!(watermark.checkpoint, Some(41));
+    }
+
+    #[test]
+    fn transaction_objects_exclude_checkpoint_siblings() {
+        let checkpoint = TestCheckpointBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(10)
+            .finish_transaction()
+            .start_transaction(1)
+            .create_owned_object(20)
+            .finish_transaction()
+            .build_checkpoint();
+        let first_object = TestCheckpointBuilder::derive_object_id(10);
+        let second_object = TestCheckpointBuilder::derive_object_id(20);
+
+        let first_ids = transaction_objects(&checkpoint.transactions[0], &checkpoint.object_set)
+            .map(|object| object.id())
+            .collect::<Vec<_>>();
+        let second_ids = transaction_objects(&checkpoint.transactions[1], &checkpoint.object_set)
+            .map(|object| object.id())
+            .collect::<Vec<_>>();
+
+        assert!(first_ids.contains(&first_object));
+        assert!(!first_ids.contains(&second_object));
+        assert!(second_ids.contains(&second_object));
+        assert!(!second_ids.contains(&first_object));
+    }
 }

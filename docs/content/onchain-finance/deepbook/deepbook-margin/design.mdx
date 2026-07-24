@@ -1,17 +1,45 @@
 ---
 title: Design
-description: Learn about DeepBook Margin design, including MarginPool, MarginManager, and MarginRegistry shared objects.
+description: >-
+  Learn about DeepBook Margin design, including MarginPool, MarginManager, and
+  MarginRegistry shared objects.
 keywords:
-  [
-    deepbook margin design,
-    margin pool,
-    margin manager,
-    margin registry,
-    leveraged trading,
-    lending protocol,
-    state,
-    interest accrual,
-  ]
+  - deepbook margin design
+  - margin pool
+  - margin manager
+  - margin registry
+  - leveraged trading
+  - lending protocol
+  - state
+  - interest accrual
+goal:
+  description: >-
+    Reader can learn about DeepBook Margin design, including MarginPool,
+    MarginManager, and MarginRegistry shared objects
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Margin architecture
+    stage: Margin
+questions:
+  - What is Design in Sui?
+  - How does design work on Sui?
+  - Why should I use design?
+answer: >-
+  At a high level, the DeepBook Margin design revolves around four main shared
+  objects that work together to enable leveraged trading:.
 ---
 
 At a high level, the DeepBook Margin design revolves around four main shared objects that work together to enable leveraged trading:

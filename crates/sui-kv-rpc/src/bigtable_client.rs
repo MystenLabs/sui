@@ -58,24 +58,27 @@ use sui_types::storage::ObjectKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-/// Stage label values for the `permit_wait_ms` metric. `&'static str` so they
+/// Stage label values for the permit timing metrics. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
 pub(crate) mod stage {
     pub const TRANSACTIONS: &str = "transactions";
     pub const OBJECTS: &str = "objects";
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
+    pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
 }
 
 /// Histograms for tuning the request-scoped `BigTableClient` semaphore.
-/// Cardinality is bounded: 3 methods × 4 stages = 12 series for
-/// `permit_wait_ms`, 3 series for the request-end `permits_peak` and
-/// `ops_total` histograms.
+/// Cardinality is bounded: 3 methods × 5 stages = 15 series each for
+/// `permit_wait_ms` and `permit_hold_ms`, and 3 series each for the request-end
+/// `permits_peak` and `ops_total` histograms.
 #[derive(Clone)]
 pub(crate) struct Metrics {
     /// Time spent waiting for one limiter permit, recorded once per successful
     /// `acquire_owned()` call.
     pub permit_wait_ms: HistogramVec,
+    /// Time one limiter permit is held from acquisition through release.
+    pub permit_hold_ms: HistogramVec,
     /// Peak in-use permit count observed during a single request, recorded
     /// once when the request's `BigTableClient` is dropped.
     pub permits_peak: HistogramVec,
@@ -95,11 +98,22 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
+            permit_hold_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_bigtable_permit_hold_ms",
+                "Time a request-scoped BigTable limiter permit is held, from successful acquire to release (the gated stream's full drain or drop).",
+                &["method", "stage"],
+                prometheus::exponential_buckets(0.5, 2.0, 16).unwrap(),
+                registry,
+            )
+            .unwrap(),
             permits_peak: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_permits_peak",
                 "Peak in-use BigTable limiter permits observed during a single list request.",
                 &["method"],
-                vec![1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0],
+                vec![
+                    1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 65.0, 80.0,
+                    100.0, 130.0, 166.0, 200.0,
+                ],
                 registry,
             )
             .unwrap(),
@@ -290,7 +304,7 @@ impl BigTableClient {
         &self,
         tx_sequence_numbers: &[u64],
     ) -> Result<Vec<(u64, CheckpointSequenceNumber)>, RpcError> {
-        let _permit = self.acquire(stage::CHECKPOINTS).await?;
+        let _permit = self.acquire(stage::TX_CP_RESOLVE).await?;
         self.inner
             .clone()
             .resolve_tx_checkpoints(tx_sequence_numbers)
@@ -305,7 +319,7 @@ impl BigTableClient {
         tx_sequence_numbers: Vec<u64>,
     ) -> Result<BoxStream<'static, Result<(u64, CheckpointSequenceNumber), anyhow::Error>>, RpcError>
     {
-        let permit = self.acquire(stage::CHECKPOINTS).await?;
+        let permit = self.acquire(stage::TX_CP_RESOLVE).await?;
         let inner = self
             .inner
             .clone()
@@ -431,10 +445,18 @@ pub(crate) type WmResolverFut =
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,
     context: Arc<BigTableClientContext>,
+    stage: &'static str,
+    acquired_at: Instant,
 }
 
 impl Drop for LimitedPermit {
     fn drop(&mut self) {
+        let hold_ms = self.acquired_at.elapsed().as_secs_f64() * 1000.0;
+        self.context
+            .metrics
+            .permit_hold_ms
+            .with_label_values(&[self.context.method, self.stage])
+            .observe(hold_ms);
         record_release(&self.context);
     }
 }
@@ -446,10 +468,13 @@ async fn acquire_limited(
 ) -> Result<LimitedPermit, tokio::sync::AcquireError> {
     let start = Instant::now();
     let permit = limiter.acquire_owned().await?;
-    record_acquired(&context, stage, start.elapsed());
+    let acquired_at = Instant::now();
+    record_acquired(&context, stage, acquired_at.duration_since(start));
     Ok(LimitedPermit {
         _permit: permit,
         context,
+        stage,
+        acquired_at,
     })
 }
 
@@ -657,6 +682,37 @@ mod tests {
             histogram_sample_count(family(&families, "kv_rpc_bigtable_ops_total")),
             1,
             "ops_total observed once on context drop"
+        );
+    }
+
+    #[tokio::test]
+    async fn limited_permit_records_hold_once_on_drop() {
+        let (metrics, registry) = Metrics::for_testing();
+        let context = test_context(metrics, "list_transactions");
+        let limiter = Arc::new(Semaphore::new(1));
+
+        let permit = acquire_limited(limiter.clone(), context.clone(), stage::TX_CP_RESOLVE)
+            .await
+            .unwrap();
+        assert_eq!(limiter.available_permits(), 0);
+
+        drop(permit);
+        assert_eq!(limiter.available_permits(), 1);
+        drop(context);
+
+        let families = registry.gather();
+        let permit_hold = family(&families, "kv_rpc_bigtable_permit_hold_ms");
+        assert_eq!(histogram_sample_count(permit_hold), 1);
+        let labels = permit_hold.get_metric()[0].get_label();
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.name() == "method" && label.value() == "list_transactions")
+        );
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.name() == "stage" && label.value() == "tx_cp_resolve")
         );
     }
 

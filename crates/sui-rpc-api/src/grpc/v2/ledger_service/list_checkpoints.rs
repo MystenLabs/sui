@@ -30,6 +30,8 @@ use crate::ledger_history::query_options::CheckpointRange;
 use crate::ledger_history::query_options::QueryOptions;
 use crate::ledger_history::query_options::RangeExhaustion;
 use crate::ledger_history::query_options::ResolvedRange;
+use crate::metrics::ListRequestMetrics;
+use crate::metrics::ListStreamMetrics;
 use crate::read_mask_defaults;
 
 use super::bitmap_scan::DrainedBitmapHits;
@@ -42,6 +44,7 @@ use super::chunked_scan::ChunkedScan;
 use super::chunked_scan::ScanChunkDone;
 use super::chunked_scan::cancelled;
 use super::chunked_scan::scan_limit_or_range;
+use super::chunked_scan::spawn_list_chunk;
 use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_checkpoints_to_serving_floor;
@@ -56,6 +59,20 @@ use crate::ledger_history::watermark::boundary_watermark;
 use crate::ledger_history::watermark::item_watermark;
 use crate::ledger_history::watermark::merge_covered_checkpoint_bound;
 use crate::ledger_history::watermark::scan_frontier_cursor_cp;
+
+const METHOD: &str = "list_checkpoints";
+
+fn resolution(read_mask: &FieldMaskTree) -> &'static str {
+    if read_mask.contains(Checkpoint::OBJECTS_FIELD.name) {
+        "objects"
+    } else if read_mask.contains(Checkpoint::CONTENTS_FIELD.name)
+        || read_mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
+    {
+        "transactions"
+    } else {
+        "summary"
+    }
+}
 
 pub(crate) type ListCheckpointsStream =
     BoxStream<'static, Result<ListCheckpointsResponse, RpcError>>;
@@ -75,6 +92,13 @@ pub(crate) async fn list_checkpoints(
         request.read_mask,
         read_mask_defaults::CHECKPOINT,
     )?;
+    let mut request_metrics = ListRequestMetrics::new(
+        service
+            .list_metrics
+            .as_ref()
+            .map(|metrics| metrics.stream_metrics(METHOD, resolution(&read_mask))),
+        started,
+    );
     let ledger_history = service.config.ledger_history();
     let endpoint = ledger_history.list_checkpoints();
     let bitmap_bucket_scan_budget = ledger_history.bitmap_bucket_scan_budget();
@@ -100,6 +124,7 @@ pub(crate) async fn list_checkpoints(
 
     let terminal_options = options.clone();
     Ok(async_stream::try_stream! {
+        let chunk_metrics = request_metrics.chunk_metrics();
         let mut scan = ChunkedScan::new(
             initial_state,
             limit_items,
@@ -116,6 +141,7 @@ pub(crate) async fn list_checkpoints(
                     args.chunk_item_limit,
                     args.remaining_request_item_limit,
                     args.cancel,
+                    chunk_metrics.clone(),
                 )
             },
         );
@@ -129,17 +155,25 @@ pub(crate) async fn list_checkpoints(
             {
                 covered_checkpoint_bound = Some(checkpoint);
             }
-            if response.checkpoint.is_some()
-                && scan.produced() == limit_items
-                && scan.exhausted()
-            {
+            let is_data = response.checkpoint.is_some();
+            let item_limit_reached =
+                is_data && scan.produced() == limit_items && scan.exhausted();
+            if item_limit_reached {
                 let mut end = QueryEnd::default();
                 end.reason = Some(QueryEndReason::ItemLimit as i32);
                 response.end = Some(end);
+                request_metrics.finish_success(
+                    QueryEndReason::ItemLimit,
+                    filtered.then(|| scan.bitmap_buckets_evaluated()),
+                );
             }
+            request_metrics.observe_frame(&response, is_data);
+            let yield_started = request_metrics.yield_clock();
             yield response;
+            request_metrics.observe_yield_wait(yield_started);
         }
 
+        let bitmap_buckets_evaluated = filtered.then(|| scan.bitmap_buckets_evaluated());
         let produced = scan.produced();
         let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
         let terminal_reason = super::query_end::effective_terminal_reason(
@@ -150,7 +184,12 @@ pub(crate) async fn list_checkpoints(
         if terminal_reason != QueryEndReason::ItemLimit {
             let terminal_watermark =
                 chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
-            yield end_response(terminal_watermark, terminal_reason);
+            let response = end_response(terminal_watermark, terminal_reason);
+            request_metrics.observe_frame(&response, false);
+            request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
+            let yield_started = request_metrics.yield_clock();
+            yield response;
+            request_metrics.observe_yield_wait(yield_started);
         }
         info!(
             filtered,
@@ -175,8 +214,9 @@ fn spawn_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: CancellationToken,
+    metrics: Option<ListStreamMetrics>,
 ) -> JoinHandle<Result<CheckpointChunkDone, RpcError>> {
-    tokio::task::spawn_blocking(move || {
+    spawn_list_chunk(metrics, move |metrics| {
         next_checkpoint_chunk(
             service,
             state,
@@ -187,6 +227,7 @@ fn spawn_checkpoint_chunk(
             chunk_item_limit,
             remaining_request_item_limit,
             &cancel,
+            metrics,
         )
     })
 }
@@ -231,6 +272,7 @@ fn next_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
     match state {
         CheckpointScanState::Init {
@@ -359,6 +401,7 @@ fn next_checkpoint_chunk(
                 chunk_item_limit,
                 remaining_request_item_limit,
                 cancel,
+                metrics,
             )
         }
         CheckpointScanState::Unfiltered {
@@ -377,6 +420,7 @@ fn next_checkpoint_chunk(
             scan_budget,
             chunk_item_limit,
             cancel,
+            metrics,
         ),
         CheckpointScanState::Filtered {
             query,
@@ -408,6 +452,7 @@ fn next_checkpoint_chunk(
             chunk_item_limit,
             remaining_request_item_limit,
             cancel,
+            metrics,
         ),
     }
 }
@@ -423,6 +468,7 @@ fn next_unfiltered_checkpoint_chunk(
     scan_budget: usize,
     chunk_item_limit: usize,
     cancel: &CancellationToken,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let seqs = checkpoint_seqs_for_range(range.clone(), ascending, chunk_item_limit);
@@ -438,7 +484,7 @@ fn next_unfiltered_checkpoint_chunk(
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
-    let items = render_checkpoint_seqs(&service, seqs, &read_mask, &options, cancel)?;
+    let items = render_checkpoint_seqs(&service, seqs, &read_mask, &options, cancel, metrics)?;
     let produced = items.len();
     Ok(CheckpointChunkDone {
         items,
@@ -474,6 +520,7 @@ fn next_filtered_checkpoint_chunk(
     chunk_item_limit: usize,
     remaining_request_item_limit: usize,
     cancel: &CancellationToken,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<CheckpointChunkDone, RpcError> {
     let ascending = options.is_ascending();
     let item_limit = chunk_item_limit.min(remaining_request_item_limit);
@@ -617,7 +664,8 @@ fn next_filtered_checkpoint_chunk(
     if cancel.is_cancelled() {
         return Err(cancelled());
     }
-    let mut items = render_checkpoint_seqs(&service, cp_seqs, &read_mask, &options, cancel)?;
+    let mut items =
+        render_checkpoint_seqs(&service, cp_seqs, &read_mask, &options, cancel, metrics)?;
     let produced = items.len();
     if let Some(watermark) = scan_watermark {
         items.push(watermark);
@@ -798,6 +846,7 @@ fn render_checkpoint_seqs(
     read_mask: &FieldMaskTree,
     options: &QueryOptions,
     cancel: &CancellationToken,
+    metrics: Option<&ListStreamMetrics>,
 ) -> Result<Vec<ListCheckpointsResponse>, RpcError> {
     let mut items = Vec::with_capacity(seqs.len());
     // Per-chunk running boundary; monotonic across chunks because seqs are
@@ -808,12 +857,12 @@ fn render_checkpoint_seqs(
             return Err(cancelled());
         }
         checkpoint_boundary = merge_covered_checkpoint_bound(checkpoint_boundary, cp_seq, options);
-        items.push(render_checkpoint_seq(
-            service,
-            cp_seq,
-            read_mask,
-            checkpoint_boundary,
-        )?);
+        let render_started = metrics.map(|_| Instant::now());
+        let response = render_checkpoint_seq(service, cp_seq, read_mask, checkpoint_boundary)?;
+        if let (Some(metrics), Some(render_started)) = (metrics, render_started) {
+            metrics.observe_render(render_started.elapsed());
+        }
+        items.push(response);
     }
     Ok(items)
 }
@@ -915,6 +964,28 @@ mod tests {
             proto.ordering = Some(Ordering::Descending as i32);
         }
         QueryOptions::checkpoints_from_proto(Some(&proto), 100, 100).unwrap()
+    }
+
+    #[test]
+    fn resolution_uses_validated_read_mask() {
+        use sui_rpc::field::FieldMask;
+        use sui_rpc::field::FieldMaskUtil;
+
+        for (mask, expected) in [
+            ("digest", "summary"),
+            ("contents", "transactions"),
+            ("transactions", "transactions"),
+            ("objects", "objects"),
+            ("objects,transactions", "objects"),
+        ] {
+            let read_mask = read_mask_defaults::validate_read_mask::<Checkpoint>(
+                Some(FieldMask::from_str(mask)),
+                read_mask_defaults::CHECKPOINT,
+            )
+            .unwrap();
+
+            assert_eq!(resolution(&read_mask), expected, "read mask: {mask}");
+        }
     }
 
     /// The filtered checkpoint scan's serving-floor reconciliation mirrors

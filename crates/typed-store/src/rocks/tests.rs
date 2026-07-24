@@ -105,6 +105,15 @@ async fn test_safe_drop_db() {
         .unwrap();
 }
 
+#[cfg(tidehunter)]
+#[test]
+fn test_is_tidehunter_db_detects_shape_v2_marker() {
+    let path = temp_dir();
+    std::fs::write(path.join("shape_v2.yaml"), "").unwrap();
+
+    assert!(is_tidehunter_db(&path));
+}
+
 #[tokio::test]
 async fn test_multi_contain() {
     let db = open_map(temp_dir(), None);
@@ -941,4 +950,45 @@ async fn test_snapshot_iterator_tidehunter_point_in_time() {
         .map(Result::unwrap)
         .collect();
     assert_eq!(reversed, vec![(3, "c".to_string()), (1, "A".to_string())]);
+}
+
+#[cfg(tidehunter)]
+#[tokio::test]
+async fn test_open_destroys_undeclared_key_spaces() {
+    use crate::tidehunter_util::{KeyShapeBuilder, KeyType, ThConfig, add_key_space, open};
+
+    fn open_db(path: &std::path::Path, db_name: &str, names: &[&str]) -> Arc<tidehunter::db::Db> {
+        let mut builder = KeyShapeBuilder::new();
+        let config = ThConfig::new(8, 16, KeyType::uniform(1));
+        for name in names {
+            add_key_space(&mut builder, name, &config);
+        }
+        let (db, _registry_id) = open(path, builder.build(), &MetricConf::new(db_name));
+        db
+    }
+
+    let path = temp_dir();
+    let key = [1u8; 8];
+
+    let db = open_db(&path, "destroy_ks_1", &["a", "b"]);
+    db.insert(db.ks("a"), key.to_vec(), b"va".to_vec()).unwrap();
+    db.insert(db.ks("b"), key.to_vec(), b"vb".to_vec()).unwrap();
+    drop(db);
+
+    // Reopening without "b" destroys it; "a" is untouched.
+    let db = open_db(&path, "destroy_ks_2", &["a"]);
+    assert_eq!(
+        db.get(db.ks("a"), &key).unwrap().as_deref(),
+        Some(b"va".as_slice())
+    );
+    drop(db);
+
+    // Re-declaring "b" reconnects to a fresh, empty key space instead of the
+    // destroyed data.
+    let db = open_db(&path, "destroy_ks_3", &["a", "b"]);
+    assert_eq!(
+        db.get(db.ks("a"), &key).unwrap().as_deref(),
+        Some(b"va".as_slice())
+    );
+    assert!(db.get(db.ks("b"), &key).unwrap().is_none());
 }

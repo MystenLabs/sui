@@ -1829,4 +1829,102 @@ mod tests {
             other => panic!("expected scan Fault, got {other:?}"),
         }
     }
+
+    fn stream_items(all: &[Result<Watermarked<u64>, ScanStop>]) -> Vec<u64> {
+        all.iter()
+            .filter_map(|r| match r {
+                Ok(Watermarked::Item(v)) => Some(*v),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Absent-dimension semantics (mirrors the iter-side tests): an include whose key has no rows
+    /// at all annihilates its conjunction (`∩ ∅ = ∅`). Pinned explicitly because this shape only
+    /// arises when a queried key was never written (e.g. a sender with no transactions), which
+    /// live-cluster tests never exercise.
+    #[tokio::test]
+    async fn absent_include_annihilates_term() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query =
+            BitmapQuery::new(vec![BitmapTerm::new(vec![include(b"ghost")]).unwrap()]).unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(2 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            SkipPolicy::DRAIN_ONLY,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
+        let items = stream_items(&all);
+
+        assert!(
+            items.is_empty(),
+            "absent include must annihilate: {items:?}"
+        );
+    }
+
+    /// A present include cannot rescue a conjunction whose other include is absent — the
+    /// intersection is still empty.
+    #[tokio::test]
+    async fn absent_include_annihilates_term_despite_present_include() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"ghost")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(2 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            SkipPolicy::DRAIN_ONLY,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
+        let items = stream_items(&all);
+
+        assert!(
+            items.is_empty(),
+            "absent include must annihilate: {items:?}"
+        );
+    }
+
+    /// An exclude whose key has no rows subtracts nothing (`∖ ∅`): the present include's matches
+    /// pass through untouched.
+    #[tokio::test]
+    async fn absent_exclude_is_noop() {
+        let source = TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([(test_key(b"a"), vec![(0, vec![1, 2])])])),
+        };
+        let query = BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), exclude(b"ghost")]).unwrap(),
+        ])
+        .unwrap();
+
+        let stream = eval_bitmap_query_stream(
+            source,
+            query,
+            0..(2 * BUCKET_SIZE),
+            BUCKET_SIZE,
+            ScanDirection::Ascending,
+            3,
+            SkipPolicy::DRAIN_ONLY,
+            |_| {},
+        );
+        let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
+
+        assert_eq!(stream_items(&all), vec![1, 2]);
+    }
 }

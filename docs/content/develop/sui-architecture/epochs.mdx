@@ -1,7 +1,39 @@
 ---
 title: Epochs and Reconfiguration
-description: Epochs define time periods on Sui where the validator set remains unchanged. Reconfiguration adjusts network parameters at epoch boundaries.
-keywords: [ epochs, reconfiguration, validators, object versioning ]
+description: >-
+  Epochs define time periods on Sui where the validator set remains unchanged.
+  Reconfiguration adjusts network parameters at epoch boundaries.
+keywords:
+  - epochs
+  - reconfiguration
+  - validators
+  - object versioning
+goal:
+  description: >-
+    Reader understands epochs define time periods on Sui where the validator set
+    remains unchanged.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Epochs and Reconfiguration in Sui?
+  - How does epochs and reconfiguration work on Sui?
+  - How do I configure epochs and reconfiguration?
+answer: >-
+  Epochs define time periods on Sui where the validator set remains unchanged.
+  Reconfiguration adjusts network parameters at epoch boundaries.
 ---
 
 On Sui, an epoch is a period of time defined by the network. During this time, the Sui [validator](/operators/validator/validator-config) set and their stakes remain unchanged. On both [Mainnet](/develop/sui-architecture/networks) and [Testnet](/develop/sui-architecture/networks), an epoch is about 24 hours. Epochs on Devnet are 1 hour. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.

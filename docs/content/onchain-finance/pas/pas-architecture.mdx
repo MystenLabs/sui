@@ -1,7 +1,44 @@
 ---
 title: What is Permissioned Asset Standard?
-description: Learn how the Permissioned Asset Standard (PAS) enforces restricted asset movement on Sui through Accounts, Policies, and programmable approval logic.
-keywords: [ PAS, Permissioned Asset Standard, Account, Policy, Request, approval, permissioned assets, closed-loop ]
+description: >-
+  Learn how the Permissioned Asset Standard (PAS) enforces restricted asset
+  movement on Sui through Accounts, Policies, and programmable approval logic.
+keywords:
+  - PAS
+  - Permissioned Asset Standard
+  - Account
+  - Policy
+  - Request
+  - approval
+  - permissioned assets
+  - closed-loop
+goal:
+  description: >-
+    Reader can learn how the Permissioned Asset Standard (PAS) enforces
+    restricted asset movement on Sui through Accounts
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Permissioned Asset Standard in Sui?
+  - How does permissioned asset standard work on Sui?
+  - Why should I use permissioned asset standard?
+answer: >-
+  On Sui, any object with the `store` ability can be freely transferred by its
+  owner. `Balance` and `Coin` both have `store`, meaning if you hold them, you
+  can send them anywhere on the network with no restrictions.
 ---
 
 On Sui, any object with the `store` ability can be freely transferred by its owner. `Balance` and `Coin` both have `store`, meaning if you hold them, you can send them anywhere on the network with no restrictions.

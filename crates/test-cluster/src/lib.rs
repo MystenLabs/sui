@@ -485,6 +485,49 @@ impl TestCluster {
             .expect("timed out waiting for reconfiguration to complete");
     }
 
+    /// Waits until every node advances to a strictly higher epoch than the one it is at when this is
+    /// called. Unlike `wait_for_epoch_all_nodes`, which matches a target epoch exactly, this only
+    /// requires forward progress, so it is safe when the cluster catches up through several epochs at
+    /// once (e.g. recovering from a stall) and would blow past any fixed target.
+    pub async fn wait_for_next_epoch_all_nodes(&self) {
+        let handles: Vec<_> = self
+            .swarm
+            .all_nodes()
+            .map(|node| node.get_node_handle().unwrap())
+            .collect();
+        let tasks: Vec<_> = handles
+            .iter()
+            .map(|handle| {
+                handle.with_async(|node| async {
+                    let start_epoch = node.state().epoch_store_for_testing().epoch();
+                    let mut retries = 0;
+                    loop {
+                        let epoch = node.state().epoch_store_for_testing().epoch();
+                        if epoch > start_epoch {
+                            if let Some(agg) = node.clone_authority_aggregator() {
+                                // Fullnode: also wait for its auth aggregator to reconfigure.
+                                if agg.committee.epoch() > start_epoch {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        retries += 1;
+                        if retries % 5 == 0 {
+                            tracing::warn!(validator=?node.state().name.concise(), "Waiting {:?}s for an epoch beyond {:?}; currently at {:?}", retries, start_epoch, epoch);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        timeout(Duration::from_secs(40), join_all(tasks))
+            .await
+            .expect("timed out waiting for all nodes to advance an epoch");
+    }
+
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         // fullnode_handle is not part of swarm and cannot be dropped / killed
         self.fullnode_handle
@@ -1055,6 +1098,7 @@ impl TestCluster {
             };
 
             let mut consensus_position = None;
+            let mut rejected_transient = false;
             for result in submit_response.results {
                 match result {
                     SubmitTxResult::Executed { details, .. } => {
@@ -1064,6 +1108,13 @@ impl TestCluster {
                         return Ok((data.effects, events));
                     }
                     SubmitTxResult::Rejected { error } => {
+                        // Mirror the production `TransactionDriver`: a rejection with a
+                        // retriable category (e.g. validator overloaded) is resubmitted.
+                        if error.as_inner().categorize().is_submission_retriable() {
+                            last_transient_err = Some(error.into());
+                            rejected_transient = true;
+                            break;
+                        }
                         return Err(error.into());
                     }
                     SubmitTxResult::Submitted {
@@ -1072,6 +1123,9 @@ impl TestCluster {
                         consensus_position = Some(position);
                     }
                 }
+            }
+            if rejected_transient {
+                continue;
             }
 
             let consensus_position = consensus_position
@@ -1092,16 +1146,34 @@ impl TestCluster {
                     let events = data.events.unwrap_or_default();
                     return Ok((data.effects, events));
                 }
-                Ok(WaitForEffectsResponse::Rejected { error }) => {
-                    return Err(error
-                        .unwrap_or_else(|| {
+                Ok(WaitForEffectsResponse::Rejected { error }) => match error {
+                    // The validator cast a reject vote with a definite cause (e.g. an
+                    // invalid transaction); surface it unless the category is retriable.
+                    Some(err) if !err.as_inner().categorize().is_submission_retriable() => {
+                        return Err(err.into());
+                    }
+                    Some(err) => {
+                        last_transient_err = Some(err.into());
+                    }
+                    // No reject vote was cast locally: the position was indirectly
+                    // rejected at commit time because finalization did not complete
+                    // within INDIRECT_REJECT_DEPTH leader rounds — typically when the
+                    // proposer's block disseminates slowly right after reconfiguration.
+                    // The transaction itself may be perfectly valid, so mirror the
+                    // production `TransactionDriver` (`RejectedByConsensus` maps to the
+                    // retriable `ErrorCategory::Aborted`) and resubmit for a fresh
+                    // position.
+                    None => {
+                        last_transient_err = Some(
                             SuiErrorKind::GenericAuthorityError {
-                                error: "Transaction was rejected".to_string(),
+                                error: "Transaction was rejected by consensus without a \
+                                    reject vote; resubmitting"
+                                    .to_string(),
                             }
-                            .into()
-                        })
-                        .into());
-                }
+                            .into(),
+                        );
+                    }
+                },
                 // The position we waited on was garbage-collected before being sequenced; resubmit
                 // to obtain a fresh position.
                 Ok(WaitForEffectsResponse::Expired { .. }) => {
@@ -1277,6 +1349,9 @@ pub struct TestClusterBuilder {
 
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
+    peer_deny_sync_config_callback:
+        Option<sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -1322,6 +1397,7 @@ impl TestClusterBuilder {
             execution_time_observer_config: None,
             validator_observer_config: None,
             state_sync_config: None,
+            peer_deny_sync_config_callback: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
@@ -1329,6 +1405,18 @@ impl TestClusterBuilder {
 
     pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
         self.state_sync_config = Some(config);
+        self
+    }
+
+    /// Per-validator hook for `peer_deny_sync_config`. The closure receives this
+    /// validator's authority name and the slice of all genesis-committee authority
+    /// names, so callers can compute an allowlist that references peers (e.g.
+    /// "trust everyone but myself").
+    pub fn with_peer_deny_sync_config_per_validator(
+        mut self,
+        f: sui_swarm_config::network_config_builder::PeerDenySyncConfigCallback,
+    ) -> Self {
+        self.peer_deny_sync_config_callback = Some(f);
         self
     }
 
@@ -1710,6 +1798,10 @@ impl TestClusterBuilder {
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {
             builder = builder.with_state_sync_config(state_sync_config);
+        }
+
+        if let Some(cb) = self.peer_deny_sync_config_callback.clone() {
+            builder = builder.with_peer_deny_sync_config_per_validator(cb);
         }
 
         if self.disable_fullnode_pruning {

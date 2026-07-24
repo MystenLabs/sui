@@ -1,7 +1,42 @@
 ---
 title: Sui Client CLI
-description: The Sui Client CLI provides command-level access to interact with the Sui network.
-keywords: [ sui cli, sui client cli, sui client cli, sui client, sui cli help, sui cli reference, sui cli commands, cli commands, cli reference ]
+description: >-
+  The Sui Client CLI provides command-level access to interact with the Sui
+  network.
+keywords:
+  - sui cli
+  - sui client cli
+  - sui client cli
+  - sui client
+  - sui cli help
+  - sui cli reference
+  - sui cli commands
+  - cli commands
+  - cli reference
+goal:
+  description: 'Reader can look up client cli command syntax, flags, and usage examples'
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - pattern: 'sui '
+      min: 2
+      label: Shows CLI command usage
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Sui Client CLI in Sui?
+  - How do I publish a move package?
+  - What are the available sui client cli commands?
+answer: >-
+  The Sui CLI `client` command provides command-level access to interact with
+  the Sui network.
 ---
 
 The Sui CLI `client` command provides command-level access to interact with the Sui network. Typical uses for `sui client` include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.
@@ -237,8 +272,10 @@ The most common options are:
 - `--to`: Recipient address (or its keystore alias). Required.
 - `--amount`: Amount to send in the coin's smallest unit (MIST for SUI). Required unless `--all-coins` is set.
 - `--coin-type`: Coin type to send. Defaults to `0x2::sui::SUI`.
-- `--all-coins`: Send all owned coin objects of the specified type (not address-balance funds). Conflicts with `--amount` and `--stateless`.
-- `--stateless`: Draw all funds (including gas) from the sender's address balances, producing a transaction with no owned-object inputs. Conflicts with `--all-coins`.
+- `--all-coins`: Send all owned coin objects of the specified type (not address-balance funds). Conflicts with `--amount` and `--from-address-balance`.
+- `--from-address-balance`: Draw the amount from the sender's address balance rather than their coins. Without it, coins are preferred and the address balance is only used if the coins cannot cover the amount. Conflicts with `--all-coins`.
+
+Either way, the recipient is paid into their address balance. Gas is selected separately: it comes from the sender's address balance when that can cover the budget, and from their coins otherwise.
 
 ### Transfer an object to party ownership
 

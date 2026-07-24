@@ -43,8 +43,29 @@ pub fn open(path: &Path, key_shape: KeyShape, metric_conf: &MetricConf) -> (Arc<
     // column family's handle by name via `Db::ks`.
     let db = Db::open(path, key_shape, Arc::new(thdb_config(metric_conf)), metrics)
         .expect("failed to open tidehunter db");
+    destroy_undeclared_key_spaces(&db, path);
     db.start_periodic_snapshot();
     (db, registry_id)
+}
+
+/// Destroys key spaces that exist in the database but are no longer declared
+/// in the `KeyShape`, i.e. tables that were removed from the DBMap struct.
+/// `Db::open` retains such key spaces internally (data preserved, not
+/// exposed); destroying them persists a registry tombstone so their data is
+/// dropped and disk space is reclaimed through the regular GC cadences.
+fn destroy_undeclared_key_spaces(db: &Db, path: &Path) {
+    let registry = Db::load_key_shape(path).expect("failed to load tidehunter key shape registry");
+    for ks in registry.iter_ks() {
+        if ks.destroyed() || db.try_ks(ks.name()).is_some() {
+            continue;
+        }
+        tracing::warn!(
+            "destroying tidehunter key space '{}': present in database but not declared",
+            ks.name()
+        );
+        db.destroy_key_space(ks.name())
+            .expect("failed to destroy tidehunter key space");
+    }
 }
 
 fn new_db_registry(name: String) -> Registry {

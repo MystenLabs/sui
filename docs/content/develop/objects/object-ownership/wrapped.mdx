@@ -1,7 +1,56 @@
 ---
 title: Wrapped Objects
-description: Wrapped objects are object data structures nested inside of another object data structure. Objects can be wrapped directly, through `Option`, or through `vector` fields. 
-keywords: [ wrapped objects, wrapping objects, unwrapping objects, direct wrapping, wrap directly, wrap object directly, wrap object option, option wrap, vector wrap, wrap object vector ]
+description: >-
+  Wrapped objects are object data structures nested inside of another object
+  data structure. Objects can be wrapped directly, through `Option`, or through
+  `vector` fields.
+keywords:
+  - wrapped objects
+  - wrapping objects
+  - unwrapping objects
+  - direct wrapping
+  - wrap directly
+  - wrap object directly
+  - wrap object option
+  - option wrap
+  - vector wrap
+  - wrap object vector
+goal:
+  description: >-
+    Reader understands wrapped objects are object data structures nested inside
+    of another object data structure
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Wrapped objects
+    stage: Environment
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Wrapped objects
+    stage: Environment
+questions:
+  - What is Wrapped Objects in Sui?
+  - How does wrapped objects work on Sui?
+  - Why should I use wrapped objects?
+answer: >-
+  Wrapped objects are object data structures nested inside of another object
+  data structure. Objects can be wrapped directly, through `Option`, or through
+  `vector` fields.
 ---
 
 Wrapping refers to nesting structs to organize data structures in Move. When an object is wrapped, the object no longer exists independently onchain. You can no longer look up the object by its ID, as the object becomes part of the data of the object that wraps it. Most importantly, you can no longer pass the wrapped object as an argument in a Move call. The only access point is through the object that wraps it.

@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Weak},
     time::{Duration, Instant},
 };
 
@@ -541,12 +541,26 @@ impl ChannelPool {
 /// Proxies Tonic requests to NetworkService with actual handler implementation.
 struct TonicServiceProxy<S: ValidatorNetworkService> {
     context: Arc<Context>,
-    service: Arc<S>,
+    // TonicServiceProxy is cloned into per-connection server tasks, which complete on the
+    // network's schedule during graceful shutdown, and can briefly outlive the node if it is
+    // dropped without stop(). Hold the service weakly so lingering connections cannot extend
+    // the life of the authority service and its state; requests racing shutdown fail with
+    // `unavailable` instead.
+    service: Weak<S>,
 }
 
 impl<S: ValidatorNetworkService> TonicServiceProxy<S> {
     fn new(context: Arc<Context>, service: Arc<S>) -> Self {
-        Self { context, service }
+        Self {
+            context,
+            service: Arc::downgrade(&service),
+        }
+    }
+
+    fn service(&self) -> Result<Arc<S>, tonic::Status> {
+        self.service
+            .upgrade()
+            .ok_or_else(|| tonic::Status::unavailable("Consensus authority is shutting down"))
     }
 }
 
@@ -568,7 +582,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             block,
             excluded_ancestors: vec![],
         };
-        self.service
+        self.service()?
             .handle_send_block(peer_index, block)
             .await
             .map_err(|e| tonic::Status::invalid_argument(format!("{e:?}")))?;
@@ -604,7 +618,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             }
         };
         let stream = self
-            .service
+            .service()?
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
@@ -648,7 +662,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let fetch_after_rounds = inner.fetch_after_rounds;
         let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_blocks(
                 peer_index,
                 block_refs,
@@ -680,7 +694,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         };
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
-            .service
+            .service()?
             .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -730,7 +744,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         }
 
         let blocks = self
-            .service
+            .service()?
             .handle_fetch_latest_blocks(peer_index, authorities)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -756,7 +770,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             return Err(tonic::Status::internal("PeerInfo not found"));
         };
         let (highest_received, highest_accepted) = self
-            .service
+            .service()?
             .handle_get_latest_rounds(peer_index)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;

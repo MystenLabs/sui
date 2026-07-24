@@ -44,6 +44,9 @@ importers:
       afdocs:
         specifier: ^0.3.2
         version: 0.3.2
+      ajv:
+        specifier: ^8.17.1
+        version: 8.17.1
       algoliasearch:
         specifier: ^5.25.0
         version: 5.46.0

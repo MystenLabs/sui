@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::Round;
@@ -17,6 +20,7 @@ use crate::{
     dag_state::DagState,
     error::ConsensusError,
     network::{ValidatorNetworkClient, ValidatorNetworkService},
+    task::{join_and_propagate_panic, reap_finished_task},
 };
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
@@ -30,6 +34,8 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
+    // Retain replaced subscription tasks so stop() can await them and propagate panics.
+    retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
 }
 
 impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
@@ -48,6 +54,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             authority_service,
             dag_state,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
+            retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -58,8 +65,10 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         }
         let context = self.context.clone();
         let network_client = self.network_client.clone();
-        let authority_service = self.authority_service.clone();
-        let dag_state = self.dag_state.clone();
+        // Subscriber already holds these resources strongly. Give subscription tasks weak
+        // references so they do not become additional owners during shutdown.
+        let authority_service = Arc::downgrade(&self.authority_service);
+        let dag_state = Arc::downgrade(&self.dag_state);
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -72,10 +81,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         )));
     }
 
-    pub(crate) fn stop(&self) {
-        let mut subscriptions = self.subscriptions.lock();
-        for (peer, _) in self.context.committee.authorities() {
-            self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
+    pub(crate) async fn stop(&self) {
+        {
+            let mut subscriptions = self.subscriptions.lock();
+            for (peer, _) in self.context.committee.authorities() {
+                self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
+            }
+        }
+
+        // All retired subscriptions have already been aborted by unsubscribe_locked().
+        let subscriptions = std::mem::take(&mut *self.retired_subscriptions.lock());
+        for subscription in subscriptions {
+            join_and_propagate_panic(subscription).await;
         }
     }
 
@@ -83,6 +100,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
         if let Some(subscription) = subscription.take() {
             subscription.abort();
+            let mut retired_subscriptions = self.retired_subscriptions.lock();
+            // Reap retired subscriptions that have finished, so the list stays bounded under
+            // repeated resubscriptions.
+            retired_subscriptions.retain_mut(|task| !reap_finished_task(task));
+            retired_subscriptions.push(subscription);
         }
         // There is a race between shutting down the subscription task and clearing the metric here.
         // TODO: fix the race when unsubscribe_locked() gets called outside of stop().
@@ -97,8 +119,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     async fn subscription_loop(
         context: Arc<Context>,
         network_client: Arc<C>,
-        authority_service: Arc<S>,
-        dag_state: Arc<RwLock<DagState>>,
+        authority_service: Weak<S>,
+        dag_state: Weak<RwLock<DagState>>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -139,6 +161,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             // reconnection resumes from the latest accepted round rather than re-streaming and
             // re-verifying blocks that have been accepted since this subscription started.
             let last_received: Round = {
+                let Some(dag_state) = dag_state.upgrade() else {
+                    return;
+                };
                 let dag_state = dag_state.read();
                 let gc_round = dag_state.gc_round();
                 dag_state
@@ -198,6 +223,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             .subscribed_blocks
                             .with_label_values(&[peer_hostname])
                             .inc();
+                        let Some(authority_service) = authority_service.upgrade() else {
+                            return;
+                        };
                         let result = authority_service.handle_send_block(peer, block).await;
                         if let Err(e) = result {
                             match e {

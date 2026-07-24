@@ -2,16 +2,38 @@
 title: Orders
 description: Learn how to place and manage orders using margin managers.
 keywords:
-  [
-    orders,
-    limit order,
-    market order,
-    reduce only,
-    cancel order,
-    modify order,
-    margin trading,
-    deepbook margin,
-  ]
+  - orders
+  - limit order
+  - market order
+  - reduce only
+  - cancel order
+  - modify order
+  - margin trading
+  - deepbook margin
+goal:
+  description: Reader can place and manage orders using margin managers
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: 'Margin contract: Orders'
+    stage: Margin
+questions:
+  - What is Orders in Sui?
+  - How does orders work on Sui?
+  - Why should I use orders?
+answer: Learn how to place and manage orders using margin managers.
 ---
 
 The `pool_proxy` module provides wrapper functions for trading with margin managers. These functions enable placing orders, modifying and canceling them, and managing staking and governance participation through a margin manager. All trading operations require the margin manager to be associated with the correct DeepBook pool.

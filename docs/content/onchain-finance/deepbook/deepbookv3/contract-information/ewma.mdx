@@ -1,18 +1,44 @@
 ---
 title: EWMA Gas Price Penalty
-description: Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas price penalty system.
+description: >-
+  Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas
+  price penalty system.
 keywords:
-  [
-    ewma,
-    gas price,
-    taker fee,
-    penalty,
-    volatility,
-    z-score,
-    exponentially weighted moving average,
-    toxic takers,
-    deepbookv3,
-  ]
+  - ewma
+  - gas price
+  - taker fee
+  - penalty
+  - volatility
+  - z-score
+  - exponentially weighted moving average
+  - toxic takers
+  - deepbookv3
+goal:
+  description: >-
+    Reader can learn about the DeepBook EWMA (Exponentially Weighted Moving
+    Average) gas price penalty system
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is EWMA Gas Price Penalty in Sui?
+  - When does the penalty apply?
+  - How does ewma gas price penalty work on Sui?
+answer: >-
+  Learn about the DeepBook EWMA (Exponentially Weighted Moving Average) gas
+  price penalty system.
 ---
 
 DeepBook implements an exponentially weighted moving average (EWMA) system to dynamically adjust taker fees based on network gas prices. This feature helps prevent toxic takers from using high gas prices to prioritize their transactions and pick off stale maker orders.

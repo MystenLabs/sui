@@ -97,7 +97,7 @@ jobs:
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env
           rustup component add clippy
-          cargo xclippy -D warnings
+          cargo xclippy -- -D warnings
 
       - name: Build with tidehunter feature
         if: ${{ matrix.os == 'ubuntu-ghcloud' }}

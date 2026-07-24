@@ -1,7 +1,34 @@
 ---
 title: Accessing Data
 description: Overview of the types of data access mechanisms available in Sui.
-keywords: [ data types, data access, data access interfaces, json rpc, custom indexers, indexers, grpc, graphql rpc, general-purpose indexer ]
+keywords:
+  - data types
+  - data access
+  - data access interfaces
+  - json rpc
+  - custom indexers
+  - indexers
+  - grpc
+  - graphql rpc
+  - general-purpose indexer
+goal:
+  description: >-
+    Reader can choose the right mechanism (GraphQL, gRPC, indexers, archival
+    store) to access Sui transactions, checkpoints, objects, and events
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Accessing Data in Sui?
+  - What topics does Accessing Data cover?
+  - How does accessing data work on Sui?
+answer: Overview of the types of data access mechanisms available in Sui.
 ---
 
 Access Sui network data, like [transactions](/develop/transactions/txn-overview), [checkpoints](/develop/sui-architecture/checkpoint-verification), [objects](/develop/sui-architecture/object-model), and [events](/develop/accessing-data/using-events), through different interfaces to build applications, analyze network behavior, or audit network activity.

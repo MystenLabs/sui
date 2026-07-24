@@ -273,8 +273,8 @@ pub enum ToolCommand {
         verbose: bool,
 
         /// Number of retries for failed HTTP requests when downloading snapshot files.
-        /// Defaults to 3 retries. Set to 0 to disable retries.
-        #[clap(long = "max-retries", default_value = "3")]
+        /// Set to 0 to disable retries.
+        #[clap(long = "max-retries", default_value = "10")]
         max_retries: usize,
         /// Port for the Prometheus metrics server. Defaults to 9185.
         #[clap(long = "metrics-port", default_value = "9185")]

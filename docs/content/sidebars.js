@@ -102,6 +102,7 @@ export default {
         items: [
             'develop/manage-packages/move-package-management',
             'develop/manage-packages/automated-address-management',
+            'develop/manage-packages/source-verification',
         ]
       },      
       {
@@ -173,6 +174,7 @@ export default {
           items: [
             'develop/accessing-data/grpc/what-is-grpc',
             'develop/accessing-data/grpc/using-grpc',
+            'develop/accessing-data/grpc/grpc-migration-cookbook',
           ],
         },
         {
@@ -182,6 +184,7 @@ export default {
           items: [
             'develop/accessing-data/graphql/graphql-rpc',
             'develop/accessing-data/graphql/query-with-graphql',
+            'develop/accessing-data/graphql/graphql-migration-cookbook',
           ],
         },
         {
@@ -288,6 +291,8 @@ export default {
             'getting-started/examples/lootbox-ctf',
             'getting-started/examples/merchant-ctf',
             'getting-started/examples/staking-ctf',
+            'getting-started/examples/consumer-app-zklogin',
+            'getting-started/examples/defi-trading-zklogin',
           ],
         },
         'getting-started/examples/event-indexer',
@@ -378,6 +383,7 @@ export default {
           'onchain-finance/examples-patterns/loyalty-tokens',
           'onchain-finance/examples-patterns/in-game-currency',
           'onchain-finance/examples-patterns/soulbound-tokens',
+          'onchain-finance/examples-patterns/staking-rewards',
           'onchain-finance/examples-patterns/nft-rental',
           'onchain-finance/examples-patterns/kiosk',
           'onchain-finance/examples-patterns/wasm-template',
@@ -443,6 +449,7 @@ export default {
                 'onchain-finance/deepbook/deepbookv3-sdk/flash-loans',
                 'onchain-finance/deepbook/deepbookv3-sdk/swaps',
                 'onchain-finance/deepbook/deepbookv3-sdk/staking-governance',
+                'onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook',
               ],
             },
           ],
@@ -488,6 +495,7 @@ export default {
           label: 'Predict',
           link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-predict/deepbook-predict' },
           items: [
+            'onchain-finance/deepbook/deepbook-predict/tutorial',
             'onchain-finance/deepbook/deepbook-predict/design',
             {
               type: 'category',
@@ -693,9 +701,10 @@ suiStackSidebar: [
       label: 'zkLogin',
       link: { type: 'doc', id: 'sui-stack/zklogin-integration/index' },
       items: [
-        'sui-stack/zklogin-integration/zklogin',
+        'sui-stack/zklogin-integration/integration-guide',
         'sui-stack/zklogin-integration/developer-account',
         'sui-stack/zklogin-integration/zklogin-demo',
+        'sui-stack/zklogin-integration/zklogin',
       ],
     },
     {

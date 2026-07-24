@@ -2236,9 +2236,9 @@ async fn safe_drop_rocksdb(path: PathBuf, timeout: Duration) -> Result<(), std::
 
 #[cfg(tidehunter)]
 fn is_tidehunter_db(path: &Path) -> bool {
-    // `shape.yaml` is written by TideHunterDb::open and is the canonical marker
-    // for a tidehunter DB directory; RocksDB never creates it.
-    path.join("shape.yaml").exists()
+    // `shape_v2.yaml` is written by TideHunterDb::open at the DB root; RocksDB
+    // never creates it.
+    path.join("shape_v2.yaml").exists()
 }
 
 #[cfg(tidehunter)]

@@ -415,7 +415,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             let target = (function_ref.module, function_ref.function);
             Instruction::AssignReg {
                 lhs,
-                rhs: RValue::Call { target, args },
+                rhs: RValue::Call {
+                    target,
+                    type_arguments: function_ref.type_arguments.clone(),
+                    args,
+                },
             }
         }
 
