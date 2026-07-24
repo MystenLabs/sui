@@ -118,7 +118,7 @@ Minting requires a live (active) oracle. Redeeming works against a live or settl
 
 ### Read a live oracle from the server
 
-Read the current oracle list from the public Predict server, then select an active oracle and a strike from its grid. The server returns snake_case fields and the strike grid rather than a single strike.
+Read the current oracle list from the public Predict server, then select an active oracle and a strike from its grid. The server returns `snake_case` fields and the strike grid rather than a single strike.
 
 ```ts title='oracle.ts'
 import { PREDICT, type ActiveOracle } from './config.js';
