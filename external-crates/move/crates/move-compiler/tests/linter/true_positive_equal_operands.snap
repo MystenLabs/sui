@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
   ┌─ tests/linter/true_positive_equal_operands.move:6:9
   │
 6 │         x % copy x;
@@ -17,7 +17,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
   │
   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
   ┌─ tests/linter/true_positive_equal_operands.move:7:9
   │
 7 │         copy x ^ x;
@@ -29,7 +29,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
   │
   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
   ┌─ tests/linter/true_positive_equal_operands.move:8:9
   │
 8 │         x / x;
@@ -41,7 +41,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
   │
   = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:10:9
    │
 10 │         x | x;
@@ -53,7 +53,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:11:9
    │
 11 │         x & x;
@@ -65,7 +65,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:13:9
    │
 13 │         x != x;
@@ -77,7 +77,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:14:9
    │
 14 │         x < x;
@@ -89,7 +89,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:15:9
    │
 15 │         x > x;
@@ -101,7 +101,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:17:9
    │
 17 │         x == x;
@@ -113,7 +113,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:18:9
    │
 18 │         x <= x;
@@ -125,7 +125,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:19:9
    │
 19 │         copy x >= move x;
@@ -137,7 +137,7 @@ warning[Lint W02011]: redundant, always-equal operands for binary operation
    │
    = This warning can be suppressed with '#[allow(lint(always_equal_operands))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02011]: redundant, always-equal operands for binary operation
+warning[WL02011]: redundant, always-equal operands for binary operation
    ┌─ tests/linter/true_positive_equal_operands.move:22:9
    │
 22 │         x == x;

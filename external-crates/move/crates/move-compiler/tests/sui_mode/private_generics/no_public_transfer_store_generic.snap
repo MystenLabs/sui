@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:11:9
    │
 10 │     public fun t1<T: key + store>(s: T) {
@@ -15,7 +15,7 @@ error[Sui E02009]: invalid private transfer call
 11 │         transfer::transfer(s, @0x100);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:15:9
    │
 14 │     public fun t2<T: key + store>(s: T) {
@@ -25,7 +25,7 @@ error[Sui E02009]: invalid private transfer call
 15 │         transfer::freeze_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:19:9
    │
 18 │     public fun t3<T: key + store>(s: T) {
@@ -35,7 +35,7 @@ error[Sui E02009]: invalid private transfer call
 19 │         transfer::share_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:23:9
    │
 22 │     public fun t4<T: key + store>(p: &mut UID, s: Receiving<T>): T {
@@ -45,7 +45,7 @@ error[Sui E02009]: invalid private transfer call
 23 │         transfer::receive(p, s)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store_generic.move:27:9
    │
 26 │     public fun t5<T: key + store>(s: T, p: sui::party::Party) {

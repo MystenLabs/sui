@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/matching/at_pattern_mut_ref_nested.move:14:9
    │
 14 │         x @ E::A(n) => *n,

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[Sui E02007]: invalid object declaration
+error[ESC02007]: invalid object declaration
    ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:10:17
    │
 10 │     public enum Obj has key, store {
@@ -13,7 +13,7 @@ error[Sui E02007]: invalid object declaration
    │                 │        
    │                 Invalid object 'Obj'
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/move_2024/typing/enum_in_struct_position.move:27:9
    │
 10 │     public enum Obj has key, store {

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_2024/unit_test/test_only_use_fun.move:6:5
   │
 6 │     use fun foo as X.f;

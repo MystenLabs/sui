@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W02006]: 'loop' without 'break' or 'return'
+warning[WL02006]: 'loop' without 'break' or 'return'
   ┌─ tests/linter/true_positive_loop_without_exit.move:5:9
   │
 5 │         loop {}
@@ -13,7 +13,7 @@ warning[Lint W02006]: 'loop' without 'break' or 'return'
   │
   = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02006]: 'loop' without 'break' or 'return'
+warning[WL02006]: 'loop' without 'break' or 'return'
    ┌─ tests/linter/true_positive_loop_without_exit.move:10:9
    │
 10 │         loop { abort ZERO }
@@ -21,7 +21,7 @@ warning[Lint W02006]: 'loop' without 'break' or 'return'
    │
    = This warning can be suppressed with '#[allow(lint(loop_without_exit))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W02006]: 'loop' without 'break' or 'return'
+warning[WL02006]: 'loop' without 'break' or 'return'
    ┌─ tests/linter/true_positive_loop_without_exit.move:14:9
    │  
 14 │ ╭         loop {

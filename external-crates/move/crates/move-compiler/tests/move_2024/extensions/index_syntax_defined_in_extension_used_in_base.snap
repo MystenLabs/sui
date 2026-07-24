@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02020]: no valid 'syntax' declaration found
+error[EC02020]: no valid 'syntax' declaration found
    ┌─ tests/move_2024/extensions/index_syntax_defined_in_extension_used_in_base.move:13:10
    │
 13 │         &s[0]
    │          ^^^^ No valid 'syntax(index)' method found for 'a::m::S'
 
-warning[W04039]: unable to determine literal's type
+warning[WC04039]: unable to determine literal's type
    ┌─ tests/move_2024/extensions/index_syntax_defined_in_extension_used_in_base.move:13:12
    │
 13 │         &s[0]

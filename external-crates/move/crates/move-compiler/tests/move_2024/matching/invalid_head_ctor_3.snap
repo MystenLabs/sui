@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03022]: invalid usage position
+error[EC03022]: invalid usage position
    ┌─ tests/move_2024/matching/invalid_head_ctor_3.move:16:13
    │
 16 │             l::a(_) => (),

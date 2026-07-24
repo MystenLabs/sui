@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01007]: invalid byte string
+error[EC01007]: invalid byte string
   ┌─ tests/move_check/parser/byte_string_token_eof1.move:3:9
   │
 3 │         b"diem\"

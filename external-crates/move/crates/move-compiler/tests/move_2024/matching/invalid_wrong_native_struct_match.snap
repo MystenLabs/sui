@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/matching/invalid_wrong_native_struct_match.move:13:13
    │
 11 │     fun f(s: S): u64 {
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
    │             Invalid pattern
    │             Given: '0x0::M::N'
 
-error[E04015]: invalid use of native item
+error[EC04015]: invalid use of native item
    ┌─ tests/move_2024/matching/invalid_wrong_native_struct_match.move:13:13
    │
  5 │     public native struct N;

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09013]: unused mutable reference '&mut'
+warning[WC09013]: unused mutable reference '&mut'
    ┌─ tests/move_check/borrows/unused_mut_ref_unpack.move:15:17
    │
 15 │         let f = &mut f.f;

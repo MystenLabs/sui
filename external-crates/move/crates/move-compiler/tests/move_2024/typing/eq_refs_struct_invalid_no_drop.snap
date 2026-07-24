@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:6:9
   │
 3 │     public struct S has copy {}
@@ -16,7 +16,7 @@ error[E05001]: ability constraint not satisfied
 6 │         a == b
   │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:6:14
   │
 3 │     public struct S has copy {}
@@ -27,7 +27,7 @@ error[E05001]: ability constraint not satisfied
 6 │         a == b
   │              ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:10:9
    │
  3 │     public struct S has copy {}
@@ -40,7 +40,7 @@ error[E06001]: unused value without 'drop'
 10 │         a == b
    │         ^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:14:9
    │
  3 │     public struct S has copy {}
@@ -53,7 +53,7 @@ error[E06001]: unused value without 'drop'
 14 │         a == b
    │         ^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:18:9
    │
  3 │     public struct S has copy {}
@@ -66,7 +66,7 @@ error[E06001]: unused value without 'drop'
 18 │         a == b
    │         ^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:22:9
    │
  3 │     public struct S has copy {}
@@ -79,7 +79,7 @@ error[E06001]: unused value without 'drop'
 22 │         a == b
    │         ^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:9
    │
  3 │     public struct S has copy {}
@@ -90,7 +90,7 @@ error[E05001]: ability constraint not satisfied
 26 │         a == b && b == c && a == c
    │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:9
    │
  3 │     public struct S has copy {}
@@ -103,7 +103,7 @@ error[E06001]: unused value without 'drop'
 26 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:9
    │
  3 │     public struct S has copy {}
@@ -116,7 +116,7 @@ error[E06001]: unused value without 'drop'
 26 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:9
    │
  3 │     public struct S has copy {}
@@ -129,7 +129,7 @@ error[E06001]: unused value without 'drop'
 26 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:14
    │
  3 │     public struct S has copy {}
@@ -140,7 +140,7 @@ error[E05001]: ability constraint not satisfied
 26 │         a == b && b == c && a == c
    │              ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:19
    │
  3 │     public struct S has copy {}
@@ -151,7 +151,7 @@ error[E05001]: ability constraint not satisfied
 26 │         a == b && b == c && a == c
    │                   ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:24
    │
  3 │     public struct S has copy {}
@@ -162,7 +162,7 @@ error[E05001]: ability constraint not satisfied
 26 │         a == b && b == c && a == c
    │                        ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:29
    │
  3 │     public struct S has copy {}
@@ -173,7 +173,7 @@ error[E05001]: ability constraint not satisfied
 26 │         a == b && b == c && a == c
    │                             ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:26:34
    │
  3 │     public struct S has copy {}
@@ -184,7 +184,7 @@ error[E05001]: ability constraint not satisfied
 26 │         a == b && b == c && a == c
    │                                  ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:30:9
    │
  3 │     public struct S has copy {}
@@ -195,7 +195,7 @@ error[E05001]: ability constraint not satisfied
 30 │         a == b && b == c && a == c
    │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:30:9
    │
  3 │     public struct S has copy {}
@@ -208,7 +208,7 @@ error[E06001]: unused value without 'drop'
 30 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:30:9
    │
  3 │     public struct S has copy {}
@@ -221,7 +221,7 @@ error[E06001]: unused value without 'drop'
 30 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:30:14
    │
  3 │     public struct S has copy {}
@@ -232,7 +232,7 @@ error[E05001]: ability constraint not satisfied
 30 │         a == b && b == c && a == c
    │              ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:34:9
    │
  3 │     public struct S has copy {}
@@ -243,7 +243,7 @@ error[E05001]: ability constraint not satisfied
 34 │         a == b && b == c && a == c
    │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:34:9
    │
  3 │     public struct S has copy {}
@@ -256,7 +256,7 @@ error[E06001]: unused value without 'drop'
 34 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:34:9
    │
  3 │     public struct S has copy {}
@@ -269,7 +269,7 @@ error[E06001]: unused value without 'drop'
 34 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:34:14
    │
  3 │     public struct S has copy {}
@@ -280,7 +280,7 @@ error[E05001]: ability constraint not satisfied
 34 │         a == b && b == c && a == c
    │              ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:38:9
    │
  3 │     public struct S has copy {}
@@ -293,7 +293,7 @@ error[E06001]: unused value without 'drop'
 38 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:38:9
    │
  3 │     public struct S has copy {}
@@ -306,7 +306,7 @@ error[E06001]: unused value without 'drop'
 38 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:38:29
    │
  3 │     public struct S has copy {}
@@ -317,7 +317,7 @@ error[E05001]: ability constraint not satisfied
 38 │         a == b && b == c && a == c
    │                             ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:38:34
    │
  3 │     public struct S has copy {}
@@ -328,7 +328,7 @@ error[E05001]: ability constraint not satisfied
 38 │         a == b && b == c && a == c
    │                                  ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:42:9
    │
  3 │     public struct S has copy {}
@@ -341,7 +341,7 @@ error[E06001]: unused value without 'drop'
 42 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:46:9
    │
  3 │     public struct S has copy {}
@@ -354,7 +354,7 @@ error[E06001]: unused value without 'drop'
 46 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:50:9
    │
  3 │     public struct S has copy {}
@@ -367,7 +367,7 @@ error[E06001]: unused value without 'drop'
 50 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:50:9
    │
  3 │     public struct S has copy {}
@@ -380,7 +380,7 @@ error[E06001]: unused value without 'drop'
 50 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:50:29
    │
  3 │     public struct S has copy {}
@@ -391,7 +391,7 @@ error[E05001]: ability constraint not satisfied
 50 │         a == b && b == c && a == c
    │                             ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:50:34
    │
  3 │     public struct S has copy {}
@@ -402,7 +402,7 @@ error[E05001]: ability constraint not satisfied
 50 │         a == b && b == c && a == c
    │                                  ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:54:9
    │
  3 │     public struct S has copy {}
@@ -415,7 +415,7 @@ error[E06001]: unused value without 'drop'
 54 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:58:9
    │
  3 │     public struct S has copy {}
@@ -428,7 +428,7 @@ error[E06001]: unused value without 'drop'
 58 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:62:9
    │
  3 │     public struct S has copy {}
@@ -441,7 +441,7 @@ error[E06001]: unused value without 'drop'
 62 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:62:9
    │
  3 │     public struct S has copy {}
@@ -454,7 +454,7 @@ error[E06001]: unused value without 'drop'
 62 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:62:19
    │
  3 │     public struct S has copy {}
@@ -465,7 +465,7 @@ error[E05001]: ability constraint not satisfied
 62 │         a == b && b == c && a == c
    │                   ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:62:24
    │
  3 │     public struct S has copy {}
@@ -476,7 +476,7 @@ error[E05001]: ability constraint not satisfied
 62 │         a == b && b == c && a == c
    │                        ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:66:9
    │
  3 │     public struct S has copy {}
@@ -489,7 +489,7 @@ error[E06001]: unused value without 'drop'
 66 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:70:9
    │
  3 │     public struct S has copy {}
@@ -502,7 +502,7 @@ error[E06001]: unused value without 'drop'
 70 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:74:9
    │
  3 │     public struct S has copy {}
@@ -515,7 +515,7 @@ error[E06001]: unused value without 'drop'
 74 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:78:9
    │
  3 │     public struct S has copy {}
@@ -528,7 +528,7 @@ error[E06001]: unused value without 'drop'
 78 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:82:9
    │
  3 │     public struct S has copy {}
@@ -541,7 +541,7 @@ error[E06001]: unused value without 'drop'
 82 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:82:9
    │
  3 │     public struct S has copy {}
@@ -554,7 +554,7 @@ error[E06001]: unused value without 'drop'
 82 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:82:19
    │
  3 │     public struct S has copy {}
@@ -565,7 +565,7 @@ error[E05001]: ability constraint not satisfied
 82 │         a == b && b == c && a == c
    │                   ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:82:24
    │
  3 │     public struct S has copy {}
@@ -576,7 +576,7 @@ error[E05001]: ability constraint not satisfied
 82 │         a == b && b == c && a == c
    │                        ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:86:9
    │
  3 │     public struct S has copy {}
@@ -589,7 +589,7 @@ error[E06001]: unused value without 'drop'
 86 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:90:9
    │
  3 │     public struct S has copy {}
@@ -602,7 +602,7 @@ error[E06001]: unused value without 'drop'
 90 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:94:9
    │
  3 │     public struct S has copy {}
@@ -615,7 +615,7 @@ error[E06001]: unused value without 'drop'
 94 │         a == b && b == c && a == c
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_2024/typing/eq_refs_struct_invalid_no_drop.move:98:9
    │
  3 │     public struct S has copy {}

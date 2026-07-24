@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E07005]: invalid reference transfer
+error[EC07005]: invalid reference transfer
    ┌─ tests/move_2024/typing/macro_by_name_gives_unique_locals.move:13:9
    │
 13 │         check_unique(s1, s2)

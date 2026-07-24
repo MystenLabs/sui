@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/named_address_no_value_in_annotation.move:2:7
   │
 2 │     #[test(_a = @UnboundAddr)]

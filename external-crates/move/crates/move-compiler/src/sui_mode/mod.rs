@@ -5,7 +5,7 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
 use crate::{
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::{DiagnosticInfo, DiagnosticSource, Severity, custom},
     shared::stdlib_definitions,
 };
 
@@ -104,7 +104,7 @@ pub const PRIVATE_TRANSFER_FUNCTIONS: &[Symbol] = &[
 // Diagnostics
 //**************************************************************************************************
 
-pub const SUI_DIAG_PREFIX: &str = "Sui ";
+pub const SUI_DIAG_PREFIX: DiagnosticSource = DiagnosticSource::SuiCompiler;
 
 // Categories
 pub const ID_LEAK_CATEGORY: u8 = 1;

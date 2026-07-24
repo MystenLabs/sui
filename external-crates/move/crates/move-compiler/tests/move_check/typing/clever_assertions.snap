@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/typing/clever_assertions.move:4:7
   │
 4 │     #[error]
@@ -13,7 +13,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/typing/clever_assertions.move:7:7
   │
 7 │     #[error]
@@ -21,7 +21,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
    ┌─ tests/move_check/typing/clever_assertions.move:23:9
    │
 23 │         assert!(false);

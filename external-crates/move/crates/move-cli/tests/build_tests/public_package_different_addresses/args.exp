@@ -1,6 +1,6 @@
 Command `build -v`:
 BUILDING Defn
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
   ┌─ ./sources/B.move:3:31
   │
 3 │     public fun usage(): u64 { defn::definition() }

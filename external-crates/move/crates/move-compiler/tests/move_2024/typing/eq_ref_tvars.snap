@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_ref_tvars.move:18:11
    │
 15 │         let x: T<u64> = any();
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
 18 │         x == y && x == z
    │           ^^ Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_ref_tvars.move:18:21
    │
 15 │         let x: T<u64> = any();
@@ -27,7 +27,7 @@ error[E04007]: incompatible types
 18 │         x == y && x == z
    │                     ^^ Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_ref_tvars.move:48:31
    │
 45 │         let a: &T<u64> = abort 0;
@@ -38,7 +38,7 @@ error[E04007]: incompatible types
 48 │         a == b && c == d && a == c && b == d
    │                               ^^ Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_ref_tvars.move:48:41
    │
 46 │         let b: &mut T<u64> = abort 0;
@@ -48,7 +48,7 @@ error[E04007]: incompatible types
 48 │         a == b && c == d && a == c && b == d
    │                                         ^^ Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_ref_tvars.move:73:11
    │
 72 │         let x: T<u64> = option_take(&mut c);
@@ -58,7 +58,7 @@ error[E04007]: incompatible types
    │           │               
    │           Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/eq_ref_tvars.move:74:9
    │
 72 │         let x: T<u64> = option_take(&mut c);

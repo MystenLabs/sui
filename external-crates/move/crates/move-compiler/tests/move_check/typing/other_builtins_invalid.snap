@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/other_builtins_invalid.move:4:10
   │
 3 │     fun foo(x: &u64) {
@@ -16,7 +16,7 @@ error[E04006]: invalid subtype
   │          Invalid call of 'freeze'. Invalid argument for parameter '0'
   │          Expected: '&mut u64'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/other_builtins_invalid.move:4:26
   │
 4 │         (freeze<u64>(x): &mut u64);
@@ -26,7 +26,7 @@ error[E04006]: invalid subtype
   │          │               Expected: '&mut u64'
   │          Given: '&u64'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/other_builtins_invalid.move:5:10
   │
 5 │         (freeze<vector<bool>>(&any()): &mut vector<bool>);
@@ -36,13 +36,13 @@ error[E04006]: invalid subtype
   │          Invalid call of 'freeze'. Invalid argument for parameter '0'
   │          Expected: '&mut vector<bool>'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
   ┌─ tests/move_check/typing/other_builtins_invalid.move:5:32
   │
 5 │         (freeze<vector<bool>>(&any()): &mut vector<bool>);
   │                                ^^^^^ Could not infer this type. Try adding an annotation
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/other_builtins_invalid.move:5:40
   │
 5 │         (freeze<vector<bool>>(&any()): &mut vector<bool>);
@@ -52,7 +52,7 @@ error[E04006]: invalid subtype
   │          │                             Expected: '&mut vector<bool>'
   │          Given: '&vector<bool>'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/other_builtins_invalid.move:7:10
   │
 7 │         (assert!(42u64, true): ());
@@ -62,7 +62,7 @@ error[E04007]: incompatible types
   │          Invalid call of 'assert'. Invalid argument for parameter '0'
   │          Expected: 'bool'
 
-error[E04035]: invalid constant usage in error context
+error[EC04035]: invalid constant usage in error context
   ┌─ tests/move_check/typing/other_builtins_invalid.move:7:25
   │
 7 │         (assert!(42u64, true): ());
@@ -73,7 +73,7 @@ error[E04035]: invalid constant usage in error context
   │
   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/other_builtins_invalid.move:8:38
   │
 8 │         (assert!(true && false, *x): bool);
@@ -83,7 +83,7 @@ error[E04007]: incompatible types
   │          │                           Expected: 'bool'
   │          Given: '()'
 
-error[E04035]: invalid constant usage in error context
+error[EC04035]: invalid constant usage in error context
   ┌─ tests/move_check/typing/other_builtins_invalid.move:9:32
   │
 9 │         assert!(true || false, 0u8);

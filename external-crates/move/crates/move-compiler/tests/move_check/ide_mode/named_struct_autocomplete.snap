@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:24
    │
 13 │         let _tmp1 = _s.;
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:26
    │
 14 │         let _tmp2 = _s.a.;

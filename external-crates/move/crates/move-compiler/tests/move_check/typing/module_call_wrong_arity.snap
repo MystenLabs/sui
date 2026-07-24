@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:27:9
    │
  5 │     public fun foo(): u64 { 0 }
@@ -17,7 +17,7 @@ error[E04017]: too many arguments
    │         │     Found 1 argument(s) here
    │         Invalid call of '0x2::X::foo'. The call expected 0 argument(s) but got 1
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:28:9
    │
  5 │     public fun foo(): u64 { 0 }
@@ -29,7 +29,7 @@ error[E04017]: too many arguments
    │         │     Found 2 argument(s) here
    │         Invalid call of '0x2::X::foo'. The call expected 0 argument(s) but got 2
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:29:9
    │
  6 │     public fun bar(x: u64): (address, u64) {
@@ -41,7 +41,7 @@ error[E04016]: too few arguments
    │         │     Found 0 argument(s) here
    │         Invalid call of '0x2::X::bar'. The call expected 1 argument(s) but got 0
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:30:9
    │
  6 │     public fun bar(x: u64): (address, u64) {
@@ -53,7 +53,7 @@ error[E04017]: too many arguments
    │         │     Found 2 argument(s) here
    │         Invalid call of '0x2::X::bar'. The call expected 1 argument(s) but got 2
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:31:9
    │
  9 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -65,7 +65,7 @@ error[E04016]: too few arguments
    │         │               Found 0 argument(s) here
    │         Invalid call of '0x2::X::baz'. The call expected 2 argument(s) but got 0
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:32:9
    │
  9 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -77,7 +77,7 @@ error[E04016]: too few arguments
    │         │               Found 1 argument(s) here
    │         Invalid call of '0x2::X::baz'. The call expected 2 argument(s) but got 1
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:33:9
    │
  9 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -89,7 +89,7 @@ error[E04017]: too many arguments
    │         │     Found 3 argument(s) here
    │         Invalid call of '0x2::X::baz'. The call expected 2 argument(s) but got 3
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:37:9
    │
 18 │     fun foo(): u64 { 0 }
@@ -101,7 +101,7 @@ error[E04017]: too many arguments
    │         │  Found 1 argument(s) here
    │         Invalid call of '0x2::M::foo'. The call expected 0 argument(s) but got 1
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:38:9
    │
 18 │     fun foo(): u64 { 0 }
@@ -113,7 +113,7 @@ error[E04017]: too many arguments
    │         │  Found 2 argument(s) here
    │         Invalid call of '0x2::M::foo'. The call expected 0 argument(s) but got 2
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:39:9
    │
 19 │     fun bar(x: u64): (address, u64) {
@@ -125,7 +125,7 @@ error[E04016]: too few arguments
    │         │  Found 0 argument(s) here
    │         Invalid call of '0x2::M::bar'. The call expected 1 argument(s) but got 0
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:40:9
    │
 19 │     fun bar(x: u64): (address, u64) {
@@ -137,7 +137,7 @@ error[E04017]: too many arguments
    │         │  Found 2 argument(s) here
    │         Invalid call of '0x2::M::bar'. The call expected 1 argument(s) but got 2
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:41:9
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -149,7 +149,7 @@ error[E04016]: too few arguments
    │         │            Found 0 argument(s) here
    │         Invalid call of '0x2::M::baz'. The call expected 2 argument(s) but got 0
 
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:42:9
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
@@ -161,7 +161,7 @@ error[E04016]: too few arguments
    │         │            Found 1 argument(s) here
    │         Invalid call of '0x2::M::baz'. The call expected 2 argument(s) but got 1
 
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:43:9
    │
 22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {

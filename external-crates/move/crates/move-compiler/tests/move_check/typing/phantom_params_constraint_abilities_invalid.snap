@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:11:12
    │
  9 │     struct S1<T: drop + copy + store + key> { a: T }
@@ -18,7 +18,7 @@ error[E05001]: ability constraint not satisfied
    │            │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'copy'
    │            'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:11:12
    │
  9 │     struct S1<T: drop + copy + store + key> { a: T }
@@ -31,7 +31,7 @@ error[E05001]: ability constraint not satisfied
    │            │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'drop'
    │            'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:11:12
    │
  9 │     struct S1<T: drop + copy + store + key> { a: T }
@@ -44,7 +44,7 @@ error[E05001]: ability constraint not satisfied
    │            │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'key'
    │            'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:11:12
    │
  9 │     struct S1<T: drop + copy + store + key> { a: T }
@@ -57,7 +57,7 @@ error[E05001]: ability constraint not satisfied
    │            │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'store'
    │            'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:16:12
    │  
 14 │       struct S3<T1: drop, T2: copy, T3: store, T4: key> { a: T1, b: T2, c: T3, d: T4 }
@@ -75,7 +75,7 @@ error[E05001]: ability constraint not satisfied
 20 │ │              >
    │ ╰──────────────^ 'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:16:12
    │  
 14 │       struct S3<T1: drop, T2: copy, T3: store, T4: key> { a: T1, b: T2, c: T3, d: T4 }
@@ -93,7 +93,7 @@ error[E05001]: ability constraint not satisfied
 20 │ │              >
    │ ╰──────────────^ 'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:16:12
    │  
 14 │       struct S3<T1: drop, T2: copy, T3: store, T4: key> { a: T1, b: T2, c: T3, d: T4 }
@@ -111,7 +111,7 @@ error[E05001]: ability constraint not satisfied
 20 │ │              >
    │ ╰──────────────^ 'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:16:12
    │  
 14 │       struct S3<T1: drop, T2: copy, T3: store, T4: key> { a: T1, b: T2, c: T3, d: T4 }
@@ -129,7 +129,7 @@ error[E05001]: ability constraint not satisfied
 20 │ │              >
    │ ╰──────────────^ 'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:25:9
    │
 23 │     fun f1<T: drop + copy + store + key>() { }
@@ -142,7 +142,7 @@ error[E05001]: ability constraint not satisfied
    │         │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:25:9
    │
 23 │     fun f1<T: drop + copy + store + key>() { }
@@ -155,7 +155,7 @@ error[E05001]: ability constraint not satisfied
    │         │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'drop'
    │         'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:25:9
    │
 23 │     fun f1<T: drop + copy + store + key>() { }
@@ -168,7 +168,7 @@ error[E05001]: ability constraint not satisfied
    │         │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'key'
    │         'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:25:9
    │
 23 │     fun f1<T: drop + copy + store + key>() { }
@@ -181,7 +181,7 @@ error[E05001]: ability constraint not satisfied
    │         │  The type '0x42::M::HasAbilities<0x42::M::NoAbilities, 0x42::M::NoAbilities>' does not have the ability 'store'
    │         'store' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:30:9
    │  
 28 │       fun f3<T1: drop, T2: copy, T3: store, T4: key>() { }
@@ -198,7 +198,7 @@ error[E05001]: ability constraint not satisfied
 34 │ │           >();
    │ ╰─────────────^ 'copy' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:30:9
    │  
 28 │       fun f3<T1: drop, T2: copy, T3: store, T4: key>() { }
@@ -215,7 +215,7 @@ error[E05001]: ability constraint not satisfied
 34 │ │           >();
    │ ╰─────────────^ 'drop' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:30:9
    │  
 28 │       fun f3<T1: drop, T2: copy, T3: store, T4: key>() { }
@@ -232,7 +232,7 @@ error[E05001]: ability constraint not satisfied
 34 │ │           >();
    │ ╰─────────────^ 'key' constraint not satisifed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/phantom_params_constraint_abilities_invalid.move:30:9
    │  
 28 │       fun f3<T1: drop, T2: copy, T3: store, T4: key>() { }

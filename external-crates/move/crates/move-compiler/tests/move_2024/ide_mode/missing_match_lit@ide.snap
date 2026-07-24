@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:16
   │
 4 │         match (0u64) {
@@ -13,7 +13,7 @@ error[E04036]: non-exhaustive pattern
   │
   = When '_0' is not 1
 
-note[I15004]: IDE missing match arms
+note[NC15004]: IDE missing match arms
   ┌─ tests/move_2024/ide_mode/missing_match_lit.move:4:22
   │  
 4 │           match (0u64) {
@@ -22,13 +22,13 @@ note[I15004]: IDE missing match arms
 6 │ │         }
   │ ╰─────────^ Missing arms: '_'
 
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:16
    │
 10 │         match (0u64) {
    │                ^^^^ Pattern '_' not covered
 
-note[I15004]: IDE missing match arms
+note[NC15004]: IDE missing match arms
    ┌─ tests/move_2024/ide_mode/missing_match_lit.move:10:22
    │  
 10 │           match (0u64) {

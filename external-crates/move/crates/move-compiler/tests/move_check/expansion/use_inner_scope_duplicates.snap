@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/move_check/expansion/use_inner_scope_duplicates.move:13:43
    │
 13 │         use 0x2::M::{check as foo, num as foo};
@@ -13,7 +13,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_inner_scope_duplicates.move:13:43
    │
 13 │         use 0x2::M::{check as foo, num as foo};
@@ -21,7 +21,7 @@ error[E02001]: duplicate declaration, item, or annotation
    │                               │            
    │                               Module member or alias previously defined here
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/move_check/expansion/use_inner_scope_duplicates.move:15:23
    │
 15 │         use 0x2::M as N;
@@ -29,7 +29,7 @@ warning[W09001]: unused alias
    │
    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_check/expansion/use_inner_scope_duplicates.move:15:23
    │
 14 │         use 0x2::M as N;

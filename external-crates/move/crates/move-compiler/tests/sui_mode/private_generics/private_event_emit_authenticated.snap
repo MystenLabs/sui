@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02008]: invalid event
+error[ESC02008]: invalid event
   ┌─ tests/sui_mode/private_generics/private_event_emit_authenticated.move:8:9
   │
 7 │     public fun t(s: a::other::Event) {
@@ -13,7 +13,7 @@ error[Sui E02008]: invalid event
 8 │         event::emit_authenticated(s)
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit_authenticated' must be called with a type defined in the current module
 
-error[Sui E02008]: invalid event
+error[ESC02008]: invalid event
    ┌─ tests/sui_mode/private_generics/private_event_emit_authenticated.move:12:9
    │
 11 │     public fun gen<T: copy + drop>(x: T) {
@@ -21,7 +21,7 @@ error[Sui E02008]: invalid event
 12 │         event::emit_authenticated(move x)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit_authenticated' must be called with a type defined in the current module
 
-error[Sui E02008]: invalid event
+error[ESC02008]: invalid event
    ┌─ tests/sui_mode/private_generics/private_event_emit_authenticated.move:16:9
    │
 15 │     public fun prim(x: u64) {
@@ -29,7 +29,7 @@ error[Sui E02008]: invalid event
 16 │         event::emit_authenticated(x)
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit_authenticated' must be called with a type defined in the current module
 
-error[Sui E02008]: invalid event
+error[ESC02008]: invalid event
    ┌─ tests/sui_mode/private_generics/private_event_emit_authenticated.move:20:9
    │
 19 │     public fun vec(x: vector<X>) {

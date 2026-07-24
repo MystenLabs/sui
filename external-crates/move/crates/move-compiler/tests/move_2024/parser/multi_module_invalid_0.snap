@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
   ┌─ tests/move_2024/parser/multi_module_invalid_0.move:3:11
   │
 1 │ module a::m { }

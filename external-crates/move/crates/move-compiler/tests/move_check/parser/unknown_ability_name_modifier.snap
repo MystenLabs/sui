@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/unknown_ability_name_modifier.move:4:20
   │
 4 │     struct Foo has blah {}

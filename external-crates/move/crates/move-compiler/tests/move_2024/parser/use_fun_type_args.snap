@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_2024/parser/use_fun_type_args.move:3:5
   │
 3 │     use fun foo as X<u64>.foo;
@@ -13,13 +13,13 @@ warning[W09001]: unused alias
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01016]: invalid name
+error[EC01016]: invalid name
   ┌─ tests/move_2024/parser/use_fun_type_args.move:3:21
   │
 3 │     use fun foo as X<u64>.foo;
   │                     ^^^^^ Type arguments are disallowed here. Expected a type name with no type arguments
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/parser/use_fun_type_args.move:4:9
   │
 3 │     use fun foo as X<u64>.foo;

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:12:17
    │
 12 │         (0: u8) == (1: u128);
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
    │             │   Incompatible arguments to '=='
    │             Found: 'u8'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:13:14
    │
 13 │         0u64 == false;
@@ -23,7 +23,7 @@ error[E04007]: incompatible types
    │         │    Incompatible arguments to '=='
    │         Found: 'u64'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:14:15
    │
 14 │         &0u64 == 1u64;
@@ -32,7 +32,7 @@ error[E04007]: incompatible types
    │         │     Incompatible arguments to '=='
    │         Found: '&u64'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:15:14
    │
 15 │         1u64 == &0u64;
@@ -41,7 +41,7 @@ error[E04007]: incompatible types
    │         │    Incompatible arguments to '=='
    │         Found: 'u64'. It is not compatible with the other type.
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:16:9
    │
  2 │     struct S { u: u64 }
@@ -53,7 +53,7 @@ error[E05001]: ability constraint not satisfied
 16 │         s == s_ref;
    │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:16:11
    │
 11 │     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
@@ -64,7 +64,7 @@ error[E04007]: incompatible types
 16 │         s == s_ref;
    │           ^^ Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:17:15
    │
 11 │     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
@@ -75,7 +75,7 @@ error[E04007]: incompatible types
 17 │         s_mut == s;
    │               ^^ Incompatible arguments to '=='
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:17:18
    │
  2 │     struct S { u: u64 }
@@ -87,7 +87,7 @@ error[E05001]: ability constraint not satisfied
 17 │         s_mut == s;
    │                  ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:21:9
    │
  3 │     struct R has key {
@@ -98,7 +98,7 @@ error[E05001]: ability constraint not satisfied
 21 │         r == r;
    │         ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:21:14
    │
  3 │     struct R has key {
@@ -109,7 +109,7 @@ error[E05001]: ability constraint not satisfied
 21 │         r == r;
    │              ^ '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:25:9
    │
 25 │         G0<R>{ f: R { f: 1 } } == G0<R>{ f: R { f: 1 } };
@@ -119,7 +119,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x8675309::M::G0<0x8675309::M::R>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:25:35
    │
 25 │         G0<R>{ f: R { f: 1 } } == G0<R>{ f: R { f: 1 } };
@@ -129,19 +129,19 @@ error[E05001]: ability constraint not satisfied
    │                                   '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                                   The type '0x8675309::M::G0<0x8675309::M::R>' does not have the ability 'drop'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_check/typing/eq_invalid.move:27:9
    │
 27 │         G2{} == G2{};
    │         ^^^^ Could not infer this type. Try adding an annotation
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_check/typing/eq_invalid.move:27:17
    │
 27 │         G2{} == G2{};
    │                 ^^^^ Could not infer this type. Try adding an annotation
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:28:9
    │
  7 │     struct G1<T: key> { f: T }
@@ -153,7 +153,7 @@ error[E05001]: ability constraint not satisfied
    │         '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x8675309::M::G1<T>' does not have the ability 'drop'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/eq_invalid.move:28:23
    │
  7 │     struct G1<T: key> { f: T }
@@ -165,7 +165,7 @@ error[E05001]: ability constraint not satisfied
    │                       '==' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                       The type '0x8675309::M::G1<T>' does not have the ability 'drop'
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_check/typing/eq_invalid.move:32:9
    │
 32 │         () == ();
@@ -174,7 +174,7 @@ error[E04005]: expected a single type
    │         │     Expected a single type, but found expression list type: '()'
    │         Incompatible arguments to '=='
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_check/typing/eq_invalid.move:33:9
    │
 33 │         (0, 1) == (0u64, 1u64);
@@ -183,7 +183,7 @@ error[E04005]: expected a single type
    │         │         Expected a single type, but found expression list type: '(u64, u64)'
    │         Incompatible arguments to '=='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:34:28
    │
 34 │         (1u64, 2u64, 3u64) == (0u64, 1u64);
@@ -192,7 +192,7 @@ error[E04007]: incompatible types
    │         │                  Incompatible arguments to '=='
    │         Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/eq_invalid.move:35:22
    │
 35 │         (0u64, 1u64) == (1u64, 2u64, 3u64);

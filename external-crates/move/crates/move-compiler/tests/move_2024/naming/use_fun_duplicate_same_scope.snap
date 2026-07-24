@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/naming/use_fun_duplicate_same_scope.move:5:9
   │
 4 │     public use fun foo as S.foo;
@@ -15,7 +15,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │         │        
   │         Duplicate 'use fun' for 'a::t1::S.foo'
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/naming/use_fun_duplicate_same_scope.move:12:9
    │
 11 │     public use fun foo as S.bar;

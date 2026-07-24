@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_2024/parser/global_access_pack.move:3:5
   │
 3 │     struct S { }

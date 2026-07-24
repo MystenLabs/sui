@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04027]: invalid 'move' usage
+error[EC04027]: invalid 'move' usage
    ┌─ tests/move_2024/parser/path_usage.move:16:9
    │
 16 │         move x.y.z;

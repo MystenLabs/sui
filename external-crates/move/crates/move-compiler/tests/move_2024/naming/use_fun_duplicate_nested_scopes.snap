@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:10:5
    │
  4 │     public fun foo(_: &S) {}
@@ -16,7 +16,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:21:9
    │
 19 │     use fun a::m::foo as S.bar;
@@ -27,7 +27,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/move_2024/naming/use_fun_duplicate_nested_scopes.move:31:9
    │
 29 │     use a::m::foo as bar;

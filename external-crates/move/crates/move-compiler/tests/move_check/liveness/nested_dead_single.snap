@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/liveness/nested_dead_single.move:3:23
   │
 3 │         loop { return abort 0 }

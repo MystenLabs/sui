@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
   ┌─ tests/move_2024/matching/match_unit_type.move:8:9
   │
 8 │     let x = ();
@@ -13,7 +13,7 @@ error[E04005]: expected a single type
   │         │    
   │         Invalid type for local
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
   ┌─ tests/move_2024/matching/match_unit_type.move:9:12
   │
 8 │     let x = ();
@@ -21,13 +21,13 @@ error[E04005]: expected a single type
 9 │     match (x) {
   │            ^ Invalid 'match' subject
 
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/match_unit_type.move:9:12
   │
 9 │     match (x) {
   │            ^ Pattern '_' not covered
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/matching/match_unit_type.move:10:10
    │
 10 │         () => 42,

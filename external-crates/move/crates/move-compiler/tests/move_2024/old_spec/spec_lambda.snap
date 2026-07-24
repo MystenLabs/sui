@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/old_spec/spec_lambda.move:2:5
   │
 2 │     spec fun do(f: ||) { }
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │     Unexpected 'spec'
   │     Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_2024/old_spec/spec_lambda.move:2:17
   │
 2 │     spec fun do(f: ||) { }
@@ -22,7 +22,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04030]: invalid usage of lambda type
+error[EC04030]: invalid usage of lambda type
   ┌─ tests/move_2024/old_spec/spec_lambda.move:2:20
   │
 2 │     spec fun do(f: ||) { }

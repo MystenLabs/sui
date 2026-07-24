@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/matching/invalid_native_struct_field_binder.move:5:9
   │  
 4 │       fun t(n: &N): u64 {
@@ -16,7 +16,7 @@ error[E04007]: incompatible types
 7 │ │         }
   │ ╰─────────^ Invalid return expression
 
-error[E04015]: invalid use of native item
+error[EC04015]: invalid use of native item
   ┌─ tests/move_2024/matching/invalid_native_struct_field_binder.move:6:13
   │
 2 │     public native struct N;

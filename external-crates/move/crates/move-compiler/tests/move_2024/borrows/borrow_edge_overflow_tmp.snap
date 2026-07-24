@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E07003]: invalid operation, could create a dangling reference
+error[EC07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:17:5
    │
 15 │     if (test) x = &j;
@@ -14,7 +14,7 @@ error[E07003]: invalid operation, could create a dangling reference
 17 │     test && test;
    │     ^^^^^^^^^^^^ Invalid assignment of temporary variable
 
-error[E07003]: invalid operation, could create a dangling reference
+error[EC07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:17:5
    │
 15 │     if (test) x = &j;
@@ -23,7 +23,7 @@ error[E07003]: invalid operation, could create a dangling reference
 17 │     test && test;
    │     ^^^^^^^^^^^^ Invalid move of temporary variable
 
-error[E07006]: ambiguous variable usage
+error[EC07006]: ambiguous variable usage
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:17:13
    │
 15 │     if (test) x = &j;
@@ -37,7 +37,7 @@ error[E07006]: ambiguous variable usage
    │
    = Ambiguous inference of 'move' or 'copy' for a borrowed variable's last usage: A 'move' would invalidate the borrowing reference, but a 'copy' might not be the expected implicit behavior since this the last direct usage of the variable.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -46,7 +46,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local value is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -55,7 +55,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'a' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -64,7 +64,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'b' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -73,7 +73,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'c' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -82,7 +82,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'd' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -91,7 +91,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'e' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -100,7 +100,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'f' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -109,7 +109,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'g' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -118,7 +118,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'h' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -127,7 +127,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'i' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -136,7 +136,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'j' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -145,7 +145,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'k' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;
@@ -154,7 +154,7 @@ error[E07004]: invalid return of locally borrowed state
 18 │     x
    │     ^ Invalid return. Local variable 'test' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_2024/borrows/borrow_edge_overflow_tmp.move:18:5
    │
 15 │     if (test) x = &j;

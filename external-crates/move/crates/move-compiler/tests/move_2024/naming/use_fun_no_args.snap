@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02017]: invalid 'use fun' declaration
+error[EC02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/naming/use_fun_no_args.move:6:5
   │
 4 │     public fun no() { abort 0 }

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/pack.move:14:27
    │
  2 │     struct S has drop { f: u64 }

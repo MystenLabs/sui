@@ -390,7 +390,7 @@ Failures in 0x0::my_module:
 
 
 ┌── make_sure_zero_coin_fails ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/my_module.move:22:27
 │    │
 │ 21 │     fun make_sure_zero_coin_fails() {
@@ -403,7 +403,7 @@ Failures in 0x0::my_module:
 
 
 ┌── make_sure_zero_coin_fails2 ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ ./sources/my_module.move:34:31
 │    │
 │ 33 │     fun make_sure_zero_coin_fails2() {

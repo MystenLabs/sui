@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
   ┌─ tests/move_2024/typing/unused_use_fun_silenced_by_macros.move:9:9
   │
 5 │     use fun foo as u64.f;
@@ -16,7 +16,7 @@ warning[W02021]: duplicate alias
   │
   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_2024/typing/unused_use_fun_silenced_by_macros.move:9:9
   │
 9 │         use fun foo as u64.f;
@@ -24,7 +24,7 @@ warning[W09001]: unused alias
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
    ┌─ tests/move_2024/typing/unused_use_fun_silenced_by_macros.move:27:27
    │
 23 │     use a::x::drop as f;
@@ -35,7 +35,7 @@ warning[W02021]: duplicate alias
    │
    = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
    ┌─ tests/move_2024/typing/unused_use_fun_silenced_by_macros.move:27:27
    │
 27 │         use a::x::drop as f;

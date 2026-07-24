@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/borrow_divergent.move:4:12
   │
 4 │            &break;
@@ -14,7 +14,7 @@ error[E04004]: expected a single non-reference type
   │            │Could not find a concrete type for this expression
   │            Invalid borrow
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/borrow_divergent.move:9:9
   │
 9 │         &{ return };
@@ -23,7 +23,7 @@ error[E04004]: expected a single non-reference type
   │         │  Could not find a concrete type for this expression
   │         Invalid borrow
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/typing/borrow_divergent.move:13:9
    │
 13 │         &(if (cond) return else return);

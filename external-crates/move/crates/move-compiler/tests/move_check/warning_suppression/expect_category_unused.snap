@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_category_unused.move:4:14
   │
 4 │     #[expect(unused)]
@@ -13,7 +13,7 @@ warning[W10007]: issue with attribute value
   │
   = Use '#[allow(unused)]' instead
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/expect_category_unused.move:6:13
   │
 6 │         let x = 0u64;

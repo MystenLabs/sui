@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/global_access.move:6:24
   │
 6 │         let _ : bool = ::exists<Self::R>(0x0);

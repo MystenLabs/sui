@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09009]: unused struct field
+warning[WC09009]: unused struct field
   ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:5:9
   │
 5 │         some_field: u64,
@@ -13,20 +13,20 @@ warning[W09009]: unused struct field
   │
   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03010]: unbound field
+error[EC03010]: unbound field
    ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:16:9
    │  
 16 │ ╭         some_struct.
 17 │ │         some_struct.bar()
    │ ╰───────────────────^ Unbound field 'some_struct' in 'a::m::SomeStruct'
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:16:20
    │
 16 │         some_struct.
    │                    ^ Possible dot names: 'a::m::bar', 'a::m::foo', or 'some_field'
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/wrong_completion_before_dot_call.move:17:9
    │
 17 │         some_struct.bar()

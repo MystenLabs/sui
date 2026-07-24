@@ -1,6 +1,6 @@
 Command `lint`:
 BUILDING LintTest
-warning[Lint W04004]: unneeded return
+warning[WL04004]: unneeded return
   ┌─ ./sources/example.move:8:24
   │
 8 │ public fun t1(): u64 { return EXAMPLE }
@@ -10,7 +10,7 @@ warning[Lint W04004]: unneeded return
 
 Command `lint --mode custom`:
 BUILDING LintTest
-warning[Lint W04004]: unneeded return
+warning[WL04004]: unneeded return
   ┌─ ./sources/example.move:8:24
   │
 8 │ public fun t1(): u64 { return EXAMPLE }
@@ -18,7 +18,7 @@ warning[Lint W04004]: unneeded return
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W04004]: unneeded return
+warning[WL04004]: unneeded return
    ┌─ ./sources/example.move:17:24
    │
 17 │ public fun t3(): u64 { return CUSTOM }

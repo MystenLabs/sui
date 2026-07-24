@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/duplicate_function_parameter_names.move:2:13
   │
 2 │     fun foo(x: u64, x: u64) {}
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/typing/duplicate_function_parameter_names.move:2:21
   │
 2 │     fun foo(x: u64, x: u64) {}
@@ -21,7 +21,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/typing/duplicate_function_parameter_names.move:2:21
   │
 2 │     fun foo(x: u64, x: u64) {}

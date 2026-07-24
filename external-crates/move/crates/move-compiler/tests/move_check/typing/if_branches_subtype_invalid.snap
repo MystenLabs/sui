@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:3:16
   │
 2 │     fun t0(cond: bool, u: &u64, u_mut: &mut u64) {
@@ -16,7 +16,7 @@ error[E04006]: invalid subtype
   │                Invalid type annotation
   │                Expected: '&mut u64'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:4:16
   │
 2 │     fun t0(cond: bool, u: &u64, u_mut: &mut u64) {
@@ -28,7 +28,7 @@ error[E04006]: invalid subtype
   │                Invalid type annotation
   │                Expected: '&mut u64'
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
   ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:5:16
   │
 2 │     fun t0(cond: bool, u: &u64, u_mut: &mut u64) {
@@ -40,7 +40,7 @@ error[E04006]: invalid subtype
   │                Invalid type annotation
   │                Expected: '&mut u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:9:23
   │
 8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -50,7 +50,7 @@ error[E04007]: incompatible types
 9 │         let _: &u64 = if (cond) u else b;
   │                       ^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:10:23
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -61,7 +61,7 @@ error[E04007]: incompatible types
 10 │         let _: &u64 = if (cond) b else u;
    │                       ^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:12:23
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -72,7 +72,7 @@ error[E04007]: incompatible types
 12 │         let _: &u64 = if (cond) u_mut else b;
    │                       ^^^^^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:13:23
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -83,7 +83,7 @@ error[E04007]: incompatible types
 13 │         let _: &u64 = if (cond) b else u_mut;
    │                       ^^^^^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:15:23
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -94,7 +94,7 @@ error[E04007]: incompatible types
 15 │         let _: &u64 = if (cond) u else b_mut;
    │                       ^^^^^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:16:23
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -105,7 +105,7 @@ error[E04007]: incompatible types
 16 │         let _: &u64 = if (cond) b_mut else u;
    │                       ^^^^^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:19:27
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -116,7 +116,7 @@ error[E04007]: incompatible types
 19 │         let _: &mut u64 = if (cond) u_mut else b_mut;
    │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:20:27
    │
  8 │     fun t1(cond: bool, u: &u64, u_mut: &mut u64, b: &bool, b_mut: &mut bool) {
@@ -127,7 +127,7 @@ error[E04007]: incompatible types
 20 │         let _: &mut u64 = if (cond) b_mut else u_mut;
    │                           ^^^^^^^^^^^^^^^^^^^^^^^^^^ Incompatible branches
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:25:21
    │
 24 │     fun t2(cond: bool, u: &u64, u_mut: &mut u64) {
@@ -138,7 +138,7 @@ error[E04006]: invalid subtype
    │                     │Expected: '&mut u64'
    │                     Invalid type annotation
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:26:21
    │
 24 │     fun t2(cond: bool, u: &u64, u_mut: &mut u64) {
@@ -150,7 +150,7 @@ error[E04006]: invalid subtype
    │                     │Expected: '&mut u64'
    │                     Invalid type annotation
 
-error[E04006]: invalid subtype
+error[EC04006]: invalid subtype
    ┌─ tests/move_check/typing/if_branches_subtype_invalid.move:27:21
    │
 24 │     fun t2(cond: bool, u: &u64, u_mut: &mut u64) {

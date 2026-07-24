@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02003]: invalid 'address' declaration
+error[EC02003]: invalid 'address' declaration
    ┌─ tests/move_2024/extensions/invalid_module_name.move:11:15
    │
 11 │ extend module m {

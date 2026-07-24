@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/borrow_field_non_ref_non_local_root.move:9:22
    │
  2 │     struct S has drop { f: u64 }

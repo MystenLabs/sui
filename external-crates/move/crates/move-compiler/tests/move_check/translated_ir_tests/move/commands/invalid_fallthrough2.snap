@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/translated_ir_tests/move/commands/invalid_fallthrough2.move:4:3
   │
 4 │   return ();

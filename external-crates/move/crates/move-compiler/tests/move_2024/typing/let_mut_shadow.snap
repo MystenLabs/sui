@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_shadow.move:9:9
   │
 3 │     public fun foo(x: u64) {

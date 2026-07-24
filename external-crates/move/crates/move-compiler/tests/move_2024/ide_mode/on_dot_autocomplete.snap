@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:1:9
   │
 1 │ #[allow(ide_path_autocomplete)]
   │         ^^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_path_autocomplete'
 
-error[E04023]: invalid method call
+error[EC04023]: invalid method call
    ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:9
    │
 23 │         c.b.a.b();        // unresolved method name

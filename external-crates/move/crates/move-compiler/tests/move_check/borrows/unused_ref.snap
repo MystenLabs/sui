@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04017]: too many arguments
+error[EC04017]: too many arguments
    ┌─ tests/move_check/borrows/unused_ref.move:28:5
    │
 19 │ fun borrow<K: copy + drop + store, V: store>(_x: &X, _k: K): &V {

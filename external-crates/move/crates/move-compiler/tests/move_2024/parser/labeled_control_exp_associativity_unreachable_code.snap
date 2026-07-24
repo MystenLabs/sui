@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/parser/labeled_control_exp_associativity_unreachable_code.move:11:13
    │
 11 │         1 + 'a: loop { foo() } + 2u64;

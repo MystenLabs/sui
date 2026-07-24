@@ -9,7 +9,9 @@ use crate::{
     Flags,
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
-        codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
+        codes::{
+            Category, DiagnosticCode, DiagnosticInfo, DiagnosticSource, DiagnosticsID, Severity,
+        },
         filter::{FilterName, FilterPrefix, FilterResult, FilterScope, FilterStack},
     },
     shared::{
@@ -657,7 +659,7 @@ impl Diagnostics {
         inner.diagnostics.retain(f);
     }
 
-    pub fn any_with_prefix(&self, prefix: &str) -> bool {
+    pub fn any_with_prefix(&self, prefix: DiagnosticSource) -> bool {
         let Self {
             diags: Some(inner),
             format: _,
@@ -688,7 +690,7 @@ impl Diagnostics {
 
     /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
     /// have a given prefix and how many different unique lints were filtered.
-    pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
+    pub fn filtered_source_diags_with_prefix(&self, prefix: DiagnosticSource) -> (usize, usize) {
         let Self {
             diags: Some(inner),
             format: _,

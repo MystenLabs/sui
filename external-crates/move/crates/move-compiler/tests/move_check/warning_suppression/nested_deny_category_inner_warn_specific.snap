@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/nested_deny_category_inner_warn_specific.move:7:13
   │
 5 │     #[warn(unused_variable)]

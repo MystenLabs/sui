@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
   ┌─ tests/move_check/typing/vector_void.move:3:18
   │
 3 │         let _v = vector[{ abort 0 }];

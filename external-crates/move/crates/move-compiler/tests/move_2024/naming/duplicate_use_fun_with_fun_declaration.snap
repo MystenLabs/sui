@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/naming/duplicate_use_fun_with_fun_declaration.move:7:9
   │
 4 │     public use fun foobar as X.foobaz;

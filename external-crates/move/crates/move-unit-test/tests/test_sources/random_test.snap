@@ -13,7 +13,7 @@ Test failures:
 Failures in 0x6::random_test:
 
 ┌── should_fail_test_div_mod_10 ────── (seed = 8)
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │   ┌─ random_test.move:4:11
 │   │
 │ 3 │     fun should_fail_test_div_mod_10(x: u64) {
@@ -28,7 +28,7 @@ Failures in 0x6::random_test:
 
 
 ┌── should_fail_test_div_mod_10_2_vec ────── (seed = 5)
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │   ┌─ random_test.move:9:33
 │   │
 │ 8 │     fun should_fail_test_div_mod_10_2_vec(x: vector<vector<u64>>) {

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
   ┌─ tests/sui_mode/id_leak/invalid_object_missing_id.move:9:9
   │
 9 │         S {}

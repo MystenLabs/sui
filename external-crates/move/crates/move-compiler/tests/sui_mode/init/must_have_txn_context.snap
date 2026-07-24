@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/must_have_txn_context.move:3:9
   │
 3 │     fun init() {
@@ -14,7 +14,7 @@ error[Sui E02003]: invalid 'init' function
   │         Invalid 'init' function declaration
   │         'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
 
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
    ┌─ tests/sui_mode/init/must_have_txn_context.move:12:9
    │
 12 │     fun init(_ctx: &mut tx_context::TxContext, _ctx2: &mut tx_context::TxContext) {

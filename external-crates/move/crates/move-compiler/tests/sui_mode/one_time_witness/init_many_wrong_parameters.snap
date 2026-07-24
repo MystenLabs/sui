@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/init_many_wrong_parameters.move:2:9
   │
 2 │     fun init(_: who::X, _: who::Y, _: who::Z) {}
@@ -13,25 +13,25 @@ error[Sui E02003]: invalid 'init' function
   │         │                           
   │         Invalid 'init' function declaration
 
-error[E03002]: unbound module
+error[EC03002]: unbound module
   ┌─ tests/sui_mode/one_time_witness/init_many_wrong_parameters.move:2:17
   │
 2 │     fun init(_: who::X, _: who::Y, _: who::Z) {}
   │                 ^^^ Unbound module alias 'who'
 
-error[E03002]: unbound module
+error[EC03002]: unbound module
   ┌─ tests/sui_mode/one_time_witness/init_many_wrong_parameters.move:2:28
   │
 2 │     fun init(_: who::X, _: who::Y, _: who::Z) {}
   │                            ^^^ Unbound module alias 'who'
 
-error[E03002]: unbound module
+error[EC03002]: unbound module
   ┌─ tests/sui_mode/one_time_witness/init_many_wrong_parameters.move:2:39
   │
 2 │     fun init(_: who::X, _: who::Y, _: who::Z) {}
   │                                       ^^^ Unbound module alias 'who'
 
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/init_many_wrong_parameters.move:8:9
   │
 8 │     fun init(_: Who, _: u64, _: &mut sui::tx_context::TxContext) {}
@@ -39,7 +39,7 @@ error[Sui E02003]: invalid 'init' function
   │         │                     
   │         Invalid 'init' function declaration
 
-error[E03004]: unbound type
+error[EC03004]: unbound type
   ┌─ tests/sui_mode/one_time_witness/init_many_wrong_parameters.move:8:17
   │
 8 │     fun init(_: Who, _: u64, _: &mut sui::tx_context::TxContext) {}

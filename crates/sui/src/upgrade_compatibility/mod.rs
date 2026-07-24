@@ -31,7 +31,7 @@ use move_binary_format::{
 };
 use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
-use move_compiler::diagnostics::codes::DiagnosticInfo;
+use move_compiler::diagnostics::codes::{DiagnosticInfo, DiagnosticSource};
 use move_compiler::{
     diagnostics::{
         Diagnostic, Diagnostics,
@@ -612,7 +612,7 @@ fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
     }
 }
 
-const COMPATIBILITY_PREFIX: &str = "Compatibility ";
+const COMPATIBILITY_PREFIX: DiagnosticSource = DiagnosticSource::SuiCompiler;
 /// Generates an enum Category along with individual enum for each individual category
 /// and impls into diagnostic info for each category.
 macro_rules! upgrade_codes {

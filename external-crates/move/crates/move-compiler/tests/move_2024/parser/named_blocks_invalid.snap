@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
   ┌─ tests/move_2024/parser/named_blocks_invalid.move:4:9
   │
 4 │         name: {
   │         ^^^^ Unbound variable 'name'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/named_blocks_invalid.move:4:13
   │
 4 │         name: {

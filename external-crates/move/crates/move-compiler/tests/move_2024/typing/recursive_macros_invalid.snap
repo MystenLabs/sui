@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:4:13
    │
  4 │         1 + self_cyle!()
@@ -14,7 +14,7 @@ error[E04032]: unable to expand macro function
 39 │         self_cyle!();
    │         ------------ 'a::m::self_cyle' previously expanded here
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:17:9
    │
  9 │         cycle2!()
@@ -29,7 +29,7 @@ error[E04032]: unable to expand macro function
 40 │         cycle1!();
    │         --------- 'a::m::cycle1' previously expanded here
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:22:19
    │
 22 │         apply!(|| cycle_app!(|| $f()))
@@ -41,7 +41,7 @@ error[E04032]: unable to expand macro function
 41 │         cycle_app!(|| 1);
    │         ---------------- 'a::m::cycle_app' previously expanded here
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:31:18
    │
 31 │         by_name!(cycle_by_name!($f))

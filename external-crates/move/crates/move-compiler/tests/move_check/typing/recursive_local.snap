@@ -5,13 +5,13 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
   ┌─ tests/move_check/typing/recursive_local.move:4:13
   │
 4 │         let x;
   │             ^ Could not infer this type. Try adding an annotation
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
   ┌─ tests/move_check/typing/recursive_local.move:5:9
   │
 5 │         x = (x, 0u64);
@@ -19,7 +19,7 @@ error[E04005]: expected a single type
   │         │    
   │         Invalid type for local
 
-error[E04008]: recursive type not allowed
+error[EC04008]: recursive type not allowed
   ┌─ tests/move_check/typing/recursive_local.move:5:9
   │
 4 │         let x;
@@ -27,7 +27,7 @@ error[E04008]: recursive type not allowed
 5 │         x = (x, 0u64);
   │         ^ Invalid assignment to variable 'x'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
   ┌─ tests/move_check/typing/recursive_local.move:5:14
   │
 5 │         x = (x, 0u64);

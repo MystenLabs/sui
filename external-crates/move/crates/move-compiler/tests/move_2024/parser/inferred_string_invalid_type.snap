@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/parser/inferred_string_invalid_type.move:4:26
   │
 4 │     fun test() { let _x: S = "inferred stringŻ"; }
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
   │                          Invalid type annotation
   │                          Expected: 'a::m::S'
 
-warning[W04039]: unable to determine literal's type
+warning[WC04039]: unable to determine literal's type
   ┌─ tests/move_2024/parser/inferred_string_invalid_type.move:4:30
   │
 4 │     fun test() { let _x: S = "inferred stringŻ"; }

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_wildcard_prefixed.move:2:15
   │
 2 │ #[expect(lint(all))]

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/extensions/invalid_duplicate_use_fun.move:4:9
   │
 4 │     fun get_x(s: &S): &u64 { &s.x }

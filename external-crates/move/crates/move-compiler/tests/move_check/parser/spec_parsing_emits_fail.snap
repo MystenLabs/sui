@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/parser/spec_parsing_emits_fail.move:2:5
   │  
 2 │ ╭     spec with_emits {

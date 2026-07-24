@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/matching/duplicate_defns.move:9:17
   │
 2 │     public enum X {
@@ -14,7 +14,7 @@ error[E02001]: duplicate declaration, item, or annotation
 9 │     public enum X {
   │                 ^ Duplicate module member 'X'. Top level names in a namespace must be unique
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/matching/duplicate_defns.move:14:19
    │
  9 │     public enum X {

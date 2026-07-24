@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
   ┌─ tests/move_2024/expansion/unnecessary_alias_implicit.move:4:19
   │
 2 │     public struct S()
@@ -16,7 +16,7 @@ warning[W02021]: duplicate alias
   │
   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_2024/expansion/unnecessary_alias_implicit.move:4:19
   │
 4 │         use a::m::S; // unused and duplciate
@@ -24,7 +24,7 @@ warning[W09001]: unused alias
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W02021]: duplicate alias
+warning[WC02021]: duplicate alias
   ┌─ tests/move_2024/expansion/unnecessary_alias_implicit.move:5:19
   │
 3 │     public fun foo() {
@@ -35,7 +35,7 @@ warning[W02021]: duplicate alias
   │
   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_2024/expansion/unnecessary_alias_implicit.move:5:19
   │
 5 │         use a::m::foo; // unused and duplciate

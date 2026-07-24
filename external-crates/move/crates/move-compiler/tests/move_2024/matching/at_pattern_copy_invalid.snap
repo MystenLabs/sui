@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/matching/at_pattern_copy_invalid.move:10:13
    │
  3 │     public enum Maybe<T> has drop {

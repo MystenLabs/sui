@@ -4,10 +4,13 @@
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
-    diagnostics::{codes::DiagnosticsID, filter::FilterName},
+    diagnostics::{
+        codes::{DiagnosticSource, DiagnosticsID},
+        filter::FilterName,
+    },
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX, LintLevel, LinterDiagnosticCategory},
+    linters::{ALLOW_ATTR_CATEGORY, LintLevel, LinterDiagnosticCategory},
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -83,6 +86,8 @@ pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
+
+pub const LINT_WARNING_PREFIX: DiagnosticSource = DiagnosticSource::SuiLint;
 
 #[repr(u8)]
 pub enum LinterDiagnosticCode {

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/wrong_name.move:8:9
   │
 8 │     fun init(_otw: OneTimeWitness, _ctx: &mut tx_context::TxContext) {}

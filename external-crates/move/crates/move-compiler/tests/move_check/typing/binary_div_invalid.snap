@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
   ┌─ tests/move_check/typing/binary_div_invalid.move:8:9
   │
 8 │         false / true;
@@ -14,7 +14,7 @@ error[E04003]: built-in operation not supported
   │         Invalid argument to '/'
   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
   ┌─ tests/move_check/typing/binary_div_invalid.move:8:17
   │
 8 │         false / true;
@@ -22,7 +22,7 @@ error[E04003]: built-in operation not supported
   │         │        
   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/binary_div_invalid.move:9:14
   │
 9 │         1u64 / false;
@@ -31,7 +31,7 @@ error[E04007]: incompatible types
   │         │    Incompatible arguments to '/'
   │         Found: 'u64'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:10:9
    │
 10 │         false / 1u64;
@@ -40,7 +40,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '/'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_div_invalid.move:10:15
    │
 10 │         false / 1u64;
@@ -49,7 +49,7 @@ error[E04007]: incompatible types
    │         │     Incompatible arguments to '/'
    │         Found: 'bool'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:10:17
    │
 10 │         false / 1u64;
@@ -57,7 +57,7 @@ error[E04003]: built-in operation not supported
    │         │        
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:11:9
    │
 11 │         @0x0 / @0x1;
@@ -66,7 +66,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '/'
    │         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:11:16
    │
 11 │         @0x0 / @0x1;
@@ -74,7 +74,7 @@ error[E04003]: built-in operation not supported
    │         │       
    │         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_div_invalid.move:12:17
    │
 12 │         (0: u8) / (1: u128);
@@ -83,7 +83,7 @@ error[E04007]: incompatible types
    │             │   Incompatible arguments to '/'
    │             Found: 'u8'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:13:9
    │
  7 │     fun t0(r: R, s: S) {
@@ -92,7 +92,7 @@ error[E04003]: built-in operation not supported
 13 │         r / r;
    │         ^ Invalid argument to '/'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/binary_div_invalid.move:13:9
    │
  3 │     struct R {
@@ -104,7 +104,7 @@ error[E05001]: ability constraint not satisfied
 13 │         r / r;
    │         ^^^^^ Cannot ignore values without the 'drop' ability. The value must be used
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:13:13
    │
  7 │     fun t0(r: R, s: S) {
@@ -113,7 +113,7 @@ error[E04003]: built-in operation not supported
 13 │         r / r;
    │             ^ Invalid argument to '/'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:14:9
    │
  7 │     fun t0(r: R, s: S) {
@@ -122,7 +122,7 @@ error[E04003]: built-in operation not supported
 14 │         s / s;
    │         ^ Invalid argument to '/'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:14:13
    │
  7 │     fun t0(r: R, s: S) {
@@ -131,7 +131,7 @@ error[E04003]: built-in operation not supported
 14 │         s / s;
    │             ^ Invalid argument to '/'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:15:9
    │
 15 │         1u64 / false / @0x0 / 0u64;
@@ -140,7 +140,7 @@ error[E04003]: built-in operation not supported
    │         │              Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
    │         Invalid argument to '/'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_div_invalid.move:15:14
    │
 15 │         1u64 / false / @0x0 / 0u64;
@@ -149,7 +149,7 @@ error[E04007]: incompatible types
    │         │    Incompatible arguments to '/'
    │         Found: 'u64'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_div_invalid.move:15:29
    │
 15 │         1u64 / false / @0x0 / 0u64;
@@ -158,7 +158,7 @@ error[E04007]: incompatible types
    │                        │    Incompatible arguments to '/'
    │                        Found: 'address'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:15:31
    │
 15 │         1u64 / false / @0x0 / 0u64;
@@ -166,7 +166,7 @@ error[E04003]: built-in operation not supported
    │                        │       
    │                        Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:16:9
    │
 16 │         () / ();
@@ -175,7 +175,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '/'
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:16:14
    │
 16 │         () / ();
@@ -183,7 +183,7 @@ error[E04003]: built-in operation not supported
    │         │     
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_div_invalid.move:17:14
    │
 17 │         1u64 / ();
@@ -192,7 +192,7 @@ error[E04007]: incompatible types
    │         │    Incompatible arguments to '/'
    │         Found: 'u64'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:18:9
    │
 18 │         (0u64, 1u64) / (0u64, 1u64, 2u64);
@@ -201,7 +201,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '/'
    │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_div_invalid.move:18:22
    │
 18 │         (0u64, 1u64) / (0u64, 1u64, 2u64);
@@ -210,7 +210,7 @@ error[E04007]: incompatible types
    │         │            Incompatible arguments to '/'
    │         Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:18:24
    │
 18 │         (0u64, 1u64) / (0u64, 1u64, 2u64);
@@ -218,7 +218,7 @@ error[E04003]: built-in operation not supported
    │         │               
    │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:19:9
    │
 19 │         (1, 2) / (0u64, 1u64);
@@ -227,7 +227,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '/'
    │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_div_invalid.move:19:18
    │
 19 │         (1, 2) / (0u64, 1u64);

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:18:7
    │
 18 │     #[test(_a=@0x1)]
@@ -14,7 +14,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:19:5
    │
 19 │     public fun a(_a: signer) { }
@@ -23,7 +23,7 @@ warning[W10007]: issue with attribute value
    = Test functions with arguments have been deprecated
    = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:22:7
    │
 22 │     #[test(_a=@0x1, _b=@0x2)]
@@ -32,7 +32,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:23:5
    │
 23 │     public fun b(_a: signer, _b: signer) { }
@@ -41,7 +41,7 @@ warning[W10007]: issue with attribute value
    = Test functions with arguments have been deprecated
    = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:26:7
    │
 26 │     #[test(_a=@0x1, _b=@0x2), expected_failure]
@@ -50,7 +50,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:27:5
    │
 27 │     public fun c(_a: signer, _b: signer) { }
@@ -59,7 +59,7 @@ warning[W10007]: issue with attribute value
    = Test functions with arguments have been deprecated
    = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:30:7
    │
 30 │     #[test(_a=@0x1, _b=@0x2)]
@@ -68,7 +68,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:32:5
    │
 32 │     public fun d(_a: signer, _b: signer) { }
@@ -77,7 +77,7 @@ warning[W10007]: issue with attribute value
    = Test functions with arguments have been deprecated
    = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:35:7
    │
 35 │     #[test(_a=@0x1, _b=@0x2)]
@@ -86,7 +86,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:37:5
    │
 37 │     public fun e(_a: signer, _b: signer) { }
@@ -95,7 +95,7 @@ warning[W10007]: issue with attribute value
    = Test functions with arguments have been deprecated
    = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:40:7
    │
 40 │     #[test(_a=@0x1, _b=@0x2), expected_failure(abort_code=5, location=0x1::M)]
@@ -104,7 +104,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:41:5
    │
 41 │     public fun g(_a: signer, _b: signer) { }

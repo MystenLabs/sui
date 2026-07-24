@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
   ┌─ tests/move_check/liveness/trailing_semi_loops.move:3:16
   │
 3 │         loop ();
@@ -17,7 +17,7 @@ warning[W09004]: unnecessary trailing semicolon
   │
   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/liveness/trailing_semi_loops.move:7:12
   │
 7 │         { (loop (): ()) };
@@ -25,7 +25,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:14:10
    │  
 11 │ ╭         loop {
@@ -40,7 +40,7 @@ warning[W09004]: unnecessary trailing semicolon
    │  
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:21:26
    │
 21 │             let _: u64 = if (true) break else break;
@@ -48,7 +48,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:27:18
    │
 27 │             break;
@@ -60,7 +60,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:34:22
    │
 34 │                 break;
@@ -72,7 +72,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:43:42
    │
 43 │             if (cond) continue else break;
@@ -84,7 +84,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:49:42
    │
 49 │             if (cond) abort 0 else return;
@@ -96,7 +96,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:60:17
    │
 60 │                 x = 2;
@@ -104,7 +104,7 @@ warning[W09003]: unused assignment
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:62:14
    │  
 56 │ ╭             if (cond) {
@@ -122,7 +122,7 @@ warning[W09004]: unnecessary trailing semicolon
    │  
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:70:22
    │
 70 │                 break;
@@ -134,7 +134,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:72:25
    │
 72 │                 continue;
@@ -146,7 +146,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:80:23
    │
 80 │                 return;
@@ -158,7 +158,7 @@ warning[W09004]: unnecessary trailing semicolon
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09004]: unnecessary trailing semicolon
+warning[WC09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/liveness/trailing_semi_loops.move:82:24
    │
 82 │                 abort 0;

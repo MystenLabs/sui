@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02007]: invalid 'fun' declaration
+error[EC02007]: invalid 'fun' declaration
   ┌─ tests/move_2024/expansion/entry_macro.move:3:5
   │
 3 │     entry macro fun foo() {}

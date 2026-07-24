@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02007]: invalid object declaration
+error[ESC02007]: invalid object declaration
   ┌─ tests/sui_mode/struct_with_key/key_struct_second_field_id.move:7:9
   │
 6 │     struct S has key {
@@ -13,7 +13,7 @@ error[Sui E02007]: invalid object declaration
 7 │         flag: bool,
   │         ^^^^ Invalid object 'S'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
 
-error[Sui E02007]: invalid object declaration
+error[ESC02007]: invalid object declaration
    ┌─ tests/sui_mode/struct_with_key/key_struct_second_field_id.move:12:9
    │
 11 │     struct R has key {
