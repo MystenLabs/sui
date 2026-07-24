@@ -106,42 +106,57 @@ pub async fn execution_process(
 
         authority.metrics.execution_rate_tracker.lock().record();
 
-        // Certificate execution can take significant time, so run it in a separate task.
+        // Certificate execution is CPU-bound and can take significant time, so run it on a
+        // blocking thread to avoid stalling the async runtime's worker threads.
         let epoch_store_clone = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
+        spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
-            let _guard = permit;
+            let _permit = permit;
             if authority.is_tx_already_executed(&digest) {
                 return;
             }
 
             fail_point_async!("transaction_execution_delay");
 
-            match authority.try_execute_immediately(
-                &certificate,
-                execution_env,
-                &epoch_store_clone,
-            ) {
-                ExecutionOutput::Success(_) => {
-                    authority
-                        .metrics
-                        .execution_driver_executed_transactions
-                        .inc();
+            // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
+            // for in-flight execution to finish (previously guaranteed by `within_alive_epoch`,
+            // since execution has no yield points). Skip if the epoch has already ended.
+            let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
+                return;
+            };
+
+            // Await unconditionally: once dispatched, execution always runs to completion
+            // within the alive-epoch guard and is never detached at epoch end.
+            tokio::task::spawn_blocking(move || {
+                let _scope = monitored_scope("ExecutionDriver::blocking_task");
+                match authority.try_execute_immediately(
+                    &certificate,
+                    execution_env,
+                    &epoch_store_clone,
+                ) {
+                    ExecutionOutput::Success(_) => {
+                        authority
+                            .metrics
+                            .execution_driver_executed_transactions
+                            .inc();
+                    }
+                    ExecutionOutput::EpochEnded => {
+                        warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
+                    }
+                    ExecutionOutput::Fatal(e) => {
+                        fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
+                    }
+                    ExecutionOutput::RetryLater => {
+                        // Transaction will be retried later and auto-rescheduled, so we ignore it here
+                        authority
+                            .metrics
+                            .execution_driver_paused_transactions
+                            .inc();
+                    }
                 }
-                ExecutionOutput::EpochEnded => {
-                    warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
-                }
-                ExecutionOutput::Fatal(e) => {
-                    fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
-                }
-                ExecutionOutput::RetryLater => {
-                    // Transaction will be retried later and auto-rescheduled, so we ignore it here
-                    authority
-                        .metrics
-                        .execution_driver_paused_transactions
-                        .inc();
-                }
-            }
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest))));
+            })
+            .await
+            .expect("transaction execution task panicked");
+        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
     }
 }
