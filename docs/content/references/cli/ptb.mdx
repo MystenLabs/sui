@@ -144,6 +144,20 @@ For `none`, you can use the `none` keyword. For `some`, you can use the `some` k
 $ sui client ptb --move-call "0x1::option::destroy_none" none
 ```
 
+### Address balance withdrawals
+
+CLI PTBs support address balance withdrawal inputs using `withdrawal(AMOUNT)` for SUI or `withdrawal<COIN_TYPE>(AMOUNT)` for another coin type. A withdrawal input creates a `Withdrawal<Balance<T>>` value that must be redeemed in the same PTB with `sui::coin::redeem_funds<T>` or `sui::balance::redeem_funds<T>`.
+
+```sh
+$ sui client ptb \
+--move-call sui::coin::redeem_funds "<sui::sui::SUI>" 'withdrawal(1000000000)' \
+--assign coin \
+--transfer-objects "[coin]" @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 \
+--gas-budget 50000000
+```
+
+Quote the withdrawal literal in shells that treat `<`, `>`, or parentheses specially.
+
 ### Addresses
 
 ### Assign
