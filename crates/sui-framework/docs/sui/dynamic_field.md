@@ -176,7 +176,7 @@ Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlrea
     <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <b>assert</b>!(!<a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object">has_child_object</a>(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>), <a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
     <b>let</b> field = <a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a> {
-        id: <a href="../sui/object.md#sui_object_new_uid_from_hash">object::new_uid_from_hash</a>(<a href="../sui/hash.md#sui_hash">hash</a>),
+        id: <a href="../sui/object.md#sui_object_new_uid_from_hash">object::new_uid_from_hash</a>(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>),
         name,
         value,
     };

@@ -40,7 +40,7 @@ public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
     let id = addr.to_id();
     assert!(!df::exists(parent, Claimed(id)), EObjectAlreadyExists);
     df::add(parent, Claimed(id), ClaimedStatus::Reserved);
-    object::new_uid_from_hash(addr)
+    object::new_uid_from_hash(parent.to_address(), addr)
 }
 
 /// Checks if a provided `key` has been claimed for the given parent.

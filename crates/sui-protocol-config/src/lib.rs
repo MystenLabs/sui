@@ -372,6 +372,8 @@ const MAINNET_USDB: &str =
 //              function signatures with `&mut TxContext` + any `&mut _` return
 //              that have no non-`TxContext` `&mut U` parameter.
 // Version 132: Enable defer_owned_object_double_spend on devnet.
+//              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
+//              root version of hash-derived UIDs (`new_uid_from_hash`).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1725,6 +1727,9 @@ pub struct ProtocolConfig {
     object_delete_impl_cost_base: Option<u64>,
     // Cost params for the Move native function `record_new_uid(id: address)`
     object_record_new_uid_cost_base: Option<u64>,
+    // Cost params for the Move native function
+    // `record_new_uid_from_hash(parent: address, bytes: address)`
+    object_record_new_uid_from_hash_cost_base: Option<u64>,
 
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -2653,6 +2658,9 @@ impl ProtocolConfig {
             object_delete_impl_cost_base: Some(52),
             // Cost params for the Move native function `record_new_uid(id: address)`
             object_record_new_uid_cost_base: Some(52),
+            // Cost params for the Move native function
+            // `record_new_uid_from_hash(parent: address, bytes: address)`. Introduced in v131.
+            object_record_new_uid_from_hash_cost_base: None,
 
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -4562,6 +4570,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                     }
+                    cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                 }
                 // Use this template when making changes:
                 //
