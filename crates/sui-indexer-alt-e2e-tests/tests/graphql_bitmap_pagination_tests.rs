@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::path::Path;
 use std::time::Duration;
 
 use fastcrypto::encoding::Base58;
@@ -368,6 +369,109 @@ async fn events_page(
 async fn all_event_positions(cluster: &OffchainCluster, filter: &Value) -> Vec<(String, u64)> {
     let (page, _) = events_page(cluster, filter, Some(50), None, None, None).await;
     page.into_iter().map(|(_, d, s)| (d, s)).collect()
+}
+
+/// Advance an `alpha_cluster` with regular checkpoints at cps 1-2, an epoch-advance at cp 3
+/// (closing epoch 0 and starting epoch 1 at cp 4), and regular checkpoints at cps 4-5. Together
+/// with the genesis fixture the epochs table reads: epoch 0 = cps [0, 3] (closed), epoch 1 = cps
+/// [4, ..] (ongoing).
+///
+/// Every checkpoint carries exactly one transaction, so `network_total_transactions` chains as cp +
+/// 1. The advance checkpoint's timestamp is bumped so its epoch-end cells supersede the genesis
+/// fixture's (which also closed epoch 0, at cp 0, with the same mock system state).
+async fn advance_multiple_epochs(cluster: &OffchainCluster, path: &Path) {
+    for cp in 1..=2u64 {
+        let checkpoint = TestCheckpointBuilder::new(cp)
+            .with_network_total_transactions(cp)
+            .start_transaction(1)
+            .create_owned_object(cp)
+            .finish_transaction()
+            .build_checkpoint();
+        write_checkpoint(path, checkpoint).await.unwrap();
+    }
+
+    let system_state = SuiSystemState::V2(SuiSystemStateInnerV2 {
+        epoch: 1,
+        protocol_version: 1,
+        ..mock::sui_system_state_inner_v2()
+    });
+    let advance = TestCheckpointBuilder::new(3)
+        .with_network_total_transactions(3)
+        .with_timestamp_ms(3_000)
+        .advance_epoch(AdvanceEpochConfig {
+            output_objects: mock::system_state_output_objects(system_state),
+            ..Default::default()
+        });
+    write_checkpoint(path, advance).await.unwrap();
+
+    for cp in 4..=5u64 {
+        let checkpoint = TestCheckpointBuilder::new(cp)
+            .with_epoch(1)
+            .with_network_total_transactions(cp)
+            .start_transaction(1)
+            .create_owned_object(cp)
+            .finish_transaction()
+            .build_checkpoint();
+        write_checkpoint(path, checkpoint).await.unwrap();
+    }
+
+    cluster
+        .wait_for_graphql(5, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 5");
+}
+
+/// One page of the checkpoints connection: each edge's `(cursor, sequenceNumber)` in emission
+/// order (edges are ascending for both `first` and `last` pages), plus the raw `pageInfo`.
+async fn checkpoints_page(
+    cluster: &OffchainCluster,
+    filter: &Value,
+    first: Option<usize>,
+    after: Option<String>,
+    last: Option<usize>,
+    before: Option<String>,
+) -> (Vec<(String, u64)>, Value) {
+    let query = r#"query($filter: CheckpointFilter, $first: Int, $after: String, $last: Int, $before: String) {
+        checkpoints(filter: $filter, first: $first, after: $after, last: $last, before: $before) {
+            edges { cursor node { sequenceNumber } }
+            pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
+        }
+    }"#;
+
+    let resp = graphql(
+        cluster,
+        query,
+        json!({ "filter": filter, "first": first, "after": after, "last": last, "before": before }),
+    )
+    .await;
+
+    let edges = resp
+        .pointer("/checkpoints/edges")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("expected edges array in {resp}"));
+    let page = edges
+        .iter()
+        .map(|e| {
+            (
+                e["cursor"].as_str().expect("edge cursor").to_string(),
+                e["node"]["sequenceNumber"]
+                    .as_u64()
+                    .expect("edge node sequenceNumber"),
+            )
+        })
+        .collect();
+    let page_info = resp
+        .pointer("/checkpoints/pageInfo")
+        .cloned()
+        .unwrap_or_else(|| panic!("expected pageInfo in {resp}"));
+
+    (page, page_info)
+}
+
+/// All checkpoint sequence numbers matching `filter`, in one big forward page.
+async fn all_checkpoint_seqs(cluster: &OffchainCluster, filter: &Value) -> Vec<u64> {
+    let (page, _) = checkpoints_page(cluster, filter, Some(50), None, None, None).await;
+    page.into_iter().map(|(_, seq)| seq).collect()
 }
 
 #[tokio::test]
@@ -1341,4 +1445,100 @@ async fn test_events_module_and_type_rejected() {
         err.to_string().contains("not supported"),
         "unexpected error: {err:#}"
     );
+}
+
+#[tokio::test]
+async fn checkpoints_cursor_round_trips_across_pages() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    advance_multiple_epochs(&cluster, temp_dir.path()).await;
+    let filter = json!(null);
+    let expected: Vec<u64> = (0..=5).collect();
+
+    // ----- Forward pagination -----
+    let mut forward = Vec::new();
+    let mut after: Option<String> = None;
+    for _ in 0..10 {
+        let (page, page_info) =
+            checkpoints_page(&cluster, &filter, Some(4), after.clone(), None, None).await;
+        forward.extend(page.into_iter().map(|(_, seq)| seq));
+        if !page_info["hasNextPage"].as_bool().unwrap_or(false) {
+            break;
+        }
+        after = page_info["endCursor"].as_str().map(String::from);
+        assert!(after.is_some(), "hasNextPage implies endCursor");
+    }
+    assert_eq!(forward, expected);
+
+    // ----- Backward pagination -----
+    //
+    // Pages arrive latest-first with edges ascending within each page; reverse the page order so
+    // flattening yields ascending order.
+    let mut pages = Vec::new();
+    let mut before: Option<String> = None;
+    for _ in 0..10 {
+        let (page, page_info) =
+            checkpoints_page(&cluster, &filter, None, None, Some(4), before.clone()).await;
+        let seqs: Vec<u64> = page.into_iter().map(|(_, seq)| seq).collect();
+        if !seqs.is_empty() {
+            pages.push(seqs);
+        }
+        if !page_info["hasPreviousPage"].as_bool().unwrap_or(false) {
+            break;
+        }
+        before = page_info["startCursor"].as_str().map(String::from);
+        assert!(before.is_some(), "hasPreviousPage implies startCursor");
+    }
+    let backward: Vec<u64> = pages.into_iter().rev().flatten().collect();
+    assert_eq!(backward, expected);
+}
+
+#[tokio::test]
+async fn test_checkpoints_checkpoint_bounds() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    advance_multiple_epochs(&cluster, temp_dir.path()).await;
+
+    let window = all_checkpoint_seqs(
+        &cluster,
+        &json!({ "afterCheckpoint": 1, "beforeCheckpoint": 4 }),
+    )
+    .await;
+    assert_eq!(window, vec![2, 3]);
+
+    let at = all_checkpoint_seqs(&cluster, &json!({ "atCheckpoint": 2 })).await;
+    assert_eq!(at, vec![2]);
+
+    // A window that collapses to nothing.
+    let empty = all_checkpoint_seqs(
+        &cluster,
+        &json!({ "afterCheckpoint": 2, "beforeCheckpoint": 3 }),
+    )
+    .await;
+    assert!(empty.is_empty(), "expected no matches, got {empty:?}");
+}
+
+#[tokio::test]
+async fn test_checkpoints_at_epoch() {
+    // `atEpoch` resolves through a `GetEpoch` point-read into a checkpoint range on the request.
+    let (cluster, temp_dir) = alpha_cluster().await;
+    advance_multiple_epochs(&cluster, temp_dir.path()).await;
+
+    // Closed epoch: cps [0, 3].
+    let closed = all_checkpoint_seqs(&cluster, &json!({ "atEpoch": 0 })).await;
+    assert_eq!(closed, vec![0, 1, 2, 3]);
+
+    // Ongoing epoch: no last checkpoint yet; upper bound comes from the scope.
+    let ongoing = all_checkpoint_seqs(&cluster, &json!({ "atEpoch": 1 })).await;
+    assert_eq!(ongoing, vec![4, 5]);
+
+    // Nonexistent epoch.
+    let missing = all_checkpoint_seqs(&cluster, &json!({ "atEpoch": 9 })).await;
+    assert!(missing.is_empty(), "expected no matches, got {missing:?}");
+
+    // `atEpoch` composes with checkpoint bounds.
+    let bounded = all_checkpoint_seqs(
+        &cluster,
+        &json!({ "atEpoch": 0, "afterCheckpoint": 0, "beforeCheckpoint": 3 }),
+    )
+    .await;
+    assert_eq!(bounded, vec![1, 2]);
 }

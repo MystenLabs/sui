@@ -32,6 +32,7 @@ use crate::api::types::address::AddressKey;
 use crate::api::types::checkpoint;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::CheckpointConnection;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::coin_metadata::CoinMetadata;
 use crate::api::types::dynamic_field::DynamicField;
@@ -238,7 +239,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Option<Result<Connection<String, Checkpoint>, RpcError>> {
+    ) -> Option<Result<CheckpointConnection, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;
