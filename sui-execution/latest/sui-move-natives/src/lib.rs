@@ -274,6 +274,7 @@ impl JwkMap {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod jwk_map_tests {
     use super::JwkMap;
     use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
