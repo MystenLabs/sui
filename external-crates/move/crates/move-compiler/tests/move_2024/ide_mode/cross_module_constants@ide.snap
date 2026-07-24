@@ -1,0 +1,99 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:8:1
+   │  
+ 8 │ ╭ module 0x42::a {
+ 9 │ │ 
+10 │ │ public(package) const MAX: u64 = 100;
+11 │ │ 
+   · │
+15 │ │ 
+16 │ │ }
+   │ ╰─^ Possible in-scope names
+   │  
+   = members: 'Option -> std::option::Option', 'MAX -> 0x42::a::MAX', 'SECRET -> 0x42::a::SECRET', or 'secret -> 0x42::a::secret'
+   = modules: 'Self -> 0x42::a', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:14:28
+   │
+14 │ public fun secret(): u64 { SECRET }
+   │                            ^^^^^^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'MAX -> 0x42::a::MAX', 'SECRET -> 0x42::a::SECRET', or 'secret -> 0x42::a::secret'
+   = modules: 'Self -> 0x42::a', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:18:1
+   │  
+18 │ ╭ module 0x42::b {
+19 │ │ 
+20 │ │ use 0x42::a;
+21 │ │ 
+   · │
+29 │ │ 
+30 │ │ }
+   │ ╰─^ Possible in-scope names
+   │  
+   = members: 'Option -> std::option::Option', 'complete -> 0x42::b::complete', 'max -> 0x42::b::max', or 'steal -> 0x42::b::steal'
+   = modules: 'Self -> 0x42::b', 'a -> 0x42::a', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:22:25
+   │
+22 │ public fun max(): u64 { a::MAX }
+   │                         ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'complete -> 0x42::b::complete', 'max -> 0x42::b::max', or 'steal -> 0x42::b::steal'
+   = modules: 'Self -> 0x42::b', 'a -> 0x42::a', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:24:27
+   │
+24 │ public fun steal(): u64 { a::SECRET }
+   │                           ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'complete -> 0x42::b::complete', 'max -> 0x42::b::max', or 'steal -> 0x42::b::steal'
+   = modules: 'Self -> 0x42::b', 'a -> 0x42::a', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:24:27
+   │
+12 │ const SECRET: u64 = 7;
+   │       ------ The constant '0x42::a::SECRET' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package
+   ·
+24 │ public fun steal(): u64 { a::SECRET }
+   │                           ^^^^^^^^^ Invalid access of '0x42::a::SECRET'
+
+note[I15006]: IDE path autocomplete
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:27:5
+   │
+27 │     a::
+   │     ^ Possible in-scope names
+   │
+   = members: 'Option -> std::option::Option', 'complete -> 0x42::b::complete', 'max -> 0x42::b::max', or 'steal -> 0x42::b::steal'
+   = modules: 'Self -> 0x42::b', 'a -> 0x42::a', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+   = type params: 
+
+error[E01016]: invalid name
+   ┌─ tests/move_2024/ide_mode/cross_module_constants.move:27:5
+   │
+27 │     a::
+   │     ^^^ Incomplete name in this position. Expected an identifier after '::'

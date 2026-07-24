@@ -18,6 +18,7 @@ public fun classify(x: u64): u64 {
     match (x) {
         a::ONE => 100,
         a::TWO => 200,
+        n if (*n < a::ONE) => 1,
         _ => 0,
     }
 }

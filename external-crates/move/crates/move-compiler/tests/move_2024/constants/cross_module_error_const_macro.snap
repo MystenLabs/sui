@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04035]: invalid constant usage in error context
+   ┌─ tests/move_2024/constants/cross_module_error_const_macro.move:14:22
+   │
+11 │ public(package) const ENotValid: vector<u8> = b"invalid";
+   │                       --------- '#[error]' constants can only be used in the module that defines them
+   ·
+14 │     assert!($x < 10, ENotValid);
+   │                      ^^^^^^^^^ Invalid use of '#[error]' constant '0x42::a::ENotValid' in assertion

@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/constants/cross_module_borrow.move:17:29
+   │
+17 │ public fun deref(): u64 { *&a::MAX }
+   │                             ^^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/constants/cross_module_borrow.move:19:37
+   │
+19 │ public fun borrow(): vector<u8> { *&a::BYTES }
+   │                                     ^^^^^^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
