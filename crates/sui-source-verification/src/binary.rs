@@ -184,8 +184,30 @@ fn download_and_install(
 /// Download the `sui` release tarball for `version` and stream it, extracting only the `sui` binary
 /// to `dest`.
 fn stream_sui_binary(version: &str, platform: &str, dest: &Path) -> anyhow::Result<()> {
+    if let Some(tarball) = suiup_cached_tarball(version, platform) {
+        debug!("reusing suiup's cached release at {}", tarball.display());
+        let reader = fs::File::open(&tarball).context("opening suiup's cached release")?;
+        return extract_sui_from_stream(reader, version, platform, dest);
+    }
     let reader = download_reader(version, platform)?;
     extract_sui_from_stream(reader, version, platform, dest)
+}
+
+/// The path to a `sui` release tarball already cached by `suiup`, if one exists. `suiup` keeps
+/// release archives under `<cache-dir>/suiup/releases/sui-<net>-v<version>-<platform>.tgz`; reusing
+/// one avoids re-downloading a release the user already has.
+fn suiup_cached_tarball(version: &str, platform: &str) -> Option<PathBuf> {
+    let releases = dirs::cache_dir()?.join("suiup").join("releases");
+    suiup_tarball_in(&releases, version, platform)
+}
+
+/// The path to a matching `suiup` release tarball under `releases` (checking the mainnet and testnet
+/// naming), or `None` if neither is present.
+fn suiup_tarball_in(releases: &Path, version: &str, platform: &str) -> Option<PathBuf> {
+    ["mainnet", "testnet"]
+        .into_iter()
+        .map(|net| releases.join(format!("sui-{net}-v{version}-{platform}.tgz")))
+        .find(|path| path.exists())
 }
 
 /// Open a streaming reader over the `sui` release tarball for `version`, trying the mainnet release
@@ -431,5 +453,26 @@ mod tests {
         assert!(!cache.path().join("1.3.0").exists());
         // The in-progress install is never evicted.
         assert!(cache.path().join(".tmp-9.9.9-1").exists());
+    }
+
+    /// `suiup_tarball_in` matches a cached release under either the mainnet or testnet naming.
+    #[test]
+    fn finds_suiup_cached_tarball() {
+        let releases = tempfile::tempdir().unwrap();
+        assert!(suiup_tarball_in(releases.path(), "1.0.0", "macos-arm64").is_none());
+
+        fs::write(
+            releases.path().join("sui-testnet-v1.0.0-macos-arm64.tgz"),
+            b"",
+        )
+        .unwrap();
+        let found = suiup_tarball_in(releases.path(), "1.0.0", "macos-arm64").unwrap();
+        assert_eq!(
+            found.file_name().unwrap(),
+            "sui-testnet-v1.0.0-macos-arm64.tgz"
+        );
+
+        // A different version does not match.
+        assert!(suiup_tarball_in(releases.path(), "2.0.0", "macos-arm64").is_none());
     }
 }
