@@ -1,0 +1,38 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 7-19:
+//# print-bytecode
+// Move bytecode v7
+module 42.a {
+
+public local(): u64 {
+B0:
+	0: LdConst[1](u64: 2)
+	1: Ret
+}
+
+public(friend) _const_USED(): u64 {
+B0:
+	0: LdConst[0](u64: 1)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 1
+	1 => u64: 2
+]
+}
+// Move bytecode v7
+module 42.b {
+use 0000000000000000000000000000000000000000000000000000000000000042::a;
+
+public used(): u64 {
+B0:
+	0: Call a::_const_USED(): u64
+	1: Ret
+}
+
+}

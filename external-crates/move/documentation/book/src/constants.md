@@ -84,14 +84,14 @@ The two kinds of usage behave differently when the defining package is upgraded:
 
 - A cross-module use in a *constant definition* (like `HALF_SUPPLY` above) is resolved by the
   compiler, which folds the referenced constant's value into the new constant at compile time.
-- A cross-module use in a *function body* compiles to a call of a `public(package)` getter
-  function that the compiler synthesizes in the defining module, so the value read at runtime is
-  the one in the version of the defining module the code is linked against.
+- A cross-module use in a *function body* compiles to a call of a `public(package)` function
+  that the compiler generates in the defining module, so the value read at runtime is the one in
+  the version of the defining module the code is linked against.
 
 Within a single package version this distinction is unobservable, since all modules of a package
-are compiled and published together. Note that the synthesized getter is called each time the
-constant is used in a function body, which costs marginally more gas than reading a constant of
-the current module.
+are compiled and published together. Note that reading a cross-module constant may incur slightly
+more gas usage than reading a constant of the current module, as it is compiled as a function
+call.
 
 One usage is restricted: a [`#[error]` constant](./abort-and-assert.md) used as an abort code
 must come from the aborting module, since its name and value are encoded against the aborting

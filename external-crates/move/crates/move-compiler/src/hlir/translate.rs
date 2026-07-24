@@ -530,7 +530,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         visibility: _,
         signature: tsignature,
         value: tvalue,
-        getter_name,
+        constant_fn_name,
     } = cdef;
     context.push_warning_filter_scope(warning_filter.clone());
     let signature = base_type(&context.reporter, &tsignature);
@@ -554,7 +554,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         loc,
         signature,
         value: (locals, body),
-        getter_name,
+        constant_fn_name,
     }
 }
 
