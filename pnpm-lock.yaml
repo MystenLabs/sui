@@ -362,6 +362,25 @@ importers:
         specifier: ^5.5.3
         version: 5.5.3
 
+  examples/onchain-finance/gas-station:
+    dependencies:
+      '@mysten/sui':
+        specifier: ^1.18.0
+        version: 1.29.1(typescript@5.8.3)
+      express:
+        specifier: ^4.22.1
+        version: 4.22.1
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.0
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.17.46
+      typescript:
+        specifier: ^5.5.3
+        version: 5.8.3
+
   examples/onchain-finance/x402-pay-per-request:
     dependencies:
       '@mysten/sui':
