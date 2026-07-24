@@ -45,6 +45,10 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
+    // Test knob: bound concurrent verify_and_vote to available parallelism
+    // (CONSENSUS_VERIFY_BOUND=1) so round bursts complete quorum-first (FIFO)
+    // instead of fair-sharing all cores across the whole burst.
+    verify_semaphore: Option<Arc<tokio::sync::Semaphore>>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -61,6 +65,13 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
+        let verify_semaphore = std::env::var("CONSENSUS_VERIFY_BOUND").ok().map(|_| {
+            Arc::new(tokio::sync::Semaphore::new(
+                std::thread::available_parallelism()
+                    .map(|p| p.get())
+                    .unwrap_or(8),
+            ))
+        });
         Self {
             context,
             block_verifier,
@@ -73,6 +84,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
+            verify_semaphore,
         }
     }
 
@@ -206,7 +218,17 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .node_metrics
             .handle_send_block_verify_exec
             .clone();
+        let verify_permit = match &self.verify_semaphore {
+            Some(sem) => Some(
+                sem.clone()
+                    .acquire_owned()
+                    .await
+                    .expect("verify semaphore is never closed"),
+            ),
+            None => None,
+        };
         let (verified_block, reject_txn_votes) = tokio::task::spawn_blocking(move || {
+            let _verify_permit = verify_permit;
             queue_wait_hist.observe(verify_spawned.elapsed().as_secs_f64());
             let exec_start = std::time::Instant::now();
             let result = block_verifier.verify_and_vote(signed_block, serialized);
