@@ -249,7 +249,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn new_id_from_hash(&mut self, parent: ObjectID, id: ObjectID) -> PartialVMResult<()> {
         self.new_id(id)?;
         self.child_object_store
-            .inherit_root_version_from_parent(parent, id);
+            .inherit_root_version_from_parent(parent, id)?;
         Ok(())
     }
 
