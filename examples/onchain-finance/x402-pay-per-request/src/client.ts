@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 
-const client = new SuiGrpcClient({
-	baseUrl: 'https://fullnode.mainnet.sui.io:443',
-	network: 'mainnet',
-});
+const client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443' });
 const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
 
 // docs::#fetch-with-payment
@@ -37,29 +34,28 @@ async function fetchWithPayment(url: string): Promise<Response> {
 		const [coin] = tx.splitCoins(tx.gas, [BigInt(amount)]);
 		tx.transferObjects([coin], recipient);
 	} else {
-		const coins = await client.listCoins({
+		const { data: coins } = await client.getCoins({
 			owner: keypair.toSuiAddress(),
 			coinType,
 		});
-		const [coin] = tx.splitCoins(tx.object(coins.objects[0].objectId), [BigInt(amount)]);
+		const [coin] = tx.splitCoins(tx.object(coins[0].coinObjectId), [BigInt(amount)]);
 		tx.transferObjects([coin], recipient);
 	}
 
-	const result = await client.core.signAndExecuteTransaction({
+	const result = await client.signAndExecuteTransaction({
 		transaction: tx,
 		signer: keypair,
+		options: { showEffects: true },
 	});
 
-	if (result.$kind === 'FailedTransaction') {
+	if (result.effects?.status.status !== 'success') {
 		throw new Error('Payment transaction failed');
 	}
-
-	const digest = result.Transaction!.digest;
 
 	// Retry with payment proof, challenge ID, and signed challenge
 	return fetch(url, {
 		headers: {
-			'X-Payment-Digest': digest,
+			'X-Payment-Digest': result.digest,
 			'X-Payment-Challenge': challenge,
 			'X-Payment-Signature': challengeSignature,
 		},
