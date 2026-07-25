@@ -719,7 +719,7 @@ macro_rules! implement_storage_traits {
             fn load_implicitly_read_system_object(
                 &self,
                 object_id: &ObjectID,
-                version: sui_types::base_types::SystemObjectVersion,
+                version: sui_types::base_types::ConsensusObjectVersion,
             ) -> Object {
                 $implementor::load_implicitly_read_system_object(self, object_id, version)
             }

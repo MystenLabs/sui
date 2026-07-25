@@ -217,7 +217,7 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
-                sui_execution::executor::SystemObjectVersions::default(),
+                sui_types::base_types::SystemObjectVersions::default(),
                 gas_data,
                 gas_status,
                 kind,

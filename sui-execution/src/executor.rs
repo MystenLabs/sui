@@ -9,7 +9,7 @@ use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ConsensusObjectVersion, SuiAddress},
+    base_types::{SuiAddress, SystemObjectVersions},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -24,49 +24,6 @@ use sui_types::{
 };
 
 /// Abstracts over access to the VM across versions of the execution layer.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SystemObjectVersions {
-    pub accumulator_version: Option<ConsensusObjectVersion>,
-}
-
-impl SystemObjectVersions {
-    pub fn from_effects(
-        effects: &sui_types::effects::TransactionEffects,
-        store: &dyn sui_types::storage::ObjectStore,
-    ) -> Self {
-        use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
-        let accumulator_version = effects
-            .accessed_consensus_objects()
-            .into_iter()
-            .find_map(|ico| match ico {
-                InputConsensusObject::Mutate((id, version, _))
-                | InputConsensusObject::ReadOnly((id, version, _))
-                    if id == sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
-                {
-                    Some(version)
-                }
-                _ => None,
-            })
-            .map(|version| {
-                let initial_shared_version = store
-                    .get_object_by_key(&sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID, version)
-                    .and_then(|object| object.owner().start_version())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "accumulator root at version {version} must be a consensus object in the store"
-                        )
-                    });
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version,
-                }
-            });
-        Self {
-            accumulator_version,
-        }
-    }
-}
-
 pub trait Executor {
     fn execute_transaction_to_effects(
         &self,

@@ -233,10 +233,9 @@ pub struct ConsensusObjectVersion {
     pub version: SequenceNumber,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SystemObjectVersion {
-    Exact(ConsensusObjectVersion),
-    Latest,
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SystemObjectVersions {
+    pub accumulator_version: Option<ConsensusObjectVersion>,
 }
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins

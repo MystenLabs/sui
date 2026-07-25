@@ -10,7 +10,7 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{SuiAddress, TxContext},
+    base_types::{SuiAddress, SystemObjectVersions, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -73,7 +73,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: crate::executor::SystemObjectVersions,
+        system_object_versions: SystemObjectVersions,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -92,9 +92,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
                 input_objects,
-                sui_adapter_latest::temporary_store::SystemObjectVersionRequirements::Exact {
-                    accumulator_version: system_object_versions.accumulator_version,
-                },
+                system_object_versions,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -126,7 +124,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: crate::executor::SystemObjectVersions,
+        system_object_versions: SystemObjectVersions,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -145,9 +143,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
                 input_objects,
-                sui_adapter_latest::temporary_store::SystemObjectVersionRequirements::Exact {
-                    accumulator_version: system_object_versions.accumulator_version,
-                },
+                system_object_versions,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -196,7 +192,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                sui_adapter_latest::temporary_store::SystemObjectVersionRequirements::Latest,
+                SystemObjectVersions::from_latest_in_store(store.as_object_store()),
                 gas,
                 gas_status,
                 transaction_kind,
@@ -216,7 +212,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                sui_adapter_latest::temporary_store::SystemObjectVersionRequirements::Latest,
+                SystemObjectVersions::from_latest_in_store(store.as_object_store()),
                 gas,
                 gas_status,
                 transaction_kind,

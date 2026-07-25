@@ -8,10 +8,10 @@
 use std::collections::BTreeMap;
 
 use move_core_types::language_storage::TypeTag;
-use sui_execution::executor::SystemObjectVersions;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::SuiAddress;
+use sui_types::base_types::SystemObjectVersions;
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};

@@ -22,9 +22,8 @@ use std::{
 };
 use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
-use sui_execution::executor::SystemObjectVersions;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SystemObjectVersions, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
