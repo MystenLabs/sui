@@ -12,9 +12,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::PoolConfig;
-use sui_kvstore::validate_pipeline_name;
-
-use crate::default_service_info_watermark_pipelines;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_RENDER_AHEAD: usize = 4;
@@ -412,12 +409,20 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
-    /// Pipeline watermarks to include when reporting GetServiceInfo checkpoint
-    /// height. When unset, derived from `enable_experimental_query_apis`.
+    /// Deprecated and ignored: the `GetServiceInfo` watermark set is derived
+    /// from `enable-list-apis` and can no longer be chosen per pipeline.
+    /// Still parsed so existing config files keep loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
 
-    /// Enable the List APIs (and their alpha service-info pipelines).
+    /// Serve the List APIs (`ListCheckpoints`, `ListTransactions`,
+    /// `ListEvents`) and fold the pipelines backing them into the
+    /// `GetServiceInfo` checkpoint height. Defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_list_apis: Option<bool>,
+
+    /// Deprecated name for `enable-list-apis`. Used only when
+    /// `enable-list-apis` is unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_experimental_query_apis: Option<bool>,
 
@@ -477,8 +482,10 @@ impl KvRpcConfig {
         self.bigtable_channel_timeout_ms.map(Duration::from_millis)
     }
 
-    pub fn enable_experimental_query_apis(&self) -> bool {
-        self.enable_experimental_query_apis.unwrap_or(false)
+    pub fn enable_list_apis(&self) -> bool {
+        self.enable_list_apis
+            .or(self.enable_experimental_query_apis)
+            .unwrap_or(false)
     }
 
     /// TLS identity, when both cert and key are set and non-empty.
@@ -504,22 +511,6 @@ impl KvRpcConfig {
             min_pool_size: self.bigtable_min_pool_size.unwrap_or(base.min_pool_size),
             max_pool_size: self.bigtable_max_pool_size.unwrap_or(base.max_pool_size),
             ..base
-        }
-    }
-
-    /// Resolve the service-info watermark pipelines: an explicit non-empty
-    /// `watermark_pipeline` (validated against the known pipeline names) takes
-    /// precedence, otherwise the set is derived from
-    /// `enable_experimental_query_apis`.
-    pub fn service_info_watermark_pipelines(&self) -> anyhow::Result<Vec<&'static str>> {
-        match self.watermark_pipeline.as_deref() {
-            Some(pipelines) if !pipelines.is_empty() => pipelines
-                .iter()
-                .map(|name| validate_pipeline_name(name).map_err(anyhow::Error::msg))
-                .collect(),
-            _ => Ok(default_service_info_watermark_pipelines(
-                self.enable_experimental_query_apis(),
-            )),
         }
     }
 
@@ -568,6 +559,9 @@ impl KvRpcConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES;
+    use crate::LIST_API_SERVICE_INFO_WATERMARK_PIPELINES;
+    use crate::service_info_watermark_pipelines;
 
     #[test]
     fn validate_rejects_budget_below_literal_cap() {
@@ -718,5 +712,55 @@ ledger-history:
         assert_eq!(lh.list_events().render_ahead, 4);
         assert_eq!(lh.bitmap_bucket_budget_event(), 4000);
         lh.validate().unwrap();
+    }
+
+    #[test]
+    fn list_apis_off_by_default_and_bound_the_watermark_set() {
+        let cfg = KvRpcConfig::default();
+        assert!(!cfg.enable_list_apis());
+        assert_eq!(
+            service_info_watermark_pipelines(cfg.enable_list_apis()),
+            DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec(),
+        );
+
+        let yaml = "enable-list-apis: true\n";
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(cfg.enable_list_apis());
+        let pipelines = service_info_watermark_pipelines(cfg.enable_list_apis());
+        for name in LIST_API_SERVICE_INFO_WATERMARK_PIPELINES {
+            assert!(pipelines.contains(&name), "{name} must bound the height");
+        }
+    }
+
+    #[test]
+    fn deprecated_experimental_key_still_enables_list_apis() {
+        // Configs written before the rename must keep serving the List APIs.
+        let yaml = "enable-experimental-query-apis: true\n";
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(cfg.enable_list_apis());
+
+        // The current name wins when both are present.
+        let yaml = "enable-list-apis: false\nenable-experimental-query-apis: true\n";
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(!cfg.enable_list_apis());
+    }
+
+    #[test]
+    fn deprecated_watermark_pipeline_loads_but_is_ignored() {
+        // Existing configs pinning a pipeline set must still load, and must not
+        // change the watermark set the server reports.
+        let yaml = r#"
+watermark-pipeline:
+  - kvstore_checkpoints
+  - a_pipeline_that_no_longer_exists
+enable-list-apis: true
+"#;
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).expect("stale key must not hard-fail");
+        cfg.validate().unwrap();
+        assert_eq!(
+            service_info_watermark_pipelines(cfg.enable_list_apis()).len(),
+            DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.len()
+                + LIST_API_SERVICE_INFO_WATERMARK_PIPELINES.len(),
+        );
     }
 }
