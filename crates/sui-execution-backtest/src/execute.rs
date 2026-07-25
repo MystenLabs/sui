@@ -8,10 +8,10 @@
 use std::collections::BTreeMap;
 
 use move_core_types::language_storage::TypeTag;
+use sui_execution::executor::SystemObjectVersions;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::{ConsensusObjectVersion, SystemObjectVersions};
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
@@ -127,7 +127,7 @@ struct PreparedTx {
     /// its recorded effects. The executor loads each system object at exactly this version and
     /// treats a system read with no assigned version as an invariant violation, so it must cover
     /// every such object the transaction touched.
-    system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
+    system_object_versions: SystemObjectVersions,
     gas_data: GasData,
     gas_status: SuiGasStatus,
     txn_kind: TransactionKind,

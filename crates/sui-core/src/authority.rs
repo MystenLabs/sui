@@ -71,6 +71,7 @@ use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
+use sui_execution::executor::SystemObjectVersions;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
@@ -1935,7 +1936,7 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
+        system_object_versions: SystemObjectVersions,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -2038,10 +2039,7 @@ impl AuthorityState {
         );
         // Versions of system objects this transaction may read during execution, each at the version
         // it was sequenced against. See `TemporaryStore::check_system_object_available`.
-        let system_object_versions = execution_env
-            .assigned_versions
-            .system_object_versions
-            .clone();
+        let system_object_versions = execution_env.assigned_versions.system_object_versions;
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),

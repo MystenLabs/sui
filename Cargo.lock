@@ -17084,6 +17084,7 @@ dependencies = [
  "strum_macros 0.27.1",
  "sui-config",
  "sui-core",
+ "sui-execution",
  "sui-macros",
  "sui-move-build",
  "sui-protocol-config",

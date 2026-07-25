@@ -239,35 +239,6 @@ pub enum SystemObjectVersion {
     Latest,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SystemObjectVersions<T> {
-    pub accumulator_version: Option<T>,
-}
-
-impl<T> Default for SystemObjectVersions<T> {
-    fn default() -> Self {
-        Self {
-            accumulator_version: None,
-        }
-    }
-}
-
-impl<T> SystemObjectVersions<T> {
-    pub fn map<U>(self, f: impl Fn(T) -> U) -> SystemObjectVersions<U> {
-        SystemObjectVersions {
-            accumulator_version: self.accumulator_version.map(f),
-        }
-    }
-}
-
-impl SystemObjectVersions<SystemObjectVersion> {
-    pub fn all_latest() -> Self {
-        Self {
-            accumulator_version: Some(SystemObjectVersion::Latest),
-        }
-    }
-}
-
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of

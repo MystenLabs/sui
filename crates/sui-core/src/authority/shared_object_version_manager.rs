@@ -10,13 +10,13 @@ use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use sui_execution::executor::SystemObjectVersions;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::SystemObjectVersions;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
@@ -49,13 +49,13 @@ pub struct AssignedVersions {
     /// commit this transaction belongs to). The accumulator root qualifies because it is written at
     /// the end of every commit, so there is always a well-defined prior version to read from. More
     /// system objects will be added over time.
-    pub system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
+    pub system_object_versions: SystemObjectVersions,
 }
 
 impl AssignedVersions {
     pub fn new(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-        system_object_versions: SystemObjectVersions<ConsensusObjectVersion>,
+        system_object_versions: SystemObjectVersions,
     ) -> Self {
         Self {
             shared_object_versions,

@@ -162,7 +162,7 @@ impl EpochState {
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,
-                std::collections::BTreeMap::new(),
+                sui_execution::executor::SystemObjectVersions::default(),
                 gas_data,
                 gas_status,
                 kind,
