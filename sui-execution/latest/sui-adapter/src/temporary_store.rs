@@ -47,11 +47,11 @@ pub(crate) mod invariants;
 use invariants::InvariantChecker;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SystemObjectVersions {
+pub struct SystemObjectVersionRequirements {
     pub accumulator_version: Option<SystemObjectVersion>,
 }
 
-impl SystemObjectVersions {
+impl SystemObjectVersionRequirements {
     pub fn all_latest() -> Self {
         Self {
             accumulator_version: Some(SystemObjectVersion::Latest),
@@ -117,7 +117,7 @@ pub struct TemporaryStore<'backing> {
     /// recorded version; `check_system_object_available` consults this map. Every system object read
     /// during execution must appear here — querying one that is absent is an invariant violation
     /// (the transaction was not sequenced against it), so the check errors rather than allowing it.
-    system_object_versions: SystemObjectVersions,
+    system_object_versions: SystemObjectVersionRequirements,
 
     /// System objects read during execution that are not through input objects, keyed by object ID, with the version (and its
     /// digest) at which they were read. Recorded by `check_system_object_available` and
@@ -137,7 +137,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        system_object_versions: SystemObjectVersions,
+        system_object_versions: SystemObjectVersionRequirements,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
