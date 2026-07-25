@@ -289,7 +289,9 @@ pub(crate) mod checked {
             tx_context.borrow().digest(),
             protocol_config,
             0,
-            SystemObjectVersionRequirements::default(),
+            SystemObjectVersionRequirements::Exact {
+                accumulator_version: None,
+            },
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(

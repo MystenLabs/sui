@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::{SystemObjectVersion, VersionDigest};
+use sui_types::base_types::{ConsensusObjectVersion, SystemObjectVersion, VersionDigest};
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
@@ -46,17 +46,12 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 pub(crate) mod invariants;
 use invariants::InvariantChecker;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SystemObjectVersionRequirements {
-    pub accumulator_version: Option<SystemObjectVersion>,
-}
-
-impl SystemObjectVersionRequirements {
-    pub fn all_latest() -> Self {
-        Self {
-            accumulator_version: Some(SystemObjectVersion::Latest),
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemObjectVersionRequirements {
+    Exact {
+        accumulator_version: Option<ConsensusObjectVersion>,
+    },
+    Latest,
 }
 
 pub struct TemporaryStore<'backing> {
@@ -190,14 +185,19 @@ impl<'backing> TemporaryStore<'backing> {
     /// read so it can be emitted into effects and reproduced on replay.
     pub fn check_system_object_available(&self, object_id: &ObjectID) {
         // Every system object read during execution must have an assigned version.
-        let consensus_version = if *object_id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
-            self.system_object_versions.accumulator_version.unwrap()
+        let version = if *object_id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+            match self.system_object_versions {
+                SystemObjectVersionRequirements::Exact {
+                    accumulator_version,
+                } => SystemObjectVersion::Exact(accumulator_version.unwrap()),
+                SystemObjectVersionRequirements::Latest => SystemObjectVersion::Latest,
+            }
         } else {
             panic!("unknown implicitly read system object {object_id}")
         };
         let object_at_required = self
             .store
-            .load_implicitly_read_system_object(object_id, consensus_version);
+            .load_implicitly_read_system_object(object_id, version);
 
         // Record the read at `required_version` (which is what the transaction depends
         // on and reads) so it can be emitted into effects as a read-only consensus object and
