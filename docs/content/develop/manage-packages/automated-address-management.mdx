@@ -160,6 +160,8 @@ published-version = "1"
 
 - Entries are keyed by `chain-id`, not the `[env.NAME]`. This ensures addresses are resolved consistently even if users assign arbitrary environment names.
 
+- The `chain-id` value can be in either the legacy hex short form (for example, `4c78adac`) or the full Base58 form. Both formats are accepted interchangeably. Run `sui client chain-identifier` to display the chain ID in both formats.
+
 - Key-value pairs correspond to the data described in [adopting automated address management](#adopting-automated-address-management). Use the `sui move manage-package` command as the frontend to modify these values.
 
 :::
