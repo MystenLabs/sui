@@ -2037,8 +2037,6 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        // Versions of system objects this transaction may read during execution, each at the version
-        // it was sequenced against. See `TemporaryStore::check_system_object_available`.
         let system_object_versions = execution_env.assigned_versions.system_object_versions;
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {

@@ -11,9 +11,7 @@ use sui_framework::BuiltInFramework;
 use sui_move_build::BuildConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::base_types::{
-    ConsensusObjectVersion, ObjectID, SequenceNumber, SuiAddress, SystemObjectVersion,
-};
+use sui_types::base_types::{ConsensusObjectVersion, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::InputKey;
 use tempfile::tempdir;
@@ -331,10 +329,10 @@ async fn test_load_implicitly_read_system_object() {
         async move {
             cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
-                SystemObjectVersion::Exact(ConsensusObjectVersion {
+                ConsensusObjectVersion {
                     initial_shared_version: init_version,
                     version: target_version,
-                }),
+                },
             )
         }
     });
@@ -357,10 +355,10 @@ async fn test_load_implicitly_read_system_object() {
 
     let object = cache.as_ref().load_implicitly_read_system_object(
         &object_id,
-        SystemObjectVersion::Exact(ConsensusObjectVersion {
+        ConsensusObjectVersion {
             initial_shared_version: init_version,
             version: target_version,
-        }),
+        },
     );
     assert_eq!(object.version(), target_version);
 }
@@ -395,10 +393,10 @@ async fn test_execution_permit_released_while_blocked() {
             let _permit_guard = set_execution_permit(Box::new(permit));
             cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
-                SystemObjectVersion::Exact(ConsensusObjectVersion {
+                ConsensusObjectVersion {
                     initial_shared_version: init_version,
                     version: target_version,
-                }),
+                },
             )
         }
     });

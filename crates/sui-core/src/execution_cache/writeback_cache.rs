@@ -73,7 +73,7 @@ use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use sui_types::base_types::{
     ConsensusObjectVersion, EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber,
-    SystemObjectVersion, VerifiedExecutionData,
+    VerifiedExecutionData,
 };
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
@@ -500,23 +500,16 @@ impl WritebackCache {
     pub(crate) fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: SystemObjectVersion,
+        version: ConsensusObjectVersion,
     ) -> Object {
         assert!(
             sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id),
             "{object_id} is not an implicitly read system object"
         );
-        let exact = match version {
-            SystemObjectVersion::Exact(exact) => exact,
-            SystemObjectVersion::Latest => {
-                return ObjectCacheRead::get_object(self, object_id)
-                    .unwrap_or_else(|| panic!("system object {object_id} does not exist"));
-            }
-        };
         let ConsensusObjectVersion {
             initial_shared_version,
             version,
-        } = exact;
+        } = version;
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
             return object;
         }

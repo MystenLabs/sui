@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::ObjectKey;
-use crate::base_types::{ObjectID, ObjectRef, SystemObjectVersion, VersionNumber};
+use crate::base_types::{ConsensusObjectVersion, ObjectID, ObjectRef, VersionNumber};
 use crate::object::Object;
 use crate::storage::WriteKind;
 use std::collections::BTreeMap;
@@ -21,21 +21,15 @@ pub trait ObjectStore {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: SystemObjectVersion,
+        version: ConsensusObjectVersion,
     ) -> Object {
-        match version {
-            SystemObjectVersion::Exact(exact) => self
-                .get_object_by_key(object_id, exact.version)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "system object {object_id} not found at required version {}",
-                        exact.version
-                    )
-                }),
-            SystemObjectVersion::Latest => self
-                .get_object(object_id)
-                .unwrap_or_else(|| panic!("system object {object_id} does not exist")),
-        }
+        self.get_object_by_key(object_id, version.version)
+            .unwrap_or_else(|| {
+                panic!(
+                    "system object {object_id} not found at required version {}",
+                    version.version
+                )
+            })
     }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
@@ -61,7 +55,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: SystemObjectVersion,
+        version: ConsensusObjectVersion,
     ) -> Object {
         (*self).load_implicitly_read_system_object(object_id, version)
     }
@@ -87,7 +81,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: SystemObjectVersion,
+        version: ConsensusObjectVersion,
     ) -> Object {
         (**self).load_implicitly_read_system_object(object_id, version)
     }
@@ -113,7 +107,7 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: SystemObjectVersion,
+        version: ConsensusObjectVersion,
     ) -> Object {
         (**self).load_implicitly_read_system_object(object_id, version)
     }

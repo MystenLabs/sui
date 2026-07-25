@@ -826,7 +826,9 @@ impl SystemObjectVersions {
         Self::new(accumulator_version)
     }
 
-    /// Use latest versions of the implicitly read system objects from the store.
+    /// Before execution, get the latest versions of the implicitly read system objects from the store,
+    /// and use these versions as the exact version to read during execution.
+    /// This is different from SystemObjectVersionRequirements::Latest in that the versions are pinned and won't change during execution.
     /// This is used only in sequential execution mode such as simulacrum.
     pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
         let accumulator_version = store
@@ -985,7 +987,7 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: crate::base_types::SystemObjectVersion,
+        version: crate::base_types::ConsensusObjectVersion,
     ) -> Object {
         self.inner
             .load_implicitly_read_system_object(object_id, version)
