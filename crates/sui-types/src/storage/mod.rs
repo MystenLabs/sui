@@ -794,8 +794,8 @@ pub fn get_transaction_output_objects(
     Ok(output_objects)
 }
 
-// Returns an iterator over the ObjectKey's of objects read or written by this transaction
 impl SystemObjectVersions {
+    /// Obtains pinned system object versions from effects, queries the store for the initial shared versions.
     pub fn from_effects(effects: &TransactionEffects, store: &dyn ObjectStore) -> Self {
         let accumulator_version = effects
             .accessed_consensus_objects()
@@ -823,11 +823,11 @@ impl SystemObjectVersions {
                     version,
                 }
             });
-        Self {
-            accumulator_version,
-        }
+        Self::new(accumulator_version)
     }
 
+    /// Use latest versions of the implicitly read system objects from the store.
+    /// This is used only in sequential execution mode such as simulacrum.
     pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
         let accumulator_version = store
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
@@ -841,12 +841,11 @@ impl SystemObjectVersions {
                     version: object.version(),
                 }
             });
-        Self {
-            accumulator_version,
-        }
+        Self::new(accumulator_version)
     }
 }
 
+// Returns a set of the ObjectKey's of objects read or written by this transaction
 pub fn get_transaction_object_set(
     transaction: &TransactionData,
     effects: &TransactionEffects,

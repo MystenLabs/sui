@@ -235,7 +235,23 @@ pub struct ConsensusObjectVersion {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SystemObjectVersions {
-    pub accumulator_version: Option<ConsensusObjectVersion>,
+    accumulator_version: Option<ConsensusObjectVersion>,
+}
+
+impl SystemObjectVersions {
+    pub fn new(accumulator_version: Option<ConsensusObjectVersion>) -> Self {
+        Self {
+            accumulator_version,
+        }
+    }
+
+    pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
+        if *object_id == crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+            self.accumulator_version
+        } else {
+            panic!("{object_id} is not an implicitly read system object")
+        }
+    }
 }
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins

@@ -30,7 +30,7 @@ use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -177,11 +177,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// read so it can be emitted into effects and reproduced on replay.
     pub fn check_system_object_available(&self, object_id: &ObjectID) {
         // Every system object read during execution must have an assigned version.
-        let version = if *object_id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
-            self.system_object_versions.accumulator_version.unwrap()
-        } else {
-            panic!("unknown implicitly read system object {object_id}")
-        };
+        let version = self.system_object_versions.get(object_id).unwrap();
         let object_at_required = self
             .store
             .load_implicitly_read_system_object(object_id, version);

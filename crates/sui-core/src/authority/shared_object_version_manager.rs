@@ -5,6 +5,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::execution_cache::ObjectCacheRead;
 use either::Either;
 use std::collections::BTreeMap;
@@ -73,19 +74,17 @@ impl AssignedVersions {
     ) -> Self {
         Self::new(
             shared_object_versions,
-            SystemObjectVersions {
-                accumulator_version: accumulator_version.map(|v| ConsensusObjectVersion {
-                    initial_shared_version: sui_types::object::OBJECT_START_VERSION,
-                    version: v,
-                }),
-            },
+            SystemObjectVersions::new(accumulator_version.map(|v| ConsensusObjectVersion {
+                initial_shared_version: sui_types::object::OBJECT_START_VERSION,
+                version: v,
+            })),
         )
     }
 
     /// The accumulator root version this transaction reads, if any.
     pub fn accumulator_version(&self) -> Option<SequenceNumber> {
         self.system_object_versions
-            .accumulator_version
+            .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .map(|v| v.version)
     }
 
@@ -405,20 +404,19 @@ impl SharedObjVerManager {
                     cert.digest()
                 );
             }
-            let system_object_versions = SystemObjectVersions {
-                accumulator_version: accumulator_version.map(|version| {
+            let system_object_versions =
+                SystemObjectVersions::new(accumulator_version.map(|version| {
                     let initial_shared_version = epoch_store
                         .epoch_start_config()
-                        .accumulator_root_obj_initial_shared_version()
+                        .system_object_initial_shared_version(SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                         .expect(
-                            "accumulator root initial shared version must be set when its version is assigned",
+                            "initial shared version must be known for an implicitly read system object",
                         );
                     ConsensusObjectVersion {
                         initial_shared_version,
                         version,
                     }
-                }),
-            };
+                }));
             let tx_key = cert.key();
             trace!(
                 ?tx_key,
@@ -459,9 +457,7 @@ impl SharedObjVerManager {
         } else {
             None
         };
-        let system_object_versions = SystemObjectVersions {
-            accumulator_version,
-        };
+        let system_object_versions = SystemObjectVersions::new(accumulator_version);
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.
