@@ -3,12 +3,13 @@
 
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
-    BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
-    BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
-    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
-    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest,
-    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListTransactionsRequest,
-    ListTransactionsResponse, ledger_service_server::LedgerService,
+    BatchGetCheckpointsRequest, BatchGetCheckpointsResponse, BatchGetObjectsRequest,
+    BatchGetObjectsResponse, BatchGetTransactionsRequest, BatchGetTransactionsResponse,
+    GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest, GetEpochResponse,
+    GetObjectRequest, GetObjectResponse, GetServiceInfoRequest, GetServiceInfoResponse,
+    GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest, ListCheckpointsResponse,
+    ListEventsRequest, ListEventsResponse, ListTransactionsRequest, ListTransactionsResponse,
+    ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -116,6 +117,21 @@ impl LedgerService for KvRpcServer {
         get_checkpoint::get_checkpoint(
             self.client.clone(),
             self.limited_client("GetCheckpoint"),
+            &self.stages,
+            request.into_inner(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
+    }
+
+    async fn batch_get_checkpoints(
+        &self,
+        request: tonic::Request<BatchGetCheckpointsRequest>,
+    ) -> Result<tonic::Response<BatchGetCheckpointsResponse>, tonic::Status> {
+        get_checkpoint::batch_get_checkpoints(
+            self.client.clone(),
+            self.limited_client("BatchGetCheckpoints"),
             &self.stages,
             request.into_inner(),
         )

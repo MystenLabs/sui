@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RpcService;
+use sui_rpc::proto::sui::rpc::v2::BatchGetCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::BatchGetCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
@@ -96,6 +98,15 @@ impl LedgerService for RpcService {
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
         get_checkpoint::get_checkpoint(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn batch_get_checkpoints(
+        &self,
+        request: tonic::Request<BatchGetCheckpointsRequest>,
+    ) -> Result<tonic::Response<BatchGetCheckpointsResponse>, tonic::Status> {
+        get_checkpoint::batch_get_checkpoints(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
