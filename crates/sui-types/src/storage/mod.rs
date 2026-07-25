@@ -985,7 +985,7 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-        version: crate::base_types::ConsensusObjectVersion,
+        version: crate::base_types::SystemObjectVersion,
     ) -> Object {
         self.inner
             .load_implicitly_read_system_object(object_id, version)

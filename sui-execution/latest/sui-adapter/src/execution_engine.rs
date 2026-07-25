@@ -37,7 +37,10 @@ pub(crate) mod checked {
 
     use crate::static_programmable_transactions as SPT;
     use crate::sui_types::gas::SuiGasStatusAPI;
-    use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
+    use crate::{
+        gas_charger::GasCharger,
+        temporary_store::{SystemObjectVersionRequirements, TemporaryStore},
+    };
     use move_core_types::ident_str;
     use move_core_types::language_storage::TypeTag;
     use sui_move_natives::all_natives;
@@ -150,7 +153,7 @@ pub(crate) mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        system_object_versions: SystemObjectVersions,
+        system_object_versions: SystemObjectVersionRequirements,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -286,7 +289,7 @@ pub(crate) mod checked {
             tx_context.borrow().digest(),
             protocol_config,
             0,
-            SystemObjectVersions::default(),
+            SystemObjectVersionRequirements::Exact(SystemObjectVersions::default()),
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         SPT::execute::<execution_mode::Genesis>(

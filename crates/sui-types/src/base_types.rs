@@ -233,6 +233,12 @@ pub struct ConsensusObjectVersion {
     pub version: SequenceNumber,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemObjectVersion {
+    Exact(ConsensusObjectVersion),
+    Latest,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SystemObjectVersions {
     accumulator_version: Option<ConsensusObjectVersion>,
