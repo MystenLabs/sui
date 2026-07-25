@@ -22,13 +22,13 @@ use serde::Serialize;
 /// We do not allow the number of validators in any epoch to go above this.
 pub const MAX_VALIDATOR_COUNT: u64 = 150;
 
-#[deprecated(note = "SIP-39 removes min barreier for joining the validator set")]
+#[deprecated(note = "SIP-39 removes min barrier for joining the validator set")]
 /// Lower-bound on the amount of stake required to become a validator.
 ///
 /// 30 million SUI
 pub const MIN_VALIDATOR_JOINING_STAKE_MIST: u64 = 30_000_000 * MIST_PER_SUI;
 
-#[deprecated(note = "SIP-39 removes low barreier for joining the validator set")]
+#[deprecated(note = "SIP-39 removes low barrier for joining the validator set")]
 /// Deprecated: with SIP-39 there is no longer a minimum stake requirement.
 ///
 /// Validators with stake amount below `validator_low_stake_threshold` are considered to
@@ -38,7 +38,7 @@ pub const MIN_VALIDATOR_JOINING_STAKE_MIST: u64 = 30_000_000 * MIST_PER_SUI;
 /// 20 million SUI
 pub const VALIDATOR_LOW_STAKE_THRESHOLD_MIST: u64 = 20_000_000 * MIST_PER_SUI;
 
-#[deprecated(note = "SIP-39 removes very low barreier for joining the validator set")]
+#[deprecated(note = "SIP-39 removes very low barrier for joining the validator set")]
 /// Validators with stake below `validator_very_low_stake_threshold` will be removed
 /// immediately at epoch change, no grace period.
 ///
