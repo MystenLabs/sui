@@ -11,6 +11,7 @@
 //!
 //! - [`TransactionStore`] - Retrieve transaction data and effects by digest
 //! - [`EpochStore`] - Retrieve epoch information and protocol configuration
+//! - [`CheckpointContextStore`] - Select coherent checkpoint execution context
 //! - [`ObjectStore`] - Retrieve objects by their keys with flexible version queries
 //!
 //! ## Store Implementations
@@ -38,8 +39,12 @@ pub use node::Node;
 use anyhow::{Error, Result};
 use std::io::Write;
 use sui_types::{
-    base_types::ObjectID, effects::TransactionEffects, object::Object,
-    supported_protocol_versions::ProtocolConfig, transaction::TransactionData,
+    base_types::ObjectID,
+    digests::{ChainIdentifier, CheckpointDigest},
+    effects::TransactionEffects,
+    object::Object,
+    supported_protocol_versions::ProtocolConfig,
+    transaction::TransactionData,
 };
 
 // ============================================================================
@@ -69,12 +74,39 @@ pub trait TransactionStore {
 }
 
 /// Epoch data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EpochData {
     pub epoch_id: u64,
     pub protocol_version: u64,
     pub rgp: u64,
     pub start_timestamp: u64,
+}
+
+/// Chain and epoch metadata for executing against state at a finalized checkpoint.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckpointExecutionContext {
+    /// Network identifier derived from the genesis checkpoint digest.
+    pub chain_identifier: ChainIdentifier,
+    /// Sequence number of the selected checkpoint.
+    pub checkpoint: u64,
+    /// Digest of the selected checkpoint summary.
+    pub checkpoint_digest: CheckpointDigest,
+    /// Epoch metadata associated with the selected checkpoint.
+    pub epoch: EpochData,
+}
+
+/// Retrieves coherent execution context from a checkpoint-aware data source.
+///
+/// Local cache stores do not implement this trait because selecting the latest checkpoint
+/// requires a live source. Read-through stores delegate selection to their secondary store.
+pub trait CheckpointContextStore {
+    /// Return context for an explicit checkpoint, or the latest coherent checkpoint for `None`.
+    /// Latest selection falls back before an end-of-epoch checkpoint; explicitly selecting such
+    /// a checkpoint returns an error.
+    fn checkpoint_execution_context(
+        &self,
+        checkpoint: Option<u64>,
+    ) -> Result<CheckpointExecutionContext, Error>;
 }
 
 /// An `EpochStore` retrieves the epoch data and protocol configuration

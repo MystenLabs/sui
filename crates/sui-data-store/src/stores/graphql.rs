@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! An implementation of the data store interfaces: `TransactionStore`, `EpochStore` and `ObjectStore`
-//! backed by the RPC GQL endpoint. Schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
+//! An implementation of the data store interfaces backed by the RPC GQL endpoint.
+//! Schema in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //! The RPC calls are implemented in `gql_queries.rs`.
 
 use crate::{
-    EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary, TransactionInfo,
-    TransactionStore, VersionQuery, gql_queries, node::Node,
+    CheckpointContextStore, CheckpointExecutionContext, EpochData, EpochStore, ObjectKey,
+    ObjectStore, SetupStore, StoreSummary, TransactionInfo, TransactionStore, VersionQuery,
+    gql_queries, node::Node,
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
@@ -170,6 +171,21 @@ impl EpochStore for DataStore {
                 Err(e)
             }
         }
+    }
+}
+
+/// Constructs checkpoint execution context from GraphQL and caches its immutable epoch metadata.
+impl CheckpointContextStore for DataStore {
+    fn checkpoint_execution_context(
+        &self,
+        checkpoint: Option<u64>,
+    ) -> Result<CheckpointExecutionContext, Error> {
+        let context = block_on!(gql_queries::checkpoint_query::query(checkpoint, self))?;
+        self.epoch_map
+            .write()
+            .unwrap()
+            .insert(context.epoch.epoch_id, context.epoch.clone());
+        Ok(context)
     }
 }
 

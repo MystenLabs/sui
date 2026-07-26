@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    EpochData, EpochStore, ObjectKey, ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore,
+    CheckpointContextStore, CheckpointExecutionContext, EpochData, EpochStore, ObjectKey,
+    ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore, StoreSummary, TransactionInfo,
+    TransactionStore,
 };
 use anyhow::{Error, Result};
 use mysten_common::ZipDebugEqIteratorExt;
@@ -81,6 +82,23 @@ where
     }
 }
 
+/// Delegates checkpoint selection to the secondary store and caches its epoch metadata.
+impl<P, S> CheckpointContextStore for ReadThroughStore<P, S>
+where
+    P: ReadWriteDataStore,
+    S: ReadDataStore + CheckpointContextStore,
+{
+    fn checkpoint_execution_context(
+        &self,
+        checkpoint: Option<u64>,
+    ) -> Result<CheckpointExecutionContext, Error> {
+        let context = self.secondary.checkpoint_execution_context(checkpoint)?;
+        self.primary
+            .write_epoch_info(context.epoch.epoch_id, context.epoch.clone())?;
+        Ok(context)
+    }
+}
+
 impl<P, S> ObjectStore for ReadThroughStore<P, S>
 where
     P: ReadWriteDataStore,
@@ -147,5 +165,90 @@ where
             self.primary.setup(Some(chain_id.clone()))?;
         }
         Ok(chain_id.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckpointExecutionContext, EpochData, stores::InMemoryStore};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use sui_types::{
+        digests::{ChainIdentifier, CheckpointDigest},
+        object::Object,
+    };
+
+    struct ContextSource {
+        context: CheckpointExecutionContext,
+        calls: AtomicU64,
+    }
+
+    impl TransactionStore for ContextSource {
+        fn transaction_data_and_effects(
+            &self,
+            _tx_digest: &str,
+        ) -> Result<Option<TransactionInfo>, Error> {
+            Ok(None)
+        }
+    }
+
+    impl EpochStore for ContextSource {
+        fn epoch_info(&self, _epoch: u64) -> Result<Option<EpochData>, Error> {
+            Ok(None)
+        }
+
+        fn protocol_config(&self, _epoch: u64) -> Result<Option<ProtocolConfig>, Error> {
+            Ok(None)
+        }
+    }
+
+    impl ObjectStore for ContextSource {
+        fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
+            Ok(keys.iter().map(|_| None).collect())
+        }
+    }
+
+    impl CheckpointContextStore for ContextSource {
+        fn checkpoint_execution_context(
+            &self,
+            _checkpoint: Option<u64>,
+        ) -> Result<CheckpointExecutionContext, Error> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            Ok(self.context.clone())
+        }
+    }
+
+    #[test]
+    fn checkpoint_context_comes_from_secondary_and_caches_epoch_data() {
+        let epoch = EpochData {
+            epoch_id: 7,
+            protocol_version: 42,
+            rgp: 1_000,
+            start_timestamp: 123,
+        };
+        let primary = InMemoryStore::new(crate::Node::Mainnet);
+        primary.add_epoch_data(
+            epoch.epoch_id,
+            EpochData {
+                protocol_version: 1,
+                ..epoch.clone()
+            },
+        );
+        let source = ContextSource {
+            context: CheckpointExecutionContext {
+                chain_identifier: ChainIdentifier::random(),
+                checkpoint: 10,
+                checkpoint_digest: CheckpointDigest::random(),
+                epoch: epoch.clone(),
+            },
+            calls: AtomicU64::new(0),
+        };
+        let store = ReadThroughStore::new(primary, source);
+
+        let context = store.checkpoint_execution_context(None).unwrap();
+
+        assert_eq!(context.epoch, epoch);
+        assert_eq!(store.secondary.calls.load(Ordering::Relaxed), 1);
+        assert_eq!(store.primary.epoch_info(7).unwrap(), Some(epoch));
     }
 }
