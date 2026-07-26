@@ -73,7 +73,7 @@ impl CFG {
         parameters: &Signature,
         target_blocks: BlockIDSize,
     ) -> CFG {
-        assert!(target_blocks > 0, "The CFG must haave at least one block");
+        assert!(target_blocks > 0, "The CFG must have at least one block");
         let mut basic_blocks: HashMap<BlockIDSize, BasicBlock> = HashMap::new();
         // Generate basic blocks
         for i in 0..target_blocks {
