@@ -155,14 +155,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let is_consensus_tx = transaction.is_consensus_tx();
-        let (_, effects, execution_error) = submit_and_execute_with_error(
-            &self.validator,
-            Some(&self.fullnode),
-            transaction,
-            is_consensus_tx,
-        )
-        .await?;
+        let (_, effects, execution_error) =
+            submit_and_execute_with_error(&self.validator, Some(&self.fullnode), transaction, true)
+                .await?;
         let effects = effects.into_data();
         self.pending_effects.push(effects.clone());
         Ok((effects, execution_error))
