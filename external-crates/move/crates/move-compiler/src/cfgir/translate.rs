@@ -16,10 +16,17 @@ use crate::{
         filter::{FilterScope, empty_filter_scope},
     },
     expansion::ast::{Attributes, ModuleIdent, Mutability},
-    hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+    hlir::{
+        ast::{self as H, BlockLabel, Label, Value, Value_, Var},
+        translate::base_type,
+    },
     ice, ice_assert,
+    naming::ast::BuiltinTypeName_,
     parser::ast::{ConstantName, FunctionName},
-    shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
+    shared::{
+        AstDebug, CompilationEnv, NumberFormat, NumericalAddress, program_info::TypingProgramInfo,
+        unique_map::UniqueMap,
+    },
 };
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
@@ -74,6 +81,9 @@ pub(super) struct Context<'env> {
     current_package: Option<Symbol>,
     /// the fold state of every constant in the program
     constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
+    /// densely-assigned ids for modules outside this compilation, used in copy names: their
+    /// dependency orders come from other compilations and could collide with this one's
+    precompiled_module_ids: BTreeMap<ModuleIdent, usize>,
     // Copies of cross-module constants synthesized for the current module. Note the copies have no
     // counterpart in the typing `ProgramInfo`.
     constant_copies: BTreeMap<(ModuleIdent, ConstantName), ConstantName>,
@@ -96,6 +106,7 @@ impl<'env> Context<'env> {
             info,
             current_package: None,
             constant_defs: BTreeMap::new(),
+            precompiled_module_ids: BTreeMap::new(),
             constant_copies: BTreeMap::new(),
             constant_copy_defs: vec![],
             constant_copy_index: 0,
@@ -152,8 +163,6 @@ impl<'env> Context<'env> {
             }
             Some((_, ConstantEntry::Pending)) => None,
             None => {
-                // TODO(cross-module-constants): pre-compiled dependencies have folded values in
-                // `PreCompiledProgramInfo`; supporting them is a possible follow-up
                 self.add_diag(outside_compilation_use(&m, &c, use_loc));
                 None
             }
@@ -161,11 +170,12 @@ impl<'env> Context<'env> {
     }
 
     /// Synthesizes a module-local copy of `m::c` from its already-folded value, named
-    /// `_{dep_order}_{module}_{const}` (e.g. `_3_b_C`). The leading `_` avoids user constants
-    /// (which must start uppercase), and the dependency order -- unique per module -- makes the
-    /// names collision-free: equal names have equal leading digit runs, hence the same module,
-    /// hence the same constant. These names are not stable across module-graph changes; they
-    /// appear only in source maps and are not part of the upgrade-compatibility surface.
+    /// `_{module_id}_{module}_{const}` (e.g. `_3_b_C`), where the module id is the defining
+    /// module's dependency order (or a `p`-prefixed id for pre-compiled modules). The leading `_`
+    /// avoids user constants (which must start uppercase), and the module id -- unique per module
+    /// -- makes the names collision-free: equal names have equal leading id runs, hence the same
+    /// module, hence the same constant. These names are not stable across module-graph changes;
+    /// they appear only in source maps and are not part of the upgrade-compatibility surface.
     fn synthesize_constant_copy(
         &mut self,
         constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
@@ -178,12 +188,17 @@ impl<'env> Context<'env> {
         let value = constant_values
             .get(&(m, c))
             .expect("ICE defined constant with no folded value");
-        let dep_order = self
-            .info
-            .module(&m)
-            .dependency_order
-            .expect("ICE typed module with no dependency order");
-        let symbol = format!("_{}_{}_{}", dep_order, m.value.module, c).into();
+        // pre-compiled modules use their own `p`-prefixed id namespace
+        let module_id = match self.precompiled_module_ids.get(&m) {
+            Some(id) => format!("p{}", id),
+            None => self
+                .info
+                .module(&m)
+                .dependency_order
+                .expect("ICE typed module with no dependency order")
+                .to_string(),
+        };
+        let symbol = format!("_{}_{}_{}", module_id, m.value.module, c).into();
         // the copy carries the original definition's loc so tooling points at the definition
         let copy_name = ConstantName(sp(defined_loc, symbol));
         let cdef = G::Constant {
@@ -346,10 +361,84 @@ fn modules(
         }
     }
     let mut constant_values: BTreeMap<(ModuleIdent, ConstantName), Value> = BTreeMap::new();
+    seed_precompiled_constants(context, &hmodules, &mut constant_values);
     let modules = hmodules
         .into_iter()
         .map(|(mname, m)| module(context, &mut constant_values, mname, m));
     UniqueMap::maybe_from_iter(modules).unwrap()
+}
+
+/// Constants of modules outside this compilation (e.g. the analyzer's pre-compiled dependencies)
+/// were folded when they were compiled; seed their values so they can be folded into constant
+/// definitions and copied into function bodies like any other constant
+fn seed_precompiled_constants(
+    context: &mut Context,
+    hmodules: &[(ModuleIdent, H::ModuleDefinition)],
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
+) {
+    let compiled: BTreeSet<ModuleIdent> = hmodules.iter().map(|(mname, _)| *mname).collect();
+    let info = context.info;
+    for (mident, minfo) in info.modules.key_cloned_iter() {
+        if compiled.contains(&mident) || minfo.constants.is_empty() {
+            continue;
+        }
+        let next_id = context.precompiled_module_ids.len();
+        context.precompiled_module_ids.insert(mident, next_id);
+        for (cname, cinfo) in minfo.constants.key_cloned_iter() {
+            let signature = base_type(&context.reporter, &cinfo.signature);
+            let entry = match cinfo
+                .value
+                .get()
+                .and_then(|mv| value_from_move_value(mv, &signature))
+            {
+                Some(value) => {
+                    constant_values.insert((mident, cname), value);
+                    ConstantEntry::Defined {
+                        loc: cinfo.defined_loc,
+                        signature: Box::new(signature),
+                    }
+                }
+                // the constant's own compilation reported an error for it
+                None => ConstantEntry::Failed,
+            };
+            context.constant_defs.insert((mident, cname), entry);
+        }
+    }
+}
+
+/// Rebuilds an HLIR value from a folded runtime value, driven by the constant's signature
+fn value_from_move_value(mv: &MoveValue, ty: &H::BaseType) -> Option<Value> {
+    use H::TypeName_ as TN;
+    use MoveValue as MV;
+    use Value_ as V;
+    let loc = ty.loc;
+    let v_ = match mv {
+        MV::U8(u) => V::U8(*u),
+        MV::U16(u) => V::U16(*u),
+        MV::U32(u) => V::U32(*u),
+        MV::U64(u) => V::U64(*u),
+        MV::U128(u) => V::U128(*u),
+        MV::U256(u) => V::U256(*u),
+        MV::Bool(b) => V::Bool(*b),
+        MV::Address(a) => V::Address(NumericalAddress::new(a.into_bytes(), NumberFormat::Hex)),
+        MV::Vector(vs) => {
+            let H::BaseType_::Apply(_, sp!(_, TN::Builtin(sp!(_, BuiltinTypeName_::Vector))), args) =
+                &ty.value
+            else {
+                return None;
+            };
+            let [elem_ty] = args.as_slice() else {
+                return None;
+            };
+            let elems = vs
+                .iter()
+                .map(|v| value_from_move_value(v, elem_ty))
+                .collect::<Option<Vec<_>>>()?;
+            V::Vector(Box::new(elem_ty.clone()), elems)
+        }
+        MV::Struct(_) | MV::Signer(_) | MV::Variant(_) => return None,
+    };
+    Some(sp(loc, v_))
 }
 
 fn module(

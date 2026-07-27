@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Constants in pre-compiled modules cannot be used cross-module: each use -- in a function body
-//! or a constant definition -- reports an error. This path is not reachable in the move_check
-//! testsuite, which always compiles dependencies from source.
+//! `public(package)` constants in pre-compiled modules can be used from source modules of the
+//! same package: their folded values are seeded from the pre-compiled program info, so they fold
+//! into constant definitions and are copied into function bodies like any other constant. This is
+//! the analyzer's interaction pattern -- it compiles against cached pre-compiled dependencies --
+//! and is not reachable in the move_check testsuite, which always compiles dependencies from
+//! source.
 
 use move_compiler::{
     Compiler, PASS_PARSER,
@@ -18,6 +21,8 @@ use vfs::{VfsPath, impls::memory::MemoryFS};
 const LIB: &str = r#"
 module a::m {
     public(package) const MAX: u64 = 100;
+    public(package) const BYTES: vector<u8> = b"hello";
+    public(package) const ADDR: address = @0x7;
 }
 "#;
 
@@ -28,6 +33,10 @@ module a::n {
     const D: u64 = m::MAX + 1;
 
     public fun read(): u64 { m::MAX + D }
+
+    public fun bytes(): vector<u8> { m::BYTES }
+
+    public fun addr(): address { m::ADDR }
 }
 "#;
 
@@ -87,7 +96,5 @@ fn cross_module_constants_from_pre_compiled_lib() {
         &files, diags, /* color */ false,
     ))
     .unwrap();
-    let expected = "Constants defined in modules outside of the current compilation cannot be \
-                    accessed from other modules";
-    assert_eq!(rendered.matches(expected).count(), 2, "{rendered}");
+    assert!(rendered.is_empty(), "{rendered}");
 }
