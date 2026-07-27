@@ -130,6 +130,6 @@ Deposit the DEEP into your BalanceManager with the [funding step above](#fund-a-
 
 ### Troubleshooting
 
-- **`InsufficientCoinBalance`:** the transaction spends more of a coin than you hold after gas. The swap draws SUI from the same balance that pays gas, so size it below your SUI balance minus a gas budget, or fund more SUI. The SDK also reserves a default gas budget when you do not set one, so leave room for it or call `setGasBudget` explicitly and size the swap around it.
+- `InsufficientCoinBalance`: the transaction spends more of a coin than you hold after gas. The swap draws SUI from the same balance that pays gas, so size it below your SUI balance minus a gas budget, or fund more SUI. The SDK also reserves a default gas budget when you do not set one, so leave room for it or call `setGasBudget` explicitly and size the swap around it.
 - `version unavailable for consumption`: you built a transaction from stale state before a previous one finalized. Wait for finality (the SDK's `waitForTransaction`) before building the next transaction. Do not blindly retry a rejected transaction, because it can leave the gas coin equivocation-locked.
 - **Swap succeeds but you receive zero DEEP:** the book was empty and `minOut` was 0, so the pool returned your SUI unfilled. Set a nonzero `minOut` from `getQuantityOut` so an empty book reverts, and check the quote before swapping.
