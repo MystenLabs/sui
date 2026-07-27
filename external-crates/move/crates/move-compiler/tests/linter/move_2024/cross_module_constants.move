@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Cross-module constant uses produce no lint output: the generated constant functions reuse
+// Cross-module constant uses produce no lint output: the synthesized constant copies reuse
 // the constant's location, so a lint firing on them would point at the declaration
 
 module 0x42::a {

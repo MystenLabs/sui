@@ -42,8 +42,8 @@ module 0x42::b {
     }
 
     public fun check_upgraded() {
-        // the getter reads the constant of this version's 0x42::a, and DOUBLE was re-folded
-        // from the new value when the upgrade was compiled
+        // this version's copy of the constant and the re-folded DOUBLE were both compiled
+        // from the new value
         assert!(a::MAX == 50, 0);
         assert!(DOUBLE == 100, 1);
     }
@@ -53,7 +53,7 @@ module 0x42::b {
 
 //# run 0x42::b::check_upgraded --linkage 0x42=>0x108
 
-// the original version is untouched: its getter and its folded constant both still hold the
+// the original version is untouched: its copy and its folded constant both still hold the
 // old values
 
 //# run 0x42::b::check_original

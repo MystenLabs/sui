@@ -12,7 +12,7 @@ error[E03022]: invalid usage position
    │                                ^^^^^^ Invalid module access. Expected a function, but found constant 'MAX' in module '0x42::a'
 
 error[E03003]: unbound module member
-   ┌─ tests/move_2024/constants/invalid_cross_module_call_forms.move:21:36
+   ┌─ tests/move_2024/constants/invalid_cross_module_call_forms.move:21:34
    │
-21 │ public fun call_generated(): u64 { a::_const_MAX() }
-   │                                    ^^^^^^^^^^^^^ Invalid module access. Unbound function '_const_MAX' in module '0x42::a'
+21 │ public fun call_mangled(): u64 { a::_const_MAX() }
+   │                                  ^^^^^^^^^^^^^ Invalid module access. Unbound function '_const_MAX' in module '0x42::a'
