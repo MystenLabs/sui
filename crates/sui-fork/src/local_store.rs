@@ -24,6 +24,7 @@ use sui_rpc_store::schema::effects as schema_effects;
 use sui_rpc_store::schema::events as schema_events;
 use sui_rpc_store::schema::object_by_owner;
 use sui_rpc_store::schema::object_by_type;
+use sui_rpc_store::schema::object_version_by_checkpoint;
 use sui_rpc_store::schema::objects;
 use sui_rpc_store::schema::objects::Status;
 use sui_rpc_store::schema::objects::TombstoneKind;
@@ -75,6 +76,13 @@ pub(crate) struct LocalStore {
     /// This table is the fork's authority for [`Self::get_latest_object_status`];
     /// see [`crate::live_state`].
     live_state: Arc<LiveState>,
+    /// The checkpoint this fork diverged at.
+    ///
+    /// Pre-fork objects are materialized lazily from a remote query pinned here,
+    /// so each one learned this way is live *as of this checkpoint* — the same
+    /// claim a live-set restore makes at its anchor. It is also the floor for the
+    /// checkpoint numbering of locally executed checkpoints.
+    forked_at_checkpoint: CheckpointSequenceNumber,
 }
 
 /// Local object removal that must be written as a `sui-rpc-store` tombstone.
@@ -88,12 +96,18 @@ pub(crate) struct ObjectRemoval {
 impl LocalStore {
     /// Creates a fork store handle over an already-open `sui-rpc-store` DB and
     /// schema, plus the fork-owned live-state pointer table.
-    pub(crate) fn new(db: Db, schema: Arc<RpcStoreSchema>, live_state: Arc<LiveState>) -> Self {
+    pub(crate) fn new(
+        db: Db,
+        schema: Arc<RpcStoreSchema>,
+        live_state: Arc<LiveState>,
+        forked_at_checkpoint: CheckpointSequenceNumber,
+    ) -> Self {
         Self {
             reader: RpcStoreReader::new(db.clone(), schema.clone()),
             db,
             schema,
             live_state,
+            forked_at_checkpoint,
         }
     }
 
@@ -316,6 +330,22 @@ impl LocalStore {
         Ok(Some(sequence))
     }
 
+    /// The checkpoint that in-flight local execution is producing.
+    ///
+    /// Object-version rows written during execution have to be keyed by the
+    /// checkpoint that will contain them, but that checkpoint is not sealed —
+    /// and so not persisted — until execution finishes. It is always one past
+    /// the highest persisted checkpoint: sealing is serialized by the
+    /// publication lock so only one checkpoint is ever in flight, and the fork
+    /// produces nothing at or below the checkpoint it diverged at.
+    fn executing_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
+        let highest = self
+            .highest_checkpoint_sequence()?
+            .unwrap_or(self.forked_at_checkpoint)
+            .max(self.forked_at_checkpoint);
+        Ok(highest + 1)
+    }
+
     /// Saves an object fetched from the remote chain as current local state if allowed.
     ///
     /// This records the object row and only updates the live-state pointer when
@@ -331,6 +361,9 @@ impl LocalStore {
         let mut batch = self.db.batch();
         self.stage_object_version(&mut batch, object)?;
         self.stage_package_version(&mut batch, object)?;
+        if update_live_pointer {
+            self.stage_restored_object_version(&mut batch, object.id(), object.version())?;
+        }
         batch.commit().context("failed to save live object")?;
         if update_live_pointer {
             self.live_state.set_live(object.id(), object.version())?;
@@ -430,6 +463,9 @@ impl LocalStore {
             Some((_, Status::Live(_))) | Some((_, Status::Tombstone(_))) => {}
         }
 
+        if make_current {
+            self.stage_restored_object_version(&mut batch, object.id(), object.version())?;
+        }
         batch
             .commit()
             .context("failed to save indexed live object")?;
@@ -471,8 +507,12 @@ impl LocalStore {
             })
             .collect();
 
+        let checkpoint = self.executing_checkpoint()?;
         let mut batch = self.db.batch();
 
+        // Removals stage before writes so that an object removed and rewritten
+        // in the same result ends up live: both write the same
+        // checkpoint-pinned key, and the later put wins.
         for removed in removed_objects {
             batch.put(
                 &self.schema.objects,
@@ -482,10 +522,24 @@ impl LocalStore {
                 },
                 &objects::tombstone(removed.kind),
             )?;
+            self.stage_object_version_at_checkpoint(
+                &mut batch,
+                removed.object_id,
+                checkpoint,
+                removed.version,
+            )?;
         }
 
         for object in written_objects.values() {
             self.stage_object_version(&mut batch, object)?;
+            if !terminal_deleted.contains(&object.id()) {
+                self.stage_object_version_at_checkpoint(
+                    &mut batch,
+                    object.id(),
+                    checkpoint,
+                    object.version(),
+                )?;
+            }
         }
 
         batch
@@ -583,6 +637,44 @@ impl LocalStore {
         object: &Object,
     ) -> anyhow::Result<()> {
         Objects.restore(self.schema.as_ref(), object, batch)
+    }
+
+    /// Stages the checkpoint-pinned row recording that `id` ended `checkpoint`
+    /// at `version`, which may be a live version or a tombstone version.
+    ///
+    /// Only locally executed checkpoints may be keyed this way: the row asserts
+    /// that nothing changed the object between `checkpoint` and the next row,
+    /// which holds for the post-fork range because the fork executed all of it.
+    fn stage_object_version_at_checkpoint(
+        &self,
+        batch: &mut sui_consistent_store::Batch,
+        id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+        version: SequenceNumber,
+    ) -> anyhow::Result<()> {
+        let (key, value) = object_version_by_checkpoint::store(id, checkpoint, version);
+        batch.put(&self.schema.object_version_by_checkpoint, &key, &value)?;
+        Ok(())
+    }
+
+    /// Stages a restore-floor row asserting that `version` is the object's live
+    /// version as of the fork checkpoint.
+    ///
+    /// This is the shape a live-set restore writes at its anchor, and it carries
+    /// the same meaning here: the object predates everything the fork executed.
+    /// Callers must have resolved `version` from a remote query pinned at the
+    /// fork checkpoint — an exact-version fetch of some older version proves
+    /// nothing about what is live and must not be recorded.
+    fn stage_restored_object_version(
+        &self,
+        batch: &mut sui_consistent_store::Batch,
+        id: ObjectID,
+        version: SequenceNumber,
+    ) -> anyhow::Result<()> {
+        let (key, value) =
+            object_version_by_checkpoint::store_restored(id, self.forked_at_checkpoint, version);
+        batch.put(&self.schema.object_version_by_checkpoint, &key, &value)?;
+        Ok(())
     }
 
     /// Returns whether the object currently has an owner-index row.
@@ -727,6 +819,10 @@ mod tests {
 
     use super::*;
 
+    /// Non-zero so that rows written at the fork checkpoint are distinguishable
+    /// from the `(id, 0)` synthetic floor the indexer writes.
+    const TEST_FORK_CHECKPOINT: CheckpointSequenceNumber = 100;
+
     fn fresh_store() -> (tempfile::TempDir, LocalStore) {
         let dir = tempfile::tempdir().unwrap();
         let store = reopen_store(&dir);
@@ -736,7 +832,7 @@ mod tests {
     fn reopen_store(dir: &tempfile::TempDir) -> LocalStore {
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         let live_state = Arc::new(LiveState::open(dir.path()).unwrap());
-        LocalStore::new(db, Arc::new(schema), live_state)
+        LocalStore::new(db, Arc::new(schema), live_state, TEST_FORK_CHECKPOINT)
     }
 
     fn make_object(id: ObjectID, version: u64, owner: Owner) -> Object {
