@@ -350,7 +350,7 @@ const DEFAULT_ADDRESS: &str = "[::1]:8000";
 const DEFAULT_METRICS_HOST: &str = "127.0.0.1";
 const DEFAULT_METRICS_PORT: u16 = 9184;
 
-/// Root archival KV RPC config, deserialized from a YAML file (`--config-path`).
+/// Root archival KV RPC config, deserialized from TOML by `--config`.
 ///
 /// Every field is optional and falls back to a built-in default via the
 /// accessors below; `instance_id` is the sole required field and is resolved by
@@ -447,15 +447,23 @@ pub struct KvRpcConfig {
 }
 
 impl KvRpcConfig {
-    /// Deserialize a [`KvRpcConfig`] from a YAML file. Kept inline (rather than
-    /// via `sui_config::Config`) so the archival binary stays decoupled from the
-    /// fullnode config crate.
-    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    /// Deserialize a [`KvRpcConfig`] from a TOML file.
+    pub fn load_toml(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let path = path.as_ref();
+        let contents = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read config file {}", path.display()))?;
+        toml::from_str(&contents)
+            .with_context(|| format!("failed to parse TOML config file {}", path.display()))
+    }
+
+    /// Deserialize a [`KvRpcConfig`] from a YAML file accepted by the deprecated
+    /// `--config-path` flag.
+    pub fn load_yaml(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
         let contents = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read config file {}", path.display()))?;
         serde_yaml::from_str(&contents)
-            .with_context(|| format!("failed to parse config file {}", path.display()))
+            .with_context(|| format!("failed to parse YAML config file {}", path.display()))
     }
 
     /// Render the JSON Schema for the config file (backs the `--config-schema`
