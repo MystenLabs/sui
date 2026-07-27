@@ -9,8 +9,7 @@ module 0x42::a {
         115792089237316195423570985008687907853269984665640564039457584007913129639935;
     public(package) const NESTED: vector<vector<u8>> = vector[b"a", b"bc"];
 
-    // local use compiles as a constant load, alongside the generated function for the
-    // cross-module uses
+    // local use compiles as a load of this module's own constant
     public fun local_max(): u64 { MAX }
 }
 
@@ -21,12 +20,12 @@ module 0x42::b {
     const FOLDED: address = a::ADDR;
 
     public fun check() {
-        // function-body uses: compiled as calls to synthesized getters in 0x42::a
+        // function-body uses: compiled as loads of copies of the constants in this module
         assert!(a::MAX == 100, 0);
         assert!(a::BYTES == b"hello", 1);
         // constant-definition use: folded at compile time
         assert!(DOUBLE == 200, 2);
-        // local constant load and cross-module call agree
+        // local constant load and cross-module copy agree
         assert!(a::local_max() == a::MAX, 3);
         // other constant types
         assert!(a::ADDR == @0x7, 4);

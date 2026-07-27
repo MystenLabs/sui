@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Member completion on a module with a generated constant function lists the constant but not
+// Member completion on a module with a package-visible constant lists the constant but not
 // the generated function; a rejected (private) cross-module use under IDE mode continues past
 // the error without an ICE
 
