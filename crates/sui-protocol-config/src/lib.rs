@@ -1255,6 +1255,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     enable_allowances: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    check_object_funds_withdraw_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4645,6 +4648,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                         cfg.feature_flags.create_forwarding_address_registry = true;
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                     cfg.feature_flags

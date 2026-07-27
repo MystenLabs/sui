@@ -804,6 +804,7 @@ impl LocalExec {
                 checked_input_objects,
                 // TODO: Support implicit system object reads for replay.
                 sui_types::base_types::SystemObjectVersions::empty(),
+                None,
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
@@ -1002,6 +1003,7 @@ impl LocalExec {
                 epoch_start_timestamp,
                 input_objects,
                 sui_types::base_types::SystemObjectVersions::empty(),
+                None,
                 gas_data,
                 gas_status,
                 kind,

@@ -481,6 +481,9 @@ fn run_execution(
             ctx.epoch_start_timestamp_ms,
             input_objects,
             system_object_versions,
+            // TODO: When backtesting object funds withdraws, we will need unsettled balance
+            // information to reproduce the original execution.
+            None,
             gas_data,
             gas_status,
             txn_kind,
