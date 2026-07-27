@@ -19,6 +19,7 @@ use move_core_types::{
     annotated_visitor as AV,
     language_storage::StructTag,
     runtime_value as R,
+    u256::U256,
     vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Value};
@@ -43,7 +44,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
-    storage::RuntimeObjectResolver,
+    storage::{ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
 
@@ -118,6 +119,19 @@ pub(crate) struct ObjectRuntimeState {
     settlement_output_sui: u64,
     accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
     accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
+    object_funds_available: BTreeMap<(AccountAddress, TypeTag), ObjectFundsAvailable>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct ObjectFundsAvailable {
+    /// Current known available balance for this object balance account: a single running
+    /// amount that deposits increase and reservations decrease.
+    /// We lazily query the store the first time when the available balance is not sufficient
+    /// to serve a reservation. In case where we first deposit into an object, and then reserve
+    /// a smaller amount, we will not need to query the store at all.
+    available: U256,
+    /// Whether a query to the store has been made.
+    queried: bool,
 }
 
 #[derive(Tid)]
@@ -208,11 +222,53 @@ impl<'a> ObjectRuntime<'a> {
                 settlement_output_sui: 0,
                 accumulator_merge_totals: BTreeMap::new(),
                 accumulator_split_totals: BTreeMap::new(),
+                object_funds_available: BTreeMap::new(),
             },
             is_metered,
             protocol_config,
             metrics,
         }
+    }
+
+    pub fn check_object_funds_sufficiency(
+        &mut self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+        amount: U256,
+    ) -> ObjectFundsSufficiency {
+        let key = (owner.into(), type_.clone());
+        let mut entry = self
+            .state
+            .object_funds_available
+            .get(&key)
+            .copied()
+            .unwrap_or_default();
+        if entry.available < amount && !entry.queried {
+            let settled_available = match self
+                .child_object_store
+                .object_available_balance(owner, type_)
+            {
+                Ok(balance) => balance,
+                Err(e) => {
+                    return ObjectFundsSufficiency::LoadError(e.to_string());
+                }
+            };
+            let Some(available) = entry.available.checked_add(U256::from(settled_available)) else {
+                return ObjectFundsSufficiency::LoadError(
+                    "object funds available balance overflow".to_string(),
+                );
+            };
+            entry.available = available;
+            entry.queried = true;
+        }
+        let sufficiency = if entry.available >= amount {
+            entry.available -= amount;
+            ObjectFundsSufficiency::Sufficient
+        } else {
+            ObjectFundsSufficiency::Insufficient
+        };
+        self.state.object_funds_available.insert(key, entry);
+        sufficiency
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
@@ -441,6 +497,23 @@ impl<'a> ObjectRuntime<'a> {
                             )));
                     }
                     self.state.accumulator_merge_totals.insert(key, new_total);
+                    if self
+                        .protocol_config
+                        .check_object_funds_withdraw_in_execution()
+                    {
+                        let entry = self
+                            .state
+                            .object_funds_available
+                            .entry((target_addr, target_ty.clone()))
+                            .or_default();
+                        entry.available = entry
+                            .available
+                            .checked_add(U256::from(amount as u128))
+                            .ok_or_else(|| {
+                            PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+                                .with_message("object funds available balance overflow".to_string())
+                        })?;
+                    }
                 }
                 MoveAccumulatorAction::Split => {
                     let current = self
@@ -746,6 +819,7 @@ impl ObjectRuntimeState {
             settlement_output_sui,
             accumulator_merge_totals: _,
             accumulator_split_totals: _,
+            object_funds_available: _,
             total_events_emitted: _,
         } = self;
 

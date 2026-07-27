@@ -45,7 +45,7 @@ pub enum ObjectFundsWithdrawStatus {
     Pending(oneshot::Receiver<FundsWithdrawStatus>),
 }
 
-pub struct ObjectFundsChecker {
+pub struct ObjectFundsCheckerDEPRECATED {
     /// Watchers to keep track the last settled accumulator version.
     /// This is updated whenever the settlement barrier transaction is executed.
     last_settled_version_sender: watch::Sender<SequenceNumber>,
@@ -54,7 +54,7 @@ pub struct ObjectFundsChecker {
     metrics: Arc<metrics::ObjectFundsCheckerMetrics>,
 }
 
-impl ObjectFundsChecker {
+impl ObjectFundsCheckerDEPRECATED {
     pub fn new(
         starting_accumulator_version: SequenceNumber,
         unsettled: Arc<UnsettledObjectWithdrawals>,

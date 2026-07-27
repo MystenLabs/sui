@@ -218,6 +218,7 @@ impl SingleValidator {
                 0,
                 input_objects,
                 sui_types::base_types::SystemObjectVersions::default(),
+                None,
                 gas_data,
                 gas_status,
                 kind,

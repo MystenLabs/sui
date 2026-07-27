@@ -7,7 +7,10 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
+use sui_types::{
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
+    base_types::SequenceNumber,
+};
 
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 
@@ -23,12 +26,29 @@ struct Inner {
     /// Balance are updated only by settlement transactions, not when we withdraw funds.
     /// Hence when we are checking object funds, on top of the settled balance, we also need to account for
     /// the amount of withdraws from the same consensus commit (that all reads from the same accumulator version).
+    /// When `record_net_unsettled_object_withdraws` is enabled, the recorded amounts are the per-account
+    /// net withdraws from effects (what settlement will actually deduct); otherwise they are the
+    /// running max withdraws.
     unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
     /// Tracks the accounts that have pending withdraws at each accumulator version.
     /// This information is not required for functional correctness, but needed to garbage collect
     /// unused entries in unsettled_withdraws that are now fully committed. Without doing so unsettled_withdraws
     /// may grow unbounded.
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
+}
+
+impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        UnsettledObjectWithdrawals::get_unsettled_object_withdraw(
+            self,
+            account,
+            accumulator_version,
+        )
+    }
 }
 
 impl UnsettledObjectWithdrawals {

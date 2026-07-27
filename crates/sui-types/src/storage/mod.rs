@@ -187,6 +187,14 @@ pub enum ObjectChange {
 pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
 impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum ObjectFundsSufficiency {
+    Sufficient,
+    Insufficient,
+    LoadError(String),
+}
+
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver {
@@ -197,6 +205,10 @@ pub trait RuntimeObjectResolver {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
+
+    fn object_available_balance(&self, _owner: SuiAddress, _type_: &TypeTag) -> SuiResult<u128> {
+        Ok(u128::MAX)
+    }
 
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
     /// `get_object_received_at_version` must be the exact version at which the object will be received,

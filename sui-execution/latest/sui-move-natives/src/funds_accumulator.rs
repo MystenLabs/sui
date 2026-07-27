@@ -15,7 +15,9 @@ use move_vm_runtime::{
     natives::functions::{NativeContext, NativeResult},
 };
 use smallvec::smallvec;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::funds_accumulator::E_OBJECT_FUNDS_INSUFFICIENT;
+use sui_types::storage::ObjectFundsSufficiency;
 
 use crate::{
     NativesCostTable,
@@ -133,4 +135,42 @@ pub fn withdraw_from_accumulator_address(
     // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
     let withdrawn = Value::struct_(Struct::pack(vec![Value::u64(amount)]));
     Ok(NativeResult::ok(context.gas_used(), smallvec![withdrawn]))
+}
+
+pub fn reserve_object_funds_for_withdrawal(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let ty_tag = context.type_to_type_tag(&safe_unwrap!(ty_args.pop()))?;
+
+    let limit = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<U256>());
+    let owner: SuiAddress =
+        safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<AccountAddress>()).into();
+
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+
+    // Before check_object_funds_withdraw_in_execution is enabled, object funds withdrawals are not
+    // checked in execution. They are checked post-execution, and potentially retried if insufficient.
+    if !obj_runtime
+        .protocol_config
+        .check_object_funds_withdraw_in_execution()
+    {
+        return Ok(NativeResult::ok(context.gas_used(), smallvec![]));
+    }
+
+    match obj_runtime.check_object_funds_sufficiency(owner, &ty_tag, limit) {
+        ObjectFundsSufficiency::Sufficient => Ok(NativeResult::ok(context.gas_used(), smallvec![])),
+        ObjectFundsSufficiency::Insufficient => Ok(NativeResult::err(
+            context.gas_used(),
+            E_OBJECT_FUNDS_INSUFFICIENT,
+        )),
+        ObjectFundsSufficiency::LoadError(msg) => Err(PartialVMError::new(
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        )
+        .with_message(msg)),
+    }
 }

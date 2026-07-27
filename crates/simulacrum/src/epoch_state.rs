@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
 use sui_config::{
@@ -10,9 +11,12 @@ use sui_config::{
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
+    base_types::SequenceNumber,
     committee::{Committee, EpochId},
     digests::ChainIdentifier,
-    effects::TransactionEffects,
+    effects::{TransactionEffects, TransactionEffectsAPI},
     execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -34,9 +38,31 @@ pub struct EpochState {
     bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
     executor: Arc<dyn Executor + Send + Sync>,
     chain_identifier: ChainIdentifier,
+    unsettled_object_withdrawals: UnsettledObjectWithdrawals,
     /// A counter that advances each time we advance the clock in order to ensure that each update
     /// txn has a unique digest. This is reset on epoch changes
     next_consensus_round: u64,
+}
+
+#[derive(Default)]
+struct UnsettledObjectWithdrawals {
+    unsettled_withdraws: RwLock<BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>>,
+}
+
+impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        self.unsettled_withdraws
+            .read()
+            .unwrap()
+            .get(account)
+            .and_then(|withdraws| withdraws.get(&accumulator_version))
+            .copied()
+            .unwrap_or(0)
+    }
 }
 
 impl EpochState {
@@ -66,6 +92,7 @@ impl EpochState {
             bytecode_verifier_metrics,
             executor,
             chain_identifier,
+            unsettled_object_withdrawals: UnsettledObjectWithdrawals::default(),
             next_consensus_round: 0,
         }
     }
@@ -150,6 +177,10 @@ impl EpochState {
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
+        let system_object_versions =
+            sui_types::base_types::SystemObjectVersions::from_latest_in_store(
+                store.backing_store().as_object_store(),
+            );
         let (inner_temp_store, gas_status, effects, _timings, result) = self
             .executor
             .execute_transaction_to_effects_and_execution_error(
@@ -162,9 +193,8 @@ impl EpochState {
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,
-                sui_types::base_types::SystemObjectVersions::from_latest_in_store(
-                    store.backing_store().as_object_store(),
-                ),
+                system_object_versions,
+                Some(&self.unsettled_object_withdrawals),
                 gas_data,
                 gas_status,
                 kind,
@@ -173,6 +203,49 @@ impl EpochState {
                 tx_digest,
                 &mut None,
             );
+        if effects.status().is_ok()
+            && !inner_temp_store
+                .accumulator_running_max_withdraws
+                .is_empty()
+            && let Some(accumulator_version) =
+                system_object_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        {
+            self.record_unsettled_object_withdraws(tx_data, &effects, accumulator_version.version);
+        }
         Ok((inner_temp_store, gas_status, effects, result))
+    }
+
+    fn record_unsettled_object_withdraws(
+        &self,
+        tx_data: &sui_types::transaction::TransactionData,
+        effects: &TransactionEffects,
+        accumulator_version: SequenceNumber,
+    ) {
+        let address_funds_reservations: BTreeSet<_> = tx_data
+            .process_funds_withdrawals_for_execution(self.chain_identifier)
+            .into_keys()
+            .collect();
+        let mut unsettled_withdraws = self
+            .unsettled_object_withdrawals
+            .unsettled_withdraws
+            .write()
+            .unwrap();
+        for event in effects.accumulator_events() {
+            if address_funds_reservations.contains(&event.accumulator_obj) {
+                continue;
+            }
+            if let Some(amount) = event
+                .write
+                .get_fund_withdraw_amount()
+                .filter(|amount| *amount > 0)
+            {
+                let entry = unsettled_withdraws
+                    .entry(event.accumulator_obj)
+                    .or_default()
+                    .entry(accumulator_version)
+                    .or_default();
+                *entry = entry.checked_add(amount).unwrap();
+            }
+        }
     }
 }
