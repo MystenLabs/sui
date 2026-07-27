@@ -2,7 +2,7 @@
 source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
-error[Compatibility E01007]: missing declaration
+error[ESC01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:8
   │
 4 │ module upgrades::upgrades {
@@ -11,7 +11,7 @@ error[Compatibility E01007]: missing declaration
   = Enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = Add missing enum 'EnumToRemove' back to the module 'upgrades'.
 
-error[Compatibility E01007]: missing declaration
+error[ESC01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:8
   │
 4 │ module upgrades::upgrades {
@@ -20,7 +20,7 @@ error[Compatibility E01007]: missing declaration
   = Functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = Add missing function 'function_to_remove' back to the module 'upgrades'.
 
-error[Compatibility E01007]: missing declaration
+error[ESC01007]: missing declaration
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:8
   │
 4 │ module upgrades::upgrades {
@@ -29,7 +29,7 @@ error[Compatibility E01007]: missing declaration
   = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = Add missing struct 'StructToRemove' back to the module 'upgrades'.
 
-error[Compatibility E01002]: type mismatch
+error[ESC01002]: type mismatch
   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:7:9
   │
 6 │     public struct StructToChange {
@@ -40,7 +40,7 @@ error[Compatibility E01002]: type mismatch
   = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
   = Restore the original struct's field for struct 'StructToChange' including the ordering.
 
-error[Compatibility E03001]: function signature mismatch
+error[ESC03001]: function signature mismatch
    ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:18:31
    │
 18 │     fun function_to_change(): u32 { // changed to u32

@@ -658,7 +658,7 @@ macro_rules! upgrade_codes {
 
 // Used to generate diagnostics primary labels for upgrade compatibility errors.
 // WARNING: you should add new codes to the END of each category list to avoid breaking the existing codes.
-// adding into the middle of a list will change the error code numbers "error[Compatibility EXXXXX]"
+// adding into the middle of a list will change the error code numbers "error[ESCXXXXX]"
 // similarly new categories should be added to the end of the outer list.
 upgrade_codes!(
     Declarations: [
