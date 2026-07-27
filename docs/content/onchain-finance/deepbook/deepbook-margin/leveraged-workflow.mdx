@@ -99,7 +99,7 @@ The client references pools, coins, and margin pools by SDK key. On Testnet it a
 
 <ImportContent source="examples/deepbook-margin/src/client.ts" mode="code" tag="client" />
 
-## Create a MarginManager
+## Create a `MarginManager`
 
 Create one `MarginManager` for the pool and reuse it across runs. A single `margin_manager::new` call creates the manager, shares it, and registers it in the `MarginRegistry`, so there is no separate registration step. Creating a new manager each run leaves orphaned shared objects that fragment your collateral, so discover or persist the ID and create only when you have none.
 
