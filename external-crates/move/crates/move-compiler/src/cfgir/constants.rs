@@ -11,9 +11,11 @@
 // (`dependent_constants` and the dependency-ordering walker). There is no mutable HLIR visitor
 // today; consider a shared walker if another one appears.
 
-use super::translate::{ConstantEntry, Context, move_value_from_value};
 use crate::{
-    cfgir::ast as G,
+    cfgir::{
+        ast as G,
+        translate::{ConstantEntry, Context, move_value_from_value},
+    },
     diag,
     diagnostics::{Diagnostic, filter::empty_filter_scope},
     expansion::ast::ModuleIdent,
