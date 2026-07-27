@@ -65,6 +65,9 @@ pub enum PackageError {
     #[error("Invalid system dependency `{dep}`; the allowed system dependencies are: {valid}")]
     InvalidSystemDep { dep: String, valid: String },
 
+    #[error("Could not determine the system dependencies for environment `{env}`: {err}")]
+    SystemDeps { env: EnvironmentID, err: String },
+
     #[error("Error while loading dependency {dep}: {err}")]
     DepError { dep: String, err: Box<PackageError> },
 

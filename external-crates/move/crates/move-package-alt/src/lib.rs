@@ -11,8 +11,9 @@ mod dependency;
 mod errors;
 mod flavor;
 mod graph;
-mod logging;
 mod package;
+
+pub mod logging;
 
 pub mod git;
 pub mod schema;
