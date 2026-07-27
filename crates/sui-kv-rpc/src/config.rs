@@ -696,17 +696,19 @@ stages:
     }
 
     #[test]
-    fn partial_yaml_falls_back_to_defaults() {
+    fn partial_toml_falls_back_to_defaults() {
         // Only one endpoint is customized; everything else must resolve to defaults.
-        let yaml = r#"
-instance-id: my-instance
-ledger-history:
-  list-transactions:
-    max-limit-items: 7
-    render-ahead: 3
-  bitmap-bucket-budget-tx: 2048
+        let config_toml = r#"
+instance-id = "my-instance"
+
+[ledger-history]
+bitmap-bucket-budget-tx = 2048
+
+[ledger-history.list-transactions]
+max-limit-items = 7
+render-ahead = 3
 "#;
-        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        let cfg: KvRpcConfig = toml::from_str(config_toml).unwrap();
         assert_eq!(cfg.instance_id.as_deref(), Some("my-instance"));
         assert_eq!(cfg.address(), DEFAULT_ADDRESS);
         assert_eq!(cfg.metrics_port(), DEFAULT_METRICS_PORT);

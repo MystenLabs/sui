@@ -249,3 +249,35 @@ async fn main() -> Result<()> {
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn config_flags_select_their_config_format() {
+        let app = App::try_parse_from(["sui-kv-rpc", "--config", "config.toml"]).unwrap();
+        assert_eq!(app.config, Some(PathBuf::from("config.toml")));
+        assert!(app.config_path.is_none());
+
+        let app = App::try_parse_from(["sui-kv-rpc", "--config-path", "config.yaml"]).unwrap();
+        assert!(app.config.is_none());
+        assert_eq!(app.config_path, Some(PathBuf::from("config.yaml")));
+    }
+
+    #[test]
+    fn config_flags_are_mutually_exclusive() {
+        let error = match App::try_parse_from([
+            "sui-kv-rpc",
+            "--config",
+            "config.toml",
+            "--config-path",
+            "config.yaml",
+        ]) {
+            Ok(_) => panic!("both config flags must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
+    }
+}
