@@ -179,7 +179,10 @@ fn output_error_case(module: CompiledModule, output_path: Option<String>, case_i
         Some(path) => {
             let mut out = vec![];
             module
-                .serialize(&mut out)
+                .serialize_with_version(
+                    move_binary_format::file_format_common::VERSION_MAX,
+                    &mut out,
+                )
                 .expect("Unable to serialize module");
             let output_file = format!("{}/case{}_{}.module", path, tid, case_id);
             let mut f = fs::File::create(output_file)

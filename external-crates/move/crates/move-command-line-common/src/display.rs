@@ -52,30 +52,15 @@ pub fn try_render_constant(constant: &Constant) -> RenderResult {
             .map(|x| x.to_string())
             .map_or(RenderResult::NotRendered, RenderResult::AsValue),
 
-        SignatureToken::I8 => bcs::from_bytes::<i8>(bytes)
-            .ok()
-            .map(|x| x.to_string())
-            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
-        SignatureToken::I16 => bcs::from_bytes::<i16>(bytes)
-            .ok()
-            .map(|x| x.to_string())
-            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
-        SignatureToken::I32 => bcs::from_bytes::<i32>(bytes)
-            .ok()
-            .map(|x| x.to_string())
-            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
-        SignatureToken::I64 => bcs::from_bytes::<i64>(bytes)
-            .ok()
-            .map(|x| x.to_string())
-            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
-        SignatureToken::I128 => bcs::from_bytes::<i128>(bytes)
-            .ok()
-            .map(|x| x.to_string())
-            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
-        SignatureToken::I256 => bcs::from_bytes::<move_core_types::i256::I256>(bytes)
-            .ok()
-            .map(|x| x.to_string())
-            .map_or(RenderResult::NotRendered, RenderResult::AsValue),
+        // Signed integer constants are not yet supported
+        // (`SignatureToken::is_valid_for_constant` returns false for them), so there is nothing
+        // to render. #26274 flips these sites together when signed constants become real.
+        SignatureToken::I8
+        | SignatureToken::I16
+        | SignatureToken::I32
+        | SignatureToken::I64
+        | SignatureToken::I128
+        | SignatureToken::I256 => RenderResult::NotRendered,
 
         SignatureToken::Signer
         | SignatureToken::Vector(_)

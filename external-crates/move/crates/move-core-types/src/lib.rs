@@ -27,6 +27,35 @@ pub mod u256;
 mod unit_tests;
 pub mod vm_status;
 
+/// Panics with a uniform, greppable `[signed-ints]` message. Use for "not yet supported"
+/// placeholders on genuinely-unreachable paths while the signed-integer stack is landing;
+/// the enablement PR deletes this macro so the compiler enumerates every surviving call site.
+/// For fallible contexts, use [`signed_ints_unsupported!`] instead so the caller can return a
+/// typed error.
+#[macro_export]
+macro_rules! signed_ints_todo {
+    () => {
+        panic!("[signed-ints] not yet supported")
+    };
+    ($($arg:tt)+) => {
+        panic!("[signed-ints] not yet supported: {}", format_args!($($arg)+))
+    };
+}
+
+/// Evaluates to a `String` carrying the uniform, greppable `[signed-ints]` tag, for fallible
+/// contexts where a "not yet supported" placeholder must produce an error instead of
+/// panicking, e.g. `return Err(MyError::msg(signed_ints_unsupported!("i8 constants")))`.
+/// The enablement PR deletes this macro so the compiler enumerates every surviving call site.
+#[macro_export]
+macro_rules! signed_ints_unsupported {
+    () => {
+        ::std::string::String::from("[signed-ints] not yet supported")
+    };
+    ($($arg:tt)+) => {
+        ::std::format!("[signed-ints] not yet supported: {}", format_args!($($arg)+))
+    };
+}
+
 pub const VARIANT_COUNT_MAX: u64 = 127;
 
 // Tags are zero-indexed so the max tag value is one less than the max variant count.

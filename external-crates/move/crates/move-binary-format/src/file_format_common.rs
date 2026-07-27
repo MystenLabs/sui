@@ -498,7 +498,7 @@ pub(crate) fn write_u128(binary: &mut BinaryData, value: u128) -> Result<()> {
 
 /// Write an `i8` in Little Endian format.
 pub(crate) fn write_i8(binary: &mut BinaryData, value: i8) -> Result<()> {
-    binary.push(value as u8)
+    binary.extend(&value.to_le_bytes())
 }
 
 /// Write an `i16` in Little Endian format.

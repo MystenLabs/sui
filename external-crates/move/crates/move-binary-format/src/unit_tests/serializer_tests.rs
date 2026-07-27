@@ -231,3 +231,103 @@ fn serialize_v7_has_flavor() {
         v7_unflavored_bytes
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Signed integer usage detection + serializer version gates
+// ---------------------------------------------------------------------------------------------
+
+mod signed_integers {
+    use super::*;
+    use crate::file_format::{
+        Constant, FieldDefinition, IdentifierIndex, Signature, SignatureToken, TypeSignature,
+        module_uses_signed_integers,
+    };
+
+    fn with_signed_signature() -> CompiledModule {
+        let mut m = basic_test_module();
+        m.signatures
+            .push(Signature(vec![SignatureToken::Vector(Box::new(
+                SignatureToken::I64,
+            ))]));
+        m
+    }
+
+    fn with_signed_constant() -> CompiledModule {
+        let mut m = basic_test_module();
+        m.constant_pool.push(Constant {
+            type_: SignatureToken::I8,
+            data: vec![0],
+        });
+        m
+    }
+
+    fn with_signed_struct_field() -> CompiledModule {
+        let mut m = basic_test_module();
+        let crate::file_format::StructFieldInformation::Declared(fields) =
+            &mut m.struct_defs[0].field_information
+        else {
+            panic!("expected declared fields");
+        };
+        fields[0].signature = TypeSignature(SignatureToken::I128);
+        m
+    }
+
+    fn with_signed_enum_field() -> CompiledModule {
+        let mut m = basic_test_module_with_enum();
+        m.enum_defs[0].variants[0].fields.push(FieldDefinition {
+            name: IdentifierIndex(0),
+            signature: TypeSignature(SignatureToken::I256),
+        });
+        m
+    }
+
+    fn with_signed_bytecode(instruction: Bytecode) -> CompiledModule {
+        let mut m = basic_test_module();
+        m.function_defs[0].code.as_mut().unwrap().code = vec![instruction, Bytecode::Ret];
+        m
+    }
+
+    #[test]
+    fn module_uses_signed_integers_detects_all_positions() {
+        assert!(!module_uses_signed_integers(&basic_test_module()));
+        assert!(!module_uses_signed_integers(&basic_test_module_with_enum()));
+
+        assert!(module_uses_signed_integers(&with_signed_signature()));
+        assert!(module_uses_signed_integers(&with_signed_constant()));
+        // Field definitions serialize their tokens directly (not via the signature pool), so
+        // the traversal must cover them explicitly.
+        assert!(module_uses_signed_integers(&with_signed_struct_field()));
+        assert!(module_uses_signed_integers(&with_signed_enum_field()));
+
+        for instruction in [
+            Bytecode::LdI8(-1),
+            Bytecode::LdI256(Box::new(move_core_types::i256::I256::from(-1i8))),
+            Bytecode::CastI32,
+            Bytecode::Neg,
+        ] {
+            assert!(module_uses_signed_integers(&with_signed_bytecode(
+                instruction
+            )));
+        }
+    }
+
+    // The serializer's version gate lives at the signature-token peel-off, so every position
+    // `module_uses_signed_integers` covers must also refuse to serialize below VERSION_8.
+    #[test]
+    fn serializer_gates_every_signed_position_below_version_8() {
+        let cases: Vec<(CompiledModule, &str)> = vec![
+            (with_signed_signature(), "signature pool"),
+            (with_signed_constant(), "constant type"),
+            (with_signed_struct_field(), "struct field definition"),
+            (with_signed_enum_field(), "enum variant field definition"),
+            (with_signed_bytecode(Bytecode::Neg), "code unit"),
+        ];
+        for (module, what) in cases {
+            let mut v = vec![];
+            assert!(
+                module.serialize_with_version(VERSION_7, &mut v).is_err(),
+                "expected serialization failure below VERSION_8 for signed content in {what}"
+            );
+        }
+    }
+}

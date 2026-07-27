@@ -118,10 +118,11 @@ fn read_u256_internal(
 }
 
 fn read_i8_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i8> {
-    let byte = cursor
-        .read_u8()
+    let mut bytes = [0; 1];
+    cursor
+        .read_exact(&mut bytes)
         .map_err(|_| PartialVMError::new(StatusCode::BAD_I8))?;
-    Ok(byte as i8)
+    Ok(i8::from_le_bytes(bytes))
 }
 
 fn read_i16_internal(cursor: &mut VersionedCursor) -> BinaryLoaderResult<i16> {
@@ -1071,6 +1072,39 @@ pub fn load_signature_token_test_entry(
     cursor: std::io::Cursor<&[u8]>,
 ) -> BinaryLoaderResult<SignatureToken> {
     load_signature_token(&mut VersionedCursor::new_for_test(VERSION_MAX, cursor))
+}
+
+#[cfg(test)]
+pub(crate) fn load_signature_token_test_entry_with_version(
+    version: u32,
+    cursor: std::io::Cursor<&[u8]>,
+) -> BinaryLoaderResult<SignatureToken> {
+    load_signature_token(&mut VersionedCursor::new_for_test(version, cursor))
+}
+
+// Test entry points for the signed-integer readers, fixed at `VERSION_8` (the version that
+// introduces signed values). Used by the LE round-trip tests against `write_i*`.
+#[cfg(test)]
+pub(crate) mod signed_read_test_entries {
+    use super::*;
+
+    macro_rules! read_test_entry {
+        ($name:ident, $reader:ident, $ty:ty) => {
+            pub(crate) fn $name(bytes: &[u8]) -> BinaryLoaderResult<$ty> {
+                $reader(&mut VersionedCursor::new_for_test(
+                    VERSION_8,
+                    std::io::Cursor::new(bytes),
+                ))
+            }
+        };
+    }
+
+    read_test_entry!(read_i8, read_i8_internal, i8);
+    read_test_entry!(read_i16, read_i16_internal, i16);
+    read_test_entry!(read_i32, read_i32_internal, i32);
+    read_test_entry!(read_i64, read_i64_internal, i64);
+    read_test_entry!(read_i128, read_i128_internal, i128);
+    read_test_entry!(read_i256, read_i256_internal, move_core_types::i256::I256);
 }
 
 /// Deserializes a `SignatureToken`.

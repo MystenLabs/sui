@@ -344,7 +344,7 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             | NormalizedType::I64
             | NormalizedType::I128
             | NormalizedType::I256 => {
-                panic!("Signed integer types are not yet supported in sui-json-rpc-types")
+                move_core_types::signed_ints_todo!("signed integer types in sui-json-rpc-types")
             }
         }
     }

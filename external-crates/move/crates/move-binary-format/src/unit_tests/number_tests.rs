@@ -120,3 +120,104 @@ proptest! {
         prop_assert_eq!(input, output);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Signed integer little-endian round-trips (VERSION_8 readers)
+// ---------------------------------------------------------------------------------------------
+
+use crate::deserializer::signed_read_test_entries as signed_read;
+use move_core_types::i256::I256;
+
+macro_rules! signed_roundtrip {
+    ($writer:ident, $reader:ident, $value:expr) => {{
+        let input = $value;
+        let mut serialized = BinaryData::new();
+        $writer(&mut serialized, input).expect("serialization should work");
+        let serialized = serialized.into_inner();
+        let output = signed_read::$reader(&serialized[..]).expect("deserialization should work");
+        assert_eq!(input, output, "round-trip failed for {}", input);
+        // Pin the encoding itself: little-endian two's complement.
+        assert_eq!(&serialized[..], input.to_le_bytes().as_slice());
+    }};
+}
+
+#[test]
+fn signed_le_roundtrip_interesting_values() {
+    signed_roundtrip!(write_i8, read_i8, i8::MIN);
+    signed_roundtrip!(write_i8, read_i8, -1i8);
+    signed_roundtrip!(write_i8, read_i8, i8::MAX);
+    signed_roundtrip!(write_i16, read_i16, i16::MIN);
+    signed_roundtrip!(write_i16, read_i16, -1i16);
+    signed_roundtrip!(write_i16, read_i16, i16::MAX);
+    signed_roundtrip!(write_i32, read_i32, i32::MIN);
+    signed_roundtrip!(write_i32, read_i32, -1i32);
+    signed_roundtrip!(write_i32, read_i32, i32::MAX);
+    signed_roundtrip!(write_i64, read_i64, i64::MIN);
+    signed_roundtrip!(write_i64, read_i64, -1i64);
+    signed_roundtrip!(write_i64, read_i64, i64::MAX);
+    signed_roundtrip!(write_i128, read_i128, i128::MIN);
+    signed_roundtrip!(write_i128, read_i128, -1i128);
+    signed_roundtrip!(write_i128, read_i128, i128::MAX);
+    signed_roundtrip!(write_i256, read_i256, I256::min_value());
+    signed_roundtrip!(write_i256, read_i256, I256::from(-1i8));
+    signed_roundtrip!(write_i256, read_i256, I256::max_value());
+}
+
+proptest! {
+    #[test]
+    fn i8_roundtrip(input in any::<i8>()) {
+        let mut serialized = BinaryData::new();
+        write_i8(&mut serialized, input).expect("serialization should work");
+        let output = signed_read::read_i8(&serialized.into_inner()[..])
+            .expect("deserialization should work");
+        prop_assert_eq!(input, output);
+    }
+
+    #[test]
+    fn i16_roundtrip(input in any::<i16>()) {
+        let mut serialized = BinaryData::new();
+        write_i16(&mut serialized, input).expect("serialization should work");
+        let output = signed_read::read_i16(&serialized.into_inner()[..])
+            .expect("deserialization should work");
+        prop_assert_eq!(input, output);
+    }
+
+    #[test]
+    fn i32_roundtrip(input in any::<i32>()) {
+        let mut serialized = BinaryData::new();
+        write_i32(&mut serialized, input).expect("serialization should work");
+        let output = signed_read::read_i32(&serialized.into_inner()[..])
+            .expect("deserialization should work");
+        prop_assert_eq!(input, output);
+    }
+
+    #[test]
+    fn i64_roundtrip(input in any::<i64>()) {
+        let mut serialized = BinaryData::new();
+        write_i64(&mut serialized, input).expect("serialization should work");
+        let output = signed_read::read_i64(&serialized.into_inner()[..])
+            .expect("deserialization should work");
+        prop_assert_eq!(input, output);
+    }
+
+    #[test]
+    fn i128_roundtrip(input in any::<i128>()) {
+        let mut serialized = BinaryData::new();
+        write_i128(&mut serialized, input).expect("serialization should work");
+        let output = signed_read::read_i128(&serialized.into_inner()[..])
+            .expect("deserialization should work");
+        prop_assert_eq!(input, output);
+    }
+
+    #[test]
+    fn i256_roundtrip(input in any::<i128>()) {
+        // I256 has no `Arbitrary` impl; widen an arbitrary i128 (covers both signs and
+        // the low-128 bit patterns; MIN/MAX are pinned in the explicit test above).
+        let input = I256::from(input);
+        let mut serialized = BinaryData::new();
+        write_i256(&mut serialized, input).expect("serialization should work");
+        let output = signed_read::read_i256(&serialized.into_inner()[..])
+            .expect("deserialization should work");
+        prop_assert_eq!(input, output);
+    }
+}

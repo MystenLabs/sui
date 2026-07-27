@@ -3,11 +3,12 @@
 
 use move_binary_format::{
     CompiledModule,
-    errors::PartialVMResult,
+    errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, DatatypeHandleIndex, SignatureToken},
     safe_unwrap,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
+use move_core_types::vm_status::StatusCode;
 use std::{
     cmp::max,
     collections::{BTreeMap, btree_map::Entry},
@@ -40,20 +41,20 @@ impl<'a> AbilityCache<'a> {
         use SignatureToken as S;
 
         Ok(match ty {
-            S::Bool
-            | S::U8
-            | S::U16
-            | S::U32
-            | S::U64
-            | S::U128
-            | S::U256
-            | S::I8
-            | S::I16
-            | S::I32
-            | S::I64
-            | S::I128
-            | S::I256
-            | S::Address => AbilitySet::PRIMITIVES,
+            S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => {
+                AbilitySet::PRIMITIVES
+            }
+
+            // Signed integers are not supported in this execution version; fail closed like
+            // the rest of v3's signed-token arms.
+            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(
+                            "Unexpected signed int signature token in version 3".to_string(),
+                        ),
+                );
+            }
 
             S::Reference(_) | S::MutableReference(_) => AbilitySet::REFERENCES,
             S::Signer => AbilitySet::SIGNER,

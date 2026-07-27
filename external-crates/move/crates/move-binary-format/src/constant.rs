@@ -18,6 +18,8 @@ fn sig_to_ty(sig: &SignatureToken) -> Option<MoveTypeLayout> {
         SignatureToken::U128 => Some(MoveTypeLayout::U128),
         SignatureToken::U256 => Some(MoveTypeLayout::U256),
         SignatureToken::Vector(v) => Some(MoveTypeLayout::Vector(Box::new(sig_to_ty(v.as_ref())?))),
+        // Signed integer constants are not yet supported; this agrees with
+        // `SignatureToken::is_valid_for_constant`. #26274 flips these sites together.
         SignatureToken::I8
         | SignatureToken::I16
         | SignatureToken::I32

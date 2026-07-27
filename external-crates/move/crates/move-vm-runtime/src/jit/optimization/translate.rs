@@ -217,7 +217,10 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         | FF::Bytecode::Neg => {
             return Err(partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Signed integer bytecodes are not yet supported"
+                "{}",
+                move_core_types::signed_ints_unsupported!(
+                    "signed integer bytecodes in the VM runtime"
+                )
             ));
         }
 
