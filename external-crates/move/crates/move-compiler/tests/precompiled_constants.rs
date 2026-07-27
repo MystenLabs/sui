@@ -7,6 +7,16 @@
 //! the analyzer's interaction pattern -- it compiles against cached pre-compiled dependencies --
 //! and is not reachable in the move_check testsuite, which always compiles dependencies from
 //! source.
+// TODO(cross-module-constants): source maps have no location slot for constants, so a copy can
+// only point back to its original through its mangled name. Given
+//
+//     module a::m { public(package) const MAX: u64 = 100; }
+//     module a::n { use a::m; public fun read(): u64 { m::MAX } }
+//
+// `n`'s source map records only `_0_m_MAX -> <pool index>`, and tooling cannot resolve the copy
+// to `MAX`'s definition in `a::m` without parsing the mangled name. We would want to simply
+// record the original defining location for the copy, which requires extending the source map
+// format with constant locations.
 
 use move_compiler::{
     Compiler,
