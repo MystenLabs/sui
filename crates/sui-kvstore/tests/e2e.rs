@@ -27,7 +27,6 @@ use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::ALL_PIPELINE_NAMES;
-use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
@@ -214,7 +213,6 @@ impl TestHarness {
             IndexerConfig::default(),
             PipelineLayer::default(),
             Chain::Unknown,
-            &ALPHA_PIPELINE_NAMES,
             &registry,
         )
         .await

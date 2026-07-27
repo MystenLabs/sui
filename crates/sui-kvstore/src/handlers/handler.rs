@@ -215,9 +215,10 @@ mod tests {
         .await;
 
         let (addr, _handle) = mock.start().await.unwrap();
-        let client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
-            .await
-            .unwrap();
+        let client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
         let store = BigTableStore::new(client);
         let mut conn = store.connect().await.unwrap();
 
