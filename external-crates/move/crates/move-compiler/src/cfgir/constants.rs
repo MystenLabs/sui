@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Rewrites cross-module constant references in function bodies into references to module-local
-//! copies of the referenced constants: when module `a` uses `b::C`, the already-folded value of
-//! `b::C` is synthesized into `a` as a new constant (see `Context::constant_copy`) and the use is
-//! rewritten to refer to that copy. The value is copied, never re-folded, so a constant whose
-//! definition failed to fold reports an error at each cross-module use instead. References in
-//! constant definitions do not go through this: they are resolved by constant folding.
+//! copies of the referenced constants, synthesized from their already-folded values (see
+//! `Context::constant_copy`). References in constant definitions do not go through this: they are
+//! resolved by constant folding.
 // TODO(cross-module-constants): this is one of several hand-rolled HLIR/typed-AST walkers
-// (`compute_dependent_constants` and the dependency-ordering walker). There is no mutable HLIR visitor
-// today; consider a shared walker if another one appears.
+// (`compute_dependent_constants` and the dependency-ordering walker). There is no mutable HLIR
+// visitor today; consider a shared walker if another one appears.
 
 use crate::{
     cfgir::translate::Context, expansion::ast::ModuleIdent, hlir::ast as H, ice_assert,
