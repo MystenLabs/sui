@@ -6550,3 +6550,89 @@ async fn test_should_wait_for_dependency_object() {
     let result = authority_state.should_wait_for_dependency_object(deleted_obj_ref);
     assert!(result.is_none(), "Should not wait for deleted object");
 }
+
+#[tokio::test]
+async fn test_effects_equivocation_prevented_at_signing_not_execution() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state.get_object(&object_id).unwrap();
+    let gas_object = authority_state.get_object(&gas_object_id).unwrap();
+
+    let transfer_transaction = init_transfer_transaction(
+        &authority_state,
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+    let verified_tx = vote_transaction(&authority_state, transfer_transaction.into()).unwrap();
+    let executable =
+        VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch_store.epoch());
+    let tx_digest = *executable.digest();
+
+    // Simulate having previously signed different effects for this transaction, as could
+    // happen if a divergent re-execution occurs after signed effects were returned to a
+    // client but before the transaction was committed to a checkpoint.
+    let previously_signed_digest = TransactionEffectsDigest::random();
+    let previously_signed_sig = AuthoritySignInfo::new(
+        epoch_store.epoch(),
+        &TransactionEffects::default(),
+        Intent::sui_app(IntentScope::TransactionEffects),
+        authority_state.name,
+        &*authority_state.secret,
+    );
+    epoch_store
+        .insert_effects_digest_and_signature(
+            &tx_digest,
+            &previously_signed_digest,
+            &previously_signed_sig,
+        )
+        .unwrap();
+
+    // Execution must not consult previously signed effects: it succeeds even though the
+    // resulting effects differ from the previously signed digest.
+    let (effects, execution_error) = authority_state
+        .try_execute_immediately(&executable, ExecutionEnv::new(), &epoch_store)
+        .unwrap();
+    assert!(execution_error.is_none());
+    assert_ne!(effects.digest(), previously_signed_digest);
+
+    // Signing must refuse to contradict the previously signed effects.
+    let err = authority_state
+        .get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)
+        .unwrap_err();
+    assert!(matches!(
+        err.as_inner(),
+        SuiErrorKind::GenericAuthorityError { error }
+            if error.contains("differs from previously signed effects digest")
+    ));
+
+    // Recording a conflicting digest for the same transaction is rejected.
+    let err = epoch_store
+        .insert_effects_digest_and_signature(&tx_digest, &effects.digest(), &previously_signed_sig)
+        .unwrap_err();
+    assert!(matches!(
+        err.as_inner(),
+        SuiErrorKind::GenericAuthorityError { error }
+            if error.contains("differs from previously signed effects digest")
+    ));
+
+    // Re-recording the same digest remains idempotent.
+    epoch_store
+        .insert_effects_digest_and_signature(
+            &tx_digest,
+            &previously_signed_digest,
+            &previously_signed_sig,
+        )
+        .unwrap();
+}
