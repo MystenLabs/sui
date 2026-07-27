@@ -547,8 +547,37 @@ export default {
         'onchain-finance/kiosk/kiosk-apps',
       ],
     },
-    'onchain-finance/payment-kit',
-	'onchain-finance/payment-intents',
+    {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/payment-security',
+        'onchain-finance/regulated-payments',
+        'onchain-finance/fiat-integration',
+        'onchain-finance/gas-station',
+        'onchain-finance/p2p-reference-app',
+        'onchain-finance/recipient-resolution',
+        'onchain-finance/x402-pay-per-request',
+        'onchain-finance/funding-wallets',
+        {
+          type: 'category',
+          label: 'Agentic Payments',
+          link: { type: 'doc', id: 'onchain-finance/agentic-payments/index' },
+          items: [
+            'onchain-finance/agentic-payments/agent-wallet-setup',
+            'onchain-finance/agentic-payments/spending-policies',
+            'onchain-finance/agentic-payments/recurring-payments',
+            'onchain-finance/agentic-payments/settlement-verification',
+            'onchain-finance/agentic-payments/payment-reconciliation',
+            'onchain-finance/agentic-payments/production-hardening',
+          ],
+        },
+      ],
+    },
   ],
 
 suiStackSidebar: [
@@ -767,6 +796,7 @@ suiStackSidebar: [
 		label: 'Validators',
 		link: { type: 'doc', id: 'operators/validator/index', },
 		items: [
+      'operators/validator/validator-setup',
       'operators/validator/validator-config',
       'operators/validator/validator-tasks',
       'operators/validator/node-tools',
