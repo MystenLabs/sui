@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::RangeInclusive;
+use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -439,17 +439,19 @@ impl Transaction {
             return Ok(Connection::new(false, false).into());
         };
 
+        // `cp_bounds` end is inclusive; `scan_grpc` takes an exclusive end.
+        let cp_bounds = *cp_bounds.start()..cp_bounds.end().saturating_add(1);
         let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
 
         build_grpc_connection(scope, &page, result)
     }
 
-    /// Scan a page of transactions over `cp_bounds` via the streaming gRPC List API. Computing
-    /// checkpoint bounds is the caller's responsibility. Items are returned in scan order
-    /// (descending when paginating from the back).
+    /// Scan a page of transactions over the half-open checkpoint range `cp_bounds` via the
+    /// streaming gRPC List API. Computing checkpoint bounds is the caller's responsibility.
+    /// Items are returned in scan order (descending when paginating from the back).
     pub(crate) async fn scan_grpc(
         reader: &AlphaLedgerGrpcReader,
-        cp_bounds: RangeInclusive<u64>,
+        cp_bounds: Range<u64>,
         page: &Page<CTransaction>,
         filter: &TransactionFilter,
     ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
@@ -478,9 +480,8 @@ impl Transaction {
         let mut request = v2::ListTransactionsRequest::default();
         // Digest only — contents hydrate lazily via `KvLoader` on field access.
         request.read_mask = Some(FieldMask::from_paths(["digest"]));
-        request.start_checkpoint = Some(*cp_bounds.start());
-        // `cp_bounds` end is inclusive; the request bound is exclusive.
-        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.start_checkpoint = Some(cp_bounds.start);
+        request.end_checkpoint = Some(cp_bounds.end);
         request.filter = filter.to_grpc_filter();
         request.options = Some(options);
 
