@@ -33,6 +33,11 @@ pub trait Format: Sized {
     /// Write a numeric value that fits in a `u32`.
     fn number<M: Meter>(meter: &mut M, value: u32) -> Result<Self, MeterError>;
 
+    /// Write a numeric value that fits in an `i32`. The signed counterpart of [`Self::number`]:
+    /// small integer widths (up to 32 bits) render as native numbers, wider widths render as
+    /// strings.
+    fn signed_number<M: Meter>(meter: &mut M, value: i32) -> Result<Self, MeterError>;
+
     /// Write a string value.
     fn string<M: Meter>(meter: &mut M, value: String) -> Result<Self, MeterError>;
 

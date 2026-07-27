@@ -72,7 +72,6 @@ pub(super) async fn function(
                 | PRE::TypeParamOOB(_, _)
                 | PRE::UnexpectedReference
                 | PRE::UnexpectedSigner
-                | PRE::UnexpectedSignedInteger
                 | PRE::UnexpectedError(_)
                 | PRE::ValueNesting(_) => {
                     RpcError::from(anyhow!(e).context("Failed to resolve type layout"))
@@ -116,6 +115,12 @@ fn normalized_type(sig: &OpenSignatureBody) -> SuiMoveNormalizedType {
         S::U64 => T::U64,
         S::U128 => T::U128,
         S::U256 => T::U256,
+        S::I8 => T::I8,
+        S::I16 => T::I16,
+        S::I32 => T::I32,
+        S::I64 => T::I64,
+        S::I128 => T::I128,
+        S::I256 => T::I256,
         S::Vector(sig) => T::Vector(Box::new(normalized_type(sig))),
         S::Datatype(t, params) => T::new_struct(
             t.package.to_canonical_string(/* with_prefix */ true),

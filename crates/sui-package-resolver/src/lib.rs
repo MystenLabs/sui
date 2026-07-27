@@ -290,6 +290,12 @@ pub enum OpenSignatureBody {
     Vector(Box<OpenSignatureBody>),
     Datatype(DatatypeKey, Vec<OpenSignatureBody>),
     TypeParameter(u16),
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 /// Information necessary to convert a type tag into a type layout.
@@ -1141,6 +1147,7 @@ impl OpenSignatureBody {
             S::U64 => O::U64,
             S::U128 => O::U128,
             S::U256 => O::U256,
+            // TODO (signed-ints): signed resolution becomes reachable at enablement.
             S::I8 => O::I8,
             S::I16 => O::I16,
             S::I32 => O::I32,
@@ -1178,6 +1185,12 @@ impl OpenSignatureBody {
             O::U64 => T::U64,
             O::U128 => T::U128,
             O::U256 => T::U256,
+            O::I8 => T::I8,
+            O::I16 => T::I16,
+            O::I32 => T::I32,
+            O::I64 => T::I64,
+            O::I128 => T::I128,
+            O::I256 => T::I256,
             O::Vector(s) => T::Vector(Box::new(s.instantiate(type_params)?)),
 
             O::Datatype(key, dty_params) => T::Struct(Box::new(StructTag {
@@ -1388,6 +1401,12 @@ impl<'l> ResolutionContext<'l> {
                 | O::U64
                 | O::U128
                 | O::U256
+                | O::I8
+                | O::I16
+                | O::I32
+                | O::I64
+                | O::I128
+                | O::I256
                 | O::TypeParameter(_) => {
                     // Nothing further to add to context
                 }
@@ -1669,6 +1688,12 @@ impl<'l> ResolutionContext<'l> {
             O::U64 => (L::U64, 1),
             O::U128 => (L::U128, 1),
             O::U256 => (L::U256, 1),
+            O::I8 => (L::I8, 1),
+            O::I16 => (L::I16, 1),
+            O::I32 => (L::I32, 1),
+            O::I64 => (L::I64, 1),
+            O::I128 => (L::I128, 1),
+            O::I256 => (L::I256, 1),
 
             O::TypeParameter(ix) => {
                 let (layout, depth) = param_layouts
@@ -1790,9 +1815,20 @@ impl<'l> ResolutionContext<'l> {
         use OpenSignatureBody as O;
 
         match sig {
-            O::Address | O::Bool | O::U8 | O::U16 | O::U32 | O::U64 | O::U128 | O::U256 => {
-                /* nop */
-            }
+            O::Address
+            | O::Bool
+            | O::U8
+            | O::U16
+            | O::U32
+            | O::U64
+            | O::U128
+            | O::U256
+            | O::I8
+            | O::I16
+            | O::I32
+            | O::I64
+            | O::I128
+            | O::I256 => { /* nop */ }
 
             O::TypeParameter(_) => { /* nop */ }
 
@@ -2577,6 +2613,48 @@ mod tests {
                 resolver.abilities(type_(prim)).await.unwrap(),
                 S::EMPTY | A::Copy | A::Drop | A::Store,
                 "Unexpected primitive abilities for: {prim}",
+            );
+        }
+    }
+
+    /// Signed integer types resolve uniformly with the unsigned ones: signatures, layouts,
+    /// instantiation, and abilities all support them, even though no module published on Sui
+    /// can mention them yet.
+    #[tokio::test]
+    async fn test_signed_integer_resolution() {
+        use Ability as A;
+        use AbilitySet as S;
+        use MoveTypeLayout as L;
+        use OpenSignatureBody as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([]);
+        let resolver = Resolver::new(cache);
+
+        let cases: &[(&str, T, O, L)] = &[
+            ("i8", T::I8, O::I8, L::I8),
+            ("i16", T::I16, O::I16, L::I16),
+            ("i32", T::I32, O::I32, L::I32),
+            ("i64", T::I64, O::I64, L::I64),
+            ("i128", T::I128, O::I128, L::I128),
+            ("i256", T::I256, O::I256, L::I256),
+        ];
+        for (name, tag, open, layout) in cases {
+            assert_eq!(&type_(name), tag, "Unexpected type tag for: {name}");
+            assert_eq!(
+                &open.instantiate(&[]).unwrap(),
+                tag,
+                "Unexpected instantiation for: {name}"
+            );
+            assert_eq!(
+                &resolver.type_layout(tag.clone()).await.unwrap(),
+                layout,
+                "Unexpected layout for: {name}"
+            );
+            assert_eq!(
+                resolver.abilities(tag.clone()).await.unwrap(),
+                S::EMPTY | A::Copy | A::Drop | A::Store,
+                "Unexpected abilities for: {name}",
             );
         }
     }

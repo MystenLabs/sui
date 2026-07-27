@@ -142,6 +142,116 @@ fn tests_parse_value_positive() {
     }
 }
 
+#[allow(clippy::unreadable_literal)]
+#[test]
+fn tests_parse_value_signed() {
+    use crate::i256::I256;
+    use ParsedValue as V;
+    let i256_min_str =
+        "-57896044618658097711785492504343953926634992332820282019728792003956564819968";
+    let i256_max_str =
+        "57896044618658097711785492504343953926634992332820282019728792003956564819967";
+    let cases: &[(&str, V)] = &[
+        // Positive-signed and zero.
+        ("0i8", V::I8(0)),
+        ("5i8", V::I8(5)),
+        ("127i8", V::I8(i8::MAX)),
+        ("0x7Fi8", V::I8(i8::MAX)),
+        // Lexer boundary: hex digits immediately followed by a signed suffix.
+        ("0xAi8", V::I8(0xA)),
+        ("0xbi8", V::I8(0xb)),
+        ("0xai8", V::I8(0xa)),
+        ("0xAi16", V::I16(0xA)),
+        // Negative decimal, including MIN (minus folds into the literal, so the
+        // magnitude parse must not overflow).
+        ("-1i8", V::I8(-1)),
+        ("-5i8", V::I8(-5)),
+        ("-128i8", V::I8(i8::MIN)),
+        ("-1_2_8i8", V::I8(i8::MIN)),
+        ("  -1i8", V::I8(-1)),
+        ("-1i16", V::I16(-1)),
+        ("-32768i16", V::I16(i16::MIN)),
+        ("32767i16", V::I16(i16::MAX)),
+        ("-1i32", V::I32(-1)),
+        ("-2147483648i32", V::I32(i32::MIN)),
+        ("2147483647i32", V::I32(i32::MAX)),
+        ("-1i64", V::I64(-1)),
+        ("-9223372036854775808i64", V::I64(i64::MIN)),
+        ("9223372036854775807i64", V::I64(i64::MAX)),
+        ("-1i128", V::I128(-1)),
+        (
+            "-170141183460469231731687303715884105728i128",
+            V::I128(i128::MIN),
+        ),
+        (
+            "170141183460469231731687303715884105727i128",
+            V::I128(i128::MAX),
+        ),
+        ("-1i256", V::I256(I256::from(-1i8))),
+        // Negative hex: the hex digits are a magnitude negated by the minus.
+        ("-0x80i8", V::I8(i8::MIN)),
+        ("-0x1i8", V::I8(-1)),
+        ("-0x8000i16", V::I16(i16::MIN)),
+        ("-0xF_Fi16", V::I16(-255)),
+    ];
+
+    for (s, expected) in cases {
+        assert_eq!(&ParsedValue::parse(s).unwrap(), expected, "parsing {s}")
+    }
+
+    // I256 MIN/MAX round-trip through the string representation.
+    assert_eq!(
+        ParsedValue::<()>::parse(&format!("{i256_min_str}i256")).unwrap(),
+        V::I256(I256::from_str(i256_min_str).unwrap())
+    );
+    assert_eq!(
+        ParsedValue::<()>::parse(&format!("{i256_max_str}i256")).unwrap(),
+        V::I256(I256::from_str(i256_max_str).unwrap())
+    );
+}
+
+#[test]
+fn tests_parse_value_signed_negative_cases() {
+    /// Signed-literal inputs that must fail to parse.
+    const CASES: &[&str] = &[
+        // Minus on an unsigned suffix.
+        "-1u8",
+        "-1u16",
+        "-1u32",
+        "-1u64",
+        "-1u128",
+        "-1u256",
+        "-0x1u8",
+        // Bare `-` misuse.
+        "-",
+        "--5i8",
+        "- 5i8",
+        "-i8",
+        "-_5i8",
+        "-true",
+        // Untyped negative numbers have no signed inference.
+        "-5",
+        "-0x5",
+        // Out of range (magnitude checks must account for the sign).
+        "-129i8",
+        "128i8",
+        "-0x81i8",
+        "0x80i8",
+        "-32769i16",
+        "32768i16",
+        "-9223372036854775809i64",
+        "9223372036854775808i64",
+    ];
+
+    for s in CASES {
+        assert!(
+            ParsedValue::<()>::parse(s).is_err(),
+            "Unexpectedly succeeded in parsing: {}",
+            s
+        )
+    }
+}
+
 #[test]
 fn tests_parse_value_negative() {
     /// Test cases for the parser that should always fail.

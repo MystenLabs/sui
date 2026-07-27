@@ -278,6 +278,36 @@ impl Token for ValueToken {
                     .count();
                 number_maybe_with_suffix(s, len)
             }
+            // A `-` folds into the numeric literal that must immediately follow it (matching the
+            // expression-side treatment of negative literals in the compiler); for hex literals
+            // the digits are a magnitude, e.g. `-0x80i8` is -128. Sign/range checking happens
+            // when the literal is parsed, so `-1u8` lexes but fails to parse.
+            '-' => {
+                let tail = &s[1..];
+                let mut tail_chars = tail.chars().peekable();
+                let (tok, len) = match tail_chars.next() {
+                    Some('0') if matches!(tail_chars.peek(), Some('x')) => {
+                        tail_chars.next().unwrap();
+                        match tail_chars.next() {
+                            Some(c) if c.is_ascii_hexdigit() => {
+                                let len = 3 + tail_chars
+                                    .take_while(|c| char::is_ascii_hexdigit(c) || *c == '_')
+                                    .count();
+                                number_maybe_with_suffix(tail, len)
+                            }
+                            _ => bail!("unrecognized token: {}", s),
+                        }
+                    }
+                    Some(c) if c.is_ascii_digit() => {
+                        let len = 1 + tail_chars
+                            .take_while(|c| char::is_ascii_digit(c) || *c == '_')
+                            .count();
+                        number_maybe_with_suffix(tail, len)
+                    }
+                    _ => bail!("unrecognized token: {}", s),
+                };
+                (tok, len + 1)
+            }
             c if c.is_ascii_whitespace() => {
                 // c + remaining
                 let len = 1 + chars.take_while(char::is_ascii_whitespace).count();

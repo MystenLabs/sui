@@ -449,6 +449,90 @@ fn signed_integer_bcs_roundtrip() {
 }
 
 #[test]
+fn signed_integer_bcs_golden_bytes() {
+    use crate::i256::I256;
+
+    // BCS bytes are a cross-implementation contract (TS/Python SDKs, indexers), so pin the
+    // actual encoding — little-endian two's complement — per width. Round-trip tests cannot
+    // catch symmetric encoding mistakes (e.g. sign-magnitude or big-endian on both paths).
+    //
+    // Fully-literal anchors first:
+    assert_eq!(R::MoveValue::I8(-1).simple_serialize().unwrap(), vec![0xFF]);
+    assert_eq!(
+        R::MoveValue::I8(i8::MIN).simple_serialize().unwrap(),
+        vec![0x80]
+    );
+    assert_eq!(
+        R::MoveValue::I8(i8::MAX).simple_serialize().unwrap(),
+        vec![0x7F]
+    );
+    assert_eq!(
+        R::MoveValue::I16(i16::MIN).simple_serialize().unwrap(),
+        vec![0x00, 0x80]
+    );
+    assert_eq!(
+        R::MoveValue::I16(-1).simple_serialize().unwrap(),
+        vec![0xFF, 0xFF]
+    );
+    assert_eq!(
+        R::MoveValue::I16(i16::MAX).simple_serialize().unwrap(),
+        vec![0xFF, 0x7F]
+    );
+
+    // MIN / -1 / MAX for every width, against Rust's (independent) little-endian
+    // two's-complement encoding. Check the runtime and annotated value forms, which
+    // serialize independently.
+    macro_rules! check_golden {
+        ($variant:ident, $ty:ty) => {
+            for value in [<$ty>::MIN, -1, <$ty>::MAX] {
+                let expected = value.to_le_bytes().to_vec();
+                assert_eq!(
+                    R::MoveValue::$variant(value).simple_serialize().unwrap(),
+                    expected,
+                    "unexpected runtime bytes for {value}{}",
+                    stringify!($ty),
+                );
+                assert_eq!(
+                    A::MoveValue::$variant(value).simple_serialize().unwrap(),
+                    expected,
+                    "unexpected annotated bytes for {value}{}",
+                    stringify!($ty),
+                );
+            }
+        };
+    }
+    check_golden!(I8, i8);
+    check_golden!(I16, i16);
+    check_golden!(I32, i32);
+    check_golden!(I64, i64);
+    check_golden!(I128, i128);
+
+    // i256: 32 bytes, little-endian two's complement, written out explicitly (Rust has no
+    // native 256-bit integer to serve as an independent reference).
+    let mut i256_min = vec![0x00; 32];
+    i256_min[31] = 0x80;
+    let i256_neg_one = vec![0xFF; 32];
+    let mut i256_max = vec![0xFF; 32];
+    i256_max[31] = 0x7F;
+    for (value, expected) in [
+        (I256::min_value(), i256_min),
+        (I256::from(-1i8), i256_neg_one),
+        (I256::max_value(), i256_max),
+    ] {
+        assert_eq!(
+            R::MoveValue::I256(value).simple_serialize().unwrap(),
+            expected,
+            "unexpected runtime bytes for {value}i256",
+        );
+        assert_eq!(
+            A::MoveValue::I256(value).simple_serialize().unwrap(),
+            expected,
+            "unexpected annotated bytes for {value}i256",
+        );
+    }
+}
+
+#[test]
 fn signed_integer_display() {
     assert_eq!(R::MoveValue::I8(0).to_string(), "0i8");
     assert_eq!(R::MoveValue::I8(i8::MIN).to_string(), "-128i8");

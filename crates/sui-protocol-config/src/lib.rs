@@ -1286,6 +1286,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
 
+    // If true, signed integer types (i8..i256) are accepted in transaction type arguments.
+    // Remains false until the full signed-integer stack (VM, verifier, value layer) lands;
+    // flipped by the signed-integers enablement PR.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_signed_integers: bool,
+
     // Enable allowance-sourced funds withdrawals (`WithdrawFrom::SenderAllowance`).
     // Requires `enable_accumulators`.
     #[serde(skip_serializing_if = "is_false")]

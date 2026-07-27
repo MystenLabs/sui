@@ -84,6 +84,11 @@ impl Format for Value {
         Ok(Self::from(value))
     }
 
+    fn signed_number<M: Meter>(meter: &mut M, value: i32) -> Result<Self, MeterError> {
+        meter.charge(std::mem::size_of::<Value>())?;
+        Ok(Self::from(value))
+    }
+
     fn string<M: Meter>(meter: &mut M, value: String) -> Result<Self, MeterError> {
         meter.charge(std::mem::size_of::<Value>() + value.len())?;
         Ok(Self::from(value))

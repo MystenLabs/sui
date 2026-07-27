@@ -67,6 +67,18 @@ impl Format for Json {
         Ok(Json::Number(value.into()))
     }
 
+    fn signed_number<M: Meter>(meter: &mut M, value: i32) -> Result<Self, MeterError> {
+        let magnitude = value.unsigned_abs();
+        let digits = if magnitude == 0 {
+            1
+        } else {
+            magnitude.ilog10() + 1
+        };
+        // Account for the leading minus sign
+        meter.charge(digits as usize + usize::from(value < 0))?;
+        Ok(Json::Number(value.into()))
+    }
+
     fn string<M: Meter>(meter: &mut M, value: String) -> Result<Self, MeterError> {
         // Account for the quotes around the string
         meter.charge(2 + value.len())?;
