@@ -11,10 +11,13 @@ use crate::{
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
+    diagnostics::{
+        Diagnostic, DiagnosticReporter, Diagnostics,
+        filter::{FilterScope, empty_filter_scope},
+    },
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
-    ice_assert,
+    ice, ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
@@ -53,7 +56,7 @@ pub(super) struct CFGIRDebugFlags {
 /// The fold state of a constant definition, tracked for every constant in the program so that
 /// cross-module uses in function bodies can be replaced by module-local copies of the folded
 /// values (see `constants::rewrite_cross_module_constants`).
-pub(super) enum ConstantEntry {
+enum ConstantEntry {
     /// Seeded before any module is processed. Still `Pending` at use time only when the defining
     /// module has not been processed, which requires a module dependency cycle, already reported
     /// during typing
@@ -67,11 +70,11 @@ pub(super) enum ConstantEntry {
 
 pub(super) struct Context<'env> {
     pub(super) env: &'env CompilationEnv,
-    pub(super) info: &'env TypingProgramInfo,
+    info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
     /// the fold state of every constant in the program
-    pub(super) constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
+    constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
     // Module-local copies of cross-module constants synthesized for the current module, as a map
     // from the source constant to the local copy name plus the synthesized definitions in creation
     // order. Note for future CFGIR visitor authors: these copies appear in the module's constant
@@ -120,37 +123,108 @@ impl<'env> Context<'env> {
         std::mem::take(&mut self.constant_copy_defs)
     }
 
+    /// Resolves a cross-module constant use to the name of a module-local copy of the constant,
+    /// synthesizing the copy at its first use. Returns `None` if no copy can be made, reporting an
+    /// error unless one was already reported at the constant's definition: either the constant
+    /// failed to fold, its module has not been processed (possible only under an already-reported
+    /// module dependency cycle), or it is defined outside the current compilation.
     pub(super) fn constant_copy(
-        &self,
-        source: &(ModuleIdent, ConstantName),
-    ) -> Option<ConstantName> {
-        self.constant_copies.get(source).copied()
-    }
-
-    /// Returns false if the mangled name is already taken by a different source constant
-    pub(super) fn add_constant_copy(
         &mut self,
+        constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
         m: ModuleIdent,
         c: ConstantName,
-        copy_name: ConstantName,
-        cdef: G::Constant,
-    ) -> bool {
+        use_loc: Loc,
+    ) -> Option<ConstantName> {
+        if let Some(copy_name) = self.constant_copies.get(&(m, c)) {
+            return Some(*copy_name);
+        }
+        match self.constant_defs.get_key_value(&(m, c)) {
+            Some((_, ConstantEntry::Defined { signature })) => {
+                let signature = (**signature).clone();
+                Some(self.synthesize_constant_copy(constant_values, m, c, signature, use_loc))
+            }
+            Some(((_, defined), ConstantEntry::Failed)) => {
+                let defined_loc = defined.0.loc;
+                self.add_diag(unfoldable_constant_use(&m, &c, use_loc, defined_loc));
+                None
+            }
+            // The defining module has not been processed yet, which is only possible under a
+            // module dependency cycle, already reported during typing
+            Some((_, ConstantEntry::Pending)) => None,
+            None => {
+                // TODO(cross-module-constants): constants in pre-compiled dependencies have their
+                // folded values in `PreCompiledProgramInfo`; supporting them is a possible
+                // follow-up.
+                let msg = format!(
+                    "Invalid access of '{}::{}'. Constants defined in modules outside of the \
+                     current compilation cannot be accessed from other modules",
+                    m, c
+                );
+                self.add_diag(diag!(TypeSafety::Visibility, (use_loc, msg)));
+                None
+            }
+        }
+    }
+
+    /// Synthesizes a module-local copy of the constant `m::c` from its already-folded value, named
+    /// `_{dep_order}_{module}_{const}`, e.g. `b::C` with `b` at dependency order 3 becomes
+    /// `_3_b_C`. The leading `_` means the name can never collide with a user constant (those must
+    /// start with an uppercase letter). Leading with the defining module's dependency order --
+    /// unique per module -- means two distinct source constants can never mangle to the same name:
+    /// equal names have equal leading digit runs, hence the same defining module, hence the same
+    /// constant name (unique within their module). Note these names are not stable across
+    /// module-graph changes (dependency orders renumber); they appear only in source maps and are
+    /// not part of the upgrade-compatibility surface.
+    fn synthesize_constant_copy(
+        &mut self,
+        constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
+        m: ModuleIdent,
+        c: ConstantName,
+        signature: H::BaseType,
+        first_use: Loc,
+    ) -> ConstantName {
+        let value = constant_values
+            .get(&(m, c))
+            .expect("ICE defined constant with no folded value");
+        let dep_order = self
+            .info
+            .module(&m)
+            .dependency_order
+            .expect("ICE typed module with no dependency order");
+        let symbol = format!("_{}_{}_{}", dep_order, m.value.module, c).into();
+        // The first-use loc (rather than the defining loc) keeps every loc in the using module's
+        // source map within its own file
+        let copy_name = ConstantName(sp(first_use, symbol));
+        let cdef = G::Constant {
+            warning_filter: empty_filter_scope(),
+            index: {
+                let index = self.constant_copy_index;
+                self.constant_copy_index += 1;
+                index
+            },
+            attributes: UniqueMap::new(),
+            loc: first_use,
+            signature,
+            value: Some(move_value_from_value(value.clone())),
+        };
         if self
             .constant_copy_defs
             .iter()
             .any(|(name, _)| *name == copy_name)
         {
-            return false;
+            self.add_diag(ice!((
+                first_use,
+                format!("mangled constant copy name collision on '{}'", copy_name)
+            )));
+        } else {
+            self.constant_copies.insert((m, c), copy_name);
+            self.constant_copy_defs.push((copy_name, cdef));
         }
-        self.constant_copies.insert((m, c), copy_name);
-        self.constant_copy_defs.push((copy_name, cdef));
-        true
+        copy_name
     }
 
-    pub(super) fn next_constant_copy_index(&mut self) -> usize {
-        let index = self.constant_copy_index;
-        self.constant_copy_index += 1;
-        index
+    pub(super) fn reporter(&self) -> &DiagnosticReporter<'env> {
+        &self.reporter
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
@@ -356,7 +430,7 @@ fn constants(
     // another, an edge is added between them.
     let mut graph = DiGraphMap::<ConstantName, ()>::new();
     for (name, constant) in consts.key_cloned_iter() {
-        let deps = dependent_constants(constant);
+        let deps = super::constants::compute_dependent_constants(constant);
         graph.add_node(name);
         for (dep_module, dep) in deps {
             // Only add edges for constants defined in this module; cross-module dependencies
@@ -464,101 +538,6 @@ fn constants(
     }
 
     out_map
-}
-
-fn dependent_constants(constant: &H::Constant) -> BTreeSet<(ModuleIdent, ConstantName)> {
-    fn dep_exp(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, exp: &H::Exp) {
-        use H::UnannotatedExp_ as E;
-        match &exp.exp.value {
-            E::UnresolvedError
-            | E::Unreachable
-            | E::Unit { .. }
-            | E::Value(_)
-            | E::Move { .. }
-            | E::Copy { .. } => (),
-            E::UnaryExp(_, rhs) => dep_exp(set, rhs),
-            E::BinopExp(lhs, _, rhs) => {
-                dep_exp(set, lhs);
-                dep_exp(set, rhs)
-            }
-            E::Cast(base, _) => dep_exp(set, base),
-            E::Vector(_, _, _, args) | E::Multiple(args) => {
-                for arg in args {
-                    dep_exp(set, arg);
-                }
-            }
-            E::Constant(m, c) => {
-                set.insert((*m, *c));
-            }
-            _ => panic!("ICE typing should have rejected exp in const"),
-        }
-    }
-
-    fn dep_cmd(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, command: &H::Command_) {
-        use H::Command_ as C;
-        match command {
-            C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
-            C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(_, exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
-            C::Mutate(lhs, rhs) => {
-                dep_exp(set, lhs);
-                dep_exp(set, rhs)
-            }
-            C::Break(_)
-            | C::Continue(_)
-            | C::Jump { .. }
-            | C::JumpIf { .. }
-            | C::VariantSwitch { .. } => (),
-        }
-    }
-
-    fn dep_stmt(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, stmt: &H::Statement_) {
-        use H::Statement_ as S;
-        match stmt {
-            S::Command(cmd) => dep_cmd(set, &cmd.value),
-            S::IfElse {
-                cond,
-                if_block,
-                else_block,
-            } => {
-                dep_exp(set, cond);
-                dep_block(set, if_block);
-                dep_block(set, else_block)
-            }
-            S::VariantMatch {
-                subject,
-                enum_name: _,
-                arms,
-            } => {
-                dep_exp(set, subject);
-                for (_, arm) in arms {
-                    dep_block(set, arm);
-                }
-            }
-            S::While {
-                cond: (cond_block, cond_exp),
-                block,
-                ..
-            } => {
-                dep_block(set, cond_block);
-                dep_exp(set, cond_exp);
-                dep_block(set, block)
-            }
-            S::Loop { block, .. } => dep_block(set, block),
-            S::NamedBlock { block, .. } => dep_block(set, block),
-        }
-    }
-
-    fn dep_block(set: &mut BTreeSet<(ModuleIdent, ConstantName)>, block: &H::Block) {
-        for entry in block {
-            dep_stmt(set, &entry.value);
-        }
-    }
-
-    let mut output = BTreeSet::new();
-    let (_, block) = &constant.value;
-    dep_block(&mut output, block);
-    output
 }
 
 fn constant(
@@ -767,13 +746,25 @@ fn report_cannot_fold<'a>(
             .get_key_value(&(m, c))
             .map(|((_, defined), _)| defined.0.loc)
             .unwrap_or(use_loc);
-        context.add_diag(super::constants::unfoldable_constant_use(
-            &m,
-            &c,
-            use_loc,
-            defined_loc,
-        ));
+        context.add_diag(unfoldable_constant_use(&m, &c, use_loc, defined_loc));
     }
+}
+
+/// The error reported at each use of a constant whose definition could not be evaluated to a
+/// value, in function bodies and constant definitions alike.
+fn unfoldable_constant_use(
+    m: &ModuleIdent,
+    c: &ConstantName,
+    use_loc: Loc,
+    defined_loc: Loc,
+) -> Diagnostic {
+    let msg = format!(
+        "Invalid use of constant '{}::{}'. Its value could not be computed",
+        m, c
+    );
+    let mut diag = diag!(CodeGeneration::UnfoldableConstant, (use_loc, msg));
+    diag.add_secondary_label((defined_loc, format!("'{}' is defined here", c)));
+    diag
 }
 
 fn failed_cross_module_constants(
