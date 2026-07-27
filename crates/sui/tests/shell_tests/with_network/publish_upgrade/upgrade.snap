@@ -88,7 +88,7 @@ version = 2
 version = 2
 
 === expect to fail when upgrading a because it is not compatible with b ===
-error[ESC03001]: function signature mismatch
+error[EUC03001]: function signature mismatch
   ┌─ <SANDBOX_DIR>/b/sources/new_module.move:1:34
   │
 1 │ module b::new_module; public fun b(): bool { true }

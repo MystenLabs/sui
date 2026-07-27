@@ -15,12 +15,11 @@ use crate::{
 };
 
 use super::{
-    COIN_MOD_NAME, COIN_STRUCT_NAME, LINT_WARNING_ORIGIN, LinterDiagnosticCategory,
-    LinterDiagnosticCode,
+    COIN_MOD_NAME, COIN_STRUCT_NAME, LINT_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
 };
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_ORIGIN,
+    LINT_ORIGIN,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::CoinField as u8,

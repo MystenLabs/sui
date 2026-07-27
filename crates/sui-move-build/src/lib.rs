@@ -18,9 +18,9 @@ use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::Get
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
-    linters::LINT_WARNING_ORIGIN as MOVE_LINT_ORIGIN,
+    linters::LINT_ORIGIN as MOVE_LINT_ORIGIN,
     shared::files::MappedFiles,
-    sui_mode::linters::LINT_WARNING_ORIGIN as SUI_LINT_ORIGIN,
+    sui_mode::linters::LINT_ORIGIN as SUI_LINT_ORIGIN,
 };
 use move_core_types::{
     account_address::AccountAddress,

@@ -36,7 +36,7 @@ use crate::{
         SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
         info::TransferKind,
         linters::{
-            LINT_WARNING_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
+            LINT_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
             SHARE_FUN, TRANSFER_MOD_NAME, type_abilities,
         },
     },
@@ -52,7 +52,7 @@ const SHARE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
 ];
 
 const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_ORIGIN,
+    LINT_ORIGIN,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::ShareOwned as u8,

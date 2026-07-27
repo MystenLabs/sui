@@ -612,7 +612,7 @@ fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
     }
 }
 
-const COMPATIBILITY_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::SuiCompiler;
+const COMPATIBILITY_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::UpgradeCompatibility;
 /// Generates an enum Category along with individual enum for each individual category
 /// and impls into diagnostic info for each category.
 macro_rules! upgrade_codes {
@@ -658,7 +658,7 @@ macro_rules! upgrade_codes {
 
 // Used to generate diagnostics primary labels for upgrade compatibility errors.
 // WARNING: you should add new codes to the END of each category list to avoid breaking the existing codes.
-// adding into the middle of a list will change the error code numbers "error[ESCXXXXX]"
+// adding into the middle of a list will change the error code numbers "error[EUCXXXXX]"
 // similarly new categories should be added to the end of the outer list.
 upgrade_codes!(
     Declarations: [

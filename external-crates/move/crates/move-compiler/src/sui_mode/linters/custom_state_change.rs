@@ -36,7 +36,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    FREEZE_FUN, INVALID_LOC, LINT_WARNING_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
+    FREEZE_FUN, INVALID_LOC, LINT_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
     RECEIVE_FUN, SHARE_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
@@ -48,7 +48,7 @@ const PRIVATE_OBJ_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
 ];
 
 const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_ORIGIN,
+    LINT_ORIGIN,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::CustomStateChange as u8,

@@ -87,7 +87,7 @@ macro_rules! lints {
             const fn diag_info(&self) -> DiagnosticInfo {
                 let (category, code, msg) = self.category_code_and_message();
                 custom(
-                    LINT_WARNING_ORIGIN,
+                    LINT_ORIGIN,
                     Severity::Warning,
                     category,
                     code,
@@ -185,12 +185,12 @@ lints!(
     ),
 );
 
-pub const LINT_WARNING_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::Lint;
+pub const LINT_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::Lint;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-        vec![DiagnosticsID::all(Some(LINT_WARNING_ORIGIN))],
+        vec![DiagnosticsID::all(Some(LINT_ORIGIN))],
     )];
     filters.extend(
         STYLE_WARNING_FILTERS
@@ -198,18 +198,11 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
             .map(|(category, code, filter_name)| {
                 (
                     Symbol::from(*filter_name),
-                    vec![DiagnosticsID::exact(
-                        Some(LINT_WARNING_ORIGIN),
-                        *category,
-                        *code,
-                    )],
+                    vec![DiagnosticsID::exact(Some(LINT_ORIGIN), *category, *code)],
                 )
             }),
     );
-    (
-        LINT_WARNING_ORIGIN.filter_prefix().map(Symbol::from),
-        filters,
-    )
+    (LINT_ORIGIN.filter_prefix().map(Symbol::from), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {

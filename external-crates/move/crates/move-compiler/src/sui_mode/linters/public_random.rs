@@ -16,12 +16,12 @@ use crate::{
 };
 
 use super::{
-    LINT_WARNING_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
-    RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME,
+    LINT_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode, RANDOM_GENERATOR_STRUCT_NAME,
+    RANDOM_MOD_NAME, RANDOM_STRUCT_NAME,
 };
 
 const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_ORIGIN,
+    LINT_ORIGIN,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::PublicRandom as u8,
