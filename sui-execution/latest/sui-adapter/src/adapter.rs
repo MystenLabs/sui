@@ -28,7 +28,7 @@ mod checked {
     use tracing::instrument;
 
     use sui_move_natives::{
-        NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,
+        JwkMap, NativesCostTable, object_runtime::ObjectRuntime, scratch::ScratchRuntime,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
@@ -85,6 +85,7 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
+        jwk_map: JwkMap,
     ) -> Result<NativeExtensions<'r>, ExecutionError> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let extensions = NativeExtensions::default();
@@ -104,6 +105,9 @@ mod checked {
         exts.add(NativesCostTable::from_protocol_config(protocol_config));
         exts.add(ScratchRuntime::new(protocol_config));
         exts.add(TransactionContext::new(tx_context));
+        // Always install JwkMap (empty default when GCP attestation is off / AuthState missing)
+        // so Move unit tests and natives never ABRT with "native extension not found".
+        exts.add(jwk_map);
         drop(exts);
         Ok(extensions)
     }

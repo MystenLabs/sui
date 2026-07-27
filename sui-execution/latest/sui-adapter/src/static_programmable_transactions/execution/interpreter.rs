@@ -30,6 +30,7 @@ use sui_types::{
     error::ExecutionErrorTrait,
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
+    gcp_attestation::is_gcp_attestation_call,
     metrics::ExecutionMetrics,
     object::Owner,
 };
@@ -99,6 +100,17 @@ where
         original_command_len: _,
         commands,
     } = ast;
+    let needs_gcp_attestation_jwks = commands.iter().any(|command| {
+        matches!(
+            &command.value.command,
+            T::Command__::MoveCall(call)
+                if is_gcp_attestation_call(
+                    *call.function.original_mid.address(),
+                    call.function.original_mid.name().as_str(),
+                    call.function.name.as_str(),
+                )
+        )
+    });
     let mut context = Context::new(
         env,
         metrics,
@@ -110,6 +122,7 @@ where
         withdrawals,
         pure,
         receiving,
+        needs_gcp_attestation_jwks,
     )?;
 
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;

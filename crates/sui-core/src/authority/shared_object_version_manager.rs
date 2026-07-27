@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
@@ -18,9 +19,10 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::executable_transaction::VerifiedExecutableTransactionWithAliases;
+use sui_types::gcp_attestation::is_gcp_attestation_call;
 use sui_types::storage::{
     ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
@@ -300,12 +302,17 @@ impl SharedObjVerManager {
     where
         T: AsTx + 'a,
     {
+        let needs_authenticator_state = epoch_store.protocol_config().enable_gcp_attestation()
+            && assignables
+                .clone()
+                .any(|assignable| schedulable_uses_gcp_attestation(assignable));
         let mut shared_input_next_versions = get_or_init_versions(
             assignables
                 .clone()
                 .flat_map(|a| a.shared_input_objects(epoch_store)),
             epoch_store,
             cache_reader,
+            needs_authenticator_state,
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
@@ -353,6 +360,10 @@ impl SharedObjVerManager {
             }),
             epoch_store,
             cache_reader,
+            epoch_store.protocol_config().enable_gcp_attestation()
+                && certs_and_effects
+                    .iter()
+                    .any(|(cert, _, _)| transaction_uses_gcp_attestation(cert)),
         );
         let mut assigned_versions = Vec::new();
         for (cert, effects, accumulator_version) in certs_and_effects {
@@ -365,12 +376,13 @@ impl SharedObjVerManager {
             let cert_assigned_versions: Vec<_> = effects
                 .input_consensus_objects()
                 .into_iter()
-                .map(|iso| {
+                .filter_map(|iso| {
                     let (id, version) = iso.id_and_version();
-                    let initial_version = initial_version_map
-                        .get(&id)
-                        .expect("transaction must have all inputs from effects");
-                    ((id, *initial_version), version)
+                    match initial_version_map.get(&id) {
+                        Some(initial_version) => Some(((id, *initial_version), version)),
+                        None if id == SUI_AUTHENTICATOR_STATE_OBJECT_ID => None,
+                        None => panic!("unexpected implicit consensus object {id} in effects"),
+                    }
                 })
                 .collect();
             let tx_key = cert.key();
@@ -379,10 +391,18 @@ impl SharedObjVerManager {
                 ?cert_assigned_versions,
                 "assigned consensus object versions from effects"
             );
-            let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = (*accumulator_version)
-                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-                .into_iter()
-                .collect();
+            let mut system_object_versions: BTreeMap<ObjectID, SequenceNumber> =
+                (*accumulator_version)
+                    .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+                    .into_iter()
+                    .collect();
+            for (id, kind) in effects.unchanged_consensus_objects() {
+                if id == SUI_AUTHENTICATOR_STATE_OBJECT_ID
+                    && let UnchangedConsensusKind::ReadOnlyRoot((version, _)) = kind
+                {
+                    system_object_versions.insert(id, version);
+                }
+            }
             assigned_versions.push((
                 tx_key,
                 AssignedVersions::new(cert_assigned_versions, system_object_versions),
@@ -413,10 +433,30 @@ impl SharedObjVerManager {
         } else {
             None
         };
-        // The accumulator root is the only system object read implicitly during execution today.
+        let authenticator_state_version = if epoch_store.protocol_config().enable_gcp_attestation()
+            && schedulable_uses_gcp_attestation(assignable)
+        {
+            let initial_version = epoch_store
+                .epoch_start_config()
+                .authenticator_obj_initial_shared_version()
+                .expect("AuthenticatorState must exist when GCP attestation is enabled");
+            Some(
+                *shared_input_next_versions
+                    .get(&(SUI_AUTHENTICATOR_STATE_OBJECT_ID, initial_version))
+                    .expect(
+                        "AuthenticatorState must be initialized when GCP attestation is enabled",
+                    ),
+            )
+        } else {
+            None
+        };
         let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = accumulator_version
-            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
+            .map(|version| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, version))
             .into_iter()
+            .chain(
+                authenticator_state_version
+                    .map(|version| (SUI_AUTHENTICATOR_STATE_OBJECT_ID, version)),
+            )
             .collect();
 
         if shared_input_objects.is_empty() {
@@ -548,6 +588,7 @@ fn get_or_init_versions<'a>(
     shared_input_objects: impl Iterator<Item = SharedInputObject> + 'a,
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
+    needs_authenticator_state: bool,
 ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
     let mut shared_input_objects: Vec<_> = shared_input_objects
         .map(|so| so.into_id_and_version())
@@ -562,11 +603,35 @@ fn get_or_init_versions<'a>(
                 .expect("accumulator root obj initial shared version should be set"),
         ));
     }
+    if needs_authenticator_state {
+        shared_input_objects.push((
+            SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+            epoch_store
+                .epoch_start_config()
+                .authenticator_obj_initial_shared_version()
+                .expect("AuthenticatorState must exist when GCP attestation is enabled"),
+        ));
+    }
 
     shared_input_objects.sort();
     shared_input_objects.dedup();
 
     epoch_store.get_or_init_next_object_versions(&shared_input_objects, cache_reader)
+}
+
+fn schedulable_uses_gcp_attestation<T: AsTx>(assignable: &Schedulable<T>) -> bool {
+    assignable
+        .as_tx()
+        .is_some_and(transaction_uses_gcp_attestation)
+}
+
+fn transaction_uses_gcp_attestation(tx: &VerifiedExecutableTransaction) -> bool {
+    tx.transaction_data()
+        .move_calls()
+        .into_iter()
+        .any(|(_, package, module, function)| {
+            is_gcp_attestation_call((*package).into(), module, function)
+        })
 }
 
 #[cfg(test)]
@@ -585,17 +650,19 @@ mod tests {
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::crypto::{RandomnessRound, get_account_key_pair};
     use sui_types::digests::ObjectDigest;
-    use sui_types::effects::TestEffectsBuilder;
+    use sui_types::effects::{InputConsensusObject, TestEffectsBuilder};
     use sui_types::executable_transaction::{
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
 
     use sui_types::object::Object;
-    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
+    use sui_types::transaction::{CallArg, ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
-    use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+    use sui_types::{
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    };
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_basic() {
@@ -1045,6 +1112,111 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn test_assign_versions_from_consensus_with_gcp_attestation() {
+        let authority = TestAuthorityBuilder::new().build().await;
+        let cert = generate_gcp_attestation_tx();
+        let assignables = [Schedulable::Transaction(cert.clone())];
+        let epoch_store = authority.epoch_store_for_testing();
+
+        let assignment = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+            assignables.iter(),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        let expected_version = authority
+            .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
+            .unwrap()
+            .version();
+        assert_eq!(
+            assignment.assigned_versions.0[0]
+                .1
+                .system_object_versions
+                .get(&SUI_AUTHENTICATOR_STATE_OBJECT_ID),
+            Some(&expected_version),
+        );
+    }
+
+    #[tokio::test]
+    async fn test_assign_versions_from_effects_recovers_authenticator_state() {
+        let authority = TestAuthorityBuilder::new().build().await;
+        let cert = generate_gcp_attestation_tx();
+        let authenticator_state = authority
+            .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
+            .unwrap();
+        let authenticator_ref = authenticator_state.compute_object_reference();
+        let mut effects = TestEffectsBuilder::new(cert.data()).build();
+        effects.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly(
+            authenticator_ref,
+        ));
+        let epoch_store = authority.epoch_store_for_testing();
+
+        let assigned = SharedObjVerManager::assign_versions_from_effects(
+            &[(&cert, &effects, None)],
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+        );
+
+        assert_eq!(
+            assigned.0[0]
+                .1
+                .system_object_versions
+                .get(&SUI_AUTHENTICATOR_STATE_OBJECT_ID),
+            Some(&authenticator_ref.1),
+        );
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "unexpected implicit consensus object")]
+    async fn test_assign_versions_from_effects_rejects_unknown_implicit_object() {
+        let authority = TestAuthorityBuilder::new().build().await;
+        let cert = generate_gcp_attestation_tx();
+        let mut effects = TestEffectsBuilder::new(cert.data()).build();
+        effects.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly((
+            ObjectID::random(),
+            SequenceNumber::from_u64(7),
+            ObjectDigest::random(),
+        )));
+        let epoch_store = authority.epoch_store_for_testing();
+
+        let _ = SharedObjVerManager::assign_versions_from_effects(
+            &[(&cert, &effects, None)],
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+        );
+    }
+
+    fn generate_gcp_attestation_tx() -> VerifiedExecutableTransaction {
+        let tx_data = TestTransactionBuilder::new(
+            SuiAddress::ZERO,
+            (
+                ObjectID::random(),
+                SequenceNumber::from_u64(1),
+                ObjectDigest::random(),
+            ),
+            0,
+        )
+        .move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            "gcp_attestation",
+            "verify_gcp_attestation",
+            vec![
+                CallArg::Pure(vec![]),
+                CallArg::Pure(vec![]),
+                CallArg::CLOCK_IMM,
+            ],
+        )
+        .build();
+        let tx = SenderSignedData::new(tx_data, vec![]);
+        VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
+            tx,
+            CertificateProof::new_system(0),
+        ))
     }
 
     /// Generate a transaction that uses shared objects as specified in the parameters.
