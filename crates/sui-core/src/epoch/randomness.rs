@@ -1025,22 +1025,22 @@ impl RandomnessManager {
         let epoch_store = self
             .epoch_store()
             .expect("epoch store must be alive while computing DKG status for a commit");
-        if !epoch_store
-            .protocol_config()
-            .allow_dkg_completion_after_timeout()
-            || !Self::is_past_dkg_timeout_round(round, epoch_store.protocol_config())
+        let protocol_config = epoch_store.protocol_config();
+
+        if protocol_config.allow_dkg_completion_after_timeout()
+            && Self::is_past_dkg_timeout_round(round, protocol_config)
         {
-            return status;
+            if !self.dkg_timeout_reported {
+                self.dkg_timeout_reported = true;
+                error!(
+                    "random beacon: DKG timed out; randomness-using transactions will be canceled unless/until DKG completes"
+                );
+                epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
+            }
+            return DkgStatus::TimedOut;
         }
 
-        if !self.dkg_timeout_reported {
-            error!(
-                "random beacon: DKG timed out; randomness-using transactions will be canceled unless/until DKG completes"
-            );
-            epoch_store.metrics.epoch_random_beacon_dkg_failed.set(1);
-            self.dkg_timeout_reported = true;
-        }
-        DkgStatus::TimedOut
+        DkgStatus::Pending
     }
 
     fn submit_dkg_confirmation(
