@@ -50,6 +50,11 @@ answer: >-
   plus interest, and withdraw. If the risk ratio falls to the pool's liquidation
   threshold, anyone can liquidate the position, repaying part of the debt and
   taking a reward from the collateral to restore the target risk ratio.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Open a leveraged position
+    stage: Margin
 ---
 
 import Tabs from '@theme/Tabs';
@@ -212,3 +217,8 @@ Withdraw your collateral back to your wallet. A withdraw must leave your risk ra
 - **Valuation reverts on a stale price:** the Pyth price is older than the pool's maximum price age. Refresh the price feed before the risk-reading or trading call. See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
 - **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.
 - **Every run mints a new manager:** you are not reusing an existing `MarginManager`. Discover or persist the ID and create only when absent, as in [Create a MarginManager](#create-a-marginmanager).
+
+## Next steps
+
+- [Integrating DeepBook Margin](/onchain-finance/deepbook/deepbook-margin/margin-integration) to take margin into your own app, covering the object model, trading path, liquidation, and events to index.
+- [Composing DeepBook transactions](/onchain-finance/deepbook/deepbookv3-sdk/composing-transactions) to compose lending, trading, and staking atomically.

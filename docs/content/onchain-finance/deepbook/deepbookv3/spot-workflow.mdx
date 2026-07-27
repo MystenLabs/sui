@@ -15,8 +15,8 @@ keywords:
   - deepbook sdk
 goal:
   description: >-
-    Reader completes a full DeepBook spot order lifecycle on Testnet and observes
-    the on-chain result of each step.
+    Reader completes a full DeepBook spot order lifecycle on Testnet and
+    observes the on-chain result of each step.
   requires:
     - has_frontmatter:
         - title
@@ -41,8 +41,13 @@ answer: >-
   Create and share a BalanceManager, deposit assets, then place a limit order
   with placeLimitOrder. Read status with accountOpenOrders and getOrder, and
   fills through the manager's settled balances. Cancel with cancelOrder and
-  withdraw with withdrawAllFromManager. Self-matching is allowed by default, so a
-  taker order can fill your own resting maker order.
+  withdraw with withdrawAllFromManager. Self-matching is allowed by default, so
+  a taker order can fill your own resting maker order.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Run a spot trading workflow
+    stage: DeFi SDK
 ---
 
 import Tabs from '@theme/Tabs';
@@ -162,3 +167,8 @@ For environment and funding failures (faucet rate limits, stale RPC URL, CLI ver
 - **`Insufficient balance of <coin> ... Required X, Available Y`:** the friendly build-time error from `coinWithBalance` when a deposit or swap requests more of a coin than the wallet holds. Size the amount to your balance. Contrast it with `InsufficientCoinBalance`, the raw simulation error you get when the amounts plus the gas budget together exceed your balance.
 - **Every run mints a new manager:** you are not reusing an existing `BalanceManager`. Discover or persist the ID and create only when absent, as in [Set up a BalanceManager](#set-up-a-balancemanager).
 - **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.
+
+## Next steps
+
+- [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow) to borrow against collateral and open a margin position. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) first.
+- [Composing DeepBook transactions](/onchain-finance/deepbook/deepbookv3-sdk/composing-transactions) to combine deposit, order, flash loan, and stake into atomic transactions.

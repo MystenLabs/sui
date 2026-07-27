@@ -41,10 +41,15 @@ questions:
   - How does staking DEEP reduce trading fees?
 answer: >-
   DeepBook charges trading fees in DEEP by default, or in the input token at a
-  25% higher rate. The DEEP amount floats with an on-chain price, so read it with
-  the SDK rather than hardcoding it. Fund a BalanceManager by depositing DEEP.
-  There is no Testnet DEEP faucet: request DEEP from the token-request form, or
-  swap faucet SUI for DEEP when the DEEP_SUI book has liquidity.
+  25% higher rate. The DEEP amount floats with an on-chain price, so read it
+  with the SDK rather than hardcoding it. Fund a BalanceManager by depositing
+  DEEP. There is no Testnet DEEP faucet: request DEEP from the token-request
+  form, or swap faucet SUI for DEEP when the DEEP_SUI book has liquidity.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Fund a BalanceManager
+    stage: DeFi Primitives
 ---
 
 DEEP pays DeepBook trading fees. Before placing fee-paying orders, you fund a [BalanceManager](/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager) with DEEP, and optionally stake DEEP to reduce your fees. You can also pay fees with the input token instead of DEEP.
@@ -128,3 +133,7 @@ Deposit the DEEP into your BalanceManager with the [funding step above](#fund-a-
 - **`InsufficientCoinBalance`:** the transaction spends more of a coin than you hold after gas. The swap draws SUI from the same balance that pays gas, so size it below your SUI balance minus a gas budget, or fund more SUI. The SDK also reserves a default gas budget when you do not set one, so leave room for it or call `setGasBudget` explicitly and size the swap around it.
 - **`version unavailable for consumption`:** you built a transaction from stale state before a previous one finalized. Wait for finality (the SDK's `waitForTransaction`) before building the next transaction. Do not blindly retry a rejected transaction, because it can leave the gas coin equivocation-locked.
 - **Swap succeeds but you receive zero DEEP:** the book was empty and `minOut` was 0, so the pool returned your SUI unfilled. Set a nonzero `minOut` from `getQuantityOut` so an empty book reverts, and check the quote before swapping.
+
+## Next steps
+
+- [Spot Trading Workflow](/onchain-finance/deepbook/deepbookv3/spot-workflow) to place, read, cancel, and fill orders on Testnet with the manager you funded.

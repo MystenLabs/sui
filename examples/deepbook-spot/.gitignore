@@ -1,0 +1,7 @@
+node_modules/
+package-lock.json
+.deepbook-manager-id
+run.mts
+run-orders.mts
+recover.mts
+run-compose.mts
