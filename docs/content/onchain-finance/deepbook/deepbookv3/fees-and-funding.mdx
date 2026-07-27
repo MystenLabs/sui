@@ -16,7 +16,7 @@ keywords:
   - deepbook funding
 goal:
   description: >-
-    Reader understands how DeepBook fees are charged and sized, and can fund a
+    Reader understands how DeepBook charges and sizes fees, and can fund a
     BalanceManager with DEEP on Testnet.
   requires:
     - has_frontmatter:
@@ -41,7 +41,7 @@ questions:
   - How does staking DEEP reduce trading fees?
 answer: >-
   DeepBook charges trading fees in DEEP by default, or in the input token at a
-  25% higher rate. The DEEP amount floats with an on-chain price, so read it
+  25% higher rate. The DEEP amount floats with an onchain price, so read it
   with the SDK rather than hardcoding it. Fund a BalanceManager by depositing
   DEEP. There is no Testnet DEEP faucet: request DEEP from the token-request
   form, or swap faucet SUI for DEEP when the DEEP_SUI book has liquidity.
@@ -54,16 +54,16 @@ builder_paths:
 
 DEEP pays DeepBook trading fees. Before placing fee-paying orders, you fund a [BalanceManager](/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager) with DEEP, and optionally stake DEEP to reduce your fees. You can also pay fees with the input token instead of DEEP.
 
-The TypeScript samples on this page live in the `examples/deepbook-spot` package, which CI type-checks with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1. They reference pools and coins by SDK key (for example `DEEP_SUI`, `SUI_DBUSDC`, `DEEP`), so no on-chain IDs are hardcoded. See the [DeepBookV3 SDK constants](/onchain-finance/deepbook/deepbookv3-sdk/deepbookv3-sdk#keys) for the key-to-ID mapping and [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information) for the canonical IDs.
+The TypeScript samples on this page live in the `examples/deepbook-spot` package, which CI type-checks with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1. They reference pools and coins by SDK key (for example `DEEP_SUI`, `SUI_DBUSDC`, `DEEP`) rather than hardcoding onchain IDs. See the [DeepBookV3 SDK constants](/onchain-finance/deepbook/deepbookv3-sdk/deepbookv3-sdk#keys) for the key-to-ID mapping and [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information) for the canonical IDs.
 
 ## Pay fees in DEEP or the input token
 
 You choose the fee asset per order with the `pay_with_deep` flag (the SDK's `payWithDeep`, default `true`):
 
-- **DEEP (default):** the pool prices the fee in DEEP from its on-chain DEEP price.
+- **DEEP (default):** the pool prices the fee in DEEP from its onchain DEEP price.
 - **Input token:** the pool charges the fee in the asset you trade, at **25% more** than the DEEP-denominated fee (equivalently, DEEP is about 20% cheaper). This penalty is the `FEE_PENALTY_MULTIPLIER` constant.
 
-Both paths work for orders and swaps. In `pool.move`, `place_order_int` selects `get_order_deep_price` when `pay_with_deep` is true and `empty_deep_price` otherwise, with no assertion forcing either. One older note in the reference (`place_limit_order` says `pay_with_deep` "must be true") predates input-token fees, which shipped in package version 2; treat `payWithDeep` as a free choice.
+Both paths work for orders and swaps. In `pool.move`, `place_order_int` selects `get_order_deep_price` when `pay_with_deep` is true and `empty_deep_price` otherwise, with no assertion forcing either. One older note in the reference (`place_limit_order` says `pay_with_deep` must be true) predates input-token fees, which shipped in package version 2; treat `payWithDeep` as a free choice.
 
 :::info
 
@@ -81,11 +81,11 @@ Because this rate floats, read the DEEP a trade needs at execution time rather t
 
 ## Maker, taker, and staking fees
 
-Taker fee, maker fee, and the stake requirement are per-pool governance parameters (`TradeParams`), not constants. Governance can change them, so read them on-chain instead of hardcoding:
+Taker fee, maker fee, and the stake requirement are per-pool governance parameters (`TradeParams`), not constants. Governance can change them, so read them onchain instead of hardcoding:
 
 <ImportContent source="examples/deepbook-spot/src/read-fees.ts" mode="code" tag="read-fees" />
 
-The fee bounds for volatile, stable, and whitelisted pools are listed in [Design](/onchain-finance/deepbook/deepbookv3/design). Staking DEEP reduces your taker fee: when your active stake and your volume in DEEP both meet the pool's stake requirement, the taker fee is halved.
+[Design](/onchain-finance/deepbook/deepbookv3/design) lists the fee bounds for volatile, stable, and whitelisted pools. Staking DEEP reduces your taker fee: when your active stake and your volume in DEEP both meet the pool's stake requirement, the pool halves your taker fee.
 
 <ImportContent source="packages/deepbook/sources/state/trade_params.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="taker_fee_for_user" noComments />
 
@@ -93,7 +93,7 @@ Staking also earns maker rebates. See [Staking and Governance](/onchain-finance/
 
 ## Fund a BalanceManager with DEEP
 
-Deposit DEEP into your BalanceManager so orders can pay fees from it. The same DEEP balance is what you stake for the fee discount. The client setup is shared by every sample on this page:
+Deposit DEEP into your BalanceManager so orders can pay fees from it. The same DEEP balance is what you stake for the fee discount. Every sample on this page shares the client setup:
 
 <ImportContent source="examples/deepbook-spot/src/client.ts" mode="code" tag="client" />
 
@@ -133,7 +133,3 @@ Deposit the DEEP into your BalanceManager with the [funding step above](#fund-a-
 - **`InsufficientCoinBalance`:** the transaction spends more of a coin than you hold after gas. The swap draws SUI from the same balance that pays gas, so size it below your SUI balance minus a gas budget, or fund more SUI. The SDK also reserves a default gas budget when you do not set one, so leave room for it or call `setGasBudget` explicitly and size the swap around it.
 - **`version unavailable for consumption`:** you built a transaction from stale state before a previous one finalized. Wait for finality (the SDK's `waitForTransaction`) before building the next transaction. Do not blindly retry a rejected transaction, because it can leave the gas coin equivocation-locked.
 - **Swap succeeds but you receive zero DEEP:** the book was empty and `minOut` was 0, so the pool returned your SUI unfilled. Set a nonzero `minOut` from `getQuantityOut` so an empty book reverts, and check the quote before swapping.
-
-## Next steps
-
-- [Spot Trading Workflow](/onchain-finance/deepbook/deepbookv3/spot-workflow) to place, read, cancel, and fill orders on Testnet with the manager you funded.

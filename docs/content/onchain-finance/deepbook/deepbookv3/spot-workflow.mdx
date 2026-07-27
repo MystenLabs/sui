@@ -16,7 +16,7 @@ keywords:
 goal:
   description: >-
     Reader completes a full DeepBook spot order lifecycle on Testnet and
-    observes the on-chain result of each step.
+    observes the onchain result of each step.
   requires:
     - has_frontmatter:
         - title
@@ -41,8 +41,8 @@ answer: >-
   Create and share a BalanceManager, deposit assets, then place a limit order
   with placeLimitOrder. Read status with accountOpenOrders and getOrder, and
   fills through the manager's settled balances. Cancel with cancelOrder and
-  withdraw with withdrawAllFromManager. Self-matching is allowed by default, so
-  a taker order can fill your own resting maker order.
+  withdraw with withdrawAllFromManager. The SDK allows self-matching by default,
+  so a taker order can fill your own resting maker order.
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -53,9 +53,9 @@ builder_paths:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Run a complete DeepBook spot order lifecycle on Sui Testnet with real transactions: create a `BalanceManager`, deposit, place a resting limit order, read its status, cancel it, then place a maker order and fill it with your own taker order, and withdraw. Each on-chain step lists what to observe, so the page doubles as a verification checklist.
+Run a complete DeepBook spot order lifecycle on Sui Testnet with real transactions: create a `BalanceManager`, deposit, place a resting limit order, read its status, cancel it, then place a maker order and fill it with your own taker order, and withdraw. Each onchain step lists what to observe, so the page doubles as a verification checklist.
 
-It uses the `DEEP_SUI` pool, which you can fund by finishing the [Fees and Funding](/onchain-finance/deepbook/deepbookv3/fees-and-funding) flow (Testnet SUI plus DEEP). The samples live in the `examples/deepbook-spot` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1, and reference pools and coins by SDK key so no on-chain IDs are hardcoded.
+It uses the `DEEP_SUI` pool, which you can fund by finishing the [Fees and Funding](/onchain-finance/deepbook/deepbookv3/fees-and-funding) flow (Testnet SUI plus DEEP). The samples live in the `examples/deepbook-spot` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1, and reference pools and coins by SDK key rather than hardcoding onchain IDs.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -99,7 +99,7 @@ Size the amount to your wallet balance. `depositIntoManager` sources coins with 
 
 :::info
 
-`DEEP_SUI` is a whitelisted pool, so it charges no trading fee and deducts no DEEP. The `payWithDeep` flag has no effect here. On a fee-paying pool, DEEP is deducted from your manager on each fill, sized by the pool's floating DEEP price, so keep DEEP in the manager. See [How the DEEP fee is sized](/onchain-finance/deepbook/deepbookv3/fees-and-funding#how-the-deep-fee-is-sized) and [Pay fees in DEEP or the input token](/onchain-finance/deepbook/deepbookv3/fees-and-funding#pay-fees-in-deep-or-the-input-token).
+`DEEP_SUI` is a whitelisted pool, so it charges no trading fee and deducts no DEEP. The `payWithDeep` flag has no effect here. On a fee-paying pool, the pool deducts DEEP from your manager on each fill, sized by its floating DEEP price, so keep DEEP in the manager. See [How the DEEP fee is sized](/onchain-finance/deepbook/deepbookv3/fees-and-funding#how-the-deep-fee-is-sized) and [Pay fees in DEEP or the input token](/onchain-finance/deepbook/deepbookv3/fees-and-funding#pay-fees-in-deep-or-the-input-token).
 
 :::
 
@@ -163,12 +163,7 @@ For environment and funding failures (faucet rate limits, stale RPC URL, CLI ver
 
 - **Order below minimum or off-tick:** an order smaller than the pool's minimum size, or priced off its tick size, is rejected. Read the pool's `minSize`, `lotSize`, and `tickSize` with `poolBookParams` and round to them.
 - **`POST_ONLY` returns nothing:** a `POST_ONLY` order that would cross the book is not placed, and returns no order rather than aborting. Price it away from the opposite side of the book.
-- **A taker order filled your own resting order:** self-matching is allowed by default. Set `selfMatchingOption` to `CANCEL_TAKER` or `CANCEL_MAKER` if that is not what you want.
+- **A taker order filled your own resting order:** the SDK allows self-matching by default. Set `selfMatchingOption` to `CANCEL_TAKER` or `CANCEL_MAKER` if that is not what you want.
 - **`Insufficient balance of <coin> ... Required X, Available Y`:** the friendly build-time error from `coinWithBalance` when a deposit or swap requests more of a coin than the wallet holds. Size the amount to your balance. Contrast it with `InsufficientCoinBalance`, the raw simulation error you get when the amounts plus the gas budget together exceed your balance.
 - **Every run mints a new manager:** you are not reusing an existing `BalanceManager`. Discover or persist the ID and create only when absent, as in [Set up a BalanceManager](#set-up-a-balancemanager).
 - **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.
-
-## Next steps
-
-- [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow) to borrow against collateral and open a margin position. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) first.
-- [Composing DeepBook transactions](/onchain-finance/deepbook/deepbookv3-sdk/composing-transactions) to combine deposit, order, flash loan, and stake into atomic transactions.
