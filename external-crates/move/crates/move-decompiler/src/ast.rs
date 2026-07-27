@@ -147,6 +147,14 @@ impl Type {
                 Type::Reference(*is_mut, Box::new(Type::from_normalized(inner)))
             }
             normalized::Type::TypeParameter(idx) => Type::TypeParameter(*idx),
+            normalized::Type::I8
+            | normalized::Type::I16
+            | normalized::Type::I32
+            | normalized::Type::I64
+            | normalized::Type::I128
+            | normalized::Type::I256 => {
+                move_core_types::signed_ints_todo!("signed integer types in the decompiler")
+            }
             normalized::Type::Datatype(dt) => Type::Datatype(Box::new(Datatype {
                 type_ref: TypeRef::Qualified(ModuleRef::Qualified(dt.module), dt.name),
                 type_arguments: dt

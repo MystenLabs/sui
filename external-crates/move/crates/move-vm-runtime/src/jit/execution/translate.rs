@@ -1719,7 +1719,10 @@ fn make_arena_type_impl(
             | SignatureToken::I256 => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Signed integer types are not yet supported in the VM runtime"
+                    "{}",
+                    move_core_types::signed_ints_unsupported!(
+                        "signed integer types in the VM runtime"
+                    )
                 ));
             }
         };

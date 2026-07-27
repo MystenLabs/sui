@@ -1498,7 +1498,9 @@ impl<'a> StacklessBytecodeGenerator<'a> {
             | MoveBytecode::CastI128
             | MoveBytecode::CastI256
             | MoveBytecode::Neg => {
-                panic!("Signed integer bytecodes are not yet supported in stackless-bytecode");
+                move_core_types::signed_ints_todo!(
+                    "signed integer bytecodes in stackless-bytecode"
+                );
             }
         }
     }

@@ -122,6 +122,15 @@ pub fn stack_has_integer(state: &AbstractState, index: usize) -> bool {
         }
 }
 
+/// Determine whether the stack contains a signed integer value at given index.
+pub fn stack_has_signed_integer(state: &AbstractState, index: usize) -> bool {
+    index < state.stack_len()
+        && match state.stack_peek(index) {
+            Some(AbstractValue { token, .. }) => token.is_signed_integer(),
+            None => false,
+        }
+}
+
 pub fn stack_top_is_castable_to(state: &AbstractState, typ: SignatureToken) -> bool {
     stack_has_integer(state, 0)
         && match typ {
@@ -225,13 +234,53 @@ pub fn stack_top_is_castable_to(state: &AbstractState, typ: SignatureToken) -> b
                     Some(AbstractValue::new_primitive(SignatureToken::U256)),
                 )
             }
+            // Signed cast targets mirror the unsigned convention above: only source types
+            // whose entire range fits in the target are allowed (widening within signed
+            // types, plus unsigned sources strictly narrower than the signed target), so
+            // generated casts cannot abort at runtime.
             SignatureToken::I8
             | SignatureToken::I16
             | SignatureToken::I32
             | SignatureToken::I64
             | SignatureToken::I128
-            | SignatureToken::I256
-            | SignatureToken::Bool
+            | SignatureToken::I256 => {
+                use SignatureToken as S;
+                let sources: &[SignatureToken] = match &typ {
+                    S::I8 => &[S::I8],
+                    S::I16 => &[S::I8, S::I16, S::U8],
+                    S::I32 => &[S::I8, S::I16, S::I32, S::U8, S::U16],
+                    S::I64 => &[S::I8, S::I16, S::I32, S::I64, S::U8, S::U16, S::U32],
+                    S::I128 => &[
+                        S::I8,
+                        S::I16,
+                        S::I32,
+                        S::I64,
+                        S::I128,
+                        S::U8,
+                        S::U16,
+                        S::U32,
+                        S::U64,
+                    ],
+                    S::I256 => &[
+                        S::I8,
+                        S::I16,
+                        S::I32,
+                        S::I64,
+                        S::I128,
+                        S::I256,
+                        S::U8,
+                        S::U16,
+                        S::U32,
+                        S::U64,
+                        S::U128,
+                    ],
+                    _ => unreachable!(),
+                };
+                sources.iter().any(|source| {
+                    stack_has(state, 0, Some(AbstractValue::new_primitive(source.clone())))
+                })
+            }
+            SignatureToken::Bool
             | SignatureToken::Address
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
@@ -1170,6 +1219,15 @@ macro_rules! state_stack_is_castable {
 macro_rules! state_stack_has_integer {
     ($e1: expr) => {
         Box::new(move |state| stack_has_integer(state, $e1))
+    };
+}
+
+/// Wrapper for enclosing the arguments of `stack_has_signed_integer` so that only the `state`
+/// needs to be given.
+#[macro_export]
+macro_rules! state_stack_has_signed_integer {
+    ($e1: expr) => {
+        Box::new(move |state| stack_has_signed_integer(state, $e1))
     };
 }
 

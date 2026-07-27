@@ -1157,7 +1157,10 @@ impl Type {
                 S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Signed integer constants are not yet supported"
+                        "{}",
+                        move_core_types::signed_ints_unsupported!(
+                            "signed integer constants in the VM runtime"
+                        )
                     ));
                 }
                 // Not allowed/Not meaningful

@@ -103,7 +103,7 @@ fn call(
     let arguments = safe_unwrap!(arguments_opt);
 
     let return_ = verifier.module.signature_at(function_handle.return_);
-    let return_kinds = ValueKind::for_signature(return_);
+    let return_kinds = ValueKind::for_signature(return_)?;
     let values = state.call(
         offset,
         arguments,

@@ -15,6 +15,9 @@ use crate::{
 use move_core_types::{metadata::Metadata, vm_status::StatusCode};
 
 fn malformed_simple_versioned_test(version: u32) {
+    // Versions 7+ encode the flavor into the version bytes; `encode_version` is the identity
+    // for earlier versions.
+    let version = BinaryFlavor::encode_version(version);
     // bad uleb (more than allowed for table count)
     let mut binary = BinaryConstants::MOVE_MAGIC.to_vec();
     binary.extend(version.to_le_bytes()); // version
@@ -207,8 +210,8 @@ fn malformed_simple() {
         StatusCode::UNKNOWN_VERSION
     );
 
-    // versioned tests (only up to VERSION_6 since version 7+ requires flavor encoding)
-    for version in VERSION_1..=VERSION_6 {
+    // versioned tests (the helper applies flavor encoding where a version requires it)
+    for version in VERSION_1..=VERSION_MAX {
         malformed_simple_versioned_test(version);
     }
 }
@@ -441,7 +444,7 @@ fn deserialize_empty_enum_fails() {
 }
 
 #[test]
-fn signed_integer_signature_token_rejected_at_version_7() {
+fn serializer_rejects_signed_signature_token_below_version_8() {
     use crate::file_format::{Signature, SignatureToken};
     let mut module = basic_test_module();
     // Inject a signed integer type into the signature pool.
@@ -459,6 +462,127 @@ fn signed_integer_signature_token_rejected_at_version_7() {
         err_msg.contains("Signed integer types"),
         "Error should mention signed integer types, got: {err_msg}"
     );
+}
+
+/// Serializes `base` and `variant` (which must differ in exactly one byte — the byte of
+/// interest) at `VERSION_MAX`, then overwrites that byte in `base`'s blob with `patch`.
+/// This lets the tests plant byte tags (signed type tags / signed opcodes) that the
+/// serializer itself refuses to emit below `VERSION_8`.
+fn serialize_and_patch_single_byte(
+    base: &CompiledModule,
+    variant: &CompiledModule,
+    patch: u8,
+) -> Vec<u8> {
+    let mut base_bytes = vec![];
+    base.serialize_with_version(VERSION_MAX, &mut base_bytes)
+        .unwrap();
+    let mut variant_bytes = vec![];
+    variant
+        .serialize_with_version(VERSION_MAX, &mut variant_bytes)
+        .unwrap();
+    assert_eq!(base_bytes.len(), variant_bytes.len());
+    let diffs: Vec<usize> = base_bytes
+        .iter()
+        .zip(&variant_bytes)
+        .enumerate()
+        .filter(|(_, (a, b))| a != b)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        diffs.len(),
+        1,
+        "base and variant modules must differ in exactly one byte"
+    );
+    base_bytes[diffs[0]] = patch;
+    base_bytes
+}
+
+fn assert_signed_rejected_below_version_8(bytes: &[u8], what: &str) {
+    let err = CompiledModule::deserialize_with_defaults(bytes)
+        .expect_err("blob with signed content must not deserialize below VERSION_8");
+    assert_eq!(
+        err.major_status(),
+        StatusCode::MALFORMED,
+        "wrong status for {what}: {err:?}"
+    );
+    assert!(
+        err.to_string()
+            .contains("not supported in bytecode version"),
+        "error should mention the version gate for {what}, got: {err:?}"
+    );
+}
+
+// The fail-closed property this PR rests on: a max-version-7 deserializer rejects blobs
+// containing signed integer types or opcodes as MALFORMED, wherever they occur. The
+// serializer refuses to emit them below VERSION_8, so each test serializes a valid v7
+// module and byte-patches the position of interest to a signed tag.
+
+#[test]
+fn deserializer_rejects_signed_token_in_signature() {
+    use crate::file_format::{Signature, SignatureToken};
+    let mut base = basic_test_module();
+    base.signatures.push(Signature(vec![SignatureToken::U8]));
+    let mut variant = basic_test_module();
+    variant
+        .signatures
+        .push(Signature(vec![SignatureToken::U16]));
+    let bytes = serialize_and_patch_single_byte(&base, &variant, SerializedType::I8 as u8);
+    assert_signed_rejected_below_version_8(&bytes, "I8 in signature pool");
+}
+
+#[test]
+fn deserializer_rejects_signed_token_in_struct_field() {
+    use crate::file_format::{SignatureToken, StructFieldInformation, TypeSignature};
+    let field_type = |module: &mut CompiledModule, ty: SignatureToken| {
+        let StructFieldInformation::Declared(fields) = &mut module.struct_defs[0].field_information
+        else {
+            panic!("expected declared fields");
+        };
+        fields[0].signature = TypeSignature(ty);
+    };
+    let mut base = basic_test_module();
+    field_type(&mut base, SignatureToken::U8);
+    let mut variant = basic_test_module();
+    field_type(&mut variant, SignatureToken::U16);
+    let bytes = serialize_and_patch_single_byte(&base, &variant, SerializedType::I16 as u8);
+    assert_signed_rejected_below_version_8(&bytes, "I16 in struct field definition");
+}
+
+#[test]
+fn deserializer_rejects_signed_token_in_constant_type() {
+    use crate::file_format::{Constant, SignatureToken};
+    let mut base = basic_test_module();
+    base.constant_pool.push(Constant {
+        type_: SignatureToken::U8,
+        data: vec![0],
+    });
+    let mut variant = basic_test_module();
+    variant.constant_pool.push(Constant {
+        type_: SignatureToken::Bool,
+        data: vec![0],
+    });
+    let bytes = serialize_and_patch_single_byte(&base, &variant, SerializedType::I8 as u8);
+    assert_signed_rejected_below_version_8(&bytes, "I8 in constant type");
+}
+
+#[test]
+fn deserializer_rejects_signed_opcodes_in_code_unit() {
+    // The opcode version gate fires on the opcode byte itself, before any payload is read,
+    // so patching a one-byte opcode to LD_I8 (payload-carrying) or NEG both exercise it.
+    for (patch, what) in [
+        (Opcodes::LD_I8 as u8, "LdI8 opcode in code unit"),
+        (Opcodes::NEG as u8, "Neg opcode in code unit"),
+    ] {
+        let code = |module: &mut CompiledModule, opcode: Bytecode| {
+            module.function_defs[0].code.as_mut().unwrap().code = vec![opcode, Bytecode::Ret];
+        };
+        let mut base = basic_test_module();
+        code(&mut base, Bytecode::LdTrue);
+        let mut variant = basic_test_module();
+        code(&mut variant, Bytecode::LdFalse);
+        let bytes = serialize_and_patch_single_byte(&base, &variant, patch);
+        assert_signed_rejected_below_version_8(&bytes, what);
+    }
 }
 
 #[test]

@@ -1256,8 +1256,12 @@ impl SignatureToken {
         use SignatureToken::*;
 
         match self {
-            Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256
-            | Address => true,
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => true,
+            // Signed integer constants are not yet supported: this must agree with
+            // `constant::sig_to_ty` (and the VM's constant deserialization), which currently
+            // reject signed types. #26274 flips these sites together when signed constants
+            // become real.
+            I8 | I16 | I32 | I64 | I128 | I256 => false,
             Vector(inner) => inner.is_valid_for_constant(),
             Signer
             | Datatype(_)
@@ -1845,7 +1849,12 @@ pub enum Bytecode {
     CastI128,
     /// Convert the value at the top of the stack into I256.
     CastI256,
-    /// Negate the integer value at the top of the stack.
+    /// Negate the signed integer value at the top of the stack. Valid only on signed integer
+    /// types (i8..i256) and type-preserving: the result has the same type as the operand.
+    /// Aborts at runtime when the operand is the type's minimum value (`-MIN` overflows).
+    ///
+    /// Stack transition:
+    /// ```..., signed_integer_value -> ..., signed_integer_value```
     Neg,
 
     // ******** DEPRECATED BYTECODES ********
@@ -2200,6 +2209,27 @@ impl Bytecode {
     /// Returns true if this bytecode instruction is either a conditional or an unconditional branch
     pub fn is_branch(&self) -> bool {
         self.is_conditional_branch() || self.is_unconditional_branch()
+    }
+
+    /// Returns true if this bytecode instruction operates on signed integers and therefore
+    /// requires bytecode version `VERSION_8` or later.
+    pub fn is_signed_integer_instruction(&self) -> bool {
+        matches!(
+            self,
+            Bytecode::LdI8(_)
+                | Bytecode::LdI16(_)
+                | Bytecode::LdI32(_)
+                | Bytecode::LdI64(_)
+                | Bytecode::LdI128(_)
+                | Bytecode::LdI256(_)
+                | Bytecode::CastI8
+                | Bytecode::CastI16
+                | Bytecode::CastI32
+                | Bytecode::CastI64
+                | Bytecode::CastI128
+                | Bytecode::CastI256
+                | Bytecode::Neg
+        )
     }
 
     /// Returns the offset that this bytecode instruction branches to, if any.
@@ -2899,6 +2929,52 @@ impl CompiledModule {
     pub fn self_id(&self) -> ModuleId {
         self.module_id_for_handle(self.self_handle())
     }
+}
+
+/// Returns true if the module uses signed integer types or instructions anywhere they can
+/// occur: signature tokens in the signature pool, constant types, struct/enum field definition
+/// types, or code-unit bytecodes. A module for which this returns true requires bytecode
+/// version `VERSION_8` or later (version selection and the serializer's version gates key off
+/// exactly these positions).
+pub fn module_uses_signed_integers(module: &CompiledModule) -> bool {
+    fn token_uses_signed_integers(token: &SignatureToken) -> bool {
+        token
+            .preorder_traversal()
+            .any(SignatureToken::is_signed_integer)
+    }
+
+    module
+        .signatures
+        .iter()
+        .any(|sig| sig.0.iter().any(token_uses_signed_integers))
+        || module
+            .constant_pool
+            .iter()
+            .any(|constant| token_uses_signed_integers(&constant.type_))
+        || module
+            .struct_defs
+            .iter()
+            .any(|struct_def| match &struct_def.field_information {
+                StructFieldInformation::Native => false,
+                StructFieldInformation::Declared(fields) => fields
+                    .iter()
+                    .any(|field| token_uses_signed_integers(&field.signature.0)),
+            })
+        || module.enum_defs.iter().any(|enum_def| {
+            enum_def.variants.iter().any(|variant| {
+                variant
+                    .fields
+                    .iter()
+                    .any(|field| token_uses_signed_integers(&field.signature.0))
+            })
+        })
+        || module.function_defs.iter().any(|function_def| {
+            function_def.code.as_ref().is_some_and(|code| {
+                code.code
+                    .iter()
+                    .any(Bytecode::is_signed_integer_instruction)
+            })
+        })
 }
 
 /// Return the simplest module that will pass the bounds checker

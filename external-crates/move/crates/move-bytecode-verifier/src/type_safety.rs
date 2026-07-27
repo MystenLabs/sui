@@ -217,6 +217,21 @@ fn variant_switch(
     Ok(())
 }
 
+// helper for the integer cast instructions (`CastU*` / `CastI*`): pop the operand, check that
+// it is an integer, and push the target type
+fn check_cast(
+    verifier: &mut TypeSafetyChecker,
+    meter: &mut (impl Meter + ?Sized),
+    offset: CodeOffset,
+    target: SignatureToken,
+) -> PartialVMResult<()> {
+    let operand = safe_unwrap!(verifier.stack.pop());
+    if !operand.is_integer() {
+        return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+    }
+    verifier.push(meter, target)
+}
+
 // helper for both `ImmBorrowField` and `MutBorrowField`
 fn borrow_field(
     verifier: &mut TypeSafetyChecker,
@@ -841,27 +856,9 @@ fn verify_instr(
             }
         }
 
-        Bytecode::CastU8 => {
-            let operand = safe_unwrap!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::U8)?;
-        }
-        Bytecode::CastU64 => {
-            let operand = safe_unwrap!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::U64)?;
-        }
-        Bytecode::CastU128 => {
-            let operand = safe_unwrap!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::U128)?;
-        }
+        Bytecode::CastU8 => check_cast(verifier, meter, offset, ST::U8)?,
+        Bytecode::CastU64 => check_cast(verifier, meter, offset, ST::U64)?,
+        Bytecode::CastU128 => check_cast(verifier, meter, offset, ST::U128)?,
 
         Bytecode::Add
         | Bytecode::Sub
@@ -1080,71 +1077,17 @@ fn verify_instr(
                 _ => return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset)),
             };
         }
-        Bytecode::CastU16 => {
-            let operand = safe_unwrap!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::U16)?;
-        }
-        Bytecode::CastU32 => {
-            let operand = safe_unwrap!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::U32)?;
-        }
-        Bytecode::CastU256 => {
-            let operand = safe_unwrap!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::U256)?;
-        }
-        Bytecode::CastI8 => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::I8)?;
-        }
-        Bytecode::CastI16 => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::I16)?;
-        }
-        Bytecode::CastI32 => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::I32)?;
-        }
-        Bytecode::CastI64 => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::I64)?;
-        }
-        Bytecode::CastI128 => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::I128)?;
-        }
-        Bytecode::CastI256 => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
-            if !operand.is_integer() {
-                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
-            }
-            verifier.push(meter, ST::I256)?;
-        }
+        Bytecode::CastU16 => check_cast(verifier, meter, offset, ST::U16)?,
+        Bytecode::CastU32 => check_cast(verifier, meter, offset, ST::U32)?,
+        Bytecode::CastU256 => check_cast(verifier, meter, offset, ST::U256)?,
+        Bytecode::CastI8 => check_cast(verifier, meter, offset, ST::I8)?,
+        Bytecode::CastI16 => check_cast(verifier, meter, offset, ST::I16)?,
+        Bytecode::CastI32 => check_cast(verifier, meter, offset, ST::I32)?,
+        Bytecode::CastI64 => check_cast(verifier, meter, offset, ST::I64)?,
+        Bytecode::CastI128 => check_cast(verifier, meter, offset, ST::I128)?,
+        Bytecode::CastI256 => check_cast(verifier, meter, offset, ST::I256)?,
         Bytecode::Neg => {
-            let operand = safe_unwrap_err!(verifier.stack.pop());
+            let operand = safe_unwrap!(verifier.stack.pop());
             // Neg is restricted to signed integer types only. Unsigned integers use
             // wrapping subtraction from zero instead. The operand type is preserved
             // (negating an i32 produces an i32, etc.).

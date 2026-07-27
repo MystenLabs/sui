@@ -430,22 +430,22 @@ impl<'a> BytecodeGenerator<'a> {
                     )))
                 }
                 BytecodeType::I8(instruction) => {
-                    Some(instruction(self.rng.gen_range(i8::MIN..i8::MAX)))
+                    Some(instruction(self.rng.gen_range(i8::MIN..=i8::MAX)))
                 }
                 BytecodeType::I16(instruction) => {
-                    Some(instruction(self.rng.gen_range(i16::MIN..i16::MAX)))
+                    Some(instruction(self.rng.gen_range(i16::MIN..=i16::MAX)))
                 }
                 BytecodeType::I32(instruction) => {
-                    Some(instruction(self.rng.gen_range(i32::MIN..i32::MAX)))
+                    Some(instruction(self.rng.gen_range(i32::MIN..=i32::MAX)))
                 }
                 BytecodeType::I64(instruction) => {
-                    Some(instruction(self.rng.gen_range(i64::MIN..i64::MAX)))
+                    Some(instruction(self.rng.gen_range(i64::MIN..=i64::MAX)))
                 }
                 BytecodeType::I128(instruction) => Some(instruction(Box::new(
-                    self.rng.gen_range(i128::MIN..i128::MAX),
+                    self.rng.gen_range(i128::MIN..=i128::MAX),
                 ))),
                 BytecodeType::I256(instruction) => Some(instruction(Box::new(I256::from(
-                    self.rng.gen_range(i128::MIN..i128::MAX),
+                    self.rng.gen_range(i128::MIN..=i128::MAX),
                 )))),
                 BytecodeType::ConstantPoolIndex(instruction) => {
                     // Select a random address from the module's address pool
