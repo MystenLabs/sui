@@ -661,6 +661,7 @@ impl SuiCommand {
                                 build_config.environment.clone(),
                                 pubfile_path,
                                 modes,
+                                &context,
                             )
                             .await?
                         } else {

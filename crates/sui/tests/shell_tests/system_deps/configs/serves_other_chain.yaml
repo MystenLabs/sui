@@ -1,0 +1,10 @@
+keystore:
+  File: ~
+envs:
+  - alias: other_env
+    rpc: "bogus"
+    ws: ~
+    basic_auth: ~
+    chain_id: "9999"
+active_env: other_env
+active_address: "0x0000000000000000000000000000000000000000000000000000000000000000"
