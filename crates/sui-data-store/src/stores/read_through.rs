@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    CheckpointContextStore, CheckpointExecutionContext, EpochData, EpochStore, ObjectKey,
-    ObjectStore, ReadDataStore, ReadWriteDataStore, SetupStore, StoreSummary, TransactionInfo,
-    TransactionStore,
+    CheckpointContextStore, CheckpointExecutionContext, CheckpointObjectRequest,
+    CheckpointObjectStore, EpochData, EpochStore, ObjectKey, ObjectStore, ReadDataStore,
+    ReadWriteDataStore, SetupStore, StoreSummary, TransactionInfo, TransactionStore,
 };
 use anyhow::{Error, Result};
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{object::Object, supported_protocol_versions::ProtocolConfig};
 
-/// A read-through store that composes a primary (cache) and a secondary (source) store.
-/// It tries the primary first; on miss it reads from the secondary and writes back to the primary.
+/// Read-through caching for legacy APIs over a primary cache and secondary source.
+/// Checkpoint APIs delegate to the secondary; checkpoint object answers are not cached here.
 pub struct ReadThroughStore<P, S>
 where
     P: ReadWriteDataStore,
@@ -99,6 +99,21 @@ where
     }
 }
 
+/// Delegates checkpoint-bound reads because legacy cache keys cannot preserve their semantics.
+impl<P, S> CheckpointObjectStore for ReadThroughStore<P, S>
+where
+    P: ReadWriteDataStore,
+    S: ReadDataStore + CheckpointObjectStore,
+{
+    fn get_checkpoint_objects(
+        &self,
+        context: &CheckpointExecutionContext,
+        requests: &[CheckpointObjectRequest],
+    ) -> Result<Vec<Option<Object>>, Error> {
+        self.secondary.get_checkpoint_objects(context, requests)
+    }
+}
+
 impl<P, S> ObjectStore for ReadThroughStore<P, S>
 where
     P: ReadWriteDataStore,
@@ -181,6 +196,7 @@ mod tests {
     struct ContextSource {
         context: CheckpointExecutionContext,
         calls: AtomicU64,
+        object_calls: AtomicU64,
     }
 
     impl TransactionStore for ContextSource {
@@ -218,6 +234,18 @@ mod tests {
         }
     }
 
+    impl CheckpointObjectStore for ContextSource {
+        fn get_checkpoint_objects(
+            &self,
+            context: &CheckpointExecutionContext,
+            requests: &[CheckpointObjectRequest],
+        ) -> Result<Vec<Option<Object>>, Error> {
+            assert_eq!(context, &self.context);
+            self.object_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(requests.iter().map(|_| None).collect())
+        }
+    }
+
     #[test]
     fn checkpoint_context_comes_from_secondary_and_caches_epoch_data() {
         let epoch = EpochData {
@@ -242,6 +270,7 @@ mod tests {
                 epoch: epoch.clone(),
             },
             calls: AtomicU64::new(0),
+            object_calls: AtomicU64::new(0),
         };
         let store = ReadThroughStore::new(primary, source);
 
@@ -250,5 +279,42 @@ mod tests {
         assert_eq!(context.epoch, epoch);
         assert_eq!(store.secondary.calls.load(Ordering::Relaxed), 1);
         assert_eq!(store.primary.epoch_info(7).unwrap(), Some(epoch));
+    }
+
+    /// A cached object body does not establish that its version was visible at the requested
+    /// checkpoint, so checkpoint-bound reads must bypass legacy cache entries.
+    #[test]
+    fn checkpoint_objects_delegate_without_using_legacy_cache_entries() {
+        let context = CheckpointExecutionContext {
+            chain_identifier: ChainIdentifier::random(),
+            checkpoint: 10,
+            checkpoint_digest: CheckpointDigest::random(),
+            epoch: EpochData {
+                epoch_id: 7,
+                protocol_version: 42,
+                rgp: 1_000,
+                start_timestamp: 123,
+            },
+        };
+        let object = Object::with_owner_for_testing(
+            sui_types::base_types::SuiAddress::random_for_testing_only(),
+        );
+        let primary = InMemoryStore::new(crate::Node::Mainnet);
+        primary.add_object_data(object.id(), object.version().value(), object.clone());
+        let source = ContextSource {
+            context: context.clone(),
+            calls: AtomicU64::new(0),
+            object_calls: AtomicU64::new(0),
+        };
+        let store = ReadThroughStore::new(primary, source);
+        let requests = [CheckpointObjectRequest {
+            object_id: object.id(),
+            selector: crate::CheckpointObjectSelector::ExactVersion(object.version().value()),
+        }];
+
+        let results = store.get_checkpoint_objects(&context, &requests).unwrap();
+
+        assert_eq!(results, vec![None]);
+        assert_eq!(store.secondary.object_calls.load(Ordering::Relaxed), 1);
     }
 }

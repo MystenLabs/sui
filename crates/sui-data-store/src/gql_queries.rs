@@ -260,62 +260,45 @@ pub(crate) mod object_query {
     #[derive(cynic::QueryFragment)]
     #[cynic(graphql_type = "Object", schema_module = "crate::gql_queries::schema")]
     pub(crate) struct ObjectFragment {
-        #[allow(dead_code)]
-        pub address: SuiAddress,
-        pub version: Option<u64>,
         pub object_bcs: Option<Base64>,
     }
 
     // Maximum number of keys to query in a single request.
     // REVIEW: not clear how this translate to the 5000B limit, so
     // we are picking a "random" and conservative number.
-    const MAX_KEYS_SIZE: usize = 30;
+    pub(super) const MAX_KEYS_SIZE: usize = 30;
+
+    /// Decode fields common to every GraphQL object response.
+    pub(super) fn decode_object_fragment(fragment: ObjectFragment) -> Result<Object, Error> {
+        let b64 = fragment
+            .object_bcs
+            .ok_or_else(|| anyhow!("Object bcs is None for object"))?
+            .0;
+        let bytes = CryptoBase64::decode(&b64)?;
+        Ok(bcs::from_bytes(&bytes)?)
+    }
 
     pub(crate) async fn query(
         keys: &[GqlObjectKey],
         data_store: &DataStore,
     ) -> Result<Vec<Option<(Object, u64)>>, Error> {
-        let mut keys = keys
-            .iter()
-            .cloned()
-            .map(ObjectKey::from)
-            .collect::<Vec<_>>();
-        let mut key_chunks = vec![];
-        while !keys.is_empty() {
-            let chunk: Vec<_> = keys.drain(..MAX_KEYS_SIZE.min(keys.len())).collect();
-            key_chunks.push(chunk);
-        }
-
         let mut objects = vec![];
-
-        for keys in key_chunks {
+        for key_chunk in keys.chunks(MAX_KEYS_SIZE) {
+            let keys = key_chunk.iter().cloned().map(ObjectKey::from).collect();
             let query: cynic::Operation<MultiGetObjectsQuery, MultiGetObjectsVars> =
                 MultiGetObjectsQuery::build(MultiGetObjectsVars { keys });
             let response = data_store.run_query(&query).await?;
-
-            let list = if let Some(data) = response.data {
-                data.multi_get_objects
-            } else {
-                return Err(anyhow!(
-                    "Missing data in transaction query response. Errors: {:?}",
-                    response.errors,
-                ));
-            };
+            let list = graphql_data(response, "object query")?
+                .ok_or_else(|| anyhow!("Missing object query data"))?
+                .multi_get_objects;
 
             let chunk = list
                 .into_iter()
                 .map(|frag| match frag {
                     Some(frag) => {
-                        let b64 = frag
-                            .object_bcs
-                            .ok_or_else(|| anyhow!("Object bcs is None for object"))?
-                            .0;
-                        let bytes = CryptoBase64::decode(&b64)?;
-                        let obj: Object = bcs::from_bytes(&bytes)?;
-                        let version = frag
-                            .version
-                            .ok_or_else(|| anyhow!("Object version is None for object"))?;
-                        Ok::<_, Error>(Some((obj, version)))
+                        let object = decode_object_fragment(frag)?;
+                        let version = object.version().value();
+                        Ok::<_, Error>(Some((object, version)))
                     }
                     None => Ok::<_, Error>(None),
                 })
@@ -342,6 +325,593 @@ pub(crate) mod object_query {
                     _ => None,
                 },
             }
+        }
+    }
+}
+
+pub(crate) mod checkpoint_object_query {
+    //! Loads objects through the query scope of a selected checkpoint execution context.
+
+    #[cfg(test)]
+    use super::object_query::Base64;
+    use super::object_query::{
+        MAX_KEYS_SIZE, ObjectFragment, ObjectKey as GraphQLObjectKey, SuiAddress,
+        decode_object_fragment,
+    };
+    use super::*;
+    use crate::{CheckpointObjectRequest, CheckpointObjectSelector};
+    use sui_types::{
+        digests::{ChainIdentifier, CheckpointDigest},
+        object::Object,
+    };
+
+    #[derive(cynic::QueryVariables)]
+    struct CheckpointObjectArgs {
+        /// Explicit checkpoint from the execution context.
+        sequence_number: Option<u64>,
+        /// Object selectors translated into GraphQL keys.
+        keys: Vec<GraphQLObjectKey>,
+        /// GraphQL query type whose object metadata range is required.
+        range_type: String,
+        /// Singular object field backed by the same metadata as multi-get object lookup.
+        range_field: Option<String>,
+    }
+
+    /// Root response used to verify that the endpoint and checkpoint match the supplied context.
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "CheckpointObjectArgs", graphql_type = "Query")]
+    struct Query {
+        /// Genesis checkpoint digest identifying the endpoint's network.
+        chain_identifier: String,
+        /// Service retention metadata evaluated in the same request as the object reads.
+        service_config: ServiceConfig,
+        /// Checkpoint whose nested query scopes every object read.
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<GraphQLCheckpoint>,
+    }
+
+    /// Retention configuration for the object metadata needed by checkpoint-latest reads.
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "CheckpointObjectArgs")]
+    struct ServiceConfig {
+        #[arguments(type: $range_type, field: $range_field)]
+        available_range: AvailableRange,
+    }
+
+    /// Inclusive checkpoint range advertised for the selected GraphQL field.
+    #[derive(cynic::QueryFragment)]
+    struct AvailableRange {
+        first: Option<RangeCheckpoint>,
+        last: Option<RangeCheckpoint>,
+    }
+
+    /// Checkpoint bound returned by `availableRange`.
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Checkpoint")]
+    struct RangeCheckpoint {
+        sequence_number: u64,
+    }
+
+    /// Selected checkpoint and its nested, checkpoint-scoped query root.
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "CheckpointObjectArgs", graphql_type = "Checkpoint")]
+    struct GraphQLCheckpoint {
+        /// Sequence returned for the explicitly requested checkpoint.
+        sequence_number: u64,
+        /// Digest used to verify checkpoint identity against the execution context.
+        digest: Option<String>,
+        /// Query root scoped to state at the end of this checkpoint.
+        query: Option<ScopedQuery>,
+    }
+
+    /// Query root whose unbounded reads are interpreted at the enclosing checkpoint.
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "CheckpointObjectArgs", graphql_type = "Query")]
+    struct ScopedQuery {
+        /// Results corresponding positionally to the requested keys.
+        #[arguments(keys: $keys)]
+        multi_get_objects: Vec<Option<ObjectFragment>>,
+    }
+
+    /// Load requests in order at one immutable checkpoint and one object-availability range.
+    pub(crate) async fn query(
+        context: &CheckpointExecutionContext,
+        requests: &[CheckpointObjectRequest],
+        data_store: &DataStore,
+    ) -> Result<Vec<Option<Object>>, Error> {
+        let mut objects = Vec::with_capacity(requests.len());
+        for request_chunk in requests.chunks(MAX_KEYS_SIZE) {
+            let operation = Query::build(CheckpointObjectArgs {
+                sequence_number: Some(context.checkpoint),
+                keys: request_chunk.iter().map(graphql_key).collect(),
+                range_type: "Query".to_string(),
+                range_field: Some("object".to_string()),
+            });
+            let response = data_store.run_query(&operation).await?;
+            let data = graphql_data(response, "checkpoint object query")?
+                .ok_or_else(|| anyhow!("Missing data for checkpoint object query"))?;
+            objects.extend(decode_response(data, context, request_chunk)?);
+        }
+        Ok(objects)
+    }
+
+    /// Validate the checkpoint envelope and decode one batch of object results.
+    fn decode_response(
+        data: Query,
+        context: &CheckpointExecutionContext,
+        requests: &[CheckpointObjectRequest],
+    ) -> Result<Vec<Option<Object>>, Error> {
+        let chain_digest = data
+            .chain_identifier
+            .parse::<CheckpointDigest>()
+            .context("Invalid chain identifier in checkpoint object response")?;
+        let chain_identifier = ChainIdentifier::from(chain_digest);
+        if chain_identifier != context.chain_identifier {
+            bail!(
+                concat!(
+                    "Checkpoint object response chain {} does not match context ",
+                    "chain {}",
+                ),
+                chain_identifier,
+                context.chain_identifier
+            );
+        }
+
+        let history_start = validate_available_range(data.service_config, context.checkpoint)?;
+
+        let checkpoint = data.checkpoint.ok_or_else(|| {
+            anyhow!(
+                "Checkpoint {} is unavailable or has been pruned",
+                context.checkpoint
+            )
+        })?;
+        if checkpoint.sequence_number != context.checkpoint {
+            bail!(
+                "Checkpoint object query returned sequence {} for context checkpoint {}",
+                checkpoint.sequence_number,
+                context.checkpoint
+            );
+        }
+        let checkpoint_digest = checkpoint
+            .digest
+            .ok_or_else(|| anyhow!("Missing digest for checkpoint {}", context.checkpoint))?
+            .parse::<CheckpointDigest>()
+            .with_context(|| format!("Invalid digest for checkpoint {}", context.checkpoint))?;
+        if checkpoint_digest != context.checkpoint_digest {
+            bail!(
+                concat!(
+                    "Checkpoint object response digest {} does not match context ",
+                    "digest {}",
+                ),
+                checkpoint_digest,
+                context.checkpoint_digest
+            );
+        }
+
+        let scoped_query = checkpoint.query.ok_or_else(|| {
+            anyhow!(
+                "Missing checkpoint-scoped query for checkpoint {}",
+                context.checkpoint
+            )
+        })?;
+        if scoped_query.multi_get_objects.len() != requests.len() {
+            bail!(
+                "Checkpoint object query returned {} results for {} requests",
+                scoped_query.multi_get_objects.len(),
+                requests.len()
+            );
+        }
+
+        std::iter::zip(requests, scoped_query.multi_get_objects)
+            .map(|(request, object)| {
+                decode_object(request, object, context.checkpoint, history_start)
+            })
+            .collect()
+    }
+
+    /// Validate that object metadata covers the selected checkpoint.
+    fn validate_available_range(
+        service_config: ServiceConfig,
+        checkpoint: u64,
+    ) -> Result<u64, Error> {
+        let range = service_config.available_range;
+        let first = range
+            .first
+            .ok_or_else(|| anyhow!("Missing first checkpoint in object availability range"))?
+            .sequence_number;
+        let last = range
+            .last
+            .ok_or_else(|| anyhow!("Missing last checkpoint in object availability range"))?
+            .sequence_number;
+
+        if first > last {
+            bail!("Invalid object availability range {first}..={last}");
+        }
+        if checkpoint < first || checkpoint > last {
+            bail!("Checkpoint {checkpoint} is outside object availability range {first}..={last}");
+        }
+        Ok(first)
+    }
+
+    /// Decode one positional result from checkpoint-scoped `multiGetObjects`.
+    ///
+    /// Each result has two optional levels:
+    ///
+    /// `Option<ObjectFragment { object_bcs: Option<Base64> }>`
+    ///
+    /// The outer `Option` says whether GraphQL returned an object. The inner `Option` says whether
+    /// that object's serialized body is available. Their meanings depend on the requested selector:
+    ///
+    /// `Latest`:
+    /// - `Some` with a body: the object is live at the checkpoint and its body is available; decode
+    ///   it.
+    /// - `Some` without a body: the object is live, but its body is unavailable; return an error.
+    /// - `None`: no live object was returned. This proves absence when `history_start == 0`;
+    ///   otherwise state from before the retained range may be missing, so return an error.
+    ///
+    /// `ExactVersion`:
+    /// - `Some` with a body: the exact version is visible at the checkpoint; decode and validate
+    ///   it.
+    /// - `Some` without a body: the exact object body is unavailable; return an error.
+    /// - `None`: the API cannot distinguish an absent or not-yet-written version from an
+    ///   unavailable body, so return an error.
+    ///
+    /// Transport and GraphQL errors, range and checkpoint identity, and response cardinality are
+    /// validated before this function is called.
+    fn decode_object(
+        request: &CheckpointObjectRequest,
+        fragment: Option<ObjectFragment>,
+        checkpoint: u64,
+        history_start: u64,
+    ) -> Result<Option<Object>, Error> {
+        let Some(fragment) = fragment else {
+            return match request.selector {
+                CheckpointObjectSelector::Latest if history_start == 0 => Ok(None),
+                CheckpointObjectSelector::Latest => bail!(
+                    concat!(
+                        "Latest object lookup for {} at checkpoint {} is indeterminate because ",
+                        "the endpoint's object history starts at checkpoint {}",
+                    ),
+                    request.object_id,
+                    checkpoint,
+                    history_start,
+                ),
+                CheckpointObjectSelector::ExactVersion(version) => bail!(
+                    concat!(
+                        "Exact object lookup for {} at version {} and checkpoint {} is ",
+                        "indeterminate: the version may not exist, may be newer than the ",
+                        "checkpoint, or its body may be unavailable",
+                    ),
+                    request.object_id,
+                    version,
+                    checkpoint,
+                ),
+            };
+        };
+
+        let object = decode_object_fragment(fragment)?;
+
+        if object.id() != request.object_id {
+            bail!(
+                "Decoded object {} does not match requested object {}",
+                object.id(),
+                request.object_id
+            );
+        }
+        let object_version = object.version().value();
+
+        match request.selector {
+            CheckpointObjectSelector::ExactVersion(expected) if object_version != expected => {
+                bail!(
+                    concat!(
+                        "Object {} resolved to version {}, expected exact version ",
+                        "{}",
+                    ),
+                    request.object_id,
+                    object_version,
+                    expected,
+                );
+            }
+            CheckpointObjectSelector::ExactVersion(_) | CheckpointObjectSelector::Latest => {}
+        }
+
+        Ok(Some(object))
+    }
+
+    /// Translate only the selector; the enclosing query supplies the checkpoint bound.
+    fn graphql_key(request: &CheckpointObjectRequest) -> GraphQLObjectKey {
+        let version = match request.selector {
+            CheckpointObjectSelector::ExactVersion(version) => Some(version),
+            CheckpointObjectSelector::Latest => None,
+        };
+        GraphQLObjectKey {
+            address: SuiAddress(request.object_id.to_string()),
+            version,
+            root_version: None,
+            at_checkpoint: None,
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::EpochData;
+        use sui_types::{
+            base_types::{ObjectID, SequenceNumber, SuiAddress as RuntimeAddress},
+            object::Owner,
+        };
+
+        fn context() -> CheckpointExecutionContext {
+            CheckpointExecutionContext {
+                chain_identifier: ChainIdentifier::random(),
+                checkpoint: 7,
+                checkpoint_digest: CheckpointDigest::random(),
+                epoch: EpochData {
+                    epoch_id: 3,
+                    protocol_version: 42,
+                    rgp: 1_000,
+                    start_timestamp: 123,
+                },
+            }
+        }
+
+        fn move_object(id: ObjectID, version: u64) -> Object {
+            Object::with_id_owner_version_for_testing(
+                id,
+                SequenceNumber::from_u64(version),
+                Owner::AddressOwner(RuntimeAddress::random_for_testing_only()),
+            )
+        }
+
+        fn graphql_object(object: Object) -> ObjectFragment {
+            ObjectFragment {
+                object_bcs: Some(Base64(
+                    CryptoBase64::from_bytes(&bcs::to_bytes(&object).unwrap()).encoded(),
+                )),
+            }
+        }
+
+        fn response(context: &CheckpointExecutionContext, objects: Vec<Option<Object>>) -> Query {
+            response_with_range(context, objects, Some(0), Some(context.checkpoint))
+        }
+
+        fn response_with_range(
+            context: &CheckpointExecutionContext,
+            objects: Vec<Option<Object>>,
+            first: Option<u64>,
+            last: Option<u64>,
+        ) -> Query {
+            Query {
+                chain_identifier: CheckpointDigest::new(*context.chain_identifier.as_bytes())
+                    .to_string(),
+                service_config: ServiceConfig {
+                    available_range: AvailableRange {
+                        first: first.map(|sequence_number| RangeCheckpoint { sequence_number }),
+                        last: last.map(|sequence_number| RangeCheckpoint { sequence_number }),
+                    },
+                },
+                checkpoint: Some(GraphQLCheckpoint {
+                    sequence_number: context.checkpoint,
+                    digest: Some(context.checkpoint_digest.to_string()),
+                    query: Some(ScopedQuery {
+                        multi_get_objects: objects
+                            .into_iter()
+                            .map(|object| object.map(graphql_object))
+                            .collect(),
+                    }),
+                }),
+            }
+        }
+
+        fn request(
+            object_id: ObjectID,
+            selector: CheckpointObjectSelector,
+        ) -> CheckpointObjectRequest {
+            CheckpointObjectRequest {
+                object_id,
+                selector,
+            }
+        }
+
+        #[test]
+        fn selectors_map_to_checkpoint_scoped_object_keys() {
+            let id = ObjectID::random();
+            let exact = graphql_key(&request(id, CheckpointObjectSelector::ExactVersion(3)));
+            let latest = graphql_key(&request(id, CheckpointObjectSelector::Latest));
+
+            assert_eq!(exact.version, Some(3));
+            assert_eq!(exact.root_version, None);
+            assert_eq!(latest.version, None);
+            assert_eq!(latest.root_version, None);
+            assert!(
+                [&exact, &latest]
+                    .into_iter()
+                    .all(|key| key.at_checkpoint.is_none())
+            );
+        }
+
+        #[test]
+        fn generated_query_nests_object_reads_under_checkpoint_scope() {
+            let context = context();
+            let operation = Query::build(CheckpointObjectArgs {
+                sequence_number: Some(context.checkpoint),
+                keys: vec![graphql_key(&request(
+                    ObjectID::random(),
+                    CheckpointObjectSelector::Latest,
+                ))],
+                range_type: "Query".to_string(),
+                range_field: Some("object".to_string()),
+            });
+
+            let range = operation.query.find("availableRange").unwrap();
+            let checkpoint = operation.query.find("checkpoint(").unwrap();
+            let scoped_query = operation.query[checkpoint..].find("query {").unwrap();
+            let objects = operation.query[checkpoint + scoped_query..]
+                .find("multiGetObjects")
+                .unwrap();
+
+            // This guards against incidental changes in how query is defined
+            // where `service_config and `checkpoint` are at the same nesting level.
+            assert!(range < checkpoint);
+            assert!(objects > 0);
+            assert_eq!(
+                operation.variables.sequence_number,
+                Some(context.checkpoint)
+            );
+            assert_eq!(operation.variables.range_type, "Query");
+            assert_eq!(operation.variables.range_field.as_deref(), Some("object"));
+            assert!(!operation.query.contains("filters:"));
+        }
+
+        #[test]
+        fn decodes_selectors_and_preserves_result_order() {
+            let context = context();
+            let exact = move_object(ObjectID::random(), 3);
+            let latest = move_object(ObjectID::random(), 4);
+            let requests = vec![
+                request(exact.id(), CheckpointObjectSelector::ExactVersion(3)),
+                request(latest.id(), CheckpointObjectSelector::Latest),
+            ];
+
+            let results = decode_response(
+                response_with_range(
+                    &context,
+                    vec![Some(exact.clone()), Some(latest.clone())],
+                    Some(context.checkpoint),
+                    Some(context.checkpoint),
+                ),
+                &context,
+                &requests,
+            )
+            .unwrap();
+
+            assert_eq!(
+                results
+                    .iter()
+                    .map(|object| object.as_ref().map(|object| object.id()))
+                    .collect::<Vec<_>>(),
+                vec![Some(exact.id()), Some(latest.id())]
+            );
+        }
+
+        #[test]
+        fn decodes_latest_null_with_complete_history_as_absence() {
+            let context = context();
+            let object_id = ObjectID::random();
+            let request = request(object_id, CheckpointObjectSelector::Latest);
+
+            assert_eq!(
+                decode_response(response(&context, vec![None]), &context, &[request]).unwrap(),
+                vec![None],
+            );
+        }
+
+        #[test]
+        fn rejects_null_without_complete_history_or_for_exact_version() {
+            let context = context();
+            let object_id = ObjectID::random();
+            let latest = request(object_id, CheckpointObjectSelector::Latest);
+            let exact = request(object_id, CheckpointObjectSelector::ExactVersion(3));
+
+            let incomplete = decode_response(
+                response_with_range(&context, vec![None], Some(1), Some(context.checkpoint)),
+                &context,
+                &[latest],
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(incomplete.contains(&object_id.to_string()));
+            assert!(incomplete.contains("starts at checkpoint 1"));
+
+            let exact_error = decode_response(response(&context, vec![None]), &context, &[exact])
+                .unwrap_err()
+                .to_string();
+            assert!(exact_error.contains(&object_id.to_string()));
+            assert!(exact_error.contains("may be newer than the checkpoint"));
+        }
+
+        #[test]
+        fn rejects_missing_invalid_or_out_of_bounds_availability_range() {
+            let context = context();
+            let object = move_object(ObjectID::random(), 3);
+            let object_request = request(object.id(), CheckpointObjectSelector::Latest);
+
+            for response in [
+                response_with_range(
+                    &context,
+                    vec![Some(object.clone())],
+                    None,
+                    Some(context.checkpoint),
+                ),
+                response_with_range(&context, vec![Some(object.clone())], Some(0), None),
+                response_with_range(&context, vec![Some(object.clone())], Some(8), Some(7)),
+                response_with_range(&context, vec![Some(object.clone())], Some(8), Some(9)),
+                response_with_range(&context, vec![Some(object.clone())], Some(0), Some(6)),
+            ] {
+                assert!(decode_response(response, &context, &[object_request]).is_err());
+            }
+        }
+
+        #[test]
+        fn rejects_a_response_for_another_checkpoint_context() {
+            let context = context();
+            let request = request(ObjectID::random(), CheckpointObjectSelector::Latest);
+
+            let mut wrong_chain = response(&context, vec![None]);
+            wrong_chain.chain_identifier = CheckpointDigest::random().to_string();
+            assert!(decode_response(wrong_chain, &context, &[request]).is_err());
+
+            let mut wrong_sequence = response(&context, vec![None]);
+            wrong_sequence.checkpoint.as_mut().unwrap().sequence_number += 1;
+            assert!(decode_response(wrong_sequence, &context, &[request]).is_err());
+
+            let mut wrong_digest = response(&context, vec![None]);
+            wrong_digest.checkpoint.as_mut().unwrap().digest =
+                Some(CheckpointDigest::random().to_string());
+            assert!(decode_response(wrong_digest, &context, &[request]).is_err());
+        }
+
+        #[test]
+        fn rejects_misaligned_or_wrong_object_results() {
+            let context = context();
+            let object = move_object(ObjectID::random(), 3);
+            let object_request = request(object.id(), CheckpointObjectSelector::Latest);
+
+            let too_few = response(&context, vec![]);
+            assert!(decode_response(too_few, &context, &[object_request]).is_err());
+
+            let wrong_id = response(&context, vec![Some(move_object(ObjectID::random(), 3))]);
+            assert!(decode_response(wrong_id, &context, &[object_request]).is_err());
+
+            let mut missing_bcs = response(&context, vec![Some(object)]);
+            missing_bcs
+                .checkpoint
+                .as_mut()
+                .unwrap()
+                .query
+                .as_mut()
+                .unwrap()
+                .multi_get_objects[0]
+                .as_mut()
+                .unwrap()
+                .object_bcs = None;
+            assert!(decode_response(missing_bcs, &context, &[object_request]).is_err());
+        }
+
+        #[test]
+        fn enforces_exact_selector() {
+            let context = context();
+            let object = move_object(ObjectID::random(), 4);
+
+            let exact = request(object.id(), CheckpointObjectSelector::ExactVersion(3));
+            assert!(
+                decode_response(
+                    response(&context, vec![Some(object.clone())]),
+                    &context,
+                    &[exact]
+                )
+                .is_err()
+            );
         }
     }
 }

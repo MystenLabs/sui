@@ -6,9 +6,9 @@
 //! The RPC calls are implemented in `gql_queries.rs`.
 
 use crate::{
-    CheckpointContextStore, CheckpointExecutionContext, EpochData, EpochStore, ObjectKey,
-    ObjectStore, SetupStore, StoreSummary, TransactionInfo, TransactionStore, VersionQuery,
-    gql_queries, node::Node,
+    CheckpointContextStore, CheckpointExecutionContext, CheckpointObjectRequest,
+    CheckpointObjectStore, EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore, StoreSummary,
+    TransactionInfo, TransactionStore, VersionQuery, gql_queries, node::Node,
 };
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
@@ -186,6 +186,19 @@ impl CheckpointContextStore for DataStore {
             .unwrap()
             .insert(context.epoch.epoch_id, context.epoch.clone());
         Ok(context)
+    }
+}
+
+/// Retrieves objects through GraphQL's query scope for the selected checkpoint.
+impl CheckpointObjectStore for DataStore {
+    fn get_checkpoint_objects(
+        &self,
+        context: &CheckpointExecutionContext,
+        requests: &[CheckpointObjectRequest],
+    ) -> Result<Vec<Option<Object>>, Error> {
+        block_on!(gql_queries::checkpoint_object_query::query(
+            context, requests, self
+        ))
     }
 }
 

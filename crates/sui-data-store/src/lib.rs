@@ -12,6 +12,7 @@
 //! - [`TransactionStore`] - Retrieve transaction data and effects by digest
 //! - [`EpochStore`] - Retrieve epoch information and protocol configuration
 //! - [`CheckpointContextStore`] - Select coherent checkpoint execution context
+//! - [`CheckpointObjectStore`] - Retrieve objects within a checkpoint execution context
 //! - [`ObjectStore`] - Retrieve objects by their keys with flexible version queries
 //!
 //! ## Store Implementations
@@ -107,6 +108,45 @@ pub trait CheckpointContextStore {
         &self,
         checkpoint: Option<u64>,
     ) -> Result<CheckpointExecutionContext, Error>;
+}
+
+/// How an object should be resolved within a checkpoint execution context.
+///
+/// This is similar to [`VersionQuery`], but keeps checkpoint scope separate from version selection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckpointObjectSelector {
+    /// Return this exact version if it had been written by the selected checkpoint.
+    /// The version may no longer have been live at that checkpoint.
+    ExactVersion(u64),
+    /// Return the latest live version at the end of the selected checkpoint.
+    Latest,
+}
+
+/// An object lookup anchored to a checkpoint execution context.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CheckpointObjectRequest {
+    /// On-chain storage ID to resolve.
+    pub object_id: ObjectID,
+    /// Resolution semantics to apply within the checkpoint context.
+    pub selector: CheckpointObjectSelector,
+}
+
+/// Retrieves validated objects without allowing reads to escape the supplied checkpoint context.
+///
+/// This remains separate from [`ObjectStore`] because legacy version queries and cache keys cannot
+/// carry verified chain and checkpoint identity independently from version selection.
+/// Implementations preserve request order and cardinality, return the requested object ID, and
+/// enforce the supplied checkpoint and selector. `None` means definitive absence for that selector
+/// at that checkpoint. Failures must remain errors because execution may legitimately continue
+/// when an object is absent; APIs that cannot distinguish absence from unavailable or pruned data
+/// must therefore return an error.
+pub trait CheckpointObjectStore {
+    /// Return one result per request in the same order.
+    fn get_checkpoint_objects(
+        &self,
+        context: &CheckpointExecutionContext,
+        requests: &[CheckpointObjectRequest],
+    ) -> Result<Vec<Option<Object>>, Error>;
 }
 
 /// An `EpochStore` retrieves the epoch data and protocol configuration
