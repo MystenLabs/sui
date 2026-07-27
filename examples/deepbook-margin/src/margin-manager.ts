@@ -7,16 +7,28 @@ import type { DeepBookMarginClient } from './client.js';
 // docs::#find-manager
 // Reuse an existing MarginManager instead of minting a new one on every run.
 // `getMarginManagerIdsForOwner` returns the managers the registry tracks for an
-// owner. A MarginManager is tied to one DeepBook pool, so filter by the pool you
-// intend to trade. Treat the lookup as best-effort and also persist the ID you
-// create: a new manager each run leaves orphaned shared objects that fragment
-// your collateral.
+// owner across every pool. A MarginManager is bound to one DeepBook pool, so
+// return only the one for `poolKey`: reading a manager's state with `poolKey`
+// succeeds when the manager belongs to that pool and aborts otherwise, so a
+// manager for a different pool is skipped. Returning the first manager of any
+// pool would wire the rest of the flow to the wrong pool. Treat the lookup as
+// best-effort and also persist the ID you create, because a new manager each run
+// leaves orphaned shared objects that fragment your collateral.
 export async function findMarginManagerId(
 	client: DeepBookMarginClient,
 	owner: string,
+	poolKey: string,
 ): Promise<string | undefined> {
 	const ids = await client.deepbook.getMarginManagerIdsForOwner(owner);
-	return ids[0];
+	for (const id of ids) {
+		try {
+			const states = await client.deepbook.getMarginManagerStates({ [id]: poolKey });
+			if (Object.keys(states).length > 0) return id;
+		} catch {
+			// Reading with `poolKey` aborts for a manager bound to another pool.
+		}
+	}
+	return undefined;
 }
 // docs::/#find-manager
 
