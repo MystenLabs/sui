@@ -530,24 +530,11 @@ impl WritebackCache {
             id: FullObjectID::Consensus((*object_id, initial_shared_version)),
             version,
         };
-        tokio::task::block_in_place(|| {
-            // Release the execution permit (if any) before parking, so that blocked
-            // executions never starve the transaction that will unblock them. The permit
-            // is not reacquired after the wait: transient over-subscription resolves
-            // itself as executions complete.
-            mysten_common::sync::execution_permit::release_execution_permit();
-            tokio::runtime::Handle::current().block_on(self.object_notify_read.read(
-                "load_implicitly_read_system_object",
-                &[key],
-                move |_keys| {
-                    vec![if self.object_exists_by_key(object_id, version) {
-                        Some(())
-                    } else {
-                        None
-                    }]
-                },
-            ))
-        });
+        self.object_notify_read.read_one_blocking(
+            "load_implicitly_read_system_object",
+            &key,
+            |_key| self.object_exists_by_key(object_id, version).then_some(()),
+        );
         self.metrics
             .implicit_system_object_read_wait_latency
             .with_label_values(&[object_id.to_string().as_str()])

@@ -324,9 +324,9 @@ async fn test_load_implicitly_read_system_object() {
     );
     cache.write_object_entry_for_test(below_target);
 
-    let blocked = tokio::spawn({
+    let blocked = tokio::task::spawn_blocking({
         let cache = cache.clone();
-        async move {
+        move || {
             cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
                 ConsensusObjectVersion {
@@ -387,9 +387,9 @@ async fn test_execution_permit_released_while_blocked() {
     let permit = semaphore.clone().try_acquire_owned().unwrap();
     assert_eq!(semaphore.available_permits(), 0);
 
-    let blocked = tokio::spawn({
+    let blocked = tokio::task::spawn_blocking({
         let cache = cache.clone();
-        async move {
+        move || {
             let _permit_guard = set_execution_permit(Box::new(permit));
             cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
