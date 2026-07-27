@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -438,6 +439,20 @@ impl Transaction {
             return Ok(Connection::new(false, false).into());
         };
 
+        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+
+        build_grpc_connection(scope, &page, result)
+    }
+
+    /// Scan a page of transactions over `cp_bounds` via the streaming gRPC List API. Computing
+    /// checkpoint bounds is the caller's responsibility. Items are returned in scan order
+    /// (descending when paginating from the back).
+    pub(crate) async fn scan_grpc(
+        reader: &AlphaLedgerGrpcReader,
+        cp_bounds: RangeInclusive<u64>,
+        page: &Page<CTransaction>,
+        filter: &TransactionFilter,
+    ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
         // Extract the cursor and pass through to grpc.
         let after = page.after().map(|c| CursorToken::from(&**c).encode());
         // Pg-minted cursors set checkpoint as 0. Substitute the checkpoint with u64::max on the
@@ -469,12 +484,10 @@ impl Transaction {
         request.filter = filter.to_grpc_filter();
         request.options = Some(options);
 
-        let result = reader
+        Ok(reader
             .list_transactions(request)
             .await
-            .context("Failed to list transactions")?;
-
-        build_grpc_connection(scope, &page, result)
+            .context("Failed to list transactions")?)
     }
 }
 
