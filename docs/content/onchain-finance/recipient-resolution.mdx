@@ -114,16 +114,7 @@ This is the simplest approach and works for any identifier format. The tradeoff 
 
 For decentralized resolution, deploy a Move module that stores mappings in a shared `Table`:
 
-```move
-module example::directory;
-
-use sui::table::{Self, Table};
-
-public struct Directory has key {
-    id: UID,
-    entries: Table<vector<u8>, address>,
-}
-```
+<ImportContent source="examples/onchain-finance/recipient-resolution/sources/directory.move" mode="code" tag="directory" />
 
 Clients query the registry onchain before building the payment transaction. This avoids trusting a centralized service but requires onchain storage costs for each registration.
 

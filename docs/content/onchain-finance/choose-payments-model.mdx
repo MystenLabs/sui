@@ -98,29 +98,7 @@ Learn more: [Payment Kit Standard](/onchain-finance/payment-kit).
 
 Write your own Move module when you need onchain spending caps, allowlists, expiry, or settlement logic that the Payment Kit does not cover. This is the right choice for agent spending mandates and regulated payment flows.
 
-```move
-module example::payments;
-
-use sui::coin::Coin;
-use sui::sui::SUI;
-
-public struct PaymentConfig has key {
-    id: UID,
-    max_per_tx: u64,
-    authorized_recipients: vector<address>,
-}
-
-public fun execute_payment(
-    config: &PaymentConfig,
-    payment: Coin<SUI>,
-    recipient: address,
-    ctx: &mut TxContext,
-) {
-    assert!(payment.value() <= config.max_per_tx, 0);
-    assert!(config.authorized_recipients.contains(&recipient), 1);
-    transfer::public_transfer(payment, recipient);
-}
-```
+<ImportContent source="examples/onchain-finance/choose-payments-model/sources/payments.move" mode="code" tag="payments" />
 
 Learn more: [Spending Policies and Mandates](/onchain-finance/agentic-payments/spending-policies).
 

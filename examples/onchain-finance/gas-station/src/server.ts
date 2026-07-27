@@ -6,6 +6,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { toBase64, fromBase64 } from '@mysten/sui/utils';
+import { TransactionDataBuilder } from '@mysten/sui/transactions';
 
 import { GasCoinPool } from './pool.js';
 
@@ -25,10 +26,15 @@ await pool.initialize(client, sponsorAddress);
 
 const GAS_BUDGET = 10_000_000; // 0.01 SUI
 
-// Track pending sponsorships: gasCoinId → expected transaction bytes.
-// The confirm endpoint verifies the finalized transaction actually used
-// the gas coin before releasing it back to the pool.
-const pendingSponsorships = new Map<string, { txBytesB64: string }>();
+// Track pending sponsorships: gasCoinId → expected digest and coin version.
+// The confirm endpoint requires the exact digest the server computed at
+// sponsor time. The coin is only released after verifying the transaction
+// onchain or confirming the coin version advanced.
+interface PendingSponsorship {
+	expectedDigest: string;
+	coinVersionAtSponsorship: string;
+}
+const pendingSponsorships = new Map<string, PendingSponsorship>();
 // docs::/#server-setup
 
 // docs::#sponsor-endpoint
@@ -58,19 +64,21 @@ app.post('/sponsor', async (req, res) => {
 				digest: gasCoin.digest,
 			}]);
 
-			// 4. Build the final transaction bytes
+			// 4. Build the final transaction bytes and compute the digest
 			const bytes = await tx.build({ client });
 			const builtB64 = toBase64(bytes);
+			const expectedDigest = TransactionDataBuilder.getDigestFromBytes(bytes);
 
 			// 5. Sign with the sponsor key
 			const sponsorSig = await sponsor.signTransaction(bytes);
 
-			// 6. Record the sponsorship so /confirm can verify the digest
-			pendingSponsorships.set(gasCoin.objectId, { txBytesB64: builtB64 });
+			// 6. Record the expected digest so /confirm can verify
+			pendingSponsorships.set(gasCoin.objectId, {
+				expectedDigest,
+				coinVersionAtSponsorship: gasCoin.version,
+			});
 
 			// 7. Return the signed bytes, sponsor signature, and coin ID.
-			//    The client must call POST /sponsor/confirm after submission
-			//    so the pool can update the coin version and release it.
 			res.json({
 				txBytes: builtB64,
 				sponsorSignature: sponsorSig.signature,
@@ -88,39 +96,30 @@ app.post('/sponsor', async (req, res) => {
 
 // docs::#confirm-endpoint
 // Client calls this after submitting the dual-signed transaction.
-// The server verifies the finalized transaction actually used the
-// reserved gas coin before releasing it back to the pool.
+// The server only releases the gas coin after verifying the provided
+// digest matches the transaction it sponsored and the coin version
+// has advanced onchain.
 app.post('/sponsor/confirm', async (req, res) => {
 	const { gasCoinId, digest } = req.body;
 
-	// Verify this gas coin has a pending sponsorship
+	// 1. Verify this gas coin has a pending sponsorship
 	const pending = pendingSponsorships.get(gasCoinId);
 	if (!pending) {
 		res.status(400).json({ error: 'No pending sponsorship for this gas coin' });
 		return;
 	}
 
+	// 2. Reject if the digest does not match what the server signed
+	if (digest !== pending.expectedDigest) {
+		res.status(400).json({ error: 'Digest does not match the sponsored transaction' });
+		return;
+	}
+
 	try {
-		// Wait for the transaction to finalize
-		await client.waitForTransaction({ digest });
+		// 3. Wait for the exact sponsored transaction to finalize
+		await client.waitForTransaction({ digest: pending.expectedDigest });
 
-		// Verify the finalized transaction actually used this gas coin
-		const txResult = await client.getTransactionBlock({
-			digest,
-			options: { showInput: true },
-		});
-
-		const gasPayment = txResult.transaction?.data.gasData.payment;
-		const usedGasCoin = gasPayment?.some((p) => p.objectId === gasCoinId);
-
-		if (!usedGasCoin) {
-			res.status(400).json({ error: 'Transaction did not use the expected gas coin' });
-			return;
-		}
-
-		// Re-fetch the gas coin to get its updated version.
-		// Gas is always charged (even on failed transactions),
-		// so the coin version changes in both cases.
+		// 4. Re-fetch the gas coin to get its updated version
 		const coinObj = await client.getObject({ id: gasCoinId });
 		if (coinObj.data) {
 			pool.release(gasCoinId, coinObj.data.version, coinObj.data.digest);
@@ -128,18 +127,23 @@ app.post('/sponsor/confirm', async (req, res) => {
 		pendingSponsorships.delete(gasCoinId);
 		res.json({ ok: true });
 	} catch {
-		// RPC error: try a direct object fetch as fallback.
+		// RPC error or timeout. Only release the coin if we can confirm
+		// its version advanced (proving the sponsored tx executed).
 		try {
 			const coinObj = await client.getObject({ id: gasCoinId });
-			if (coinObj.data) {
+			if (coinObj.data && coinObj.data.version !== pending.coinVersionAtSponsorship) {
+				// Coin version advanced: the sponsored tx (or some tx) consumed it.
 				pool.release(gasCoinId, coinObj.data.version, coinObj.data.digest);
+				pendingSponsorships.delete(gasCoinId);
 			}
+			// If version unchanged, keep the coin reserved. The client
+			// can retry /confirm or the sponsorship times out via a
+			// background cleanup job (not shown).
 		} catch {
-			// Object fetch also failed. Remove the coin from the pool.
-			// A background replenishment job replaces it.
-			pool.discard(gasCoinId);
+			// Cannot reach RPC at all. Keep the coin reserved rather
+			// than releasing it unsafely. A background job should
+			// periodically reconcile stale reservations.
 		}
-		pendingSponsorships.delete(gasCoinId);
 		res.json({ ok: true });
 	}
 });

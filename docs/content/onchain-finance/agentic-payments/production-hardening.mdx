@@ -65,60 +65,11 @@ For teams using feature flag services (LaunchDarkly, Unleash, or similar), check
 
 An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the offchain kill-switch fails (agent ignoring the flag, stale config), the onchain check prevents execution.
 
-```move
-module example::admin_config;
-
-const EPaused: u64 = 0;
-const ENotAdmin: u64 = 1;
-
-public struct AdminConfig has key {
-    id: UID,
-    paused: bool,
-    admin: address,
-}
-
-public struct AdminCap has key, store {
-    id: UID,
-}
-
-fun init(ctx: &mut TxContext) {
-    let config = AdminConfig {
-        id: object::new(ctx),
-        paused: false,
-        admin: ctx.sender(),
-    };
-    transfer::share_object(config);
-    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
-}
-
-public fun assert_not_paused(config: &AdminConfig) {
-    assert!(!config.paused, EPaused);
-}
-
-public fun pause(_cap: &AdminCap, config: &mut AdminConfig) {
-    config.paused = true;
-}
-
-public fun unpause(_cap: &AdminCap, config: &mut AdminConfig) {
-    config.paused = false;
-}
-```
+<ImportContent source="examples/onchain-finance/production-hardening/sources/admin_config.move" mode="code" tag="admin_config" />
 
 Your spending mandate's `execute_spend` function calls `admin_config::assert_not_paused(config)` as its first operation. When the admin pauses the system, every agent transaction aborts immediately.
 
-```move
-public fun execute_spend<T>(
-    config: &AdminConfig,
-    mandate: &mut SpendingMandate,
-    payment: Coin<T>,
-    recipient: address,
-    clock: &Clock,
-    ctx: &TxContext,
-) {
-    admin_config::assert_not_paused(config);
-    // ... rest of spend logic
-}
-```
+<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_1.move" mode="code" tag="snippet_1" />
 
 ## Retry safety
 
@@ -146,22 +97,7 @@ Store idempotency keys in a durable store (database, Redis) with the transaction
 
 For onchain idempotency, the [Payment Kit](/onchain-finance/payment-kit) provides built-in duplicate prevention through `PaymentRegistry`. If you are using a custom Move module, you can implement a similar pattern:
 
-```move
-use sui::table::Table;
-
-public struct ProcessedKeys has key {
-    id: UID,
-    keys: Table<String, bool>,
-}
-
-public fun assert_not_processed(store: &ProcessedKeys, key: &String) {
-    assert!(!store.keys.contains(key), EDuplicateOperation);
-}
-
-public fun mark_processed(store: &mut ProcessedKeys, key: String) {
-    store.keys.add(key, true);
-}
-```
+<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_2.move" mode="code" tag="snippet_2" />
 
 ## Circuit breaker
 
