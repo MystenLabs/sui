@@ -12,6 +12,7 @@ use std::str::FromStr;
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
 use futures::TryStreamExt;
+use move_bytecode_verifier_meter::Scope;
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui::client_commands::{
@@ -1182,6 +1183,49 @@ async fn test_verify_bytecode_meter_unsupported_protocol_version() -> Result<(),
     assert!(
         err.contains("newer than the maximum version"),
         "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_verify_bytecode_meter_on_package() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+
+    let client = context.grpc_client()?;
+    let chain_id = client.get_chain_identifier().await?.to_string();
+    let (_tmp, package_path) =
+        create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
+
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None;
+
+    let resp = SuiClientCommands::VerifyBytecodeMeter {
+        package_path: Some(package_path),
+        protocol_version: None,
+        module_paths: vec![],
+        build_config,
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::VerifyBytecodeMeter {
+        success,
+        used_ticks,
+        ..
+    } = resp
+    else {
+        unreachable!("Invalid response");
+    };
+
+    assert!(
+        success,
+        "dummy_modules_publish should meter under the limit"
+    );
+    assert!(
+        used_ticks.max_ticks(Scope::Package) > 0,
+        "the package's modules should have been metered"
     );
 
     Ok(())
