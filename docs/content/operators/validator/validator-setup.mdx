@@ -102,11 +102,17 @@ For higher security, run the full key generation on a machine with no network ac
 sui client
 ```
 
-2. Generate or import your account key and set it as the active address:
+2. Generate a keystore-backed account key (this adds the key to `sui.keystore` and sets it as the active address):
 
 ```bash
-sui keytool generate ed25519
-sui client switch --address <GENERATED_ADDRESS>
+sui client new-address ed25519
+```
+
+If you already have an account key, import it instead:
+
+```bash
+sui keytool import <PRIVATE_KEY_BASE64_OR_HEX> ed25519
+sui client switch --address <IMPORTED_ADDRESS>
 ```
 
 3. Run `make-validator-info` on the air-gapped machine. This generates all four key files (`protocol.key`, `account.key`, `network.key`, `worker.key`) and the `validator.info` file:
