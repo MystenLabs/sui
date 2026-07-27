@@ -54,10 +54,7 @@ builder_paths:
     stage: Advanced
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-A [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) runs a sequence of commands as one atomic transaction: either every command applies or none does, and one command's result can feed the next. That makes DeepBook operations composable. The samples below build three compositions and run compile-checked against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1, referencing pools and coins by SDK key rather than hardcoding onchain IDs. For the reusable CLI and SDK templates behind them, see the [PTB and CLI cookbook](/onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook).
+A [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) runs a sequence of commands as one atomic transaction: either every command applies or none does, and one command's result can feed the next. That makes DeepBook operations composable. The samples below build three compositions and run compile-checked against `@mysten/deepbook-v3` and `@mysten/sui`, referencing pools and coins by SDK key rather than hardcoding onchain IDs. For the reusable CLI and SDK templates behind them, see the [PTB and CLI cookbook](/onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook).
 
 :::caution
 

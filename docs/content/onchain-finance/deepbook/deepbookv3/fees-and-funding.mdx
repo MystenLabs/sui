@@ -54,7 +54,7 @@ builder_paths:
 
 DEEP pays DeepBook trading fees. Before placing fee-paying orders, you fund a [`BalanceManager`](/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager) with DEEP, and optionally stake DEEP to reduce your fees. You can also pay fees with the input token instead of DEEP.
 
-The TypeScript samples on this page live in the `examples/deepbook-spot` package and type-check with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1. They reference pools and coins by SDK key (for example `DEEP_SUI`, `SUI_DBUSDC`, `DEEP`) rather than hardcoding onchain IDs. See the [DeepBookV3 SDK constants](/onchain-finance/deepbook/deepbookv3-sdk#keys) for the key-to-ID mapping and [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information) for the canonical IDs.
+The TypeScript samples on this page live in the `examples/deepbook-spot` package and type-check with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`. They reference pools and coins by SDK key (for example `DEEP_SUI`, `SUI_DBUSDC`, `DEEP`) rather than hardcoding onchain IDs. See the [DeepBookV3 SDK constants](/onchain-finance/deepbook/deepbookv3-sdk#keys) for the key-to-ID mapping and [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information) for the canonical IDs.
 
 ## Pay fees in DEEP or the input token
 
@@ -81,7 +81,7 @@ Because this rate floats, read the DEEP a trade needs at execution time rather t
 
 ## Maker, taker, and staking fees
 
-Taker fee, maker fee, and the stake requirement are per-pool governance parameters (`TradeParams`), not constants. Governance can change them, so read them onchain instead of hardcoding:
+Maker fee, taker fee, and the stake requirement are per-pool governance parameters (`TradeParams`), not constants. Governance can change them, so read them onchain instead of hardcoding:
 
 <ImportContent source="examples/deepbook-spot/src/read-fees.ts" mode="code" tag="read-fees" />
 
@@ -108,9 +108,12 @@ There is no Testnet DEEP faucet, by design: the DEEP token's treasury cap is loc
 - **Token-request form (reliable):** the [DeepBook Testnet token request form](https://tally.so/r/Xx102L) grants DEEP and quote assets such as DBUSDC directly. Use it as the default, and always for quote assets.
 - **Swap SUI for DEEP (when the book has liquidity):** on the whitelisted `DEEP_SUI` pool, faucet SUI converts to DEEP with no BalanceManager. The Testnet `DEEP_SUI` book is thin and intermittent, so treat this as a convenience, not a guarantee.
 
-##### Step 0: Update the CLI and confirm your environment
-
-Version skew between your CLI and the network produces confusing failures, so do this first. Update the CLI with `suiup update`, then check `sui --version` to confirm the client and server API versions match. Confirm your active environment points at a current Testnet RPC with `sui client active-env` and `sui client envs`. A stale or wrong RPC URL reads empty balances and rejects transactions.
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] A current CLI, updated with `suiup update`: version skew between your CLI and the network produces confusing failures. Confirm the client and server API versions match with `sui --version`. See [Install Sui](/references/cli/client).
+- [x] An active environment on a current Testnet RPC: check with `sui client active-env` and `sui client envs`, because a stale or wrong RPC URL reads empty balances and rejects transactions. See [Sui environment setup](/references/contribute/sui-environment).
+</TabItem>
+</Tabs>
 
 ##### Step 1: Get Testnet SUI
 

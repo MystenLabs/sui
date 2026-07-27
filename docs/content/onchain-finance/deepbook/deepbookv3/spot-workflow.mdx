@@ -50,12 +50,9 @@ builder_paths:
     stage: DeFi SDK
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 Run a complete DeepBook spot order lifecycle on Sui Testnet with real transactions: create a `BalanceManager`, deposit, place a resting limit order, read its status, cancel it, then place a maker order and fill it with your own taker order, and withdraw. Each onchain step lists what to observe, so the page doubles as a verification checklist.
 
-It uses the `DEEP_SUI` pool, which you can fund by finishing the [Fees and Funding](/onchain-finance/deepbook/deepbookv3/fees-and-funding) flow (Testnet SUI plus DEEP). The samples live in the `examples/deepbook-spot` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1, and reference pools and coins by SDK key rather than hardcoding onchain IDs.
+It uses the `DEEP_SUI` pool, which you can fund by finishing the [Fees and Funding](/onchain-finance/deepbook/deepbookv3/fees-and-funding) flow (Testnet SUI plus DEEP). The samples live in the `examples/deepbook-spot` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`, and reference pools and coins by SDK key rather than hardcoding onchain IDs.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">

@@ -54,9 +54,6 @@ builder_paths:
     stage: Margin
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 DeepBook Margin builds on the spot order book, but integrating it is not the same job as integrating spot. The structural differences an integrator meets fall into five areas: the object model, the isolated lending pools, the trading path, liquidation, and the events to index. For the objects in isolation see [DeepBook Margin design](/onchain-finance/deepbook/deepbook-margin/design); for a hands-on run see the [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow).
 
 :::caution
@@ -65,7 +62,7 @@ Margin trading borrows funds against collateral, and anyone can liquidate a borr
 
 :::
 
-## The object model
+## The margin object model
 
 Spot trading uses a `BalanceManager`: it holds your balances, you hold its `TradeCap`, and you trade a `Pool` directly. A single `BalanceManager` works across every pool.
 
@@ -117,10 +114,10 @@ Margin activity emits its own events, distinct from the spot order events. The [
 
 Every row below reflects current source or an existing reference page.
 
-| Aspect | Spot (`BalanceManager`) | Margin (`MarginManager`) | Reference |
+| **Aspect** | **Spot (`BalanceManager`)** | **Margin (`MarginManager`)** | **Reference** |
 | --- | --- | --- | --- |
-| Fund custody | Holds your balances directly | Wraps a `BalanceManager` inside the manager object | [Object model](#the-object-model) |
-| Trade authorization | You hold the `TradeCap` and trade the pool directly | The manager holds the deposit, withdraw, and trade caps; proofs are internal | [Object model](#the-object-model) |
+| Fund custody | Holds your balances directly | Wraps a `BalanceManager` inside the manager object | [Object model](#the-margin-object-model) |
+| Trade authorization | You hold the `TradeCap` and trade the pool directly | The manager holds the deposit, withdraw, and trade caps; proofs are internal | [Object model](#the-margin-object-model) |
 | Pool scope | One manager works across all pools | Bound to a single DeepBook pool | [Design](/onchain-finance/deepbook/deepbook-margin/design#margin-manager) |
 | Borrowing | None | Borrow one side from one isolated `MarginPool` at a time | [Design](/onchain-finance/deepbook/deepbook-margin/design#margin-registry) |
 | Order entry | `placeLimitOrder` on the pool | `place_limit_order_v2` through the pool proxy, risk-checked | [Trading path](#the-trading-path) |

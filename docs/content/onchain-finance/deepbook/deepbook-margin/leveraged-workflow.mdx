@@ -57,9 +57,6 @@ builder_paths:
     stage: Margin
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 Open a leveraged position on DeepBook Margin end to end on Sui Testnet: create a `MarginManager`, read the pool's risk parameters and borrow liquidity onchain, deposit collateral, borrow to open leverage, monitor your risk ratio, then close the position, repay the borrow, and withdraw. Each step lists what to observe, so the page doubles as a verification checklist.
 
 Margin trading borrows funds against collateral, and anyone can liquidate a borrowed position. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) before you start, and keep it open alongside this walkthrough.
@@ -72,13 +69,13 @@ Leverage multiplies losses as well as gains, and interest accrues on your borrow
 
 This walkthrough uses the `SUI_DBUSDC` pool, borrowing the stable quote asset (DBUSDC) against a volatile base collateral (SUI) to open a leveraged long on SUI. Health monitoring here is entirely oracle-priced, so the pair choice matters: on Testnet the SUI and USDC price feeds are canonical Pyth feeds, whereas the Testnet DEEP feed is a substitute (an HFT feed) rather than a dedicated DEEP oracle. Do not build oracle-priced risk math on the substitute feed.
 
-The samples live in the `examples/deepbook-margin` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` version 1.5.9 and `@mysten/sui` version 2.22.1, and reference pools, coins, and margin pools by SDK key rather than hardcoding onchain IDs.
+The samples live in the `examples/deepbook-margin` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`, and reference pools, coins, and margin pools by SDK key rather than hardcoding onchain IDs.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 - [x] A current CLI: run `suiup update sui`, then `sui --version` to confirm it.
 - [x] Testnet SUI on your address for collateral and gas, from the [Sui faucet](/getting-started/onboarding/get-coins).
-- [x] For the borrow-and-trade steps, quote collateral (DBUSDC). SUI alone funds creation, reads, and gas.
+- [x] For the borrow-and-trade steps, enough SUI for collateral and gas, plus DBUSDC borrow liquidity in the margin pool. You supply SUI as collateral and borrow DBUSDC from the pool, so you do not need DBUSDC in your wallet.
 - [x] The SDK installed: `npm install @mysten/deepbook-v3 @mysten/sui`.
 </TabItem>
 </Tabs>
@@ -129,7 +126,7 @@ You borrow from a margin pool, so it must hold enough idle supply to lend. The p
 
 :::info
 
-The remaining steps borrow real funds and need quote collateral (DBUSDC) in your wallet. They appear as type-checked samples with the observable result to confirm when you run them. The code is identical to what an executed run uses, so once you hold DBUSDC you run each step in order and check the stated result.
+The remaining steps borrow real funds: they supply SUI as collateral and borrow DBUSDC from the margin pool, so you need SUI for collateral and gas and enough DBUSDC borrow liquidity in the pool, not DBUSDC in your wallet. They appear as type-checked samples with the observable result to confirm when you run them. The code is identical to what an executed run uses, so once the pool has borrow liquidity you run each step in order and check the stated result.
 
 :::
 
