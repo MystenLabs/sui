@@ -1,0 +1,270 @@
+---
+title: Validator setup
+sidebar_label: Setup
+description: >-
+  End-to-end guide for setting up a Sui validator, from key generation
+  and proof of possession to joining the committee and securing keys
+  with cold storage or a Ledger hardware wallet.
+keywords:
+  - validator setup
+  - validator keys
+  - proof of possession
+  - become candidate
+  - join committee
+  - Operation Cap
+  - key rotation
+  - cold wallet
+  - Ledger
+  - air-gapped
+  - BLS
+  - ed25519
+  - validator staking
+goal:
+  description: >-
+    Validator operator can generate keys, produce proof of possession,
+    join the validator set, delegate operations, and secure keys with
+    cold storage
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I set up a Sui validator from scratch?
+  - How do I generate validator keys and proof of possession?
+  - How do I join the Sui validator set?
+  - How do I use a Ledger or air-gapped machine for validator keys?
+  - How do I rotate validator keys?
+  - How do I delegate validator operations with Operation Cap?
+answer: >-
+  Set up a Sui validator by generating four keys (protocol, account,
+  network, worker), producing a proof of possession, calling
+  become-candidate to register onchain, staking 30M SUI, and joining the
+  committee. Secure the account key with cold storage using a Ledger
+  hardware wallet or an air-gapped machine.
+---
+
+This guide walks you through the complete validator setup process, from generating your four keys to joining the active validator set. It consolidates steps from the [configuration](/operators/validator/validator-config), [management](/operators/validator/validator-tasks), and [CLI tools](/operators/validator/node-tools) reference pages into a single procedural walkthrough.
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- **Hardware** that meets the [validator requirements](/operators/validator/validator-config#validator-requirements) (24 CPU cores, 128 GB RAM, 4 TB NVMe SSD, 1 Gbps network).
+- **Sui CLI** installed. See [Install Sui](/getting-started/onboarding/sui-install).
+- **Sui client** configured and connected to the target network. See [Configure Sui Client](/getting-started/onboarding/configure-sui-client).
+- **30M SUI** (minimum) available for self-staking or committed from delegators. See [Validator Rewards](/operators/validator/validator-rewards) for the DPoS staking model.
+
+## Step 1: Generate keys
+
+Every Sui validator needs four cryptographic keys:
+
+| Key file | Scheme | Purpose |
+|----------|--------|---------|
+| `protocol.key` | BLS12381 | Signs transactions and consensus messages |
+| `account.key` | Ed25519 | Controls staking assets and validator metadata |
+| `network.key` | Ed25519 | Authenticates state sync connections |
+| `worker.key` | Ed25519 | Authenticates consensus worker connections |
+
+Choose one of the following approaches based on your security requirements.
+
+### Option A: Local generation
+
+The `make-validator-info` command generates all four keys and produces a `validator.info` file:
+
+```bash
+sui validator make-validator-info \
+  <name> <description> <image-url> <project-url> <host-name> <gas-price>
+```
+
+This creates the key files in the current directory and outputs a `validator.info` file you use in the next steps. See [Node Tools](/operators/validator/node-tools#become-a-validator-or-join-committee) for the full command reference.
+
+### Option B: Air-gapped machine
+
+For higher security, generate keys on a machine with no network access:
+
+1. On the air-gapped machine, generate each key separately:
+
+```bash
+sui keytool generate bls12381
+sui keytool generate ed25519   # Repeat for account, network, worker
+```
+
+2. Rename the generated files to `protocol.key`, `account.key`, `network.key`, and `worker.key`.
+
+3. Copy the **public keys** (not private keys) to your online machine for the `make-validator-info` step.
+
+4. Keep the private key files on the air-gapped machine. You bring them online only when you need to sign (for example, to produce the proof of possession).
+
+For the full offline signing workflow, see [Offline Signing](/develop/transactions/transaction-auth/offline-signing).
+
+### Option C: Ledger hardware wallet
+
+You can store the `account.key` on a Ledger hardware device for maximum security. The BLS12381 `protocol.key` cannot use Ledger because Ledger does not support the BLS12381 scheme.
+
+1. Install the Ledger signer:
+
+```bash
+suiup install ledger-signer
+```
+
+2. Generate or import the account key on the Ledger:
+
+```bash
+sui external-keys generate ledger-signer
+```
+
+3. List available keys to confirm the Ledger key appears:
+
+```bash
+sui external-keys list-keys
+```
+
+The Ledger key automatically delegates signing to the hardware device when you execute transactions that require the account key. Generate the remaining three keys (protocol, network, worker) locally or on an air-gapped machine.
+
+For the full Ledger integration reference, see [External Signers CLI](/references/cli/external-signers).
+
+## Step 2: Generate proof of possession
+
+A proof of possession (PoP) proves that you control the BLS12381 protocol key. The network requires this proof when you register as a validator candidate.
+
+1. Serialize the PoP payload:
+
+```bash
+sui validator serialize-payload-pop \
+  --account-address $ACCOUNT_ADDRESS \
+  --protocol-public-key $BLS_PUBKEY
+```
+
+This outputs: `Serialized payload: $PAYLOAD_TO_SIGN`
+
+2. Sign the payload with your BLS12381 protocol key:
+
+```bash
+sui keytool sign --address $PROTOCOL_KEY_ADDRESS --data $PAYLOAD_TO_SIGN
+```
+
+If your protocol key is on an air-gapped machine, transfer the serialized payload to that machine, sign it there, and bring the signature back.
+
+The PoP uses intent prefix `[5, 0, 0]` (scope: ProofOfPossession, version: V0, app: Sui). For details on intent signing, see [Intent Signing](/develop/transactions/transaction-auth/intent-signing).
+
+## Step 3: Register as a candidate
+
+Submit your validator information to the network:
+
+```bash
+sui validator become-candidate path/to/validator.info
+```
+
+This calls `request_add_validator_candidate` onchain. After this step, your validator address can receive stake delegations but does not yet participate in consensus.
+
+Verify the registration succeeded by checking the transaction output for a successful status.
+
+## Step 4: Stake 30M SUI
+
+Your validator must accumulate at least 30M SUI in total stake (self-stake plus delegated stake) before joining the committee. You can self-stake using the CLI:
+
+```bash
+sui client call \
+  --package 0x3 \
+  --module sui_system \
+  --function request_add_stake \
+  --args 0x5 $SUI_COIN_OBJECT_ID $VALIDATOR_ADDRESS \
+  --gas-budget 10000000
+```
+
+You can also receive delegated stake from other SUI holders. The total must reach the minimum joining stake before proceeding to the next step.
+
+For details on the staking model, see [Validator Tasks: joining the validator set](/operators/validator/validator-tasks#joining-the-validator-set).
+
+## Step 5: Join the committee
+
+Once you have sufficient stake, request to join the active validator set:
+
+```bash
+sui validator join-committee
+```
+
+This calls `request_add_validator` onchain. You become a pending validator and join the active set at the start of the next epoch.
+
+:::caution
+
+Start your validator node **before** the epoch changes so you can participate from the first checkpoint. If your node is offline when the epoch starts, you miss consensus participation and may receive reduced rewards. See [Validator Deployment](/operators/validator/validator-config#deployment) for node startup instructions.
+
+:::
+
+## Step 6: Set up Operation Cap
+
+When you create a validator, the system generates an `UnverifiedValidatorOperationCap` and transfers it to your validator address. The holder of this capability can perform routine operations on your behalf (set gas prices, report other validators).
+
+### Delegate operations
+
+Transfer the Operation Cap to a hot wallet address so your cold account key stays offline:
+
+```bash
+sui client transfer --to $HOT_WALLET_ADDRESS --object-id $OPERATION_CAP_ID --gas-budget 10000000
+```
+
+The hot wallet can now perform gas price updates and validator reporting without needing the account key.
+
+### Revoke delegation
+
+To revoke a delegated Operation Cap and generate a new one:
+
+```bash
+sui client call \
+  --package 0x3 \
+  --module sui_system \
+  --function rotate_operation_cap \
+  --args 0x5 \
+  --gas-budget 10000000
+```
+
+This invalidates the old cap and creates a new one at your validator address. See [Validator Tasks: Operation Cap](/operators/validator/validator-tasks#operation-cap) for details.
+
+## Key rotation
+
+You can rotate any of your four keys using the `update-metadata` command. Key changes take effect at the next epoch.
+
+```bash
+# Rotate the protocol key.
+sui validator update-metadata --protocol-public-key $NEW_BLS_PUBKEY --proof-of-possession $NEW_POP
+
+# Rotate the network key.
+sui validator update-metadata --network-public-key $NEW_NETWORK_PUBKEY
+
+# Rotate the worker key.
+sui validator update-metadata --worker-public-key $NEW_WORKER_PUBKEY
+```
+
+After the epoch changes, restart your validator with the new key files and updated `validator.yaml` configuration. The old key files are no longer valid after the epoch transition.
+
+For the full command reference, see [Node Tools: update validator metadata](/operators/validator/node-tools#update-validator-metadata).
+
+## Cold wallet security checklist
+
+Follow these practices to protect your validator keys:
+
+- Store `account.key` offline on a Ledger, air-gapped machine, or HSM. Only bring it online for staking operations and key rotations.
+- Delegate routine operations (gas price updates, peer reporting) to an Operation Cap held by a hot wallet.
+- Rotate the Operation Cap periodically and immediately after any suspected compromise.
+- Set file permissions on all key files to `chmod 600` (owner read/write only).
+- Back up key material in geographically separate secure locations.
+- Use [multisig](/develop/transactions/transaction-auth/multisig) for high-value operations (large stake movements, key rotations) when possible.
+- Monitor for unexpected key usage with [Prometheus alerts](/operators/validator/alerts).
+- Document your recovery and rotation procedures and test them regularly.
+
+For general security guidance, see [Security Best Practices](/develop/security/best-practices).
