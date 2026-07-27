@@ -18,8 +18,9 @@ use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::Get
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
-    linters::LINT_WARNING_PREFIX,
+    linters::LINT_WARNING_ORIGIN as MOVE_LINT_ORIGIN,
     shared::files::MappedFiles,
+    sui_mode::linters::LINT_WARNING_ORIGIN as SUI_LINT_ORIGIN,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -249,9 +250,16 @@ impl BuildConfig {
 /// There may be additional information that needs to be displayed after diagnostics are reported
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
-    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-    let (filtered_diags_num, unique) =
-        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
+    let lint_origins = [MOVE_LINT_ORIGIN, SUI_LINT_ORIGIN];
+    let any_linter_warnings = lint_origins
+        .iter()
+        .any(|origin| warning_diags.any_with_origin(*origin));
+    let (filtered_diags_num, unique) = lint_origins
+        .iter()
+        .map(|origin| warning_diags.filtered_source_diags_with_origin(*origin))
+        .fold((0, 0), |(count, unique), (origin_count, origin_unique)| {
+            (count + origin_count, unique + origin_unique)
+        });
     if let Some(f) = files {
         report_warnings(f, warning_diags);
     }

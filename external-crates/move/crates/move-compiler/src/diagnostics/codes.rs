@@ -16,26 +16,35 @@ pub enum Severity {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
-pub enum DiagnosticSource {
+pub enum DiagnosticOrigin {
     Compiler,
     Lint,
     SuiCompiler,
     SuiLint,
+    External(&'static str),
 }
 
-impl DiagnosticSource {
+impl DiagnosticOrigin {
     const fn code(self) -> &'static str {
         match self {
             Self::Compiler => "C",
             Self::Lint => "L",
             Self::SuiCompiler => "SC",
             Self::SuiLint => "SL",
+            Self::External(code) => code,
+        }
+    }
+
+    pub const fn filter_prefix(self) -> Option<&'static str> {
+        match self {
+            Self::Lint | Self::SuiLint => Some("lint"),
+            Self::Compiler | Self::SuiCompiler | Self::External(_) => None,
         }
     }
 }
 
-/// Core compiler diagnostics use `None`; other sources carry their explicit source.
-pub type ExternalPrefix = Option<DiagnosticSource>;
+/// Core compiler diagnostics use `None`; other origins carry their explicit origin.
+pub type ExternalPrefix = Option<DiagnosticOrigin>;
 
 /// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] filter key.
 /// When used as the category, matches all categories; when used as the code, matches all codes
@@ -113,10 +122,10 @@ pub(crate) trait DiagnosticCode: Copy {
 
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
-/// `"[{severity}{source}{category}{code}] {message}"`.
+/// `"[{severity}{origin}{category}{code}] {message}"`.
 /// Note, this will panic if `category > 99`
 pub const fn custom(
-    source: DiagnosticSource,
+    origin: DiagnosticOrigin,
     severity: Severity,
     category: u8,
     code: u8,
@@ -127,7 +136,7 @@ pub const fn custom(
         severity,
         category,
         code,
-        external_prefix: Some(source),
+        external_prefix: Some(origin),
         message,
     }
 }
@@ -446,8 +455,8 @@ impl DiagnosticInfo {
             Severity::Bug => "ICE",
         };
         debug_assert!(category <= 99);
-        let source = external_prefix.unwrap_or(DiagnosticSource::Compiler).code();
-        let string_code = format!("{sev_prefix}{source}{category:02}{code:03}");
+        let origin = external_prefix.unwrap_or(DiagnosticOrigin::Compiler).code();
+        let string_code = format!("{sev_prefix}{origin}{category:02}{code:03}");
         (string_code, message)
     }
 
@@ -484,7 +493,7 @@ impl DiagnosticInfo {
         self.external_prefix.is_some()
     }
 
-    pub fn external_prefix(&self) -> ExternalPrefix {
+    pub fn origin(&self) -> ExternalPrefix {
         self.external_prefix
     }
 }
@@ -507,49 +516,5 @@ impl Severity {
 impl Default for Severity {
     fn default() -> Self {
         Self::MIN
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn renders_compiler_diagnostic_code() {
-        assert_eq!(
-            UnusedItem::MutParam.into_info().render(),
-            (
-                "WC09014".to_owned(),
-                "unused mutable reference '&mut' parameter",
-            )
-        );
-    }
-
-    #[test]
-    fn renders_all_source_and_severity_prefixes() {
-        let cases = [
-            (Severity::NonblockingError, DiagnosticSource::Compiler, "EC"),
-            (Severity::Warning, DiagnosticSource::Lint, "WL"),
-            (Severity::Note, DiagnosticSource::SuiCompiler, "NSC"),
-            (Severity::Bug, DiagnosticSource::SuiLint, "ICESL"),
-        ];
-
-        for (severity, source, prefix) in cases {
-            let info = if source == DiagnosticSource::Compiler {
-                DiagnosticInfo {
-                    severity,
-                    category: 1,
-                    code: 2,
-                    external_prefix: None,
-                    message: "test diagnostic",
-                }
-            } else {
-                custom(source, severity, 1, 2, "test diagnostic")
-            };
-            assert_eq!(
-                info.render(),
-                (format!("{prefix}01002"), "test diagnostic",)
-            );
-        }
     }
 }

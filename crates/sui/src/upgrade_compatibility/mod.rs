@@ -31,7 +31,7 @@ use move_binary_format::{
 };
 use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
-use move_compiler::diagnostics::codes::{DiagnosticInfo, DiagnosticSource};
+use move_compiler::diagnostics::codes::{DiagnosticInfo, DiagnosticOrigin};
 use move_compiler::{
     diagnostics::{
         Diagnostic, Diagnostics,
@@ -612,7 +612,7 @@ fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
     }
 }
 
-const COMPATIBILITY_PREFIX: DiagnosticSource = DiagnosticSource::SuiCompiler;
+const COMPATIBILITY_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::SuiCompiler;
 /// Generates an enum Category along with individual enum for each individual category
 /// and impls into diagnostic info for each category.
 macro_rules! upgrade_codes {
@@ -643,7 +643,7 @@ macro_rules! upgrade_codes {
                         Self::ZeroPlaceholder =>
                             panic!("do not use placeholder error code"),
                         $(Self::$code => custom(
-                            COMPATIBILITY_PREFIX,
+                            COMPATIBILITY_ORIGIN,
                             Severity::NonblockingError,
                             Category::$cat as u8,
                             self as u8,

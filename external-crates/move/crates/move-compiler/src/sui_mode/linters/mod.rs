@@ -5,12 +5,12 @@ use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticSource, DiagnosticsID},
+        codes::{DiagnosticOrigin, DiagnosticsID},
         filter::FilterName,
     },
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{ALLOW_ATTR_CATEGORY, LintLevel, LinterDiagnosticCategory},
+    linters::{LintLevel, LinterDiagnosticCategory},
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -87,7 +87,7 @@ pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-pub const LINT_WARNING_PREFIX: DiagnosticSource = DiagnosticSource::SuiLint;
+pub const LINT_WARNING_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::SuiLint;
 
 #[repr(u8)]
 pub enum LinterDiagnosticCode {
@@ -108,13 +108,15 @@ pub enum LinterDiagnosticCode {
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     let sui = LinterDiagnosticCategory::Sui as u8;
-    // `lint(all)` is registered by the core linter (`linters::known_filters`); don't
-    // register it again here or `filter_from_str` returns duplicate ids.
     let filters = vec![
+        (
+            Symbol::from(crate::diagnostics::filter::FILTER_ALL),
+            vec![DiagnosticsID::all(Some(LINT_WARNING_ORIGIN))],
+        ),
         (
             Symbol::from(SHARE_OWNED_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::ShareOwned as u8,
             )],
@@ -122,7 +124,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(SELF_TRANSFER_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::SelfTransfer as u8,
             )],
@@ -130,7 +132,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(CUSTOM_STATE_CHANGE_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::CustomStateChange as u8,
             )],
@@ -138,7 +140,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(COIN_FIELD_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::CoinField as u8,
             )],
@@ -146,7 +148,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(FREEZE_WRAPPED_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::FreezeWrapped as u8,
             )],
@@ -154,7 +156,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(COLLECTION_EQUALITY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::CollectionEquality as u8,
             )],
@@ -162,7 +164,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(PUBLIC_RANDOM_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::PublicRandom as u8,
             )],
@@ -170,7 +172,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(MISSING_KEY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::MissingKey as u8,
             )],
@@ -178,7 +180,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(FREEZING_CAPABILITY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::FreezingCapability as u8,
             )],
@@ -186,7 +188,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::PreferMutableTxContext as u8,
             )],
@@ -194,7 +196,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
             )],
@@ -202,7 +204,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(UNCALLABLE_FUNCTION_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::UncallableFunction as u8,
             )],
@@ -210,14 +212,17 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(LINT_WARNING_PREFIX),
+                Some(LINT_WARNING_ORIGIN),
                 sui,
                 LinterDiagnosticCode::UnusedObjWithFields as u8,
             )],
         ),
     ];
 
-    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
+    (
+        LINT_WARNING_ORIGIN.filter_prefix().map(Symbol::from),
+        filters,
+    )
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {

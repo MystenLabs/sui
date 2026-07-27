@@ -12,7 +12,7 @@ use crate::{
     sui_mode::{
         SUI_ADDR_VALUE,
         linters::{
-            FREEZE_FUN, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
+            FREEZE_FUN, LINT_WARNING_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
             PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
         },
     },
@@ -26,7 +26,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_ORIGIN,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::FreezingCapability as u8,

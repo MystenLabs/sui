@@ -29,7 +29,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    INVALID_LOC, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
+    INVALID_LOC, LINT_WARNING_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
     PUBLIC_TRANSFER_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME, type_abilities,
 };
 
@@ -39,7 +39,7 @@ const TRANSFER_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
 ];
 
 const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
+    LINT_WARNING_ORIGIN,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::SelfTransfer as u8,
