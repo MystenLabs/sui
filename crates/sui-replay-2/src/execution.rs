@@ -33,7 +33,9 @@ use sui_types::{
     inner_temporary_store::InnerTemporaryStore,
     metrics::ExecutionMetrics,
     object::Object,
-    storage::{BackingPackageStore, PackageObject, ParentSync, RuntimeObjectResolver},
+    storage::{
+        BackingPackageStore, BackingStore, PackageObject, ParentSync, RuntimeObjectResolver,
+    },
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
 };
@@ -59,6 +61,47 @@ pub struct TxnContextAndEffects {
     pub inner_store: InnerTemporaryStore,      // temporary store used during execution
     pub checkpoint: u64,                       // checkpoint where the transaction was included
     pub protocol_version: u64,                 // protocol version used for execution
+}
+
+/// Inputs whose trust and gas semantics have already been established by the caller.
+///
+/// Replay deliberately constructs trusted inputs, while local simulation will supply values
+/// produced by canonical transaction checks. The shared execution core does neither.
+pub(crate) struct CheckedExecutionInputs {
+    pub input_objects: CheckedInputObjects,
+    pub gas_status: SuiGasStatus,
+    pub execution_params: ExecutionOrEarlyError,
+    pub system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+}
+
+/// Values produced directly by the versioned execution engine.
+pub(crate) struct TransactionExecutionResult {
+    pub transaction_result: Result<(), ExecutionError>,
+    pub effects: TransactionEffects,
+    pub gas_status: SuiGasStatus,
+    pub inner_store: InnerTemporaryStore,
+}
+
+/// Add created outputs to the object collections used for replay and dry-run artifacts.
+/// They cannot appear before execution, so copy their bodies from temporary-store writes.
+pub(crate) fn extend_object_cache_with_created_outputs(
+    object_cache: &mut BTreeMap<ObjectID, BTreeMap<u64, Object>>,
+    effects: &TransactionEffects,
+    inner_store: &InnerTemporaryStore,
+) -> Result<(), Error> {
+    for (object_ref, _owner) in effects.created() {
+        let object = inner_store.written.get(&object_ref.0).ok_or_else(|| {
+            anyhow!(
+                "created object {} is missing from temporary store writes",
+                object_ref.0,
+            )
+        })?;
+        object_cache
+            .entry(object.id())
+            .or_default()
+            .insert(object.version().value(), object.clone());
+    }
+    Ok(())
 }
 
 // Entry point. Executes a transaction.
@@ -129,50 +172,34 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
-    let (inner_store, gas_status, effects, _execution_timing, result) = executor
-        .executor
-        .execute_transaction_to_effects_and_execution_error(
-            &store,
-            protocol_config,
-            executor.execution_metrics.clone(),
-            false, // expensive checks
-            execution_params,
-            &epoch,
-            epoch_start_timestamp,
+    let TransactionExecutionResult {
+        transaction_result: result,
+        effects,
+        gas_status,
+        inner_store,
+    } = execute_checked_transaction(
+        &executor,
+        &store,
+        &txn_data,
+        digest,
+        epoch,
+        epoch_start_timestamp,
+        CheckedExecutionInputs {
             input_objects,
-            std::collections::BTreeMap::new(),
-            txn_data.gas_data().clone(),
             gas_status,
-            txn_data.kind().clone(),
-            None, // compat_args
-            txn_data.sender(),
-            digest,
-            trace_builder_opt,
-        );
+            execution_params,
+            // Replay has historically supplied no implicit system-object versions.
+            system_object_versions: BTreeMap::new(),
+        },
+        trace_builder_opt,
+    );
     let ReplayStore {
         object_cache,
         checkpoint: _,
         store: _,
     } = store;
     let mut object_cache = object_cache.into_inner();
-
-    // Get created objects from transaction effects
-    for (object_ref, _owner) in effects.created() {
-        let object_id = object_ref.0;
-        // Look for the created object in inner_store's written objects
-        if let Some(object) = inner_store.written.get(&object_id) {
-            object_cache
-                .entry(object_id)
-                .or_default()
-                .insert(object.version().value(), object.clone());
-        } else {
-            // Return error if created object is not found in inner_store
-            return Err(anyhow!(
-                "Created object {} not found in inner_store written objects",
-                object_id
-            ));
-        }
-    }
+    extend_object_cache_with_created_outputs(&mut object_cache, &effects, &inner_store)?;
 
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
@@ -188,6 +215,54 @@ pub fn execute_transaction_to_effects(
             protocol_version: protocol_config.version.as_u64(),
         },
     ))
+}
+
+/// Executes a transaction whose checked inputs, gas status, and early-error policy were prepared
+/// by the caller.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn execute_checked_transaction(
+    executor: &ReplayExecutor,
+    store: &dyn BackingStore,
+    txn_data: &TransactionData,
+    digest: TransactionDigest,
+    epoch: EpochId,
+    epoch_start_timestamp: u64,
+    inputs: CheckedExecutionInputs,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+) -> TransactionExecutionResult {
+    let CheckedExecutionInputs {
+        input_objects,
+        gas_status,
+        execution_params,
+        system_object_versions,
+    } = inputs;
+    let (inner_store, gas_status, effects, _execution_timing, transaction_result) = executor
+        .executor
+        .execute_transaction_to_effects_and_execution_error(
+            store,
+            &executor.protocol_config,
+            executor.execution_metrics.clone(),
+            false, // expensive checks
+            execution_params,
+            &epoch,
+            epoch_start_timestamp,
+            input_objects,
+            system_object_versions,
+            txn_data.gas_data().clone(),
+            gas_status,
+            txn_data.kind().clone(),
+            None, // compat_args
+            txn_data.sender(),
+            digest,
+            trace_builder_opt,
+        );
+
+    TransactionExecutionResult {
+        transaction_result,
+        effects,
+        gas_status,
+        inner_store,
+    }
 }
 
 impl ReplayExecutor {
