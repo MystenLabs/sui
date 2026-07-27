@@ -51,7 +51,6 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
-use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
@@ -431,6 +430,11 @@ impl OffchainCluster {
             ..Default::default()
         };
 
+        // One switch drives both sides: the kv-rpc server only serves the List
+        // APIs when they are enabled, and the graphql/jsonrpc readers only
+        // consume them when they are. Off by default, matching production.
+        let enable_list_apis = kv_rpc_config.enable_list_apis();
+
         let (bigtable_client, bigtable_emulator, archival_service) =
             start_archival(client_args.clone(), kv_rpc_address, kv_rpc_config, registry).await?;
 
@@ -440,6 +444,7 @@ impl OffchainCluster {
                     .parse()
                     .expect("Failed to parse kv-rpc URI"),
             ),
+            enable_list_apis: Some(enable_list_apis),
             ..Default::default()
         };
 
@@ -864,7 +869,6 @@ async fn start_archival(
         BtIndexerConfig::default(),
         PipelineLayer::default(),
         Chain::Unknown,
-        &ALPHA_PIPELINE_NAMES,
         registry,
     )
     .await
@@ -884,17 +888,12 @@ async fn start_archival(
         kv_rpc_config.ledger_history(),
         kv_rpc_config.request_bigtable_concurrency(),
         kv_rpc_config.stages(),
+        kv_rpc_config.enable_list_apis(),
     )
     .await
     .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
-        .start_service(
-            kv_rpc_address,
-            sui_kv_rpc::ServerConfig {
-                enable_experimental_query_apis: true,
-                ..Default::default()
-            },
-        )
+        .start_service(kv_rpc_address, sui_kv_rpc::ServerConfig::default())
         .await
         .context("Failed to start kv-rpc server")?;
 
