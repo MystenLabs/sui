@@ -148,7 +148,7 @@ fn exp(
             if m == module {
                 return;
             }
-            if let Some(copy_name) = context.constant_copies.get(&(m, c)) {
+            if let Some(copy_name) = context.constant_copy(&(m, c)) {
                 *e_ = E::Constant(module, copy_name);
                 return;
             }
@@ -256,13 +256,13 @@ fn synthesize_copy(
     let copy_name = ConstantName(sp(first_use, symbol));
     let cdef = G::Constant {
         warning_filter: empty_filter_scope(),
-        index: context.constant_copies.next_index(),
+        index: context.next_constant_copy_index(),
         attributes: UniqueMap::new(),
         loc: first_use,
         signature,
         value: Some(move_value_from_value(value.clone())),
     };
-    if !context.constant_copies.add(m, c, copy_name, cdef) {
+    if !context.add_constant_copy(m, c, copy_name, cdef) {
         context.add_diag(ice!((
             first_use,
             format!("mangled constant copy name collision on '{}'", copy_name)

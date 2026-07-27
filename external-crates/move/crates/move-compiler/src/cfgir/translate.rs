@@ -65,56 +65,6 @@ pub(super) enum ConstantEntry {
     Defined { signature: Box<H::BaseType> },
 }
 
-/// Module-local copies of cross-module constants synthesized for the current module. Note for
-/// future CFGIR visitor authors: these copies appear in the module's constant table like any other
-/// constant, but have no counterpart in the typing `ProgramInfo`.
-#[derive(Default)]
-pub(super) struct ConstantCopies {
-    /// source constant -> local copy name
-    by_source: BTreeMap<(ModuleIdent, ConstantName), ConstantName>,
-    /// synthesized definitions, in creation order
-    defs: Vec<(ConstantName, G::Constant)>,
-    /// continues after the module's own constants so `to_bytecode`'s sort-by-index emits copies
-    /// deterministically after them
-    next_index: usize,
-}
-
-impl ConstantCopies {
-    fn new(next_index: usize) -> Self {
-        Self {
-            by_source: BTreeMap::new(),
-            defs: vec![],
-            next_index,
-        }
-    }
-
-    pub(super) fn get(&self, source: &(ModuleIdent, ConstantName)) -> Option<ConstantName> {
-        self.by_source.get(source).copied()
-    }
-
-    /// Returns false if the mangled name is already taken by a different source constant
-    pub(super) fn add(
-        &mut self,
-        m: ModuleIdent,
-        c: ConstantName,
-        copy_name: ConstantName,
-        cdef: G::Constant,
-    ) -> bool {
-        if self.defs.iter().any(|(name, _)| *name == copy_name) {
-            return false;
-        }
-        self.by_source.insert((m, c), copy_name);
-        self.defs.push((copy_name, cdef));
-        true
-    }
-
-    pub(super) fn next_index(&mut self) -> usize {
-        let index = self.next_index;
-        self.next_index += 1;
-        index
-    }
-}
-
 pub(super) struct Context<'env> {
     pub(super) env: &'env CompilationEnv,
     pub(super) info: &'env TypingProgramInfo,
@@ -122,8 +72,15 @@ pub(super) struct Context<'env> {
     current_package: Option<Symbol>,
     /// the fold state of every constant in the program
     pub(super) constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
-    /// copies of cross-module constants synthesized for the current module
-    pub(super) constant_copies: ConstantCopies,
+    // Module-local copies of cross-module constants synthesized for the current module, as a map
+    // from the source constant to the local copy name plus the synthesized definitions in creation
+    // order. Note for future CFGIR visitor authors: these copies appear in the module's constant
+    // table like any other constant, but have no counterpart in the typing `ProgramInfo`.
+    constant_copies: BTreeMap<(ModuleIdent, ConstantName), ConstantName>,
+    constant_copy_defs: Vec<(ConstantName, G::Constant)>,
+    /// continues after the module's own constants so `to_bytecode`'s sort-by-index emits copies
+    /// deterministically after them
+    constant_copy_index: usize,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -140,7 +97,9 @@ impl<'env> Context<'env> {
             info,
             current_package: None,
             constant_defs: BTreeMap::new(),
-            constant_copies: ConstantCopies::default(),
+            constant_copies: BTreeMap::new(),
+            constant_copy_defs: vec![],
+            constant_copy_index: 0,
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
@@ -149,6 +108,49 @@ impl<'env> Context<'env> {
                 print_optimized_blocks: false,
             },
         }
+    }
+
+    fn reset_constant_copies(&mut self, next_index: usize) {
+        self.constant_copies = BTreeMap::new();
+        self.constant_copy_defs = vec![];
+        self.constant_copy_index = next_index;
+    }
+
+    fn take_constant_copy_defs(&mut self) -> Vec<(ConstantName, G::Constant)> {
+        std::mem::take(&mut self.constant_copy_defs)
+    }
+
+    pub(super) fn constant_copy(
+        &self,
+        source: &(ModuleIdent, ConstantName),
+    ) -> Option<ConstantName> {
+        self.constant_copies.get(source).copied()
+    }
+
+    /// Returns false if the mangled name is already taken by a different source constant
+    pub(super) fn add_constant_copy(
+        &mut self,
+        m: ModuleIdent,
+        c: ConstantName,
+        copy_name: ConstantName,
+        cdef: G::Constant,
+    ) -> bool {
+        if self
+            .constant_copy_defs
+            .iter()
+            .any(|(name, _)| *name == copy_name)
+        {
+            return false;
+        }
+        self.constant_copies.insert((m, c), copy_name);
+        self.constant_copy_defs.push((copy_name, cdef));
+        true
+    }
+
+    pub(super) fn next_constant_copy_index(&mut self) -> usize {
+        let index = self.constant_copy_index;
+        self.constant_copy_index += 1;
+        index
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
@@ -311,12 +313,11 @@ fn module(
         .map(|(_, cdef)| cdef.index + 1)
         .max()
         .unwrap_or(0);
-    context.constant_copies = ConstantCopies::new(next_index);
+    context.reset_constant_copies(next_index);
     let constant_values = &*constant_values;
     let functions =
         hfunctions.map(|name, f| function(context, constant_values, module_ident, name, f));
-    let copies = std::mem::take(&mut context.constant_copies);
-    for (name, cdef) in copies.defs {
+    for (name, cdef) in context.take_constant_copy_defs() {
         constants
             .add(name, cdef)
             .expect("ICE synthesized constant name collision");
