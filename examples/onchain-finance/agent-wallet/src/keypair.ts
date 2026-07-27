@@ -55,20 +55,28 @@ declare const oldAddress: string;
 declare const newAddress: string;
 declare const oldKeypair: Ed25519Keypair;
 
-// Transfer all owned objects to the new address
-const { data: ownedObjects } = await client.getOwnedObjects({
-	owner: oldAddress,
-});
-
+// Transfer all owned objects to the new address.
+// Paginate to cover all objects and let the SDK select the gas coin
+// (the gas coin is excluded from transferObjects automatically).
 const rotateTx = new Transaction();
 rotateTx.setSender(oldAddress);
-for (const item of ownedObjects) {
-	if (!item.data) continue;
-	rotateTx.transferObjects(
-		[rotateTx.object(item.data.objectId)],
-		newAddress,
-	);
-}
+
+let cursor: string | null | undefined = undefined;
+do {
+	const page = await client.getOwnedObjects({
+		owner: oldAddress,
+		cursor: cursor ?? undefined,
+		limit: 50,
+	});
+	for (const item of page.data) {
+		if (!item.data) continue;
+		rotateTx.transferObjects(
+			[rotateTx.object(item.data.objectId)],
+			newAddress,
+		);
+	}
+	cursor = page.nextCursor;
+} while (cursor);
 
 await client.signAndExecuteTransaction({ transaction: rotateTx, signer: oldKeypair });
 // docs::/#key-rotation
