@@ -13,7 +13,8 @@ const gqlClient = new SuiGraphQLClient({
 	network: 'testnet',
 });
 
-const { data } = await gqlClient.query({
+const { data } = await gqlClient.query<any>({
+	variables: {},
 	query: `{
     address(address: "${senderAddress}") {
       transactions(last: 20) {
