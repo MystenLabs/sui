@@ -20,7 +20,7 @@ keywords:
 goal:
   description: >-
     Reader can replace any JSON-RPC call with the equivalent gRPC pattern,
-    including event queries, checkpoint streaming, and batch lookups
+    including event queries, checkpoint streaming, and batch lookups.
   requires:
     - has_frontmatter:
         - title
@@ -70,46 +70,48 @@ answer: >-
   TransactionExecutionService for submission. This cookbook provides side-by-side
   code samples for every common migration path.
 ---
- 
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
- 
-Each recipe below pairs a JSON-RPC call with its gRPC replacement and explains the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For gRPC concepts and setup, see [What is gRPC?](/develop/accessing-data/grpc/what-is-grpc) and [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
- 
+
+Each recipe pairs a JSON-RPC call with its gRPC replacement and explains the key differences. For the full method mapping and decision criteria, see the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration). For gRPC concepts and setup, see [What is gRPC?](/develop/accessing-data/grpc/what-is-grpc) and [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
+
 :::info
- 
+
 <ImportContent source="json-rpc-deprecation" mode="snippet" />
+
 :::
- 
+
 ## Before you start
- 
-All gRPC examples use the `@mysten/sui` TypeScript SDK. Install it with:
- 
-```shell
-npm install @mysten/sui
+
+All gRPC examples use the `@mysten/sui` TypeScript SDK. Install the SDK with the following command:
+
+```sh
+$ npm install @mysten/sui
 ```
- 
+
 Create a client once and reuse it:
- 
+
 ```ts
 import { SuiGrpcClient } from '@mysten/sui/grpc';
- 
+
 const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: '<FULL_NODE_URL>',
   network: 'mainnet',
 });
 ```
- 
-For `grpcurl` and Buf CLI examples, replace `<full node URL:port>` with your provider's gRPC endpoint. See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc) for setup details and language-specific client instructions for Go and Python.
- 
+
+For `grpcurl` and Buf CLI examples, replace `<FULL_NODE_URL>` with your provider's gRPC endpoint. See [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc) for setup details and language-specific client instructions for Go and Python.
+
 ## Get a single object
- 
+
 Replace `sui_getObject` with `LedgerService.GetObject`. Use a [field mask](/develop/accessing-data/grpc/using-grpc#field-masks) to request only the fields you need.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -121,42 +123,48 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     ]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const { object } = await client.core.getObject({
   objectId: '0xOBJECT_ID',
   include: { content: true },
 });
- 
+
 console.log('Owner:', object.owner);
 console.log('Type:', object.type);
 console.log('Content:', object.content);
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
+$ grpcurl -d '{
   "object_id": "0xOBJECT_ID",
   "read_mask": { "paths": ["content", "owner"] }
-}' <full node URL:port> sui.rpc.v2.LedgerService/GetObject
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetObject
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- JSON-RPC uses `showContent`, `showOwner` booleans. gRPC uses a `read_mask` with field paths, or the SDK's `include` parameter.
+
+The gRPC call differs from the JSON-RPC call in the following ways:
+
+- JSON-RPC uses the `showContent` and `showOwner` booleans. gRPC uses a `read_mask` with field paths, or the SDK's `include` parameter.
 - The SDK's `getObject` returns `{ object }` directly. Use `getObjects` (plural) for batch lookups, which returns `{ objects: (Object | Error)[] }`.
+
 ## Batch-fetch objects
- 
+
 Replace `sui_multiGetObjects` with `LedgerService.BatchGetObjects`. The top-level `read_mask` applies to all objects in the batch.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -168,15 +176,16 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     ]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const { objects } = await client.core.getObjects({
   objectIds: ['0xOBJECT_A', '0xOBJECT_B', '0xOBJECT_C'],
   include: { content: true },
 });
- 
+
 for (const obj of objects) {
   if (obj instanceof Error) {
     console.error('Failed to fetch:', obj.message);
@@ -185,33 +194,38 @@ for (const obj of objects) {
   }
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
+$ grpcurl -d '{
   "requests": [
     { "object_id": "0xOBJECT_A" },
     { "object_id": "0xOBJECT_B" },
     { "object_id": "0xOBJECT_C" }
   ],
   "read_mask": { "paths": ["content"] }
-}' <full node URL:port> sui.rpc.v2.LedgerService/BatchGetObjects
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/BatchGetObjects
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- Only the top-level `read_mask` is respected. Any mask inside individual sub-requests is ignored.
+
+The gRPC call differs from the JSON-RPC call in the following ways:
+
+- The service respects only the top-level `read_mask`. The service ignores any mask inside individual sub-requests.
 - The response returns objects in the same order as the request.
+
 ## Get a transaction
- 
+
 Replace `sui_getTransactionBlock` with `LedgerService.GetTransaction`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -223,43 +237,49 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     ]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const result = await client.core.getTransaction({
   digest: 'J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4',
   include: { effects: true, events: true },
 });
- 
+
 if (result.$kind === 'Transaction') {
   console.log('Status:', result.Transaction.effects?.status);
   console.log('Events:', result.Transaction.events);
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
+$ grpcurl -d '{
   "digest": "J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4",
   "read_mask": { "paths": ["effects", "events"] }
-}' <full node URL:port> sui.rpc.v2.LedgerService/GetTransaction
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetTransaction
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- JSON-RPC uses `showEffects`, `showEvents` booleans. gRPC uses `read_mask` paths or the SDK's `include`.
+
+The gRPC call differs from the JSON-RPC call in the following ways:
+
+- JSON-RPC uses the `showEffects` and `showEvents` booleans. gRPC uses `read_mask` paths or the SDK's `include` parameter.
 - Digests are `Base58`-encoded strings in both APIs.
+
 ## Batch-fetch transactions
- 
+
 Replace `sui_multiGetTransactionBlocks` with `LedgerService.BatchGetTransactions`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -271,16 +291,17 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     ]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 // Use the proto client directly for batch transaction lookups
 const { response } = await client.ledgerService.batchGetTransactions({
   digests: ['DIGEST_A', 'DIGEST_B'],
   readMask: { paths: ['effects', 'events'] },
 });
- 
+
 for (const tx of response.transactions) {
   if (tx.result.oneofKind === 'transaction') {
     const executed = tx.result.transaction;
@@ -288,32 +309,35 @@ for (const tx of response.transactions) {
   }
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
+$ grpcurl -d '{
   "digests": ["DIGEST_A", "DIGEST_B"],
   "read_mask": { "paths": ["effects", "events"] }
-}' <full node URL:port> sui.rpc.v2.LedgerService/BatchGetTransactions
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/BatchGetTransactions
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- Same `read_mask` rules as batch objects: only the top-level mask is respected.
+
+The same `read_mask` rules apply as for batch objects: the service respects only the top-level mask.
+
 ## Query events
- 
-JSON-RPC offered `suix_queryEvents` with filters like `MoveModule`, `MoveEventType`, `Sender`, and `Transaction`. gRPC does not have a direct filtered-event query. Instead, read events from transaction data or stream them from checkpoints.
- 
+
+JSON-RPC uses `suix_queryEvents` with filters such as `MoveModule`, `MoveEventType`, `Sender`, and `Transaction`. gRPC provides `LedgerService.ListEvents` for paginated, filtered historical queries and `SubscriptionService.SubscribeEvents` for live streaming with the same filters. You can also read events from a specific transaction.
+
 ### Events from a known transaction
- 
+
 If you know the transaction digest, fetch the transaction with events included.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -325,15 +349,16 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     ]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const result = await client.core.getTransaction({
   digest: '8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2',
   include: { events: true },
 });
- 
+
 if (result.$kind === 'Transaction') {
   for (const event of result.Transaction.events ?? []) {
     console.log('Type:', event.eventType);
@@ -341,93 +366,147 @@ if (result.$kind === 'Transaction') {
   }
 }
 ```
- 
+
 </TabItem>
 </Tabs>
-### Live event streaming from checkpoints
- 
-Replace `sui_subscribeEvent` (WebSocket) with `SubscriptionService.SubscribeCheckpoints`. Stream finalized checkpoints, then filter events client-side by type, module, or sender.
- 
+
+### Live event streaming
+
+Replace `sui_subscribeEvent` (WebSocket) with `SubscriptionService.SubscribeEvents`. The JSON-RPC WebSocket subscription APIs have been deprecated since mid-2024, so migrate any remaining WebSocket subscriptions to gRPC streaming. The server filters events before it sends them, so your client receives only matching events.
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC WebSocket (deprecated)">
+
 ```ts
-// Old WebSocket subscription — no longer supported
-const ws = new WebSocket('wss://fullnode.mainnet.sui.io/websocket');
+// Old WebSocket subscription (no longer supported)
+const ws = new WebSocket('wss://<FULL_NODE_URL>/websocket');
 ws.send(JSON.stringify({
   jsonrpc: '2.0',
   id: 1,
   method: 'sui_subscribeEvent',
-  params: [{ MoveEventType: '0xPACKAGE::module::MyEvent' }],
+  params: [{ MoveEventType: '<PACKAGE>::module::MyEvent' }],
 }));
 ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
 ```
- 
+
 </TabItem>
-<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+<TabItem value="grpc-proto" label="gRPC (proto client)">
+
+:::info
+
+The `@mysten/sui` TypeScript SDK does not yet expose `SubscribeEvents`. Use the generated proto client directly until the SDK adds a wrapper. The `grpcurl` and Buf CLI examples on this page work today.
+
+:::
+
 ```ts
-import { SuiGrpcClient } from '@mysten/sui/grpc';
- 
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
- 
-const TARGET_EVENT_TYPE = '0xPACKAGE::module::MyEvent';
- 
-// Stream checkpoints and filter events client-side
-const { responses } = client.subscriptionService.subscribeCheckpoints({
-  readMask: {
-    paths: ['transactions'],
+// Use the generated proto client directly
+const stream = client.subscriptionService.subscribeEvents({
+  filter: {
+    terms: [{
+      literals: [{
+        eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+      }],
+    }],
   },
 });
- 
-for await (const response of responses) {
-  for (const tx of response.checkpoint?.transactions ?? []) {
-    for (const event of tx.events?.events ?? []) {
-      if (event.eventType === TARGET_EVENT_TYPE) {
-        console.log('Matched event:', event);
-      }
-    }
-  }
+
+for await (const response of stream.responses) {
+  console.log('Matched event:', response.event);
 }
 ```
- 
+
 </TabItem>
 <TabItem value="buf-cli" label="gRPC (Buf CLI)">
+
 ```sh
-buf curl --protocol grpc \
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
-  -d '{ "readMask": "transactions" }' \
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+        }]
+      }]
+    }
+  }' \
   --timeout 5m
 ```
- 
-Filter the output with `jq` for a specific event type:
- 
-```sh
-buf curl --protocol grpc \
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
-  -d '{ "readMask": "transactions" }' \
-  --timeout 5m \
-  | jq '.checkpoint.transactions[]?.events.events[]? | select(.eventType == "0xPACKAGE::module::MyEvent")'
-```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- JSON-RPC WebSocket subscriptions filtered events server-side. gRPC streams entire checkpoints and you filter client-side.
-- The gRPC stream is ordered and gapless. If your stream disconnects, resume from the last processed checkpoint sequence number. Backfill any missed range with `LedgerService.GetCheckpoint` before resubscribing. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
-- For filtered historical event queries over a range, use [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql) instead.
+
+The gRPC subscription differs from the JSON-RPC subscription in the following ways:
+
+- JSON-RPC WebSocket subscriptions filtered events server-side, and have been deprecated since mid-2024. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client receives only matching events.
+- Subscriptions always begin at the current tip of the chain and do not accept a resume point. To avoid missing data between a backfill and a subscription, open the subscription first, note the first `Watermark` from `SubscribeEvents`, then backfill with `LedgerService.ListEvents` up to that watermark. After the backfill completes, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+- For filtered historical event queries over a range, use `LedgerService.ListEvents` or [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql).
+
+### Query events over a checkpoint range
+
+Use `LedgerService.ListEvents` to retrieve events matching an `EventFilter` across a range of checkpoints. This method replaces the paginated `suix_queryEvents` pattern.
+
+<Tabs groupId="transport">
+<TabItem value="grpc-proto" label="gRPC (proto client)">
+
+:::info
+
+The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents`. Use the generated proto client directly until the SDK adds a wrapper, or use the Rust SDK, which supports `ListEvents`. The `grpcurl` example in the next tab works today.
+
+:::
+
+```ts
+// Use the generated proto client directly
+const stream = client.ledgerService.listEvents({
+  startCheckpoint: BigInt(1000000),
+  endCheckpoint: BigInt(1000100),
+  filter: {
+    terms: [{
+      literals: [{
+        eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+      }],
+    }],
+  },
+  options: { limit: 50 },
+});
+
+for await (const response of stream.responses) {
+  console.log('Event:', response.event);
+}
+```
+
+</TabItem>
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+```sh
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "end_checkpoint": "1000100",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "event_type": { "event_type": "<PACKAGE>::module::MyEvent" }
+      }]
+    }]
+  }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListEvents
+```
+
+</TabItem>
+</Tabs>
+
 ## Stream checkpoints
- 
-Replace `sui_getCheckpoints` polling with `SubscriptionService.SubscribeCheckpoints` for a real-time, ordered stream.
- 
+
+Replace `sui_getCheckpoints` polling with `SubscriptionService.SubscribeCheckpoints` for a real-time, ordered stream, or `LedgerService.ListCheckpoints` for paginated queries over a checkpoint range.
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC polling (deprecated)">
+
 ```ts
-// Old polling pattern — inefficient and deprecated
+// Old polling pattern (inefficient and deprecated)
 let cursor = null;
 while (true) {
-  const res = await fetch('https://fullnode.mainnet.sui.io:443', {
+  const res = await fetch('<FULL_NODE_URL>', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -444,16 +523,17 @@ while (true) {
   if (!result.hasNextPage) await new Promise((r) => setTimeout(r, 1000));
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const { responses } = client.subscriptionService.subscribeCheckpoints({
   readMask: {
     paths: ['sequenceNumber', 'digest', 'summary'],
   },
 });
- 
+
 for await (const response of responses) {
   const cp = response.checkpoint;
   console.log('Checkpoint:', cp?.sequenceNumber);
@@ -461,205 +541,234 @@ for await (const response of responses) {
   console.log('Tx count:', cp?.summary?.totalNetworkTransactions);
 }
 ```
- 
+
 </TabItem>
 <TabItem value="buf-cli" label="gRPC (Buf CLI)">
+
 ```sh
-buf curl --protocol grpc \
-  https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints \
   -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }' \
   --timeout 5m
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- No polling loop needed. The gRPC stream pushes checkpoints as they finalize.
-- Checkpoints arrive in order with no gaps. Track the last processed `sequenceNumber` to resume after a disconnect.
-- `grpcurl` does not support server-side streaming. Use the Buf CLI or an SDK client instead.
+
+The gRPC stream differs from the JSON-RPC polling pattern in the following ways:
+
+- You do not need a polling loop. The gRPC stream pushes checkpoints as they finalize.
+- Use `LedgerService.ListCheckpoints` to query a historical range of checkpoints, optionally filtered by a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` for live streaming from the current tip.
+- Subscriptions do not support resumption. To avoid gaps, open the subscription first, note the first `cursor` from `SubscribeCheckpoints`, then backfill missed checkpoints with `ListCheckpoints` up to that cursor before you consume from the already-open stream.
+- `grpcurl` supports server-side streaming for the `LedgerService.List*` calls on this page. For `SubscriptionService` subscriptions, which are indefinite streams, the Buf CLI or an SDK client provides better control over timeouts and reconnection.
+
 ## Look up a single checkpoint
- 
+
 Replace `sui_getCheckpoint` with `LedgerService.GetCheckpoint`.
- 
+
 :::info
-A full node only serves checkpoints within its retention window. If you query an old sequence number and get `NOT_FOUND`, either use a more recent checkpoint or query the [Archival Service](/develop/accessing-data/archival-store) instead.
+
+A full node serves only checkpoints within its retention window. If you query an old sequence number and receive `NOT_FOUND`, either use a more recent checkpoint or query the [Archival Service](/develop/accessing-data/archival-store) instead.
+
 :::
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "sui_getCheckpoint",
-    "params": ["<CHECKPOINT_SEQUENCE_NUMBER>"]
+    "params": ["CHECKPOINT_SEQUENCE_NUMBER"]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
-// Use the proto client directly — no Core API wrapper for checkpoint lookups
+// Use the proto client directly. No Core API wrapper exists for checkpoint lookups.
 const { response } = await client.ledgerService.getCheckpoint({
   checkpointId: {
     oneofKind: 'sequenceNumber',
-    sequenceNumber: BigInt('<CHECKPOINT_SEQUENCE_NUMBER>'),
+    sequenceNumber: BigInt('CHECKPOINT_SEQUENCE_NUMBER'),
   },
   readMask: { paths: ['digest', 'summary'] },
 });
- 
+
 console.log('Digest:', response.checkpoint?.digest);
 console.log('Timestamp:', response.checkpoint?.summary?.timestamp);
 console.log('Total transactions:', response.checkpoint?.summary?.totalNetworkTransactions);
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
-  "sequence_number": "<CHECKPOINT_SEQUENCE_NUMBER>",
+$ grpcurl -d '{
+  "sequence_number": "CHECKPOINT_SEQUENCE_NUMBER",
   "read_mask": { "paths": ["digest", "summary"] }
-}' <full node URL:port> sui.rpc.v2.LedgerService/GetCheckpoint
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetCheckpoint
 ```
- 
+
 </TabItem>
 </Tabs>
+
 ## Get balances
- 
+
 Replace `suix_getBalance` and `suix_getAllBalances` with `StateService.GetBalance` and `StateService.ListBalances`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+To query a single coin type, run the following command:
+
 ```sh
-# Single coin type
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "suix_getBalance",
-    "params": ["0xADDRESS", "0x2::sui::SUI"]
+    "params": ["<ADDRESS>", "0x2::sui::SUI"]
   }'
- 
-# All coin types
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+```
+
+To query all coin types, run the following command:
+
+```sh
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "suix_getAllBalances",
-    "params": ["0xADDRESS"]
+    "params": ["<ADDRESS>"]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 // Single coin type
 const { balance } = await client.core.getBalance({
-  owner: '0xADDRESS',
+  owner: '<ADDRESS>',
   coinType: '0x2::sui::SUI',
 });
 console.log('Total balance:', balance.balance);
 console.log('Coin balance:', balance.coinBalance);
 console.log('Address balance:', balance.addressBalance);
- 
+
 // All coin types
 const { balances } = await client.core.listBalances({
-  owner: '0xADDRESS',
+  owner: '<ADDRESS>',
 });
 for (const b of balances) {
   console.log(b.coinType, b.balance);
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+To query a single coin type, run the following command:
+
 ```sh
-# Single coin type
-grpcurl -d '{
-  "owner": "0xADDRESS",
+$ grpcurl -d '{
+  "owner": "<ADDRESS>",
   "coin_type": "0x2::sui::SUI"
-}' <full node URL:port> sui.rpc.v2.StateService/GetBalance
- 
-# All coin types
-grpcurl -d '{
-  "owner": "0xADDRESS"
-}' <full node URL:port> sui.rpc.v2.StateService/ListBalances
+}' <FULL_NODE_URL> sui.rpc.v2.StateService/GetBalance
 ```
- 
+
+To query all coin types, run the following command:
+
+```sh
+$ grpcurl -d '{
+  "owner": "<ADDRESS>"
+}' <FULL_NODE_URL> sui.rpc.v2.StateService/ListBalances
+```
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- gRPC separates `coinBalance` (coin objects) and `addressBalance` (accumulator). The `balance` field is the combined total. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for reconciliation details.
+
+gRPC separates `coinBalance` (coin objects) and `addressBalance` (accumulator). The `balance` field is the combined total. See [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#querying-balances) for reconciliation details.
+
 ## List owned coins
- 
+
 Replace `suix_getCoins` and `suix_getAllCoins` with `StateService.ListOwnedObjects` filtered by coin type.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "suix_getCoins",
-    "params": ["0xADDRESS", "0x2::sui::SUI", null, 50]
+    "params": ["<ADDRESS>", "0x2::sui::SUI", null, 50]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 // List SUI coin objects
 const page = await client.core.listOwnedObjects({
-  owner: '0xADDRESS',
+  owner: '<ADDRESS>',
   type: '0x2::coin::Coin<0x2::sui::SUI>',
   limit: 50,
 });
- 
+
 for (const obj of page.objects) {
   console.log('Coin:', obj.objectId);
 }
- 
+
 // Paginate with the cursor from the previous response
 if (page.hasNextPage) {
   const nextPage = await client.core.listOwnedObjects({
-    owner: '0xADDRESS',
+    owner: '<ADDRESS>',
     type: '0x2::coin::Coin<0x2::sui::SUI>',
     limit: 50,
     cursor: page.cursor,
   });
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
-  "owner": "0xADDRESS",
+$ grpcurl -d '{
+  "owner": "<ADDRESS>",
   "object_type": "0x2::coin::Coin<0x2::sui::SUI>"
-}' <full node URL:port> sui.rpc.v2.StateService/ListOwnedObjects
+}' <FULL_NODE_URL> sui.rpc.v2.StateService/ListOwnedObjects
 ```
- 
-To list coins of every type, filter by `0x2::coin::Coin` without a type parameter.
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
+
+The gRPC approach differs from the JSON-RPC approach in the following ways:
+
 - There is no dedicated coin-listing RPC. Use `ListOwnedObjects` with a `Coin<T>` type filter.
+- To list coins of every type, filter by `0x2::coin::Coin` without a type parameter.
 - For transaction building, prefer [gas smashing](/develop/transaction-payment/gas-smashing) or [address-balance gas payments](/onchain-finance/asset-custody/address-balances/using-address-balances) over manual coin selection.
+
 ## List dynamic fields
- 
+
 Replace `suix_getDynamicFields` with `StateService.ListDynamicFields`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -668,123 +777,133 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     "params": ["0xPARENT_OBJECT_ID", null, 50]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const page = await client.core.listDynamicFields({
   parentId: '0xPARENT_OBJECT_ID',
   limit: 50,
 });
- 
+
 for (const field of page.dynamicFields) {
   console.log('Name:', field.name);
   console.log('Field ID:', field.fieldId);
 }
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{
+$ grpcurl -d '{
   "parent": "0xPARENT_OBJECT_ID"
-}' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
+}' <FULL_NODE_URL> sui.rpc.v2.StateService/ListDynamicFields
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- For `suix_getDynamicFieldObject`, derive the dynamic field's object ID locally from the parent ID and field name, then call `LedgerService.GetObject`. You do not need `ListDynamicFields` when you already know the field name.
+
+For `suix_getDynamicFieldObject`, derive the dynamic field's object ID locally from the parent ID and field name, then call `LedgerService.GetObject`. You do not need `ListDynamicFields` when you already know the field name.
+
 ## Execute a transaction
- 
+
 Replace `sui_executeTransactionBlock` with `TransactionExecutionService.ExecuteTransaction`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "sui_executeTransactionBlock",
     "params": [
-      "<BASE64_TX_BYTES>",
-      ["<BASE64_SIGNATURE>"],
+      "BASE64_TX_BYTES",
+      ["BASE64_SIGNATURE"],
       { "showEffects": true }
     ]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 import { Transaction } from '@mysten/sui/transactions';
- 
+
 // Build and sign a transaction (see PTB docs for details)
 const tx = new Transaction();
 // ... add commands ...
 const bytes = await tx.build({ client });
 const { signature } = await keypair.signTransaction(bytes);
- 
+
 // Execute
 const result = await client.core.executeTransaction({
   transaction: bytes,
   signatures: [signature],
   include: { effects: true },
 });
- 
+
 if (result.$kind === 'Transaction') {
   console.log('Digest:', result.Transaction.digest);
   console.log('Status:', result.Transaction.effects?.status);
 }
 ```
- 
+
 </TabItem>
 </Tabs>
-**Key differences:**
-- The JSON-RPC `unsafe_*` builder methods (`unsafe_moveCall`, `unsafe_transferObject`, and others) have no gRPC equivalent. Build transactions with [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK, then submit the bytes. See [Building PTBs](/develop/transactions/ptbs/building-ptb) and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview).
+
+The JSON-RPC `unsafe_*` builder methods, such as `unsafe_moveCall` and `unsafe_transferObject`, have no gRPC equivalent. Build transactions with [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK, then submit the bytes. See [Building PTBs](/develop/transactions/ptbs/building-ptb) and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview).
+
 ## Simulate a transaction (dry run)
- 
+
 Replace `sui_dryRunTransactionBlock` and `sui_devInspectTransactionBlock` with `TransactionExecutionService.SimulateTransaction`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
     "method": "sui_dryRunTransactionBlock",
-    "params": ["<BASE64_TX_BYTES>"]
+    "params": ["BASE64_TX_BYTES"]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const result = await client.core.simulateTransaction({
   transaction: txBytes,
   include: { effects: true, events: true },
 });
- 
+
 if (result.$kind === 'Transaction') {
   console.log('Simulated status:', result.Transaction.effects?.status);
   console.log('Simulated events:', result.Transaction.events);
 }
 ```
- 
+
 </TabItem>
 </Tabs>
+
 ## Get reference gas price
- 
-Replace `suix_getReferenceGasPrice` with `getReferenceGasPrice` on the SDK, or `LedgerService.GetEpoch` via grpcurl and read the `reference_gas_price` field.
- 
+
+Replace `suix_getReferenceGasPrice` with `getReferenceGasPrice` on the SDK, or call `LedgerService.GetEpoch` through `grpcurl` and read the `reference_gas_price` field.
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
 ```sh
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -793,32 +912,37 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     "params": []
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
 ```ts
 const { referenceGasPrice } = await client.core.getReferenceGasPrice();
 console.log('Reference gas price:', referenceGasPrice);
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
 ```sh
-grpcurl -d '{ "read_mask": { "paths": ["reference_gas_price"] } }' \
-  <full node URL:port> sui.rpc.v2.LedgerService/GetEpoch
+$ grpcurl -d '{ "read_mask": { "paths": ["reference_gas_price"] } }' \
+  <FULL_NODE_URL> sui.rpc.v2.LedgerService/GetEpoch
 ```
- 
+
 </TabItem>
 </Tabs>
+
 ## Resolve a SuiNS name
- 
+
 Replace JSON-RPC name resolution with `NameService.LookupName` and `NameService.ReverseLookupName`.
- 
+
 <Tabs groupId="transport">
 <TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+To resolve a name to an address, run the following command:
+
 ```sh
-# Name to address
-curl -X POST https://fullnode.mainnet.sui.io:443 \
+$ curl -X POST <FULL_NODE_URL> \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -827,39 +951,45 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
     "params": ["example.sui"]
   }'
 ```
- 
+
 </TabItem>
 <TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+To resolve a name to an address, run the following command:
+
 ```sh
-# Name to address
-grpcurl -d '{ "name": "example.sui" }' \
-  <full node URL:port> sui.rpc.v2.NameService/LookupName
- 
-# Address to name (reverse lookup)
-grpcurl -d '{ "address": "0xADDRESS" }' \
-  <full node URL:port> sui.rpc.v2.NameService/ReverseLookupName
+$ grpcurl -d '{ "name": "example.sui" }' \
+  <FULL_NODE_URL> sui.rpc.v2.NameService/LookupName
 ```
- 
+
+To resolve an address to a name, run the following command:
+
+```sh
+$ grpcurl -d '{ "address": "<ADDRESS>" }' \
+  <FULL_NODE_URL> sui.rpc.v2.NameService/ReverseLookupName
+```
+
 </TabItem>
 </Tabs>
+
 ## Common patterns
- 
-### Reconnecting a checkpoint stream
- 
-If the gRPC stream disconnects, backfill any missed checkpoints before resubscribing:
- 
+
+### Reconnect a checkpoint stream
+
+If the gRPC stream disconnects, backfill any missed checkpoints before you resubscribe:
+
 ```ts
 let lastProcessed = 0n;
- 
+
 async function startStream() {
   const { responses } = client.subscriptionService.subscribeCheckpoints({
     readMask: { paths: ['sequenceNumber', 'transactions'] },
   });
- 
+
   try {
     for await (const response of responses) {
       const seq = response.checkpoint?.sequenceNumber ?? 0n;
- 
+
       // Detect and backfill gaps
       if (seq > lastProcessed + 1n && lastProcessed > 0n) {
         for (let i = lastProcessed + 1n; i < seq; i++) {
@@ -870,7 +1000,7 @@ async function startStream() {
           processCheckpoint(missed.checkpoint);
         }
       }
- 
+
       processCheckpoint(response.checkpoint);
       lastProcessed = seq;
     }
@@ -880,76 +1010,68 @@ async function startStream() {
   }
 }
 ```
- 
-### Paginating through all owned objects
- 
+
+### Paginate through all owned objects
+
+Use the cursor from each response to request the next page:
+
 ```ts
 import type { SuiClientTypes } from '@mysten/sui';
- 
+
 let cursor: string | null = null;
- 
+
 do {
   const page: SuiClientTypes.ListOwnedObjectsResponse = await client.core.listOwnedObjects({
-    owner: '0xADDRESS',
+    owner: '<ADDRESS>',
     limit: 50,
     cursor,
   });
- 
+
   for (const obj of page.objects) {
     console.log(obj.objectId);
   }
- 
+
   cursor = page.hasNextPage ? page.cursor : null;
 } while (cursor);
 ```
- 
-### Falling back to Archival for pruned data
- 
-A full node returns `NOT_FOUND` for data outside its retention window. Fall back to the [Archival Service](/develop/accessing-data/archival-store) for historical lookups:
- 
+
+### Fall back to the Archival Store for pruned data
+
+A full node returns `NOT_FOUND` for data outside its retention window. Fall back to the [Archival Store](/develop/accessing-data/archival-store) for historical lookups:
+
 ```ts
 import { SuiGrpcClient } from '@mysten/sui/grpc';
- 
+
 const fullNode = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  baseUrl: '<FULL_NODE_URL>',
   network: 'mainnet',
 });
- 
+
 const archive = new SuiGrpcClient({
   baseUrl: 'https://archive.mainnet.sui.io:443',
   network: 'mainnet',
 });
- 
+
 async function getTransaction(digest: string) {
   const result = await fullNode.core.getTransaction({
     digest,
     include: { effects: true },
   });
- 
+
   if (result.$kind === 'Transaction') {
     return result.Transaction;
   }
- 
-  // Data was pruned — fall back to archival
+
+  // Data was pruned, so fall back to the Archival Store.
   const archiveResult = await archive.core.getTransaction({
     digest,
     include: { effects: true },
   });
- 
+
   if (archiveResult.$kind === 'Transaction') {
     return archiveResult.Transaction;
   }
- 
+
   throw new Error(`Transaction ${digest} not found in full node or archive`);
 }
 ```
- 
-## Related resources
- 
-- [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration): full method mapping and decision criteria
-- [What is gRPC?](/develop/accessing-data/grpc/what-is-grpc): concepts, services, and best practices
-- [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc): client setup in TypeScript, Go, and Python
-- [Emitting Events](/develop/accessing-data/using-events): event struct definitions, querying, and filtering
-- [Archival Store](/develop/accessing-data/archival-store): high-retention lookups for pruned data
-- [Building PTBs](/develop/transactions/ptbs/building-ptb): transaction construction for the `ExecuteTransaction` path
-- [Sui Full Node gRPC API reference](/references/fullnode-protocol): complete protobuf service and message definitions

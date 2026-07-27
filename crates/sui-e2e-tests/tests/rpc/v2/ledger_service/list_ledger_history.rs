@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use move_core_types::ident_str;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost::bytes::Bytes;
 use prost_types::FieldMask;
 use sui_macros::sim_test;
@@ -12,6 +13,7 @@ use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
+use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
@@ -613,6 +615,79 @@ fn tx_digest(tx: &ExecutedTransaction) -> String {
     tx.digest().to_owned()
 }
 
+fn object_keys(transaction: &ExecutedTransaction) -> Vec<(String, u64)> {
+    let objects = &transaction
+        .objects
+        .as_ref()
+        .expect("objects should be populated when requested")
+        .objects;
+    assert!(
+        !objects.is_empty(),
+        "requested object set should be non-empty"
+    );
+    objects
+        .iter()
+        .map(|object| {
+            (
+                object
+                    .object_id
+                    .clone()
+                    .expect("object_id should be populated when requested"),
+                object
+                    .version
+                    .expect("version should be populated when requested"),
+            )
+        })
+        .collect()
+}
+
+fn assert_identity_only_object_mask(transaction: &ExecutedTransaction) {
+    let objects = &transaction
+        .objects
+        .as_ref()
+        .expect("objects should be populated when requested")
+        .objects;
+    assert!(
+        !objects.is_empty(),
+        "requested object set should be non-empty"
+    );
+    for object in objects {
+        assert!(object.object_id.is_some());
+        assert!(object.version.is_some());
+        assert!(object.bcs.is_none());
+        assert!(object.digest.is_none());
+        assert!(object.owner.is_none());
+        assert!(object.object_type.is_none());
+        assert!(object.has_public_transfer.is_none());
+        assert!(object.contents.is_none());
+        assert!(object.package.is_none());
+        assert!(object.previous_transaction.is_none());
+        assert!(object.storage_rebate.is_none());
+        assert!(object.json.is_none());
+        assert!(object.balance.is_none());
+        assert!(object.display.is_none());
+    }
+}
+
+fn changed_object_types(transaction: &ExecutedTransaction) -> Vec<(String, Option<String>)> {
+    transaction
+        .effects
+        .as_ref()
+        .expect("effects should be populated when requested")
+        .changed_objects
+        .iter()
+        .map(|object| {
+            (
+                object
+                    .object_id
+                    .clone()
+                    .expect("changed object ID should be populated"),
+                object.object_type.clone(),
+            )
+        })
+        .collect()
+}
+
 fn tx_filter(literals: Vec<TransactionLiteral>) -> TransactionFilter {
     tx_filter_terms(vec![literals])
 }
@@ -922,7 +997,13 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
     let cluster = new_cluster().await;
     let sender = cluster.get_address_0();
     let first_transfer = transfer_self(&cluster, sender).await;
-    transfer_self(&cluster, sender).await;
+    let second_transfer = transfer_self(&cluster, sender).await;
+    let first_transfer_digest = tx_digest(&first_transfer);
+    let second_transfer_digest = tx_digest(&second_transfer);
+    let execution_transactions: HashMap<String, &ExecutedTransaction> = HashMap::from([
+        (first_transfer_digest.clone(), &first_transfer),
+        (second_transfer_digest.clone(), &second_transfer),
+    ]);
 
     let validator_address = cluster.swarm.config().validator_configs()[0].sui_address();
     let staking_transaction =
@@ -938,6 +1019,59 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
         .await;
     let staking_digest = staking_transaction_digest.to_string();
 
+    let mut client = new_ledger_client(&cluster).await;
+    let objects_only_mask = FieldMask::from_paths(["objects"]);
+    let mut request = ListTransactionsRequest::default();
+    request.read_mask = Some(objects_only_mask.clone());
+    request.start_checkpoint = Some(tx_checkpoint(&first_transfer));
+    request.filter = Some(tx_sender(sender));
+    request.options = Some(query_options(100));
+    let objects_only_response = list_transactions_result(&mut client, request).await;
+    for item in &objects_only_response.transactions {
+        object_keys(
+            item.transaction
+                .as_ref()
+                .expect("data item should contain an executed transaction"),
+        );
+    }
+
+    let ordered_transfer_digests = [
+        second_transfer_digest.as_str(),
+        first_transfer_digest.as_str(),
+    ];
+    let mut batch_request = BatchGetTransactionsRequest::default();
+    batch_request.digests = ordered_transfer_digests
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    batch_request.read_mask = Some(objects_only_mask);
+    let batch_response = client
+        .batch_get_transactions(batch_request)
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        batch_response.transactions.len(),
+        ordered_transfer_digests.len()
+    );
+    for (digest, result) in ordered_transfer_digests
+        .into_iter()
+        .zip_debug_eq(batch_response.transactions)
+    {
+        let transaction = result.to_result().unwrap_or_else(|status| {
+            panic!("BatchGetTransactions failed for {digest}: {status:?}")
+        });
+        assert_eq!(
+            object_keys(&transaction),
+            object_keys(
+                execution_transactions
+                    .get(digest)
+                    .expect("transfer execution baseline should exist")
+            ),
+            "objects-only BatchGetTransactions mismatch for {digest}"
+        );
+    }
+
     let read_mask = FieldMask::from_paths([
         "digest",
         "transaction",
@@ -947,8 +1081,9 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
         "checkpoint",
         "timestamp",
         "balance_changes",
+        "objects.objects.object_id",
+        "objects.objects.version",
     ]);
-    let mut client = new_ledger_client(&cluster).await;
     let mut request = ListTransactionsRequest::default();
     request.read_mask = Some(read_mask.clone());
     request.start_checkpoint = Some(tx_checkpoint(&first_transfer));
@@ -983,6 +1118,7 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
             list_transaction.timestamp.is_some(),
             "ListTransactions should populate the timestamp for {digest}"
         );
+        assert_identity_only_object_mask(&list_transaction);
 
         let mut get_request = GetTransactionRequest::default();
         get_request.digest = Some(digest.clone());
@@ -999,6 +1135,23 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
             "ListTransactions and GetTransaction should match for {digest}"
         );
 
+        if let Some(execution_transaction) = execution_transactions.get(digest.as_str()) {
+            assert_eq!(
+                object_keys(&list_transaction),
+                object_keys(execution_transaction),
+                "transaction objects should match execution for {digest}"
+            );
+            assert_eq!(
+                changed_object_types(&list_transaction),
+                changed_object_types(execution_transaction),
+                "changed object types should match execution for {digest}"
+            );
+            assert_eq!(
+                list_transaction.balance_changes, execution_transaction.balance_changes,
+                "balance changes should match execution for {digest}"
+            );
+        }
+
         if digest == staking_digest {
             staking_list_transaction = Some(list_transaction);
         }
@@ -1010,6 +1163,53 @@ async fn test_list_transactions_rich_mask_matches_get_transaction() {
         !staking_list_transaction.balance_changes.is_empty(),
         "staking transaction should have balance changes"
     );
+
+    let ordered_transfer_digests = [
+        second_transfer_digest.as_str(),
+        first_transfer_digest.as_str(),
+    ];
+    let mut batch_request = BatchGetTransactionsRequest::default();
+    batch_request.digests = ordered_transfer_digests
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    batch_request.read_mask = Some(read_mask);
+    let batch_response = client
+        .batch_get_transactions(batch_request)
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        batch_response.transactions.len(),
+        ordered_transfer_digests.len()
+    );
+    for (digest, result) in ordered_transfer_digests
+        .into_iter()
+        .zip_debug_eq(batch_response.transactions)
+    {
+        let transaction = result.to_result().unwrap_or_else(|status| {
+            panic!("BatchGetTransactions failed for {digest}: {status:?}")
+        });
+        assert_eq!(transaction.digest.as_deref(), Some(digest));
+        assert_identity_only_object_mask(&transaction);
+        let execution_transaction = execution_transactions
+            .get(digest)
+            .expect("transfer execution baseline should exist");
+        assert_eq!(
+            object_keys(&transaction),
+            object_keys(execution_transaction),
+            "nested-mask BatchGetTransactions objects mismatch for {digest}"
+        );
+        assert_eq!(
+            changed_object_types(&transaction),
+            changed_object_types(execution_transaction),
+            "nested-mask BatchGetTransactions effects mismatch for {digest}"
+        );
+        assert_eq!(
+            transaction.balance_changes, execution_transaction.balance_changes,
+            "nested-mask BatchGetTransactions balance changes mismatch for {digest}"
+        );
+    }
 }
 
 #[sim_test]

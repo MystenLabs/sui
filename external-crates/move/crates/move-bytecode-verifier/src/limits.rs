@@ -5,6 +5,7 @@ use move_binary_format::{
     IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
     file_format::{Bytecode, CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
+    partial_vm_error_with_debug_message,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;
@@ -194,8 +195,10 @@ impl<'a> LimitsVerifier<'a> {
                     if let Some(lim) = config.max_constant_vector_len
                         && cons.len() > lim as usize
                     {
-                        return Err(PartialVMError::new(StatusCode::TOO_MANY_VECTOR_ELEMENTS)
-                            .with_message(format!("vector size limit is {}", lim)));
+                        return Err(partial_vm_error_with_debug_message!(
+                            TOO_MANY_VECTOR_ELEMENTS,
+                            format!("vector size limit is {}", lim)
+                        ));
                     }
                 } else {
                     return Err(verification_error(
@@ -336,23 +339,25 @@ impl<'a> LimitsVerifier<'a> {
                 if let Some(max) = max_fun
                     && fn_total > max
                 {
-                    return Err(
-                        PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
+                    return Err(partial_vm_error_with_debug_message!(
+                        TOO_MANY_TYPE_NODES,
+                        format!(
                             "function exceeds generic-instantiation budget: {} > {}",
                             fn_total, max
-                        )),
-                    );
+                        )
+                    ));
                 }
 
                 if let Some(max) = max_mod
                     && module_total > max
                 {
-                    return Err(
-                        PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES).with_message(format!(
+                    return Err(partial_vm_error_with_debug_message!(
+                        TOO_MANY_TYPE_NODES,
+                        format!(
                             "module exceeds generic-instantiation budget: {} > {}",
                             module_total, max
-                        )),
-                    );
+                        )
+                    ));
                 }
             }
         }

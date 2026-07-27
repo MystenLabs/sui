@@ -695,12 +695,11 @@ mod tests {
     ) -> mpsc::Receiver<SubscriptionUpdate> {
         let (sender, receiver) = mpsc::channel(16);
         let filtered = query.is_some();
-        let guard = SubscriptionLifecycleGuard::new(
-            kind,
-            filtered,
-            Arc::new(SubscriberCounts::default()),
-            metrics,
-        );
+        let counters = Arc::new(SubscriberCounts::new(1));
+        let reservation = counters
+            .try_reserve()
+            .expect("test subscription requires subscriber capacity");
+        let guard = SubscriptionLifecycleGuard::new(kind, filtered, reservation, metrics);
         matcher.insert(SubscriptionSpec { kind, query }, sender, guard);
         receiver
     }
@@ -1040,13 +1039,16 @@ mod tests {
     fn full_channel_records_one_slow_consumer_termination() {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
-        let counters = Arc::new(SubscriberCounts::default());
+        let counters = Arc::new(SubscriberCounts::new(1));
+        let reservation = counters
+            .try_reserve()
+            .expect("test subscription requires subscriber capacity");
         let query = tx_query(vec![sender_literal(addr(0), false)]);
         let (sender, _receiver) = mpsc::channel(1);
         let guard = SubscriptionLifecycleGuard::new(
             SubscriptionKind::Transactions,
             true,
-            Arc::clone(&counters),
+            reservation,
             &metrics,
         );
         matcher.insert(
@@ -1057,6 +1059,7 @@ mod tests {
             sender,
             guard,
         );
+        assert_eq!(counters.reserved(), 1);
 
         // The initial progress frame fills the channel, so the matched
         // payload in the same dispatch classifies the subscriber as slow.
@@ -1077,6 +1080,7 @@ mod tests {
             0
         );
         assert_eq!(counters.total.load(Ordering::Relaxed), 0);
+        assert_eq!(counters.reserved(), 0);
 
         drop(matcher);
         assert_eq!(

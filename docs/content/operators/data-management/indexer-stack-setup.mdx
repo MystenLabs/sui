@@ -39,7 +39,22 @@ answer: >-
 
 <ImportContent source="indexer-graphql" mode="snippet" />
 
-See [GraphQL and General-Purpose Indexer](/develop/accessing-data/custom-indexer/custom-indexers) for more information on the stack.
+See [Sui Data Access](/develop/accessing-data/data-serving) for more information on how the stack serves application queries.
+
+## Production fullnode endpoints
+
+The `https://fullnode.mainnet.sui.io:443`, `https://fullnode.testnet.sui.io:443`, and `https://fullnode.devnet.sui.io:443` endpoints are public-good services for testing only. They are not intended for a production indexer or GraphQL stack. For every fullnode URL in this guide, use a production-grade gRPC endpoint from an [RPC provider](/develop/accessing-data/rpc-providers) with sufficient capacity and retention for your workload.
+
+## Requester Pays checkpoint buckets {#requester-pays}
+
+The full-retention Mainnet and Testnet Google Cloud Storage (GCS) checkpoint buckets are Requester Pays enabled. Before running a production backfill or recovery, configure Google credentials that can charge an enabled billing project:
+
+```sh
+$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
+$ export GOOGLE_CLOUD_PROJECT=your-billing-project
+```
+
+Workload Identity or another supported Google credential source can replace the credential file. Every `--remote-store-gcs` command must also include the `x-goog-user-project` header. See Google Cloud's [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) documentation for billing and IAM requirements.
 
 ## Indexer setup
 
@@ -91,87 +106,90 @@ A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up t
 
 ### Run `sui-indexer-alt`
 
-Use full node gRPC as the default source for steady-state operation. Use a checkpoint bucket only for backfill, recovery, or fallback when historical checkpoints are required.
+Run production ingestion in 2 phases: backfill from the full-retention Requester Pays GCS bucket, then stop the backfill process and restart from the saved watermarks with fullnode gRPC for steady state. Run 1 indexer process for each configuration file and assign every co-located process a unique metrics address.
 
-For steady-state operation, use the public full node gRPC endpoint pattern `https://fullnode.<network>.sui.io:443`, for example:
+#### Phase 1: backfill
 
-- Mainnet: `https://fullnode.mainnet.sui.io:443`
-- Testnet: `https://fullnode.testnet.sui.io:443`
+Unprunable pipelines must start at genesis:
 
-Run an indexer instance using this command for each of the configuration files. The command varies based on whether the pipeline is prunable or unprunable:
-
-#### For unprunable pipelines (must start from genesis)
-```sh
-$ sui-indexer-alt indexer \
-    --config <CONFIG_FILE> \
-    --database-url <DATABASE_URL> \
-    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET>
-```
-
-#### For prunable pipelines with retention period
 ```sh
 $ sui-indexer-alt indexer \
     --config <CONFIG_FILE> \
     --database-url <DATABASE_URL> \
     --remote-store-gcs <REMOTE_STORE_GCS_BUCKET> \
-    --first-checkpoint <CHECKPOINT_NUMBER>
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}" \
+    --metrics-address <UNIQUE_METRICS_ADDRESS>
+```
+
+Prunable pipelines can start at a checkpoint based on their retention period:
+
+```sh
+$ sui-indexer-alt indexer \
+    --config <CONFIG_FILE> \
+    --database-url <DATABASE_URL> \
+    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET> \
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}" \
+    --first-checkpoint <CHECKPOINT_NUMBER> \
+    --metrics-address <UNIQUE_METRICS_ADDRESS>
 ```
 
 For prunable pipelines, calculate the `first-checkpoint` based on your retention period:
 - **30-day retention**: Start from checkpoint `current_checkpoint - 10368000`
 - **90-day retention**: Start from checkpoint `current_checkpoint - 31104000`
 
-| **CLI param** | **Description** |
+| **CLI parameter** | **Description** |
 | --- | --- |
 | `<CONFIG_FILE>` | Path to indexer configuration file. |
 | `<DATABASE_URL>` | Postgres database connection string. |
-| `<REMOTE_STORE_GCS_BUCKET>` | GCS bucket name to index from. Recommended for backfill because it uses the GCS API directly instead of HTTPS. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources). |
-| `<CHECKPOINT_NUMBER>` | (Optional) For prunable pipelines only, the checkpoint to start indexing from based on retention requirements. |
+| `<REMOTE_STORE_GCS_BUCKET>` | Full-retention GCS bucket name. Use `mysten-mainnet-checkpoints-use4` for Mainnet or `mysten-testnet-checkpoints-use4` for Testnet. |
+| `<CHECKPOINT_NUMBER>` | For prunable pipelines only, the checkpoint at which indexing starts. |
+| `<UNIQUE_METRICS_ADDRESS>` | Prometheus bind address unique to this process, for example `127.0.0.1:9184`. |
 
 #### Examples
 
-**Unprunable pipeline (from genesis through GCS bucket):**
+**Unprunable pipeline from genesis:**
+
 ```sh
 $ sui-indexer-alt indexer \
     --config unpruned.toml \
     --database-url postgres://username:password@localhost:5432/database \
-    --remote-store-gcs mysten-mainnet-checkpoints-use4
+    --remote-store-gcs mysten-mainnet-checkpoints-use4 \
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}" \
+    --metrics-address 127.0.0.1:9184
 ```
 
 **Prunable pipeline with 30-day retention (assuming current checkpoint is 100,000,000):**
+
 ```sh
 $ sui-indexer-alt indexer \
     --config events.toml \
     --database-url postgres://username:password@localhost:5432/database \
     --remote-store-gcs mysten-mainnet-checkpoints-use4 \
-    --first-checkpoint 89632000
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}" \
+    --first-checkpoint 89632000 \
+    --metrics-address 127.0.0.1:9187
 ```
 
-**HTTPS remote store URL (alternative to GCS bucket access):**
+#### Phase 2: steady state
+
+After a backfill process reaches the network tip, stop it and restart the same configuration against a production-grade fullnode gRPC endpoint from an RPC provider. Existing pipelines resume from their committed watermarks. Use `--rpc-api-url` for polling and `--streaming-url` for low-latency checkpoint streaming:
+
 ```sh
+$ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
+
 $ sui-indexer-alt indexer \
     --config events.toml \
     --database-url postgres://username:password@localhost:5432/database \
-    --remote-store-url https://checkpoints.mainnet.sui.io \
-    --first-checkpoint 89632000
+    --rpc-api-url "$FULLNODE_GRPC_URL" \
+    --streaming-url "$FULLNODE_GRPC_URL" \
+    --metrics-address 127.0.0.1:9187
 ```
 
-**Steady-state operation from a full node gRPC endpoint (recommended):**
-```sh
-$ sui-indexer-alt indexer \
-    --config events.toml \
-    --database-url postgres://username:password@localhost:5432/database \
-    --rpc-api-url https://fullnode.mainnet.sui.io:443 \
-    --streaming-url https://fullnode.mainnet.sui.io:443
-```
+If recovery requires checkpoints outside the fullnode's retention, stop the process, recover from the GCS bucket, and then switch back to fullnode gRPC.
 
 :::info
 
-`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full-retention backfills older than 30 days or from genesis, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet.
-
-If the checkpoint bucket you are using has Requester Pays enabled, configure GCS credentials and a billing project when using `--remote-store-gcs`. In Sui's object store config, the relevant fields are `google_service_account` and `google_project_id`. `google_project_id` is sent as the `x-goog-user-project` header required by GCS Requester Pays.
-
-For more on Requester Pays, see [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays). For source selection and steady-state operation guidance, see [Running a Remote Store](/operators/data-management/remote-store-setup) and [Archival Stack Setup](/operators/data-management/archival-stack-setup). In general, public HTTPS checkpoint endpoints should not be your default source in steady state if a full node gRPC endpoint is available.
+For checkpoint ingestion, the public `https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` stores are for testing only. Do not use them for production backfill, recovery, fallback, or steady state. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for the source matrix.
 
 :::
 
@@ -339,115 +357,104 @@ Once caught up to network tip, you can manually set the max concurrency to a low
 
 ## Consistent store setup
 
-All consistent store pipelines run in the same instance based on a single configuration file. Like the indexer, the pipelines run in parallel and throughput is limited by the slowest pipeline. The consistent store also includes an `address_balances` pipeline for address balance accumulator state.
+The consistent store maintains live ownership and balance indexes in its own RocksDB database and exposes checkpoint-consistent reads over gRPC. It does not use the Postgres `DATABASE_URL` and does not replace the General-purpose Indexer. Keep its database path on persistent local SSD storage.
+
+All 4 pipelines run in 1 process. Their watermarks are independent from the Postgres indexer's watermarks, and throughput is limited by the slowest consistent-store pipeline.
 
 #### Hardware requirements
 
 - **CPU:** 8 cores
 - **Memory:** 32GB
 
-### Restore command
+### Restore from a formal snapshot
 
-When you add a new pipeline to the consistent store, the service backfills from genesis by default. To avoid this, use the `restore` command to construct the consistent state at the latest epoch, or a specific epoch with the `--epoch` flag.
+Without a restore, a new consistent store must process checkpoints from genesis. For production, restore the latest formal snapshot into an empty RocksDB path before starting the service.
 
-```sh
-$ sui-indexer-alt-consistent-store restore \
-    --azure <AZURE_BUCKET> \
-    --database-path <DATABASE_PATH> \
-    --gcs <GCS_BUCKET> \
-    --http <HTTP_ENDPOINT> \
-    --object-file-concurrency <OBJECT_FILE_CONCURRENCY> \
-    --pipeline <PIPELINE_NAME> \
-    --remote-store-url <REMOTE_STORE_URL> \
-    --s3 <S3_BUCKET>
-```
+The restore command reads from two distinct sources:
 
-| CLI parameter               | Description                                                                                                                               |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `<AZURE_BUCKET>` \*         | Name or URL of Azure bucket containing [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots).  |
-| `<DATABASE_PATH>`           | Path to RocksDB database.                                                                                                                 |
-| `<GCS_ACCOUNT>` \*          | Name or URL of GCS bucket containing [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots).    |
-| `<HTTP_ENDPOINT>` \*        | URL of formal snapshot API.                                                                                                               |
-| `<OBJECT_FILE_CONCURRENCY>` | Path to indexer configuration file.                                                                                                       |
-| `<PIPELINE_NAME>`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                                                |
-| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources).      |
-| `<S3_BUCKET>` \*            | Name or URL of AWS S3 bucket containing [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots). |
+1. Exactly 1 formal snapshot source, such as `--http`, `--gcs`, `--azure`, `--s3`, or `--local`.
+1. A required `--remote-store-url`. The restorer uses this store to map the snapshot epoch to its ending checkpoint and fetch that checkpoint; it is not the post-restore catch-up source.
 
-\* Must specify one of `<AZURE_BUCKET>`, `<GCS_ACCOUNT>`, `<HTTP_ENDPOINT>`, or `<S3_BUCKET>`.
-
-Example:
+Mainnet and Testnet restores can use `https://checkpoints.mainnet.sui.io` or `https://checkpoints.testnet.sui.io` for `--remote-store-url`, respectively.
 
 ```sh
+$ export CONSISTENT_STORE_PATH=/path/to/consistent-store
+$ mkdir -p "$(dirname "$CONSISTENT_STORE_PATH")"
+
 $ sui-indexer-alt-consistent-store restore \
-    --database-path /path/to/rocksdb \
+    --database-path "$CONSISTENT_STORE_PATH" \
     --http https://formal-snapshot.mainnet.sui.io \
+    --remote-store-url https://checkpoints.mainnet.sui.io \
     --object-file-concurrency 5 \
     --pipeline address_balances \
     --pipeline balances \
     --pipeline object_by_owner \
     --pipeline object_by_type \
-    --remote-store-url https://checkpoints.mainnet.sui.io
-```
-
-`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full-retention backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet instead of `--remote-store-url`.
-
-### Run command
-
-Run a consistent store instance using this command for the configuration file that follows:
-
-```sh
-$ sui-indexer-alt-consistent-store run \
-    --config <CONFIG_FILE> \
-    --database-path <DATABASE_PATH> \
-    --remote-store-url <REMOTE_STORE_URL>
-```
-
-| CLI param            | Description                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `<CONFIG_FILE>`      | Path to consistent store configuration file.                                                                                         |
-| `<DATABASE_PATH>`    | Path to RocksDB database.                                                                                                            |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources). Public HTTPS checkpoint endpoints retain only the most recent 30 days of checkpoints. |
-
-Example:
-
-```sh
-$ sui-indexer-alt-consistent-store run \
     --config consistent-store.toml \
-    --database-path /path/to/rocksdb \
-    --remote-store-url https://checkpoints.mainnet.sui.io
+    --metrics-address 127.0.0.1:9186
 ```
 
-For full-retention backfill, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet rather than `--remote-store-url`.
+| **CLI parameter** | **Description** |
+| --- | --- |
+| `--database-path` | Empty path where the RocksDB database is created. |
+| `--http`, `--gcs`, `--azure`, `--s3`, or `--local` | Formal snapshot source. Specify exactly one. See [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots). |
+| `--remote-store-url` | Public HTTPS checkpoint store used to read the epoch mapping and selected end-of-epoch checkpoint during restore. |
+| `--object-file-concurrency` | Number of formal-snapshot object files to download concurrently. |
+| `--pipeline` | Runtime pipeline name to restore. Repeat once for each required pipeline. |
+| `--config` | Consistent-store TOML configuration. Only its RocksDB settings are used during restore. |
+
+Each `--pipeline` is required because restore materializes only explicitly selected pipelines. Let the command exit successfully before starting `run`.
+
+Use the latest formal snapshot so the public HTTPS checkpoint store still retains its end-of-epoch checkpoint. If that checkpoint is no longer available, restore cannot complete and you must choose a newer formal snapshot.
+
+### Run and catch up with fullnode gRPC
+
+After restore completes, start the combined consistent-store indexer and gRPC service. The polling client catches up after the restored watermark, and streaming supplies new checkpoints at the network tip. Use a production-grade fullnode endpoint from an RPC provider:
+
+```sh
+$ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
+
+$ sui-indexer-alt-consistent-store run \
+    --database-path "$CONSISTENT_STORE_PATH" \
+    --rpc-api-url "$FULLNODE_GRPC_URL" \
+    --streaming-url "$FULLNODE_GRPC_URL" \
+    --rpc-listen-address 127.0.0.1:7001 \
+    --metrics-address 127.0.0.1:9186 \
+    --config consistent-store.toml
+```
+
+Wait for the service to report `SERVING` and for every pipeline watermark to approach the network tip before routing GraphQL traffic to it. Only 1 process can open a given RocksDB path. Back up the RocksDB path separately from Postgres, and stop the consistent-store process before taking a filesystem-level copy.
+
+If a successfully restored watermark is older than the fullnode's retention window, use GCS for the catch-up phase:
+
+```sh
+$ sui-indexer-alt-consistent-store run \
+    --database-path "$CONSISTENT_STORE_PATH" \
+    --remote-store-gcs mysten-mainnet-checkpoints-use4 \
+    --remote-store-header "x-goog-user-project:${GOOGLE_CLOUD_PROJECT}" \
+    --rpc-listen-address 127.0.0.1:7001 \
+    --metrics-address 127.0.0.1:9186 \
+    --config consistent-store.toml
+```
+
+Do not route traffic to this temporary catch-up process. After it reaches the network tip, stop it and restart with fullnode gRPC.
+
+To build a consistent store without a formal snapshot, run from an empty path against the full-retention GCS bucket and process from checkpoint 0. Do not set `--first-checkpoint` to a later checkpoint, because doing so produces incomplete ownership and balance state.
+
+For Testnet, use `https://formal-snapshot.testnet.sui.io`, `https://checkpoints.testnet.sui.io`, and a production-grade Testnet fullnode endpoint from an RPC provider. Use the `mysten-testnet-checkpoints-use4` bucket when GCS catch-up is necessary. Keep every source on the same network and use a separate RocksDB path per network.
 
 ### Run config recommendations
 
-<table>
-	<thead>
-		<tr>
-			<th>Config TOML</th>
-			<th>Description</th>
-			<th>Pipelines</th>
-			<th>Backfill time</th>
-			<th>Data retention</th>
-		</tr>
-	</thead>
-	<tbody>
-		<tr>
-			<td>`consistent-store.toml`</td>
-			<td>Consistent store API configuration and event tables.</td>
-			<td>
-				<ul className="pl-4">
-					<li>`address_balances`</li>
-					<li>`balances`</li>
-					<li>`object-by-owner`</li>
-					<li>`object-by-type`</li>
-				</ul>
-			</td>
-			<td>1-2 hours</td>
-			<td>Must retain all data</td>
-		</tr>
-	</tbody>
-</table>
+The CLI runtime pipeline names use underscores, while the corresponding TOML keys use hyphens:
+
+| **Runtime pipeline (`--pipeline`)** | **TOML key** | **Description** |
+| --- | --- | --- |
+| `address_balances` | `address-balances` | Address balance accumulator state. |
+| `balances` | `balances` | Coin balance state. |
+| `object_by_owner` | `object-by-owner` | Live objects indexed by owner. |
+| `object_by_type` | `object-by-type` | Live objects indexed by type. |
+
+A formal-snapshot restore of all pipelines typically takes 1–2 hours. All pipeline state must be retained.
 
 <details>
 	<summary>`consistent-store.toml`</summary>
@@ -479,7 +486,7 @@ The GraphQL RPC server relies on multiple backend services to fulfill different 
 - Archival service (`--ledger-grpc-url`) provides historical data for most queries involving checkpoints, objects, and transactions.
 - Consistent store (`--consistent-store-url`) serves live data for queries related to current object and balance ownership.
 - Postgres database (`--database-url`) is the primary store for most queries, except for direct object and transaction lookups handled by the Archival service.
-- Fullnode RPC (`--fullnode-rpc-url`) powers transaction simulation and execution.
+- Fullnode gRPC (`--fullnode-rpc-url`) powers transaction simulation and execution.
 
 Set the appropriate service URLs in your run command based on the query types your GraphQL RPC server needs to support.
 
@@ -492,8 +499,9 @@ If you use the Sui Foundation-hosted public good archival service on Testnet or 
 :::
 
 Use the following command to run a GraphQL RPC server node:
+
 ```sh
-sui-indexer-alt-graphql rpc \
+$ sui-indexer-alt-graphql rpc \
     --config <PATH_TO_GRAPHQL_CONFIG_FILE> \
     --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_1> \
     --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_2> \
@@ -501,24 +509,30 @@ sui-indexer-alt-graphql rpc \
     --ledger-grpc-url <LEDGER_GRPC_URL> \
     --consistent-store-url <CONSISTENT_STORE_URL> \
     --database-url <DATABASE_URL> \
-    --fullnode-rpc-url <FULLNODE_RPC_URL>
+    --fullnode-rpc-url <FULLNODE_GRPC_URL> \
+    --rpc-listen-address <RPC_LISTEN_ADDRESS> \
+    --metrics-address <METRICS_ADDRESS>
 ```
 
 Multiple `--indexer-config` parameters can be provided, one for each general-purpose indexer instance.
 
-| CLI parameter                        | Description                                                                        |
-|----------------------------------|------------------------------------------------------------------------------------|
-| `CONFIG_FILE`                    | Path to the optional GraphQL RPC server configuration file |
-| `INDEXER_CONFIG_FILE`            | Path to general-purpose indexer configuration file; can be set multiple times for different pipelines                 |
-| `LEDGER_GRPC_URL`                | URL to Archival service's `LedgerService` gRPC API                                   |
-| `CONSISTENT_STORE_URL`           | URL to [Consistent store](#consistent-store-setup) API                             |
-| `DATABASE_URL`                   | Postgres database connection string                                                |
-| `FULLNODE_RPC_URL`               | URL to full node RPC                                                            |
-
+| **CLI parameter** | **Description** |
+| --- | --- |
+| `PATH_TO_GRAPHQL_CONFIG_FILE` | Path to the optional GraphQL RPC server configuration file. |
+| `PATH_TO_INDEXER_CONFIG_FILE` | Path to a General-purpose Indexer configuration file; repeat for each group of pipelines. |
+| `LEDGER_GRPC_URL` | Archival Service `LedgerService` gRPC URL. |
+| `CONSISTENT_STORE_URL` | [Consistent store](#consistent-store-setup) gRPC URL. Use `http://` unless you explicitly configured its TLS listener. |
+| `DATABASE_URL` | Postgres database connection string. |
+| `FULLNODE_GRPC_URL` | Production-grade fullnode gRPC URL from an RPC provider, used for transaction simulation and execution. |
+| `RPC_LISTEN_ADDRESS` | GraphQL bind address, for example `127.0.0.1:7000`. |
+| `METRICS_ADDRESS` | Prometheus bind address unique to this process, for example `127.0.0.1:9185`. |
 
 Example:
+
 ```sh
-sui-indexer-alt-graphql rpc \
+$ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
+
+$ sui-indexer-alt-graphql rpc \
     --config graphql.toml \
     --indexer-config events.toml \
     --indexer-config obj_versions.toml \
@@ -528,18 +542,21 @@ sui-indexer-alt-graphql rpc \
     --indexer-config tx_kinds.toml \
     --indexer-config unpruned.toml \
     --ledger-grpc-url https://archive.mainnet.sui.io:443 \
-    --consistent-store-url https://localhost:7001 \
+    --consistent-store-url http://127.0.0.1:7001 \
     --database-url postgres://username:password@localhost:5432/database \
-    --fullnode-rpc-url https://localhost:9000
+    --fullnode-rpc-url "$FULLNODE_GRPC_URL" \
+    --rpc-listen-address 127.0.0.1:7000 \
+    --metrics-address 127.0.0.1:9185
 ```
+
+With these addresses, GraphQL is available at `http://127.0.0.1:7000/graphql`, its health check is at `http://127.0.0.1:7000/health`, and Prometheus metrics are at `http://127.0.0.1:9185/metrics`. Assign a different metrics address to every co-located indexer process; all 3 binaries otherwise default to **port 9184**.
 
 ### Generating configuration
 
 You can run the GraphQL RPC server without a configuration file, which uses default values. To customize settings, generate a configuration file using the following command and edit it as needed:
 
 ```sh
-
-sui-indexer-alt-graphql generate-config > <PATH_TO_GRAPHQL_CONFIG_FILE>
+$ sui-indexer-alt-graphql generate-config > <PATH_TO_GRAPHQL_CONFIG_FILE>
 ```
 
 This produces output similar to the following:

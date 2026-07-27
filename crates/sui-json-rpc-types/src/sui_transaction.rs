@@ -627,6 +627,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
                                 SuiEndOfEpochTransactionKind::WriteAccumulatorStorageCost
                             }
+                            EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                                SuiEndOfEpochTransactionKind::ForwardingAddressRegistryCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1806,6 +1809,7 @@ pub enum SuiEndOfEpochTransactionKind {
     DisplayRegistryCreate,
     AddressAliasStateCreate,
     WriteAccumulatorStorageCost,
+    ForwardingAddressRegistryCreate,
 }
 
 #[serde_as]

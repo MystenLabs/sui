@@ -87,6 +87,12 @@ The cheat sheet highlights common Sui CLI commands.
 
 ## Faucet and gas
 
+:::info Faucet availability
+
+`sui client faucet` works on **Devnet and Localnet only**. It does not work on Testnet. For Testnet tokens, use the web faucet at [faucet.sui.io](https://faucet.sui.io), Discord (`#testnet-faucet`), or the TypeScript SDK. All faucets are rate-limited. If you hit a limit, wait or try a different method. There is no faucet for Mainnet; SUI tokens on Mainnet have real monetary value.
+
+:::
+
 <table class="w-100">
 	<thead>
 		<tr>
@@ -97,7 +103,7 @@ The cheat sheet highlights common Sui CLI commands.
 	<tbody>
 		<tr>
 			<td class="w-2/3">`sui client faucet`</td>
-			<td class="w-1/3">Get a SUI coin from the faucet associated with the active network</td>
+			<td class="w-1/3">Get a SUI coin from the faucet (Devnet and Localnet only)</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui client faucet --address ADDRESS`</td>
@@ -114,6 +120,10 @@ The cheat sheet highlights common Sui CLI commands.
 		<tr>
 			<td class="w-2/3">`sui client gas ADDRESS`</td>
 			<td class="w-1/3">List the gas coins for the given address (accepts also an alias)</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client balance`</td>
+			<td class="w-1/3">List all coin balances for the active address</td>
 		</tr>
 	</tbody>
 </table>
@@ -192,6 +202,93 @@ The cheat sheet highlights common Sui CLI commands.
 		<tr>
 			<td class="w-2/3">`sui move test --trace`</td>
 			<td class="w-1/3">Create an execution trace for the Move tests in the current directory. Use with the [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension.</td>
+		</tr>
+	</tbody>
+</table>
+
+## Publishing and upgrading packages
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client publish`</td>
+			<td class="w-1/3">Publish the Move package in the current directory</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client publish --dry-run`</td>
+			<td class="w-1/3">Simulate publish to estimate gas cost without executing</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client publish --serialize-unsigned-transaction`</td>
+			<td class="w-1/3">Output unsigned base64 transaction bytes for external or multisig signing</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client test-publish`</td>
+			<td class="w-1/3">Publish for testing with temporary address handling (transaction still lands on-chain)</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client upgrade \`<br/>&nbsp;&nbsp;`--upgrade-capability CAP_ID`</td>
+			<td class="w-1/3">Upgrade a previously published package</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client verify-source PACKAGE_PATH`</td>
+			<td class="w-1/3">Verify on-chain bytecode matches local source code</td>
+		</tr>
+	</tbody>
+</table>
+
+## Objects and dynamic fields
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client objects`</td>
+			<td class="w-1/3">List all objects owned by the active address</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client object OBJECT_ID`</td>
+			<td class="w-1/3">Show details for a specific object (type, owner, content)</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client object OBJECT_ID --json`</td>
+			<td class="w-1/3">Show object details in JSON format</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client dynamic-field OBJECT_ID`</td>
+			<td class="w-1/3">List dynamic fields attached to an object</td>
+		</tr>
+	</tbody>
+</table>
+
+## Transaction inspection
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Command</td>
+			<td>Description</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td class="w-2/3">`sui client tx-block DIGEST`</td>
+			<td class="w-1/3">Show details of an executed transaction by its digest</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client tx-block DIGEST --json`</td>
+			<td class="w-1/3">Show transaction details in JSON format</td>
 		</tr>
 	</tbody>
 </table>
@@ -286,6 +383,55 @@ The cheat sheet highlights common Sui CLI commands.
 				`sui client ptb \`<br/>&nbsp;&nbsp;`--move-call p::m::f "<type>" args \`<br/>&nbsp;&nbsp;`--serialize-unsigned-transaction`
 			</td>
 			<td class="w-1/3">Serialize the unsigned PTB as base64 instead of executing it</td>
+		</tr>
+	</tbody>
+</table>
+
+## Troubleshooting
+
+<table class="w-100">
+	<thead>
+		<tr>
+			<td>Error or symptom</td>
+			<td>Cause</td>
+			<td>Fix</td>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>`Cannot find gas coin for signer address`</td>
+			<td>Active address has no SUI tokens</td>
+			<td>Fund the address with the faucet (Devnet/Localnet) or web faucet (Testnet)</td>
+		</tr>
+		<tr>
+			<td>`Client/server API version mismatch`</td>
+			<td>CLI version doesn't match the network's protocol version</td>
+			<td>Run `suiup update` to update the CLI</td>
+		</tr>
+		<tr>
+			<td>`Your package is already published`</td>
+			<td>`Published.toml` already has an entry for this environment</td>
+			<td>Use `sui client upgrade` to upgrade, or switch to a different network with `sui client switch --env`</td>
+		</tr>
+		<tr>
+			<td>Transaction fails with `InsufficientGas`</td>
+			<td>Gas budget too low or insufficient balance</td>
+			<td>Increase `--gas-budget` or fund the address. Use `--dry-run` to estimate cost first</td>
+		</tr>
+		<tr>
+			<td>`ObjectVersionUnavailableForConsumption`</td>
+			<td>Object was modified by another transaction since you last read it</td>
+			<td>Re-fetch the object with `sui client object OBJECT_ID` and retry</td>
+		</tr>
+		<tr>
+			<td>`Package dependency cannot be found`</td>
+			<td>Active network doesn't have the required dependency published</td>
+			<td>Verify your environment with `sui client active-env` and that dependencies are published on that network</td>
+		</tr>
+		<tr>
+			<td>`sui client faucet` fails on Testnet</td>
+			<td>`sui client faucet` only supports Devnet and Localnet</td>
+			<td>Use the web faucet at [faucet.sui.io](https://faucet.sui.io) or Discord for Testnet tokens</td>
 		</tr>
 	</tbody>
 </table>

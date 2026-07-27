@@ -17,6 +17,7 @@ use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResult;
+use sui_rpc::proto::sui::rpc::v2::ObjectSet as ProtoObjectSet;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
@@ -235,6 +236,20 @@ pub(crate) fn render_executed_transaction(
             .into_iter()
             .map(Into::into)
             .collect();
+    }
+
+    if let Some(object_mask) = mask
+        .subtree(ExecutedTransaction::OBJECTS_FIELD)
+        .and_then(|submask| submask.subtree(ProtoObjectSet::OBJECTS_FIELD))
+    {
+        message.objects = Some(
+            ProtoObjectSet::default().with_objects(
+                objects
+                    .iter()
+                    .map(|object| service.render_object_to_proto(object, &object_mask, objects))
+                    .collect(),
+            ),
+        );
     }
 
     Ok(message)

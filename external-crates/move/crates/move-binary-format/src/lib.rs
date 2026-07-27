@@ -248,3 +248,17 @@ macro_rules! checked_as {
         })
     }};
 }
+
+#[macro_export]
+macro_rules! partial_vm_error_with_debug_message {
+    ($error_name:ident, $body:expr) => {{
+        let _e = $crate::errors::PartialVMError::new(
+            move_core_types::vm_status::StatusCode::$error_name,
+        );
+        if cfg!(debug_assertions) {
+            _e.with_message($body)
+        } else {
+            _e
+        }
+    }};
+}

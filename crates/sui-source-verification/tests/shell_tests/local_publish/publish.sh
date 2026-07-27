@@ -1,0 +1,29 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+sui client --client.config $CONFIG switch --env localnet
+
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format hex)
+echo "[environments]" >> a/Move.toml
+echo "localnet = \"$chain_id\"" >> a/Move.toml
+echo "[environments]" >> b/Move.toml
+echo "localnet = \"$chain_id\"" >> b/Move.toml
+
+
+# Publishing records each package's address and toolchain in Published.toml; verify-source reads the
+# address to check against from that metadata, so it needs only the package path.
+sui client --client.config $CONFIG publish "b" > /dev/null 2>&1
+sui client --client.config $CONFIG verify-source "b"
+
+sui client --client.config $CONFIG publish "a" > /dev/null 2>&1
+sui client --client.config $CONFIG verify-source "a"
+
+
+# Tampering the source must be detected: the rebuild no longer matches the published bytecode.
+sed -i.bak 's/42/99/' b/sources/b.move
+rm b/sources/b.move.bak
+if sui client --client.config $CONFIG verify-source "b" > /dev/null 2>&1; then
+  echo "ERROR: tampered source passed verification"
+else
+  echo "Tampered source failed verification, as expected"
+fi
