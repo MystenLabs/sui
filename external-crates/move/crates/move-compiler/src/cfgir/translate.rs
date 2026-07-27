@@ -53,16 +53,12 @@ pub(super) struct CFGIRDebugFlags {
     pub(super) print_optimized_blocks: bool,
 }
 
-/// The fold state of a constant definition, tracked for every constant in the program so that
-/// cross-module uses in function bodies can be replaced by module-local copies of the folded
-/// values (see `constants::rewrite_cross_module_constants`).
+/// The fold state of a constant definition
 enum ConstantEntry {
-    /// Seeded before any module is processed. Still `Pending` at use time only when the defining
-    /// module has not been processed, which requires a module dependency cycle, already reported
-    /// during typing
+    /// Not yet processed. Only observable at a use under a module dependency cycle, which typing
+    /// has already reported
     Pending,
-    /// The definition could not be folded to a value; an error was already reported at the
-    /// definition site
+    /// Failed to fold to a value; an error was already reported at the definition
     Failed,
     /// Folded; the value is in the shared constant value map
     Defined { signature: Box<H::BaseType> },
@@ -75,14 +71,11 @@ pub(super) struct Context<'env> {
     current_package: Option<Symbol>,
     /// the fold state of every constant in the program
     constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
-    // Module-local copies of cross-module constants synthesized for the current module, as a map
-    // from the source constant to the local copy name plus the synthesized definitions in creation
-    // order. Note for future CFGIR visitor authors: these copies appear in the module's constant
-    // table like any other constant, but have no counterpart in the typing `ProgramInfo`.
+    // Copies of cross-module constants synthesized for the current module. Note the copies have no
+    // counterpart in the typing `ProgramInfo`.
     constant_copies: BTreeMap<(ModuleIdent, ConstantName), ConstantName>,
     constant_copy_defs: Vec<(ConstantName, G::Constant)>,
-    /// continues after the module's own constants so `to_bytecode`'s sort-by-index emits copies
-    /// deterministically after them
+    /// continues after the module's own constants so copies are emitted after them
     constant_copy_index: usize,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
@@ -123,11 +116,9 @@ impl<'env> Context<'env> {
         std::mem::take(&mut self.constant_copy_defs)
     }
 
-    /// Resolves a cross-module constant use to the name of a module-local copy of the constant,
-    /// synthesizing the copy at its first use. Returns `None` if no copy can be made, reporting an
-    /// error unless one was already reported at the constant's definition: either the constant
-    /// failed to fold, its module has not been processed (possible only under an already-reported
-    /// module dependency cycle), or it is defined outside the current compilation.
+    /// Resolves a cross-module constant use to a module-local copy of the constant, synthesizing
+    /// the copy at its first use. Returns `None` if no copy can be made, reporting an error unless
+    /// one was already reported at the definition.
     pub(super) fn constant_copy(
         &mut self,
         constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
@@ -148,13 +139,10 @@ impl<'env> Context<'env> {
                 self.add_diag(unfoldable_constant_use(&m, &c, use_loc, defined_loc));
                 None
             }
-            // The defining module has not been processed yet, which is only possible under a
-            // module dependency cycle, already reported during typing
             Some((_, ConstantEntry::Pending)) => None,
             None => {
-                // TODO(cross-module-constants): constants in pre-compiled dependencies have their
-                // folded values in `PreCompiledProgramInfo`; supporting them is a possible
-                // follow-up.
+                // TODO(cross-module-constants): pre-compiled dependencies have folded values in
+                // `PreCompiledProgramInfo`; supporting them is a possible follow-up
                 let msg = format!(
                     "Invalid access of '{}::{}'. Constants defined in modules outside of the \
                      current compilation cannot be accessed from other modules",
@@ -166,15 +154,12 @@ impl<'env> Context<'env> {
         }
     }
 
-    /// Synthesizes a module-local copy of the constant `m::c` from its already-folded value, named
-    /// `_{dep_order}_{module}_{const}`, e.g. `b::C` with `b` at dependency order 3 becomes
-    /// `_3_b_C`. The leading `_` means the name can never collide with a user constant (those must
-    /// start with an uppercase letter). Leading with the defining module's dependency order --
-    /// unique per module -- means two distinct source constants can never mangle to the same name:
-    /// equal names have equal leading digit runs, hence the same defining module, hence the same
-    /// constant name (unique within their module). Note these names are not stable across
-    /// module-graph changes (dependency orders renumber); they appear only in source maps and are
-    /// not part of the upgrade-compatibility surface.
+    /// Synthesizes a module-local copy of `m::c` from its already-folded value, named
+    /// `_{dep_order}_{module}_{const}` (e.g. `_3_b_C`). The leading `_` avoids user constants
+    /// (which must start uppercase), and the dependency order -- unique per module -- makes the
+    /// names collision-free: equal names have equal leading digit runs, hence the same module,
+    /// hence the same constant. These names are not stable across module-graph changes; they
+    /// appear only in source maps and are not part of the upgrade-compatibility surface.
     fn synthesize_constant_copy(
         &mut self,
         constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
@@ -192,8 +177,7 @@ impl<'env> Context<'env> {
             .dependency_order
             .expect("ICE typed module with no dependency order");
         let symbol = format!("_{}_{}_{}", dep_order, m.value.module, c).into();
-        // The first-use loc (rather than the defining loc) keeps every loc in the using module's
-        // source map within its own file
+        // the first-use loc keeps the using module's source map within its own file
         let copy_name = ConstantName(sp(first_use, symbol));
         let cdef = G::Constant {
             warning_filter: empty_filter_scope(),
@@ -524,9 +508,8 @@ fn constants(
             .expect("ICE constant name collision");
     }
 
-    // Anything still `Pending` for this module did not fold to a value, either because folding
-    // failed or because it was removed as part of a constant cycle -- an error was reported at the
-    // definition either way
+    // anything still `Pending` failed to fold or was removed as part of a cycle; an error was
+    // reported at the definition either way
     for name in all_names {
         let entry = context
             .constant_defs
@@ -719,10 +702,9 @@ fn command_exps(cmd_: &H::Command_) -> impl Iterator<Item = &H::Exp> {
     exps.into_iter()
 }
 
-/// Reports a constant definition that could not be folded to a value. If the given expressions
-/// contain cross-module references to constants that themselves failed to fold, those references
-/// are reported as the root cause; otherwise the generic unfoldable-constant error is reported at
-/// `loc`.
+/// Reports a constant definition that could not be folded to a value: cross-module references to
+/// constants that themselves failed to fold are reported as the root cause, otherwise the generic
+/// unfoldable-constant error is reported at `loc`.
 fn report_cannot_fold<'a>(
     context: &mut Context,
     module: ModuleIdent,
@@ -750,8 +732,7 @@ fn report_cannot_fold<'a>(
     }
 }
 
-/// The error reported at each use of a constant whose definition could not be evaluated to a
-/// value, in function bodies and constant definitions alike.
+/// The error reported at each use of a constant whose definition could not be evaluated to a value
 fn unfoldable_constant_use(
     m: &ModuleIdent,
     c: &ConstantName,
@@ -796,8 +777,7 @@ fn failed_cross_module_constants(
                 failed_cross_module_constants(context, module, arg, failed);
             }
         }
-        // other forms cannot appear in (possibly partially folded) constant bodies, but there is
-        // no need to enforce that here
+        // other forms cannot appear in constant bodies
         _ => (),
     }
 }
