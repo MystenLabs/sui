@@ -374,6 +374,7 @@ const MAINNET_USDB: &str =
 // Version 132: Enable defer_owned_object_double_spend on devnet.
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
+//              Create the ForwardingAddressRegistry system object on devnet.
 // Version 133: Enable GCP Confidential Spaces attestation verification on
 //              Unknown/devnet only. Gas costs set on all chains.
 // Version 134: Add enable_gcp_consensus_validation (GCP-issuer JWK validation in consensus
@@ -1089,6 +1090,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     address_aliases: bool,
+
+    // If true, create the forwarding address registry object in the change epoch transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    create_forwarding_address_registry: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -4607,6 +4612,7 @@ impl ProtocolConfig {
                 132 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
+                        cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                 }
