@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 3, line 50:
+task 3, line 49:
 //# run 0x42::b::fail
 Error: Function execution failed with VMError: {
     major_status: ABORTED,

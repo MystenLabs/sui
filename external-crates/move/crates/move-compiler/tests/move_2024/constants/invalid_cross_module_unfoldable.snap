@@ -22,5 +22,35 @@ error[E08001]: cannot compute constant value
 error[E08001]: cannot compute constant value
    ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:25:16
    │
+ 9 │ public(package) const BAD: u64 = 1 / 0;
+   │                       --- 'BAD' is defined here
+   ·
 25 │ const D: u64 = a::BAD + c::X;
-   │                ^^^^^^^^^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
+   │                ^^^^^^ Invalid use of constant '0x42::a::BAD'. Its value could not be computed
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:25:25
+   │
+15 │ public(package) const X: u64 = Y + 1;
+   │                       - 'X' is defined here
+   ·
+25 │ const D: u64 = a::BAD + c::X;
+   │                         ^^^^ Invalid use of constant '0x42::c::X'. Its value could not be computed
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:27:25
+   │
+ 9 │ public(package) const BAD: u64 = 1 / 0;
+   │                       --- 'BAD' is defined here
+   ·
+27 │ public fun bad(): u64 { a::BAD }
+   │                         ^^^^^^ Invalid use of constant '0x42::a::BAD'. Its value could not be computed
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable.move:29:23
+   │
+15 │ public(package) const X: u64 = Y + 1;
+   │                       - 'X' is defined here
+   ·
+29 │ public fun x(): u64 { c::X }
+   │                       ^^^^ Invalid use of constant '0x42::c::X'. Its value could not be computed

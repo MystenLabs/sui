@@ -138,14 +138,6 @@ pub struct ModuleContext<'env> {
     pub stdlib_types: BTreeMap<StdlibName, Type>,
 }
 
-/// The kind of module member whose definition is currently being type-checked
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DefinitionKind {
-    Function,
-    MacroFunction,
-    Constant,
-}
-
 pub struct Context<'env, 'outer> {
     pub outer: &'outer ModuleContext<'env>,
 
@@ -163,11 +155,7 @@ pub struct Context<'env, 'outer> {
     next_match_var_id: usize,
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
     pub current_function: Option<FunctionName>,
-    pub definition_kind: DefinitionKind,
-    /// collects the constants used cross-module in function bodies, which need a generated
-    /// `public(package)` constant function in their defining module. Keyed with the location of
-    /// the first use for error reporting.
-    pub needed_constant_functions: BTreeMap<(ModuleIdent, ConstantName), Loc>,
+    pub in_macro_function: bool,
     /// True only while speculatively typing an IDE macro body with diagnostics thrown away.
     pub ide_typing_macro_body: bool,
     max_variable_color: RefCell<u16>,
@@ -559,8 +547,7 @@ impl<'env> ModuleContext<'env> {
             next_match_var_id: 0,
             use_funs,
             current_function: None,
-            definition_kind: DefinitionKind::Function,
-            needed_constant_functions: BTreeMap::new(),
+            in_macro_function: false,
             ide_typing_macro_body: false,
             max_variable_color: RefCell::new(0),
             return_type: None,
@@ -1212,12 +1199,10 @@ impl<'env, 'outer> Context<'env, 'outer> {
         BTreeSet<(ModuleIdent, Loc)>,
         BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
         UsedMethods,
-        BTreeMap<(ModuleIdent, ConstantName), Loc>,
     ) {
         let Self {
             used_module_members,
             new_friends,
-            needed_constant_functions,
             mut use_funs,
             ..
         } = self;
@@ -1227,12 +1212,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
             UseFunsScope_::Outer(_, used) => used,
             UseFunsScope_::Local(_) => panic!("ICE last scope should never be local"),
         };
-        (
-            new_friends,
-            used_module_members,
-            used_methods,
-            needed_constant_functions,
-        )
+        (new_friends, used_module_members, used_methods)
     }
 
     //********************************************
@@ -2001,7 +1981,7 @@ fn check_constant_visibility(
     let in_current_module = context.is_current_module(m);
     // Inside a macro function definition, visibility is resolved in the scope of the caller at
     // each expansion site
-    if in_current_module || context.definition_kind == DefinitionKind::MacroFunction {
+    if in_current_module || context.in_macro_function {
         return;
     }
     let cross_module_constants = context
@@ -2026,22 +2006,10 @@ fn check_constant_visibility(
         return;
     }
     match visibility {
-        Visibility::Package(vis_loc) if context.current_module_shares_package_and_address(m) => {
-            match context.definition_kind {
-                // resolved by constant folding; no runtime call is made
-                DefinitionKind::Constant => (),
-                // the use compiles to a call of the generated constant function, so the using
-                // module must become a friend of the defining module
-                DefinitionKind::Function => {
-                    context.record_current_module_as_friend(m, vis_loc);
-                    context
-                        .needed_constant_functions
-                        .insert((*m, *c), usage_loc);
-                }
-                // handled by the early return above
-                DefinitionKind::MacroFunction => (),
-            }
-        }
+        // The use is resolved entirely at compile time: constant-definition uses fold the value
+        // in, and function-body uses compile to a module-local copy of the constant synthesized
+        // during CFGIR translation. No friend relationship is created.
+        Visibility::Package(_) if context.current_module_shares_package_and_address(m) => (),
         Visibility::Package(vis_loc) => {
             let msg = format!(
                 "Invalid access of '{}' visible constant '{}::{}'",

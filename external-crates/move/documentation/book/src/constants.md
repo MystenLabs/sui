@@ -70,7 +70,7 @@ module a::mint {
     const HALF_SUPPLY: u64 = config::MAX_SUPPLY / 2;
 
     public fun mint(amount: u64) {
-        // compiled as a call into `a::config`
+        // compiled as a copy of the constant in `a::mint`
         assert!(amount <= config::MAX_SUPPLY, 0);
         // ...
     }
@@ -80,18 +80,16 @@ module a::mint {
 Even with `public(package)`, constants remain internal to their package: using a constant from
 another package is an error.
 
-The two kinds of usage behave differently when the defining package is upgraded:
+Every cross-module constant use is resolved at compile time:
 
 - A cross-module use in a *constant definition* (like `HALF_SUPPLY` above) is resolved by the
   compiler, which folds the referenced constant's value into the new constant at compile time.
-- A cross-module use in a *function body* compiles to a call of a `public(package)` function
-  that the compiler generates in the defining module, so the value read at runtime is the one in
-  the version of the defining module the code is linked against.
+- A cross-module use in a *function body* compiles to a copy of the constant that the compiler
+  synthesizes in the using module.
 
-Within a single package version this distinction is unobservable, since all modules of a package
-are compiled and published together. Note that reading a cross-module constant may incur slightly
-more gas usage than reading a constant of the current module, as it is compiled as a function
-call.
+In both cases the value is baked into the using module when it is compiled: upgrading the
+defining package does not change the values already compiled into modules that use them, and no
+runtime call is made.
 
 One usage is restricted: a [`#[error]` constant](./abort-and-assert.md) used as an abort code
 must come from the aborting module, since its name and value are encoded against the aborting

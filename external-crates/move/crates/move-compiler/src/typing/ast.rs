@@ -116,8 +116,6 @@ pub struct Constant {
     pub visibility: Visibility,
     pub signature: Type,
     pub value: Exp,
-    /// The compiler-generated function that returns this constant for cross-module calls
-    pub constant_fn_name: Option<FunctionName>,
 }
 
 //**************************************************************************************************
@@ -579,15 +577,11 @@ impl AstDebug for (ConstantName, &Constant) {
                 visibility,
                 signature,
                 value,
-                constant_fn_name,
             },
         ) = self;
         doc.ast_debug(w);
         warning_filter.ast_debug(w);
         attributes.ast_debug(w);
-        if let Some(constant_fn) = constant_fn_name {
-            w.writeln(format!("constant_fn: {constant_fn}"));
-        }
         visibility.ast_debug(w);
         w.write(format!("const#{index} {name}:"));
         signature.ast_debug(w);

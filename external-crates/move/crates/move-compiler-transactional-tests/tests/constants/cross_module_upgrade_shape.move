@@ -1,7 +1,7 @@
 //# init --edition 2024.alpha
 
-// The generated constant function disappears when the upgraded package no longer uses the
-// constant cross-module
+// The synthesized constant copy disappears when the upgraded package no longer uses the
+// constant cross-module; constants are not part of the upgrade-compatibility surface
 
 //# publish
 module 0x42::a {
