@@ -1276,8 +1276,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
         E::Constant(m, c) => {
-            // cross-module constant references in function bodies are rewritten to references to
-            // module-local copies of the constants during CFGIR translation
+            // cross-module references are replaced with module-local copies during CFGIR
             assert!(
                 context.current_module() == Some(&m),
                 "ICE cross-module constant should have been replaced with a module-local constant \
