@@ -1,0 +1,39 @@
+// A mutable call result extends only the mutable arguments, but there are some ways of producing
+//  one without a mut source
+
+//# publish
+mvir 0x2::mut_from_imm_param_invalid {
+    public struct S has copy, drop { f: u64 }
+
+    fun bad(s: &Self::S): &mut u64 {
+    label b0:
+        return &mut move(s).S::f;
+    }
+}
+
+//# publish
+mvir 0x3::mut_from_local_invalid {
+    fun bad(x: u64): &mut u64 {
+        let a: u64;
+    label b0:
+        a = move(x);
+        return &mut a;
+    }
+}
+
+
+//# run
+mvir 0x4::mut_from_abort {
+    fun boom(): &mut u64 {
+    label b0:
+        abort 0;
+    }
+}
+
+//# run --gas-budget 1000
+mvir 0x5::mut_from_loop {
+    fun boom(): &mut u64 {
+    label b0:
+        jump b0;
+    }
+}

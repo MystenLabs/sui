@@ -1,0 +1,64 @@
+// A call's mutable results are modelled as disjoint from its immutable results, with no edge between
+// them. Cases where the callee's return check justifies that, so the caller can rely on it.
+
+//# publish
+mvir 0x2::disjoint_fields {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &u64 {
+label b0:
+    return &mut copy(s).S::f, &move(s).S::g;
+}
+
+fun t(s: &mut Self::S) {
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    m, i = Self::split(copy(s));
+    // allowed only because the graph has no edge from m to i
+    *copy(m) = 1;
+    _ = *copy(i);
+    *move(m) = 2;
+    _ = move(i);
+    _ = move(s);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::nested_calls {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &u64 {
+label b0:
+    return &mut copy(s).S::f, &move(s).S::g;
+}
+
+fun bump(x: &mut u64): &mut u64 {
+label b0:
+    *copy(x) = *copy(x) + 1;
+    return move(x);
+}
+
+entry fun t() {
+    let s: Self::S;
+    let sr: &mut Self::S;
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    s = S { f: 0, g: 9 };
+    sr = &mut s;
+    m, i = Self::split(move(sr));
+    // feed a mutable result into another call while the immutable result stays live
+    m = Self::bump(move(m));
+    assert(*copy(i) == 9, 40);
+    assert(*copy(m) == 1, 41);
+    _ = move(m);
+    _ = move(i);
+    return;
+}
+
+}

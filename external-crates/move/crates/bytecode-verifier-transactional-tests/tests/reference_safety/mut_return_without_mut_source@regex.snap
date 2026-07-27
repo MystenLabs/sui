@@ -1,0 +1,45 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-12:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::mut_from_imm_param_invalid'. Got VMError: {
+    major_status: BORROWFIELD_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::mut_from_imm_param_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 1, lines 14-22:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::mut_from_local_invalid'. Got VMError: {
+    major_status: UNSAFE_RET_LOCAL_OR_RESOURCE_STILL_BORROWED,
+    sub_status: None,
+    location: 0x3::mut_from_local_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 2, lines 25-31:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(0),
+    location: 0x4::mut_from_abort,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000004::mut_from_abort::boom at offset 1",
+}
+
+task 3, lines 33-39:
+//# run --gas-budget 1000
+Error: Function execution failed with VMError: {
+    major_status: OUT_OF_GAS,
+    sub_status: None,
+    location: 0x5::mut_from_loop,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
