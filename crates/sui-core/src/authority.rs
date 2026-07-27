@@ -4,7 +4,7 @@
 
 use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::ObjectFundsChecker;
+use crate::accumulators::object_funds_checker::ObjectFundsCheckerDEPRECATED;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
@@ -73,6 +73,7 @@ use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::base_types::SystemObjectVersions;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -144,7 +145,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::execution_status::ExecutionErrorKind;
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, ObjectMap, TxCoins, WrittenObjects};
 use sui_types::message_envelope::Message;
@@ -1018,7 +1019,7 @@ pub struct AuthorityState {
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
-    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
+    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsCheckerDEPRECATED>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
@@ -1935,6 +1936,7 @@ impl AuthorityState {
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1960,6 +1962,7 @@ impl AuthorityState {
                 epoch_timestamp_ms,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2059,6 +2062,9 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
+        let unsettled_object_funds =
+            Some(self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead);
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
             .execute_transaction_to_effects(
@@ -2078,6 +2084,7 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2086,20 +2093,60 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        let object_funds_checker = self.object_funds_checker.load();
-        if let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && !object_funds_checker.should_commit_object_funds_withdraws(
-                certificate,
-                &effects,
-                &inner_temp_store.accumulator_running_max_withdraws,
-                &execution_env,
-                self.get_account_funds_read(),
-                &self.execution_scheduler,
-                epoch_store,
-            )
-        {
-            assert_reachable!("retry object withdraw later");
-            return ExecutionOutput::RetryLater;
+        if !protocol_config.check_object_funds_withdraw_in_execution() {
+            let object_funds_checker = self.object_funds_checker.load();
+            if let Some(object_funds_checker) = object_funds_checker.as_ref()
+                && !object_funds_checker.should_commit_object_funds_withdraws(
+                    certificate,
+                    &effects,
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    &execution_env,
+                    self.get_account_funds_read(),
+                    &self.execution_scheduler,
+                    epoch_store,
+                )
+            {
+                assert_reachable!("retry object withdraw later");
+                return ExecutionOutput::RetryLater;
+            }
+        } else {
+            match effects.status() {
+                ExecutionStatus::Success => {
+                    if let Some(accumulator_version) =
+                        execution_env.assigned_versions.accumulator_version()
+                    {
+                        let recorded = self
+                            .unsettled_object_withdrawals
+                            .record_object_funds_withdraws(
+                                certificate.transaction_data(),
+                                &effects,
+                                &inner_temp_store.accumulator_running_max_withdraws,
+                                accumulator_version,
+                                self.chain_identifier,
+                            );
+                        if recorded {
+                            assert_reachable!(
+                                "record unsettled object withdraws from in-execution check"
+                            );
+                            self.object_funds_checker_metrics
+                                .in_execution_check_result
+                                .with_label_values(&["sufficient"])
+                                .inc();
+                        }
+                    }
+                }
+                ExecutionStatus::Failure(failure) => {
+                    if sui_types::funds_accumulator::is_object_funds_insufficient_abort(
+                        &failure.error,
+                    ) {
+                        assert_reachable!("object funds insufficient in execution");
+                        self.object_funds_checker_metrics
+                            .in_execution_check_result
+                            .with_label_values(&["insufficient"])
+                            .inc();
+                    }
+                }
+            }
         }
 
         // (test-only) Inject a fork before the effects-digest check below. Placed here so that a
@@ -2599,7 +2646,12 @@ impl AuthorityState {
         );
 
         // Post-execution: check object funds (non-address withdrawals discovered during execution).
-        let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+        // TODO: Remove this code once check_object_funds_withdraw_in_execution is enabled on all
+        // production networks.
+        let (inner_temp_store, effects, execution_result) = if !protocol_config
+            .check_object_funds_withdraw_in_execution()
+            && execution_result.is_ok()
+        {
             let has_insufficient_object_funds = inner_temp_store
                 .accumulator_running_max_withdraws
                 .iter()
@@ -3761,12 +3813,13 @@ impl AuthorityState {
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
         // TODO: Once we enable object funds checking during execution, we will no longer need to initialize the object funds checker here.
-        if self.node_role(&epoch_store).runs_consensus()
-            && epoch_store.protocol_config().enable_object_funds_withdraw()
-        {
+        let protocol_config = epoch_store.protocol_config();
+        let needs_checker = protocol_config.enable_object_funds_withdraw()
+            && self.node_role(&epoch_store).runs_consensus();
+        if needs_checker {
             if self.object_funds_checker.load().is_none() {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
-                    Arc::new(ObjectFundsChecker::new(
+                    Arc::new(ObjectFundsCheckerDEPRECATED::new(
                         o.version(),
                         self.unsettled_object_withdrawals.clone(),
                         self.object_funds_checker_metrics.clone(),
