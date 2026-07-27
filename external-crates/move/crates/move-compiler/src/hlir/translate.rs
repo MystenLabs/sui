@@ -677,7 +677,7 @@ fn base_types<'a, R: std::iter::FromIterator<H::BaseType>>(
     tys.into_iter().map(|t| base_type(reporter, t)).collect()
 }
 
-fn base_type(reporter: &DiagnosticReporter, sp!(loc, nb_): &N::Type) -> H::BaseType {
+pub(crate) fn base_type(reporter: &DiagnosticReporter, sp!(loc, nb_): &N::Type) -> H::BaseType {
     use H::BaseType_ as HB;
     use N::TypeInner as NT;
     let b_ = match &*nb_.0 {
