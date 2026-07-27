@@ -154,12 +154,7 @@ impl<'env> Context<'env> {
             None => {
                 // TODO(cross-module-constants): pre-compiled dependencies have folded values in
                 // `PreCompiledProgramInfo`; supporting them is a possible follow-up
-                let msg = format!(
-                    "Invalid access of '{}::{}'. Constants defined in modules outside of the \
-                     current compilation cannot be accessed from other modules",
-                    m, c
-                );
-                self.add_diag(diag!(TypeSafety::Visibility, (use_loc, msg)));
+                self.add_diag(outside_compilation_use(&m, &c, use_loc));
                 None
             }
         }
@@ -716,32 +711,31 @@ fn command_exps(cmd_: &H::Command_) -> impl Iterator<Item = &H::Exp> {
 }
 
 /// Reports a constant definition that could not be folded to a value: cross-module references to
-/// constants that themselves failed to fold are reported as the root cause, otherwise the generic
-/// unfoldable-constant error is reported at `loc`.
+/// constants that themselves failed to fold (or are outside the current compilation) are reported
+/// as the root cause, otherwise the generic unfoldable-constant error is reported at `loc`.
 fn report_cannot_fold<'a>(
     context: &mut Context,
     module: ModuleIdent,
     loc: Loc,
     exps: impl Iterator<Item = &'a H::Exp>,
 ) {
-    let mut failed = vec![];
+    let mut unresolved = vec![];
     for e in exps {
-        failed_cross_module_constants(context, module, e, &mut failed);
+        unresolved_cross_module_constants(context, module, e, &mut unresolved);
     }
-    if failed.is_empty() {
+    if unresolved.is_empty() {
         context.add_diag(diag!(
             CodeGeneration::UnfoldableConstant,
             (loc, CANNOT_FOLD)
         ));
         return;
     }
-    for (m, c, use_loc) in failed {
-        let defined_loc = context
-            .constant_defs
-            .get_key_value(&(m, c))
-            .map(|((_, defined), _)| defined.0.loc)
-            .unwrap_or(use_loc);
-        context.add_diag(unfoldable_constant_use(&m, &c, use_loc, defined_loc));
+    for (m, c, use_loc) in unresolved {
+        let diag = match context.constant_defs.get_key_value(&(m, c)) {
+            Some(((_, defined), _)) => unfoldable_constant_use(&m, &c, use_loc, defined.0.loc),
+            None => outside_compilation_use(&m, &c, use_loc),
+        };
+        context.add_diag(diag);
     }
 }
 
@@ -761,11 +755,24 @@ fn unfoldable_constant_use(
     diag
 }
 
-fn failed_cross_module_constants(
+/// The error reported at each use of a constant defined outside the current compilation
+fn outside_compilation_use(m: &ModuleIdent, c: &ConstantName, use_loc: Loc) -> Diagnostic {
+    let msg = format!(
+        "Invalid access of '{}::{}'. Constants defined in modules outside of the current \
+         compilation cannot be accessed from other modules",
+        m, c
+    );
+    diag!(TypeSafety::Visibility, (use_loc, msg))
+}
+
+/// Collects cross-module constant references that failed to fold or are outside the current
+/// compilation. `Pending` references (module dependency cycles) are excluded: the cycle was
+/// already reported
+fn unresolved_cross_module_constants(
     context: &Context,
     module: ModuleIdent,
     e: &H::Exp,
-    failed: &mut Vec<(ModuleIdent, ConstantName, Loc)>,
+    unresolved: &mut Vec<(ModuleIdent, ConstantName, Loc)>,
 ) {
     use H::UnannotatedExp_ as E;
     match &e.exp.value {
@@ -773,21 +780,21 @@ fn failed_cross_module_constants(
             if *m != module
                 && matches!(
                     context.constant_defs.get(&(*m, *c)),
-                    Some(ConstantEntry::Failed)
+                    Some(ConstantEntry::Failed) | None
                 )
             {
-                failed.push((*m, *c, e.exp.loc));
+                unresolved.push((*m, *c, e.exp.loc));
             }
         }
-        E::UnaryExp(_, rhs) => failed_cross_module_constants(context, module, rhs, failed),
+        E::UnaryExp(_, rhs) => unresolved_cross_module_constants(context, module, rhs, unresolved),
         E::BinopExp(lhs, _, rhs) => {
-            failed_cross_module_constants(context, module, lhs, failed);
-            failed_cross_module_constants(context, module, rhs, failed)
+            unresolved_cross_module_constants(context, module, lhs, unresolved);
+            unresolved_cross_module_constants(context, module, rhs, unresolved)
         }
-        E::Cast(base, _) => failed_cross_module_constants(context, module, base, failed),
+        E::Cast(base, _) => unresolved_cross_module_constants(context, module, base, unresolved),
         E::Vector(_, _, _, args) | E::Multiple(args) => {
             for arg in args {
-                failed_cross_module_constants(context, module, arg, failed);
+                unresolved_cross_module_constants(context, module, arg, unresolved);
             }
         }
         // other forms cannot appear in constant bodies
