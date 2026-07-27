@@ -121,6 +121,8 @@ use tracing::{debug, info};
 const NUM_CONCURRENCY_REQS: usize = 8;
 /// Rate limit for RPC calls to avoid being throttled by the server. This is equivalent to 20rps.
 const RATE_LIMIT_MILLIS: u64 = 50;
+/// Handed to users whose CLI has fallen behind the network's protocol version.
+const CLI_INSTALL_DOCS: &str = "https://docs.sui.io/guides/developer/getting-started/sui-install";
 
 pub(crate) static USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -1001,8 +1003,13 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let protocol_version =
                     protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
-                let protocol_config =
-                    ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+                let protocol_config = protocol_config_for_version(protocol_version, Chain::Unknown)
+                    .map_err(|e| {
+                        anyhow!(
+                            "Cannot meter bytecode: {e}. Either pass a supported \
+                             --protocol-version, or install a newer CLI - {CLI_INSTALL_DOCS}"
+                        )
+                    })?;
 
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
@@ -3817,7 +3824,7 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
                 "[warning] CLI's protocol version is {cli_protocol_version}, but the active \
                 network's protocol version is {on_chain_protocol_version}. \
                 \n Consider installing the latest version of the CLI - \
-                https://docs.sui.io/guides/developer/getting-started/sui-install \n\n \
+                {CLI_INSTALL_DOCS} \n\n \
                 If publishing/upgrading returns a dependency verification error, then install the \
                 latest CLI version."
             )
@@ -3827,6 +3834,59 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
     }
 
     Ok(())
+}
+
+/// `ProtocolConfig::get_for_version` panics on a version this binary does not implement, which is
+/// the routine state of a CLI that has not been updated since the last protocol upgrade. Check the
+/// bounds first so the caller can report a normal CLI error instead.
+fn protocol_config_for_version(
+    version: ProtocolVersion,
+    chain: Chain,
+) -> Result<ProtocolConfig, anyhow::Error> {
+    if version > ProtocolVersion::MAX_ALLOWED {
+        bail!(
+            "protocol version {} is newer than the maximum version {} supported by this CLI",
+            version.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        );
+    }
+
+    if version < ProtocolVersion::MIN {
+        bail!(
+            "protocol version {} is older than the minimum version {} supported by this CLI",
+            version.as_u64(),
+            ProtocolVersion::MIN.as_u64(),
+        );
+    }
+
+    Ok(ProtocolConfig::get_for_version(version, chain))
+}
+
+/// Protocol config used to deserialize the on-chain package during the upgrade compatibility
+/// check. That check is a local pre-flight convenience, not a requirement for the upgrade
+/// transaction itself, so a CLI that trails (or leads) the network falls back to the closest
+/// version it implements rather than refusing to run.
+fn protocol_config_for_compatibility_check(
+    on_chain_version: ProtocolVersion,
+    chain: Chain,
+) -> ProtocolConfig {
+    match protocol_config_for_version(on_chain_version, chain) {
+        Ok(config) => config,
+        Err(e) => {
+            let fallback = on_chain_version.clamp(ProtocolVersion::MIN, ProtocolVersion::MAX);
+            eprintln!(
+                "{}",
+                format!(
+                    "[warning] {e}. Verifying upgrade compatibility against protocol version {} \
+                    instead. \n Install the latest version of the CLI - {CLI_INSTALL_DOCS}",
+                    fallback.as_u64(),
+                )
+                .yellow()
+                .bold()
+            );
+            ProtocolConfig::get_for_version(fallback, chain)
+        }
+    }
 }
 
 /// Fetch move packages
@@ -4246,8 +4306,10 @@ async fn upgrade_command(
     if !skip_verify_compatibility {
         let protocol_version = client.get_protocol_config(None).await?.protocol_version();
 
-        let protocol_config =
-            ProtocolConfig::get_for_version(protocol_version.into(), chain_identifier.chain());
+        let protocol_config = protocol_config_for_compatibility_check(
+            protocol_version.into(),
+            chain_identifier.chain(),
+        );
         check_compatibility(
             client.clone(),
             package_id,
@@ -4463,5 +4525,39 @@ fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
         Ok("http://127.0.0.1:9123/v2/gas".to_string())
     } else {
         bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protocol_config_out_of_range_errors_instead_of_panicking() {
+        let too_new = ProtocolVersion::MAX_ALLOWED + 1;
+        let err = protocol_config_for_version(too_new, Chain::Unknown)
+            .expect_err("a version past MAX_ALLOWED is not supported");
+        assert!(
+            err.to_string().contains("newer than the maximum version"),
+            "unexpected error: {err}"
+        );
+
+        let too_old = ProtocolVersion::MIN - 1;
+        let err = protocol_config_for_version(too_old, Chain::Unknown)
+            .expect_err("a version below MIN is not supported");
+        assert!(
+            err.to_string().contains("older than the minimum version"),
+            "unexpected error: {err}"
+        );
+
+        assert!(protocol_config_for_version(ProtocolVersion::MAX, Chain::Unknown).is_ok());
+        assert!(protocol_config_for_version(ProtocolVersion::MIN, Chain::Unknown).is_ok());
+    }
+
+    #[test]
+    fn compatibility_check_falls_back_when_network_is_ahead() {
+        let ahead = ProtocolVersion::MAX_ALLOWED + 1;
+        let config = protocol_config_for_compatibility_check(ahead, Chain::Unknown);
+        assert_eq!(config.version, ProtocolVersion::MAX);
     }
 }
