@@ -203,7 +203,7 @@ for (const addr of addressesToFreeze) {
     arguments: [
       tx.object('0x403'),        // DenyList shared object
       tx.object(denyCapId),       // DenyCapV2
-      tx.pure('address', addr),   // Address to freeze
+      tx.pure.address(addr),      // Address to freeze
     ],
   });
 }
@@ -223,40 +223,24 @@ Sui emits events for every payment, approval, and deny-list change. Build your c
 
 ### Subscribing to events
 
-Use gRPC subscriptions or the list APIs to capture compliance-relevant events in real time or historically:
+Use gRPC subscriptions or the list APIs to capture compliance-relevant events in real time or historically. The `@mysten/sui` TypeScript SDK does not yet expose `SubscribeEvents` directly. Use the generated proto client or Buf CLI:
 
-```typescript
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
-
-// Subscribe to all events from your regulated coin package.
-const stream = client.core.subscribeEvents({
-  filter: {
-    terms: [{
-      literals: [{
-        emittingModule: {
-          package: '0xYOUR_PACKAGE',
-          module: 'my_coin',
-        },
-      }],
-    }],
-  },
-});
-
-for await (const response of stream) {
-  for (const event of response.events) {
-    // Forward to your compliance logging system.
-    await complianceLogger.log({
-      type: event.eventType,
-      data: event.parsedJson,
-      checkpoint: response.watermark?.checkpoint,
-    });
-  }
-}
+```shell
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeEvents \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "emitting_module": {
+            "package": "0xYOUR_PACKAGE",
+            "module": "my_coin"
+          }
+        }]
+      }]
+    }
+  }' \
+  --timeout 5m
 ```
 
 For historical queries over a checkpoint range, use the [ledger history list APIs](/develop/accessing-data/grpc/using-grpc#ledger-history-list-apis). For event concepts and additional query patterns, see [Using Events](/develop/accessing-data/using-events).

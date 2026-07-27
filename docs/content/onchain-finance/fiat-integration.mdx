@@ -120,12 +120,11 @@ const client = new SuiGrpcClient({
 });
 
 // Check balance after webhook notification.
-const balance = await client.core.getBalance({
+const { balance } = await client.getBalance({
   owner: userSuiAddress,
-  coinType: '0x2::sui::SUI',
 });
 
-console.log('Current balance:', balance.totalBalance);
+console.log('Current balance:', balance.balance);
 ```
 
 :::caution
@@ -172,7 +171,7 @@ tx.moveCall({
   typeArguments: ['0x2::sui::SUI'],
   arguments: [
     tx.balance({ balance: withdrawalAmount }),
-    tx.pure('address', providerCollectionAddress),
+    tx.pure.address(providerCollectionAddress),
   ],
 });
 
@@ -277,7 +276,7 @@ tx.moveCall({
   typeArguments: [coinType],
   arguments: [
     tx.balance({ balance: refundAmount }),
-    tx.pure('address', userAddress),
+    tx.pure.address(userAddress),
   ],
 });
 

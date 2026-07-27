@@ -105,9 +105,9 @@ sui keytool generate ed25519   # Repeat for account, network, worker
 
 2. Rename the generated files to `protocol.key`, `account.key`, `network.key`, and `worker.key`.
 
-3. Copy the **public keys** (not private keys) to your online machine for the `make-validator-info` step.
+3. Run `make-validator-info` on the **air-gapped machine** (it generates and writes key files itself, so it must run where the keys live). Copy the resulting `validator.info` file to your online machine for the registration step.
 
-4. Keep the private key files on the air-gapped machine. You bring them online only when you need to sign (for example, to produce the proof of possession).
+4. Keep the private key files on the air-gapped machine. You bring them online only when you need to sign.
 
 For the full offline signing workflow, see [Offline Signing](/develop/transactions/transaction-auth/offline-signing).
 
@@ -141,7 +141,11 @@ For the full Ledger integration reference, see [External Signers CLI](/reference
 
 A proof of possession (PoP) proves that you control the BLS12381 protocol key. The network requires this proof when you register as a validator candidate.
 
-1. Serialize the PoP payload:
+If you used `make-validator-info` with the protocol key file present, it generates the PoP automatically and includes it in `validator.info`. You can skip this step.
+
+For air-gapped or split-machine setups where the protocol key is not available to `make-validator-info`, generate the PoP manually:
+
+1. Serialize the PoP payload on any machine:
 
 ```bash
 sui validator serialize-payload-pop \
@@ -151,15 +155,11 @@ sui validator serialize-payload-pop \
 
 This outputs: `Serialized payload: $PAYLOAD_TO_SIGN`
 
-2. Sign the payload with your BLS12381 protocol key:
+2. Sign the serialized payload with your BLS12381 protocol key on the machine that holds the key. This requires a BLS12381 signing tool (not `sui keytool sign`, which only signs ed25519/secp256k1 from the wallet keystore). The PoP uses intent prefix `[5, 0, 0]` (scope: ProofOfPossession, version: V0, app: Sui).
 
-```bash
-sui keytool sign --address $PROTOCOL_KEY_ADDRESS --data $PAYLOAD_TO_SIGN
-```
+3. Include the resulting signature as the PoP when registering as a candidate.
 
-If your protocol key is on an air-gapped machine, transfer the serialized payload to that machine, sign it there, and bring the signature back.
-
-The PoP uses intent prefix `[5, 0, 0]` (scope: ProofOfPossession, version: V0, app: Sui). For details on intent signing, see [Intent Signing](/develop/transactions/transaction-auth/intent-signing).
+For details on the intent structure, see [Intent Signing](/develop/transactions/transaction-auth/intent-signing).
 
 ## Step 3: Register as a candidate
 
@@ -237,17 +237,17 @@ This invalidates the old cap and creates a new one at your validator address. Se
 
 ## Key rotation
 
-You can rotate any of your four keys using the `update-metadata` command. Key changes take effect at the next epoch.
+You can rotate any of your four keys using the `update-metadata` subcommands. Each subcommand takes the path to the new key file. Key changes take effect at the next epoch.
 
 ```bash
-# Rotate the protocol key.
-sui validator update-metadata --protocol-public-key $NEW_BLS_PUBKEY --proof-of-possession $NEW_POP
+# Rotate the protocol key (also generates a new PoP from the key file).
+sui validator update-metadata protocol-pub-key /path/to/new-protocol.key
 
 # Rotate the network key.
-sui validator update-metadata --network-public-key $NEW_NETWORK_PUBKEY
+sui validator update-metadata network-pub-key /path/to/new-network.key
 
 # Rotate the worker key.
-sui validator update-metadata --worker-public-key $NEW_WORKER_PUBKEY
+sui validator update-metadata worker-pub-key /path/to/new-worker.key
 ```
 
 After the epoch changes, restart your validator with the new key files and updated `validator.yaml` configuration. The old key files are no longer valid after the epoch transition.
