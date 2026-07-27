@@ -1,9 +1,11 @@
 packages:
   - 'dapps/**'
   - 'examples/**'
-  # Standalone: pins @mysten/sui 2.x for the DeepBook Predict docs, which would
-  # otherwise bump shared graphql tooling across the workspace. Built in isolation.
+  # Standalone: pin @mysten/sui 2.x for the DeepBook docs, which would otherwise
+  # bump shared graphql tooling across the workspace. Built in isolation.
   - '!examples/deepbook-predict'
+  - '!examples/deepbook-spot'
+  - '!examples/deepbook-margin'
   - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'
   - '!**/.next/**'

@@ -417,6 +417,8 @@ export default {
       link: { type: 'doc', id: 'onchain-finance/deepbook/index' },
       items: [
         'onchain-finance/deepbook/deepbookv3/design',
+        'onchain-finance/deepbook/deepbookv3/fees-and-funding',
+        'onchain-finance/deepbook/deepbookv3/spot-workflow',
         {
           type: 'category',
           label: 'DeepBookV3',
@@ -450,6 +452,7 @@ export default {
                 'onchain-finance/deepbook/deepbookv3-sdk/swaps',
                 'onchain-finance/deepbook/deepbookv3-sdk/staking-governance',
                 'onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook',
+                'onchain-finance/deepbook/deepbookv3-sdk/composing-transactions',
               ],
             },
           ],
@@ -461,6 +464,8 @@ export default {
           items: [
             'onchain-finance/deepbook/deepbook-margin/design',
             'onchain-finance/deepbook/deepbook-margin/margin-risks',
+            'onchain-finance/deepbook/deepbook-margin/leveraged-workflow',
+            'onchain-finance/deepbook/deepbook-margin/margin-integration',
             {
               type: 'category',
               label: 'Contract Information',

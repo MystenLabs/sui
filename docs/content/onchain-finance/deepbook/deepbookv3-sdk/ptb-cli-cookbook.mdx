@@ -173,6 +173,8 @@ tx.moveCall({
 
 ## DeepBook: deposit and place an order in one PTB
 
+For compile-checked SDK versions of these compositions, plus a three-legged lend, trade, and stake example, see [Composing DeepBook transactions](/onchain-finance/deepbook/deepbookv3-sdk/composing-transactions).
+
 Get the DeepBookV3 package ID, pool, and coin types from [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information). Set `DEEPBOOK` to the DeepBookV3 package ID. Do not use the CLI `deepbook` name alias, which resolves to the legacy DeepBook address, not DeepBookV3.
 
 Placing an order requires a trade proof and takes 13 typed arguments. The TypeScript SDK generates the proof and encodes the arguments for you, so it is the recommended path. Deposit into the `BalanceManager` and place the order in the same transaction so both settle atomically.
