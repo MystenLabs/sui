@@ -129,6 +129,14 @@ impl std::fmt::Display for AccumulatorObjId {
     }
 }
 
+pub trait UnsettledObjectFundsRead {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128;
+}
+
 impl AccumulatorValue {
     pub fn as_u128(&self) -> Option<u128> {
         match self {
