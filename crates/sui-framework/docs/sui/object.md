@@ -25,6 +25,7 @@ Sui object identifiers
 -  [Function `sui_display_registry_address`](#sui_object_sui_display_registry_address)
 -  [Function `bridge`](#sui_object_bridge)
 -  [Function `address_alias_state`](#sui_object_address_alias_state)
+-  [Function `forwarding_address_registry`](#sui_object_forwarding_address_registry)
 -  [Function `uid_as_inner`](#sui_object_uid_as_inner)
 -  [Function `uid_to_inner`](#sui_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#sui_object_uid_to_bytes)
@@ -218,6 +219,16 @@ The hardcoded ID for the AddressAliasState Object.
 
 
 <pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_ADDRESS_ALIAS_STATE_ID">SUI_ADDRESS_ALIAS_STATE_ID</a>: <b>address</b> = 0xa;
+</code></pre>
+
+
+
+<a name="sui_object_SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID"></a>
+
+The hardcoded ID for the singleton ForwardingAddressRegistry object.
+
+
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID">SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID</a>: <b>address</b> = 0xfa;
 </code></pre>
 
 
@@ -675,6 +686,34 @@ This should only be called once from <code><a href="../sui/address_alias.md#sui_
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_address_alias_state">address_alias_state</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_ADDRESS_ALIAS_STATE_ID">SUI_ADDRESS_ALIAS_STATE_ID</a> },
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_forwarding_address_registry"></a>
+
+## Function `forwarding_address_registry`
+
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>ForwardingAddressRegistry</code> object.
+This should only be called once from <code><a href="../sui/forwarding_address.md#sui_forwarding_address">forwarding_address</a></code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_forwarding_address_registry">forwarding_address_registry</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_forwarding_address_registry">forwarding_address_registry</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+    <a href="../sui/object.md#sui_object_UID">UID</a> {
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID">SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID</a> },
     }
 }
 </code></pre>
