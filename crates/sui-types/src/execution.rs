@@ -384,38 +384,6 @@ impl ExecutionTiming {
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
-/// Signals that transaction execution should be retried later rather than committed. Unlike
-/// `ExecutionError`, the transaction that produced it is not committed: execution still runs to
-/// completion and produces effects, but the authority discards those effects and re-enqueues the
-/// transaction once the condition clears. An enum so more retry reasons can be added.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionRetryError {
-    /// A system object the transaction needs to read had not yet been committed locally at the
-    /// version this transaction requires. The transaction should be retried once that object
-    /// reaches `version`. The object id and the version to wait for are enough for the authority to
-    /// register the wait: the object's initial shared version, needed to form the full key, is
-    /// recovered from the epoch start config (which records every system object).
-    SystemObjectUnavailable {
-        object_id: ObjectID,
-        version: SequenceNumber,
-    },
-}
-
-impl std::fmt::Display for ExecutionRetryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExecutionRetryError::SystemObjectUnavailable { object_id, version } => {
-                write!(
-                    f,
-                    "system object {object_id} not yet available at version {version}; retry requested",
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for ExecutionRetryError {}
-
 /// Captures the output of executing a transaction in the execution driver.
 #[derive(Debug)]
 pub enum ExecutionOutput<T> {
