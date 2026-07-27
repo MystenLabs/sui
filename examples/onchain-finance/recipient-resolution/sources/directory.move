@@ -10,4 +10,4 @@ public struct Directory has key {
     id: UID,
     entries: Table<vector<u8>, address>,
 }
-// docs::/directory
+// docs::/#directory

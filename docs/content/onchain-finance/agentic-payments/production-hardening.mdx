@@ -69,7 +69,7 @@ An onchain kill-switch uses a shared `AdminConfig` object that your Move module 
 
 Your spending mandate's `execute_spend` function calls `admin_config::assert_not_paused(config)` as its first operation. When the admin pauses the system, every agent transaction aborts immediately.
 
-<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_1.move" mode="code" tag="snippet_1" />
+<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_1.move" mode="code" tag="guarded-spend" />
 
 ## Retry safety
 
@@ -97,7 +97,7 @@ Store idempotency keys in a durable store (database, Redis) with the transaction
 
 For onchain idempotency, the [Payment Kit](/onchain-finance/payment-kit) provides built-in duplicate prevention through `PaymentRegistry`. If you are using a custom Move module, you can implement a similar pattern:
 
-<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_2.move" mode="code" tag="snippet_2" />
+<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_2.move" mode="code" tag="onchain-idempotency" />
 
 ## Circuit breaker
 

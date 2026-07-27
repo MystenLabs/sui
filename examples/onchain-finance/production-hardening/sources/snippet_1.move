@@ -1,7 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#snippet_1
+module example::guarded_spend;
+
+use sui::clock::Clock;
+use sui::coin::Coin;
+
+// Placeholder types referenced from admin_config module
+public struct AdminConfig has key { id: UID, paused: bool }
+public struct SpendingMandate has key { id: UID }
+
+// docs::#guarded-spend
 public fun execute_spend<T>(
     config: &AdminConfig,
     mandate: &mut SpendingMandate,
@@ -10,7 +19,8 @@ public fun execute_spend<T>(
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    admin_config::assert_not_paused(config);
+    assert!(!config.paused, 0);
     // ... rest of spend logic
+    transfer::public_transfer(payment, recipient);
 }
-// docs::/snippet_1
+// docs::/#guarded-spend

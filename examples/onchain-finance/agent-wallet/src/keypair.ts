@@ -56,11 +56,21 @@ declare const newAddress: string;
 declare const oldKeypair: Ed25519Keypair;
 
 // Transfer all owned objects to the new address.
-// Paginate to cover all objects and let the SDK select the gas coin
-// (the gas coin is excluded from transferObjects automatically).
+// First, select a SUI coin to use as gas and keep it out of the
+// transfer list so the transaction can pay for itself.
+const { data: suiCoins } = await client.getCoins({ owner: oldAddress });
+const gasCoinId = suiCoins[0]?.coinObjectId;
+if (!gasCoinId) throw new Error('No SUI coin available for gas');
+
 const rotateTx = new Transaction();
 rotateTx.setSender(oldAddress);
+rotateTx.setGasPayment([{
+	objectId: suiCoins[0].coinObjectId,
+	version: suiCoins[0].version,
+	digest: suiCoins[0].digest,
+}]);
 
+// Paginate through all owned objects, skipping the gas coin
 let cursor: string | null | undefined = undefined;
 do {
 	const page = await client.getOwnedObjects({
@@ -69,7 +79,7 @@ do {
 		limit: 50,
 	});
 	for (const item of page.data) {
-		if (!item.data) continue;
+		if (!item.data || item.data.objectId === gasCoinId) continue;
 		rotateTx.transferObjects(
 			[rotateTx.object(item.data.objectId)],
 			newAddress,
@@ -77,6 +87,10 @@ do {
 	}
 	cursor = page.nextCursor;
 } while (cursor);
+
+// Transfer remaining gas coin balance last (split off gas, send the rest)
+const [remaining] = rotateTx.splitCoins(rotateTx.gas, [0n]);
+rotateTx.transferObjects([remaining], newAddress);
 
 await client.signAndExecuteTransaction({ transaction: rotateTx, signer: oldKeypair });
 // docs::/#key-rotation

@@ -1,14 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#snippet_1
+#[test_only]
+module example::spending_mandate_tests;
+
+use example::spending_mandate::{
+    Self,
+    SpendingMandate,
+    create_mandate,
+    execute_spend,
+    remaining_cap
+};
+use sui::clock;
+use sui::coin;
+use sui::sui::SUI;
+use sui::test_scenario;
+
+const EExceedsPerTxLimit: u64 = 1;
+
+// docs::#mandate-tests
 #[test]
 fun test_spend_within_limits() {
-    use sui::test_scenario;
-    use sui::clock;
-    use sui::coin;
-    use sui::sui::SUI;
-
     let owner = @0xA;
     let agent = @0xB;
     let recipient = @0xC;
@@ -18,10 +30,10 @@ fun test_spend_within_limits() {
     // Owner creates mandate
     let owner_cap = create_mandate(
         agent,
-        10_000_000_000,                // max 10 SUI per tx
-        100_000_000_000,               // 100 SUI total cap
+        10_000_000_000, // max 10 SUI per tx
+        100_000_000_000, // 100 SUI total cap
         vector[recipient],
-        1_000_000_000_000,             // far-future expiry
+        1_000_000_000_000, // far-future expiry
         scenario.ctx(),
     );
 
@@ -44,11 +56,6 @@ fun test_spend_within_limits() {
 #[test]
 #[expected_failure(abort_code = EExceedsPerTxLimit)]
 fun test_spend_exceeds_per_tx_limit() {
-    use sui::test_scenario;
-    use sui::clock;
-    use sui::coin;
-    use sui::sui::SUI;
-
     let owner = @0xA;
     let agent = @0xB;
     let recipient = @0xC;
@@ -78,4 +85,4 @@ fun test_spend_exceeds_per_tx_limit() {
     transfer::public_transfer(owner_cap, owner);
     scenario.end();
 }
-// docs::/snippet_1
+// docs::/#mandate-tests

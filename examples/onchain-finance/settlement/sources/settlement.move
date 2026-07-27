@@ -21,10 +21,7 @@ public struct SettlementVerified has copy, drop {
 }
 
 /// Execute a payment and return a proof that must be consumed.
-public fun pay_and_prove<T>(
-    payment: Coin<T>,
-    recipient: address,
-): SettlementProof {
+public fun pay_and_prove<T>(payment: Coin<T>, recipient: address): SettlementProof {
     let amount = payment.value();
     let coin_type = std::string::from_ascii(std::type_name::with_defining_ids<T>().into_string());
     transfer::public_transfer(payment, recipient);
@@ -50,4 +47,4 @@ public fun verify_settlement(
 
     let SettlementProof { recipient: _, amount: _, coin_type: _ } = proof;
 }
-// docs::/settlement
+// docs::/#settlement

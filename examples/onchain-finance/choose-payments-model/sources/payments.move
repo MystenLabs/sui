@@ -23,4 +23,4 @@ public fun execute_payment(
     assert!(config.authorized_recipients.contains(&recipient), 1);
     transfer::public_transfer(payment, recipient);
 }
-// docs::/payments
+// docs::/#payments

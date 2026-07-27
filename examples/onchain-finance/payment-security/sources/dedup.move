@@ -13,11 +13,8 @@ public struct PaymentRegistry has key {
     processed: Table<vector<u8>, bool>,
 }
 
-public fun process_payment(
-    registry: &mut PaymentRegistry,
-    payment_id: vector<u8>,
-) {
+public fun process_payment(registry: &mut PaymentRegistry, payment_id: vector<u8>) {
     assert!(!registry.processed.contains(payment_id), EDuplicatePayment);
     registry.processed.add(payment_id, true);
 }
-// docs::/dedup
+// docs::/#dedup

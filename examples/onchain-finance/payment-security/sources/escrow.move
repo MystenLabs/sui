@@ -18,11 +18,7 @@ public struct Escrow has key {
 }
 
 /// Create an escrow. The sender deposits funds.
-public fun create(
-    coin: Coin<SUI>,
-    recipient: address,
-    ctx: &mut TxContext,
-) {
+public fun create(coin: Coin<SUI>, recipient: address, ctx: &mut TxContext) {
     let escrow = Escrow {
         id: object::new(ctx),
         sender: ctx.sender(),
@@ -47,4 +43,4 @@ public fun cancel(escrow: Escrow, ctx: &TxContext) {
     transfer::public_transfer(balance, sender);
     id.delete();
 }
-// docs::/escrow
+// docs::/#escrow

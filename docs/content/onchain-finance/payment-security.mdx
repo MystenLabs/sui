@@ -94,7 +94,7 @@ Pass a unique `payment_id` (invoice number, order ID, or UUID) with each payment
 
 Use the onchain `Clock` for time-based expiry rather than epoch numbers. Epochs vary in length (~24 hours on Mainnet, but not guaranteed), while `Clock` provides millisecond-precision wall-clock time.
 
-<ImportContent source="examples/onchain-finance/payment-security/sources/snippet_1.move" mode="code" tag="snippet_1" />
+<ImportContent source="examples/onchain-finance/payment-security/sources/snippet_1.move" mode="code" tag="payment-deadline" />
 
 :::tip Set reasonable deadlines
 

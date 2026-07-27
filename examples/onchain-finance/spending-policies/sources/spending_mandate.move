@@ -136,10 +136,7 @@ public fun execute_spend<T>(
 
 /// Revoke a mandate. The owner destroys the mandate, preventing further use.
 /// The agent must present the mandate object for destruction.
-public fun revoke_mandate(
-    cap: &MandateOwnerCap,
-    mandate: SpendingMandate,
-) {
+public fun revoke_mandate(cap: &MandateOwnerCap, mandate: SpendingMandate) {
     assert!(cap.mandate_id == object::id(&mandate), ENotMandateOwner);
 
     let mandate_id = object::id(&mandate);
@@ -161,21 +158,13 @@ public fun revoke_mandate(
 }
 
 /// Update the total cap on an existing mandate. Only the owner can call this.
-public fun update_cap(
-    cap: &MandateOwnerCap,
-    mandate: &mut SpendingMandate,
-    new_total_cap: u64,
-) {
+public fun update_cap(cap: &MandateOwnerCap, mandate: &mut SpendingMandate, new_total_cap: u64) {
     assert!(cap.mandate_id == object::id(mandate), ENotMandateOwner);
     mandate.total_cap = new_total_cap;
 }
 
 /// Add a recipient to the allowlist.
-public fun add_recipient(
-    cap: &MandateOwnerCap,
-    mandate: &mut SpendingMandate,
-    recipient: address,
-) {
+public fun add_recipient(cap: &MandateOwnerCap, mandate: &mut SpendingMandate, recipient: address) {
     assert!(cap.mandate_id == object::id(mandate), ENotMandateOwner);
     if (!mandate.allowed_recipients.contains(&recipient)) {
         mandate.allowed_recipients.push_back(recipient);
@@ -191,4 +180,4 @@ public fun remaining_cap(mandate: &SpendingMandate): u64 {
 public fun is_expired(mandate: &SpendingMandate, clock: &Clock): bool {
     clock.timestamp_ms() >= mandate.expires_at_ms
 }
-// docs::/spending_mandate
+// docs::/#spending_mandate

@@ -38,4 +38,4 @@ public fun pause(_cap: &AdminCap, config: &mut AdminConfig) {
 public fun unpause(_cap: &AdminCap, config: &mut AdminConfig) {
     config.paused = false;
 }
-// docs::/admin_config
+// docs::/#admin_config

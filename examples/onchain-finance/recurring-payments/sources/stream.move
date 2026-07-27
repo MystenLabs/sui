@@ -50,11 +50,7 @@ public fun create(
 }
 
 /// Claim the unlocked portion of the stream.
-public fun claim(
-    stream: &mut StreamPayment,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<SUI> {
+public fun claim(stream: &mut StreamPayment, clock: &Clock, ctx: &mut TxContext): Coin<SUI> {
     assert!(ctx.sender() == stream.recipient, ENotRecipient);
 
     let now = clock.timestamp_ms();
@@ -78,11 +74,7 @@ public fun claim(
 
 /// Cancel the stream. Vested-but-unclaimed funds go to the recipient;
 /// unvested funds return to the sender.
-public fun cancel(
-    stream: StreamPayment,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
+public fun cancel(stream: StreamPayment, clock: &Clock, ctx: &mut TxContext) {
     assert!(ctx.sender() == stream.sender, ENotRecipient);
 
     let now = clock.timestamp_ms();
@@ -125,4 +117,4 @@ public fun cancel(
 
     id.delete();
 }
-// docs::/stream
+// docs::/#stream
