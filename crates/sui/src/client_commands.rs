@@ -3862,33 +3862,6 @@ fn protocol_config_for_version(
     Ok(ProtocolConfig::get_for_version(version, chain))
 }
 
-/// Protocol config used to deserialize the on-chain package during the upgrade compatibility
-/// check. That check is a local pre-flight convenience, not a requirement for the upgrade
-/// transaction itself, so a CLI that trails (or leads) the network falls back to the closest
-/// version it implements rather than refusing to run.
-fn protocol_config_for_compatibility_check(
-    on_chain_version: ProtocolVersion,
-    chain: Chain,
-) -> ProtocolConfig {
-    match protocol_config_for_version(on_chain_version, chain) {
-        Ok(config) => config,
-        Err(e) => {
-            let fallback = on_chain_version.clamp(ProtocolVersion::MIN, ProtocolVersion::MAX);
-            eprintln!(
-                "{}",
-                format!(
-                    "[warning] {e}. Verifying upgrade compatibility against protocol version {} \
-                    instead. \n Install the latest version of the CLI - {CLI_INSTALL_DOCS}",
-                    fallback.as_u64(),
-                )
-                .yellow()
-                .bold()
-            );
-            ProtocolConfig::get_for_version(fallback, chain)
-        }
-    }
-}
-
 /// Fetch move packages
 async fn fetch_move_packages(
     mut client: Client,
@@ -4306,7 +4279,7 @@ async fn upgrade_command(
     if !skip_verify_compatibility {
         let protocol_version = client.get_protocol_config(None).await?.protocol_version();
         let protocol_config =
-            protocol_config_for_version(protocol_version, chain_identifier.chain())?;
+            protocol_config_for_version(protocol_version.into(), chain_identifier.chain())?;
 
         check_compatibility(
             client.clone(),
