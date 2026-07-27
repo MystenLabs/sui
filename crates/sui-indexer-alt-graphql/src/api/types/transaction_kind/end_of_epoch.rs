@@ -42,6 +42,7 @@ pub enum EndOfEpochTransactionKind {
     DisplayRegistryCreate(DisplayRegistryCreateTransaction),
     AddressAliasStateCreate(AddressAliasStateCreateTransaction),
     WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction),
+    ForwardingAddressRegistryCreate(ForwardingAddressRegistryCreateTransaction),
     // TODO: Add more complex transaction types incrementally
 }
 
@@ -164,6 +165,14 @@ pub struct WriteAccumulatorStorageCostTransaction {
     dummy: Option<bool>,
 }
 
+/// System transaction for creating the forwarding address registry.
+#[derive(SimpleObject, Clone)]
+pub struct ForwardingAddressRegistryCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
@@ -243,6 +252,11 @@ impl EndOfEpochTransactionKind {
             }
             N::WriteAccumulatorStorageCost(_) => {
                 K::WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction {
+                    dummy: None,
+                })
+            }
+            N::ForwardingAddressRegistryCreate => {
+                K::ForwardingAddressRegistryCreate(ForwardingAddressRegistryCreateTransaction {
                     dummy: None,
                 })
             }
