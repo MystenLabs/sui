@@ -253,6 +253,7 @@ impl ServiceManager {
             self.db.clone(),
             self.schema.clone(),
             self.live_state.clone(),
+            self.metadata.forked_at_checkpoint,
         )
     }
 
