@@ -70,16 +70,11 @@ Sui offers three payment models. The right choice depends on whether you need re
 
 Use `transferObjects` or address balance `send_funds` to move coins directly. No onchain receipts or duplicate prevention. This is the best choice when your backend or wallet already tracks payments.
 
+<ImportContent source="examples/onchain-finance/choose-payments-model/src/examples.ts" mode="code" tag="basic-transfer" />
+
+Address balance transfers use `send_funds` and are eligible for [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers):
+
 ```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-// Option A: Transfer a coin object
-const [coin] = tx.splitCoins(tx.gas, [1_000_000_000n]);
-tx.transferObjects([coin], recipient);
-
-// Option B: Send from address balance (works with gasless stablecoin transfers)
 const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
 tx.moveCall({
   target: '0x2::balance::send_funds',
@@ -90,33 +85,13 @@ tx.moveCall({
   ],
 });
 ```
-
 Learn more: [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances), [Building PTBs](/develop/transactions/ptbs/building-ptb).
 
 ## Payment Kit
 
 Use the [Payment Kit](/onchain-finance/payment-kit) when you need structured receipts and duplicate prevention without writing custom Move. The kit provides `PaymentRegistry` for tracking, `PaymentReceipt` objects as proof of payment, and composite-key deduplication.
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-const [paymentCoin] = tx.splitCoins(tx.gas, [amount]);
-
-tx.moveCall({
-  target: '0xPAYMENT_KIT::payment_kit::process_registry_payment',
-  typeArguments: ['0x2::sui::SUI'],
-  arguments: [
-    tx.object(registryId),        // PaymentRegistry
-    tx.pure.string(nonce),        // Unique payment ID (UUIDv4)
-    tx.pure.u64(amount),          // Expected amount
-    paymentCoin,                  // Coin to pay with
-    tx.pure.option('address', recipient), // Receiver
-    tx.object('0x6'),             // Clock
-  ],
-});
-```
-
+<ImportContent source="examples/onchain-finance/choose-payments-model/src/examples.ts" mode="code" tag="payment-kit" />
 Learn more: [Payment Kit Standard](/onchain-finance/payment-kit).
 
 ## Custom Move module

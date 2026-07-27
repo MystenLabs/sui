@@ -67,48 +67,7 @@ sequenceDiagram
 
 The agent runs a basic loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge):
 
-```typescript
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
-
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
-const agentKeypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
-
-async function executeRecurringPayment(
-  mandateId: string,
-  recipientAddress: string,
-  amountMist: bigint,
-) {
-  const tx = new Transaction();
-  tx.setSender(agentKeypair.toSuiAddress());
-
-  tx.moveCall({
-    target: '0xPACKAGE::spending_mandate::execute_spend',
-    arguments: [
-      tx.object(mandateId),
-      tx.pure.u64(amountMist),
-      tx.pure.address(recipientAddress),
-      tx.object('0x6'), // Clock
-    ],
-  });
-
-  const result = await client.core.signAndExecuteTransaction({
-    transaction: tx,
-    signer: agentKeypair,
-  });
-
-  if (result.$kind === 'FailedTransaction') {
-    throw new Error(`Recurring payment failed: ${result.FailedTransaction.error}`);
-  }
-
-  return result.Transaction!.digest;
-}
-```
-
+<ImportContent source="examples/onchain-finance/recurring-payments/src/scheduler.ts" mode="code" tag="execute-recurring" />
 :::tip Use idempotency keys
 
 If the scheduler might fire twice (at-least-once delivery), track each payment period in a database and skip execution if the period was already paid. See [Production Hardening](/onchain-finance/agentic-payments/production-hardening#idempotency-keys) for the pattern.

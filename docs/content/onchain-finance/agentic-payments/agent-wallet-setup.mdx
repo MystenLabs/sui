@@ -57,37 +57,19 @@ The TypeScript SDK supports three ways to create a key pair.
 
 ### Generate a new key pair
 
-```typescript
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-
-const keypair = new Ed25519Keypair();
-const address = keypair.toSuiAddress();
-
-console.log('Agent address:', address);
-console.log('Secret key:', keypair.getSecretKey()); // Bech32: suiprivkey1...
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="generate-new" />
 
 `getSecretKey()` returns a Bech32-encoded string prefixed with `suiprivkey`. Store it securely (see next section). The address is the agent's onchain identity.
 
 ### From a mnemonic
 
-```typescript
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-
-const mnemonic = 'word1 word2 word3 ... word12';
-const keypair = Ed25519Keypair.deriveKeypair(mnemonic);
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="from-mnemonic" />
 
 Use a mnemonic when you need to recover the key pair from a backup. Store the mnemonic with the same security as a private key.
 
 ### From a private key
 
-```typescript
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-
-// fromSecretKey accepts the Bech32 suiprivkey... string directly
-const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="from-secret-key" />
 
 This is the most common pattern for production agents: load the key from an environment variable or secrets manager at startup.
 
@@ -103,9 +85,7 @@ Set the key as an environment variable on the host. This is acceptable for devel
 export AGENT_SECRET_KEY="suiprivkey1..."
 ```
 
-```typescript
-const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="env-load" />
 
 ### Cloud KMS (production)
 
@@ -143,9 +123,7 @@ If you do not use KMS-based signing, store the raw key in a secrets manager (AWS
 
 Every key pair maps to a Sui address. This address is where the agent receives objects, holds coins, and is identified onchain.
 
-```typescript
-const agentAddress = keypair.toSuiAddress();
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="derive-address" />
 
 Before the agent can submit transactions, its address needs either:
 - SUI for gas payments, or
@@ -157,32 +135,11 @@ For agents that exclusively use sponsored transactions, the agent address never 
 
 An agent signs transactions the same way a wallet does, but without user approval prompts.
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.testnet.sui.io:443',
-  network: 'testnet',
-});
-
-const tx = new Transaction();
-tx.setSender(keypair.toSuiAddress());
-tx.moveCall({ target: '0xPACKAGE::module::function' });
-
-// Sign and execute in one step
-const result = await client.signAndExecuteTransaction({
-  transaction: tx,
-  signer: keypair,
-});
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="sign-execute" />
 
 For sponsored transactions where the gas station provides a co-signature, the agent signs the transaction bytes separately:
 
-```typescript
-const bytes = await tx.build({ client });
-const { signature } = await keypair.signTransaction(bytes);
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="sign-sponsored" />
 
 See [Offline Signing](/develop/transactions/transaction-auth/offline-signing) for the full dual-signature flow.
 
@@ -202,23 +159,7 @@ Rotating an agent's key pair changes its Sui address. Plan the rotation carefull
 
 5. **Destroy old key material.** Delete the old secret key from the secrets manager. If using KMS, schedule key deletion.
 
-```typescript
-// Step 2: Transfer all owned objects to the new address
-const ownedObjects = await client.core.listOwnedObjects({
-  owner: oldAddress,
-});
-
-const tx = new Transaction();
-tx.setSender(oldAddress);
-for (const obj of ownedObjects.objects) {
-  tx.transferObjects(
-    [tx.object(obj.objectId)],
-    newAddress,
-  );
-}
-
-await oldKeypair.signAndExecuteTransaction({ transaction: tx, client });
-```
+<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="key-rotation" />
 
 ### Zero-downtime rotation
 

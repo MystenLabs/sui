@@ -257,66 +257,12 @@ public fun is_expired(mandate: &SpendingMandate, clock: &Clock): bool {
 
 The owner creates the mandate and receives a `MandateOwnerCap` for later administration. The function automatically transfers the mandate to the agent's address.
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const PACKAGE_ID = '0xYOUR_PACKAGE';
-const ONE_DAY_MS = 86_400_000;
-
-const tx = new Transaction();
-
-// Create a mandate: max 10 SUI per tx, 100 SUI total, expires in 24 hours
-const [ownerCap] = tx.moveCall({
-  target: `${PACKAGE_ID}::spending_mandate::create_mandate`,
-  arguments: [
-    tx.pure.address(agentAddress),
-    tx.pure.u64(10_000_000_000),               // max_per_tx: 10 SUI
-    tx.pure.u64(100_000_000_000),              // total_cap: 100 SUI
-    tx.pure.vector('address', [recipientA, recipientB]),
-    tx.pure.u64(Date.now() + ONE_DAY_MS),      // expires_at_ms
-  ],
-});
-
-// Transfer the MandateOwnerCap to the owner (required — it has no `drop`)
-tx.transferObjects([ownerCap], ownerKeypair.toSuiAddress());
-
-const result = await client.signAndExecuteTransaction({
-  transaction: tx,
-  signer: ownerKeypair,
-});
-```
-
+<ImportContent source="examples/onchain-finance/spending-policies/src/mandate.ts" mode="code" tag="create-mandate" />
 ## Executing a spend (agent side)
 
 The agent reads its `SpendingMandate` object, validates locally, then builds a PTB that calls `execute_spend` with the payment coin.
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-// Split the payment coin from gas
-const [paymentCoin] = tx.splitCoins(tx.gas, [amount]);
-
-// Execute the spend through the mandate
-tx.moveCall({
-  target: `${PACKAGE_ID}::spending_mandate::execute_spend`,
-  typeArguments: ['0x2::sui::SUI'],
-  arguments: [
-    tx.object(mandateObjectId),    // SpendingMandate
-    paymentCoin,                   // Coin to send
-    tx.pure.address(recipient),    // Must be in allowlist
-    tx.object('0x6'),              // Clock
-  ],
-});
-
-const result = await client.signAndExecuteTransaction({
-  transaction: tx,
-  signer: agentKeypair,
-});
-```
-
+<ImportContent source="examples/onchain-finance/spending-policies/src/mandate.ts" mode="code" tag="execute-spend" />
 ## Expiry and revocation
 
 ### Time-based expiry
@@ -327,18 +273,7 @@ The mandate includes an `expires_at_ms` timestamp. The `execute_spend` function 
 
 To revoke a mandate before it expires, the owner must retrieve the mandate object from the agent. In practice, this means the owner requests the agent to present the mandate in a PTB that calls `revoke_mandate`:
 
-```typescript
-const tx = new Transaction();
-
-tx.moveCall({
-  target: `${PACKAGE_ID}::spending_mandate::revoke_mandate`,
-  arguments: [
-    tx.object(mandateOwnerCapId),  // MandateOwnerCap
-    tx.object(mandateObjectId),    // SpendingMandate (agent must sign)
-  ],
-});
-```
-
+<ImportContent source="examples/onchain-finance/spending-policies/src/mandate.ts" mode="code" tag="revoke-mandate" />
 Because the agent owns the mandate object, the agent must co-sign this transaction. If the agent is unresponsive or compromised, the mandate still expires at `expires_at_ms`. Set short expiry windows for high-risk agents.
 
 :::tip Emergency kill-switch
