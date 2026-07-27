@@ -8,7 +8,6 @@ pub(crate) mod context;
 mod gql;
 pub(crate) mod ingestion;
 pub(crate) mod inventory;
-pub(crate) mod live_state;
 pub(crate) mod local_store;
 pub(crate) mod metadata;
 mod node;

@@ -926,8 +926,9 @@ impl SimulatorStore for ForkStore {
 //
 // The one read the stock reader could answer but must not is `get_object`
 // without a version: a stock reverse scan over the fork's sparse `objects` CF
-// would serve cached history as current, so latest-semantics reads go through
-// the store's `LiveState`-backed path (see the `ObjectStore` impl above).
+// would serve cached history as current, so latest-semantics reads resolve
+// through the checkpoint-pinned version index instead (see the `ObjectStore`
+// impl above).
 
 impl ReadStore for ForkStore {
     /// Reads committee information from committed `sui-rpc-store` data.

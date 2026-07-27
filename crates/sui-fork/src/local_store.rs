@@ -51,9 +51,6 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::transaction::VerifiedTransaction;
 
-use crate::live_state::ForkLiveState;
-use crate::live_state::LiveState;
-
 /// Fork-aware access to the embedded `sui-rpc-store`.
 ///
 /// This type owns no remote-fetch policy. It writes and reads local
@@ -64,18 +61,6 @@ pub(crate) struct LocalStore {
     db: Db,
     schema: Arc<RpcStoreSchema>,
     reader: RpcStoreReader,
-    /// Fork-owned `ObjectID -> current live version` pointer table.
-    ///
-    /// Stock `sui-rpc-store` has no column family keyed by `ObjectID` that answers
-    /// "what is this object's current version, and is it live or removed?".
-    /// `object_by_owner` / `object_by_type` do record the latest *live* version,
-    /// but they are keyed by owner/type (not `ObjectID`) and only cover indexed
-    /// owned objects, so they can't answer that for an arbitrary id. And the fork's
-    /// `objects` CF is *sparse* — it caches arbitrary historical versions on demand
-    /// — so a reverse scan there can't distinguish "removed" from "not cached".
-    /// This table is the fork's authority for [`Self::get_latest_object_status`];
-    /// see [`crate::live_state`].
-    live_state: Arc<LiveState>,
     /// The checkpoint this fork diverged at.
     ///
     /// Pre-fork objects are materialized lazily from a remote query pinned here,
@@ -95,18 +80,16 @@ pub(crate) struct ObjectRemoval {
 
 impl LocalStore {
     /// Creates a fork store handle over an already-open `sui-rpc-store` DB and
-    /// schema, plus the fork-owned live-state pointer table.
+    /// schema, anchored at the checkpoint the fork diverged at.
     pub(crate) fn new(
         db: Db,
         schema: Arc<RpcStoreSchema>,
-        live_state: Arc<LiveState>,
         forked_at_checkpoint: CheckpointSequenceNumber,
     ) -> Self {
         Self {
             reader: RpcStoreReader::new(db.clone(), schema.clone()),
             db,
             schema,
-            live_state,
             forked_at_checkpoint,
         }
     }
@@ -118,35 +101,27 @@ impl LocalStore {
 
     /// Returns the current authoritative local state for an object.
     ///
-    /// The fork-owned live-state pointer is authoritative when present. Without a
-    /// pointer we fall back to the raw `objects` rows: a tombstone is an
-    /// authoritative removal, while a bare live row is only a cached historical
-    /// version (the sparse-materialization case) and must not be reported as
-    /// current — the caller should treat that as "unknown" and consult GraphQL.
+    /// Resolved from the checkpoint-pinned version index, bounded at the
+    /// checkpoint the fork is currently producing. A row there is the fork's
+    /// authority: it was written either by local execution, or by a pre-fork
+    /// materialization that resolved the object as of the fork checkpoint.
+    /// Absence means the fork has no knowledge of the object at all, and the
+    /// caller should consult GraphQL.
+    ///
+    /// The raw `objects` rows cannot answer this. They are sparse — arbitrary
+    /// historical versions are cached on demand — so the greatest row present
+    /// is not necessarily current, and a scan finding nothing cannot separate
+    /// "removed" from "never cached". Reading the version index bounded rather
+    /// than unbounded keeps that same sparseness from mattering here.
     pub(crate) fn get_latest_object_status(
         &self,
         id: ObjectID,
     ) -> anyhow::Result<Option<(SequenceNumber, Status)>> {
-        match self.live_state.get(id)? {
-            Some(ForkLiveState::Live(version)) => {
-                Ok(self.status_at(id, version)?.map(|status| (version, status)))
-            }
-            Some(ForkLiveState::Removed { version, kind }) => {
-                Ok(Some((version, Status::Tombstone(kind))))
-            }
-            None => {
-                match self.highest_status_at_or_before(id, SequenceNumber::from_u64(u64::MAX))? {
-                    Some((version, status @ Status::Tombstone(_))) => Ok(Some((version, status))),
-                    Some((_, Status::Live(_))) => match self
-                        .highest_tombstone_at_or_before(id, SequenceNumber::from_u64(u64::MAX))?
-                    {
-                        Some((version, kind)) => Ok(Some((version, Status::Tombstone(kind)))),
-                        None => Ok(None),
-                    },
-                    None => Ok(None),
-                }
-            }
-        }
+        let bound = self.executing_checkpoint()?;
+        let Some(version) = self.schema.get_object_version_at_checkpoint(id, bound)? else {
+            return Ok(None);
+        };
+        Ok(self.status_at(id, version)?.map(|status| (version, status)))
     }
 
     /// Returns the local object status at one exact version.
@@ -365,9 +340,6 @@ impl LocalStore {
             self.stage_restored_object_version(&mut batch, object.id(), object.version())?;
         }
         batch.commit().context("failed to save live object")?;
-        if update_live_pointer {
-            self.live_state.set_live(object.id(), object.version())?;
-        }
         Ok(())
     }
 
@@ -469,9 +441,6 @@ impl LocalStore {
         batch
             .commit()
             .context("failed to save indexed live object")?;
-        if make_current {
-            self.live_state.set_live(object.id(), object.version())?;
-        }
         Ok(())
     }
 
@@ -545,20 +514,6 @@ impl LocalStore {
         batch
             .commit()
             .context("failed to apply local object diff")?;
-
-        // Update the fork-owned live pointers after the rpc-store rows commit:
-        // surviving written objects become current, removals become tombstoned.
-        // Objects created and terminally deleted in the same result are kept as
-        // historical rows but never made current.
-        let written_live = written_objects
-            .values()
-            .filter(|object| !terminal_deleted.contains(&object.id()))
-            .map(|object| (object.id(), object.version()));
-        let removed_live = removed_objects
-            .iter()
-            .map(|removed| (removed.object_id, removed.version, removed.kind));
-        self.live_state
-            .apply_checkpoint(written_live, removed_live)?;
         Ok(())
     }
 
@@ -597,37 +552,6 @@ impl LocalStore {
             return Ok(None);
         };
         Ok(Some((key.version, status)))
-    }
-
-    /// Reads the highest tombstone for an object at or below `upper_bound`.
-    ///
-    /// This keeps local removals authoritative when historical object rows
-    /// exist but no live pointer exists.
-    fn highest_tombstone_at_or_before(
-        &self,
-        id: ObjectID,
-        upper_bound: SequenceNumber,
-    ) -> anyhow::Result<Option<(SequenceNumber, TombstoneKind)>> {
-        let lower = objects::Key {
-            id,
-            version: SequenceNumber::from_u64(0),
-        };
-        let upper = objects::Key {
-            id,
-            version: upper_bound,
-        };
-
-        for row in self
-            .schema
-            .objects
-            .iter_rev((Bound::Included(lower), Bound::Included(upper)))?
-        {
-            let (key, _) = row?;
-            if let Some(Status::Tombstone(kind)) = self.status_at(id, key.version)? {
-                return Ok(Some((key.version, kind)));
-            }
-        }
-        Ok(None)
     }
 
     /// Stages the object-version row using `sui-rpc-store`'s restore helper.
@@ -831,8 +755,7 @@ mod tests {
 
     fn reopen_store(dir: &tempfile::TempDir) -> LocalStore {
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
-        let live_state = Arc::new(LiveState::open(dir.path()).unwrap());
-        LocalStore::new(db, Arc::new(schema), live_state, TEST_FORK_CHECKPOINT)
+        LocalStore::new(db, Arc::new(schema), TEST_FORK_CHECKPOINT)
     }
 
     fn make_object(id: ObjectID, version: u64, owner: Owner) -> Object {

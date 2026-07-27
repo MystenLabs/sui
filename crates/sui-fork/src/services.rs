@@ -59,7 +59,6 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::ingestion::SimulacrumIngestion;
-use crate::live_state::LiveState;
 use crate::local_store::LocalStore;
 use crate::store::ForkStore;
 
@@ -80,10 +79,6 @@ type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 pub(crate) struct ServiceManager {
     db: Db,
     schema: Arc<RpcStoreSchema>,
-    /// Fork-owned `ObjectID -> current live version` pointer table, kept in its
-    /// own store beside the rpc-store; stock `sui-rpc-store` has no `ObjectID`-keyed
-    /// current-version pointer. See [`crate::live_state`] and [`LocalStore`].
-    live_state: Arc<LiveState>,
     metadata: Metadata,
     indexer_pipelines: Vec<&'static str>,
     /// Handle to the running indexer. Holding it keeps the indexer alive
@@ -136,13 +131,9 @@ impl ServiceManager {
 
         Self::seed_chain_identifier(&db, metadata.chain_identifier)?;
 
-        let live_state =
-            Arc::new(LiveState::open(root).context("failed to open fork live-state store")?);
-
         Ok(Self {
             db,
             schema,
-            live_state,
             metadata,
             indexer_pipelines: Vec::new(),
             indexer_service: None,
@@ -252,7 +243,6 @@ impl ServiceManager {
         LocalStore::new(
             self.db.clone(),
             self.schema.clone(),
-            self.live_state.clone(),
             self.metadata.forked_at_checkpoint,
         )
     }
