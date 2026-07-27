@@ -18,14 +18,17 @@ bin_version::bin_version!();
 
 #[derive(Parser)]
 struct App {
-    /// Path to a YAML config file ([`KvRpcConfig`]). New tunables (concurrency,
+    /// Path to a TOML config file ([`KvRpcConfig`]). New tunables (concurrency,
     /// scan budgets, per-endpoint list limits, List APIs) are configured here.
     /// Run with --config-schema to print the file format.
-    #[clap(long)]
+    #[clap(long, value_name = "PATH", conflicts_with = "config_path")]
+    config: Option<PathBuf>,
+
+    /// (deprecated) Path to a YAML config file. Use --config with TOML instead.
+    #[clap(long, value_name = "PATH")]
     config_path: Option<PathBuf>,
 
-    /// Print the JSON Schema for the --config-path file (with field docs) and
-    /// exit.
+    /// Print the JSON Schema for the --config file (with field docs) and exit.
     #[clap(long)]
     config_schema: bool,
 
@@ -81,7 +84,7 @@ struct App {
 
 fn warn_deprecated(flag: &str) {
     tracing::warn!(
-        "the `{flag}` CLI flag is deprecated; configure it via --config-path instead \
+        "the `{flag}` CLI flag is deprecated; configure it via --config instead \
          (run with --config-schema to see the file format; the CLI value takes \
          precedence over the config file for now)"
     );
@@ -180,16 +183,24 @@ async fn main() -> Result<()> {
         println!("{}", KvRpcConfig::schema_json()?);
         return Ok(());
     }
-    let mut config = match &app.config_path {
-        Some(path) => KvRpcConfig::load(path)?,
-        None => KvRpcConfig::default(),
+    let mut config = if let Some(path) = &app.config {
+        KvRpcConfig::load_toml(path)?
+    } else if let Some(path) = &app.config_path {
+        tracing::warn!(
+            "the `--config-path` CLI flag is deprecated; use `--config` with a \
+             TOML config file instead; YAML remains supported by `--config-path` \
+             during migration"
+        );
+        KvRpcConfig::load_yaml(path)?
+    } else {
+        KvRpcConfig::default()
     };
     apply_deprecated_overrides(app, &mut config);
     config.validate()?;
 
     let instance_id = config.instance_id.clone().context(
-        "instance_id must be set via the config file (--config-path) or the \
-         deprecated positional argument",
+        "instance_id must be set via the config file (--config or the deprecated \
+         --config-path) or the deprecated positional argument",
     )?;
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
@@ -237,4 +248,36 @@ async fn main() -> Result<()> {
         .main()
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn config_flags_select_their_config_format() {
+        let app = App::try_parse_from(["sui-kv-rpc", "--config", "config.toml"]).unwrap();
+        assert_eq!(app.config, Some(PathBuf::from("config.toml")));
+        assert!(app.config_path.is_none());
+
+        let app = App::try_parse_from(["sui-kv-rpc", "--config-path", "config.yaml"]).unwrap();
+        assert!(app.config.is_none());
+        assert_eq!(app.config_path, Some(PathBuf::from("config.yaml")));
+    }
+
+    #[test]
+    fn config_flags_are_mutually_exclusive() {
+        let error = match App::try_parse_from([
+            "sui-kv-rpc",
+            "--config",
+            "config.toml",
+            "--config-path",
+            "config.yaml",
+        ]) {
+            Ok(_) => panic!("both config flags must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
+    }
 }
