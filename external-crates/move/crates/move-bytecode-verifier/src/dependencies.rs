@@ -12,7 +12,7 @@ use move_binary_format::{
         TableIndex, Visibility,
     },
     file_format_common::VERSION_5,
-    safe_unwrap,
+    partial_vm_error_with_debug_message, safe_unwrap,
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
 use std::collections::{BTreeMap, BTreeSet};
@@ -541,15 +541,13 @@ fn verify_script_visibility_usage(
         match (current_is_entry, script_functions.contains(fhandle_idx)) {
             (true, true) => (),
             (_, true) => {
-                return Err(PartialVMError::new(
-                    StatusCode::CALLED_SCRIPT_VISIBLE_FROM_NON_SCRIPT_VISIBLE,
-                )
-                .at_code_offset(fdef_idx, idx)
-                .with_message(
+                return Err(partial_vm_error_with_debug_message!(
+                    CALLED_SCRIPT_VISIBLE_FROM_NON_SCRIPT_VISIBLE,
                     "script-visible functions can only be called from scripts or other \
                     script-visible functions"
-                        .to_string(),
-                ));
+                        .to_string()
+                )
+                .at_code_offset(fdef_idx, idx));
             }
             _ => (),
         }
