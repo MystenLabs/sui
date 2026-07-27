@@ -31,6 +31,7 @@ use axum::routing::post;
 use axum_extra::TypedHeader;
 use config::LoggingConfig;
 use config::RpcConfig;
+use extensions::pipeline_check::PipelineAvailabilityChecker;
 use extensions::query_limits::QueryLimitsChecker;
 use extensions::query_limits::rich;
 use extensions::query_limits::show_usage::ShowUsage;
@@ -431,6 +432,7 @@ pub async fn start_rpc(
             config.limits.query_limits(),
             metrics,
         ))
+        .extension(PipelineAvailabilityChecker)
         .data(config.limits.pagination())
         .data(config.limits)
         .data(config.name_service)

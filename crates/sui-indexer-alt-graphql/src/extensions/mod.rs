@@ -2,5 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod logging;
+pub(crate) mod pipeline_check;
 pub(crate) mod query_limits;
 pub(crate) mod timeout;
