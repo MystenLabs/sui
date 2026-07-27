@@ -20,6 +20,7 @@ use move_binary_format::{
         CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
     },
     file_format_common::{VERSION_1, VERSION_5},
+    partial_vm_error_with_debug_message,
 };
 use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
 
@@ -65,9 +66,11 @@ pub fn verify_module_function_signature_by_name(
         module.identifier_at(module.function_handle_at(fdef.function).name) == name
     });
     let (idx, _fdef) = fdef_opt.ok_or_else(|| {
-        PartialVMError::new(StatusCode::VERIFICATION_ERROR)
-            .with_message("function not found in verify_module_script_function".to_string())
-            .finish(Location::Module(module.self_id()))
+        partial_vm_error_with_debug_message!(
+            VERIFICATION_ERROR,
+            "function not found in verify_module_script_function".to_string()
+        )
+        .finish(Location::Module(module.self_id()))
     })?;
     verify_module_function_signature(
         module,
