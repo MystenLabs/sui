@@ -149,6 +149,10 @@ impl LocalStore {
     ///
     /// Use this for exact-version and bounded historical reads. The caller must
     /// choose a live-object write method when the object should become current.
+    /// Deliberately writes no checkpoint-pinned version row. The caller asked
+    /// for one specific version, which is evidence about a point in history and
+    /// none at all about what is live — recording it would let an older version
+    /// win a currency read. See [`Self::get_latest_object_status`].
     pub(crate) fn save_object_version_only(&self, object: &Object) -> anyhow::Result<()> {
         let mut batch = self.db.batch();
         self.stage_object_version(&mut batch, object)?;
@@ -789,6 +793,86 @@ mod tests {
                 .get_object_at_or_before(id, SequenceNumber::from_u64(8))
                 .unwrap(),
             Some((SequenceNumber::from_u64(7), Status::Live(object))),
+        );
+    }
+
+    /// A version-keyed fetch is evidence about one point in history and says
+    /// nothing about what is live, so it must not disturb authority already
+    /// established for the object. Recording such a fetch in the version index
+    /// — at the fork checkpoint, or at the checkpoint the version was created
+    /// in — would make this read resolve to the older version.
+    ///
+    /// This is the case system packages make reachable: an upgraded user
+    /// package lives under a fresh object id, but `0x2` and friends carry every
+    /// version they have ever had under one id.
+    #[test]
+    fn exact_version_fetch_does_not_displace_established_currency() {
+        let (_dir, store) = fresh_store();
+        let id = ObjectID::random();
+        let current = make_object(id, 9, Owner::Immutable);
+        let historical = make_object(id, 5, Owner::Immutable);
+
+        store.save_live_object_if_current(&current).unwrap();
+        store.save_object_version_only(&historical).unwrap();
+
+        assert_eq!(
+            store.get_latest_object_status(id).unwrap(),
+            Some((SequenceNumber::from_u64(9), Status::Live(current))),
+            "an older version fetched by exact key must not become current",
+        );
+        assert_eq!(
+            store
+                .get_object_at_version(id, SequenceNumber::from_u64(5))
+                .unwrap(),
+            Some(Status::Live(historical)),
+            "the historical row is still readable by version",
+        );
+    }
+
+    /// Pre-fork materialization claims currency *as of the fork checkpoint*, so
+    /// its row belongs at that checkpoint and nowhere else: a row above it
+    /// would outrank locally executed checkpoints, and one below would lose to
+    /// the indexer's synthetic floors.
+    #[test]
+    fn pre_fork_materialization_is_recorded_at_the_fork_checkpoint() {
+        let (_dir, store) = fresh_store();
+        let id = ObjectID::random();
+        let object = make_object(id, 4, Owner::Immutable);
+
+        store.save_live_object_if_current(&object).unwrap();
+
+        let rows: Vec<_> = store
+            .schema
+            .iter_object_versions_by_checkpoint(id)
+            .unwrap()
+            .map(|row| row.unwrap().0.checkpoint)
+            .collect();
+        assert_eq!(rows, vec![TEST_FORK_CHECKPOINT]);
+    }
+
+    /// Locally executed changes are keyed by the checkpoint producing them,
+    /// which is derived rather than passed in. Getting that wrong is silent:
+    /// the row still resolves, just at the wrong point in history.
+    #[test]
+    fn local_execution_is_recorded_at_the_executing_checkpoint() {
+        let (_dir, store) = fresh_store();
+        let id = ObjectID::random();
+        let object = make_object(id, 1, Owner::Immutable);
+
+        store
+            .apply_local_object_diff(&BTreeMap::from([(id, object)]), &[])
+            .unwrap();
+
+        let rows: Vec<_> = store
+            .schema
+            .iter_object_versions_by_checkpoint(id)
+            .unwrap()
+            .map(|row| row.unwrap().0.checkpoint)
+            .collect();
+        assert_eq!(
+            rows,
+            vec![TEST_FORK_CHECKPOINT + 1],
+            "the first locally executed checkpoint follows the fork checkpoint",
         );
     }
 
