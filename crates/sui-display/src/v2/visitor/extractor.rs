@@ -92,13 +92,20 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         Ok(self.path.is_empty().then_some(Value::U256(n)))
     }
 
-    /// Signed integer types are not supported on Sui, and the display `Value`
-    /// enum has no variants for them.
+    /// Signed integer types are not supported on Sui, and the display `Value` enum has no
+    /// variants for them. No signed value can exist on-chain yet, so these arms are dead
+    /// code today — debug-fail so that tests scream if a signed value ever reaches display
+    /// extraction unimplemented, but degrade to `Ok(None)` (field renders as empty) in
+    /// release. TODO [signed-ints]: implement signed display extraction in the enablement PR.
     fn visit_i8(
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: i8,
     ) -> Result<Self::Value, Self::Error> {
+        debug_assert!(
+            false,
+            "signed integer values are not supported in display v2"
+        );
         Ok(None)
     }
 
@@ -107,6 +114,10 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: i16,
     ) -> Result<Self::Value, Self::Error> {
+        debug_assert!(
+            false,
+            "signed integer values are not supported in display v2"
+        );
         Ok(None)
     }
 
@@ -115,6 +126,10 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: i32,
     ) -> Result<Self::Value, Self::Error> {
+        debug_assert!(
+            false,
+            "signed integer values are not supported in display v2"
+        );
         Ok(None)
     }
 
@@ -123,6 +138,10 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: i64,
     ) -> Result<Self::Value, Self::Error> {
+        debug_assert!(
+            false,
+            "signed integer values are not supported in display v2"
+        );
         Ok(None)
     }
 
@@ -131,6 +150,10 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: i128,
     ) -> Result<Self::Value, Self::Error> {
+        debug_assert!(
+            false,
+            "signed integer values are not supported in display v2"
+        );
         Ok(None)
     }
 
@@ -139,6 +162,10 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         _: &AV::ValueDriver<'_, 'v, 'v>,
         _: move_core_types::i256::I256,
     ) -> Result<Self::Value, Self::Error> {
+        debug_assert!(
+            false,
+            "signed integer values are not supported in display v2"
+        );
         Ok(None)
     }
 

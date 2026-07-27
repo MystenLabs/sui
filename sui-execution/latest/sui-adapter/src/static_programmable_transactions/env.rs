@@ -446,6 +446,48 @@ where
             }
         }
 
+        fn contains_signed_integer(tag: &TypeTag) -> bool {
+            match tag {
+                TypeTag::I8
+                | TypeTag::I16
+                | TypeTag::I32
+                | TypeTag::I64
+                | TypeTag::I128
+                | TypeTag::I256 => true,
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U16
+                | TypeTag::U32
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::U256
+                | TypeTag::Address
+                | TypeTag::Signer => false,
+                TypeTag::Vector(inner) => contains_signed_integer(inner),
+                TypeTag::Struct(s) => s.type_params.iter().any(contains_signed_integer),
+            }
+        }
+
+        // Signed integer types are not supported by the VM runtime yet, and its `load_type`
+        // answers them with an invariant violation. Most `TypeTag`s here are safe by
+        // construction — user type arguments arrive as `TypeInput`s and are rejected in
+        // `load_vm_type_from_type_input`, and tags derived from on-chain object types cannot
+        // mention signed types because no publishable module can name them until
+        // `move_binary_format_version` reaches VERSION_8. But some transaction inputs carry
+        // raw `TypeTag`s (e.g. `WithdrawalTypeArg::Balance`), so reject signed tags here,
+        // user-facing, before they can reach `load_type`. As with `TypeInput`s,
+        // `TypeArgumentError::TypeNotFound` is deliberately reused for "found but disallowed".
+        if let Some(idx) = type_arg_idx
+            && contains_signed_integer(tag)
+        {
+            return Err(Mode::Error::from_kind(
+                ExecutionErrorKind::TypeArgumentError {
+                    argument_idx: checked_as!(idx, u16)?,
+                    kind: TypeArgumentError::TypeNotFound,
+                },
+            ));
+        }
+
         let objects = tag.all_addresses();
 
         let tag_linkage = ExecutableLinkage::type_linkage::<_, Mode::Error>(
@@ -564,6 +606,8 @@ where
                 TypeInput::U128 => TypeTag::U128,
                 TypeInput::U256 => TypeTag::U256,
                 // Signed integer types are not accepted as transaction inputs on Sui.
+                // `TypeArgumentError::TypeNotFound` is deliberately reused here for "found but
+                // disallowed" — no dedicated error kind exists for it.
                 TypeInput::I8
                 | TypeInput::I16
                 | TypeInput::I32

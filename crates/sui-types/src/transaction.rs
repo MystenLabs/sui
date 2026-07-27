@@ -265,13 +265,25 @@ fn type_input_validity_check(
             | TypeInput::Signer
             | TypeInput::U16
             | TypeInput::U32
-            | TypeInput::U256
-            | TypeInput::I8
+            | TypeInput::U256 => (),
+            // Rejecting signed type inputs here (pre-consensus, as a `UserInputError`) matches
+            // the observable behavior of pre-signed-ints binaries, where these variants fail
+            // BCS deserialization at the API boundary: nothing lands on chain. It also makes
+            // the signed-integer errors on the read paths (replay, GraphQL, SDK conversions)
+            // unreachable for new transactions until the feature flag flips.
+            TypeInput::I8
             | TypeInput::I16
             | TypeInput::I32
             | TypeInput::I64
             | TypeInput::I128
-            | TypeInput::I256 => (),
+            | TypeInput::I256 => {
+                fp_ensure!(
+                    config.enable_signed_integers(),
+                    UserInputError::Unsupported(
+                        "signed integer types are not enabled as type arguments".to_string()
+                    )
+                );
+            }
             TypeInput::Vector(t) => {
                 stack.push((t, depth + 1));
             }
@@ -296,6 +308,60 @@ fn type_input_validity_check(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod type_input_validity_tests {
+    use super::*;
+
+    fn signed_inputs() -> Vec<TypeInput> {
+        vec![
+            TypeInput::I8,
+            TypeInput::I16,
+            TypeInput::I32,
+            TypeInput::I64,
+            TypeInput::I128,
+            TypeInput::I256,
+        ]
+    }
+
+    #[test]
+    fn signed_type_inputs_rejected_without_feature_flag() {
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        assert!(!config.enable_signed_integers());
+        for input in signed_inputs() {
+            let mut count = 0;
+            let err = type_input_validity_check(&input, &config, &mut count).unwrap_err();
+            assert!(
+                matches!(err, UserInputError::Unsupported(_)),
+                "expected Unsupported for {input:?}, got {err:?}"
+            );
+            // Signed types nested in vectors and struct type params are rejected too.
+            let mut count = 0;
+            let nested = TypeInput::Vector(Box::new(input));
+            let err = type_input_validity_check(&nested, &config, &mut count).unwrap_err();
+            assert!(matches!(err, UserInputError::Unsupported(_)));
+        }
+    }
+
+    #[test]
+    fn signed_type_inputs_accepted_with_feature_flag() {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_enable_signed_integers_for_testing(true);
+        for input in signed_inputs() {
+            let mut count = 0;
+            type_input_validity_check(&input, &config, &mut count).unwrap();
+        }
+    }
+
+    #[test]
+    fn unsigned_type_inputs_unaffected() {
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        for input in [TypeInput::Bool, TypeInput::U8, TypeInput::U256] {
+            let mut count = 0;
+            type_input_validity_check(&input, &config, &mut count).unwrap();
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]

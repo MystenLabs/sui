@@ -243,7 +243,6 @@ impl MoveType {
                 | RE::NoTypeOrigin(_, _, _)
                 | RE::UnexpectedReference
                 | RE::UnexpectedSigner
-                | RE::UnexpectedSignedInteger
                 | RE::UnexpectedError(_)),
             ) => {
                 return Err(anyhow!(err)
@@ -525,7 +524,6 @@ where
         | RE::TypeParamOOB(_, _)
         | RE::UnexpectedReference
         | RE::UnexpectedSigner
-        | RE::UnexpectedSignedInteger
         | RE::UnexpectedError(_) => anyhow!(err).context(context()).into(),
     }
 }

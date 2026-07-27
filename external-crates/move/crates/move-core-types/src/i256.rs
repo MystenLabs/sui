@@ -466,6 +466,14 @@ impl From<i128> for I256 {
     }
 }
 
+/// Signed counterpart of `From<&U256> for BigInt` (see u256.rs); to be removed alongside it
+/// when Prover & Move Model code migrates off BigInt.
+impl From<&I256> for num::bigint::BigInt {
+    fn from(n: &I256) -> Self {
+        num::bigint::BigInt::from_signed_bytes_le(&n.to_le_bytes())
+    }
+}
+
 //**************************************************************************************************
 // TryFrom impls (fallible narrowing conversions)
 //**************************************************************************************************
@@ -1347,5 +1355,25 @@ mod tests {
             u256_to_i256_offset(i256_to_u256_offset(I256::from(-1i8))),
             I256::from(-1i8)
         );
+    }
+
+    #[test]
+    fn bigint_conversion() {
+        use num::bigint::BigInt;
+        use std::str::FromStr as _;
+
+        for value in [
+            I256::min_value(),
+            I256::from(-1i8),
+            I256::zero(),
+            I256::from(42i8),
+            I256::max_value(),
+        ] {
+            assert_eq!(
+                BigInt::from(&value),
+                BigInt::from_str(&value.to_string()).unwrap(),
+                "BigInt conversion mismatch for {value}"
+            );
+        }
     }
 }

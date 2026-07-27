@@ -118,11 +118,10 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: i8,
     ) -> Result<Self::Value, Self::Error> {
-        // The `Format::number` API takes an unsigned `u32`, so negative values would
-        // be garbled if reinterpreted bit-wise. Render as a string until `Format` grows a
-        // signed-number entry point. Consumers that rely on a native numeric JSON value
-        // will need to parse the string themselves.
-        Ok(F::string(&mut self.meter, value.to_string())?)
+        // Signed integers mirror the unsigned convention: widths up to 32 bits render as
+        // native numbers, wider widths render as strings (to avoid loss of precision in
+        // consumers that read numbers as f64).
+        Ok(F::signed_number(&mut self.meter, value as i32)?)
     }
 
     fn visit_i16(
@@ -130,7 +129,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: i16,
     ) -> Result<Self::Value, Self::Error> {
-        Ok(F::string(&mut self.meter, value.to_string())?)
+        Ok(F::signed_number(&mut self.meter, value as i32)?)
     }
 
     fn visit_i32(
@@ -138,7 +137,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: i32,
     ) -> Result<Self::Value, Self::Error> {
-        Ok(F::string(&mut self.meter, value.to_string())?)
+        Ok(F::signed_number(&mut self.meter, value)?)
     }
 
     fn visit_i64(
@@ -405,6 +404,54 @@ mod tests {
     fn json_u128() {
         let actual = json(L::U128, 424_242_424_242_424_242_424u128);
         let expect = json!(424_242_424_242_424_242_424u128.to_string());
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i8() {
+        let actual = json(L::I8, -42i8);
+        let expect = json!(-42i8);
+        assert_eq!(expect, actual);
+
+        let actual = json(L::I8, i8::MIN);
+        let expect = json!(-128);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i16() {
+        let actual = json(L::I16, -424i16);
+        let expect = json!(-424i16);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i32() {
+        let actual = json(L::I32, -432_432i32);
+        let expect = json!(-432_432i32);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i64() {
+        let actual = json(L::I64, -432_432_432_432i64);
+        let expect = json!((-432_432_432_432i64).to_string());
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i128() {
+        let actual = json(L::I128, -424_242_424_242_424_242_424i128);
+        let expect = json!((-424_242_424_242_424_242_424i128).to_string());
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i256() {
+        use move_core_types::i256::I256;
+        let value = I256::from_str("-42424242424242424242424242424242424242424").unwrap();
+        let actual = json(L::I256, value);
+        let expect = json!("-42424242424242424242424242424242424242424");
         assert_eq!(expect, actual);
     }
 

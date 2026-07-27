@@ -52,6 +52,12 @@ pub(crate) enum OpenMoveTypeSignatureBody {
         #[serde(rename = "typeParameters")]
         type_parameters: Vec<OpenMoveTypeSignatureBody>,
     },
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 scalar!(
@@ -144,6 +150,12 @@ impl From<OpenSignatureBody> for OpenMoveTypeSignatureBody {
             OSB::U64 => OMTSB::U64,
             OSB::U128 => OMTSB::U128,
             OSB::U256 => OMTSB::U256,
+            OSB::I8 => OMTSB::I8,
+            OSB::I16 => OMTSB::I16,
+            OSB::I32 => OMTSB::I32,
+            OSB::I64 => OMTSB::I64,
+            OSB::I128 => OMTSB::I128,
+            OSB::I256 => OMTSB::I256,
 
             OSB::Vector(signature) => OMTSB::Vector(Box::new(OMTSB::from(*signature))),
 
@@ -202,6 +214,12 @@ impl fmt::Display for OpenMoveTypeSignatureBody {
             B::U64 => write!(f, "u64"),
             B::U128 => write!(f, "u128"),
             B::U256 => write!(f, "u256"),
+            B::I8 => write!(f, "i8"),
+            B::I16 => write!(f, "i16"),
+            B::I32 => write!(f, "i32"),
+            B::I64 => write!(f, "i64"),
+            B::I128 => write!(f, "i128"),
+            B::I256 => write!(f, "i256"),
             B::Vector(sig) => write!(f, "vector<{sig}>"),
 
             B::Datatype {

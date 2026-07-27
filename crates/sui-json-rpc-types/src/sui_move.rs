@@ -94,12 +94,6 @@ pub enum SuiMoveNormalizedType {
     U64,
     U128,
     U256,
-    I8,
-    I16,
-    I32,
-    I64,
-    I128,
-    I256,
     Address,
     Signer,
     Struct {
@@ -110,6 +104,13 @@ pub enum SuiMoveNormalizedType {
     TypeParameter(SuiMoveTypeParameterIndex),
     Reference(Box<SuiMoveNormalizedType>),
     MutableReference(Box<SuiMoveNormalizedType>),
+    // New variants are appended at the end (uniform append-only convention).
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -415,6 +416,8 @@ pub enum SuiMoveValue {
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
     Variant(SuiMoveVariant),
+    // i64, i128, and i256 are converted to String to avoid overflow
+    SignedNumber(i32),
 }
 
 impl SuiMoveValue {
@@ -424,6 +427,7 @@ impl SuiMoveValue {
             SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
             SuiMoveValue::Vector(values) => SuiMoveStruct::Runtime(values).to_json_value(),
             SuiMoveValue::Number(v) => json!(v),
+            SuiMoveValue::SignedNumber(v) => json!(v),
             SuiMoveValue::Bool(v) => json!(v),
             SuiMoveValue::Address(v) => json!(v),
             SuiMoveValue::String(v) => json!(v),
@@ -439,6 +443,7 @@ impl Display for SuiMoveValue {
         let mut writer = String::new();
         match self {
             SuiMoveValue::Number(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::SignedNumber(value) => write!(writer, "{}", value)?,
             SuiMoveValue::Bool(value) => write!(writer, "{}", value)?,
             SuiMoveValue::Address(value) => write!(writer, "{}", value)?,
             SuiMoveValue::String(value) => write!(writer, "{}", value)?,
@@ -467,12 +472,13 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
-            // Signed integer types are not accepted as pure transaction inputs on Sui, but
-            // may appear in Move values read back from on-chain data. Render them as strings
-            // for consistency with the larger unsigned integer types.
-            MoveValue::I8(value) => SuiMoveValue::String(format!("{value}")),
-            MoveValue::I16(value) => SuiMoveValue::String(format!("{value}")),
-            MoveValue::I32(value) => SuiMoveValue::String(format!("{value}")),
+            // Signed integer types are not acceptable as pure transaction inputs; they may
+            // appear in Move values read back from on-chain data once VM support lands.
+            // They mirror the unsigned convention: widths up to 32 bits render as native
+            // numbers, wider widths render as strings to avoid overflow.
+            MoveValue::I8(value) => SuiMoveValue::SignedNumber(value.into()),
+            MoveValue::I16(value) => SuiMoveValue::SignedNumber(value.into()),
+            MoveValue::I32(value) => SuiMoveValue::SignedNumber(value),
             MoveValue::I64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::I128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::I256(value) => SuiMoveValue::String(format!("{value}")),
