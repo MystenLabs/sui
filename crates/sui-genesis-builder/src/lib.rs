@@ -930,6 +930,7 @@ fn create_genesis_transaction(
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
                 sui_types::base_types::SystemObjectVersions::empty(),
+                None,
                 gas_data,
                 SuiGasStatus::new_unmetered(protocol_config),
                 kind,

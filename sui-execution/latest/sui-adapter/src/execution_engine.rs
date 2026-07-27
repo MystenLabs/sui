@@ -17,7 +17,9 @@ pub(crate) mod checked {
     };
     use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, rc::Rc, sync::Arc};
-    use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
+    use sui_types::accumulator_root::{
+        ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE, UnsettledObjectFundsRead,
+    };
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -221,6 +223,7 @@ pub(crate) mod checked {
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: Option<&dyn UnsettledObjectFundsRead>,
         mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -260,6 +263,7 @@ pub(crate) mod checked {
             *epoch_id,
             system_object_versions,
             (&transaction_kind, &gas_data, transaction_signer),
+            unsettled_object_funds,
         );
 
         if bump_only_enabled(protocol_config.gas_model_version()) {

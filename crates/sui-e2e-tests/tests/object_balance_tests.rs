@@ -7,8 +7,17 @@ use rand::{Rng, seq::SliceRandom};
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::FundSource;
-use sui_types::{effects::TransactionEffectsAPI, gas_coin::MIST_PER_SUI};
-use test_cluster::TestClusterBuilder;
+use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    base_types::{SequenceNumber, SuiAddress},
+    effects::{TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind},
+    gas_coin::MIST_PER_SUI,
+    object::Owner,
+};
+use test_cluster::{
+    TestClusterBuilder,
+    addr_balance_test_env::{TestEnv, TestEnvBuilder},
+};
 
 #[sim_test]
 async fn test_object_balance_withdraw_stress() {
@@ -16,6 +25,7 @@ async fn test_object_balance_withdraw_stress() {
         cfg.set_create_root_accumulator_object_for_testing(true);
         cfg.set_enable_accumulators_for_testing(true);
         cfg.set_enable_object_funds_withdraw_for_testing(true);
+        cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
         cfg
     });
 
@@ -148,4 +158,325 @@ async fn test_object_balance_withdraw_stress() {
         handle.await.unwrap();
     }
     test_cluster.trigger_reconfiguration().await;
+}
+
+fn object_funds_in_execution_test_env() -> TestEnvBuilder {
+    TestEnvBuilder::new().with_proto_override_cb(Box::new(|_, mut cfg| {
+        cfg.set_enable_object_funds_withdraw_for_testing(true);
+        cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+        cfg
+    }))
+}
+
+fn assert_object_funds_insufficient(
+    status: &sui_types::execution_status::ExecutionStatus,
+    context: &str,
+) {
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if sui_types::funds_accumulator::is_object_funds_insufficient_abort(&failure.error)
+        ),
+        "{context}: expected object-funds insufficiency abort, got: {status:?}"
+    );
+}
+
+#[sim_test]
+async fn test_simulate_object_funds_sufficient_in_execution() {
+    let mut test_env = object_funds_in_execution_test_env().build().await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false, false)
+        .await
+        .unwrap();
+    assert!(result.transaction.effects.status().is_ok());
+}
+
+#[sim_test]
+async fn test_simulate_object_funds_insufficient_in_execution() {
+    let mut test_env = object_funds_in_execution_test_env().build().await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(100).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let result = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&tx, false, false)
+        .await
+        .unwrap();
+    assert_object_funds_insufficient(result.transaction.effects.status(), "simulated transaction");
+}
+
+fn accumulator_recorded_as_read_only_root(effects: &TransactionEffects) -> bool {
+    effects
+        .unchanged_consensus_objects()
+        .iter()
+        .any(|(id, kind)| {
+            *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                && matches!(kind, UnchangedConsensusKind::ReadOnlyRoot(_))
+        })
+}
+
+#[sim_test]
+async fn test_object_funds_sufficient_in_execution() {
+    let mut test_env = object_funds_in_execution_test_env().build().await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "sufficient object-funds withdrawal should succeed: {:?}",
+        effects.status()
+    );
+    assert!(
+        accumulator_recorded_as_read_only_root(&effects),
+        "accumulator root should be recorded as ReadOnlyRoot with the in-execution check on: {:?}",
+        effects.unchanged_consensus_objects()
+    );
+}
+
+#[sim_test]
+async fn test_object_funds_effects_unchanged_when_flag_off() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(false);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(1000).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok());
+    assert!(
+        !accumulator_recorded_as_read_only_root(&effects),
+        "no ReadOnlyRoot should be recorded with the in-execution check off: {:?}",
+        effects.unchanged_consensus_objects()
+    );
+}
+
+#[sim_test]
+async fn test_object_funds_insufficient_in_execution() {
+    let mut test_env = object_funds_in_execution_test_env().build().await;
+
+    let sender = test_env.get_sender(0);
+    let (package_id, vault_id) = test_env.setup_funded_object_balance_vault(100).await;
+
+    let vault_oref = test_env.cluster.get_latest_object_ref(&vault_id).await;
+    let tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(package_id, vault_oref),
+            vec![(500, sender)],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert_object_funds_insufficient(effects.status(), "executed transaction");
+}
+
+fn accumulator_read_only_root_version(effects: &TransactionEffects) -> Option<SequenceNumber> {
+    effects
+        .unchanged_consensus_objects()
+        .iter()
+        .find_map(|(id, kind)| match kind {
+            UnchangedConsensusKind::ReadOnlyRoot((version, _))
+                if *id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
+            {
+                Some(*version)
+            }
+            _ => None,
+        })
+}
+
+#[sim_test]
+async fn test_object_funds_unsettled_withdraws_same_commit() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_object_funds_withdraw_for_testing(true);
+            cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            cfg.set_record_net_unsettled_object_withdraws_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender0 = test_env.get_sender(0);
+    let sender1 = test_env.get_sender(1);
+
+    let tx = test_env
+        .tx_builder(sender0)
+        .publish_examples("object_balance")
+        .await
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    let package_id = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| owner.is_immutable())
+        .unwrap()
+        .0
+        .0;
+
+    let tx = test_env
+        .tx_builder(sender0)
+        .move_call(package_id, "object_balance", "new_shared", vec![])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    let (vault_ref, vault_owner) = effects.created().into_iter().next().unwrap();
+    let vault_id = vault_ref.0;
+    let Owner::Shared {
+        initial_shared_version,
+    } = vault_owner
+    else {
+        panic!("vault must be shared, got {vault_owner:?}");
+    };
+
+    let fund_vault = |test_env: &TestEnv, amount: u64| {
+        let gas = test_env.get_sender_and_gas(0).1;
+        test_env
+            .tx_builder(sender0)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, vault_id.into())])
+            .build()
+    };
+    let withdraw_tx = |test_env: &TestEnv, sender: SuiAddress, amount: u64| {
+        test_env
+            .tx_builder(sender)
+            .transfer_sui_to_address_balance(
+                FundSource::object_fund_shared(package_id, vault_id, initial_shared_version),
+                vec![(amount, sender)],
+            )
+            .build()
+    };
+
+    let tx = fund_vault(&test_env, 1000);
+    test_env.exec_tx_directly(tx).await.unwrap();
+    test_env.trigger_reconfiguration().await;
+
+    let mut executed_digests = vec![];
+    let mut settled = 1000u64;
+
+    let mut same_accumulator_version = false;
+    for _ in 0..10 {
+        let tx0 = withdraw_tx(&test_env, sender0, 600);
+        let tx1 = withdraw_tx(&test_env, sender1, 600);
+        let results = test_env
+            .cluster
+            .sign_and_execute_txns_in_soft_bundle(&[tx0, tx1])
+            .await
+            .unwrap();
+        test_env.update_all_gas().await;
+
+        let successes = results.iter().filter(|(_, fx)| fx.status().is_ok()).count();
+        assert_eq!(successes, 1, "the settled balance covers exactly one 600");
+        let failed_status = results
+            .iter()
+            .find(|(_, fx)| fx.status().is_err())
+            .map(|(_, fx)| fx.status())
+            .unwrap();
+        assert_object_funds_insufficient(failed_status, "same-commit overdraw");
+        settled -= 600;
+        executed_digests.extend(results.iter().map(|(digest, _)| *digest));
+
+        let v0 = accumulator_read_only_root_version(&results[0].1)
+            .expect("withdrawal must record the accumulator root read");
+        let v1 = accumulator_read_only_root_version(&results[1].1)
+            .expect("withdrawal must record the accumulator root read");
+        if v0 == v1 {
+            same_accumulator_version = true;
+            break;
+        }
+        let tx = fund_vault(&test_env, 600);
+        test_env.exec_tx_directly(tx).await.unwrap();
+        settled += 600;
+    }
+    assert!(
+        same_accumulator_version,
+        "withdrawals never landed in the same consensus commit"
+    );
+
+    let tx = fund_vault(&test_env, 1000 - settled);
+    test_env.exec_tx_directly(tx).await.unwrap();
+    settled = 1000;
+    let tx0 = withdraw_tx(&test_env, sender0, 400);
+    let tx1 = withdraw_tx(&test_env, sender1, 400);
+    let results = test_env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&[tx0, tx1])
+        .await
+        .unwrap();
+    test_env.update_all_gas().await;
+    for (digest, fx) in &results {
+        assert!(
+            fx.status().is_ok(),
+            "both fitting withdrawals must succeed, got: {:?}",
+            fx.status()
+        );
+        executed_digests.push(*digest);
+    }
+    settled -= 800;
+
+    let tx = withdraw_tx(&test_env, sender0, settled);
+    let (digest, fx) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        fx.status().is_ok(),
+        "spending the exact remaining balance must succeed, got: {:?}",
+        fx.status()
+    );
+    executed_digests.push(digest);
+
+    let fullnode = test_env.cluster.spawn_new_fullnode().await.sui_node;
+    fullnode
+        .state()
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects("", &executed_digests)
+        .await;
 }

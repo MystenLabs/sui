@@ -12,7 +12,9 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::{
+    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, UnsettledObjectFundsRead,
+};
 use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
@@ -31,7 +33,7 @@ use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -141,6 +143,8 @@ pub struct TemporaryStore<'backing> {
     /// digest) at which they were read.
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
+
+    unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -156,6 +160,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
+        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
     ) -> Self {
         let post_execution_check_inputs =
             PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
@@ -168,6 +173,7 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             system_object_versions,
             post_execution_check_inputs,
+            unsettled_object_funds,
         )
     }
 
@@ -188,6 +194,7 @@ impl<'backing> TemporaryStore<'backing> {
                 is_genesis: true,
                 ..Default::default()
             },
+            None,
         )
     }
 
@@ -200,6 +207,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         post_execution_check_inputs: PostExecutionCheckInputs,
+        unsettled_object_funds: Option<&'backing dyn UnsettledObjectFundsRead>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -243,6 +251,7 @@ impl<'backing> TemporaryStore<'backing> {
             invariants: InvariantChecker::default(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
+            unsettled_object_funds,
         }
     }
 
@@ -273,6 +282,10 @@ impl<'backing> TemporaryStore<'backing> {
             .borrow_mut()
             .insert(*object_id, (object.version(), object.digest()));
         Some(object)
+    }
+
+    pub fn unsettled_object_funds(&self) -> Option<&dyn UnsettledObjectFundsRead> {
+        self.unsettled_object_funds
     }
 
     // Helpers to access private fields
@@ -722,6 +735,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             loaded_system_objects,
+            unsettled_object_funds,
             // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
@@ -743,6 +757,7 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             system_object_versions,
             loaded_system_objects,
+            unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
         };
@@ -1181,6 +1196,32 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             receive_object_at_version,
             epoch_id,
         )
+    }
+
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
+        let required_version = self
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
+            .version();
+
+        let settled = AccumulatorRootValue::load(self, Some(required_version), owner, type_)?
+            .and_then(|value| value.as_u128())
+            .unwrap_or(0);
+
+        let unsettled = match self.unsettled_object_funds {
+            Some(reader) => reader.get_unsettled_object_withdraw(
+                &AccumulatorRootValue::get_field_id(owner, type_)?,
+                required_version,
+            ),
+            None => 0,
+        };
+        settled.checked_sub(unsettled).ok_or_else(|| {
+            mysten_common::debug_fatal!(
+                "unsettled object withdrawals {unsettled} exceed settled balance {settled} \
+                 for owner {owner} type {type_}"
+            );
+            sui_types::error::SuiErrorKind::ExecutionInvariantViolation.into()
+        })
     }
 }
 
