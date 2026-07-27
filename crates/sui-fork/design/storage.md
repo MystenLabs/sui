@@ -59,6 +59,17 @@ chain identifier (the framework table seeded at open, derived from the fork chec
 when absent) and the highest indexed checkpoint (the indexer watermark, with the highest
 persisted checkpoint standing in before the first watermark is written).
 
+Events are the one entry in that list whose correctness is borrowed rather than intrinsic.
+`get_events` reads the rpc-store and stops there, but a pre-fork transaction's events reach
+that store only because `fetch_and_save_transaction` pulled them in alongside the
+transaction row. What makes the stock read sufficient is an ordering property of the
+caller: `sui-rpc-api` resolves a transaction, then its effects, then its events, and it
+does so unconditionally — the read mask governs rendering, not resolution — so the fork's
+transaction policy has always run by the time the events read happens. Nothing enforces
+that ordering from this crate. Were an events-by-digest entrypoint added upstream, or the
+resolution order changed, pre-fork transactions would report *no* events rather than
+missing ones — a wrong answer shaped like a valid one.
+
 Latest-semantics reads are why that routing exists at all. The stock reader
 answers `get_object` without a version by reverse-scanning the `objects` column family,
 which is only correct when the version history is complete. The fork's history is sparse:
@@ -181,3 +192,16 @@ being consulted. This affects `read_child_object` on both the RPC and executor p
 fix direction is to short-circuit only on live-state authority or an authoritative
 tombstone, and otherwise merge the remote `RootVersion(bound)` result with the local
 candidate by maximum version.
+
+Pre-fork history cannot be *enumerated*, only looked up. `ListEvents` and
+`ListTransactions` drive off the event bitmap and ledger tx-seq index families, which the
+embedded indexer writes and which therefore begin one checkpoint after the fork point. A
+scan over a range predating the fork finds no rows and returns an empty stream rather than
+an error — silence a client reads as "nothing matched" rather than "not available here."
+Any filtered scan inherits the same limit, since filters are evaluated against the
+bitmaps. Closing this needs the treatment objects, transactions, and checkpoints already
+get — resolve from the remote, persist what came back — but in the inventory shape rather
+than the point-read one: the client asks by checkpoint range and filter, not by a key the
+fork can hand to a point lookup, so the fallback has to be a bounded, checkpoint-pinned
+remote enumeration that backfills the index families behind a completion marker, the way
+owner-scoped reads already work.
