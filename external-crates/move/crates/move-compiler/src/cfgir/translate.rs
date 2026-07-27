@@ -61,7 +61,10 @@ enum ConstantEntry {
     /// Failed to fold to a value; an error was already reported at the definition
     Failed,
     /// Folded; the value is in the shared constant value map
-    Defined { signature: Box<H::BaseType> },
+    Defined {
+        loc: Loc,
+        signature: Box<H::BaseType>,
+    },
 }
 
 pub(super) struct Context<'env> {
@@ -130,9 +133,17 @@ impl<'env> Context<'env> {
             return Some(*copy_name);
         }
         match self.constant_defs.get_key_value(&(m, c)) {
-            Some((_, ConstantEntry::Defined { signature })) => {
+            Some((_, ConstantEntry::Defined { loc, signature })) => {
+                let defined_loc = *loc;
                 let signature = (**signature).clone();
-                Some(self.synthesize_constant_copy(constant_values, m, c, signature, use_loc))
+                Some(self.synthesize_constant_copy(
+                    constant_values,
+                    m,
+                    c,
+                    signature,
+                    defined_loc,
+                    use_loc,
+                ))
             }
             Some(((_, defined), ConstantEntry::Failed)) => {
                 let defined_loc = defined.0.loc;
@@ -166,7 +177,8 @@ impl<'env> Context<'env> {
         m: ModuleIdent,
         c: ConstantName,
         signature: H::BaseType,
-        first_use: Loc,
+        defined_loc: Loc,
+        use_loc: Loc,
     ) -> ConstantName {
         let value = constant_values
             .get(&(m, c))
@@ -177,8 +189,8 @@ impl<'env> Context<'env> {
             .dependency_order
             .expect("ICE typed module with no dependency order");
         let symbol = format!("_{}_{}_{}", dep_order, m.value.module, c).into();
-        // the first-use loc keeps the using module's source map within its own file
-        let copy_name = ConstantName(sp(first_use, symbol));
+        // the copy carries the original definition's loc so tooling points at the definition
+        let copy_name = ConstantName(sp(defined_loc, symbol));
         let cdef = G::Constant {
             warning_filter: empty_filter_scope(),
             index: {
@@ -187,7 +199,7 @@ impl<'env> Context<'env> {
                 index
             },
             attributes: UniqueMap::new(),
-            loc: first_use,
+            loc: defined_loc,
             signature,
             value: Some(move_value_from_value(value.clone())),
         };
@@ -197,7 +209,7 @@ impl<'env> Context<'env> {
             .any(|(name, _)| *name == copy_name)
         {
             self.add_diag(ice!((
-                first_use,
+                use_loc,
                 format!("mangled constant copy name collision on '{}'", copy_name)
             )));
         } else {
@@ -566,6 +578,7 @@ fn constant(
             context.constant_defs.insert(
                 (module, name),
                 ConstantEntry::Defined {
+                    loc,
                     signature: Box::new(signature.clone()),
                 },
             );
