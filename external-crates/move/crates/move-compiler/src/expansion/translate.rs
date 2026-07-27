@@ -650,6 +650,20 @@ pub(super) enum ValueError {
     InvalidHexString {
         error: hex_string::HexstringError,
     },
+    // A '-'-prefixed literal (from a match pattern) with an unsigned type suffix, e.g. '-1u8'.
+    NegativeUnsigned {
+        loc: Loc,
+    },
+    // A '-'-prefixed literal (from a match pattern) with no type suffix; the target type cannot
+    // be inferred at expansion time.
+    NegativeUntyped {
+        loc: Loc,
+    },
+    // An internal invariant was broken; reported through the `ice!` machinery.
+    Ice {
+        loc: Loc,
+        msg: &'static str,
+    },
 }
 
 impl ValueError {
@@ -669,6 +683,24 @@ impl ValueError {
             ),
             ValueError::InvalidByteString { error } => error.into_diagnostic(),
             ValueError::InvalidHexString { error } => error.into_diagnostic(),
+            ValueError::NegativeUnsigned { loc } => diag!(
+                TypeSafety::BuiltinOperation,
+                (loc, "Invalid argument to '-'"),
+                (
+                    loc,
+                    "Negation is only valid for signed integer types: 'i8', 'i16', 'i32', \
+                     'i64', 'i128', 'i256'"
+                ),
+            ),
+            ValueError::NegativeUntyped { loc } => diag!(
+                Syntax::InvalidNumber,
+                (
+                    loc,
+                    "Invalid number literal. Negative literals in match patterns require an \
+                     explicit signed integer type suffix, e.g. '-1i8'"
+                ),
+            ),
+            ValueError::Ice { loc, msg } => ice!((loc, msg)),
         }
     }
 }
@@ -3797,7 +3829,11 @@ fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError>
     } else if let Some(num) = s.strip_suffix(BT::I_8) {
         parse_signed!(num, parse_i8, I8, "'i8'")
     } else {
-        panic!("ICE expected signed integer suffix")
+        // Callers guard with `has_signed_suffix`, so this is unreachable.
+        Err(ValueError::Ice {
+            loc,
+            msg: "expected a signed integer suffix on the literal",
+        })
     }
 }
 
@@ -3827,7 +3863,11 @@ fn unsigned_num(loc: Loc, s: &str) -> Result<E::Value_, ValueError> {
     } else if let Some(num) = s.strip_suffix(BT::U_8) {
         parse_unsigned!(num, parse_u8, U8, "'u8'")
     } else {
-        panic!("ICE expected unsigned integer suffix")
+        // Callers guard with `has_unsigned_suffix`, so this is unreachable.
+        Err(ValueError::Ice {
+            loc,
+            msg: "expected an unsigned integer suffix on the literal",
+        })
     }
 }
 
@@ -3884,6 +3924,19 @@ pub(super) fn value_result(
             Ok(EV::Address(top_level_address(
                 context, /* suggest_declaration */ true, addr,
             )))
+        }
+        PV::Num(ref s) if s.starts_with('-') => {
+            // A leading '-' only reaches expansion from match patterns, where the parser folds
+            // the '-' into the literal token. Expression negation is folded in `exp` (see the
+            // `PE::UnaryExp` case).
+            let num = &s[1..];
+            if has_signed_suffix(num) {
+                signed_num(loc, num, /* negated */ true).map_err(|e| vec![e])
+            } else if has_unsigned_suffix(num) {
+                Err(vec![ValueError::NegativeUnsigned { loc }])
+            } else {
+                Err(vec![ValueError::NegativeUntyped { loc }])
+            }
         }
         PV::Num(ref s) if has_unsigned_suffix(s) => unsigned_num(loc, s).map_err(|e| vec![e]),
         PV::Num(ref s) if has_signed_suffix(s) => {

@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/development/signed_ints/invalid/signed_int_match_missing_negative_arm.move:8:16
+  │
+8 │         match (x) {
+  │                ^ Pattern '_0' not covered
+  │
+  = When '_0' is not -128, -1, or 0
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/development/signed_ints/invalid/signed_int_match_missing_negative_arm.move:16:16
+   │
+16 │         match (x) {
+   │                ^ Pattern '_0' not covered
+   │
+   = When '_0' is not -1

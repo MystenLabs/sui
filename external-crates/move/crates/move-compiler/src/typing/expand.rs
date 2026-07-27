@@ -505,6 +505,10 @@ fn inferred_numerical_value(
         None
     } else if negated {
         use move_core_types::i256::I256;
+        // `value` is the literal's magnitude. Truncate it to the unsigned twin of the target
+        // width, wrapping-negate to get the two's-complement bit pattern, and reinterpret as
+        // signed. Wrapping is what makes MIN work, e.g. for `-128i8`:
+        // magnitude 128 -> u8 0x80 -> wrapping_neg 0x80 -> as i8 -128.
         let value_ = match bt {
             BT::I8 => Value_::I8(value.down_cast_lossy::<u8>().wrapping_neg() as i8),
             BT::I16 => Value_::I16(value.down_cast_lossy::<u16>().wrapping_neg() as i16),

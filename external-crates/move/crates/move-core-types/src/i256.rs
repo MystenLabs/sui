@@ -237,6 +237,7 @@ impl MulAssign for I256 {
     }
 }
 
+// Panics on division by zero and on overflow (`MIN / -1`). Use `checked_div` to detect those.
 impl Div for I256 {
     type Output = Self;
 
@@ -251,6 +252,7 @@ impl DivAssign for I256 {
     }
 }
 
+// Panics on division by zero and on overflow (`MIN % -1`). Use `checked_rem` to detect those.
 impl Rem for I256 {
     type Output = Self;
 
@@ -410,12 +412,24 @@ impl I256 {
         Self(self.0.wrapping_neg())
     }
 
-    /// Downcast to a smaller signed type. The value is truncated (low 128 bits reinterpreted).
-    /// T must be at most i128.
+    /// Downcast to a smaller signed type by truncating to the target's width and reinterpreting
+    /// the low bits as two's complement, mirroring `U256::down_cast_lossy`'s pure-bit-truncation
+    /// contract (e.g., `I256::from(200).down_cast_lossy::<i8>() == -56`).
+    /// T must be at most i128. Never panics for such targets.
     pub fn down_cast_lossy<T: TryFrom<i128>>(self) -> T {
+        // Truncate to the low 128 bits, then sign-extend from the target's width so the result
+        // always fits in T.
         let low = self.0.as_i128();
-        match T::try_from(low) {
+        let target_bits = (size_of::<T>() * 8) as u32;
+        let truncated = if target_bits < 128 {
+            let shift = 128 - target_bits;
+            (low << shift) >> shift
+        } else {
+            low
+        };
+        match T::try_from(truncated) {
             Ok(v) => v,
+            // Unreachable for signed targets of at most 128 bits.
             Err(_) => panic!("Fatal! Downcast failed"),
         }
     }
@@ -987,9 +1001,9 @@ mod tests {
         assert_eq!(neg.down_cast_lossy::<i128>(), -5i128);
     }
 
-    // The down_cast first truncates I256 -> i128 (low 128 bits) and then `TryFrom<i128>` checks
-    // whether the result fits the destination type. These tests pin the wrap behavior of those
-    // two steps so it's clear what crossing each width boundary returns.
+    // The down_cast truncates I256 to the target's width and reinterprets the low bits as two's
+    // complement (matching `U256::down_cast_lossy`). These tests pin the wrap behavior so it's
+    // clear what crossing each width boundary returns.
     #[test]
     fn down_cast_lossy_i128_wrap() {
         // i128::MAX + 1 == 2^127 — low 128 bits become i128::MIN (high bit set).
@@ -1010,10 +1024,42 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Downcast failed")]
-    fn down_cast_lossy_to_i8_panics_when_low_bits_out_of_range() {
-        // Low 128 bits = 200, which doesn't fit in i8.
-        let _ = I256::from(200i32).down_cast_lossy::<i8>();
+    fn down_cast_lossy_truncates_out_of_range_values() {
+        // 200 == 0xC8; as an i8 bit pattern that is -56.
+        assert_eq!(I256::from(200i32).down_cast_lossy::<i8>(), -56i8);
+        // -200 == ...FF38; low byte 0x38 == 56.
+        assert_eq!(I256::from(-200i32).down_cast_lossy::<i8>(), 56i8);
+    }
+
+    #[test]
+    fn down_cast_lossy_truncation_per_width() {
+        // One past each target's MAX truncates to the target's MIN, per width.
+        assert_eq!(I256::from(0x80i16).down_cast_lossy::<i8>(), i8::MIN);
+        assert_eq!(I256::from(0x8000i32).down_cast_lossy::<i16>(), i16::MIN);
+        assert_eq!(
+            I256::from(0x8000_0000i64).down_cast_lossy::<i32>(),
+            i32::MIN
+        );
+        assert_eq!(
+            I256::from(0x8000_0000_0000_0000i128).down_cast_lossy::<i64>(),
+            i64::MIN
+        );
+
+        // Bits above the target width are discarded entirely.
+        assert_eq!(I256::from(0x1_2345i32).down_cast_lossy::<i16>(), 0x2345i16);
+
+        // MIN's only set bit is bit 255, so every narrower target truncates to zero.
+        assert_eq!(I256::min_value().down_cast_lossy::<i8>(), 0i8);
+        assert_eq!(I256::min_value().down_cast_lossy::<i64>(), 0i64);
+
+        // MAX's low bits are all ones, so every narrower target truncates to -1.
+        assert_eq!(I256::max_value().down_cast_lossy::<i8>(), -1i8);
+        assert_eq!(I256::max_value().down_cast_lossy::<i64>(), -1i64);
+
+        // In-range values (including each target's own MIN) are preserved.
+        assert_eq!(I256::from(i8::MIN).down_cast_lossy::<i8>(), i8::MIN);
+        assert_eq!(I256::from(i64::MIN).down_cast_lossy::<i64>(), i64::MIN);
+        assert_eq!(I256::from(i128::MIN).down_cast_lossy::<i128>(), i128::MIN);
     }
 
     // Cast error kinds

@@ -36,6 +36,34 @@ module 0x42::m {
     // Constant folding with cast between signed types
     const CAST_UP: i64 = (1i8 as i64);
     const CAST_DOWN: i8 = (42i64 as i8);
+    const CAST_UP_NEG: i64 = (-1i8 as i64);
+    const CAST_DOWN_NEG: i8 = (-42i64 as i8);
+
+    // Division and modulus with negative operands truncate toward zero (matching the VM):
+    // -7 / 2 == -3 (not floor's -4), -7 % 2 == -1 (not 1), 7 / -2 == -3, 7 % -2 == 1.
+    const DIV_NEG_LHS: i8 = -7i8 / 2i8;
+    const MOD_NEG_LHS: i8 = -7i8 % 2i8;
+    const DIV_NEG_RHS: i8 = 7i8 / -2i8;
+    const MOD_NEG_RHS: i8 = 7i8 % -2i8;
+    const DIV_NEG_BOTH: i8 = -7i8 / -2i8;
+    const MOD_NEG_BOTH: i8 = -7i8 % -2i8;
+
+    // Truncation-direction pins: if folding ever switched to floor semantics, these would
+    // overflow at fold time and this file would fail with "cannot compute constant value".
+    // trunc: -7 / 2 == -3, and -3 - 125 == -128 fits; floor's -4 - 125 == -129 would not.
+    const DIV_TRUNC_PIN: i8 = (-7i8 / 2i8) - 125i8;
+    // trunc: -7 % 2 == -1, and 127 + -1 == 126 fits; floor's 127 + 1 == 128 would not.
+    const MOD_TRUNC_PIN: i8 = 127i8 + (-7i8 % 2i8);
+    // trunc: 7 % -2 == 1, and 1 + -128 == -127 fits; floor's -1 + -128 == -129 would not.
+    const MOD_TRUNC_PIN_RHS: i8 = (7i8 % -2i8) + (-128i8);
+
+    // MIN boundary folds that stay in range
+    const MIN_DIV_ONE: i8 = -128i8 / 1i8;
+    const MIN_MOD_NEG_TWO: i8 = -128i8 % -2i8;
+
+    // Inferred (unsuffixed) literals fold the same way once the type is known
+    const INFERRED_DIV_NEG: i8 = -7 / 2;
+    const INFERRED_MOD_NEG: i8 = -7 % 2;
 
     // i256 constant folding
     const ADD_I256: i256 = 10i256 + 20i256;
@@ -52,4 +80,12 @@ module 0x42::m {
     const SHR_I256: i256 = 256i256 >> 4u8;
     const CAST_I256: i256 = (1i8 as i256);
     const CAST_FROM_I256: i8 = (42i256 as i8);
+
+    // i256 negative-operand division and modulus (truncation toward zero)
+    const DIV_NEG_LHS_I256: i256 = -7i256 / 2i256;
+    const MOD_NEG_LHS_I256: i256 = -7i256 % 2i256;
+    const DIV_NEG_RHS_I256: i256 = 7i256 / -2i256;
+    const MOD_NEG_RHS_I256: i256 = 7i256 % -2i256;
+    const DIV_NEG_BOTH_I256: i256 = -7i256 / -2i256;
+    const MOD_NEG_BOTH_I256: i256 = -7i256 % -2i256;
 }
