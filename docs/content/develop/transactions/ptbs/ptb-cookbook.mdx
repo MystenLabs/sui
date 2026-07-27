@@ -1,0 +1,378 @@
+---
+title: PTB Cookbook
+sidebar_label: Cookbook
+description: >-
+  End-to-end TypeScript examples for common PTB patterns: sponsored
+  transactions, kiosk borrow/return, coin selection, and multi-recipient
+  transfers.
+keywords:
+  - ptb cookbook
+  - programmable transaction blocks
+  - sponsored transactions
+  - kiosk borrow_val
+  - coin selection
+  - multi-recipient transfer
+  - typescript SDK
+  - address balances
+goal:
+  description: >-
+    Reader can compose advanced PTB patterns including sponsored kiosk
+    operations, multi-recipient transfers, and mixed coin selection
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 500
+      label: Needs more content depth
+    - pattern: '```'
+      min: 4
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 3
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I combine sponsored transactions with kiosk operations?
+  - How do I send to multiple recipients in one PTB?
+  - How do I select coins from address balances in a PTB?
+  - How do I chain Move call results in a PTB?
+  - How do I do a kiosk borrow and return in one transaction?
+answer: >-
+  End-to-end TypeScript examples for common PTB patterns including sponsored
+  transactions, kiosk borrow/return, coin selection, and multi-recipient
+  transfers.
+---
+
+This page provides copy-paste TypeScript recipes for common PTB patterns. Each recipe is a complete, self-contained example.
+
+**Prerequisites:**
+- `@mysten/sui` installed (`npm install @mysten/sui`)
+- A configured `SuiClient` or `SuiGrpcClient`
+
+For PTB fundamentals, see [Building Transactions](/develop/transactions/ptbs/building-ptb). For project setup, see [TypeScript SDK PTB Template](/develop/transactions/ptbs/ts-sdk-ptb-template).
+
+## Multi-recipient transfer
+
+Split a coin and transfer portions to multiple recipients in a single atomic transaction. This is more efficient and cheaper than sending individual transactions.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiClient } from '@mysten/sui/client';
+
+const client = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' });
+
+const tx = new Transaction();
+
+const recipients = [
+  { address: '0xAlice...', amount: 1_000_000_000n }, // 1 SUI
+  { address: '0xBob...', amount: 500_000_000n },     // 0.5 SUI
+  { address: '0xCarol...', amount: 250_000_000n },    // 0.25 SUI
+];
+
+// Split the gas coin into one coin per recipient.
+const coins = tx.splitCoins(
+  tx.gas,
+  recipients.map((r) => tx.pure('u64', r.amount)),
+);
+
+// Transfer each split coin to its recipient.
+recipients.forEach((r, i) => {
+  tx.transferObjects([coins[i]], tx.pure('address', r.address));
+});
+
+await client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
+```
+
+**Key points:**
+- `tx.splitCoins(tx.gas, amounts)` creates multiple coins from the gas coin in one command.
+- Each `tx.transferObjects` consumes one split coin, so no leftover objects are created.
+- All transfers succeed or fail atomically.
+
+## Sponsored transaction
+
+A sponsor pays gas on behalf of a user. The user builds the transaction logic, the sponsor provides gas, and both sign before submission.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiClient } from '@mysten/sui/client';
+
+const client = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' });
+
+// === User side ===
+
+// Build the transaction kind (no gas info yet).
+const tx = new Transaction();
+tx.moveCall({
+  target: '0xPACKAGE::module::do_something',
+  arguments: [tx.object('0xSomeObject')],
+});
+
+// Serialize only the transaction kind bytes for the sponsor.
+const kindBytes = await tx.build({ client, onlyTransactionKind: true });
+
+// === Sponsor side ===
+
+// Reconstruct the transaction from the kind bytes.
+const sponsoredTx = Transaction.fromKind(kindBytes);
+
+// Set the user as the sender, sponsor as the gas owner.
+sponsoredTx.setSender(userAddress);
+sponsoredTx.setGasOwner(sponsorAddress);
+sponsoredTx.setGasPayment(sponsorGasCoins); // Sponsor's coin objects
+
+// Build the full transaction bytes.
+const txBytes = await sponsoredTx.build({ client });
+
+// === Both sign ===
+
+// The sponsor signs first.
+const sponsorSig = await sponsorKeypair.signTransaction(txBytes);
+// The user signs second.
+const userSig = await userKeypair.signTransaction(txBytes);
+
+// === Submit ===
+
+const result = await client.executeTransaction({
+  transaction: txBytes,
+  signatures: [userSig.signature, sponsorSig.signature],
+});
+```
+
+**Key points:**
+- `onlyTransactionKind: true` strips gas info so the sponsor can provide it.
+- The sponsor sets `setGasOwner` to their own address and provides their gas coins.
+- Both signatures are required when executing.
+
+For the conceptual model, see [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
+
+### Sponsored transaction with address balance gas
+
+The sponsor can also pay gas from their SUI address balance instead of providing specific coin objects. Address-balance gas requires additional configuration (a `ValidDuring` expiration for replay protection and a nonce). Read the [full requirements for address-balance gas payment](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances) before using this pattern in production.
+
+```typescript
+const sponsoredTx = Transaction.fromKind(kindBytes);
+sponsoredTx.setSender(userAddress);
+sponsoredTx.setGasOwner(sponsorAddress);
+
+// Empty gas payment array tells the protocol to deduct gas from the
+// sponsor's SUI address balance. The SDK sets the ValidDuring expiration
+// and nonce automatically when you build with a connected client.
+sponsoredTx.setGasPayment([]);
+
+// Building with a connected client resolves the expiration and nonce.
+const txBytes = await sponsoredTx.build({ client });
+```
+
+## Kiosk borrow, mutate, and return
+
+Borrow an item from a kiosk, perform an operation on it, and return it in one PTB. The `borrow_val` / `return_val` pattern uses a hot-potato `Borrow` object that enforces the return within the same transaction.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+const itemType = '0xPACKAGE::module::MyItem';
+const kioskId = '0xKioskObjectId';
+const kioskCapId = '0xKioskOwnerCapId';
+const itemId = '0xItemObjectId';
+
+// Borrow the item. Returns [item, borrowHotPotato].
+const [item, borrow] = tx.moveCall({
+  target: '0x2::kiosk::borrow_val',
+  typeArguments: [itemType],
+  arguments: [tx.object(kioskId), tx.object(kioskCapId), tx.pure('address', itemId)],
+});
+
+// Mutate the borrowed item (call your custom function).
+tx.moveCall({
+  target: '0xPACKAGE::module::enhance_item',
+  arguments: [item],
+});
+
+// Return the item to the kiosk (consumes the hot potato).
+tx.moveCall({
+  target: '0x2::kiosk::return_val',
+  typeArguments: [itemType],
+  arguments: [tx.object(kioskId), item, borrow],
+});
+
+await client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
+```
+
+**Key points:**
+- `borrow_val` returns the item and a `Borrow` hot potato that must be consumed in the same PTB.
+- `return_val` consumes the `Borrow` and puts the item back. If you forget to call it, the transaction fails.
+- Use `borrow_val` when you need to pass the item by value to another Move function. For in-place mutations, consider `borrow_mut` instead.
+
+For more kiosk operations, see [Sui Kiosk](/onchain-finance/kiosk/kiosk-example).
+
+## Sponsored kiosk purchase
+
+Combine sponsorship with a kiosk purchase: the buyer selects and pays for the item, while a sponsor covers the gas fee.
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+// === Buyer side ===
+
+const tx = new Transaction();
+
+const itemType = '0xPACKAGE::module::MyItem';
+const kioskId = '0xSellerKioskId';
+const itemId = '0xItemObjectId';
+const price = 5_000_000_000n; // 5 SUI
+const buyerKioskId = '0xBuyerKioskId';
+const transferPolicyId = '0xTransferPolicyId';
+
+// Withdraw from the buyer's address balance, then redeem to get a Coin<SUI>.
+// Do NOT use tx.gas — after sponsorship, the gas coin belongs to the sponsor.
+const [paymentCoin] = tx.moveCall({
+  target: '0x2::coin::redeem_funds',
+  typeArguments: ['0x2::sui::SUI'],
+  arguments: [tx.withdrawal({ amount: price })],
+});
+
+// Purchase the item from the seller's kiosk.
+const [item, transferRequest] = tx.moveCall({
+  target: '0x2::kiosk::purchase',
+  typeArguments: [itemType],
+  arguments: [tx.object(kioskId), tx.pure('address', itemId), paymentCoin],
+});
+
+// Resolve the transfer policy (example: a simple rule that just needs confirmation).
+tx.moveCall({
+  target: '0xPOLICY_PACKAGE::my_rule::prove',
+  typeArguments: [itemType],
+  arguments: [tx.object(transferPolicyId), transferRequest],
+});
+
+// Confirm the transfer policy is satisfied.
+tx.moveCall({
+  target: '0x2::transfer_policy::confirm_request',
+  typeArguments: [itemType],
+  arguments: [tx.object(transferPolicyId), transferRequest],
+});
+
+// Place the item in the buyer's kiosk.
+tx.moveCall({
+  target: '0x2::kiosk::place',
+  typeArguments: [itemType],
+  arguments: [tx.object(buyerKioskId), tx.object('0xBuyerKioskCap'), item],
+});
+
+// Serialize kind bytes for the sponsor.
+const kindBytes = await tx.build({ client, onlyTransactionKind: true });
+
+// === Sponsor side ===
+
+const sponsoredTx = Transaction.fromKind(kindBytes);
+sponsoredTx.setSender(buyerAddress);
+sponsoredTx.setGasOwner(sponsorAddress);
+sponsoredTx.setGasPayment(sponsorGasCoins);
+
+// Both sign and submit (same pattern as the sponsored transaction recipe).
+```
+
+**Key points:**
+- The buyer's payment comes from their address balance through `tx.withdrawal()` + `coin::redeem_funds`, not from `tx.gas`. In a sponsored transaction, `tx.gas` belongs to the sponsor.
+- Transfer policy resolution happens within the same PTB, ensuring atomicity.
+- The sponsor only covers gas. The purchase price comes from the buyer's address balance.
+
+## Coin selection from mixed sources
+
+Sui supports both coin objects and address balances. You can explicitly choose which source to use in a PTB.
+
+### Send from address balances
+
+Use `tx.balance()` to create a `Balance<T>` input from the sender's address balance, then pass it to `balance::send_funds`:
+
+```typescript
+const tx = new Transaction();
+
+// Send 1 SUI from the sender's address balance to a recipient's address balance.
+tx.moveCall({
+  target: '0x2::balance::send_funds',
+  typeArguments: ['0x2::sui::SUI'],
+  arguments: [
+    tx.balance({ balance: 1_000_000_000n }),
+    tx.pure('address', recipientAddress),
+  ],
+});
+```
+
+### From specific coin objects
+
+Use `tx.splitCoins` with a specific coin object when you need precise control:
+
+```typescript
+const tx = new Transaction();
+
+// Split from a specific coin object (not the gas coin).
+const [coin] = tx.splitCoins(tx.object('0xSpecificCoinId'), [tx.pure('u64', 500_000_000n)]);
+tx.transferObjects([coin], tx.pure('address', recipientAddress));
+```
+
+### Withdraw and use in Move calls
+
+Use `tx.withdrawal()` to create a withdrawal input, then redeem it through `coin::redeem_funds` to get a `Coin<T>` you can pass to Move functions:
+
+```typescript
+const tx = new Transaction();
+
+// Withdraw from address balance and redeem to get a Coin<SUI>.
+const [coin] = tx.moveCall({
+  target: '0x2::coin::redeem_funds',
+  typeArguments: ['0x2::sui::SUI'],
+  arguments: [tx.withdrawal({ amount: 1_000_000_000 })],
+});
+
+// Pass the coin to a Move function that expects Coin<SUI>.
+tx.moveCall({
+  target: '0xPACKAGE::module::deposit',
+  arguments: [coin],
+});
+```
+
+For more on address balances, see [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
+
+## Batch Move calls with result chaining
+
+Each PTB command returns a reference to its result, which you can pass as input to subsequent commands. This lets you compose complex multi-step operations in a single atomic transaction.
+
+```typescript
+const tx = new Transaction();
+
+// Step 1: Create a new game character.
+const [character] = tx.moveCall({
+  target: '0xGAME::character::create',
+  arguments: [tx.pure('string', 'Hero')],
+});
+
+// Step 2: Mint a sword and equip it to the character.
+const [sword] = tx.moveCall({
+  target: '0xGAME::items::mint_sword',
+  arguments: [tx.pure('u64', 100)], // attack power
+});
+
+tx.moveCall({
+  target: '0xGAME::character::equip',
+  arguments: [character, sword],
+});
+
+// Step 3: Transfer the character to the player.
+tx.transferObjects([character], tx.pure('address', playerAddress));
+
+await client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
+```
+
+**Key points:**
+- Results from `tx.moveCall` are `TransactionArgument` references that can be passed to any subsequent command.
+- If a Move function returns multiple values, destructure them: `const [a, b] = tx.moveCall(...)`.
+- All commands execute in order within the same PTB. If any command fails, the entire transaction reverts.
+- You can mix `moveCall`, `splitCoins`, `transferObjects`, and other commands freely.

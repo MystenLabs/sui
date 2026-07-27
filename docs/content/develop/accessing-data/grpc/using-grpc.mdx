@@ -201,7 +201,7 @@ $ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b
 $ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <FULL_NODE_URL> sui.rpc.v2.StateService/ListDynamicFields
 ```
 
-### List transactions matching a filter
+### List transactions matching a filter {#ledger-history-list-apis}
 
 Use `LedgerService.ListTransactions` to query transactions over a checkpoint range with a `TransactionFilter`. The service returns a server-side stream.
 
@@ -307,6 +307,22 @@ $ buf curl --protocol grpc \
   --timeout 5m
 ```
 
+
+### Pagination with watermarks {#list-api-pagination}
+
+Every response frame in a list API stream includes a `watermark` with a `cursor` that records the server's scan position. When the stream ends, the final frame contains a `query_end` with a `reason` field indicating why the server stopped:
+
+| Reason | Meaning | Action |
+|--------|---------|--------|
+| `ITEM_LIMIT` | Returned the requested number of items. | Resume from the latest `watermark.cursor`. |
+| `SCAN_LIMIT` | The server's internal scan budget was exhausted before finding enough results. Common with sparse filters. | Resume from the latest `watermark.cursor`. The server made progress even if it returned fewer items than requested. |
+| `LEDGER_TIP` | Reached the current tip of the chain (no `end_checkpoint` was specified). | No more results available yet. Poll later or switch to a `Subscribe*` stream. |
+| `CHECKPOINT_BOUND` | Reached the `end_checkpoint` specified in the request. | No more results in this range. |
+| `CURSOR_BOUND` | Reached a cursor-derived boundary. | Resume from the latest `watermark.cursor`. |
+
+To paginate, take the `cursor` from the latest `watermark` in the stream and pass it as `options.after` (for ascending order) or `options.before` (for descending order) in your next request. The `watermark` also tells you how much of the checkpoint range has been covered, which is useful when a sparse filter produces few or no matching items.
+
+For operator-level configuration of these APIs (timeouts, item limits, scan budgets), see [Ledger history configuration](/operators/full-node/sui-full-node#ledger-history-configuration).
 
 ## Build gRPC clients
 

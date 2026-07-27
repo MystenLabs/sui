@@ -328,7 +328,6 @@ The same `read_mask` rules apply as for batch objects: the service respects only
 ## Query events
 
 JSON-RPC uses `suix_queryEvents` with filters such as `MoveModule`, `MoveEventType`, `Sender`, and `Transaction`. gRPC provides `LedgerService.ListEvents` for paginated, filtered historical queries and `SubscriptionService.SubscribeEvents` for live streaming with the same filters. You can also read events from a specific transaction.
-
 ### Events from a known transaction
 
 If you know the transaction digest, fetch the transaction with events included.
@@ -1035,7 +1034,7 @@ do {
 } while (cursor);
 ```
 
-### Fall back to the Archival Store for pruned data
+### Fall back to the archival store for pruned data
 
 A full node returns `NOT_FOUND` for data outside its retention window. Fall back to the [Archival Store](/develop/accessing-data/archival-store) for historical lookups:
 

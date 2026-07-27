@@ -130,6 +130,7 @@ export default {
             'develop/transactions/ptbs/building-ptb',
             'develop/transactions/ptbs/inputs-and-results',
             'develop/transactions/ptbs/ts-sdk-ptb-template',
+            'develop/transactions/ptbs/ptb-cookbook',
           ],
         },
         {

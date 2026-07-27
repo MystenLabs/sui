@@ -93,3 +93,95 @@ sui client ptb \
 ```
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />
+
+## Configure supply model
+
+Before calling `finalize`, you can configure the supply model for your currency. The Currency Standard supports three supply models:
+
+### Fixed supply
+
+Mint the total supply during initialization, then call `make_supply_fixed`. The `Currency` locks the `TreasuryCap`, and no further minting or burning is possible.
+
+<ImportContent source="examples/move/coin/sources/fixed_supply.move" mode="code" fun="init" noComments />
+
+### Burn-only (deflationary) supply
+
+Mint the initial supply, then call `make_supply_burn_only`. The `Currency` locks the `TreasuryCap` to prevent further minting, but the `Currency` object still allows burns.
+
+<ImportContent source="examples/move/coin/sources/deflationary_supply.move" mode="code" fun="init" noComments />
+
+To burn coins after initialization:
+
+```move
+public fun burn(currency: &mut Currency<BURN_ONLY_SUPPLY>, coin: Coin<BURN_ONLY_SUPPLY>) {
+    currency.burn(coin);
+}
+```
+
+### Uncontrolled supply (default)
+
+If you do not call `make_supply_fixed` or `make_supply_burn_only`, the supply remains uncontrolled. The `TreasuryCap` holder can mint and burn freely. This is the default behavior shown in the [OTW creation](#one-time-witness-creation) example above. (The [standard creation](#standard-creation-recommended) example calls `make_supply_burn_only`, so it is not uncontrolled.)
+
+## Create a regulated currency
+
+To create a currency with deny-list support, call `make_regulated` on the `CurrencyInitializer` before calling `finalize`. This returns a `DenyCapV2` that you use to manage the deny list.
+
+<ImportContent source="examples/move/coin/sources/regcoin_new.move" mode="code" tag="regulate" noComments />
+
+The `make_regulated` function takes a `bool` parameter controlling whether global pause is allowed. When `true`, the `DenyCapV2` holder can freeze all transfers of the token across the network. See [Regulated Tokens](/onchain-finance/fungible-tokens/regulated-tokens) for details on managing the deny list.
+
+## Mint and burn coins
+
+How you mint and burn depends on the supply model:
+
+**Uncontrolled supply:** The `TreasuryCap` holder mints and burns directly:
+
+```move
+// Mint new coins
+let coin = treasury_cap.mint(amount, ctx);
+
+// Burn coins
+treasury_cap.burn(coin);
+```
+
+**Burn-only supply:** You cannot mint because the `Currency` locks the `TreasuryCap`. Burn through the `Currency` object:
+
+```move
+currency.burn(coin);
+```
+
+**Fixed supply:** Neither minting nor burning is possible. The `Currency` locks the `TreasuryCap` and freezes the supply.
+
+## Manage metadata
+
+The `MetadataCap<T>` controls who can update the currency's name, description, and icon URL. The `finalize` function returns it.
+
+### Claim the metadata cap
+
+If you did not transfer the `MetadataCap` during initialization, or if you want to reclaim it from a shared `Currency`, use `claim_metadata_cap`:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="claim_metadata_cap" signatureOnly />
+
+### Update metadata
+
+The `MetadataCap` holder can update the currency's display information:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="set_name" signatureOnly />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="set_description" signatureOnly />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="set_icon_url" signatureOnly />
+
+### Freeze metadata
+
+To make metadata permanently immutable, delete the `MetadataCap`:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="delete_metadata_cap" signatureOnly />
+
+Once deleted, no one can update the currency's name, description, or icon URL.
+
+## Complete example
+
+The following example creates a non-OTW currency with a burn-only supply, mints the total supply, and transfers both the minted coins and the `MetadataCap` to the publisher:
+
+<ImportContent source="examples/move/coin/sources/non_otw_currency.move" mode="code" fun="new_currency" noComments />
