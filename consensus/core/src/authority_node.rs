@@ -3,7 +3,7 @@
 
 use std::{
     sync::{Arc, Weak},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use consensus_config::{
@@ -45,7 +45,10 @@ use crate::{
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
-    transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
+    transaction::{
+        TransactionClient, TransactionConsumer, TransactionConsumerPool, TransactionPool,
+        TransactionVerifier,
+    },
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -68,6 +71,9 @@ impl ConsensusAuthority {
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
+        // When provided, the proposer takes transactions from this pool and the
+        // `TransactionClient` submission path is unused. Only relevant for validator nodes.
+        transaction_pool: Option<Arc<dyn TransactionPool>>,
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         // A counter that keeps track of how many times the consensus authority has been booted while the process
@@ -87,6 +93,7 @@ impl ConsensusAuthority {
                     network_keypair,
                     clock,
                     transaction_verifier,
+                    transaction_pool,
                     commit_consumer,
                     registry,
                     boot_counter,
@@ -192,6 +199,7 @@ where
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
+        transaction_pool: Option<Arc<dyn TransactionPool>>,
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
@@ -265,8 +273,21 @@ where
 
         let (tx_client, tx_receiver, priority_tx_receiver) =
             TransactionClient::new(context.clone());
-        let tx_consumer =
-            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+        let transaction_pool: Arc<dyn TransactionPool> = match transaction_pool {
+            // With an external pool, the TransactionClient path is unused. The channel
+            // receiver is dropped so accidental client submissions fail fast instead of
+            // hanging.
+            Some(pool) => {
+                drop(tx_receiver);
+                drop(priority_tx_receiver);
+                pool
+            }
+            None => Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+                tx_receiver,
+                priority_tx_receiver,
+                context.clone(),
+            ))),
+        };
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
@@ -350,7 +371,7 @@ where
             Core::new_validator(
                 context.clone(),
                 leader_schedule,
-                tx_consumer,
+                transaction_pool,
                 transaction_vote_tracker.clone(),
                 block_manager,
                 commit_observer,
@@ -614,7 +635,20 @@ where
             network_manager,
         ));
 
-        let dag_state_owners = dag_state.strong_count();
+        // Canceled tasks should wait to report cancellation on next poll, but they report from
+        // their JoinHandles immediately under msim. Their futures and captured references are
+        // only dropped when the executor next processes the canceled tasks. Sleeping (instead
+        // of yielding) ensures this task resumes only after the pending drops have run.
+        // In production tokio, a canceled task's future is guaranteed to have been dropped when
+        // its JoinHandle resolves, so the loop exits on the first check.
+        let mut dag_state_owners = dag_state.strong_count();
+        for _ in 0..5 {
+            if dag_state_owners == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            dag_state_owners = dag_state.strong_count();
+        }
         if dag_state_owners != 0 {
             debug_fatal!(
                 "DagState still has {} owner(s) after stopping ConsensusAuthority",
@@ -728,6 +762,7 @@ mod tests {
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
+            None,
             commit_consumer,
             registry,
             0,
@@ -770,6 +805,7 @@ mod tests {
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
+            None,
             commit_consumer,
             registry,
             0,
@@ -886,6 +922,7 @@ mod tests {
             observer_network_keypair,
             Arc::new(Clock::default()),
             Arc::new(NoopTransactionVerifier {}),
+            None,
             observer_commit_consumer,
             Registry::new(),
             0,
@@ -1322,6 +1359,7 @@ mod tests {
             network_keypair,
             Arc::new(Clock::default()),
             Arc::new(txn_verifier),
+            None,
             commit_consumer,
             registry,
             boot_counter,

@@ -1,0 +1,128 @@
+---
+title: Integrating DeepBook Margin
+sidebar_label: Integration
+description: >-
+  How integrating DeepBook Margin differs from the spot path: the MarginManager,
+  MarginPool, and MarginRegistry object model, isolated per-asset pools, the
+  pool proxy trading path, permissionless liquidation, and the events to index.
+keywords:
+  - deepbook margin
+  - integration
+  - margin manager
+  - margin pool
+  - isolated margin
+  - pool proxy
+  - liquidation
+  - events
+  - balancemanager
+goal:
+  description: >-
+    Reader understands how integrating DeepBook Margin differs from the spot
+    path, across the object model, trading path, liquidation, and indexing.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How does integrating DeepBook Margin differ from spot?
+  - What is the MarginManager object model?
+  - How do I check whether a pool supports margin trading?
+  - What margin events should I index?
+answer: >-
+  A MarginManager wraps a BalanceManager and holds its deposit, withdraw, and
+  trade caps, so unlike spot, every action routes through the manager and orders
+  go through the pool proxy. Each manager is bound to one DeepBook pool and
+  borrows one side from one isolated MarginPool, valued through Pyth oracles.
+  Anyone can liquidate positions at the pool's liquidation risk ratio
+  through the margin liquidation vault. Index the MarginManager and MarginPool
+  events to track positions, loans, and liquidations.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Integrate margin trading
+    stage: Margin
+---
+
+DeepBook Margin builds on the spot order book, but integrating it is not the same job as integrating spot. The structural differences an integrator meets fall into five areas: the object model, the isolated lending pools, the trading path, liquidation, and the events to index. For the objects in isolation see [DeepBook Margin design](/onchain-finance/deepbook/deepbook-margin/design); for a hands-on run see the [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow).
+
+:::caution
+
+Margin trading borrows funds against collateral, and anyone can liquidate a borrowed position. Any position your integration opens is subject to the pool's risk parameters and permissionless liquidation. Read [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks) before building.
+
+:::
+
+## The margin object model
+
+Spot trading uses a `BalanceManager`: it holds your balances, you hold its `TradeCap`, and you trade a `Pool` directly. A single `BalanceManager` works across every pool.
+
+Margin wraps that. A `MarginManager` is a shared object that holds a `BalanceManager` inside itself, along with the caps that authorize action on it:
+
+<ImportContent source="packages/deepbook_margin/sources/margin_manager.move" mode="code" org="MystenLabs" repo="deepbookv3" struct="MarginManager" />
+
+Two consequences drive the rest of integration:
+
+- **You never hold the wrapped manager's caps.** The `deposit_cap`, `withdraw_cap`, and `trade_cap` live inside the `MarginManager`, which generates the trade proof that authorizes orders internally. So every deposit, withdraw, and trade goes through the `MarginManager`, not through the `BalanceManager` API you would use for spot.
+- **A manager is bound to one pool.** The `deepbook_pool` field fixes the manager to a single DeepBook pool, and `margin_pool_id` records the one margin pool a current loan is from. This is isolated margin, not a cross-pool account.
+
+## Isolated pools
+
+Each borrowable asset has exactly one `MarginPool`, and the `MarginRegistry` enforces that uniqueness. A `MarginManager` borrows from one side of its pool at a time, base or quote, so risk stays on a single axis. A DeepBook pool is tradeable on margin only when the registry has enabled it and mapped its base and quote margin pools.
+
+Before integrating against a pool, preflight it: confirm margin is enabled, resolve the two margin pool IDs a position can borrow from, and read the per-pool risk parameters. Do not assume a pool supports margin or hardcode its parameters.
+
+<ImportContent source="examples/deepbook-margin/src/integration.ts" mode="code" tag="describe-pool" />
+
+**Observe:** for an enabled pool such as `SUI_DBUSDC`, this returns `marginEnabled: true`, a base and a quote margin pool ID, and the risk parameters. At the time of writing the risk parameters read as a liquidation risk ratio of `1.1`, min borrow `1.2499`, min withdraw `2`, target `1.25`, and rewards of `0.02` (user) and `0.03` (pool). Treat those as example values and read them onchain: they are set per pool by governance and are not the protocol defaults. See [Risk ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio).
+
+## The trading path
+
+Margin orders do not use the spot order entry. They go through the **pool proxy**, which places the order on the DeepBook pool on the manager's behalf and enforces the risk checks that keep a borrow safe. The current entry points are the `_v2` functions (`place_limit_order_v2`, `place_market_order_v2`, and the reduce-only variants); the unsuffixed originals are deprecated, so integrate against the `_v2` functions only.
+
+Every pool proxy order, and every operation that values a position (borrow, withdraw, risk read), takes Pyth `PriceInfoObject` arguments and reverts on a price older than the pool's maximum age. Spot orders take no oracle. This is the largest day-to-day difference: a margin integration keeps price feeds fresh, and any valuing call fails if they are stale. See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
+
+To monitor a position's health, read its oracle-priced risk ratio:
+
+<ImportContent source="examples/deepbook-margin/src/risk.ts" mode="code" tag="read-risk" />
+
+## Liquidation from the integrator's view
+
+Anyone can liquidate any position your integration opens once its risk ratio falls to the pool's liquidation risk ratio. Liquidation is permissionless and, in the current deployment, runs through the separate `margin_liquidation` package: an entry callable by anyone checks eligibility with the registry, sources repay capital from a shared liquidation vault, and calls the manager's inner settlement to repay part of the debt and pay a reward out of the collateral, restoring the position to the target risk ratio. The [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#what-happens-if-you-do-nothing-and-the-price-moves-against-you) shows the onchain entry point, and [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks#how-liquidation-works) works the consequences through with numbers.
+
+For an integrator this means two things. First, no grace period protects the positions you build, so surface the risk ratio and its distance to the liquidation threshold to your users, and act early. Second, if you run a liquidator, it is a standard permissionless keeper: watch positions, supply oracles and repay capital, and receive the reward.
+
+## Events to index
+
+Margin activity emits its own events, distinct from the spot order events. The [DeepBook Margin Indexer](/onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer) exposes these through the public indexer; the names below are the onchain event structs to key on.
+
+- **Manager lifecycle** (`margin_manager`): `MarginManagerCreatedEvent`, `DepositCollateralEvent`, `WithdrawCollateralEvent`, `LoanBorrowedEvent`, `LoanRepaidEvent`, `LiquidationEvent`.
+- **Liquidation vault** (`margin_liquidation`): `LiquidationByVault`.
+- **Pool supply and borrow** (`margin_pool`): `MarginPoolCreated`, `AssetSupplied`, `AssetWithdrawn`, plus fee and referral events for suppliers.
+- **Registry and governance** (`margin_registry`): `DeepbookPoolRegistered`, `DeepbookPoolConfigUpdated`, `MaxPriceAgeUpdated`, `PriceToleranceUpdated`, `MinOpenRiskRatioUpdated`, and `CurrentPriceUpdated`. Watch these if your integration caches per-pool risk parameters, because governance can change them.
+
+## Differences from the fully collateralized spot path
+
+Every row below reflects current source or an existing reference page.
+
+| **Aspect** | **Spot (`BalanceManager`)** | **Margin (`MarginManager`)** | **Reference** |
+| --- | --- | --- | --- |
+| Fund custody | Holds your balances directly | Wraps a `BalanceManager` inside the manager object | [Object model](#the-margin-object-model) |
+| Trade authorization | You hold the `TradeCap` and trade the pool directly | The manager holds the deposit, withdraw, and trade caps; proofs are internal | [Object model](#the-margin-object-model) |
+| Pool scope | One manager works across all pools | Bound to a single DeepBook pool | [Design](/onchain-finance/deepbook/deepbook-margin/design#margin-manager) |
+| Borrowing | None | Borrow one side from one isolated `MarginPool` at a time | [Design](/onchain-finance/deepbook/deepbook-margin/design#margin-registry) |
+| Order entry | `placeLimitOrder` on the pool | `place_limit_order_v2` through the pool proxy, risk-checked | [Trading path](#the-trading-path) |
+| Oracle dependency | None | Pyth prices required for borrow, withdraw, trade, and valuation | [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk) |
+| Withdrawal | Withdraw settled funds anytime | Gated by the Min Withdraw Risk Ratio | [Risk ratio](/onchain-finance/deepbook/deepbook-margin/contract-information/risk-ratio) |
+| Cost | DEEP trading fee per fill | DEEP trading fee plus continuously accruing borrow interest | [Interest rates](/onchain-finance/deepbook/deepbook-margin/contract-information/interest-rates) |
+| Liquidation | None | Permissionless at the liquidation threshold, routed through the liquidation vault | [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks#how-liquidation-works) |
+| New failure modes | Insufficient balance, off-tick or below min size | Adds risk-ratio aborts, stale-oracle reverts, and empty-pool borrow failures | [Workflow troubleshooting](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#troubleshooting) |

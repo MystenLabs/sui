@@ -74,6 +74,7 @@ const BUILDER_PATHS = [
       { step: 'Balance manager', stage: 'DeFi Primitives', page: 'onchain-finance/deepbook/deepbookv3/contract-information/balance-manager.mdx', eval: null },
       { step: 'Flash loans', stage: 'DeFi Primitives', page: 'onchain-finance/deepbook/deepbookv3/contract-information/flash-loans.mdx', eval: null },
       { step: 'Referral system', stage: 'DeFi Primitives', page: 'onchain-finance/deepbook/deepbookv3/contract-information/referral.mdx', eval: null },
+      { step: 'Fund a BalanceManager', stage: 'DeFi Primitives', page: 'onchain-finance/deepbook/deepbookv3/fees-and-funding.mdx', eval: null },
       // ── DeFi SDK ──
       { step: 'SDK: Orders', stage: 'DeFi SDK', page: 'onchain-finance/deepbook/deepbookv3-sdk/orders.mdx', eval: null },
       { step: 'SDK: Swaps', stage: 'DeFi SDK', page: 'onchain-finance/deepbook/deepbookv3-sdk/swaps.mdx', eval: null },
@@ -81,10 +82,13 @@ const BUILDER_PATHS = [
       { step: 'SDK: Balance manager', stage: 'DeFi SDK', page: 'onchain-finance/deepbook/deepbookv3-sdk/balance-manager.mdx', eval: null },
       { step: 'SDK: Flash loans', stage: 'DeFi SDK', page: 'onchain-finance/deepbook/deepbookv3-sdk/flash-loans.mdx', eval: null },
       { step: 'SDK: Staking & governance', stage: 'DeFi SDK', page: 'onchain-finance/deepbook/deepbookv3-sdk/staking-governance.mdx', eval: null },
+      { step: 'Run a spot trading workflow', stage: 'DeFi SDK', page: 'onchain-finance/deepbook/deepbookv3/spot-workflow.mdx', eval: null },
       // ── Margin ──
       { step: 'Margin trading overview', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/deepbook-margin.mdx', eval: null },
       { step: 'Margin architecture', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/design.mdx', eval: null },
       { step: 'Margin risks', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/margin-risks.mdx', eval: null },
+      { step: 'Open a leveraged position', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/leveraged-workflow.mdx', eval: null },
+      { step: 'Integrate margin trading', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/margin-integration.mdx', eval: null },
       { step: 'Margin contracts', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/contract-information.mdx', eval: null },
       { step: 'Margin contract: Orders', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/contract-information/orders.mdx', eval: null },
       { step: 'Margin contract: Manager', stage: 'Margin', page: 'onchain-finance/deepbook/deepbook-margin/contract-information/margin-manager.mdx', eval: null },
@@ -101,6 +105,7 @@ const BUILDER_PATHS = [
       { step: 'Shared objects', stage: 'Move Contract', page: 'develop/objects/object-ownership/shared.mdx', eval: null },
       // ── Advanced ──
       { step: 'PTB composition examples', stage: 'Advanced', page: 'develop/transactions/ptbs/prog-txn-blocks.mdx', eval: 'missing' },
+      { step: 'Compose DeepBook PTBs', stage: 'Advanced', page: 'onchain-finance/deepbook/deepbookv3-sdk/composing-transactions.mdx', eval: null },
       { step: 'Oracle integration', stage: 'Advanced', page: null, eval: 'missing' },
       { step: 'DeepBook event indexing', stage: 'Advanced', page: 'onchain-finance/deepbook/deepbookv3/deepbookv3-indexer.mdx', eval: null },
       { step: 'Margin event indexing', stage: 'Advanced', page: 'onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer.mdx', eval: null },

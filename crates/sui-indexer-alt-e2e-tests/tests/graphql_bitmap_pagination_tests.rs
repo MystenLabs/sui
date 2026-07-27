@@ -19,6 +19,7 @@ use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
 use sui_indexer_alt_e2e_tests::write_checkpoint;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
+use sui_kv_rpc::KvRpcConfig;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
@@ -29,8 +30,8 @@ use sui_types::test_checkpoint_data_builder::AdvanceEpochConfig;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 use tempfile::TempDir;
 
-/// Build an `OffchainCluster` with alpha enabled and a `BootstrapGenesis` config so the indexer
-/// doesn't wait for a real genesis checkpoint via ingestion. Writes the genesis `advance_epoch`
+/// Build an `OffchainCluster` with the List APIs enabled and a `BootstrapGenesis` config so the
+/// indexer doesn't wait for a real genesis checkpoint via ingestion. Writes the genesis
 /// checkpoint at cp 0. Callers can add further checkpoints at cp 1 onwards using the returned
 /// `TempDir`.
 ///
@@ -61,7 +62,10 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
     let cluster = OffchainCluster::new(
         client_args,
         OffchainClusterConfig {
-            experimental_query_apis: true,
+            kv_rpc_config: KvRpcConfig {
+                enable_list_apis: Some(true),
+                ..Default::default()
+            },
             // Minimum set of PG pipelines. Graphql's watermark task polls the named pipelines.
             indexer_config: IndexerConfig {
                 pipeline: PipelineLayer {
@@ -92,7 +96,7 @@ async fn alpha_cluster() -> (OffchainCluster, TempDir) {
         &prometheus::Registry::new(),
     )
     .await
-    .expect("Failed to create off-chain cluster with alpha enabled");
+    .expect("Failed to create off-chain cluster with the List APIs enabled");
 
     // Write the genesis epoch-advance checkpoint at cp 0 with the framework objects. Any
     // user-written checkpoint follows at cp 1 onwards.

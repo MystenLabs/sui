@@ -102,6 +102,7 @@ export default {
         items: [
             'develop/manage-packages/move-package-management',
             'develop/manage-packages/automated-address-management',
+            'develop/manage-packages/source-verification',
         ]
       },      
       {
@@ -382,6 +383,7 @@ export default {
           'onchain-finance/examples-patterns/loyalty-tokens',
           'onchain-finance/examples-patterns/in-game-currency',
           'onchain-finance/examples-patterns/soulbound-tokens',
+          'onchain-finance/examples-patterns/staking-rewards',
           'onchain-finance/examples-patterns/nft-rental',
           'onchain-finance/examples-patterns/kiosk',
           'onchain-finance/examples-patterns/wasm-template',
@@ -415,6 +417,8 @@ export default {
       link: { type: 'doc', id: 'onchain-finance/deepbook/index' },
       items: [
         'onchain-finance/deepbook/deepbookv3/design',
+        'onchain-finance/deepbook/deepbookv3/fees-and-funding',
+        'onchain-finance/deepbook/deepbookv3/spot-workflow',
         {
           type: 'category',
           label: 'DeepBookV3',
@@ -447,6 +451,8 @@ export default {
                 'onchain-finance/deepbook/deepbookv3-sdk/flash-loans',
                 'onchain-finance/deepbook/deepbookv3-sdk/swaps',
                 'onchain-finance/deepbook/deepbookv3-sdk/staking-governance',
+                'onchain-finance/deepbook/deepbookv3-sdk/ptb-cli-cookbook',
+                'onchain-finance/deepbook/deepbookv3-sdk/composing-transactions',
               ],
             },
           ],
@@ -458,6 +464,8 @@ export default {
           items: [
             'onchain-finance/deepbook/deepbook-margin/design',
             'onchain-finance/deepbook/deepbook-margin/margin-risks',
+            'onchain-finance/deepbook/deepbook-margin/leveraged-workflow',
+            'onchain-finance/deepbook/deepbook-margin/margin-integration',
             {
               type: 'category',
               label: 'Contract Information',
@@ -492,6 +500,7 @@ export default {
           label: 'Predict',
           link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-predict/deepbook-predict' },
           items: [
+            'onchain-finance/deepbook/deepbook-predict/tutorial',
             'onchain-finance/deepbook/deepbook-predict/design',
             {
               type: 'category',

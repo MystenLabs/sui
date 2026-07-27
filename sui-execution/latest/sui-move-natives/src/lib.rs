@@ -396,6 +396,9 @@ impl NativesCostTable {
                 object_record_new_uid_cost_base: protocol_config
                     .object_record_new_uid_cost_base()
                     .into(),
+                object_record_new_uid_from_hash_cost_base: protocol_config
+                    .object_record_new_uid_from_hash_cost_base_as_option()
+                    .map(Into::into),
             },
 
             // Crypto
@@ -1189,6 +1192,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "object",
             "record_new_uid",
             make_native!(object::record_new_uid),
+        ),
+        (
+            "object",
+            "record_new_uid_from_hash",
+            make_native!(object::record_new_uid_from_hash),
         ),
         (
             "test_scenario",

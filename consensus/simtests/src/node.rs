@@ -337,6 +337,7 @@ pub(crate) async fn make_authority(
         network_keypair,
         Arc::new(Clock::new_for_test(clock_drift)),
         transaction_verifier,
+        None,
         commit_consumer,
         registry,
         boot_counter,
