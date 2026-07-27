@@ -4,6 +4,7 @@
 mod auth_channel;
 pub mod bitmap_query;
 mod channel_pool;
+mod flow_control;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -30,14 +31,18 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use tonic::Code;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 
 use auth_channel::AuthChannel;
+use auth_channel::bigtable_features_header;
 use channel_pool::ChannelPool;
 use channel_pool::ChannelPrimer;
 pub use channel_pool::PoolConfig;
+use flow_control::BatchWriteFlowController;
+use flow_control::is_overload_error;
 
 use crate::CheckpointData;
 use crate::EpochData;
@@ -119,6 +124,7 @@ impl ChannelPrimer for BigtablePrimer {
                 channel.clone(),
                 self.policy.clone(),
                 self.token_provider.clone(),
+                bigtable_features_header(false),
             );
             let mut client = BigtableInternalClient::new(auth_channel);
             client
@@ -138,12 +144,13 @@ pub struct BigTableClient {
     client: BigtableInternalClient<AuthChannel<ChannelPool>>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
+    flow_controller: Option<Arc<BatchWriteFlowController>>,
     app_profile_id: Option<String>,
 }
 
 impl BigTableClient {
     pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
-        Self::new_for_host(host, instance_id, "local").await
+        Self::new_for_host(host, instance_id, "local", false).await
     }
 
     /// Create a client connected to a specific host.
@@ -152,6 +159,7 @@ impl BigTableClient {
         host: String,
         instance_id: String,
         client_name: &str,
+        batch_write_flow_control: bool,
     ) -> Result<Self> {
         let endpoint = Channel::from_shared(format!("http://{host}"))?;
         let pool =
@@ -160,12 +168,17 @@ impl BigTableClient {
             pool,
             "https://www.googleapis.com/auth/bigtable.data".to_string(),
             None,
+            bigtable_features_header(batch_write_flow_control),
         );
+        let client_name = client_name.to_string();
+        let flow_controller = batch_write_flow_control
+            .then(|| BatchWriteFlowController::new(client_name.clone(), None));
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
-            client_name: client_name.to_string(),
+            client_name,
             metrics: None,
+            flow_controller,
             app_profile_id: None,
         })
     }
@@ -180,6 +193,7 @@ impl BigTableClient {
         registry: Option<&Registry>,
         app_profile_id: Option<String>,
         pool_config: PoolConfig,
+        batch_write_flow_control: bool,
     ) -> Result<Self> {
         Self::new_remote_with_credentials(
             instance_id,
@@ -192,6 +206,7 @@ impl BigTableClient {
             app_profile_id,
             pool_config,
             None,
+            batch_write_flow_control,
         )
         .await
     }
@@ -207,6 +222,7 @@ impl BigTableClient {
         app_profile_id: Option<String>,
         pool_config: PoolConfig,
         credentials_path: Option<String>,
+        batch_write_flow_control: bool,
     ) -> Result<Self> {
         let config = pool_config;
         let policy = if is_read_only {
@@ -240,15 +256,24 @@ impl BigTableClient {
         };
         let pool =
             ChannelPool::new_connected(endpoint, config, Some(Box::new(primer)), registry).await?;
-        let auth_channel = AuthChannel::new(pool, policy.to_string(), Some(token_provider));
+        let metrics = registry.map(KvMetrics::new);
+        let auth_channel = AuthChannel::new(
+            pool,
+            policy.to_string(),
+            Some(token_provider),
+            bigtable_features_header(batch_write_flow_control),
+        );
         let client = BigtableInternalClient::new(auth_channel).max_decoding_message_size(
             max_decoding_message_size.unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
         );
+        let flow_controller = batch_write_flow_control
+            .then(|| BatchWriteFlowController::new(client_name.clone(), metrics.clone()));
         Ok(Self {
             table_prefix,
             client,
             client_name,
-            metrics: registry.map(KvMetrics::new),
+            metrics,
+            flow_controller,
             app_profile_id,
         })
     }
@@ -653,21 +678,63 @@ impl BigTableClient {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
-        let mut response = self.client.clone().mutate_rows(request).await?.into_inner();
-        let mut failed_keys: Vec<MutationError> = Vec::new();
-
-        while let Some(part) = response.message().await? {
-            for entry in part.entries {
-                if let Some(status) = entry.status
-                    && status.code != 0
-                    && let Some(key) = row_keys.get(entry.index as usize)
-                {
-                    failed_keys.push(MutationError {
-                        key: key.clone(),
-                        code: status.code,
-                        message: status.message,
-                    });
+        let write_admission = match &self.flow_controller {
+            Some(flow_controller) => Some(flow_controller.admit_rpc().await),
+            None => None,
+        };
+        let mut response = match self.client.clone().mutate_rows(request).await {
+            Ok(response) => response.into_inner(),
+            Err(status) => {
+                if let Some(write_admission) = write_admission {
+                    write_admission.fail(status.code());
                 }
+                return Err(status.into());
+            }
+        };
+        let mut failed_keys: Vec<MutationError> = Vec::new();
+        let mut overload_error = None;
+
+        loop {
+            match response.message().await {
+                Ok(Some(part)) => {
+                    if let Some(write_admission) = write_admission.as_ref() {
+                        write_admission.on_server_feedback(part.rate_limit_info.as_ref());
+                    }
+                    for entry in part.entries {
+                        let Some(status) = entry.status else {
+                            continue;
+                        };
+                        if status.code == 0 {
+                            continue;
+                        }
+
+                        let code = Code::from_i32(status.code);
+                        if overload_error.is_none() && is_overload_error(code) {
+                            overload_error = Some(code);
+                        }
+                        if let Some(key) = row_keys.get(entry.index as usize) {
+                            failed_keys.push(MutationError {
+                                key: key.clone(),
+                                code: status.code,
+                                message: status.message,
+                            });
+                        }
+                    }
+                }
+                Ok(None) => break,
+                Err(status) => {
+                    if let Some(write_admission) = write_admission {
+                        write_admission.fail(status.code());
+                    }
+                    return Err(status.into());
+                }
+            }
+        }
+        if let Some(write_admission) = write_admission {
+            if let Some(code) = overload_error {
+                write_admission.fail(code);
+            } else {
+                write_admission.complete();
             }
         }
 
@@ -2163,6 +2230,8 @@ fn column_exists_filter(column: &str) -> RowFilter {
 
 #[cfg(test)]
 mod tests {
+    use crate::bigtable::mock_server::{ExpectedCall, MockBigtableServer};
+    use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
     use futures::{TryStreamExt, stream};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -2170,6 +2239,168 @@ mod tests {
 
     fn row(sequence: u64) -> Result<(Bytes, Vec<(Bytes, Bytes)>)> {
         Ok((Bytes::from(sequence.to_be_bytes().to_vec()), Vec::new()))
+    }
+
+    fn enabled_client_effective_qps(client: &BigTableClient) -> f64 {
+        client
+            .flow_controller
+            .as_ref()
+            .expect("batch-write flow control is enabled")
+            .effective_qps()
+    }
+
+    async fn drive_successful_writes_until_rate_changes(
+        client: &mut BigTableClient,
+        make_entry: impl Fn() -> Entry,
+        initial_qps: f64,
+    ) -> f64 {
+        const MAX_WRITES: usize = 20;
+        const MAX_DRIVE_TIME: Duration = Duration::from_secs(5);
+
+        tokio::time::timeout(MAX_DRIVE_TIME, async {
+            for _ in 0..MAX_WRITES {
+                client
+                    .write_entries("flow-control", [make_entry()])
+                    .await
+                    .unwrap();
+                let effective_qps = enabled_client_effective_qps(client);
+                if effective_qps != initial_qps {
+                    return effective_qps;
+                }
+            }
+            panic!("effective QPS did not change after {MAX_WRITES} successful writes");
+        })
+        .await
+        .expect("successful writes took too long to isolate flow-control feedback")
+    }
+
+    #[tokio::test]
+    async fn write_entries_awaits_flow_control_admission() {
+        const OBSERVED_STARTS: usize = 10;
+        const MIN_BATCH_TIME: Duration = Duration::from_millis(900);
+
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let make_entry = || {
+            tables::make_entry(
+                Bytes::from_static(b"flow-control-row"),
+                [("col", Bytes::from_static(b"value"))],
+                None,
+            )
+        };
+        let client = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "flow-control",
+            true,
+        )
+        .await
+        .unwrap();
+
+        let batch_started_at = tokio::time::Instant::now();
+        let writes = (0..OBSERVED_STARTS).map(|_| {
+            let mut client = client.clone();
+            let entry = make_entry();
+            async move { client.write_entries("flow-control", [entry]).await }
+        });
+        futures::future::try_join_all(writes).await.unwrap();
+        assert!(
+            batch_started_at.elapsed() >= MIN_BATCH_TIME,
+            "flow-controlled batch completed in {:?}",
+            batch_started_at.elapsed()
+        );
+    }
+
+    #[tokio::test]
+    async fn streamed_server_feedback_decreases_rate_and_missing_feedback_is_a_noop() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let make_entry = || {
+            tables::make_entry(
+                Bytes::from_static(b"flow-control-row"),
+                [("col", Bytes::from_static(b"value"))],
+                None,
+            )
+        };
+        let mut client = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "flow-control",
+            true,
+        )
+        .await
+        .unwrap();
+        let initial_qps = enabled_client_effective_qps(&client);
+
+        mock.set_mutate_rows_rate_limit_info(Some(RateLimitInfo {
+            period: Some(prost_types::Duration {
+                seconds: 1,
+                nanos: 0,
+            }),
+            factor: 0.3,
+        }))
+        .await;
+        client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap();
+
+        let reduced_qps =
+            drive_successful_writes_until_rate_changes(&mut client, make_entry, initial_qps).await;
+        assert!(
+            reduced_qps < initial_qps,
+            "server feedback changed effective QPS from {initial_qps} to {reduced_qps}"
+        );
+
+        mock.set_mutate_rows_rate_limit_info(None).await;
+        client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap();
+        assert_eq!(enabled_client_effective_qps(&client), reduced_qps);
+    }
+
+    #[tokio::test]
+    async fn partial_overload_error_reduces_rate_without_server_feedback() {
+        const ROW_KEY: &[u8] = b"overloaded-row";
+
+        let mock = MockBigtableServer::new();
+        mock.expect(ExpectedCall {
+            row_keys: vec![ROW_KEY],
+            failures: HashMap::from([(0, Code::ResourceExhausted as i32)]),
+        })
+        .await;
+        let (addr, _handle) = mock.start().await.unwrap();
+        let make_entry = || {
+            tables::make_entry(
+                Bytes::from_static(ROW_KEY),
+                [("col", Bytes::from_static(b"value"))],
+                None,
+            )
+        };
+        let mut client = BigTableClient::new_for_host(
+            addr.to_string(),
+            "test".to_string(),
+            "partial-overload",
+            true,
+        )
+        .await
+        .unwrap();
+        let initial_qps = enabled_client_effective_qps(&client);
+
+        let error = client
+            .write_entries("flow-control", [make_entry()])
+            .await
+            .unwrap_err();
+        let partial = error.downcast_ref::<PartialWriteError>().unwrap();
+        assert_eq!(partial.failed_keys[0].code, Code::ResourceExhausted as i32);
+
+        let reduced_qps =
+            drive_successful_writes_until_rate_changes(&mut client, make_entry, initial_qps).await;
+        assert!(
+            reduced_qps < initial_qps,
+            "per-entry overload changed effective QPS from {initial_qps} to {reduced_qps}"
+        );
     }
 
     fn decode_sequence_only(key: Bytes, _cells: Vec<(Bytes, Bytes)>) -> Result<(u64, u64)> {
@@ -2277,7 +2508,7 @@ mod tests {
         let registry = Registry::new();
         let host = addr.to_string();
         let name = "empty-client";
-        let mut client = BigTableClient::new_for_host(host, "test".into(), name)
+        let mut client = BigTableClient::new_for_host(host, "test".into(), name, false)
             .await
             .unwrap();
         client.metrics = Some(KvMetrics::new(&registry));
@@ -2403,9 +2634,10 @@ mod tests {
     async fn get_transactions_stream_splits_digest_batches_at_max() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
-        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
-            .await
-            .unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
 
         let n = MAX_TX_DIGESTS_PER_REQUEST + 1;
         let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
@@ -2437,9 +2669,10 @@ mod tests {
     async fn get_transactions_stream_empty_digest_list_issues_no_read() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
-        let mut client = BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test")
-            .await
-            .unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
 
         let stream = client
             .get_transactions_stream(Vec::new(), None)

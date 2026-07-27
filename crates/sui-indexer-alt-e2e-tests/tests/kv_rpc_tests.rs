@@ -113,6 +113,27 @@ struct CheckpointsResult {
 fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
     options.map(|o| o.ordering()).unwrap_or(Ordering::Ascending)
 }
+/// A cluster whose kv-rpc server serves the List APIs. They are off by default,
+/// matching production, so every test in this file opts in.
+async fn list_api_cluster() -> FullCluster {
+    list_api_cluster_with_config(KvRpcConfig::default()).await
+}
+
+/// [`list_api_cluster`] for tests that also need to tune the kv-rpc config.
+async fn list_api_cluster_with_config(mut kv_rpc_config: KvRpcConfig) -> FullCluster {
+    kv_rpc_config.enable_list_apis = Some(true);
+    FullCluster::new_with_configs(
+        Simulacrum::new(),
+        OffchainClusterConfig {
+            kv_rpc_config,
+            ..Default::default()
+        },
+        &prometheus::Registry::new(),
+    )
+    .await
+    .expect("Failed to create cluster")
+}
+
 async fn wait_for_kv_checkpoint(cluster: &FullCluster, required_checkpoint: u64) {
     let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
         .await
@@ -908,9 +929,36 @@ fn ev_and(filters: Vec<EventFilter>) -> EventFilter {
 
 // --- Tests ---
 
+/// Upgrading the binary must not start serving the List APIs: providers that
+/// have not backfilled the pipelines behind them opt in explicitly.
+#[tokio::test]
+async fn test_list_apis_disabled_unless_enabled() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    transfer_self(&mut cluster, sender, &kp, gas).await;
+    let checkpoint = cluster.create_checkpoint().await;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let mut req = ListTransactionsRequest::default();
+    req.options = Some(query_options(10));
+    let status = client
+        .list_transactions(req)
+        .await
+        .expect_err("List APIs must be unavailable by default");
+    assert_eq!(status.code(), tonic::Code::Unimplemented, "{status:?}");
+
+    // The service-info height is still served, bounded by the base pipelines
+    // alone. Waiting for it to reach the checkpoint asserts it actually
+    // advances, which a stale cached height would not.
+    wait_for_kv_checkpoint(&cluster, checkpoint.sequence_number).await;
+}
+
 #[tokio::test]
 async fn test_json_read_mask() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg_id, gas) =
@@ -1045,7 +1093,7 @@ async fn test_json_read_mask() {
 
 #[tokio::test]
 async fn test_list_transactions_unfiltered() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (tx_digest, _) = transfer_self(&mut cluster, sender, &kp, gas).await;
@@ -1113,7 +1161,7 @@ async fn test_list_transactions_unfiltered() {
 
 #[tokio::test]
 async fn test_list_transactions_with_sender_filter() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     transfer_self(&mut cluster, sender, &kp, gas).await;
@@ -1140,7 +1188,7 @@ async fn test_list_transactions_with_sender_filter() {
 
 #[tokio::test]
 async fn test_list_package_write_filter() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     // Publish a Move package (a package write); capture its digest directly off
@@ -1218,7 +1266,7 @@ async fn test_list_package_write_filter() {
 
 #[tokio::test]
 async fn test_list_transactions_query_options() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
 
     // Execute several transactions to ensure options.
@@ -1446,7 +1494,7 @@ async fn test_list_transactions_query_options() {
 
 #[tokio::test]
 async fn test_list_events_unfiltered() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg_id, gas) =
@@ -1533,16 +1581,7 @@ async fn test_list_events_unfiltered_row_cap_scan_limit_resumes() {
         }),
         ..Default::default()
     };
-    let mut cluster = FullCluster::new_with_configs(
-        Simulacrum::new(),
-        OffchainClusterConfig {
-            kv_rpc_config,
-            ..Default::default()
-        },
-        &prometheus::Registry::new(),
-    )
-    .await
-    .unwrap();
+    let mut cluster = list_api_cluster_with_config(kv_rpc_config).await;
 
     // Seed a tx span wider than the two-row source cap, with real events
     // interleaved among event-less transfers. This makes resume coverage
@@ -1730,7 +1769,7 @@ async fn test_list_events_unfiltered_row_cap_scan_limit_resumes() {
 
 #[tokio::test]
 async fn test_list_events_with_emit_module_filter() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg_id, gas) =
@@ -1789,7 +1828,7 @@ async fn test_list_events_with_emit_module_filter() {
 
 #[tokio::test]
 async fn test_list_events_query_options() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg_id, mut gas) =
@@ -1989,7 +2028,7 @@ async fn test_list_events_query_options() {
 
 #[tokio::test]
 async fn test_list_transactions_or_prefix_and_event_predicates() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_c, kp_c, gas_c) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
@@ -2120,7 +2159,7 @@ async fn test_list_transactions_or_prefix_and_event_predicates() {
 
 #[tokio::test]
 async fn test_list_events_sender_or_filter() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_c, kp_c, gas_c) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
@@ -2207,7 +2246,7 @@ async fn test_list_events_sender_or_filter() {
 
 #[tokio::test]
 async fn test_list_event_stream_head_filter() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg, gas) = publish_package(
@@ -2280,7 +2319,7 @@ async fn test_list_event_stream_head_filter() {
 
 #[tokio::test]
 async fn test_list_transactions_combinator_and() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2360,7 +2399,7 @@ async fn test_list_transactions_combinator_and() {
 
 #[tokio::test]
 async fn test_list_transactions_combinator_or_not() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2403,7 +2442,7 @@ async fn test_list_transactions_combinator_or_not() {
 
 #[tokio::test]
 async fn test_list_transactions_unanchored_negation() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2465,7 +2504,7 @@ async fn test_list_transactions_unanchored_negation() {
 
 #[tokio::test]
 async fn test_list_transactions_recipient_and_affected_object() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, _kp_b, _gas_b) = cluster.funded_account(DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2540,7 +2579,7 @@ async fn test_list_transactions_recipient_and_affected_object() {
 
 #[tokio::test]
 async fn test_list_events_event_type_cascading_and_generics() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg, gas) =
@@ -2628,7 +2667,7 @@ async fn test_list_events_event_type_cascading_and_generics() {
 
 #[tokio::test]
 async fn test_list_events_combinator_and() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2695,7 +2734,7 @@ async fn test_list_events_combinator_and() {
 
 #[tokio::test]
 async fn test_list_events_combinator_or_not() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2765,7 +2804,7 @@ async fn test_list_events_combinator_or_not() {
 
 #[tokio::test]
 async fn test_list_events_unanchored_negation() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -2849,7 +2888,7 @@ async fn test_list_events_unanchored_negation() {
 
 #[tokio::test]
 async fn test_list_events_query_options_multi_event_tx() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     let (pkg, gas) =
@@ -3120,7 +3159,7 @@ async fn test_list_events_query_options_multi_event_tx() {
 
 #[tokio::test]
 async fn test_list_filter_edge_cases() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     // One trivial tx to have something indexed.
@@ -3308,7 +3347,7 @@ async fn test_list_filter_edge_cases() {
 
 #[tokio::test]
 async fn test_list_limit_items_over_cap_is_coerced() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     transfer_self(&mut cluster, sender, &kp, gas).await;
     cluster.create_checkpoint().await;
@@ -3340,7 +3379,7 @@ async fn test_list_limit_items_over_cap_is_coerced() {
 
 #[tokio::test]
 async fn test_list_checkpoints_unfiltered_range() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
 
     // Three checkpoints, each containing one transfer tx.
@@ -3379,7 +3418,7 @@ async fn test_list_checkpoints_unfiltered_range() {
 
 #[tokio::test]
 async fn test_list_checkpoints_with_sender_filter() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -3427,7 +3466,7 @@ async fn test_list_checkpoints_with_sender_filter() {
 
 #[tokio::test]
 async fn test_list_checkpoints_combinator_or() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_c, kp_c, gas_c) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
@@ -3468,7 +3507,7 @@ async fn test_list_checkpoints_combinator_or() {
 
 #[tokio::test]
 async fn test_list_checkpoints_unanchored_negation() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -3509,7 +3548,7 @@ async fn test_list_checkpoints_unanchored_negation() {
 
 #[tokio::test]
 async fn test_list_checkpoints_query_options() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
 
     // Three checkpoints, each with one transfer tx. The helper threads the
@@ -3754,7 +3793,7 @@ async fn test_list_checkpoints_query_options() {
 
 #[tokio::test]
 async fn test_list_checkpoints_combinator_and() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -3839,7 +3878,7 @@ async fn test_list_checkpoints_combinator_and() {
 
 #[tokio::test]
 async fn test_list_checkpoints_empty_range_past_watermark() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
 
@@ -3861,7 +3900,7 @@ async fn test_list_checkpoints_empty_range_past_watermark() {
 
 #[tokio::test]
 async fn test_list_checkpoints_with_transactions_read_mask() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, mut gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
 
     // One checkpoint with three self-transfers. The transfers chain the same
@@ -3918,7 +3957,7 @@ async fn test_list_checkpoints_with_transactions_read_mask() {
 
 #[tokio::test]
 async fn test_list_checkpoints_with_objects_read_mask() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
 
     // One checkpoint with a transfer; capture the gas object id so we can
@@ -3981,7 +4020,7 @@ async fn test_list_checkpoints_with_objects_read_mask() {
 // `objects` read mask silently returned empty.
 #[tokio::test]
 async fn test_get_checkpoint_with_transactions_and_objects() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let gas_id_string = gas.0.to_canonical_string(true);
 
@@ -4071,7 +4110,7 @@ async fn build_sparse_layout(
 
 #[tokio::test]
 async fn test_list_transactions_sparse_filter_emits_watermarks() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(40 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(2 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -4158,7 +4197,7 @@ async fn test_list_transactions_sparse_filter_emits_watermarks() {
 
 #[tokio::test]
 async fn test_list_events_sparse_filter_emits_watermarks() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, mut gas_a) = cluster.funded_account(50 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(5 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -4244,7 +4283,7 @@ async fn test_list_events_sparse_filter_emits_watermarks() {
 /// original `seen_digests` that came at or before that cursor.
 #[tokio::test]
 async fn test_list_transactions_resume_from_standalone_watermark() {
-    let mut cluster = FullCluster::new().await.unwrap();
+    let mut cluster = list_api_cluster().await;
     let (sender_a, kp_a, gas_a) = cluster.funded_account(40 * DEFAULT_GAS_BUDGET).unwrap();
     let (sender_b, kp_b, gas_b) = cluster.funded_account(2 * DEFAULT_GAS_BUDGET).unwrap();
 
@@ -4458,16 +4497,7 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
         ..Default::default()
     };
 
-    let mut cluster = FullCluster::new_with_configs(
-        Simulacrum::new(),
-        OffchainClusterConfig {
-            kv_rpc_config,
-            ..Default::default()
-        },
-        &prometheus::Registry::new(),
-    )
-    .await
-    .unwrap();
+    let mut cluster = list_api_cluster_with_config(kv_rpc_config).await;
 
     let (match_sender, match_kp, mut match_gas) =
         cluster.funded_account(60 * DEFAULT_GAS_BUDGET).unwrap();

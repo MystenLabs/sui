@@ -51,6 +51,7 @@ use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
 use crate::bigtable::proto::bigtable::v2::PingAndWarmResponse;
 use crate::bigtable::proto::bigtable::v2::PrepareQueryRequest;
 use crate::bigtable::proto::bigtable::v2::PrepareQueryResponse;
+use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
 use crate::bigtable::proto::bigtable::v2::ReadChangeStreamRequest;
 use crate::bigtable::proto::bigtable::v2::ReadChangeStreamResponse;
 use crate::bigtable::proto::bigtable::v2::ReadModifyWriteRowRequest;
@@ -198,6 +199,7 @@ impl MutateRowsGate {
 struct MockState {
     expectations: Vec<ExpectedCall>,
     mutate_rows_gates: VecDeque<MutateRowsGateRegistration>,
+    mutate_rows_rate_limit_info: Option<RateLimitInfo>,
     /// In-memory row storage keyed by (table_name_suffix, row_key).
     /// Table name suffix is the part after the /tables/ prefix.
     rows: HashMap<(String, Bytes), Row>,
@@ -231,6 +233,10 @@ impl MockBigtableServer {
             mutate_rows_count: Arc::new(AtomicUsize::new(0)),
             check_and_mutate_failures: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    pub async fn set_mutate_rows_rate_limit_info(&self, info: Option<RateLimitInfo>) {
+        self.state.lock().await.mutate_rows_rate_limit_info = info;
     }
 
     /// Fail the next `n` CheckAndMutateRow calls with `Status::unavailable`.
@@ -616,7 +622,7 @@ impl Bigtable for MockBigtableServer {
 
         let response = MutateRowsResponse {
             entries,
-            rate_limit_info: None,
+            rate_limit_info: state.mutate_rows_rate_limit_info,
         };
 
         // Return as a single-item stream

@@ -20,7 +20,17 @@ use crate::bigtable::client::PoolConfig;
 /// Java client default.
 pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
 
-#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+const DEFAULT_WRITE_CONCURRENCY: usize = 256;
+
+/// Returns the committer defaults used by sui-kvstore before applying config overrides.
+pub fn default_committer_config() -> CommitterConfig {
+    CommitterConfig {
+        write_concurrency: DEFAULT_WRITE_CONCURRENCY,
+        ..CommitterConfig::default()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
@@ -36,8 +46,29 @@ pub struct IndexerConfig {
     pub bigtable_connection_pool_size: Option<usize>,
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
     pub bigtable_channel_timeout_ms: Option<u64>,
+    /// Enable Bigtable batch write flow control by advertising the mutate-rows
+    /// rate-limit feature flags and adaptively throttling MutateRows from
+    /// `RateLimitInfo`. Requires a single-cluster-routing app profile and pairs
+    /// with Bigtable autoscaling. Enabled by default; set to false to disable.
+    pub batch_write_flow_control: bool,
     /// Bigtable connection pool configuration.
     pub bigtable_pool: BigtablePoolLayer,
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
+        Self {
+            ingestion: IngestionConfig::default(),
+            committer: CommitterLayer::default(),
+            pipeline: PipelineLayer::default(),
+            total_max_rows_per_second: None,
+            max_rows_per_second: None,
+            bigtable_connection_pool_size: None,
+            bigtable_channel_timeout_ms: None,
+            batch_write_flow_control: true,
+            bigtable_pool: BigtablePoolLayer::default(),
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
