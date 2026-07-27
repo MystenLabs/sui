@@ -3,6 +3,7 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::language_storage::TypeTag;
 use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
@@ -11,9 +12,9 @@ use std::{
 };
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::VMMemoryLimitExceededSubStatusCode,
+    error::{SuiResult, VMMemoryLimitExceededSubStatusCode},
     execution::DynamicallyLoadedObjectMetadata,
     metrics::ExecutionMetrics,
     move_package::MovePackage,
@@ -458,6 +459,14 @@ impl<'a> ChildObjectStore<'a> {
             }
         }
         Ok(())
+    }
+
+    pub(super) fn object_available_balance(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> SuiResult<u128> {
+        self.inner.resolver.object_available_balance(owner, type_)
     }
 
     pub(super) fn receive_object(

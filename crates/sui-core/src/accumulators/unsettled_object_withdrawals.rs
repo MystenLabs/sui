@@ -7,7 +7,13 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
+use sui_types::{
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
+    base_types::SequenceNumber,
+    digests::ChainIdentifier,
+    effects::{TransactionEffects, TransactionEffectsAPI},
+    transaction::{TransactionData, TransactionDataAPI},
+};
 
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 
@@ -23,12 +29,29 @@ struct Inner {
     /// Balance are updated only by settlement transactions, not when we withdraw funds.
     /// Hence when we are checking object funds, on top of the settled balance, we also need to account for
     /// the amount of withdraws from the same consensus commit (that all reads from the same accumulator version).
+    /// When `record_net_unsettled_object_withdraws` is enabled, the recorded amounts are the per-account
+    /// net withdraws from effects (what settlement will actually deduct); otherwise they are the
+    /// running max withdraws.
     unsettled_withdraws: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
     /// Tracks the accounts that have pending withdraws at each accumulator version.
     /// This information is not required for functional correctness, but needed to garbage collect
     /// unused entries in unsettled_withdraws that are now fully committed. Without doing so unsettled_withdraws
     /// may grow unbounded.
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
+}
+
+impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        UnsettledObjectWithdrawals::get_unsettled_object_withdraw(
+            self,
+            account,
+            accumulator_version,
+        )
+    }
 }
 
 impl UnsettledObjectWithdrawals {
@@ -78,6 +101,51 @@ impl UnsettledObjectWithdrawals {
                 .insert(*account);
         }
         self.update_unsettled_metrics(&inner);
+    }
+
+    pub fn record_object_funds_withdraws(
+        &self,
+        tx_data: &TransactionData,
+        effects: &TransactionEffects,
+        accumulator_running_max_withdraws: &BTreeMap<AccumulatorObjId, u128>,
+        accumulator_version: SequenceNumber,
+        chain_identifier: ChainIdentifier,
+    ) -> bool {
+        if accumulator_running_max_withdraws.is_empty() {
+            return false;
+        }
+        let address_funds_reservations: BTreeSet<_> = tx_data
+            .process_funds_withdrawals_for_execution(chain_identifier)
+            .into_keys()
+            .collect();
+        let updates: BTreeMap<_, _> = effects
+            .accumulator_events()
+            .into_iter()
+            .filter(|event| !address_funds_reservations.contains(&event.accumulator_obj))
+            .filter_map(|event| {
+                event
+                    .write
+                    .get_fund_withdraw_amount()
+                    .filter(|amount| *amount > 0)
+                    .map(|amount| (event.accumulator_obj, amount))
+            })
+            .collect();
+        if updates.is_empty() {
+            return false;
+        }
+        debug_assert!(
+            updates.iter().all(|(obj_id, net)| {
+                accumulator_running_max_withdraws
+                    .get(obj_id)
+                    .is_some_and(|max| net <= max)
+            }),
+            "net withdraw exceeds running max: tx={:?} updates={:?} running_max={:?}",
+            tx_data.digest(),
+            updates,
+            accumulator_running_max_withdraws,
+        );
+        self.record_unsettled_withdraws(updates.iter(), accumulator_version);
+        true
     }
 
     fn update_unsettled_metrics(&self, inner: &Inner) {

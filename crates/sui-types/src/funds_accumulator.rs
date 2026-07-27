@@ -23,6 +23,19 @@ pub const RESOLVED_WITHDRAWAL_STRUCT: (&AccountAddress, &IdentStr, &IdentStr) = 
 );
 pub const WITHDRAWAL_OWNER_FUNC_NAME: &IdentStr = ident_str!("withdrawal_owner");
 pub const WITHDRAWAL_SPLIT_FUNC_NAME: &IdentStr = ident_str!("withdrawal_split");
+pub const E_OBJECT_FUNDS_INSUFFICIENT: u64 = 2;
+
+pub fn is_object_funds_insufficient_abort(
+    status: &crate::execution_status::ExecutionFailureStatus,
+) -> bool {
+    matches!(
+        status,
+        crate::execution_status::ExecutionFailureStatus::MoveAbort(location, code)
+            if *code == E_OBJECT_FUNDS_INSUFFICIENT
+                && location.module.address() == &SUI_FRAMEWORK_ADDRESS
+                && location.module.name() == FUNDS_ACCUMULATOR_MODULE_NAME
+    )
+}
 
 /// Rust bindings for the Move struct `sui::funds_accumulator::Withdrawal`.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
