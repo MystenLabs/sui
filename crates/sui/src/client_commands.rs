@@ -4305,11 +4305,9 @@ async fn upgrade_command(
 
     if !skip_verify_compatibility {
         let protocol_version = client.get_protocol_config(None).await?.protocol_version();
+        let protocol_config =
+            protocol_config_for_version(protocol_version, chain_identifier.chain())?;
 
-        let protocol_config = protocol_config_for_compatibility_check(
-            protocol_version.into(),
-            chain_identifier.chain(),
-        );
         check_compatibility(
             client.clone(),
             package_id,
@@ -4552,12 +4550,5 @@ mod tests {
 
         assert!(protocol_config_for_version(ProtocolVersion::MAX, Chain::Unknown).is_ok());
         assert!(protocol_config_for_version(ProtocolVersion::MIN, Chain::Unknown).is_ok());
-    }
-
-    #[test]
-    fn compatibility_check_falls_back_when_network_is_ahead() {
-        let ahead = ProtocolVersion::MAX_ALLOWED + 1;
-        let config = protocol_config_for_compatibility_check(ahead, Chain::Unknown);
-        assert_eq!(config.version, ProtocolVersion::MAX);
     }
 }
