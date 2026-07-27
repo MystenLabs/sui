@@ -17,6 +17,7 @@ use move_binary_format::{
     file_format::{
         CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
     },
+    partial_vm_error_with_debug_message,
 };
 use move_bytecode_verifier_meter::{Meter, Scope, bound::BoundMeter};
 use move_core_types::vm_status::StatusCode;
@@ -244,15 +245,15 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             }) {
                 // If the regex based checker fails due to complexity,
                 // we reject it for being too complex and skip the consistency check.
-                return Err(
-                    PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX).with_message(
-                        regex_res
-                            .unwrap_err()
-                            .finish(Location::Undefined)
-                            .message()
-                            .unwrap_or_default(),
-                    ),
-                );
+                return Err(partial_vm_error_with_debug_message!(
+                    PROGRAM_TOO_COMPLEX,
+                    regex_res
+                        .unwrap_err()
+                        .finish(Location::Undefined)
+                        .message()
+                        .unwrap_or_default()
+                        .to_string()
+                ));
             }
             // The regular expression based reference safety check should be strictly more
             // permissive. So if it errors, the current one should also error.
@@ -261,13 +262,12 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             // which is equivalent to: regex_res.is_ok() || reference_safety_res.is_err()
             let is_consistent = regex_res.is_ok() || reference_safety_res.is_err();
             if !is_consistent {
-                return Err(
-                    PartialVMError::new(StatusCode::REFERENCE_SAFETY_INCONSISTENT).with_message(
-                        "regex reference safety should be strictly more permissive \
-                         than the current"
-                            .to_string(),
-                    ),
-                );
+                return Err(partial_vm_error_with_debug_message!(
+                    REFERENCE_SAFETY_INCONSISTENT,
+                    "regex reference safety should be strictly more permissive \
+                     than the current"
+                        .to_string()
+                ));
             }
         }
         reference_safety_res
