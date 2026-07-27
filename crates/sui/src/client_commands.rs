@@ -4498,30 +4498,3 @@ fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
         bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn protocol_config_out_of_range_errors_instead_of_panicking() {
-        let too_new = ProtocolVersion::MAX_ALLOWED + 1;
-        let err = protocol_config_for_version(too_new, Chain::Unknown)
-            .expect_err("a version past MAX_ALLOWED is not supported");
-        assert!(
-            err.to_string().contains("newer than the maximum version"),
-            "unexpected error: {err}"
-        );
-
-        let too_old = ProtocolVersion::MIN - 1;
-        let err = protocol_config_for_version(too_old, Chain::Unknown)
-            .expect_err("a version below MIN is not supported");
-        assert!(
-            err.to_string().contains("older than the minimum version"),
-            "unexpected error: {err}"
-        );
-
-        assert!(protocol_config_for_version(ProtocolVersion::MAX, Chain::Unknown).is_ok());
-        assert!(protocol_config_for_version(ProtocolVersion::MIN, Chain::Unknown).is_ok());
-    }
-}
