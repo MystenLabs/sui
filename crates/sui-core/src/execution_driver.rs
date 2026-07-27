@@ -29,8 +29,9 @@ pub async fn execution_process(
 ) {
     info!("Starting pending certificates execution process.");
 
-    // Rate limit concurrent executions to # of cpus.
-    let limit = Arc::new(Semaphore::new(num_cpus::get()));
+    // Rate limit concurrent executions to half of the available CPUs.
+    let execution_concurrency = std::cmp::max(1, num_cpus::get() / 2);
+    let limit = Arc::new(Semaphore::new(execution_concurrency));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
@@ -88,8 +89,12 @@ pub async fn execution_process(
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
-        // the semaphore in this context.
-        let permit = limit.acquire_owned().await.unwrap();
+        // the semaphore in this context. The scope measures time blocked waiting for a
+        // permit, i.e. how saturated execution concurrency is.
+        let permit = {
+            let _scope = monitored_scope("ExecutionDriver::acquire_permit");
+            limit.acquire_owned().await.unwrap()
+        };
 
         if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
             authority
