@@ -322,19 +322,19 @@ Bigtable writes are idempotent, so you can run several instances at the tip for 
 ### Run `sui-kv-rpc`
 
 ```sh
-sui-kv-rpc --config-path /etc/sui-kv-rpc/config.yaml
+sui-kv-rpc --config /etc/sui-kv-rpc/config.toml
 ```
 
 `instance-id` is the only required setting:
 
-```yaml title="config.yaml"
-instance-id: my-bigtable-instance
-address: "[::]:8000"
-metrics-host: 0.0.0.0
-credentials: /etc/sui-kv-rpc/bigtable-ro-sa.json
-tls-cert: /secrets/cert.pem
-tls-key: /secrets/key.pem
-enable-list-apis: true
+```toml title="config.toml"
+instance-id = "my-bigtable-instance"
+address = "[::]:8000"
+metrics-host = "0.0.0.0"
+credentials = "/etc/sui-kv-rpc/bigtable-ro-sa.json"
+tls-cert = "/secrets/cert.pem"
+tls-key = "/secrets/key.pem"
+enable-list-apis = true
 ```
 
 Run `sui-kv-rpc --config-schema` to print the full JSON Schema with per-field documentation.
@@ -362,9 +362,9 @@ Run `sui-kv-rpc --config-schema` to print the full JSON Schema with per-field do
 
 The old positional and flag form (`<INSTANCE_ID>`, `<ADDRESS>`, `--credentials`, `--tls-cert`, and so on) still works, takes precedence over the config file, and logs a deprecation warning. Use the config file.
 
-#### List API tuning (`ledger-history`)
+#### List API tuning (`[ledger-history]`)
 
-Only used when `enable-list-apis: true`. Each of `list-transactions`, `list-events`, and `list-checkpoints` takes `timeout-ms` (default 30000), `default-limit-items`, `max-limit-items`, and `render-ahead` (default 4).
+Only used when `enable-list-apis = true`. The `[ledger-history.list-transactions]`, `[ledger-history.list-events]`, and `[ledger-history.list-checkpoints]` tables each take `timeout-ms` (default 30000), `default-limit-items`, `max-limit-items`, and `render-ahead` (default 4).
 
 | Method | `default-limit-items` | `max-limit-items` |
 |--------|----------------------|-------------------|
@@ -372,11 +372,11 @@ Only used when `enable-list-apis: true`. Each of `list-transactions`, `list-even
 | `list-events` | 50 | 1000 |
 | `list-checkpoints` | 10 | 50 |
 
-Global: `bitmap-bucket-budget-tx` (4000), `bitmap-bucket-budget-event` (4000), `max-bitmap-filter-literals` (10), `bitmap-drain-probe-rows` (50).
+The `[ledger-history]` table takes `bitmap-bucket-budget-tx` (4000), `bitmap-bucket-budget-event` (4000), `max-bitmap-filter-literals` (10), and `bitmap-drain-probe-rows` (50).
 
-#### Read stages (`stages`)
+#### Read stages (`[stages.<name>]`)
 
-Each of `tx-seq-digest`, `transactions`, `objects`, and `checkpoints` takes `chunk-size` (default 100) and `concurrency`.
+The `[stages.tx-seq-digest]`, `[stages.transactions]`, `[stages.objects]`, and `[stages.checkpoints]` tables each take `chunk-size` (default 100) and `concurrency`.
 
 | Stage | Default `concurrency` |
 |-------|----------------------|
@@ -402,7 +402,7 @@ Same [`LedgerService`](/references/fullnode-protocol) API as a Sui full node, so
 | `ListEvents` | Streaming event listing, optionally filtered. | 50 default, 1000 max |
 | `ListCheckpoints` | Streaming checkpoint listing, optionally filtered. | 10 default, 50 max |
 
-The three List methods return `Unimplemented` unless `enable-list-apis: true`. There are no subscription RPCs. Every method except `GetServiceInfo` supports `read_mask`.
+The three List methods return `Unimplemented` unless `enable-list-apis = true`. There are no subscription RPCs. Every method except `GetServiceInfo` supports `read_mask`.
 
 ### Health check
 
