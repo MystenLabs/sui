@@ -93,7 +93,7 @@ A compliant payment system on Sui follows a four-layer model. Each layer builds 
 
 3. **Token policy enforcement.** Transfer restrictions execute onchain through either [PAS Policies](/onchain-finance/pas/pas-workflows) (which require approval witnesses before allowing fund movement) or [DenyCapV2 deny lists](/onchain-finance/fungible-tokens/regulated-tokens) (which block specific addresses from sending or receiving regulated coins).
 
-4. **Audit trail.** Every payment, approval, and deny-list change emits Sui events. Your compliance system subscribes to these events through [gRPC](/develop/accessing-data/grpc/using-grpc) or [GraphQL](/references/sui-api/sui-graphql) to build an offchain audit log.
+4. **Audit trail.** Every payment, approval, and deny-list change emits Sui events. Your compliance system subscribes to these events through [gRPC](/develop/accessing-data/grpc/using-grpc) or [GraphQL](/references/sui-graphql) to build an offchain audit log.
 
 The key principle is that each layer is independent. You can use DenyCapV2 deny lists without PAS, or PAS without Payment Kit. Choose the combination that matches your regulatory requirements.
 
@@ -133,7 +133,7 @@ sui client call \
   --gas-budget 10000000
 ```
 
-**Epoch delay behavior:** The address can still receive the coin until the current epoch ends. Starting from the next epoch, the address cannot send or receive the coin. Plan your freeze timing around epoch boundaries.
+**Timing behavior:** The denied address cannot use the coin as a transaction input immediately. It can still receive the coin until the next epoch starts, at which point receiving is also blocked.
 
 For the full Move and TypeScript code, see [Regulated Currencies](/onchain-finance/fungible-tokens/regulated-tokens).
 
@@ -151,7 +151,7 @@ sui client call \
   --gas-budget 10000000
 ```
 
-After removal, the address can receive immediately but cannot use the coin as a transaction input until the next epoch.
+After removal, the address can receive the coin immediately. It must wait until the next epoch before it can use the coin as a transaction input.
 
 ### Global pause
 
@@ -167,7 +167,7 @@ sui client call \
   --gas-budget 10000000
 ```
 
-Use global pause for emergency situations only (security breach, regulatory order). Disable it with `deny_list_v2_disable_global_pause` when the situation resolves. Like per-address changes, global pause takes effect at the next epoch.
+Use global pause for emergency situations only (security breach, regulatory order). Disable it with `deny_list_v2_disable_global_pause` when the situation resolves. Global pause blocks use as transaction inputs immediately, same as per-address deny. Receiving is blocked starting at the next epoch.
 
 :::caution DenyCapV2 governance
 

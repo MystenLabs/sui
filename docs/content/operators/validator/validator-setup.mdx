@@ -94,20 +94,29 @@ This creates the key files in the current directory and outputs a `validator.inf
 
 ### Option B: Air-gapped machine
 
-For higher security, generate keys on a machine with no network access:
+For higher security, run the full key generation on a machine with no network access. The `make-validator-info` command reads the active address from the CLI keystore and generates all key files, so the air-gapped machine needs a working Sui CLI installation with the account key imported as the active address.
 
-1. On the air-gapped machine, generate each key separately:
+1. Install the Sui CLI on the air-gapped machine and initialize a client configuration:
 
 ```bash
-sui keytool generate bls12381
-sui keytool generate ed25519   # Repeat for account, network, worker
+sui client
 ```
 
-2. Rename the generated files to `protocol.key`, `account.key`, `network.key`, and `worker.key`.
+2. Generate or import your account key and set it as the active address:
 
-3. Run `make-validator-info` on the **air-gapped machine** (it generates and writes key files itself, so it must run where the keys live). Copy the resulting `validator.info` file to your online machine for the registration step.
+```bash
+sui keytool generate ed25519
+sui client switch --address <GENERATED_ADDRESS>
+```
 
-4. Keep the private key files on the air-gapped machine. You bring them online only when you need to sign.
+3. Run `make-validator-info` on the air-gapped machine. This generates all four key files (`protocol.key`, `account.key`, `network.key`, `worker.key`) and the `validator.info` file:
+
+```bash
+sui validator make-validator-info \
+  <name> <description> <image-url> <project-url> <host-name> <gas-price>
+```
+
+4. Copy only `validator.info` to your online machine for the registration step. Keep the private key files on the air-gapped machine.
 
 For the full offline signing workflow, see [Offline Signing](/develop/transactions/transaction-auth/offline-signing).
 
