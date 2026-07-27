@@ -71,7 +71,7 @@ The client references pools and coins by SDK key. Read-only calls work without a
 
 <ImportContent source="examples/deepbook-spot/src/client.ts" mode="code" tag="client" />
 
-## Set up a BalanceManager
+## Set up a `BalanceManager`
 
 Create one `BalanceManager` and reuse it across runs. It holds your deposited balances and is the account every order trades from. Creating a new manager each run leaves orphaned shared objects and confuses any step that lists your managers, so reuse an existing manager and create only when you have none.
 
