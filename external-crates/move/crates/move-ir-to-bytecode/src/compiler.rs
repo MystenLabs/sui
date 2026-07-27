@@ -361,6 +361,16 @@ pub fn compile_module<'a>(
     module: ModuleDefinition,
     dependencies: impl IntoIterator<Item = &'a CompiledModule>,
 ) -> Result<(CompiledModule, SourceMap)> {
+    compile_module_with_constants(module, dependencies, vec![])
+}
+
+/// Compile a module as `compile_module`, but first seed the constant pool with the given values,
+/// in order, ahead of the module's own constants.
+pub fn compile_module_with_constants<'a>(
+    module: ModuleDefinition,
+    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
+    constant_values: Vec<(Type, MoveValue)>,
+) -> Result<(CompiledModule, SourceMap)> {
     verify_module(&module)?;
 
     let current_module = module.identifier;
@@ -405,6 +415,11 @@ pub fn compile_module<'a>(
         };
         let type_parameters = datatype_type_parameters(&s.value.type_formals);
         context.declare_datatype_handle_index(ident, abilities, type_parameters)?;
+    }
+
+    for (ty, value) in constant_values {
+        let constant = compile_constant(&mut context, &type_to_constant_type_layout(ty)?, value)?;
+        context.constant_index(constant)?;
     }
 
     for ir_constant in module.constants {
@@ -1875,7 +1890,6 @@ fn compile_bytecode(
             let constant = compile_constant(context, &type_to_constant_type_layout(ty)?, v)?;
             Bytecode::LdConst(context.constant_index(constant)?)
         }
-        IRBytecode_::LdNamedConst(c) => Bytecode::LdConst(context.named_constant_index(&c)?),
         IRBytecode_::CopyLoc(sp!(_, v_)) => Bytecode::CopyLoc(function_frame.get_local(&v_)?),
         IRBytecode_::MoveLoc(sp!(_, v_)) => Bytecode::MoveLoc(function_frame.get_local(&v_)?),
         IRBytecode_::StLoc(sp!(_, v_)) => Bytecode::StLoc(function_frame.get_local(&v_)?),

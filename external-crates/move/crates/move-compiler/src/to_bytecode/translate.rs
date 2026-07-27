@@ -671,6 +671,7 @@ fn constant(
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
     let value = value.unwrap();
+    context.record_constant_value(n, signature.clone(), value.clone());
     IR::Constant {
         name,
         signature,
@@ -1225,7 +1226,15 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         }
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
+        E::Constant(c) => {
+            // load the constant by value; it deduplicates onto the pool entry seeded by the
+            // constant's definition
+            let (ty, value) = context
+                .constant_value(&c)
+                .expect("ICE constant without a compiled definition")
+                .clone();
+            code.push(sp(loc, B::LdConst(ty, value)))
+        }
 
         E::ErrorConstant {
             line_number_loc,
