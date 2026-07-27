@@ -33,6 +33,12 @@ module a::m {
     public(package) const MAX: u64 = 100;
     public(package) const BYTES: vector<u8> = b"hello";
     public(package) const ADDR: address = @0x7;
+    public(package) const LIMIT: u64 = 10;
+
+    public macro fun clamp($x: u64): u64 {
+        let x = $x;
+        if (x > LIMIT) LIMIT else x
+    }
 }
 "#;
 
@@ -47,6 +53,9 @@ module a::n {
     public fun bytes(): vector<u8> { m::BYTES }
 
     public fun addr(): address { m::ADDR }
+
+    // the macro body's constant reference expands here, in another module
+    public fun clamped(): u64 { m::clamp!(200) }
 }
 "#;
 
@@ -156,7 +165,7 @@ fn cross_module_constants_from_pre_compiled_lib() {
     assert_eq!(user.named_module.name.as_str(), "n");
     assert_eq!(
         constant_names(user),
-        vec!["D", "_p0_m_ADDR", "_p0_m_BYTES", "_p0_m_MAX"]
+        vec!["D", "_p0_m_ADDR", "_p0_m_BYTES", "_p0_m_LIMIT", "_p0_m_MAX"]
     );
 }
 
@@ -180,10 +189,10 @@ fn cross_module_constant_copies_in_source_map() {
         panic!("expected the lib and user modules to be compiled");
     };
     assert_eq!(lib.named_module.name.as_str(), "m");
-    assert_eq!(constant_names(lib), vec!["ADDR", "BYTES", "MAX"]);
+    assert_eq!(constant_names(lib), vec!["ADDR", "BYTES", "LIMIT", "MAX"]);
     assert_eq!(user.named_module.name.as_str(), "n");
     assert_eq!(
         constant_names(user),
-        vec!["D", "_0_m_ADDR", "_0_m_BYTES", "_0_m_MAX"]
+        vec!["D", "_0_m_ADDR", "_0_m_BYTES", "_0_m_LIMIT", "_0_m_MAX"]
     );
 }

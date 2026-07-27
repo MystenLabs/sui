@@ -81,13 +81,12 @@ pub(super) struct Context<'env> {
     current_package: Option<Symbol>,
     /// the fold state of every constant in the program
     constant_defs: BTreeMap<(ModuleIdent, ConstantName), ConstantEntry>,
-    /// densely-assigned ids for modules outside this compilation, used in copy names: their
-    /// dependency orders come from other compilations and could collide with this one's
     precompiled_module_ids: BTreeMap<ModuleIdent, usize>,
     // Copies of cross-module constants synthesized for the current module. Note the copies have no
     // counterpart in the typing `ProgramInfo`.
     constant_copies: BTreeMap<(ModuleIdent, ConstantName), ConstantName>,
     constant_copy_defs: Vec<(ConstantName, G::Constant)>,
+    constant_copy_names: BTreeSet<Symbol>,
     /// continues after the module's own constants so copies are emitted after them
     constant_copy_index: usize,
     label_count: usize,
@@ -109,6 +108,7 @@ impl<'env> Context<'env> {
             precompiled_module_ids: BTreeMap::new(),
             constant_copies: BTreeMap::new(),
             constant_copy_defs: vec![],
+            constant_copy_names: BTreeSet::new(),
             constant_copy_index: 0,
             label_count: 0,
             named_blocks: UniqueMap::new(),
@@ -123,6 +123,7 @@ impl<'env> Context<'env> {
     fn reset_constant_copies(&mut self, next_index: usize) {
         self.constant_copies = BTreeMap::new();
         self.constant_copy_defs = vec![];
+        self.constant_copy_names = BTreeSet::new();
         self.constant_copy_index = next_index;
     }
 
@@ -185,22 +186,24 @@ impl<'env> Context<'env> {
         defined_loc: Loc,
         use_loc: Loc,
     ) -> ConstantName {
-        let value = constant_values
-            .get(&(m, c))
-            .expect("ICE defined constant with no folded value");
         // pre-compiled modules use their own `p`-prefixed id namespace
         let module_id = match self.precompiled_module_ids.get(&m) {
             Some(id) => format!("p{}", id),
-            None => self
-                .info
-                .module(&m)
-                .dependency_order
-                .expect("ICE typed module with no dependency order")
-                .to_string(),
+            None => match self.info.module(&m).dependency_order {
+                Some(order) => order.to_string(),
+                None => {
+                    self.add_diag(ice!((use_loc, "typed module with no dependency order")));
+                    "0".to_string()
+                }
+            },
         };
-        let symbol = format!("_{}_{}_{}", module_id, m.value.module, c).into();
+        let symbol: Symbol = format!("_{}_{}_{}", module_id, m.value.module, c).into();
         // the copy carries the original definition's loc so tooling points at the definition
         let copy_name = ConstantName(sp(defined_loc, symbol));
+        let Some(value) = constant_values.get(&(m, c)) else {
+            self.add_diag(ice!((use_loc, "defined constant with no folded value")));
+            return copy_name;
+        };
         let cdef = G::Constant {
             warning_filter: empty_filter_scope(),
             index: {
@@ -213,18 +216,14 @@ impl<'env> Context<'env> {
             signature,
             value: Some(move_value_from_value(value.clone())),
         };
-        if self
-            .constant_copy_defs
-            .iter()
-            .any(|(name, _)| *name == copy_name)
-        {
+        if self.constant_copy_names.insert(symbol) {
+            self.constant_copies.insert((m, c), copy_name);
+            self.constant_copy_defs.push((copy_name, cdef));
+        } else {
             self.add_diag(ice!((
                 use_loc,
                 format!("mangled constant copy name collision on '{}'", copy_name)
             )));
-        } else {
-            self.constant_copies.insert((m, c), copy_name);
-            self.constant_copy_defs.push((copy_name, cdef));
         }
         copy_name
     }
@@ -386,20 +385,29 @@ fn seed_precompiled_constants(
         context.precompiled_module_ids.insert(mident, next_id);
         for (cname, cinfo) in minfo.constants.key_cloned_iter() {
             let signature = base_type(&context.reporter, &cinfo.signature);
-            let entry = match cinfo
-                .value
-                .get()
-                .and_then(|mv| value_from_move_value(mv, &signature))
-            {
-                Some(value) => {
-                    constant_values.insert((mident, cname), value);
-                    ConstantEntry::Defined {
-                        loc: cinfo.defined_loc,
-                        signature: Box::new(signature),
-                    }
-                }
+            let entry = match cinfo.value.get() {
                 // the constant's own compilation reported an error for it
                 None => ConstantEntry::Failed,
+                Some(mv) => match value_from_move_value(mv, &signature) {
+                    Some(value) => {
+                        constant_values.insert((mident, cname), value);
+                        ConstantEntry::Defined {
+                            loc: cinfo.defined_loc,
+                            signature: Box::new(signature),
+                        }
+                    }
+                    None => {
+                        context.add_diag(ice!((
+                            cinfo.defined_loc,
+                            format!(
+                                "pre-compiled constant '{}::{}' value disagrees with its \
+                                 signature",
+                                mident, cname
+                            )
+                        )));
+                        ConstantEntry::Failed
+                    }
+                },
             };
             context.constant_defs.insert((mident, cname), entry);
         }
@@ -407,6 +415,7 @@ fn seed_precompiled_constants(
 }
 
 /// Rebuilds an HLIR value from a folded runtime value, driven by the constant's signature
+#[growing_stack]
 fn value_from_move_value(mv: &MoveValue, ty: &H::BaseType) -> Option<Value> {
     use H::TypeName_ as TN;
     use MoveValue as MV;
@@ -857,6 +866,7 @@ fn outside_compilation_use(m: &ModuleIdent, c: &ConstantName, use_loc: Loc) -> D
 /// Collects cross-module constant references that failed to fold or are outside the current
 /// compilation. `Pending` references (module dependency cycles) are excluded: the cycle was
 /// already reported
+#[growing_stack]
 fn unresolved_cross_module_constants(
     context: &Context,
     module: ModuleIdent,
