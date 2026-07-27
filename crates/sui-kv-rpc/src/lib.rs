@@ -4,22 +4,23 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::ensure;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
-use sui_kvstore::ALPHA_PIPELINE_NAMES;
+use sui_kvstore::BITMAP_INDEX_PIPELINE;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
 use sui_kvstore::EPOCH_END_PIPELINE;
 use sui_kvstore::EPOCH_START_PIPELINE;
+use sui_kvstore::EVENT_BITMAP_INDEX_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECTS_PIPELINE;
 pub use sui_kvstore::PoolConfig;
 use sui_kvstore::TRANSACTIONS_PIPELINE;
+use sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::PackageStoreWithLruCache;
 use sui_package_resolver::Resolver;
@@ -58,6 +59,8 @@ pub use config::StageConfig;
 pub use config::StagesConfig;
 use package_store::BigTablePackageStore;
 
+/// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
+/// height, because every instance serves the point-lookup APIs that read them.
 pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
@@ -67,7 +70,14 @@ pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
     EPOCH_END_PIPELINE,
 ];
 
-pub const EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 3] = ALPHA_PIPELINE_NAMES;
+/// Pipelines that only back the List APIs. Folded into the `GetServiceInfo`
+/// watermark set when the List APIs are enabled, so an instance whose indexer
+/// has not caught up on them does not advertise a height it cannot serve.
+pub const LIST_API_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 3] = [
+    TX_SEQ_DIGEST_PIPELINE,
+    BITMAP_INDEX_PIPELINE,
+    EVENT_BITMAP_INDEX_PIPELINE,
+];
 
 pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 
@@ -257,10 +267,10 @@ pub struct KvRpcServer {
     pub(crate) request_bigtable_concurrency: usize,
     pub(crate) stages: StagesConfig,
     // The list RPCs are part of the stable v2 LedgerService, but serving them
-    // requires the experimental query indexing pipelines. Instances without
-    // them reject list requests with `Unimplemented`, matching the behavior
-    // from when the RPCs lived in a separately registered v2alpha service.
-    query_apis_enabled: bool,
+    // needs the pipelines in [`LIST_API_SERVICE_INFO_WATERMARK_PIPELINES`].
+    // Instances that do not index them reject list requests with
+    // `Unimplemented`.
+    list_apis_enabled: bool,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -269,7 +279,6 @@ pub struct ServerConfig {
     pub tls_identity: Option<Identity>,
     pub metrics_registry: Option<Registry>,
     pub enable_reflection: bool,
-    pub enable_experimental_query_apis: bool,
 }
 
 fn ledger_service_with_response_compression<T>(service: T) -> LedgerServiceServer<T>
@@ -289,10 +298,10 @@ impl KvRpcServer {
         registry: &Registry,
         credentials_path: Option<String>,
         pool_config: PoolConfig,
-        service_info_watermark_pipelines: Vec<&'static str>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
         stages: StagesConfig,
+        enable_list_apis: bool,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
@@ -321,7 +330,7 @@ impl KvRpcServer {
             client,
             chain_id,
             server_version,
-            service_info_watermark_pipelines,
+            enable_list_apis,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -342,6 +351,7 @@ impl KvRpcServer {
             LedgerHistoryConfig::default(),
             KvRpcConfig::default().request_bigtable_concurrency(),
             StagesConfig::default(),
+            false,
         )
         .await
     }
@@ -357,6 +367,7 @@ impl KvRpcServer {
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
         stages: StagesConfig,
+        enable_list_apis: bool,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
         // Emulator/test path: metrics are inert (no scrape endpoint), but the
@@ -366,7 +377,7 @@ impl KvRpcServer {
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
-            default_service_info_watermark_pipelines(false),
+            enable_list_apis,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
@@ -378,16 +389,12 @@ impl KvRpcServer {
         client: BigTableClient,
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
-        service_info_watermark_pipelines: Vec<&'static str>,
+        enable_list_apis: bool,
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
         stages: StagesConfig,
     ) -> anyhow::Result<Self> {
-        ensure!(
-            !service_info_watermark_pipelines.is_empty(),
-            "at least one service info watermark pipeline must be configured"
-        );
         ledger_history.validate()?;
 
         let cache = Arc::new(RwLock::new(None));
@@ -401,14 +408,14 @@ impl KvRpcServer {
             chain_id,
             client,
             server_version,
-            service_info_watermark_pipelines,
+            service_info_watermark_pipelines: service_info_watermark_pipelines(enable_list_apis),
             cache,
             package_resolver,
             metrics,
             ledger_history,
             request_bigtable_concurrency,
             stages,
-            query_apis_enabled: false,
+            list_apis_enabled: enable_list_apis,
         };
 
         let server_clone = server.clone();
@@ -435,8 +442,8 @@ impl KvRpcServer {
         Ok(server)
     }
 
-    pub(crate) fn check_query_apis_enabled(&self) -> Result<(), tonic::Status> {
-        if self.query_apis_enabled {
+    pub(crate) fn check_list_apis_enabled(&self) -> Result<(), tonic::Status> {
+        if self.list_apis_enabled {
             Ok(())
         } else {
             Err(tonic::Status::unimplemented(
@@ -448,7 +455,7 @@ impl KvRpcServer {
     /// Start this server as a tonic gRPC service on the given address.
     /// Returns a `Service` handle for lifecycle management.
     pub async fn start_service(
-        mut self,
+        self,
         listen_address: SocketAddr,
         config: ServerConfig,
     ) -> anyhow::Result<sui_futures::service::Service> {
@@ -467,7 +474,6 @@ impl KvRpcServer {
         // backs a gRPC service mounted below. Consumed by both the
         // reflection services and the metrics allowlist so they cannot drift
         // out of sync.
-        self.query_apis_enabled = config.enable_experimental_query_apis;
         let file_descriptor_sets: Vec<&'static [u8]> = vec![
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
@@ -524,12 +530,13 @@ impl KvRpcServer {
     }
 }
 
-pub fn default_service_info_watermark_pipelines(
-    enable_experimental_query_apis: bool,
-) -> Vec<&'static str> {
+/// Pipelines whose watermarks bound the checkpoint height reported by
+/// `GetServiceInfo`: the always-served set, plus the List API pipelines when
+/// those APIs are enabled.
+pub fn service_info_watermark_pipelines(enable_list_apis: bool) -> Vec<&'static str> {
     let mut pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
-    if enable_experimental_query_apis {
-        pipelines.extend_from_slice(&EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES);
+    if enable_list_apis {
+        pipelines.extend_from_slice(&LIST_API_SERVICE_INFO_WATERMARK_PIPELINES);
     }
     pipelines
 }

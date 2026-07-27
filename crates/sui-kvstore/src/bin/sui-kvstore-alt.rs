@@ -15,11 +15,11 @@ use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::default_committer_config;
-use sui_kvstore::parse_alpha_pipeline_name;
 use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
+use tracing::warn;
 
 #[derive(Parser)]
 #[command(name = "sui-kvstore-alt")]
@@ -52,9 +52,10 @@ struct Args {
     #[arg(long)]
     write_legacy_data: bool,
 
-    /// Enable an alpha pipeline by framework pipeline name. Repeat to enable multiple pipelines.
-    #[arg(long = "enable-alpha-pipeline", value_name = "PIPELINE_NAME", value_parser = parse_alpha_pipeline_name)]
-    enable_alpha_pipelines: Vec<&'static str>,
+    /// Deprecated and ignored: the pipelines this used to gate are now always
+    /// registered. Still accepted so existing deployments keep starting.
+    #[arg(long = "enable-alpha-pipeline", value_name = "PIPELINE_NAME")]
+    enable_alpha_pipelines: Vec<String>,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -88,12 +89,16 @@ async fn main() -> Result<()> {
 
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
-    let alpha_pipelines = args.enable_alpha_pipelines;
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
     info!("Config: {:#?}", config);
-    info!(?alpha_pipelines, "Enabled alpha pipelines");
+    if !args.enable_alpha_pipelines.is_empty() {
+        warn!(
+            pipelines = ?args.enable_alpha_pipelines,
+            "--enable-alpha-pipeline is deprecated and ignored; these pipelines are always registered",
+        );
+    }
 
     let channel_timeout = config
         .bigtable_channel_timeout_ms
@@ -135,7 +140,6 @@ async fn main() -> Result<()> {
         indexer_config,
         config.pipeline,
         args.chain,
-        &alpha_pipelines,
         &registry,
     )
     .await?;

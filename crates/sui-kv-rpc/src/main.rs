@@ -11,7 +11,6 @@ use clap::Parser;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kv_rpc::ServerConfig;
-use sui_kvstore::validate_pipeline_name;
 use sui_rpc_api::ServerVersion;
 use telemetry_subscribers::TelemetryConfig;
 
@@ -20,8 +19,8 @@ bin_version::bin_version!();
 #[derive(Parser)]
 struct App {
     /// Path to a YAML config file ([`KvRpcConfig`]). New tunables (concurrency,
-    /// scan budgets, per-endpoint list limits, experimental query APIs) are
-    /// configured here. Run with --config-schema to print the file format.
+    /// scan budgets, per-endpoint list limits, List APIs) are configured here.
+    /// Run with --config-schema to print the file format.
     #[clap(long)]
     config_path: Option<PathBuf>,
 
@@ -57,15 +56,15 @@ struct App {
     /// (deprecated)
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
-    /// (deprecated) Pipeline watermark to include in GetServiceInfo checkpoint
-    /// height. Repeat to include multiple pipelines.
+    /// (deprecated, ignored) Pipeline watermark to include in GetServiceInfo
+    /// checkpoint height. The set is now derived from the `enable-list-apis`
+    /// config field.
     #[clap(
         long = "watermark-pipeline",
         value_name = "PIPELINE",
-        value_delimiter = ',',
-        value_parser = validate_pipeline_name
+        value_delimiter = ','
     )]
-    watermark_pipeline: Vec<&'static str>,
+    watermark_pipeline: Vec<String>,
     /// (deprecated) Channel-level timeout in milliseconds for BigTable gRPC calls.
     #[clap(long = "bigtable-channel-timeout-ms")]
     bigtable_channel_timeout_ms: Option<u64>,
@@ -98,7 +97,8 @@ fn override_field<T>(flag: &str, src: Option<T>, dst: &mut Option<T>) {
 }
 
 /// Apply the deprecated CLI flags on top of a loaded config: each set flag wins
-/// over the config file and emits a deprecation warning.
+/// over the config file and emits a deprecation warning. Flags that no longer
+/// have an effect are reported here too.
 fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
     override_field("--credentials", app.credentials, &mut config.credentials);
     override_field("instance_id", app.instance_id, &mut config.instance_id);
@@ -138,13 +138,28 @@ fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
         &mut config.bigtable_max_pool_size,
     );
 
-    if !app.watermark_pipeline.is_empty() {
-        warn_deprecated("--watermark-pipeline");
-        config.watermark_pipeline = Some(
-            app.watermark_pipeline
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
+    if config.enable_experimental_query_apis.is_some() {
+        tracing::warn!(
+            "the `enable-experimental-query-apis` config field is deprecated and \
+             will be removed; it is still honored, but rename it to \
+             `enable-list-apis`"
+        );
+    }
+
+    // Named in the warning only, so an operator can see exactly which entries
+    // stopped having an effect; nothing reads the value.
+    let ignored_pipelines: Vec<&str> = config
+        .watermark_pipeline
+        .iter()
+        .flatten()
+        .chain(app.watermark_pipeline.iter())
+        .map(String::as_str)
+        .collect();
+    if !ignored_pipelines.is_empty() {
+        tracing::warn!(
+            pipelines = ?ignored_pipelines,
+            "`watermark-pipeline` is deprecated and ignored; the GetServiceInfo \
+             watermark set is derived from `enable-list-apis`"
         );
     }
 }
@@ -192,10 +207,10 @@ async fn main() -> Result<()> {
         &registry,
         config.credentials.clone(),
         config.pool_config(),
-        config.service_info_watermark_pipelines()?,
         config.ledger_history(),
         config.request_bigtable_concurrency(),
         config.stages(),
+        config.enable_list_apis(),
     )
     .await?;
 
@@ -203,7 +218,6 @@ async fn main() -> Result<()> {
         tls_identity: config.tls_identity()?,
         metrics_registry: Some(registry),
         enable_reflection: true,
-        enable_experimental_query_apis: config.enable_experimental_query_apis(),
     };
 
     tokio::spawn(async {
