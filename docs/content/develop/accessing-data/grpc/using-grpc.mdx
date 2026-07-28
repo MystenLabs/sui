@@ -312,7 +312,7 @@ $ buf curl --protocol grpc \
 
 Every response frame in a list API stream includes a `watermark` with a `cursor` that records the server's scan position. When the stream ends, the final frame contains a `query_end` with a `reason` field indicating why the server stopped:
 
-| Reason | Meaning | Action |
+| **Reason** | **Meaning** | **Action** |
 |--------|---------|--------|
 | `ITEM_LIMIT` | Returned the requested number of items. | Resume from the latest `watermark.cursor`. |
 | `SCAN_LIMIT` | The server's internal scan budget was exhausted before finding enough results. Common with sparse filters. | Resume from the latest `watermark.cursor`. The server made progress even if it returned fewer items than requested. |
