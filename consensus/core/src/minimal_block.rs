@@ -1,0 +1,704 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Transport-only "minimal block" codec for bandwidth-efficient block propagation.
+//!
+//! A [`MinimalBlock`] carries a block's BCS bytes with the ancestor vector stripped, plus
+//! just enough structure — the ordered list of ancestor authors and per-ancestor overrides —
+//! for the receiver to reconstruct the exact ancestor `BlockRef`s from its own DAG and
+//! reserialize a byte-identical `SignedBlock`. Ancestor order must be preserved exactly:
+//! the proposer appends score-sorted excluded ancestors after the authority-ordered ones,
+//! so order is not derivable from authority indices.
+//!
+//! The sender's `claimed_block_digest` lets the receiver distinguish a failed local
+//! reconstruction (digest mismatch => fetch the full block from the sending peer) from an
+//! invalid block (digest match + bad signature => reject the peer).
+//!
+//! Minimal blocks are emitted only for live broadcasts on the validator `subscribe_blocks`
+//! stream, and only for V1/V2 blocks — V3 is sent full until it ships and gets codec
+//! coverage here.
+
+// TODO(minimal-blocks): remove once the codec is wired into the subscribe_blocks path.
+#![allow(dead_code)]
+
+use bytes::Bytes;
+use consensus_config::Committee;
+use consensus_types::block::{BlockDigest, BlockRef, Round};
+use prost::Message as _;
+
+use crate::block::{Block, BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock};
+
+/// Digests of blocks known locally at a slot. Backed by DagState in production and by
+/// simple maps in tests.
+pub(crate) trait AncestorDigestResolver {
+    /// All digests known at `slot`, including genesis blocks at round 0.
+    /// May return 0 (unknown slot), 1 (unique block), or more (equivocation).
+    fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest>;
+}
+
+/// The `Minimal` arm of the block wire envelope.
+#[derive(Clone, prost::Message)]
+pub(crate) struct MinimalBlock {
+    /// bcs(Block) built with ancestors = [].
+    #[prost(bytes = "bytes", tag = "1")]
+    block_sans_ancestors: Bytes,
+    /// Ancestor authors in exact proposal order (membership + order).
+    #[prost(uint32, repeated, tag = "2")]
+    ancestor_authors: Vec<u32>,
+    /// Only the unusual ancestors: non-default round and/or explicit digest.
+    #[prost(message, repeated, tag = "3")]
+    overrides: Vec<AncestorOverride>,
+    #[prost(bytes = "bytes", tag = "4")]
+    signature: Bytes,
+    /// 32 B digest of the full serialized SignedBlock: fallback fetch key + error distinction.
+    #[prost(bytes = "bytes", tag = "5")]
+    claimed_block_digest: Bytes,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct AncestorOverride {
+    #[prost(uint32, tag = "1")]
+    author: u32,
+    /// Set only if the ancestor round is not `block.round - 1`.
+    #[prost(uint32, optional, tag = "2")]
+    round: Option<u32>,
+    /// Set only if the slot equivocates, is below the recent-cache horizon, or is
+    /// otherwise not safely resolvable by the receiver.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    digest: Option<Bytes>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum MinimalBlockError {
+    #[error("V3 blocks are not supported by the minimal-block codec")]
+    UnsupportedVariant,
+    #[error("failed to serialize block: {0}")]
+    Serialization(#[from] bcs::Error),
+}
+
+/// Why a minimal block could not be inflated from local state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FallbackReason {
+    /// No block known at the ancestor slot.
+    MissingAncestor(Slot),
+    /// Multiple blocks (equivocation) at the slot and no explicit digest hint.
+    AmbiguousSlot(Slot),
+    /// Reconstructed bytes do not hash to the claimed digest.
+    DigestMismatch,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum InflateError {
+    /// The encoding itself is invalid — a peer fault, not a local-state issue.
+    #[error("malformed minimal block: {0}")]
+    Malformed(String),
+    /// Local state cannot resolve the block; fetch the full block by `block_ref` from
+    /// the sending peer (which authored it and must hold it).
+    #[error("cannot inflate block {block_ref}: {reason:?}")]
+    NeedFullBlock {
+        block_ref: BlockRef,
+        reason: FallbackReason,
+    },
+}
+
+/// Encodes a verified block into its minimal wire form.
+///
+/// Digests are omitted only for slots the receiver can resolve safely: unique in the
+/// local DAG and either genesis or above `min_omittable_round` (the recent-cache
+/// horizon). Everything else gets an explicit digest override.
+pub(crate) fn serialize_minimal(
+    block: &VerifiedBlock,
+    resolver: &impl AncestorDigestResolver,
+    min_omittable_round: Round,
+) -> Result<Bytes, MinimalBlockError> {
+    if matches!(**block, Block::V3(_)) {
+        return Err(MinimalBlockError::UnsupportedVariant);
+    }
+
+    let default_round = block.round().saturating_sub(1);
+    let mut ancestor_authors = Vec::with_capacity(block.ancestors().len());
+    let mut overrides = vec![];
+    for ancestor in block.ancestors() {
+        ancestor_authors.push(ancestor.author.value() as u32);
+
+        let round = (ancestor.round != default_round).then_some(ancestor.round);
+        let can_omit_digest =
+            ancestor.round == GENESIS_ROUND || ancestor.round > min_omittable_round;
+        let uniquely_resolvable = can_omit_digest
+            && matches!(
+                resolver.digests_at_slot(Slot::from(*ancestor)).as_slice(),
+                [digest] if *digest == ancestor.digest
+            );
+        let digest = (!uniquely_resolvable).then(|| Bytes::copy_from_slice(&ancestor.digest.0));
+
+        if round.is_some() || digest.is_some() {
+            overrides.push(AncestorOverride {
+                author: ancestor.author.value() as u32,
+                round,
+                digest,
+            });
+        }
+    }
+
+    let stripped = (**block).clone().with_ancestors(vec![]);
+    let minimal = MinimalBlock {
+        block_sans_ancestors: bcs::to_bytes(&stripped)?.into(),
+        ancestor_authors,
+        overrides,
+        signature: block.signed_block().signature().clone(),
+        claimed_block_digest: Bytes::copy_from_slice(&block.digest().0),
+    };
+    Ok(minimal.encode_to_vec().into())
+}
+
+/// Decodes and inflates a minimal block back into an unverified `SignedBlock` and its
+/// canonical serialized bytes, ready for the normal `verify_and_vote` path.
+///
+/// The returned block is byte-identical to what the author signed iff the computed digest
+/// matches `claimed_block_digest` (checked here). Signature verification is the caller's
+/// responsibility — a signature failure after a digest match is a peer fault, not a
+/// reconstruction failure.
+pub(crate) fn deserialize_minimal(
+    serialized: &[u8],
+    committee: &Committee,
+    resolver: &impl AncestorDigestResolver,
+) -> Result<(SignedBlock, Bytes), InflateError> {
+    let minimal = MinimalBlock::decode(serialized)
+        .map_err(|e| InflateError::Malformed(format!("prost decode: {e}")))?;
+
+    let claimed_digest: [u8; 32] = minimal
+        .claimed_block_digest
+        .as_ref()
+        .try_into()
+        .map_err(|_| InflateError::Malformed("claimed_block_digest must be 32 bytes".into()))?;
+    let claimed_digest = BlockDigest(claimed_digest);
+
+    let skeleton: Block = bcs::from_bytes(&minimal.block_sans_ancestors)
+        .map_err(|e| InflateError::Malformed(format!("bcs decode: {e}")))?;
+    if matches!(skeleton, Block::V3(_)) {
+        return Err(InflateError::Malformed(
+            "V3 blocks must be sent in full form".into(),
+        ));
+    }
+    if !skeleton.ancestors().is_empty() {
+        return Err(InflateError::Malformed(
+            "block_sans_ancestors must have empty ancestors".into(),
+        ));
+    }
+
+    // Bound and validate the untrusted ancestor structure before touching the DAG.
+    let authors = &minimal.ancestor_authors;
+    if authors.len() > committee.size() {
+        return Err(InflateError::Malformed(format!(
+            "{} ancestor authors exceeds committee size {}",
+            authors.len(),
+            committee.size()
+        )));
+    }
+    let mut seen = vec![false; committee.size()];
+    for &author in authors {
+        let Some(_) = committee.to_authority_index(author as usize) else {
+            return Err(InflateError::Malformed(format!(
+                "ancestor author {author} out of range"
+            )));
+        };
+        if std::mem::replace(&mut seen[author as usize], true) {
+            return Err(InflateError::Malformed(format!(
+                "duplicate ancestor author {author}"
+            )));
+        }
+    }
+    if let Some(&first) = authors.first()
+        && first as usize != skeleton.author().value()
+    {
+        return Err(InflateError::Malformed(
+            "first ancestor must be the block author".into(),
+        ));
+    }
+    let mut overridden = vec![false; committee.size()];
+    for o in &minimal.overrides {
+        if o.author as usize >= committee.size() || !seen[o.author as usize] {
+            return Err(InflateError::Malformed(format!(
+                "override for non-ancestor author {}",
+                o.author
+            )));
+        }
+        if std::mem::replace(&mut overridden[o.author as usize], true) {
+            return Err(InflateError::Malformed(format!(
+                "duplicate override for author {}",
+                o.author
+            )));
+        }
+        if let Some(round) = o.round
+            && round >= skeleton.round()
+        {
+            return Err(InflateError::Malformed(format!(
+                "override round {round} not below block round"
+            )));
+        }
+        if let Some(digest) = &o.digest
+            && digest.len() != 32
+        {
+            return Err(InflateError::Malformed(
+                "override digest must be 32 bytes".into(),
+            ));
+        }
+    }
+
+    let block_ref = BlockRef::new(skeleton.round(), skeleton.author(), claimed_digest);
+    let default_round = skeleton.round().saturating_sub(1);
+    let mut ancestors = Vec::with_capacity(authors.len());
+    for &author in authors {
+        let authority = committee
+            .to_authority_index(author as usize)
+            .expect("validated above");
+        let o = minimal.overrides.iter().find(|o| o.author == author);
+        let round = o.and_then(|o| o.round).unwrap_or(default_round);
+        let slot = Slot::new(round, authority);
+        let digest = match o.and_then(|o| o.digest.as_ref()) {
+            Some(digest) => BlockDigest(digest.as_ref().try_into().expect("validated above")),
+            None => match resolver.digests_at_slot(slot).as_slice() {
+                [digest] => *digest,
+                [] => {
+                    return Err(InflateError::NeedFullBlock {
+                        block_ref,
+                        reason: FallbackReason::MissingAncestor(slot),
+                    });
+                }
+                _ => {
+                    return Err(InflateError::NeedFullBlock {
+                        block_ref,
+                        reason: FallbackReason::AmbiguousSlot(slot),
+                    });
+                }
+            },
+        };
+        ancestors.push(BlockRef::new(round, authority, digest));
+    }
+
+    let signed_block =
+        SignedBlock::from_parts(skeleton.with_ancestors(ancestors), minimal.signature);
+    let serialized_block = signed_block
+        .serialize()
+        .map_err(|e| InflateError::Malformed(format!("bcs encode: {e}")))?;
+    if VerifiedBlock::compute_digest(&serialized_block) != claimed_digest {
+        return Err(InflateError::NeedFullBlock {
+            block_ref,
+            reason: FallbackReason::DigestMismatch,
+        });
+    }
+    Ok((signed_block, serialized_block))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use consensus_config::AuthorityIndex;
+    use rand::{RngCore as _, SeedableRng as _, rngs::StdRng};
+
+    use super::*;
+    use crate::{
+        block::{BlockV1, TestBlock, Transaction, genesis_blocks},
+        context::Context,
+    };
+
+    #[derive(Default)]
+    struct MapResolver(BTreeMap<Slot, Vec<BlockDigest>>);
+
+    impl MapResolver {
+        fn insert(&mut self, block_ref: BlockRef) {
+            self.0
+                .entry(Slot::from(block_ref))
+                .or_default()
+                .push(block_ref.digest);
+        }
+    }
+
+    impl AncestorDigestResolver for MapResolver {
+        fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest> {
+            self.0.get(&slot).cloned().unwrap_or_default()
+        }
+    }
+
+    fn test_digest(rng: &mut StdRng) -> BlockDigest {
+        let mut digest = [0u8; 32];
+        rng.fill_bytes(&mut digest);
+        BlockDigest(digest)
+    }
+
+    /// Refs for one ancestor per authority at `round`, own author (0) first, with
+    /// random digests registered in the resolver.
+    fn ancestor_refs(
+        committee_size: usize,
+        round: Round,
+        resolver: &mut MapResolver,
+        rng: &mut StdRng,
+    ) -> Vec<BlockRef> {
+        (0..committee_size)
+            .map(|authority| {
+                let block_ref = BlockRef::new(
+                    round,
+                    AuthorityIndex::new_for_test(authority as u32),
+                    test_digest(rng),
+                );
+                resolver.insert(block_ref);
+                block_ref
+            })
+            .collect()
+    }
+
+    fn sign(
+        block: Block,
+        context: &Context,
+        key_pairs: &[(
+            consensus_config::NetworkKeyPair,
+            consensus_config::ProtocolKeyPair,
+        )],
+    ) -> VerifiedBlock {
+        let author = block.author().value();
+        let signed = SignedBlock::new(block, &key_pairs[author].1).unwrap();
+        let serialized = signed.serialize().unwrap();
+        let verified = VerifiedBlock::new_verified(signed, serialized);
+        verified.signed_block().verify_signature(context).unwrap();
+        verified
+    }
+
+    fn roundtrip(
+        block: &VerifiedBlock,
+        context: &Context,
+        resolver: &impl AncestorDigestResolver,
+        min_omittable_round: Round,
+    ) -> Bytes {
+        let minimal = serialize_minimal(block, resolver, min_omittable_round).unwrap();
+        let (signed, serialized) =
+            deserialize_minimal(&minimal, &context.committee, resolver).unwrap();
+        assert_eq!(&serialized, block.serialized());
+        assert_eq!(VerifiedBlock::compute_digest(&serialized), block.digest());
+        signed.verify_signature(context).unwrap();
+        minimal
+    }
+
+    #[tokio::test]
+    async fn roundtrip_v2_common_case() {
+        let (context, key_pairs) = Context::new_for_test(7);
+        let mut rng = StdRng::seed_from_u64(7);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(7, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors)
+            .set_transactions(vec![Transaction::new(vec![1, 2, 3])])
+            .build();
+        let block = sign(block, &context, &key_pairs);
+
+        let minimal = roundtrip(&block, &context, &resolver, 0);
+        // Common case: every digest resolves locally, so no overrides ride the wire and
+        // the encoding is a small fraction of the full block.
+        let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
+        assert!(decoded.overrides.is_empty());
+        assert!(minimal.len() < block.serialized().len());
+    }
+
+    #[tokio::test]
+    async fn roundtrip_v1() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(4);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 5, &mut resolver, &mut rng);
+        let block = Block::V1(BlockV1::new(
+            0,
+            6,
+            AuthorityIndex::new_for_test(0),
+            1000,
+            ancestors,
+            vec![Transaction::new(vec![9; 100])],
+            vec![],
+            vec![],
+        ));
+        let block = sign(block, &context, &key_pairs);
+        roundtrip(&block, &context, &resolver, 0);
+    }
+
+    #[tokio::test]
+    async fn roundtrip_preserves_non_authority_order() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut resolver = MapResolver::default();
+        let mut ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        // Own-first is required, but the tail order is proposer-defined (score-sorted).
+        ancestors[1..].reverse();
+        let block = TestBlock::new(10, 0).set_ancestors_raw(ancestors).build();
+        let block = sign(block, &context, &key_pairs);
+        roundtrip(&block, &context, &resolver, 0);
+    }
+
+    #[tokio::test]
+    async fn roundtrip_with_overrides() {
+        let (context, key_pairs) = Context::new_for_test(6);
+        let mut rng = StdRng::seed_from_u64(6);
+        let mut resolver = MapResolver::default();
+        let mut ancestors = ancestor_refs(6, 19, &mut resolver, &mut rng);
+        // Ancestor 1: older round => round override.
+        ancestors[1] = BlockRef::new(15, AuthorityIndex::new_for_test(1), test_digest(&mut rng));
+        resolver.insert(ancestors[1]);
+        // Ancestor 2: equivocating slot => sender must attach an explicit digest.
+        resolver.insert(BlockRef::new(
+            19,
+            AuthorityIndex::new_for_test(2),
+            test_digest(&mut rng),
+        ));
+        let block = TestBlock::new(20, 0).set_ancestors_raw(ancestors).build();
+        let block = sign(block, &context, &key_pairs);
+
+        // With min_omittable_round = 16, the round-15 ancestor also needs an explicit
+        // digest (below the recent-cache horizon), on top of its round override.
+        let minimal = roundtrip(&block, &context, &resolver, 16);
+        let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
+        assert_eq!(decoded.overrides.len(), 2);
+        assert!(decoded.overrides.iter().all(|o| o.digest.is_some()));
+    }
+
+    #[tokio::test]
+    async fn roundtrip_genesis_ancestors() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut resolver = MapResolver::default();
+        let genesis: Vec<_> = genesis_blocks(&context)
+            .iter()
+            .map(|b| b.reference())
+            .collect();
+        for genesis_ref in &genesis {
+            resolver.insert(*genesis_ref);
+        }
+        let block = TestBlock::new(1, 0).set_ancestors_raw(genesis).build();
+        let block = sign(block, &context, &key_pairs);
+        // Genesis digests are omittable even when the horizon says "explicit below round 5".
+        let minimal = roundtrip(&block, &context, &resolver, 5);
+        let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
+        assert!(decoded.overrides.is_empty());
+    }
+
+    #[tokio::test]
+    async fn missing_and_ambiguous_slots_fall_back() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(11);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors.clone())
+            .build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+
+        // Receiver missing a slot entirely => MissingAncestor with the fetchable ref.
+        let mut missing = MapResolver::default();
+        for ancestor in &ancestors[..3] {
+            missing.insert(*ancestor);
+        }
+        match deserialize_minimal(&minimal, &context.committee, &missing).map(|_| ()) {
+            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+                assert_eq!(block_ref, block.reference());
+                assert_eq!(
+                    reason,
+                    FallbackReason::MissingAncestor(Slot::from(ancestors[3]))
+                );
+            }
+            other => panic!("expected MissingAncestor fallback, got {other:?}"),
+        }
+
+        // Receiver seeing an equivocation the sender didn't => AmbiguousSlot.
+        let mut ambiguous = MapResolver::default();
+        for ancestor in &ancestors {
+            ambiguous.insert(*ancestor);
+        }
+        ambiguous.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
+        match deserialize_minimal(&minimal, &context.committee, &ambiguous).map(|_| ()) {
+            Err(InflateError::NeedFullBlock { reason, .. }) => {
+                assert_eq!(
+                    reason,
+                    FallbackReason::AmbiguousSlot(Slot::from(ancestors[3]))
+                );
+            }
+            other => panic!("expected AmbiguousSlot fallback, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn wrong_single_block_at_slot_is_digest_mismatch() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(13);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors.clone())
+            .build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+
+        // Receiver holds a *different* single block at one slot (asymmetric equivocation):
+        // reconstruction succeeds but produces the wrong bytes => DigestMismatch.
+        let mut skewed = MapResolver::default();
+        for ancestor in &ancestors[..3] {
+            skewed.insert(*ancestor);
+        }
+        skewed.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
+        match deserialize_minimal(&minimal, &context.committee, &skewed).map(|_| ()) {
+            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+                assert_eq!(block_ref, block.reference());
+                assert_eq!(reason, FallbackReason::DigestMismatch);
+            }
+            other => panic!("expected DigestMismatch fallback, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn malformed_inputs_are_rejected_without_panic() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(17);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0).set_ancestors_raw(ancestors).build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+        let committee = &context.committee;
+
+        // Garbage bytes.
+        assert!(matches!(
+            deserialize_minimal(b"garbage", committee, &resolver),
+            Err(InflateError::Malformed(_))
+        ));
+
+        let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
+        let tamper = |f: &dyn Fn(&mut MinimalBlock)| {
+            let mut m = decoded.clone();
+            f(&mut m);
+            deserialize_minimal(&m.encode_to_vec(), committee, &resolver)
+        };
+
+        // Tampered claimed digest => mismatch fallback, not acceptance.
+        assert!(matches!(
+            tamper(&|m| {
+                let mut digest = m.claimed_block_digest.to_vec();
+                digest[0] ^= 1;
+                m.claimed_block_digest = digest.into();
+            }),
+            Err(InflateError::NeedFullBlock {
+                reason: FallbackReason::DigestMismatch,
+                ..
+            })
+        ));
+        // Bad digest length.
+        assert!(matches!(
+            tamper(&|m| m.claimed_block_digest = Bytes::from_static(&[1, 2, 3])),
+            Err(InflateError::Malformed(_))
+        ));
+        // Duplicate ancestor author.
+        assert!(matches!(
+            tamper(&|m| m.ancestor_authors[2] = m.ancestor_authors[1]),
+            Err(InflateError::Malformed(_))
+        ));
+        // Author out of committee range.
+        assert!(matches!(
+            tamper(&|m| m.ancestor_authors[2] = 100),
+            Err(InflateError::Malformed(_))
+        ));
+        // More authors than the committee.
+        assert!(matches!(
+            tamper(&|m| m.ancestor_authors = (0..10).collect()),
+            Err(InflateError::Malformed(_))
+        ));
+        // First ancestor not the block author.
+        assert!(matches!(
+            tamper(&|m| m.ancestor_authors.swap(0, 1)),
+            Err(InflateError::Malformed(_))
+        ));
+        // Override for a non-ancestor author.
+        assert!(matches!(
+            tamper(&|m| m.overrides.push(AncestorOverride {
+                author: 50,
+                round: None,
+                digest: None
+            })),
+            Err(InflateError::Malformed(_))
+        ));
+        // Override round not below the block round.
+        assert!(matches!(
+            tamper(&|m| m.overrides.push(AncestorOverride {
+                author: 1,
+                round: Some(10),
+                digest: None
+            })),
+            Err(InflateError::Malformed(_))
+        ));
+        // Skeleton with non-empty ancestors (would double-count on splice).
+        assert!(matches!(
+            tamper(&|m| {
+                let skeleton: Block = bcs::from_bytes(&m.block_sans_ancestors).unwrap();
+                let skeleton = skeleton.with_ancestors(vec![BlockRef::MIN]);
+                m.block_sans_ancestors = bcs::to_bytes(&skeleton).unwrap().into();
+            }),
+            Err(InflateError::Malformed(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn v3_is_rejected_by_encoder() {
+        let v3 = Block::V3(crate::block::BlockV3::new(
+            0,
+            10,
+            AuthorityIndex::new_for_test(0),
+            1000,
+            vec![],
+            vec![],
+            vec![],
+            5,
+            vec![],
+            vec![],
+        ));
+        let block = VerifiedBlock::new_for_test(v3);
+        assert!(matches!(
+            serialize_minimal(&block, &MapResolver::default(), 0),
+            Err(MinimalBlockError::UnsupportedVariant)
+        ));
+    }
+
+    /// The first before/after number: post-zstd wire bytes of full vs minimal encoding
+    /// for a mainnet-shaped block (~100 ancestors, high-entropy digests and payload).
+    #[tokio::test]
+    async fn wire_size_savings_mainnet_shape() {
+        const COMMITTEE_SIZE: usize = 100;
+        let (context, key_pairs) = Context::new_for_test(COMMITTEE_SIZE);
+        let mut rng = StdRng::seed_from_u64(2026);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(COMMITTEE_SIZE, 999, &mut resolver, &mut rng);
+        // ~1 KB of high-entropy transaction payload, like real (already-compressed) txns.
+        let transactions = (0..5)
+            .map(|_| {
+                let mut data = vec![0u8; 200];
+                rng.fill_bytes(&mut data);
+                Transaction::new(data)
+            })
+            .collect();
+        let block = TestBlock::new(1000, 0)
+            .set_ancestors_raw(ancestors)
+            .set_transactions(transactions)
+            .build();
+        let block = sign(block, &context, &key_pairs);
+
+        let minimal = roundtrip(&block, &context, &resolver, 0);
+        let full = block.serialized();
+
+        let zstd_len = |bytes: &[u8]| zstd::encode_all(bytes, 3).unwrap().len();
+        let (full_raw, minimal_raw) = (full.len(), minimal.len());
+        let (full_zstd, minimal_zstd) = (zstd_len(full), zstd_len(&minimal));
+        eprintln!(
+            "wire size, mainnet shape ({COMMITTEE_SIZE} ancestors): \
+             full {full_raw} B raw / {full_zstd} B zstd; \
+             minimal {minimal_raw} B raw / {minimal_zstd} B zstd; \
+             post-zstd saving {:.1}%",
+            100.0 * (1.0 - minimal_zstd as f64 / full_zstd as f64)
+        );
+        // The ancestor vector dominates the full block; minimal must reclaim most of it
+        // even after zstd has had its shot at the full encoding.
+        assert!(minimal_zstd * 2 < full_zstd);
+    }
+}

@@ -403,6 +403,19 @@ impl BlockAPI for BlockV3 {
     }
 }
 
+impl Block {
+    /// Replaces the ancestors of this block. Used by the minimal-block codec to strip
+    /// ancestors before serialization and to splice reconstructed ones back in.
+    pub(crate) fn with_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
+        match &mut self {
+            Block::V1(block) => block.ancestors = ancestors,
+            Block::V2(block) => block.ancestors = ancestors,
+            Block::V3(block) => block.ancestors = ancestors,
+        }
+        self
+    }
+}
+
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
@@ -468,6 +481,12 @@ impl SignedBlock {
             inner: block,
             signature: Bytes::copy_from_slice(signature.to_bytes()),
         })
+    }
+
+    /// Reassembles a SignedBlock from a block and existing signature bytes, e.g. when
+    /// reconstructing a block received in minimal form. The result is unverified.
+    pub(crate) fn from_parts(inner: Block, signature: Bytes) -> Self {
+        Self { inner, signature }
     }
 
     pub(crate) fn signature(&self) -> &Bytes {
@@ -610,6 +629,10 @@ impl VerifiedBlock {
 
     pub(crate) fn digest(&self) -> BlockDigest {
         self.digest
+    }
+
+    pub(crate) fn signed_block(&self) -> &SignedBlock {
+        &self.block
     }
 
     /// Returns the serialized block with signature.

@@ -29,6 +29,7 @@ mod leader_slot_decider;
 mod leader_timeout;
 mod linearizer;
 mod metrics;
+mod minimal_block;
 mod network;
 mod observer_service;
 mod observer_subscriber;
