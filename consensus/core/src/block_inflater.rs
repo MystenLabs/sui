@@ -31,8 +31,19 @@ use crate::{
     },
 };
 
-/// A missing ancestor may be an in-flight block; wait this long before the single retry.
-const INFLATE_RETRY_DELAY: Duration = Duration::from_millis(20);
+/// A missing ancestor is usually a block still in the local accept pipeline, so inflation
+/// backs off and retries instead of giving up.
+///
+/// Sized against the alternative, not against latency in the abstract: falling back costs a
+/// full network round trip to the sender *plus* a full-block payload, so waiting a few
+/// hundred milliseconds is strictly cheaper than fetching. The first private-testnet run
+/// (100 validators, single 20 ms retry) fell back on 15-20% of received blocks, and those
+/// fetches consumed ~30% of the bytes the codec had saved.
+const INFLATE_RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_millis(20),
+    Duration::from_millis(60),
+    Duration::from_millis(150),
+];
 
 /// Minimal-block codec bound to live DAG state, usable on both the send side (digest
 /// omission decisions) and the receive side (re-inflation).
@@ -107,23 +118,31 @@ impl BlockInflater {
         )
     }
 
-    /// Inflation with a single bounded retry on a missing ancestor. Any remaining failure
+    /// Inflation with bounded backoff retries on a missing ancestor. Any remaining failure
     /// is the caller's cue to fetch the full block from the sending peer.
+    ///
+    /// Only missing ancestors are retried: an ambiguous slot or a digest mismatch reflects a
+    /// durable difference in local state, which waiting cannot resolve.
     pub(crate) async fn inflate_with_retry(
         &self,
         minimal: &[u8],
         author: AuthorityIndex,
     ) -> Result<(SignedBlock, Bytes), InflateError> {
-        match self.inflate(minimal, author) {
-            Err(InflateError::NeedFullBlock {
-                reason: FallbackReason::MissingAncestor(_),
-                ..
-            }) => {
-                tokio::time::sleep(INFLATE_RETRY_DELAY).await;
-                self.inflate(minimal, author)
+        let mut result = self.inflate(minimal, author);
+        for delay in INFLATE_RETRY_DELAYS {
+            if !matches!(
+                result,
+                Err(InflateError::NeedFullBlock {
+                    reason: FallbackReason::MissingAncestor(_),
+                    ..
+                })
+            ) {
+                break;
             }
-            result => result,
+            tokio::time::sleep(delay).await;
+            result = self.inflate(minimal, author);
         }
+        result
     }
 }
 

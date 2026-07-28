@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -47,6 +52,54 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
     block_inflater: Arc<BlockInflater>,
+    minimal_cache: Arc<MinimalBlockCache>,
+}
+
+/// Shares one minimal encoding of each broadcast block across all subscriber streams.
+///
+/// Every subscriber runs its own stream over the same broadcast, so encoding inside the
+/// per-subscriber closure would re-encode each block once per peer — O(committee size)
+/// redundant work on the hot path. Subscribers observe the same block at nearly the same
+/// time, so a handful of recent entries is enough to collapse that to a single encode;
+/// `Bytes` clones are refcount bumps.
+struct MinimalBlockCache {
+    // Small enough that a linear scan under a short-lived lock beats a hash map.
+    recent: parking_lot::Mutex<VecDeque<(BlockRef, Bytes)>>,
+}
+
+impl MinimalBlockCache {
+    // A few slots absorb subscribers that lag by a block or two without unbounded growth.
+    const CAPACITY: usize = 8;
+
+    fn new() -> Self {
+        Self {
+            recent: parking_lot::Mutex::new(VecDeque::with_capacity(Self::CAPACITY)),
+        }
+    }
+
+    /// Returns the block's minimal encoding, encoding it only on the first request.
+    /// `None` means this block cannot be sent minimally (e.g. an unsupported variant);
+    /// the caller falls back to the full form.
+    fn encode(&self, inflater: &BlockInflater, block: &VerifiedBlock) -> Option<Bytes> {
+        let block_ref = block.reference();
+        {
+            let recent = self.recent.lock();
+            if let Some((_, bytes)) = recent.iter().find(|(r, _)| *r == block_ref) {
+                return Some(bytes.clone());
+            }
+        }
+        // Encode outside the lock: a concurrent subscriber may duplicate this work for the
+        // same block, which is harmless and far cheaper than serializing all subscribers.
+        let bytes = inflater.serialize(block, 0).ok()?;
+        let mut recent = self.recent.lock();
+        if !recent.iter().any(|(r, _)| *r == block_ref) {
+            if recent.len() == Self::CAPACITY {
+                recent.pop_front();
+            }
+            recent.push_back((block_ref, bytes.clone()));
+        }
+        Some(bytes)
+    }
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -77,6 +130,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             round_tracker,
             block_sync_service,
             block_inflater,
+            minimal_cache: Arc::new(MinimalBlockCache::new()),
         }
     }
 
@@ -405,6 +459,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .protocol_config
             .minimal_block_propagation_enabled();
         let block_inflater = self.block_inflater.clone();
+        let minimal_cache = self.minimal_cache.clone();
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
 
@@ -418,9 +473,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 let block_inflater = block_inflater.clone();
                 let context = context.clone();
                 let peer_hostname = peer_hostname.clone();
+                let minimal_cache = minimal_cache.clone();
                 stream::iter(items.into_iter().map(move |extended_block| {
                     let minimal = emit_minimal
-                        .then(|| block_inflater.serialize(&extended_block.block, 0).ok())
+                        .then(|| minimal_cache.encode(&block_inflater, &extended_block.block))
                         .flatten();
                     let mut serialized = ExtendedSerializedBlock::from(extended_block);
                     if let Some(minimal) = &minimal {
