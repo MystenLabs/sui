@@ -1372,8 +1372,11 @@ fn update_known_peers_versioned(
         .our_info_v2
         .as_ref()
         .and_then(|info| info.peer_id());
-    let known_peers_v2 = &mut state.write().unwrap().known_peers_v2;
-    let mut trusted_peer_changed = false;
+
+    // Filter and verify before taking the state write lock: signature
+    // verification is CPU-heavy (up to MAX_PEERS_TO_SEND peers per call).
+    let mut verified_peers = Vec::new();
+    let mut endpoint_updates = Vec::new();
 
     for peer_info in found_peers.into_iter().take(MAX_PEERS_TO_SEND + 1) {
         let timestamp_ms = peer_info.timestamp_ms();
@@ -1409,35 +1412,50 @@ fn update_known_peers_versioned(
             }
         };
 
-        // Forward discovered addresses for trusted peers to EndpointManager.
+        // Collect discovered addresses of trusted peers to forward to the
+        // EndpointManager after the merge below.
         if is_trusted && let VersionedNodeInfo::V2(info_v2) = peer_info.data() {
             for (endpoint_id, addrs) in &info_v2.addresses {
                 if !addrs.is_empty() {
-                    let _ = endpoint_manager.update_endpoint(
-                        endpoint_id.clone(),
-                        AddressSource::Discovery,
-                        addrs.clone(),
-                    );
+                    endpoint_updates.push((endpoint_id.clone(), addrs.clone()));
                 }
             }
         }
 
-        match known_peers_v2.entry(peer_id) {
-            Entry::Occupied(mut o) => {
-                if peer.timestamp_ms() > o.get().timestamp_ms() {
-                    o.insert(peer);
+        verified_peers.push((peer_id, peer, is_trusted));
+    }
+
+    // Merge under a brief write lock; the guard must drop before the
+    // forwarding below.
+    let mut trusted_peer_changed = false;
+    {
+        let known_peers_v2 = &mut state.write().unwrap().known_peers_v2;
+        for (peer_id, peer, is_trusted) in verified_peers {
+            match known_peers_v2.entry(peer_id) {
+                Entry::Occupied(mut o) => {
+                    if peer.timestamp_ms() > o.get().timestamp_ms() {
+                        o.insert(peer);
+                        if is_trusted {
+                            trusted_peer_changed = true;
+                        }
+                    }
+                }
+                Entry::Vacant(v) => {
+                    v.insert(peer);
                     if is_trusted {
                         trusted_peer_changed = true;
                     }
                 }
             }
-            Entry::Vacant(v) => {
-                v.insert(peer);
-                if is_trusted {
-                    trusted_peer_changed = true;
-                }
-            }
         }
+    }
+
+    // Forward after the merge: handle_peer_address_change's Chain-source
+    // fallback reads known_peers_v2, so this batch must be visible there
+    // before these updates are processed. update_endpoint also acquires locks
+    // in other subsystems, so it must not run under the state lock.
+    for (endpoint_id, addrs) in endpoint_updates {
+        let _ = endpoint_manager.update_endpoint(endpoint_id, AddressSource::Discovery, addrs);
     }
 
     trusted_peer_changed
