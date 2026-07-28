@@ -4079,12 +4079,6 @@ impl AuthorityState {
 
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
-        // clear_state_end_of_epoch discards executed-but-not-finalized transaction
-        // outputs, so latest-version observations made during the old epoch are no
-        // longer lower bounds — a bound recorded from discarded execution state could
-        // exceed the reverted durable version and produce a spurious "consumed since
-        // claim" conflict verdict in the new epoch.
-        cur_epoch_store.live_object_cache().clear();
         self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,

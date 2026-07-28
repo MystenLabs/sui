@@ -27,12 +27,14 @@
 //! re-reading the object when the bit is unknown (see
 //! `docs/objects_locking.md` §3.5/§3.6a).
 //!
-//! Entries do not survive restarts (in-memory) and are cleared at epoch
-//! reconfiguration: observations can include executed-but-not-finalized state,
-//! which end-of-epoch clearing discards, invalidating the lower-bound property
-//! for bounds recorded from it. Within an epoch (and across intra-epoch
-//! restarts) the property holds - replayed commits re-execute, so state only
-//! advances.
+//! Entries do not survive restarts (in-memory), and each epoch store owns its
+//! own instance: observations can include executed-but-not-finalized state,
+//! which the end-of-epoch revert discards, invalidating the lower-bound
+//! property for bounds recorded from it - per-epoch ownership discards them
+//! with the store, and a warm still in flight when the epoch closes lands
+//! harmlessly in the dying store's cache. Within an epoch (and across
+//! intra-epoch restarts) the property holds - replayed commits re-execute, so
+//! state only advances.
 
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -217,14 +219,6 @@ impl LiveObjectCache {
         self.shard(id).read().get(id).copied()
     }
 
-    /// Drop all bounds. MUST be called at epoch reconfiguration: end-of-epoch state
-    /// clearing discards executed-but-not-finalized transaction outputs, so bounds
-    /// recorded from that state are no longer lower bounds of durable latest versions.
-    pub fn clear(&self) {
-        for shard in &self.shards {
-            shard.write().clear();
-        }
-    }
 }
 
 impl Default for LiveObjectCache {
