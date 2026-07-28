@@ -503,9 +503,6 @@ Use the following command to run a GraphQL RPC server node:
 ```sh
 $ sui-indexer-alt-graphql rpc \
     --config <PATH_TO_GRAPHQL_CONFIG_FILE> \
-    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_1> \
-    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_2> \
-    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_3> \
     --ledger-grpc-url <LEDGER_GRPC_URL> \
     --consistent-store-url <CONSISTENT_STORE_URL> \
     --database-url <DATABASE_URL> \
@@ -514,12 +511,11 @@ $ sui-indexer-alt-graphql rpc \
     --metrics-address <METRICS_ADDRESS>
 ```
 
-Multiple `--indexer-config` parameters can be provided, one for each general-purpose indexer instance.
+The GraphQL config file's `[pipeline-defaults]` and `[pipeline.<name>]` sections declare which pipelines the RPC server should expect to find populated in the database -- see [Generating configuration](#generating-configuration).
 
 | **CLI parameter** | **Description** |
 | --- | --- |
 | `PATH_TO_GRAPHQL_CONFIG_FILE` | Path to the optional GraphQL RPC server configuration file. |
-| `PATH_TO_INDEXER_CONFIG_FILE` | Path to a General-purpose Indexer configuration file; repeat for each group of pipelines. |
 | `LEDGER_GRPC_URL` | Archival Service `LedgerService` gRPC URL. |
 | `CONSISTENT_STORE_URL` | [Consistent store](#consistent-store-setup) gRPC URL. Use `http://` unless you explicitly configured its TLS listener. |
 | `DATABASE_URL` | Postgres database connection string. |
@@ -534,13 +530,6 @@ $ export FULLNODE_GRPC_URL=https://your-rpc-provider.example:443
 
 $ sui-indexer-alt-graphql rpc \
     --config graphql.toml \
-    --indexer-config events.toml \
-    --indexer-config obj_versions.toml \
-    --indexer-config tx_affected_addresses.toml \
-    --indexer-config tx_affected_objects.toml \
-    --indexer-config tx_calls.toml \
-    --indexer-config tx_kinds.toml \
-    --indexer-config unpruned.toml \
     --ledger-grpc-url https://archive.mainnet.sui.io:443 \
     --consistent-store-url http://127.0.0.1:7001 \
     --database-url postgres://username:password@localhost:5432/database \

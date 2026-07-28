@@ -314,7 +314,6 @@ pub async fn start_rpc(
     subscription_args: args::SubscriptionArgs,
     version: &'static str,
     config: RpcConfig,
-    pg_pipelines: Vec<String>,
     registry: &Registry,
 ) -> anyhow::Result<Service> {
     let rpc = RpcService::new(args, version, schema(), registry);
@@ -368,7 +367,7 @@ pub async fn start_rpc(
 
     let watermark_task = WatermarkTask::new(
         config.watermark,
-        pg_pipelines,
+        config.pipeline,
         pg_reader.clone(),
         bigtable_reader,
         ledger_grpc_reader.clone(),

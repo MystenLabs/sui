@@ -82,10 +82,16 @@ the defaults need to be changed:
 cargo run --bin sui-indexer-alt-graphql -- generate-config > graphql_config.toml
 ```
 
-GraphQL also needs access to the configuration of the indexer(s) that are
-writing to the database it is reading from. It uses these to understand which
-pipelines are being populated and therefore what features should be available
-in the database.
+The config file's `[pipeline-defaults]` and `[pipeline.<name>]` sections tell
+GraphQL which pipelines it can expect to find populated in the database it is
+reading from, so it knows which watermarks to poll for and what features to
+enable. List each pipeline you expect to be populated as `[pipeline.<name>]`
+(e.g. `[pipeline.tx_calls]`); pipelines listed this way are enabled by default.
+Set `enabled = false` under `[pipeline-defaults]` to disable every pipeline
+listed below by default instead, or on a specific `[pipeline.<name>]` entry to
+opt just that one out (or back in, if the default has been flipped to
+disabled). Pipelines that aren't listed at all are never considered enabled.
+See `examples/prod-config/graphql.toml` for an example.
 
 ## Running
 
@@ -93,7 +99,7 @@ The service can be run with the following minimal command:
 
 ```sh
 cargo run --bin sui-indexer-alt-graphql -- rpc \
-  --indexer-config indexer_alt_config.toml
+  --config graphql_config.toml
 ```
 
 In this configuration, the RPC will respond at

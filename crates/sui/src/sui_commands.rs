@@ -1150,7 +1150,7 @@ async fn start(
         }
     };
 
-    let pipelines = if let Some(ref db_url) = database_url {
+    if let Some(ref db_url) = database_url {
         let indexer = setup_indexer(
             db_url.clone(),
             DbArgs::default(),
@@ -1163,13 +1163,10 @@ async fn start(
         .await
         .context("Failed to setup indexer")?;
 
-        let pipelines = indexer.pipelines().map(|s| s.to_string()).collect();
+        let pipelines: Vec<_> = indexer.pipelines().map(|s| s.to_string()).collect();
         rpc_services = rpc_services.merge(indexer.run().await.context("Failed to start indexer")?);
 
         info!("Indexer started with pipelines: {pipelines:?}");
-        pipelines
-    } else {
-        vec![]
     };
 
     let consistent_store_url = if let Some(input) = with_consistent_store {
@@ -1235,7 +1232,6 @@ async fn start(
                 SubscriptionArgs::default(),
                 "0.0.0",
                 graphql_config,
-                pipelines,
                 &prometheus_registry,
             )
             .await
