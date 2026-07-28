@@ -44,6 +44,7 @@
 //! intra-epoch restarts) the property holds - replayed commits re-execute, so
 //! state only advances.
 
+use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
@@ -134,7 +135,10 @@ impl LiveObjectCache {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(DEFAULT_CAPACITY);
-        Self::with_capacity(capacity)
+        // Randomized (possibly tiny) capacity in test configurations: correctness must
+        // not depend on entries staying resident, so constant eviction is a soundness
+        // stressor, not a failure mode.
+        Self::with_capacity(randomize_cache_capacity_in_tests(capacity))
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
