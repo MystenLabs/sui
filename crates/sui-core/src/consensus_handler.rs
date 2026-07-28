@@ -2835,26 +2835,27 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
 
-        // Compute each transaction's lock set once (reused by the per-transaction
-        // acquisition below) and resolve the cross-commit owned-object claim state for
-        // the whole commit up front. That state is constant for the duration of a
-        // commit: new locks are only written at commit end, deferred-lock changes
-        // happen after filtering, and the objects-table verdicts are stable for refs
-        // the in-memory layers do not cover. Over-reading refs of transactions that
-        // are later filtered out is harmless. Absence from the map means the
-        // transaction's input objects are invalid.
-        let mut lock_sets: HashMap<TransactionDigest, Vec<ObjectRef>> = HashMap::new();
+        // Resolve the cross-commit owned-object claim state for the whole commit up
+        // front. That state is constant for the duration of a commit: new locks are
+        // only written at commit end, deferred-lock changes happen after filtering,
+        // and the objects-table verdicts are stable for refs the in-memory layers do
+        // not cover. Over-reading refs of transactions that are later filtered out is
+        // harmless. Lock sets are NOT reused across occurrences of the same digest:
+        // a transaction's lock set depends on its wrapper's immutable claims, which
+        // are not covered by the digest, so occurrences (e.g. a vote-rejected
+        // duplicate with divergent claims) can carry different lock sets. The
+        // acquisition below recomputes the set from each occurrence's own wrapper.
+        let mut prefetch_refs: Vec<ObjectRef> = Vec::new();
         for (_block, parsed_transactions) in &block_transactions {
             for parsed in parsed_transactions {
                 if let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
                     &parsed.transaction.kind
                     && let Some(refs) = owned_object_refs_to_lock(tx_with_claims)
                 {
-                    lock_sets.insert(*tx_with_claims.tx().digest(), refs);
+                    prefetch_refs.extend(refs);
                 }
             }
         }
-        let mut prefetch_refs: Vec<ObjectRef> = lock_sets.values().flatten().copied().collect();
         prefetch_refs.sort();
         prefetch_refs.dedup();
         let (existing_locks, resolution_stats) = resolve_owned_object_lock_states(
@@ -3084,7 +3085,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &parsed.transaction.kind
                 {
                     let tx = tx_with_claims.tx();
-                    let Some(owned_object_refs) = lock_sets.get(tx.digest()) else {
+                    // Recompute from THIS occurrence's wrapper: the lock set depends on
+                    // the wrapper's immutable claims, so another occurrence of the same
+                    // digest (e.g. a vote-rejected duplicate with divergent claims) may
+                    // have a different set — a shared digest-keyed set would let it
+                    // poison this one.
+                    let Some(owned_object_refs) = owned_object_refs_to_lock(tx_with_claims) else {
                         // Invalid input object error is deterministic across all validators.
                         self.metrics
                             .consensus_handler_dropped_transactions
@@ -3106,7 +3112,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     let acquire_result = self
                         .epoch_store
                         .try_acquire_owned_object_locks_post_consensus(
-                            owned_object_refs,
+                            &owned_object_refs,
                             *tx.digest(),
                             &owned_object_locks,
                             &existing_locks,
@@ -3118,7 +3124,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         let table_result = self
                             .epoch_store
                             .try_acquire_owned_object_locks_post_consensus_table_based(
-                                owned_object_refs,
+                                &owned_object_refs,
                                 *tx.digest(),
                                 &owned_object_locks,
                                 &table_locks,
@@ -3164,7 +3170,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .map(|obj_ref| obj_ref.0)
                                 .collect();
                             let mut is_intra_commit_conflict = false;
-                            for obj_ref in owned_object_refs {
+                            for obj_ref in &owned_object_refs {
                                 if let Some(holder_digest) = owned_object_locks.get(obj_ref) {
                                     is_intra_commit_conflict = true;
                                     let info = contested_transaction_digests
@@ -3952,7 +3958,8 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
+            CertifiedTransaction, TransactionClaim, TransactionData, TransactionDataAPI,
+            VerifiedCertificate,
         },
     };
 
@@ -4614,6 +4621,69 @@ mod tests {
         // consensus-processed: rejection is per-position, and the digest must stay
         // resubmittable within the epoch so a later occurrence can be finalized.
         assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
+    }
+
+    // Two occurrences of the same tx digest in one commit can carry different
+    // immutable claims (the claims are not covered by the digest). A vote-rejected
+    // later occurrence falsely claiming a mutable input immutable must not shrink the
+    // lock set of the accepted occurrence: the lock set has to be derived from each
+    // occurrence's own wrapper.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_rejected_duplicate_with_divergent_claims_does_not_poison_lock_set() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let owned_ref = state
+            .get_object(&owned_object.id())
+            .unwrap()
+            .compute_object_reference();
+
+        let transaction = test_user_transaction(
+            &state,
+            sender,
+            &keypair,
+            gas_object,
+            vec![owned_object.clone()],
+        )
+        .await;
+        let honest_wrapper: PlainTransactionWithClaims = transaction.into();
+        let tx_digest = *honest_wrapper.tx().digest();
+        let poisoned_wrapper = PlainTransactionWithClaims::new(
+            honest_wrapper.tx().clone(),
+            vec![TransactionClaim::ImmutableInputObjects(vec![
+                owned_object.id(),
+            ])],
+        );
+        let honest_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, honest_wrapper);
+        let poisoned_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, poisoned_wrapper);
+
+        // The poisoned occurrence is sequenced AFTER the honest one and vote-rejected.
+        let commit = TestConsensusCommit::new(vec![honest_tx, poisoned_tx], 100, 1_000, 10)
+            .with_rejected_indices([1]);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(commit)
+            .await;
+
+        assert_eq!(
+            epoch_store.get_owned_object_lock_in_memory(&owned_ref),
+            Some(tx_digest),
+            "accepted occurrence must lock its mutable input despite the rejected \
+             duplicate claiming it immutable"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
