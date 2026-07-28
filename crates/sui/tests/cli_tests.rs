@@ -792,12 +792,36 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let object_id = object_refs.items.first().unwrap().id();
     let object_to_send = object_refs.items.get(1).unwrap().id();
 
-    SuiClientCommands::Gas {
+    let resp = SuiClientCommands::Gas {
         address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
-    .await?
-    .print(true);
+    .await?;
+
+    let SuiClientCommandResult::Gas(gas) = &resp else {
+        panic!("Expected Gas result");
+    };
+    assert!(!gas.gas_coins.is_empty(), "address should own gas coins");
+    for coin in &gas.gas_coins {
+        assert!(
+            !coin.sui_balance.is_empty(),
+            "each gas coin should report a SUI value"
+        );
+    }
+
+    // The address balance is reported next to the coins, since it is spendable SUI that no
+    // gas object accounts for.
+    let table = format!("{resp}");
+    assert!(
+        table.contains("address balance"),
+        "gas table should include the address balance row:\n{table}"
+    );
+    assert!(
+        format!("{resp:?}").contains("addressSuiBalance"),
+        "--json output should include the address balance"
+    );
+
+    resp.print(true);
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
