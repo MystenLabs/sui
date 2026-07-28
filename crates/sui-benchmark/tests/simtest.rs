@@ -182,6 +182,42 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
+    /// Byte-only load: payload rides as unreferenced pure inputs, so transactions are
+    /// expensive to disseminate and ~free to execute. Guards the failure mode where the
+    /// payload silently never reaches the wire (PTB dedupes identical pure inputs, so
+    /// non-distinct chunks collapse into one and transactions come out tiny).
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_inert_bytes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        simulated_load_config.remote_env = false;
+        simulated_load_config.inert_bytes_weight = 1;
+        simulated_load_config.inert_bytes_size = 100_000;
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 0;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.randomized_transaction_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        simulated_load_config.composite_weight = 0;
+        simulated_load_config.composite_config = None;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+    }
+
     /// Tests conflicting transfer workload which creates contention by submitting
     /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
     /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
@@ -1159,6 +1195,8 @@ mod test {
         num_contested_objects: u64,
         composite_weight: u32,
         composite_config: Option<CompositeWorkloadConfig>,
+        inert_bytes_weight: u32,
+        inert_bytes_size: u64,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1189,6 +1227,8 @@ mod test {
                 num_contested_objects: 2,
                 composite_weight: 1,
                 composite_config: Some(CompositeWorkloadConfig::balanced()),
+                inert_bytes_weight: 0,
+                inert_bytes_size: 100_000,
             }
         }
     }
@@ -1327,6 +1367,7 @@ mod test {
             shared_deletion: config.shared_deletion_weight,
             randomness: config.randomness_weight,
             adversarial: adversarial_weight,
+            inert_bytes: config.inert_bytes_weight,
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
@@ -1341,6 +1382,7 @@ mod test {
             num_transfer_accounts: config.num_transfer_accounts,
             weights,
             adversarial_cfg,
+            inert_bytes_size: config.inert_bytes_size,
             expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
