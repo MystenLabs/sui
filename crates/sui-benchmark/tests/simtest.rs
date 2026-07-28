@@ -182,6 +182,46 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
+    /// Exercises the adversarial LargePureFunctionArgs workload (payload type 5), which
+    /// builds max_function_parameters pure `vector<u8>` args to inflate transaction bytes.
+    /// Regression test for the gas budget: the workload used to request
+    /// protocol_config.max_tx_gas() (now 50,000 SUI), which exceeds the per-coin balance the
+    /// benchmark bank funds (MAX_GAS_FOR_TESTING, 1,000 SUI), panicking on startup.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_adversarial_large_pure_args() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        // Local validator proxy, matching other isolated-workload tests.
+        simulated_load_config.remote_env = false;
+        // ~10 KB transactions: 128 params x (0.005 x 16 KB).
+        simulated_load_config.adversarial_weight = 1;
+        simulated_load_config.adversarial_cfg = "5-0.005".to_string();
+        // Isolate the adversarial workload.
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 0;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.randomized_transaction_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        simulated_load_config.composite_weight = 0;
+        simulated_load_config.composite_config = None;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+    }
+
     /// Tests conflicting transfer workload which creates contention by submitting
     /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
     /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
@@ -1159,6 +1199,8 @@ mod test {
         num_contested_objects: u64,
         composite_weight: u32,
         composite_config: Option<CompositeWorkloadConfig>,
+        adversarial_weight: u32,
+        adversarial_cfg: String,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1189,6 +1231,8 @@ mod test {
                 num_contested_objects: 2,
                 composite_weight: 1,
                 composite_config: Some(CompositeWorkloadConfig::balanced()),
+                adversarial_weight: 0,
+                adversarial_cfg: "0-1.0".to_string(),
             }
         }
     }
@@ -1303,14 +1347,13 @@ mod test {
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
         let batch_payment_size = get_var("SIM_BATCH_PAYMENT_SIZE", 15);
 
-        // Run random payloads at 100% load
-        let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+        let adversarial_cfg = AdversarialPayloadCfg::from_str(&config.adversarial_cfg).unwrap();
         let duration = Interval::from_str("unbounded").unwrap();
 
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // TODO: move adversarial cfg to TestSimulatedLoadConfig once enabled.
         // tests run for ever
-        let adversarial_weight = 0;
+        let adversarial_weight = config.adversarial_weight;
 
         let shared_counter_max_tip = if config.use_shared_counter_max_tip {
             config.shared_counter_max_tip

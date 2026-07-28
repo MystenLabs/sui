@@ -3,7 +3,7 @@
 
 use super::{
     WorkloadBuilderInfo, WorkloadParams,
-    workload::{MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder},
+    workload::{MAX_BUDGET, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder},
 };
 use crate::ProgrammableTransactionBuilder;
 use crate::drivers::Interval;
@@ -214,7 +214,10 @@ impl AdversarialTestPayload {
         let args = self.get_payload_args(payload_type, protocol_config);
         let module_name = "adversarial";
         let account = self.state.account(&self.sender).unwrap();
-        let gas_budget = protocol_config.max_tx_gas();
+        // Size the budget to what the benchmark bank actually funds per gas coin
+        // (MAX_GAS_FOR_TESTING). protocol_config.max_tx_gas() is a protocol ceiling
+        // that has since grown to 50,000 SUI and would exceed every coin's balance.
+        let gas_budget = MAX_BUDGET;
         let gas_price = self
             .system_state_observer
             .state
@@ -474,7 +477,10 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             ..
         } = system_state_observer.state.borrow().clone();
         let protocol_config = protocol_config.unwrap();
-        let gas_budget = protocol_config.max_tx_gas();
+        // Size the budget to what the benchmark bank actually funds per gas coin
+        // (MAX_GAS_FOR_TESTING). protocol_config.max_tx_gas() is a protocol ceiling
+        // that has since grown to 50,000 SUI and would exceed every coin's balance.
+        let gas_budget = MAX_BUDGET;
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish_async(path)
             .await
@@ -580,7 +586,7 @@ struct AdversarialPayloadArgs {
 
 async fn get_max_package_published_compiled_package() -> CompiledPackage {
     let mut path = benchmark_move_base_dir();
-    path.push("src/workloads/data/really_big_package");
+    path.push("src/workloads/data/max_package");
     BuildConfig::new_for_testing()
         .build_async(&path)
         .await
