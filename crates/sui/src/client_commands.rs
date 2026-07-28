@@ -1033,8 +1033,16 @@ impl SuiClientCommands {
 
                     (_, package_path) => {
                         let package_path = package_path.unwrap_or_else(|| PathBuf::from("."));
+                        // Meter what `sui client publish` would actually send, so build the
+                        // package the same way that command does.
+                        let root_pkg = load_root_pkg_for_publish_upgrade(
+                            context,
+                            &build_config,
+                            &package_path,
+                        )
+                        .await?;
                         let package =
-                            compile_package_simple(client, build_config, &package_path, None)
+                            compile_package(client, &root_pkg, build_config, &package_path, false)
                                 .await?;
                         let name = package
                             .package
@@ -1996,27 +2004,6 @@ fn check_dep_verification_flags(
 
         (false, true) => Ok(verify_dependencies),
     }
-}
-
-async fn compile_package_simple(
-    _client: Client,
-    _build_config: MoveBuildConfig,
-    _package_path: &Path,
-    _chain_id: Option<String>,
-) -> Result<CompiledPackage, anyhow::Error> {
-    // build_config.implicit_dependencies = implicit_deps(latest_system_packages());
-    // let config = BuildConfig {
-    //     config: resolve_lock_file_path(build_config, Some(package_path))?,
-    //     run_bytecode_verifier: false,
-    //     print_diags_to_stderr: false,
-    //     chain_id: chain_id.clone(),
-    // };
-    // let resolution_graph = config.resolution_graph(package_path, chain_id.clone())?;
-    // let mut compiled_package =
-    //     build_from_resolution_graph(resolution_graph, false, false, chain_id)?;
-    // pkg_tree_shake(read_api, false, &mut compiled_package).await?;
-    todo!()
-    // Ok(compiled_package)
 }
 
 pub(crate) async fn upgrade_package(
