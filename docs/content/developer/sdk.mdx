@@ -1,0 +1,97 @@
+---
+title: SuiNS SDK
+description: Use the SuiNS SDK to query name service data and build transactions that interact with Sui Name Service.
+keywords: [ SuiNS, SDK, TypeScript, installation, SuinsClient, mainnet, testnet ]
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Use the SuiNS SDK to interact with the Sui Name Service. Query SuiNS data in a usable way and build transactions that interact with service names.
+
+## Installation
+
+<Tabs>
+    <TabItem label="Using @mysten/sui" value="sui">
+    To use with the latest version of the TypeScript SDK, install using:
+    ```bash npm2yarn
+    $ npm i @mysten/suins
+    ```
+    </TabItem>
+    <TabItem label="Using @mysten/sui.js" value="suijs">
+    To use with the older version (prior to 1.x) of the TypeScript SDK (0.54.1), install using:
+    ```bash npm2yarn
+    $ npm i @mysten/suins@0.0.3
+    ```
+    </TabItem>
+</Tabs>
+
+## `SuinsClient`
+
+`SuinsClient` is the base for all SuiNS functionality.
+
+:::info
+
+You should keep only one instance of `SuinsClient` throughout your dApp, API, or script. For example, in React, you should use a context to provide the client.
+
+:::
+
+## Initialize a `SuinsClient`
+
+:::caution
+
+Always keep the dependency updated so you get the latest constants. If you do not, some of your transactions might fail to build.
+
+:::
+
+You can initialize a `SuinsClient` by either providing the active network (`mainnet` or `testnet`),
+or by passing in the constants (usable for any network).
+
+<Tabs groupId='initializer'>
+
+<TabItem label="Network initializer" value='network'>
+```js
+import { SuinsClient } from '@mysten/suins';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+ 
+// You need a Sui client. You can re-use the Sui client of your project
+// (it's not recommended to create a new one).
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+ 
+// Now you can use it to create a SuiNS client.
+const suinsClient = new SuinsClient({
+	client,
+	network: 'testnet',
+});
+```
+</TabItem>
+
+<TabItem label="Constants initializer" value='constants'>
+```js
+import { SuinsClient } from '@mysten/suins';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+ 
+// You need a Sui client. You can re-use the Sui client of your project
+// (it's not recommended to create a new one).
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+ 
+// Now you can use it to create a SuiNS client.
+const suinsClient = new SuinsClient({
+	client,
+    // This example is the Mainnet configuration.
+    packageIds: {
+        suinsPackageId: {
+            latest: '0xb7004c7914308557f7afbaf0dca8dd258e18e306cb7a45b28019f3d0a693f162',
+            v1: '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0',
+        },
+        suinsObjectId: '0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871',
+        utilsPackageId: '0xdac22652eb400beb1f5e2126459cae8eedc116b73b8ad60b71e3e8d7fdb317e2',
+        registrationPackageId: '0x9d451fa0139fef8f7c1f0bd5d7e45b7fa9dbb84c2e63c2819c7abd0a7f7d749d',
+        renewalPackageId: '0xd5e5f74126e7934e35991643b0111c3361827fc0564c83fa810668837c6f0b0f',
+        registryTableId: '0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106',
+    }
+});
+```
+</TabItem>
+
+</Tabs>

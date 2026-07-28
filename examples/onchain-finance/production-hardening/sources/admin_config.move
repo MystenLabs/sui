@@ -1,41 +1,44 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#admin_config
 module example::admin_config;
 
-const EPaused: u64 = 0;
-const ENotAdmin: u64 = 1;
+#[error]
+const EPaused: vector<u8> = b"System is paused";
 
+// docs::#admin_config
 public struct AdminConfig has key {
     id: UID,
-    paused: bool,
-    admin: address,
+    is_paused: bool,
 }
 
 public struct AdminCap has key, store {
     id: UID,
+    config_id: ID,
 }
 
 fun init(ctx: &mut TxContext) {
     let config = AdminConfig {
         id: object::new(ctx),
-        paused: false,
-        admin: ctx.sender(),
+        is_paused: false,
+    };
+    let cap = AdminCap {
+        id: object::new(ctx),
+        config_id: config.id.to_inner(),
     };
     transfer::share_object(config);
-    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
+    transfer::public_transfer(cap, ctx.sender());
 }
 
 public fun assert_not_paused(config: &AdminConfig) {
-    assert!(!config.paused, EPaused);
+    assert!(!config.is_paused, EPaused);
 }
 
-public fun pause(_cap: &AdminCap, config: &mut AdminConfig) {
-    config.paused = true;
+public fun pause(config: &mut AdminConfig, _cap: &AdminCap) {
+    config.is_paused = true;
 }
 
-public fun unpause(_cap: &AdminCap, config: &mut AdminConfig) {
-    config.paused = false;
+public fun unpause(config: &mut AdminConfig, _cap: &AdminCap) {
+    config.is_paused = false;
 }
 // docs::/#admin_config

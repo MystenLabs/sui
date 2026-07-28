@@ -9,9 +9,12 @@ use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 
-const EStreamNotStarted: u64 = 0;
-const ENotRecipient: u64 = 1;
-const ENothingToClaim: u64 = 2;
+#[error]
+const EStreamNotStarted: vector<u8> = b"Stream has not started yet";
+#[error]
+const ENotRecipient: vector<u8> = b"Only the recipient can claim";
+#[error]
+const ENothingToClaim: vector<u8> = b"No claimable amount available";
 
 public struct StreamPayment has key {
     id: UID,
@@ -24,7 +27,8 @@ public struct StreamPayment has key {
     balance: Balance<SUI>,
 }
 
-const EInvalidDuration: u64 = 3;
+#[error]
+const EInvalidDuration: vector<u8> = b"End time must be after start time";
 
 /// Create a new stream. Funds are locked until the recipient claims them.
 public fun create(
@@ -90,16 +94,7 @@ public fun cancel(stream: StreamPayment, clock: &Clock, ctx: &mut TxContext) {
     let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
     let owed_to_recipient = (vested as u64) - stream.claimed_amount;
 
-    let StreamPayment {
-        id,
-        sender,
-        recipient,
-        total_amount: _,
-        claimed_amount: _,
-        start_time_ms: _,
-        end_time_ms: _,
-        mut balance,
-    } = stream;
+    let StreamPayment { id, sender, recipient, mut balance, .. } = stream;
 
     // Transfer vested-but-unclaimed funds to recipient
     if (owed_to_recipient > 0) {

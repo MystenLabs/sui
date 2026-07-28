@@ -3,12 +3,13 @@
 
 module example::guarded_spend;
 
+use example::admin_config::AdminConfig;
 use sui::clock::Clock;
 use sui::coin::Coin;
 
-// Placeholder types referenced from admin_config module
-public struct AdminConfig has key { id: UID, paused: bool }
-public struct SpendingMandate has key { id: UID }
+public struct SpendingMandate has key {
+    id: UID,
+}
 
 // docs::#guarded-spend
 public fun execute_spend<T>(
@@ -16,10 +17,10 @@ public fun execute_spend<T>(
     mandate: &mut SpendingMandate,
     payment: Coin<T>,
     recipient: address,
-    clock: &Clock,
-    ctx: &TxContext,
+    _clock: &Clock,
+    _ctx: &TxContext,
 ) {
-    assert!(!config.paused, 0);
+    example::admin_config::assert_not_paused(config);
     // ... rest of spend logic
     transfer::public_transfer(payment, recipient);
 }

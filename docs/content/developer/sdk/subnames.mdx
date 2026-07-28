@@ -1,0 +1,129 @@
+---
+title: Subname Transactions
+description: Build programmable transaction blocks to create, edit, extend, and remove subnames and leaf subnames using SuinsTransaction.
+keywords: [ SuiNS, subnames, leaf subnames, transactions, PTB, SuinsTransaction, create subname, remove subname ]
+---
+
+This page covers all subname-related PTB commands available through the SDK. For name registration, renewal, and other operations, see [Building Transactions](/developer/sdk/transactions).
+
+### Create a subname
+
+```js
+const createSubname = async (subName: string, parentNftId: string, expirationMs: number) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // We build the transaction to create a subname.
+	const subNameNft = suinsTransaction.createSubName({
+        // The NFT of the parent
+        parentNft: parentNftId,
+        // The subname to be created.
+        name: subName,
+        // The expiration timestamp needs to be less than or equal to the parent's expiration.
+        expirationTimestampMs: expirationMs,
+        // Whether the subname can create more nested subnames.
+        // E.g. more.inner.sui could create even.more.inner.sui
+        allowChildCreation: true,
+        // Whether the subname can manually extend the expiration time to
+        // the expiration time of the parent name. Can be tweaked after creation too.
+        allowTimeExtension: true,
+    });
+
+    // Transfer the NFT
+    transaction.transferObjects([subNameNft], transaction.pure.address('0xMyAddress'));
+    // ... sign and execute the transaction
+}
+```
+
+### Edit subname setup
+
+Allows the parent holder to edit the setup (allow child creation and allow time extension) for a subname.
+
+```js
+const editSetup = async (name: stringify, parentNftId: string, allowChildCreation: boolean, allowTimeExtension: boolean) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // We build the transaction to edit the setup of a subname.
+    suinsTransaction.editSetup({
+        name,
+        parentNft: parentNftId,
+        allowChildCreation,
+        allowTimeExtension,
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+### Extend a subname's expiration
+
+This functionality is available only if the parent allows time extension for the subname.
+
+```js
+const extendExpiration = async (nftId: string, expirationMs: number) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // We build the transaction to extend the expiration of a subname.
+    suinsTransaction.extendExpiration({
+        nft: nftId,
+        expirationTimestampMs: expirationMs,
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+### Create a leaf subname
+
+Read more about the differences between a [subname and a leaf subname](/developer.mdx#subname-types).
+
+```js
+const createLeafSubname = async (name: stringify, parentNftId: string, targetAddress: string) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // We build the transaction to create a leaf subname.
+    // A leaf subname is a subname that has a target address and no NFT of its own.
+    suinsTransaction.createLeafSubName({
+        // The NFT of the parent
+        parentNft: parentNftId,
+        // The leaf subname to be created.
+        name,
+        // the target address of the leaf subname (any valid Sui address)
+        targetAddress
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+### Remove a leaf subname
+
+```js
+const removeLeafSubname = async (name: string, parentNftId: string) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // Build the transaction to remove a leaf subname.
+    suinsTransaction.removeLeafSubName({
+        // The NFT of the parent
+        parentNft: parentNftId,
+        // The leaf subname to be removed.
+        name,
+    });
+
+    // ... sign and execute the transaction
+}
+```

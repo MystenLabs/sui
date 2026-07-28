@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#settlement
 module example::settlement;
 
-use std::string::{Self, String};
+use std::string::String;
 use sui::coin::Coin;
 use sui::event;
+
+#[error]
+const ERecipientMismatch: vector<u8> = b"Recipient does not match proof";
+#[error]
+const EInsufficientAmount: vector<u8> = b"Amount is less than expected";
 
 /// Hot potato (no `drop`): must be consumed in the same transaction.
 public struct SettlementProof {
@@ -20,10 +24,11 @@ public struct SettlementVerified has copy, drop {
     amount: u64,
 }
 
+// docs::#settlement
 /// Execute a payment and return a proof that must be consumed.
 public fun pay_and_prove<T>(payment: Coin<T>, recipient: address): SettlementProof {
     let amount = payment.value();
-    let coin_type = std::string::from_ascii(std::type_name::with_defining_ids<T>().into_string());
+    let coin_type = std::type_name::get_with_original_ids<T>().into_string().to_string();
     transfer::public_transfer(payment, recipient);
 
     SettlementProof { recipient, amount, coin_type }
@@ -37,14 +42,10 @@ public fun verify_settlement(
     expected_recipient: address,
     expected_amount: u64,
 ) {
-    assert!(proof.recipient == expected_recipient, 0);
-    assert!(proof.amount >= expected_amount, 1);
+    let SettlementProof { recipient, amount, coin_type: _ } = proof;
+    assert!(recipient == expected_recipient, ERecipientMismatch);
+    assert!(amount >= expected_amount, EInsufficientAmount);
 
-    event::emit(SettlementVerified {
-        recipient: proof.recipient,
-        amount: proof.amount,
-    });
-
-    let SettlementProof { recipient: _, amount: _, coin_type: _ } = proof;
+    event::emit(SettlementVerified { recipient, amount });
 }
 // docs::/#settlement

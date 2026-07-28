@@ -5,7 +5,8 @@ module example::payment_deadline;
 
 use sui::clock::Clock;
 
-const EPaymentExpired: u64 = 0;
+#[error]
+const EPaymentExpired: vector<u8> = b"Payment deadline has passed";
 
 // docs::#payment-deadline
 public fun pay_with_deadline(clock: &Clock, deadline_ms: u64) {

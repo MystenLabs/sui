@@ -1,0 +1,35 @@
+---
+title: Node Operator Guide
+sidebar_label: Node Operators
+description: Configure full nodes to resolve SuiNS names on Mainnet and Testnet environments for the Sui Name Service.
+keywords: [ SuiNS, node operators, full node, configuration, Mainnet, Testnet, name resolution ]
+---
+
+Full nodes for the Mainnet environment process SuiNS names without additional configuration. The Mysten Labs public nodes for Testnet also resolve SuiNS names. 
+
+Mysten Labs public nodes:
+
+- Mainnet: https://fullnode.mainnet.sui.io:443
+- Testnet: https://fullnode.testnet.sui.io:443
+- Devnet: https://fullnode.devnet.sui.io:443
+    - SuiNS name resolution unavailable for Devnet.
+
+## Full node configuration
+
+Full node configuration is necessary for nodes to resolve SuiNS names in the Testnet environment. Devnet is not supported because of its frequent updates.
+
+:::info
+
+Mainnet nodes resolve SuiNS names without additional configuration.
+
+:::
+
+To configure a node for SuiNS name resolution on Testnet, add the following options to your yaml configuration file:
+
+```sh
+name-service-package-address: 0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93
+name-service-registry-id: 0xb120c0d55432630fce61f7854795a3463deb6e3b443cc4ae72e1282073ff56e4
+name-service-reverse-registry-id: 0xcee9dbb070db70936c3a374439a6adb16f3ba97eac5468d2e1e6fff6ed93e465
+```
+
+For complete details on configuring a Sui Full Node, see [Sui Full Node Configuration](https://docs.sui.io/guides/operator/sui-full-node) on docs.sui.io.

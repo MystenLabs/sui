@@ -1,0 +1,135 @@
+---
+title: MVR CLI
+description: Use the MVR CLI to manage Move package dependencies and interact with the Move Registry for building Move projects on Sui.
+keywords: [ MVR, Move Registry, CLI, dependencies, Move packages, installation, Cargo, binaries ]
+---
+
+import Beta from '@site/src/components/beta'
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Beta/>
+
+Use the MVR CLI to manage your package dependencies and to interact with the Move Registry (MVR). The MVR CLI is a command line tool that enables:
+
+- Adding dependencies to your Move project.
+- Building your Move project with MVR dependencies.
+
+## Installation
+
+There are several ways to install the MVR CLI tool.
+
+### Cargo
+
+Use the following command to install using Cargo:
+
+```sh
+cargo install --locked --git https://github.com/mystenlabs/mvr --branch release mvr
+```
+
+### From binaries
+
+Download the correct binary file for your OS and architecture from the [MVR GitHub release page](https://github.com/MystenLabs/mvr/releases/latest).
+
+After downloading the file, rename the binary to `mvr` and add its location to your system `PATH` variable.
+
+<Tabs groupId='packagemanagers'>
+  <TabItem label="Zsh" value='zsh'>
+  1. Open your `.zshrc` file. This file is typically located at `~/.zshrc` in macOS. If it does not exist, create it.
+  ```sh
+  $ nano ~/.zshrc
+  ```
+  1. Update or add the following `export PATH` command. Be sure to change `/path/to/your/folder` to match your folder path. Separate all paths using a colon, if necessary.
+  ```sh
+  export PATH="/path/to/your/folder:$PATH"
+  ```
+  1. Save the file and use the `source` command to apply changes.
+  ```sh
+  $ source ~/.zshrc
+  ```
+  </TabItem>
+  <TabItem label="Bash" value='bash'>
+  1. Open your `.bashrc` file (or `.bash_profile` on macOS). This file is typically located at `~/.bashrc` in macOS. If it does not exist, create it.
+  ```sh
+  $ nano ~/.bashrc
+  ```
+  1. Update or add the following `export PATH` command. Be sure to change `/path/to/your/folder` to match your folder path. Separate all paths using a colon, if necessary.
+  ```sh
+  export PATH="/path/to/your/folder:$PATH"
+  ```
+  1. Save the file and use the `source` command to apply changes.
+  ```sh
+  $ source ~/.bashrc
+  ```
+  </TabItem>
+  <TabItem label="fish" value='fish'>
+  1. Open your fish configuration file. 
+  ```sh
+  $ nano ~/.config/fish/config.fish
+  ```
+  1. Add the following command to the configuration. Be sure to change `/path/to/your/folder` to match your folder path.
+  ```sh
+  set -Ux fish_user_paths /path/to/your/folder $fish_user_paths
+  ```
+  1. Save the file. 
+  </TabItem>
+  <TabItem label="Windows" value='windows'>
+  1. In Search, search for and then select: **System (Control Panel)**.
+  1. Click the **Advanced system settings** link.
+  1. Click **Environment Variables**. In the section **System Variables** find the **PATH** environment variable and select it. Click **Edit**. If the **PATH** environment variable does not exist, click **New**.
+  1. In the **Edit System Variable** (or **New System Variable**) window, specify the value of the PATH environment variable. Click **OK**. Close all remaining windows by clicking **OK**.
+  </TabItem>
+</Tabs>
+
+### From source
+
+To install from source:
+
+1. Clone the `mvr` repository.
+    ```sh
+    git clone https://github.com/mystenlabs/mvr.git
+    ```
+1. Open a console or terminal to the `mvr/mvr-cli` directory of the repository.
+    ```sh
+    cd mvr/mvr-cli && 
+    ```
+1. Use `cargo` to install from current directory.
+    ```sh
+    cargo install --path .
+    ```
+
+<div className="nx-pt-6">
+:::info
+
+After completing your install from one of the above methods, use a terminal or console to verify installation by typing `mvr --help` and pressing <kbd>Enter</kbd>. If your operating system does not recognize the command, then retry the installation steps.
+
+:::
+</div>
+
+## Add dependencies
+
+To add a dependency to your Move code, use the `mvr add` command. This command adds the dependency to your `Move.toml` file.
+
+```sh
+mvr add <package_name> --network <mainnet|testnet>
+```
+
+MVR adds a new entry to your `Move.toml` file. The following shows an example of the information that MVR adds.
+
+```toml
+[dependencies]
+...
+app = { r.mvr = "@mvr/app" }
+
+[r.mvr]
+network = "mainnet"
+```
+
+## Build against MVR dependencies
+
+Use `sui move build` as usual when building Move packages. The command automatically invokes MVR CLI to resolve dependencies and build your project.
+
+```bash
+sui move build
+```

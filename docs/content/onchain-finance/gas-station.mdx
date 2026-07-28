@@ -52,7 +52,9 @@ answer: >-
   the dual-signed transaction.
 ---
 
-A gas station is a backend service that pays gas on behalf of users or agents. There is no official `sui-gas-station` crate. Build your gas station using the [TypeScript SDK](/develop/transactions/ptbs/building-ptb) and the [sponsored transaction protocol](/develop/transaction-payment/sponsor-txn).
+A gas station is a backend service that pays gas on behalf of users or agents.
+
+The recommended approach is [`@mysten-incubation/sponsor`](https://www.npmjs.com/package/@mysten-incubation/sponsor), which handles gas coin management, transaction validation, and the dual-signature flow out of the box. For custom requirements (non-standard validation, self-managed coin pools), see the [self-hosted gas station](#self-hosted-gas-station) section below.
 
 ## How it works
 
@@ -82,7 +84,54 @@ sequenceDiagram
     C->>N: 6. Submit dual-signed tx
 ```
 
-## Gas coin pool
+## Using `@mysten-incubation/sponsor`
+
+Install the package:
+
+```sh npm2yarn
+npm install @mysten-incubation/sponsor
+```
+
+Create a sponsor from a keypair. The package manages gas coin selection, splitting, and version tracking automatically:
+
+```typescript
+import { Sponsor } from '@mysten-incubation/sponsor';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
+const sponsorKeypair = Ed25519Keypair.fromSecretKey(process.env.SPONSOR_SECRET_KEY!);
+
+const sponsor = new Sponsor({
+  signer: sponsorKeypair,
+  network: 'testnet',
+});
+```
+
+To sponsor a transaction, pass the client's transaction bytes and get back signed bytes:
+
+```typescript
+const { bytes, signature } = await sponsor.sponsor(txBytes);
+```
+
+The package supports pluggable transaction validation. Pass a `validate` callback to enforce allowlists, budget caps, or rate limits before sponsoring:
+
+```typescript
+const sponsor = new Sponsor({
+  signer: sponsorKeypair,
+  network: 'testnet',
+  validate: async (tx) => {
+    // Inspect tx.commands, tx.sender, etc.
+    // Throw to reject
+  },
+});
+```
+
+For full API details, see the [`@mysten-incubation/sponsor` README](https://github.com/MystenLabs/ts-sdks/tree/main/packages/sponsor).
+
+## Self-hosted gas station
+
+If you need full control over gas coin management (custom pool strategies, multi-tenant isolation, or non-standard validation), build a self-hosted gas station using the TypeScript SDK directly.
+
+### Gas coin pool
 
 The sponsor address needs a pool of SUI coins to fund transactions. Two inflight transactions cannot use a single coin simultaneously. If you try, one transaction fails due to an object version conflict.
 

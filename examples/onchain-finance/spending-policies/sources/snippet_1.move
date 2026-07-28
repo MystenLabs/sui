@@ -9,7 +9,7 @@ use example::spending_mandate::{
     SpendingMandate,
     create_mandate,
     execute_spend,
-    remaining_cap,
+    remaining_cap
 };
 use sui::clock;
 use sui::coin;

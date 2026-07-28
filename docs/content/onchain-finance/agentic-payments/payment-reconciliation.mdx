@@ -61,13 +61,7 @@ query AgentTransactions($sender: SuiAddress!, $cursor: String) {
       nodes {
         digest
         effects {
-          balanceChanges {
-            nodes {
-              owner { address }
-              amount
-              coinType { repr }
-            }
-          }
+          balanceChangesJson
         }
       }
       pageInfo {
@@ -78,6 +72,8 @@ query AgentTransactions($sender: SuiAddress!, $cursor: String) {
   }
 }
 ```
+
+`balanceChangesJson` returns the full list as a JSON array, avoiding pagination that `balanceChanges { nodes { ... } }` requires for transactions with many balance changes.
 
 ### Inspecting individual transactions
 

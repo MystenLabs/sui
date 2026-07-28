@@ -1,0 +1,222 @@
+---
+title: Managing Package Metadata
+description: Create and manage PackageInfo objects, add source code information, and configure reverse resolution for your Move packages in the Move Registry.
+keywords: [ MVR, Move Registry, PackageInfo, metadata, source code, reverse resolution, TypeScript SDK, Sui CLI ]
+---
+
+import Beta from '@site/src/components/beta'
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Beta/>
+
+:::caution
+
+The TypeScript examples assume that you use the [MVR plugin](/move-registry/tooling/typescript-sdk) for the Sui TypeScript SDK. The Sui CLI examples do not use the MVR plugin.
+
+:::
+
+## Create a new `PackageInfo` object
+
+You should create a `PackageInfo` object for your package when you first deploy it, once for each network. You can then treat the object as the source of truth for metadata of your package.
+
+The following example works for both Mainnet and Testnet.
+
+<Tabs groupId='language'>
+  <TabItem label="TypeScript" value='typescript'>
+  ```typescript
+const transaction = new Transaction();
+// ... (other code, could also include a `transaction.publish()`
+// call to publish & register in one step.)
+
+/// We pass in our UpgradeCap
+const packageInfo = transaction.moveCall({
+  target: `@mvr/metadata::package_info::new`,
+  arguments: [transaction.object('<Your UpgradeCap (by value or object id)>')],
+});
+
+// We also need to create the visual representation of our "info" object.
+// You can also call `@mvr/metadata::display::new` instead,
+// that allows customizing the colors of your metadata object!
+const display = transaction.moveCall({
+  target: `@mvr/metadata::display::default`,
+  arguments: [
+  transaction.pure.string('<Add a name to easily identify your package. This is not your MVR name.>') // Example: core
+  ],
+});
+
+// Set that display object to our info object.
+transaction.moveCall({
+  target: `@mvr/metadata::package_info::set_display`,
+  arguments: [transaction.object(packageInfo), display],
+});
+
+// Set the default for the packageInfo, which enables reverse resolution for that network
+// See details in reverse resolution section
+transaction.moveCall({
+  target: "@mvr/metadata::package_info::set_metadata",
+  arguments: [
+  transaction.object(packageInfo),
+  transaction.pure.string("default"),
+  transaction.pure.string("<MVR name>"), // Example: @suins/core or suins.sui/core
+  ],
+});
+
+// Optionally unset the metadata for the packageInfo
+// transaction.moveCall({
+//   target: "@mvr/metadata::package_info::unset_metadata",
+//   arguments: [
+//   transaction.object(packageInfo),
+//   transaction.pure.string("default"),
+//   ],
+// });
+
+// transfer the `PackageInfo` object to a safe address.
+transaction.moveCall({
+  target: `@mvr/metadata::package_info::transfer`,
+  arguments: [transaction.object(packageInfo), transaction.pure.address('<Your safe address>')],
+});
+
+// .. you can do any other actions, like setting the source code info, in the same PTB.
+```
+  </TabItem>
+  <TabItem label="Sui CLI" value='cli'>
+  ```bash
+sui client ptb \
+  --move-call @mvr/metadata::package_info::new @<Upgrade cap id or value> --assign packageinfo \
+  --move-call @mvr/metadata::display::default \"sample\" --assign display \
+  --move-call @mvr/metadata::package_info::set_display packageinfo display \
+  --move-call @mvr/metadata::package_info::set_metadata packageinfo \"default\" \"<MVR name>\" \
+  --move-call sui::tx_context::sender --assign sender \
+  --move-call @mvr/metadata::package_info::transfer packageinfo sender
+```
+  </TabItem>
+</Tabs>
+
+## Reverse resolution
+
+Reverse resolution allows you to look up the human-readable name (like @suins/core or suins.sui/core) associated with a given package ID, regardless of which version of the package you have. This is useful for identifying and verifying packages on chain, especially when working with tools or interfaces that reference package IDs directly.
+
+To accomplish this you can add a `default` on a `PackageInfo` object (see previous example), but it needs to match what that MVR name points to in order to resolve.
+
+Example of reverse resolution:
+
+```bash
+curl --location 'https://mainnet.mvr.mystenlabs.com/v1/reverse-resolution/bulk' \
+--header 'Content-Type: application/json' \
+--data '{
+  "package_ids": [
+  "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809",
+  "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5"
+  ]
+}'
+```
+
+Output:
+
+```json
+{
+  "resolution": {
+  "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5": {
+  "name": "@suins/core"
+  },
+  "0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809": {
+  "name": "@deepbook/core"
+  }
+  }
+}
+```
+
+## Add source code information
+
+You can add source code information on your `PackageInfo` object using the following setup.
+
+To update the source for a version, first call `@mvr/metadata::package_info::unset_git_versioning` to remove the existing information.
+
+<Tabs groupId='language'>
+  <TabItem label="TypeScript" value='typescript'>
+  ```typescript
+  const transaction = new Transaction();
+  // adding source code info:
+
+  // 1. Create our `GitInfo` object.
+  const git = transaction.moveCall({
+  target: `@mvr/metadata::git::new`,
+  arguments: [
+  transaction.pure.string('<Your git repository, e.g. `https://github.com/mystenlabs/mvr`>'),
+  transaction.pure.string('<Your git subdirectory, e.g. `packages/mvr`>'),
+  transaction.pure.string('<Your git commit hash or tag, e.g. `636d22d6bc4195afec9a1c0a8563b61fc813acfc`>'),
+  ],
+  });
+
+  transaction.moveCall({
+  target: `@mvr/metadata::package_info::set_git_versioning`,
+  arguments: [
+  transaction.object(`<Your PackageInfo object>`),
+  transaction.pure.u64(`<The version number for the given source code (e.g. 1)>`),
+  git,
+  ],
+  });
+  ```
+  </TabItem>
+  <TabItem label="Sui CLI" value='cli'>
+  ```bash
+  sui client ptb --move-call @mvr/metadata::git::new \
+  "\"<Your git repository, e.g. https://github.com/mystenlabs/mvr>\"" \
+  \"<Your git subdirectory, e.g. packages/mvr>\" \
+  \"<Your git commit hash or tag, e.g. 636d22d6bc4195afec9a1c0a8563b61fc813acfc>\" --assign git \
+  --move-call @mvr/metadata::package_info::set_git_versioning @<Your PackageInfo object> \
+  <The version number for the given source code (e.g. 1)> git
+  ```
+  </TabItem>
+</Tabs>
+
+## Remove or update source code information
+
+<Tabs groupId='language'>
+  <TabItem label="TypeScript" value='typescript'>
+  ```typescript
+  const transaction = new Transaction();
+
+  transaction.moveCall({
+  target: `@mvr/metadata::package_info::unset_git_versioning`,
+  arguments: [
+  transaction.object(`<Your PackageInfo object>`),
+  transaction.pure.u64(`<The version number for the given source code (e.g. 1)>`),
+  ],
+  });
+  // .. you could then follow the previous steps to add the new source code info for that version.
+  ```
+  </TabItem>
+  <TabItem label="Sui CLI" value='cli'>
+  ```bash
+  sui client ptb \
+  --move-call @mvr/metadata::package_info::unset_git_versioning @<Your PackageInfo object> <Version number>
+  ```
+  </TabItem>
+</Tabs>
+
+## Transfer the `PackageInfo` object
+
+You can transfer the `PackageInfo` object to another address (or object) by the following setup. If you want to build custom access control for your object, you can utilize a transfer to object workflow (see [Transfer to Object](https://docs.sui.io/concepts/transfers/transfer-to-object) on the Sui documentation site for more information).
+
+`PackageInfo` does not allow public transfers, to ensure that the object is always indexable (wrapping could hurt the discoverability of the object).
+
+<Tabs groupId='language'>
+  <TabItem label="TypeScript" value='typescript'>
+  ```typescript
+  const transaction = new Transaction();
+
+  // transfer the `PackageInfo` object to a safe address.
+  transaction.moveCall({
+  target: `@mvr/metadata::package_info::transfer`,
+  arguments: [transaction.object(packageInfo), transaction.pure.address('<Your safe address>')],
+  });
+  ```
+  </TabItem>
+  <TabItem label="Sui CLI" value='cli'>
+  ```bash
+  sui client ptb --transfer-objects "[@<packageInfo>]" @<Your safe address>
+  ```
+  </TabItem>
+</Tabs>

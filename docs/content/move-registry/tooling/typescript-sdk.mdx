@@ -1,0 +1,153 @@
+---
+title: Transaction Plugin for Sui TypeScript SDK 
+description: Use the MVR Sui TypeScript SDK plugin to construct programmable transaction blocks with MVR names that resolve to package addresses and types.
+keywords: [ MVR, Move Registry, TypeScript SDK, PTB, programmable transaction blocks, plugin, named packages ]
+---
+
+import Beta from '@site/src/components/beta'
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+
+<Beta/>
+
+The Move Registry (MVR, pronounced mover) Sui TypeScript SDK plugin offers builders a seamless experience when constructing programmable transaction blocks (PTBs) using MVR names. 
+
+The plugin resolves MVR names to their respective addresses before constructing the PTB, caching the results during each runtime.
+
+This also applies to type names, especially across package upgrades.
+
+## Recommended usage
+
+The MVR plugin uses a runtime API to resolve named packages and types. While this is beneficial to the user experience, it naturally comes with considerations around performance, availability, and security.
+
+For this reason, consider using the `@mysten/mvr-static` plugin, which statically resolves all the package addresses and types during the build. The plugin caches your MVR references and exports them to a resolution file.
+
+This approach offers a couple of benefits:
+
+- Enhanced user experience of leveraging MVR in your PTBs for names and types, for both Mainnet and Testnet.
+- Performance (no extra calls to the MVR endpoint) and security of statically resolving MVR references at build time.
+
+Check the NPM page for the [`@mysten/mvr-static` plugin](https://www.npmjs.com/package/@mysten/mvr-static?activeTab=readme) to learn more.
+
+## How to use
+
+:::info
+
+The plugin is functional starting from `@mysten/sui` v1.25.0.
+
+:::
+
+The MVR plugin is exported directly from the `@mysten/sui` package. To enable the plugin, register it either globally or per PTB in your dApp.
+
+### Endpoints
+
+Mysten Labs provides public good endpoints compatible with the MVR plugin.
+
+```
+Mainnet: https://mainnet.mvr.mystenlabs.com
+Testnet: https://testnet.mvr.mystenlabs.com
+```
+
+### Register the plugin
+
+Depending on the architecture of your dApp, you can register the plugin either globally or per PTB.
+
+```typescript
+/** Register the MVR plugin globally */
+
+import { namedPackagesPlugin, Transaction } from "@mysten/sui/transactions";
+
+const plugin = namedPackagesPlugin({ url: '<endpoint based on network>' });
+
+/** Register the MVR plugin globally (once) for our PTB construction */
+Transaction.registerGlobalSerializationPlugin('namedPackagesPlugin', plugin);
+```
+
+```typescript
+/** Register the MVR plugin per PTB */
+
+const mainnetPlugin = namedPackagesPlugin({ url: 'https://mainnet.mvr.mystenlabs.com' });
+const testnetPlugin = namedPackagesPlugin({ url: 'https://testnet.mvr.mystenlabs.com' });
+
+function createTransaction(network: 'mainnet' | 'testnet') {
+    const transaction = new Transaction();
+
+    transaction.addSerializationPlugin(network === 'mainnet' ? mainnetPlugin : testnetPlugin);
+
+    // continue with your transaction.
+}
+```
+
+### Define overrides
+
+If you want to use the plugin locally (for CI), or you want to cache results yourself (without the `@mysten/mvr-static` generator), you can define overrides for the package addresses and types.
+
+```typescript
+const overrides = {
+    packages: {
+        '@suifrens/accessories': '0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430',
+    },
+    types: {
+        '@suifrens/core::suifren::SuiFren': '0x80d7de9c4a56194087e0ba0bf59492aa8e6a5ee881606226930827085ddf2332::suifren::SuiFren',
+        '@suifrens/core::bullshark::Bullshark': '0x8894fa02fc6f36cbc485ae9145d05f247a78e220814fb8419ab261bd81f08f32::bullshark::Bullshark',
+    }
+}
+
+const plugin = namedPackagesPlugin({ url: '<endpoint based on network>', overrides });
+```
+
+## Before and after example
+
+:::caution
+
+The examples in the tabs are simplified for clarity. Actual addresses or names might differ.
+
+:::
+
+<Tabs groupId='packageobject'>
+  <TabItem label="Before MVR" value='before'>
+  Example of a PTB before MVR:
+    ```typescript
+    const transaction = new Transaction();
+
+    // testnet
+    // Notice how the suifren type has a V1 outer package id, and a V2 inner type package id,
+    // even if they are part of the same package upgrades.
+    transaction.moveCall({
+        target: `0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430::accessories::equip`,
+        arguments: [..],
+        typeArguments: [
+            `0x80d7de9c4a56194087e0ba0bf59492aa8e6a5ee881606226930827085ddf2332::suifren::SuiFren<0x297d8afb6ede450529d347cf9254caeea2b685c8baef67b084122291ebaefb38::bullshark::Bullshark>`
+        ]
+    });
+
+    // mainnet
+    transaction.moveCall({
+        target: `0x54800ebb4606fd0c03b4554976264373b3374eeb3fd63e7ff69f31cac786ba8c::accessories::equip`,
+        arguments: [..],
+        typeArguments: [
+            `0xee496a0cc04d06a345982ba6697c90c619020de9e274408c7819f787ff66e1a1::suifren::SuiFren<0x8894fa02fc6f36cbc485ae9145d05f247a78e220814fb8419ab261bd81f08f32::bullshark::Bullshark>`
+        ]
+    });
+    ```
+  </TabItem>
+  <TabItem label="After MVR" value='after'>
+  Example of a PTB after MVR, consistent across networks:
+
+```typescript
+const transaction = new Transaction();
+
+// Now we can use `@suifrens/core` across all package upgrades for type reference.
+// And we also have the guarantee to call the latest version of the accessories package.
+transaction.moveCall({
+    target: `@suifrens/accessories::accessories::equip`,
+    arguments: [..],
+    typeArguments: [
+        `@suifrens/core::suifren::SuiFren<@suifrens/core::bullshark::Bullshark>`
+    ]
+})
+```
+  </TabItem>
+</Tabs>
