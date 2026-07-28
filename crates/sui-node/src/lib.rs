@@ -38,7 +38,6 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
-use sui_core::live_object_cache::LiveObjectCache;
 use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
@@ -650,7 +649,6 @@ impl SuiNode {
                 &registry_service.default_registry(),
             )),
             config.fullnode_sync_mode,
-            Arc::new(LiveObjectCache::new()),
         )?;
 
         info!("created epoch store");

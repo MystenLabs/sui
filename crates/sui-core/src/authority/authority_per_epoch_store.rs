@@ -325,11 +325,13 @@ pub struct AuthorityPerEpochStore {
     /// Holds variouis data from consensus_quarantine in a more easily accessible form.
     pub(crate) consensus_output_cache: ConsensusOutputCache,
 
-    /// Lower bounds on latest object versions, shared with `AuthorityState` and the
-    /// consensus components (vote-time warming, conflict resolution). Held here so the
-    /// quarantine flush can bump bounds for consumed lock refs before dropping their
-    /// in-memory lock entries.
-    live_object_cache: Arc<LiveObjectCache>,
+    /// Lower bounds on latest object versions within this epoch (vote-time warming,
+    /// conflict resolution). Owned per epoch store: bounds derived from state that the
+    /// end-of-epoch revert discards die with the store, so a straggling warm from the
+    /// closing epoch can never leak into the next one. Held here so the quarantine
+    /// flush can bump bounds for consumed lock refs before dropping their in-memory
+    /// lock entries.
+    live_object_cache: LiveObjectCache,
 
     protocol_config: ProtocolConfig,
 
@@ -860,7 +862,6 @@ impl AuthorityPerEpochStore {
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
         fullnode_sync_mode: Option<FullNodeSyncMode>,
-        live_object_cache: Arc<LiveObjectCache>,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1026,7 +1027,7 @@ impl AuthorityPerEpochStore {
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
             consensus_output_cache,
-            live_object_cache,
+            live_object_cache: LiveObjectCache::new(),
             consensus_quarantine: RwLock::new(ConsensusOutputQuarantine::new(
                 highest_executed_checkpoint,
                 metrics.clone(),
@@ -1273,7 +1274,6 @@ impl AuthorityPerEpochStore {
             epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
             fullnode_sync_mode,
-            self.live_object_cache.clone(),
         )
     }
 
@@ -1890,7 +1890,7 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    pub fn live_object_cache(&self) -> &Arc<LiveObjectCache> {
+    pub fn live_object_cache(&self) -> &LiveObjectCache {
         &self.live_object_cache
     }
 

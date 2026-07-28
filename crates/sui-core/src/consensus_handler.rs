@@ -197,9 +197,10 @@ pub(crate) fn resolve_owned_object_lock_states(
         // (including known-absent, the pipelined case) ⇒ unclaimed. The clear direction
         // is sound because every way a consumption can leave the memory layers bumps
         // the bound first: quarantine/deferred flush bumps happen before entry removal
-        // (see commit_with_batch), executions flushed before a restart are visible to
-        // every post-restart warm (the cache is process-lifetime), and bounds recorded
-        // from discarded end-of-epoch state are cleared at reconfiguration.
+        // (see commit_with_batch), a restart starts an empty cache so executions
+        // flushed before it are visible to every post-restart warm, and bounds
+        // recorded from discarded end-of-epoch state die with the epoch store that
+        // owns the cache.
         match live_object_cache.get(&obj_ref.0) {
             Some(VersionLowerBound::Version { version, immutable }) => {
                 stats.cache += 1;
