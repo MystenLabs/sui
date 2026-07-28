@@ -8,25 +8,13 @@ use crate::parser::ast::FunctionName;
 use crate::sui_mode::{SUI_ADDR_NAME, SUI_ADDR_VALUE};
 use crate::typing::visitor::simple_visitor;
 use crate::{
-    diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
-    expansion::ast::Visibility,
-    naming::ast as N,
+    diag, diagnostics::codes::DiagnosticInfo, expansion::ast::Visibility, naming::ast as N,
     typing::ast as T,
 };
 
-use super::{
-    LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-    RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME,
-};
+use super::{RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME, SuiLintCode};
 
-const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::PublicRandom as u8,
-    "Risky use of 'sui::random'",
-);
+const PUBLIC_RANDOM_DIAG: DiagnosticInfo = SuiLintCode::PublicRandom.diag_info();
 
 simple_visitor!(
     PublicRandomVisitor,

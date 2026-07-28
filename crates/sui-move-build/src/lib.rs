@@ -20,6 +20,7 @@ use move_compiler::{
     diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
     linters::LINT_WARNING_PREFIX,
     shared::files::MappedFiles,
+    sui_mode::linters::SUI_LINT_WARNING_PREFIX,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -249,9 +250,16 @@ impl BuildConfig {
 /// There may be additional information that needs to be displayed after diagnostics are reported
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
-    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-    let (filtered_diags_num, unique) =
-        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
+    let lint_prefixes = [LINT_WARNING_PREFIX, SUI_LINT_WARNING_PREFIX];
+    let any_linter_warnings = lint_prefixes
+        .iter()
+        .any(|prefix| warning_diags.any_with_prefix(prefix));
+    let (filtered_diags_num, unique) = lint_prefixes
+        .iter()
+        .map(|prefix| warning_diags.filtered_source_diags_with_prefix(prefix))
+        .fold((0, 0), |(count, unique), (next_count, next_unique)| {
+            (count + next_count, unique + next_unique)
+        });
     if let Some(f) = files {
         report_warnings(f, warning_diags);
     }

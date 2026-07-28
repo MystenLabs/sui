@@ -17,10 +17,7 @@ use crate::{
         },
     },
     diag,
-    diagnostics::{
-        Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-    },
+    diagnostics::{Diagnostic, Diagnostics, codes::DiagnosticInfo},
     expansion::ast::ModuleIdent,
     hlir::ast::{
         BaseType, BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
@@ -35,10 +32,7 @@ use crate::{
     sui_mode::{
         SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
         info::TransferKind,
-        linters::{
-            LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
-            SHARE_FUN, TRANSFER_MOD_NAME, type_abilities,
-        },
+        linters::{PUBLIC_SHARE_FUN, SHARE_FUN, SuiLintCode, TRANSFER_MOD_NAME, type_abilities},
     },
 };
 use move_core_types::account_address::AccountAddress;
@@ -51,13 +45,7 @@ const SHARE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, SHARE_FUN),
 ];
 
-const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::ShareOwned as u8,
-    "possible owned object share",
-);
+const SHARE_OWNED_DIAG: DiagnosticInfo = SuiLintCode::ShareOwned.diag_info();
 
 //**************************************************************************************************
 // types

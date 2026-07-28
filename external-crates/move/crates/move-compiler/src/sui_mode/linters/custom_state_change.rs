@@ -22,10 +22,7 @@ use crate::{
         },
     },
     diag,
-    diagnostics::{
-        Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-    },
+    diagnostics::{Diagnostic, Diagnostics, codes::DiagnosticInfo},
     hlir::ast::{
         BaseType_, Label, ModuleCall, SingleType, SingleType_, Type, Type_, TypeName_, Var,
     },
@@ -36,8 +33,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    FREEZE_FUN, INVALID_LOC, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-    RECEIVE_FUN, SHARE_FUN, TRANSFER_FUN, TRANSFER_MOD_NAME,
+    FREEZE_FUN, INVALID_LOC, RECEIVE_FUN, SHARE_FUN, SuiLintCode, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
 const PRIVATE_OBJ_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
@@ -47,13 +43,7 @@ const PRIVATE_OBJ_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, RECEIVE_FUN),
 ];
 
-const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::CustomStateChange as u8,
-    "potentially unenforceable custom transfer/share/freeze policy",
-);
+const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = SuiLintCode::CustomStateChange.diag_info();
 
 //**************************************************************************************************
 // types
