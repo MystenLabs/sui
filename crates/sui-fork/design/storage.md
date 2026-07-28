@@ -42,66 +42,59 @@ GraphQL RPC. Any post-fork data will go through the local store.
 
 ## Where reads resolve
 
-A fork is a chain that diverged from another at a checkpoint. Call that checkpoint the fork
-point. Its world is made of two disjoint parts: the shared history at or below the fork
+A fork is a chain that diverged from another at a checkpoint. It shares history at or below the fork
 point, which belongs to both chains and which the fork can obtain on demand from the
 forked-from chain, and the fork's own history above it, which exists nowhere else. Every
 read is a question about that composite world, and three rules decide how it is answered.
 
-Local knowledge, when it is authoritative, always wins. The forked-from chain is consulted
-only for shared history, and only through queries pinned at or below the fork point.
-Anything the forked-from chain finalized *after* the fork point is never admitted, because
-that history did not happen here — the two chains disagree from the fork point onward, and
-importing the other one's later state would silently merge two worlds.
+Local knowledge, when it is authoritative, always wins. The real network is consulted
+only for shared history, and only through queries pinned at the fork point.
+Anything the forked network finalized *after* the fork point is never admitted, because
+that history did not happen here.
 
 What differs between reads is only how the request lets the fork decide which part of the
-world it is asking about. That decision is made by the kind of key the request carries.
+data it is asking about.
 
 ### Requests keyed by a checkpoint
 
 The key already answers the question. A checkpoint above the fork point can only have been
-produced by this fork, so it is served locally and a miss is a final answer; asking the
-forked-from chain would return a checkpoint that happens to share a sequence number while
-containing different transactions. A checkpoint at or below the fork point is shared
-history, so a local miss is resolved from the forked-from chain, pinned at that checkpoint,
-and persisted so the question is not asked twice.
+produced by this fork, so it is served locally. A checkpoint at or below the fork point is shared
+history, so a local miss is resolved from the live network RPC, pinned at that checkpoint,
+and persisted locally.
 
 Reads for the *latest* checkpoint ask a different question, and they always mean the
-fork's own tip. A fork that has executed nothing is at
-the fork point; a fork that has executed is ahead of it. The forked-from chain's tip is
-irrelevant and must never be consulted.
+fork's own tip. A fork that has executed nothing is at the fork point; a fork that has executed is ahead of it.
 
-### Requests keyed by a digest
+### Requests keyed by a digest (e.g., transactions, effects)
 
 A digest carries no information about which side of the fork point it falls on, so the fork
 cannot classify the request before answering it. Transactions, their effects, and the
 checkpoint that finalized them all have this shape.
 
-Local knowledge is tried first and is authoritative when present. On a miss the forked-from
-chain is asked, and its answer includes the checkpoint that finalized the transaction. That
+Local storage is tried first and is authoritative when present. On a miss the live network RPC
+is asked, and its answer includes the checkpoint that finalized the transaction. That
 checkpoint is what classifies the request after the fact: at or below the fork point it is
-shared history and is persisted and returned, and above it the transaction belongs to the
-other chain's divergent future and the correct answer is that it does not exist here. A
-digest unknown to both is simply unknown.
+shared history and is persisted and returned, and above the fork point it should exist 
+in the local storage.
 
 ### Requests keyed by an object
 
-An object can be asked about in three ways, and they are not variations of one rule.
+An object can be asked about in three ways:
 
-An exact version is an immutable key: a given version of an object never changes, so a local
-row can be served without further thought, and a miss can be resolved from the forked-from
-chain pinned at the fork point. Pinning is what enforces divergence here — a version created
+- An exact version is an immutable key: a given version of an object never changes, so a local
+row can be served without further thought, and a miss can be resolved from the live network RPC
+pinned at the fork point. Pinning is what enforces divergence here — a version created
 after the fork point does not exist in a query pinned at it, so no separate guard is needed.
 
-A request with no version asks what is *current*, which is a question about the fork's own
+- A request with no version asks what is *current*, which is a question about the fork's own
 state rather than about history, and it is the one object read that cannot be answered from
 stored object rows alone. The fork holds versions sparsely, caching whatever some earlier
 read happened to need, so the highest stored version is not necessarily the live one, and
 finding nothing stored cannot distinguish an object that was removed from one that was never
-fetched. That distinction decides whether to consult the forked-from chain at all, which is
+fetched. That distinction decides whether to consult the live network RPC at all, which is
 why currency is tracked explicitly; the following section describes how.
 
-A request bounded by a version — the highest version at or below some bound, which is how
+- A request bounded by a version — the highest version at or below some bound, which is how
 child objects are read during execution — is the subtle one. A stored row at or below the
 bound is only trustworthy if the fork knows nothing newer can exist below it, which holds
 when that row carries currency authority or is a tombstone. Absent that, the sparse cache
@@ -130,8 +123,7 @@ crate, and one worth stating because nothing here enforces it.
 
 ### Requests keyed by nothing: indexes and enumeration
 
-Reads that enumerate rather than look up split into two kinds, and conflating them is the
-easiest mistake to make here.
+Reads that enumerate rather than look up split into two kinds.
 
 A *state* index answers what is true as of a checkpoint — which objects an address owns,
 which objects have a type, what an address's balance is, which versions of a package exist.
@@ -148,7 +140,7 @@ and starts writing at the next position, so every position below is a real trans
 the other chain that this fork does not hold and cannot obtain. The fork's ledger begins at
 the fork point, and this is a permanent property of forking rather than a missing feature.
 
-### Absence must not be mistaken for emptiness
+### Missing data
 
 Three of the cases above have a range the fork cannot serve: positions below the fork point
 in the ledger, enumerations over pre-fork history, and any pre-fork read at all when the
