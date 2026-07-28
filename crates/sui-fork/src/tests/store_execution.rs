@@ -645,7 +645,7 @@ async fn test_rpc_latest_read_ignores_stale_cached_history() {
     // A pre-fork object whose true current-at-fork version is 9, while the
     // local store holds only a cached historical row at version 5 (the exact
     // state a bounded child read or exact-version read leaves behind: raw row,
-    // no live-state pointer). A latest read through the RPC reader must not
+    // no current-version row). A latest read through the RPC reader must not
     // trust the sparse objects CF's highest row — it must consult the fork's
     // currency authority and fetch the real current version.
     let temp = tempfile::tempdir().expect("failed to create tempdir");

@@ -32,8 +32,8 @@ use crate::remote::RemoteSource;
 /// Runs inventory scans on first use and marks them complete.
 ///
 /// Holds the same snapshot lock as `ForkStore`'s local object writes, so an
-/// inventory scan never interleaves with a local execution's raw-object and
-/// live-state writes (derived index rows are the embedded indexer's job), and
+/// inventory scan never interleaves with a local execution's object and
+/// current-version writes (derived index rows are the embedded indexer's job), and
 /// concurrent scans of the same owner run once.
 pub(crate) struct InventoryInitializer {
     remote: RemoteSource,

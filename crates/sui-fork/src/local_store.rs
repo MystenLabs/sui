@@ -327,9 +327,9 @@ impl LocalStore {
 
     /// Saves an object fetched from the remote chain as current local state if allowed.
     ///
-    /// This records the object row and only updates the live-state pointer when
-    /// the local store has no newer live version and no tombstone. It does not
-    /// populate owner, type, or balance indexes.
+    /// This records the object row and only claims currency for it when the local
+    /// store has no newer live version and no tombstone. It does not populate
+    /// owner, type, or balance indexes.
     pub(crate) fn save_live_object_if_current(&self, object: &Object) -> anyhow::Result<()> {
         let update_live_pointer = match self.get_latest_object_status(object.id())? {
             None => true,
@@ -449,11 +449,11 @@ impl LocalStore {
     }
 
     /// Applies local execution object writes and removals to the raw `objects`
-    /// CF and the fork-owned live-state pointer.
+    /// CF and the checkpoint-pinned version index.
     ///
     /// Write-path contract: local execution synchronously writes only
-    /// *canonical* data — object version rows and tombstones here (plus the
-    /// live-state pointer), and checkpoint/transaction/effects/events rows at
+    /// *canonical* data — object version rows, tombstones, and their
+    /// checkpoint-pinned versions here, and checkpoint/transaction/effects/events rows at
     /// seal time — because the executor needs read-your-writes for its next
     /// inputs and the embedded indexer ingests each sealed checkpoint from
     /// these very rows. All *derived* indexes (owner, type, package-version,

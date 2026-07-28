@@ -322,12 +322,12 @@ impl ForkStore {
     /// then wins here without the remote ever being consulted. Reachable from
     /// `read_child_object` on both the RPC and the executor paths, so it can
     /// skew execution, not just reads. Candidate fix (undecided): short-circuit
-    /// only on live-state authority (`Live(v)` with `v <= bound`) or on an
-    /// authoritative tombstone; otherwise query the remote `RootVersion(bound)`
-    /// and take the max-version of the remote result and the local candidate.
-    /// Optionally let executor-driven bounds (always the parent's current root
-    /// version, which Lamport-dominates the child) set the live pointer on
-    /// fetch so each child pays the remote round-trip once. Tracked in
+    /// only on an authoritative current version at or below the bound, or on a
+    /// tombstone; otherwise query the remote `RootVersion(bound)` and take the
+    /// max-version of the remote result and the local candidate. Optionally let
+    /// executor-driven bounds (always the parent's current root version, which
+    /// Lamport-dominates the child) claim currency on fetch so each child pays
+    /// the remote round-trip once. Tracked in
     /// design/storage.md § "Known gaps".
     fn get_object_lt_or_eq_version(
         &self,

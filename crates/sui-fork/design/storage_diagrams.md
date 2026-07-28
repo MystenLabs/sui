@@ -33,11 +33,9 @@ flowchart TD
     inv --> meta["MetadataStore (sidecar files)"]
     ls --> stock
     ls --> db[("rpc_store RocksDB")]
-    ls --> lsdb[("live_state RocksDB")]
     stock --> db
     rs --> gql["GraphQL, pinned at the fork checkpoint"]
     svc[ServiceManager] -->|opens and owns| db
-    svc -->|opens and owns| lsdb
     svc -->|runs| idx["embedded rpc-store Indexer"]
     idx --> db
     sim -.->|sealed checkpoints are read back for ingestion| idx
@@ -69,17 +67,18 @@ flowchart TD
 
 ### Latest-object reads: the three-way fork
 
-A latest read cannot trust a reverse scan of the sparse `objects` family, so it consults
-the `LiveState` pointer, whose three states map exactly onto the three outcomes. Note the
-`Removed` arm: an authoritative tombstone must never be "resurrected" by a remote fetch.
+A latest read cannot trust a reverse scan of the sparse `objects` family, so it floor-scans
+`object_version_by_checkpoint` instead, bounded at the checkpoint the fork is currently
+producing. Its three outcomes map exactly onto the three the fork needs. Note the tombstone
+arm: an authoritative removal must never be "resurrected" by a remote fetch.
 
 ```mermaid
 flowchart TD
-    go["get_object(id)"] --> ptr{"LiveState pointer for id"}
-    ptr -->|"Live(v)"| row["read the objects row (id, v) locally"] --> ret[return object]
-    ptr -->|Removed| gone["return not found<br/>(authoritative, never ask the remote)"]
-    ptr -->|absent| remote["RemoteSource: object<br/>at the fork checkpoint"]
-    remote -->|found| persist["persist the row,<br/>then set the pointer"] --> ret
+    go["get_object(id)"] --> ptr{"version as of the<br/>current checkpoint"}
+    ptr -->|"live version v"| row["read the objects row (id, v) locally"] --> ret[return object]
+    ptr -->|tombstone version| gone["return not found<br/>(authoritative, never ask the remote)"]
+    ptr -->|no row| remote["RemoteSource: object<br/>at the fork checkpoint"]
+    remote -->|found| persist["persist the row and a restore-floor<br/>index entry, in one batch"] --> ret
     remote -->|never existed| miss[return not found]
 ```
 
@@ -123,20 +122,19 @@ flowchart TD
 
 Everything canonical is written synchronously — the executor needs read-your-writes and
 the indexer re-reads sealed rows — while everything derived is left to the embedded
-indexer. Two orderings keep crashes fail-safe rather than fail-open: rows commit before
-the `LiveState` pointer that makes them authoritative, and removals stage before writes
-within one diff so a wrapped-then-recreated object lands live. A failed persist panics:
-the `SimulatorStore` surface cannot return errors, and executing past one would diverge
-memory from disk.
+indexer. An object row and the index entry making it current commit in one batch, so
+neither can outlive the other. Removals still stage before writes within one diff: both
+target the same checkpoint-pinned key, so the later put is what decides whether a
+wrapped-then-recreated object lands live. A failed persist panics: the `SimulatorStore`
+surface cannot return errors, and executing past one would diverge memory from disk.
 
 ```mermaid
 flowchart TD
     tx[Simulacrum executes a transaction] --> stage["stage tx, effects, events in<br/>PendingCheckpointBuffer (memory)"]
     tx --> diff[apply the object diff under the snapshot lock]
     diff --> removals[stage removals before writes]
-    removals --> rows[commit object rows and tombstones to rpc_store]
-    rows --> ptrs["update LiveState pointers,<br/>after the rows commit"]
-    ptrs --> seal["create_checkpoint seals:<br/>summary, contents, every staged tx row"]
+    removals --> rows["commit object rows, tombstones, and<br/>checkpoint-pinned versions in one batch"]
+    rows --> seal["create_checkpoint seals:<br/>summary, contents, every staged tx row"]
     seal --> clear[drop the staged entries]
     clear --> ingest[embedded Indexer ingests the sealed checkpoint]
     ingest --> derived["write derived indexes:<br/>owner, type, balance, package, bitmaps"]
