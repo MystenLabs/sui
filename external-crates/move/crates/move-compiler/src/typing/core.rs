@@ -11,7 +11,7 @@ use crate::{
     },
     editions::{self, FeatureGate},
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
-    ice,
+    ice, ice_assert,
     naming::ast::{
         self as N, ANYTHING_TYPE, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter,
         EnumDefinition, IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID,
@@ -2058,25 +2058,14 @@ fn check_constant_visibility(
                 (defined_loc, internal_msg)
             ));
         }
-        Visibility::Public(vis_loc) => {
-            // the parser rejects 'public' on constants
-            context.add_diag(ice!(
-                (usage_loc, format!("Invalid access of '{}::{}'", m, c)),
-                (
-                    vis_loc,
-                    "ICE constant declared with disallowed 'public' visibility"
-                )
-            ));
-        }
-        Visibility::Friend(vis_loc) => {
-            // the parser rejects 'public(friend)' on constants
-            context.add_diag(ice!(
-                (usage_loc, format!("Invalid access of '{}::{}'", m, c)),
-                (
-                    vis_loc,
-                    "ICE constant declared with disallowed 'public(friend)' visibility"
-                )
-            ));
+        // rejected during expansion
+        Visibility::Public(vis_loc) | Visibility::Friend(vis_loc) => {
+            ice_assert!(
+                context.reporter,
+                context.env().has_errors(),
+                vis_loc,
+                "constant declared with disallowed visibility"
+            );
         }
     }
 }
