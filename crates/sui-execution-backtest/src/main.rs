@@ -15,6 +15,7 @@
 
 mod context;
 mod execute;
+mod graphql;
 mod grpc;
 mod handler;
 mod ingestion;
@@ -32,6 +33,7 @@ use clap::{Parser, ValueEnum};
 use diesel_migrations::EmbeddedMigrations;
 use diesel_migrations::embed_migrations;
 use prometheus::Registry;
+use sui_data_store::Node;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::TaskArgs;
@@ -49,6 +51,7 @@ use tracing::info;
 use url::Url;
 
 use crate::context::{EpochCtx, resolve_epoch_work};
+use crate::graphql::GqlClient;
 use crate::grpc::RpcClient;
 use crate::handler::{Backtest, CommitRows};
 use crate::ndjson_store::NdjsonStore;
@@ -92,6 +95,11 @@ struct Args {
     /// when that is provided as the checkpoint source.
     #[clap(long)]
     fullnode_url: Option<Url>,
+
+    /// GraphQL endpoint used to read each epoch's framework packages as of its first checkpoint:
+    /// `mainnet`, `testnet`, or a GraphQL url. Required.
+    #[clap(long)]
+    graphql: Node,
 
     /// First epoch to scan (inclusive).
     #[clap(long)]
@@ -168,6 +176,7 @@ async fn main() -> Result<()> {
         .or_else(|| args.client.rpc_api_url.clone())
         .context("provide --fullnode-url (or --rpc-api-url) for epoch and package resolution")?;
     let rpc = RpcClient::new(fullnode_url)?;
+    let gql = GqlClient::new(args.graphql.clone())?;
 
     let registry = Registry::new();
     let execution_metrics = Arc::new(ExecutionMetrics::new(&registry));
@@ -196,6 +205,7 @@ async fn main() -> Result<()> {
         .with_context(|| format!("resolving epoch {}", args.start_epoch))?;
     let (epochs, first_checkpoint, last_checkpoint) = resolve_epoch_work(
         &rpc,
+        &gql,
         chain,
         args.start_epoch..=args.end_epoch,
         args.max_checkpoints_per_epoch,
