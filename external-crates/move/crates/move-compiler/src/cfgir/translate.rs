@@ -8,6 +8,7 @@ use crate::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
+        constants::{compute_dependent_constants, rewrite_cross_module_constants},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
@@ -120,11 +121,15 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn reset_constant_copies(&mut self, next_index: usize) {
+    fn reset_constant_copies(&mut self, constants: &UniqueMap<ConstantName, G::Constant>) {
         self.constant_copies = BTreeMap::new();
         self.constant_copy_defs = vec![];
         self.constant_copy_names = BTreeSet::new();
-        self.constant_copy_index = next_index;
+        self.constant_copy_index = constants
+            .key_cloned_iter()
+            .map(|(_, cdef)| cdef.index + 1)
+            .max()
+            .unwrap_or(0);
     }
 
     fn take_constant_copy_defs(&mut self) -> Vec<(ConstantName, G::Constant)> {
@@ -171,12 +176,9 @@ impl<'env> Context<'env> {
     }
 
     /// Synthesizes a module-local copy of `m::c` from its already-folded value, named
-    /// `_{module_id}_{module}_{const}` (e.g. `_3_b_C`), where the module id is the defining
-    /// module's dependency order (or a `p`-prefixed id for pre-compiled modules). The leading `_`
-    /// avoids user constants (which must start uppercase), and the module id -- unique per module
-    /// -- makes the names collision-free: equal names have equal leading id runs, hence the same
-    /// module, hence the same constant. These names are not stable across module-graph changes;
-    /// they appear only in source maps and are not part of the upgrade-compatibility surface.
+    /// `_{module_id}_{module}_{const}` (e.g. `_3_b_C`). The module id -- dependency order, or a
+    /// `p`-prefixed id for pre-compiled modules -- keeps the names collision-free, and the leading
+    /// `_` avoids user constants. The names appear only in source maps.
     fn synthesize_constant_copy(
         &mut self,
         constant_values: &BTreeMap<(ModuleIdent, ConstantName), Value>,
@@ -217,7 +219,7 @@ impl<'env> Context<'env> {
             value: Some(move_value_from_value(value.clone())),
         };
         if self.constant_copy_names.insert(symbol) {
-            self.constant_copies.insert((m, c), copy_name);
+            debug_assert!(self.constant_copies.insert((m, c), copy_name).is_none());
             self.constant_copy_defs.push((copy_name, cdef));
         } else {
             self.add_diag(ice!((
@@ -367,6 +369,59 @@ fn modules(
     UniqueMap::maybe_from_iter(modules).unwrap()
 }
 
+fn module(
+    context: &mut Context,
+    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
+    module_ident: ModuleIdent,
+    mdef: H::ModuleDefinition,
+) -> (ModuleIdent, G::ModuleDefinition) {
+    let H::ModuleDefinition {
+        warning_filter,
+        package_name,
+        attributes,
+        target_kind,
+        dependency_order,
+        friends,
+        structs,
+        enums,
+        functions: hfunctions,
+        constants: hconstants,
+    } = mdef;
+    context.current_package = package_name;
+    context.push_warning_filter_scope(warning_filter.clone());
+    let mut constants = constants(context, constant_values, module_ident, hconstants);
+    context.reset_constant_copies(&constants);
+    let constant_values = &*constant_values;
+    let functions =
+        hfunctions.map(|name, f| function(context, constant_values, module_ident, name, f));
+    for (name, cdef) in context.take_constant_copy_defs() {
+        constants
+            .add(name, cdef)
+            .expect("ICE synthesized constant name collision");
+    }
+    context.pop_warning_filter_scope();
+    context.current_package = None;
+    (
+        module_ident,
+        G::ModuleDefinition {
+            warning_filter,
+            package_name,
+            attributes,
+            target_kind,
+            dependency_order,
+            friends,
+            structs,
+            enums,
+            constants,
+            functions,
+        },
+    )
+}
+
+//**************************************************************************************************
+// Constants
+//**************************************************************************************************
+
 /// Constants of modules outside this compilation (e.g. the analyzer's pre-compiled dependencies)
 /// were folded when they were compiled; seed their values so they can be folded into constant
 /// definitions and copied into function bodies like any other constant
@@ -376,9 +431,16 @@ fn seed_precompiled_constants(
     constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
 ) {
     let compiled: BTreeSet<ModuleIdent> = hmodules.iter().map(|(mname, _)| *mname).collect();
+    // constants are only visible within their package, so only modules from the packages being
+    // compiled can contribute
+    let packages: BTreeSet<Option<Symbol>> =
+        hmodules.iter().map(|(_, mdef)| mdef.package_name).collect();
     let info = context.info;
     for (mident, minfo) in info.modules.key_cloned_iter() {
-        if compiled.contains(&mident) || minfo.constants.is_empty() {
+        if compiled.contains(&mident)
+            || !packages.contains(&minfo.package)
+            || minfo.constants.is_empty()
+        {
             continue;
         }
         let next_id = context.precompiled_module_ids.len();
@@ -450,64 +512,6 @@ fn value_from_move_value(mv: &MoveValue, ty: &H::BaseType) -> Option<Value> {
     Some(sp(loc, v_))
 }
 
-fn module(
-    context: &mut Context,
-    constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
-    module_ident: ModuleIdent,
-    mdef: H::ModuleDefinition,
-) -> (ModuleIdent, G::ModuleDefinition) {
-    let H::ModuleDefinition {
-        warning_filter,
-        package_name,
-        attributes,
-        target_kind,
-        dependency_order,
-        friends,
-        structs,
-        enums,
-        functions: hfunctions,
-        constants: hconstants,
-    } = mdef;
-    context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter.clone());
-    let mut constants = constants(context, constant_values, module_ident, hconstants);
-    let next_index = constants
-        .key_cloned_iter()
-        .map(|(_, cdef)| cdef.index + 1)
-        .max()
-        .unwrap_or(0);
-    context.reset_constant_copies(next_index);
-    let constant_values = &*constant_values;
-    let functions =
-        hfunctions.map(|name, f| function(context, constant_values, module_ident, name, f));
-    for (name, cdef) in context.take_constant_copy_defs() {
-        constants
-            .add(name, cdef)
-            .expect("ICE synthesized constant name collision");
-    }
-    context.pop_warning_filter_scope();
-    context.current_package = None;
-    (
-        module_ident,
-        G::ModuleDefinition {
-            warning_filter,
-            package_name,
-            attributes,
-            target_kind,
-            dependency_order,
-            friends,
-            structs,
-            enums,
-            constants,
-            functions,
-        },
-    )
-}
-
-//**************************************************************************************************
-// Functions
-//**************************************************************************************************
-
 fn constants(
     context: &mut Context,
     constant_values: &mut BTreeMap<(ModuleIdent, ConstantName), Value>,
@@ -519,7 +523,7 @@ fn constants(
     // another, an edge is added between them.
     let mut graph = DiGraphMap::<ConstantName, ()>::new();
     for (name, constant) in consts.key_cloned_iter() {
-        let deps = super::constants::compute_dependent_constants(constant);
+        let deps = compute_dependent_constants(constant);
         graph.add_node(name);
         for (dep_module, dep) in deps {
             // Only add edges for constants defined in this module; cross-module dependencies
@@ -668,13 +672,14 @@ fn constant(
                 loc,
                 "constant name collision"
             );
-            context.constant_defs.insert(
+            let prev_entry = context.constant_defs.insert(
                 (module, name),
                 ConstantEntry::Defined {
                     loc,
                     signature: Box::new(signature.clone()),
                 },
             );
+            debug_assert!(matches!(prev_entry, Some(ConstantEntry::Pending)));
             Some(move_value_from_value(value))
         }
         _ => None,
@@ -987,12 +992,7 @@ fn function_body(
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, mut body } => {
-            super::constants::rewrite_cross_module_constants(
-                context,
-                constant_values,
-                module,
-                &mut body,
-            );
+            rewrite_cross_module_constants(context, constant_values, module, &mut body);
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();

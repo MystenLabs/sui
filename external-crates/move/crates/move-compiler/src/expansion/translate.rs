@@ -1419,19 +1419,13 @@ fn check_visibility_modifiers(
                 public_package_usage = Some(loc);
             }
             E::Visibility::Internal => (),
-            // the parser rejects 'public' on constants
-            E::Visibility::Public(loc) => {
-                context.add_diag(ice!((
-                    loc,
-                    "ICE constant declared with disallowed 'public' visibility"
-                )));
-            }
-            // the parser rejects 'public(friend)' on constants
-            E::Visibility::Friend(loc) => {
-                context.add_diag(ice!((
-                    loc,
-                    "ICE constant declared with disallowed 'public(friend)' visibility"
-                )));
+            E::Visibility::Public(loc) | E::Visibility::Friend(loc) => {
+                let msg = format!(
+                    "Invalid constant declaration. Constants can only be declared with '{}' \
+                     visibility",
+                    E::Visibility::PACKAGE,
+                );
+                context.add_diag(diag!(Declarations::InvalidVisibilityModifier, (loc, msg)));
             }
         }
     }
