@@ -1161,6 +1161,32 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// An unsupported `--protocol-version` must be a normal CLI error, not a panic out of
+/// `ProtocolConfig::get_for_version`.
+#[sim_test]
+async fn test_verify_bytecode_meter_unsupported_protocol_version() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let context = &mut test_cluster.wallet;
+
+    let err = SuiClientCommands::VerifyBytecodeMeter {
+        package_path: None,
+        protocol_version: Some(ProtocolVersion::MAX_ALLOWED.as_u64() + 1),
+        module_paths: vec![],
+        build_config: BuildConfig::new_for_testing().config,
+    }
+    .execute(context)
+    .await
+    .unwrap_err()
+    .to_string();
+
+    assert!(
+        err.contains("newer than the maximum version"),
+        "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
 #[sim_test]
 async fn test_package_management_on_publish_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;

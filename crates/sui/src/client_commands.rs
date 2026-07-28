@@ -121,6 +121,8 @@ use tracing::{debug, info};
 const NUM_CONCURRENCY_REQS: usize = 8;
 /// Rate limit for RPC calls to avoid being throttled by the server. This is equivalent to 20rps.
 const RATE_LIMIT_MILLIS: u64 = 50;
+/// Handed to users whose CLI has fallen behind the network's protocol version.
+const CLI_INSTALL_DOCS: &str = "https://docs.sui.io/guides/developer/getting-started/sui-install";
 
 pub(crate) static USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -1001,8 +1003,13 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let protocol_version =
                     protocol_version.map_or(ProtocolVersion::MAX, ProtocolVersion::new);
-                let protocol_config =
-                    ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+                let protocol_config = protocol_config_for_version(protocol_version, Chain::Unknown)
+                    .map_err(|e| {
+                        anyhow!(
+                            "Cannot meter bytecode: {e}. Either pass a supported \
+                             --protocol-version, or install a newer CLI - {CLI_INSTALL_DOCS}"
+                        )
+                    })?;
 
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
@@ -3817,7 +3824,7 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
                 "[warning] CLI's protocol version is {cli_protocol_version}, but the active \
                 network's protocol version is {on_chain_protocol_version}. \
                 \n Consider installing the latest version of the CLI - \
-                https://docs.sui.io/guides/developer/getting-started/sui-install \n\n \
+                {CLI_INSTALL_DOCS} \n\n \
                 If publishing/upgrading returns a dependency verification error, then install the \
                 latest CLI version."
             )
@@ -3827,6 +3834,32 @@ async fn check_protocol_version_and_warn(client: &Client) -> Result<(), anyhow::
     }
 
     Ok(())
+}
+
+/// `ProtocolConfig::get_for_version` panics on a version this binary does not implement, which is
+/// the routine state of a CLI that has not been updated since the last protocol upgrade. Check the
+/// bounds first so the caller can report a normal CLI error instead.
+fn protocol_config_for_version(
+    version: ProtocolVersion,
+    chain: Chain,
+) -> Result<ProtocolConfig, anyhow::Error> {
+    if version > ProtocolVersion::MAX_ALLOWED {
+        bail!(
+            "protocol version {} is newer than the maximum version {} supported by this CLI",
+            version.as_u64(),
+            ProtocolVersion::MAX_ALLOWED.as_u64(),
+        );
+    }
+
+    if version < ProtocolVersion::MIN {
+        bail!(
+            "protocol version {} is older than the minimum version {} supported by this CLI",
+            version.as_u64(),
+            ProtocolVersion::MIN.as_u64(),
+        );
+    }
+
+    Ok(ProtocolConfig::get_for_version(version, chain))
 }
 
 /// Fetch move packages
@@ -4245,9 +4278,9 @@ async fn upgrade_command(
 
     if !skip_verify_compatibility {
         let protocol_version = client.get_protocol_config(None).await?.protocol_version();
-
         let protocol_config =
-            ProtocolConfig::get_for_version(protocol_version.into(), chain_identifier.chain());
+            protocol_config_for_version(protocol_version.into(), chain_identifier.chain())?;
+
         check_compatibility(
             client.clone(),
             package_id,
