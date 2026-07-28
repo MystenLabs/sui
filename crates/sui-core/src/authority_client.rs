@@ -6,10 +6,11 @@ use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use mysten_network::config::Config;
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetworkMetadata;
@@ -89,12 +90,15 @@ pub trait AuthorityAPI {
     /// Force the underlying transport to drop any cached connection and establish a fresh one on
     /// the next request. Used to recover from a connection that has silently gone dead (e.g. the
     /// peer validator restarted) and is no longer detected as broken by the transport layer.
+    /// Implementations may rate-limit reconnections and ignore the request during the cooldown.
     /// Default is a no-op for client implementations without a reconnectable transport.
     fn reconnect(&self) {}
 }
 
 /// Builds a fresh lazy channel; used to re-establish a connection that has gone dead.
 type ChannelBuilder = Arc<dyn Fn() -> SuiResult<Channel> + Send + Sync>;
+
+const RECONNECT_COOLDOWN: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
@@ -103,6 +107,7 @@ pub struct NetworkAuthorityClient {
     /// When present, rebuilds a fresh channel on `reconnect()`. Absent for clients constructed
     /// directly from a `Channel` (e.g. tests), where reconnection is not possible.
     builder: Option<ChannelBuilder>,
+    last_reconnect: Arc<Mutex<Option<Instant>>>,
 }
 
 impl NetworkAuthorityClient {
@@ -138,6 +143,7 @@ impl NetworkAuthorityClient {
         Self {
             client: Arc::new(ArcSwap::from_pointee(Ok(ValidatorClient::new(channel)))),
             builder: None,
+            last_reconnect: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -150,6 +156,7 @@ impl NetworkAuthorityClient {
         Self {
             client: Arc::new(ArcSwap::from_pointee(initial)),
             builder: Some(Arc::new(builder)),
+            last_reconnect: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -271,10 +278,16 @@ impl AuthorityAPI for NetworkAuthorityClient {
     }
 
     fn reconnect(&self) {
-        if let Some(builder) = &self.builder {
-            let fresh = builder().map(ValidatorClient::new);
-            self.client.store(Arc::new(fresh));
+        let Some(builder) = &self.builder else {
+            return;
+        };
+        let mut last_reconnect = self.last_reconnect.lock();
+        if last_reconnect.is_some_and(|t| t.elapsed() < RECONNECT_COOLDOWN) {
+            return;
         }
+        let fresh = builder().map(ValidatorClient::new);
+        self.client.store(Arc::new(fresh));
+        *last_reconnect = Some(Instant::now());
     }
 }
 
@@ -347,5 +360,32 @@ fn insert_metadata<T>(request: &mut tonic::Request<T>, client_addr: Option<Socke
                     request.metadata_mut().insert_bin(key, value.clone());
                 }
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn test_reconnect_cooldown() {
+        let build_count = Arc::new(AtomicUsize::new(0));
+        let build_count_clone = build_count.clone();
+        let client = NetworkAuthorityClient::new_reconnectable(move || {
+            build_count_clone.fetch_add(1, Ordering::SeqCst);
+            Ok(tonic::transport::Endpoint::from_static("http://127.0.0.1:1").connect_lazy())
+        });
+        assert_eq!(build_count.load(Ordering::SeqCst), 1);
+
+        client.reconnect();
+        assert_eq!(build_count.load(Ordering::SeqCst), 2);
+
+        client.reconnect();
+        assert_eq!(build_count.load(Ordering::SeqCst), 2);
+
+        tokio::time::sleep(RECONNECT_COOLDOWN + Duration::from_millis(100)).await;
+        client.reconnect();
+        assert_eq!(build_count.load(Ordering::SeqCst), 3);
     }
 }
