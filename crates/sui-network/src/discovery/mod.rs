@@ -1372,8 +1372,9 @@ fn update_known_peers_versioned(
         .our_info_v2
         .as_ref()
         .and_then(|info| info.peer_id());
-    let known_peers_v2 = &mut state.write().unwrap().known_peers_v2;
     let mut trusted_peer_changed = false;
+    let mut endpoint_updates = Vec::new();
+    let mut peers_to_insert = Vec::new();
 
     for peer_info in found_peers.into_iter().take(MAX_PEERS_TO_SEND + 1) {
         let timestamp_ms = peer_info.timestamp_ms();
@@ -1413,31 +1414,40 @@ fn update_known_peers_versioned(
         if is_trusted && let VersionedNodeInfo::V2(info_v2) = peer_info.data() {
             for (endpoint_id, addrs) in &info_v2.addresses {
                 if !addrs.is_empty() {
-                    let _ = endpoint_manager.update_endpoint(
-                        endpoint_id.clone(),
-                        AddressSource::Discovery,
-                        addrs.clone(),
-                    );
+                    endpoint_updates.push((endpoint_id.clone(), addrs.clone()));
                 }
             }
         }
 
-        match known_peers_v2.entry(peer_id) {
-            Entry::Occupied(mut o) => {
-                if peer.timestamp_ms() > o.get().timestamp_ms() {
-                    o.insert(peer);
+        peers_to_insert.push((peer_id, peer, is_trusted));
+    }
+
+    {
+        let mut state = state.write().unwrap();
+        let known_peers_v2 = &mut state.known_peers_v2;
+
+        for (peer_id, peer, is_trusted) in peers_to_insert {
+            match known_peers_v2.entry(peer_id) {
+                Entry::Occupied(mut o) => {
+                    if peer.timestamp_ms() > o.get().timestamp_ms() {
+                        o.insert(peer);
+                        if is_trusted {
+                            trusted_peer_changed = true;
+                        }
+                    }
+                }
+                Entry::Vacant(v) => {
+                    v.insert(peer);
                     if is_trusted {
                         trusted_peer_changed = true;
                     }
                 }
             }
-            Entry::Vacant(v) => {
-                v.insert(peer);
-                if is_trusted {
-                    trusted_peer_changed = true;
-                }
-            }
         }
+    }
+
+    for (endpoint_id, addrs) in endpoint_updates {
+        let _ = endpoint_manager.update_endpoint(endpoint_id, AddressSource::Discovery, addrs);
     }
 
     trusted_peer_changed
