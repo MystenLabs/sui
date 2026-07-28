@@ -11,7 +11,10 @@
 // TODO(minimal-blocks): remove once wired into the subscribe_blocks path.
 #![allow(dead_code)]
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use bytes::Bytes;
 use consensus_types::block::{BlockDigest, Round};
@@ -32,9 +35,15 @@ const INFLATE_RETRY_DELAY: Duration = Duration::from_millis(20);
 
 /// Minimal-block codec bound to live DAG state, usable on both the send side (digest
 /// omission decisions) and the receive side (re-inflation).
+///
+/// Holds DagState weakly: inflaters travel into subscription tasks and per-peer stream
+/// closures, which must not keep the stopped authority's DagState alive across shutdown
+/// (`authority_node` fatally asserts zero remaining owners). With the state gone, encode
+/// degrades to explicit digests and inflation reports slots as missing — both harmless
+/// on a shutting-down node.
 pub(crate) struct BlockInflater {
     context: Arc<Context>,
-    dag_state: Arc<RwLock<DagState>>,
+    dag_state: Weak<RwLock<DagState>>,
     // Genesis digests by authority index: deterministic from the committee, so round-0
     // refs never depend on cache contents and are never treated as missing.
     genesis_digests: Vec<BlockDigest>,
@@ -47,9 +56,11 @@ impl AncestorDigestResolver for DagStateResolver<'_> {
         if slot.round == GENESIS_ROUND {
             return vec![self.0.genesis_digests[slot.authority]];
         }
-        self.0
-            .dag_state
-            .read()
+        let Some(dag_state) = self.0.dag_state.upgrade() else {
+            return vec![];
+        };
+        let guard = dag_state.read();
+        guard
             .get_uncommitted_blocks_at_slot(slot)
             .iter()
             .map(|block| block.digest())
@@ -65,7 +76,7 @@ impl BlockInflater {
             .collect();
         Self {
             context,
-            dag_state,
+            dag_state: Arc::downgrade(&dag_state),
             genesis_digests,
         }
     }
@@ -117,6 +128,7 @@ mod tests {
     ) -> (
         Arc<Context>,
         Vec<crate::block::VerifiedBlock>,
+        Arc<RwLock<DagState>>,
         BlockInflater,
     ) {
         let (context, _key_pairs) = Context::new_for_test(committee_size);
@@ -126,17 +138,14 @@ mod tests {
             Arc::new(MemStore::new()),
         )));
         let genesis = genesis_blocks(&context);
-        (
-            context.clone(),
-            genesis,
-            BlockInflater::new(context, dag_state),
-        )
+        let inflater = BlockInflater::new(context.clone(), dag_state.clone());
+        (context, genesis, dag_state, inflater)
     }
 
     /// Builds, accepts, and returns one block per authority at `round`, wired to the
     /// previous `ancestors`.
     fn accept_round(
-        inflater: &BlockInflater,
+        dag_state: &Arc<RwLock<DagState>>,
         committee_size: usize,
         round: Round,
         ancestors: &[BlockRef],
@@ -152,18 +161,39 @@ mod tests {
                         .build(),
                 );
                 let reference = block.reference();
-                inflater.dag_state.write().accept_block(block);
+                dag_state.write().accept_block(block);
                 reference
             })
             .collect()
     }
 
     #[tokio::test]
-    async fn inflate_from_live_dag_state() {
-        let (_context, genesis, inflater) = setup(4);
+    async fn shutdown_releases_dag_state() {
+        let (_context, genesis, dag_state, inflater) = setup(4);
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
-        let round1 = accept_round(&inflater, 4, 1, &genesis_refs);
-        let round2 = accept_round(&inflater, 4, 2, &round1);
+        let round1 = accept_round(&dag_state, 4, 1, &genesis_refs);
+        let mut ancestors = round1;
+        ancestors.sort_by_key(|r| (r.author.value() != 0, r.author));
+        let block =
+            VerifiedBlock::new_for_test(TestBlock::new(2, 0).set_ancestors_raw(ancestors).build());
+        let minimal = inflater.serialize(&block, 0).unwrap();
+
+        // The inflater must not keep a stopped authority's DagState alive
+        // (authority_node fatally asserts zero owners at shutdown)...
+        drop(dag_state);
+        // ...and with the state gone, inflation degrades to a fallback, not a panic.
+        assert!(matches!(
+            inflater.inflate(&minimal).map(|_| ()),
+            Err(InflateError::NeedFullBlock { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn inflate_from_live_dag_state() {
+        let (_context, genesis, dag_state, inflater) = setup(4);
+        let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
+        let round1 = accept_round(&dag_state, 4, 1, &genesis_refs);
+        let round2 = accept_round(&dag_state, 4, 2, &round1);
 
         let mut ancestors = round2;
         ancestors.sort_by_key(|r| (r.author.value() != 0, r.author));
@@ -178,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn genesis_ancestors_resolve_without_dag_lookup() {
-        let (_context, genesis, inflater) = setup(4);
+        let (_context, genesis, _dag_state, inflater) = setup(4);
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
         // Note: genesis blocks are never accepted into recent_blocks here — resolution
         // must come from the precomputed genesis digests.
@@ -192,9 +222,9 @@ mod tests {
 
     #[tokio::test]
     async fn missing_ancestor_fails_then_succeeds_after_acceptance() {
-        let (_context, genesis, inflater) = setup(4);
+        let (_context, genesis, dag_state, inflater) = setup(4);
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
-        let round1 = accept_round(&inflater, 4, 1, &genesis_refs);
+        let round1 = accept_round(&dag_state, 4, 1, &genesis_refs);
 
         // A round-2 block from authority 3 that the receiver hasn't accepted yet.
         let mut refs = round1.clone();
@@ -209,20 +239,18 @@ mod tests {
             VerifiedBlock::new_for_test(TestBlock::new(3, 0).set_ancestors_raw(ancestors).build());
 
         // Sender knows the late block (it links to it), receiver doesn't yet.
-        inflater.dag_state.write().accept_block(late_block.clone());
+        dag_state.write().accept_block(late_block.clone());
         let minimal = inflater.serialize(&block, 0).unwrap();
 
-        let receiver = {
-            let (context, _key_pairs) = Context::new_for_test(4);
-            let context = Arc::new(context);
-            let dag_state = Arc::new(RwLock::new(DagState::new(
-                context.clone(),
-                Arc::new(MemStore::new()),
-            )));
-            BlockInflater::new(context, dag_state)
-        };
+        let (receiver_context, _key_pairs) = Context::new_for_test(4);
+        let receiver_context = Arc::new(receiver_context);
+        let receiver_dag_state = Arc::new(RwLock::new(DagState::new(
+            receiver_context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let receiver = BlockInflater::new(receiver_context, receiver_dag_state.clone());
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
-        accept_round(&receiver, 4, 1, &genesis_refs);
+        accept_round(&receiver_dag_state, 4, 1, &genesis_refs);
 
         match receiver.inflate_with_retry(&minimal).await.map(|_| ()) {
             Err(InflateError::NeedFullBlock { block_ref, reason }) => {
@@ -236,16 +264,16 @@ mod tests {
         }
 
         // Once the in-flight ancestor lands, the same bytes inflate cleanly.
-        receiver.dag_state.write().accept_block(late_block);
+        receiver_dag_state.write().accept_block(late_block);
         let (_signed, serialized) = receiver.inflate(&minimal).unwrap();
         assert_eq!(&serialized, block.serialized());
     }
 
     #[tokio::test]
     async fn equivocating_slot_gets_digest_hint_from_sender() {
-        let (_context, genesis, inflater) = setup(4);
+        let (_context, genesis, dag_state, inflater) = setup(4);
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
-        let round1 = accept_round(&inflater, 4, 1, &genesis_refs);
+        let round1 = accept_round(&dag_state, 4, 1, &genesis_refs);
 
         // Authority 2 equivocates at round 1; the sender knows both blocks.
         let mut refs = genesis_refs.clone();
@@ -256,7 +284,7 @@ mod tests {
                 .set_timestamp_ms(9999)
                 .build(),
         );
-        inflater.dag_state.write().accept_block(equivocation);
+        dag_state.write().accept_block(equivocation);
 
         let mut ancestors = round1;
         ancestors.sort_by_key(|r| (r.author.value() != 0, r.author));
