@@ -200,41 +200,7 @@ Follow this three-step pattern for every webhook:
 
 3. **Update application state.** Only after both verifications pass should you update your application's ledger or credit the user's account.
 
-```typescript
-async function handleProviderWebhook(req: Request): Promise<Response> {
-  // Step 1: Verify webhook signature.
-  const signature = req.headers.get('X-Provider-Signature');
-  if (!verifyWebhookSignature(req.body, signature, providerPublicKey)) {
-    return new Response('Invalid signature', { status: 401 });
-  }
-
-  const payload = await req.json();
-
-  // Step 2: Verify onchain state.
-  const txDigest = payload.transactionDigest;
-  const tx = await suiClient.core.getTransaction({
-    digest: txDigest,
-    include: { effects: true, balanceChanges: true },
-  });
-
-  const depositConfirmed = tx.Transaction?.balanceChanges?.some(
-    (change) =>
-      change.owner === payload.recipientAddress &&
-      BigInt(change.amount) >= BigInt(payload.amount),
-  );
-
-  if (!depositConfirmed) {
-    // Log the mismatch for investigation.
-    await complianceLogger.warn('Webhook does not match onchain state', payload);
-    return new Response('Onchain verification failed', { status: 422 });
-  }
-
-  // Step 3: Update application state.
-  await ledger.creditUser(payload.userId, payload.amount, payload.coinType);
-
-  return new Response('OK', { status: 200 });
-}
-```
+<ImportContent source="examples/regulated-payments/src/webhook-handler.ts" mode="code" tag="webhook-handler" />
 
 ### Reconciliation
 
@@ -268,20 +234,7 @@ When a user disputes a card payment with their bank, the chargeback process is e
 
 For voluntary refunds (not chargebacks), your application initiates a separate onchain transfer from your treasury back to the user:
 
-```typescript
-const tx = new Transaction();
-
-tx.moveCall({
-  target: '0x2::balance::send_funds',
-  typeArguments: [coinType],
-  arguments: [
-    tx.balance({ balance: refundAmount }),
-    tx.pure.address(userAddress),
-  ],
-});
-
-await client.signAndExecuteTransaction({ signer: treasuryKeypair, transaction: tx });
-```
+<ImportContent source="examples/regulated-payments/src/refund.ts" mode="code" tag="refund" />
 
 :::caution
 
