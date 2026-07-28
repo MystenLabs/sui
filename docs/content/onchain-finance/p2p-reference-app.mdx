@@ -229,8 +229,9 @@ if (result.$kind === 'FailedTransaction') {
 Display the user's past payments by querying transactions involving their address.
 
 ```typescript
-// Query transaction history using GraphQL (the TypeScript SDK does not
-// expose a high-level transaction-listing wrapper over gRPC).
+// Query transaction history using GraphQL.
+// Use balanceChangesJson (not paginated balanceChanges.nodes)
+// so all changes are returned in a single JSON array.
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 
 const gqlClient = new SuiGraphQLClient({
@@ -238,48 +239,46 @@ const gqlClient = new SuiGraphQLClient({
   network: 'testnet',
 });
 
-const { data } = await gqlClient.query({
-  query: `{
-    address(address: "${senderAddress}") {
+const HISTORY_QUERY = `
+  query PaymentHistory($sender: SuiAddress!) {
+    address(address: $sender) {
       transactions(last: 20) {
         nodes {
           digest
           effects {
-            balanceChanges {
-              nodes {
-                owner { address }
-                amount
-                coinType { repr }
-              }
-            }
+            balanceChangesJson
           }
         }
       }
     }
-  }`,
+  }
+`;
+
+const { data } = await gqlClient.query({
+  query: HISTORY_QUERY,
+  variables: { sender: senderAddress },
 });
 
 for (const tx of data?.address?.transactions?.nodes ?? []) {
-  const changes = tx.effects?.balanceChanges?.nodes ?? [];
+  const changes: any[] = tx.effects?.balanceChangesJson ?? [];
 
-  // Pair the sender's negative change with the recipient's positive change
   const sent = changes.find(
     (c) =>
-      c.coinType?.repr === USDC &&
-      c.owner?.address === senderAddress &&
+      c.coinType === USDC &&
+      c.owner === senderAddress &&
       BigInt(c.amount) < 0n,
   );
   const received = changes.find(
     (c) =>
-      c.coinType?.repr === USDC &&
-      c.owner?.address !== senderAddress &&
+      c.coinType === USDC &&
+      c.owner !== senderAddress &&
       BigInt(c.amount) > 0n,
   );
 
   if (sent && received) {
     console.log(
       `Sent ${Math.abs(Number(sent.amount)) / 1_000_000} USDC`,
-      `to ${received.owner?.address}`,
+      `to ${received.owner}`,
     );
   }
 }

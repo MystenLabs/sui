@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Self-hosted gas station example for Sui docs",
+  "description": "Gas station examples for Sui docs (self-hosted fallback)",
   "scripts": {
     "build": "tsc --noEmit"
   },

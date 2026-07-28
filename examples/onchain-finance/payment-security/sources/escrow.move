@@ -4,7 +4,7 @@
 module example::escrow;
 
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
+use sui::coin::Coin;
 use sui::event;
 use sui::sui::SUI;
 
@@ -45,23 +45,23 @@ public fun create(coin: Coin<SUI>, recipient: address, ctx: &mut TxContext) {
 }
 
 /// Claim the escrow. Only the recipient can call this.
-public fun claim(escrow: Escrow, ctx: &mut TxContext) {
+/// Pays out through address balances.
+public fun claim(escrow: Escrow, ctx: &TxContext) {
     assert!(ctx.sender() == escrow.recipient, ENotRecipient);
     let Escrow { id, sender: _, recipient, balance } = escrow;
     let amount = balance.value();
-    let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, recipient);
+    balance::send_funds(balance, recipient);
     event::emit(EscrowClaimed { escrow_id: id.to_inner(), recipient, amount });
     id.delete();
 }
 
 /// Cancel the escrow and return funds. Only the sender can call this.
-public fun cancel(escrow: Escrow, ctx: &mut TxContext) {
+/// Returns funds through address balances.
+public fun cancel(escrow: Escrow, ctx: &TxContext) {
     assert!(ctx.sender() == escrow.sender, ENotSender);
     let Escrow { id, sender, recipient: _, balance } = escrow;
     let amount = balance.value();
-    let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, sender);
+    balance::send_funds(balance, sender);
     event::emit(EscrowCancelled { escrow_id: id.to_inner(), sender, amount });
     id.delete();
 }

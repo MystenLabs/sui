@@ -143,21 +143,17 @@ const settleTx = new Transaction();
 
 const [coin] = settleTx.splitCoins(settleTx.gas, [amount]);
 
-// Pay and get proof
-const [proof] = settleTx.moveCall({
+// Pay and get receipt (hot potato)
+const [receipt] = settleTx.moveCall({
 	target: `${PACKAGE_ID}::settlement::pay_and_prove`,
 	typeArguments: ['0x2::sui::SUI'],
 	arguments: [coin, settleTx.pure.address(recipient)],
 });
 
-// Verify the proof (mandatory, hot potato)
+// Consume the receipt (mandatory, hot potato)
 settleTx.moveCall({
-	target: `${PACKAGE_ID}::settlement::verify_settlement`,
-	arguments: [
-		proof,
-		settleTx.pure.address(recipient),
-		settleTx.pure.u64(amount),
-	],
+	target: `${PACKAGE_ID}::settlement::consume_receipt`,
+	arguments: [receipt],
 });
 // docs::/#onchain-settlement-ptb
 
