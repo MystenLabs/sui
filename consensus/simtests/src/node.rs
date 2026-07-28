@@ -354,9 +354,6 @@ pub fn default_parameters() -> Parameters {
         commit_sync_parallel_fetches: 2,
         commit_sync_batch_size: 3,
         sync_last_known_own_block_timeout: Duration::from_millis(2_000),
-        // Exercise minimal-block propagation under simulated network faults; receivers
-        // accept both forms, so this only changes what the streams emit.
-        emit_minimal_blocks: true,
         ..Default::default()
     }
 }

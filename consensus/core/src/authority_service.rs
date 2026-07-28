@@ -398,8 +398,12 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // Minimal blocks are emitted for live broadcasts only: the catch-up replay above
         // serves rounds where the subscriber's cache state is unpredictable, so it always
-        // sends full blocks.
-        let emit_minimal = self.context.parameters.emit_minimal_blocks;
+        // sends full blocks. Emission is protocol-gated: every validator on a version
+        // with the flag can decode both forms, so senders may emit minimal freely.
+        let emit_minimal = self
+            .context
+            .protocol_config
+            .minimal_block_propagation_enabled();
         let block_inflater = self.block_inflater.clone();
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
@@ -1440,8 +1444,8 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_emits_minimal_for_live_only() {
-        let (mut context, _keys) = Context::new_for_test(4);
-        context.parameters.emit_minimal_blocks = true;
+        // Emission is on via ConsensusProtocolConfig::for_testing() inside new_for_test.
+        let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1531,7 +1535,9 @@ mod tests {
 
         // A receiver holding the same ancestors inflates the minimal form byte-identically.
         let receiver_inflater = BlockInflater::new(context.clone(), dag_state.clone());
-        let (_signed, serialized) = receiver_inflater.inflate(&minimal).unwrap();
+        let (_signed, serialized) = receiver_inflater
+            .inflate(&minimal, context.committee.to_authority_index(0).unwrap())
+            .unwrap();
         assert_eq!(&serialized, live_block.serialized());
     }
 

@@ -22,6 +22,9 @@ pub enum ConsensusError {
     #[error("Malformed minimal block: {0}")]
     MalformedMinimalBlock(String),
 
+    #[error("Minimal-block fallback fetch budget exceeded for peer {0}")]
+    FallbackBudgetExceeded(AuthorityIndex),
+
     #[error("Error deserializing commit: {0}")]
     MalformedCommit(bcs::Error),
 

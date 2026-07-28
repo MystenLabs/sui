@@ -375,6 +375,8 @@ const MAINNET_USDB: &str =
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
+//              Enable consensus_minimal_block_propagation on devnet: broadcast blocks
+//              travel without ancestor digests and are reconstructed at the receiver.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -855,6 +857,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     consensus_median_based_commit_timestamp: bool,
+
+    // If true, validators emit minimal (ancestor-compressed) blocks on the consensus
+    // block subscription stream. Every validator on a version with this flag accepts
+    // both full and minimal forms; the flag gates emission only.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_minimal_block_propagation: bool,
 
     // If true, enables the normalization of PTB arguments but does not yet enable splatting
     // `Result`s of length not equal to 1
@@ -4575,6 +4583,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                         cfg.feature_flags.create_forwarding_address_registry = true;
+                        cfg.feature_flags.consensus_minimal_block_propagation = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                 }

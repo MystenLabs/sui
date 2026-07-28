@@ -619,16 +619,18 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 return Err(tonic::Status::invalid_argument("Missing request"));
             }
         };
+        let context = self.context.clone();
+        let subscriber_hostname = context.committee.authority(peer_index).hostname.clone();
         let stream = self
             .service()?
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| {
+            .map(move |block| {
                 // Exactly one of the two forms rides the wire: sending the full bytes
                 // alongside the minimal form would forfeit the bandwidth saving.
                 let has_minimal = block.minimal.is_some();
-                Ok(SubscribeBlocksResponse {
+                let response = SubscribeBlocksResponse {
                     block: if has_minimal {
                         Bytes::new()
                     } else {
@@ -636,7 +638,20 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                     },
                     excluded_ancestors: block.excluded_ancestors,
                     minimal_block: block.minimal,
-                })
+                };
+                // Encoded payload bytes per subscriber and form: comparing this counter
+                // between flag-off and flag-on runs measures the propagation saving
+                // (pre-compression; zstd applies below this layer).
+                context
+                    .metrics
+                    .node_metrics
+                    .subscribe_blocks_response_bytes
+                    .with_label_values(&[
+                        subscriber_hostname.as_str(),
+                        if has_minimal { "minimal" } else { "full" },
+                    ])
+                    .inc_by(prost::Message::encoded_len(&response) as u64);
+                Ok(response)
             });
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)

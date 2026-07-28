@@ -27,6 +27,52 @@ use crate::{
 
 /// Timeout for the strict full-block fetch after a failed minimal-block inflation.
 const FALLBACK_FETCH_TIMEOUT: Duration = Duration::from_secs(2);
+/// Fallback-fetch budget: at most `MAX_FETCHES` in any rolling window of `WINDOW`
+/// received minimal blocks, so varied claimed digests cannot multiply fetch work.
+const FALLBACK_BUDGET_WINDOW: u32 = 32;
+const FALLBACK_BUDGET_MAX_FETCHES: u32 = 4;
+/// Malformed minimal encodings tolerated per subscription session before the stream is
+/// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
+const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
+
+/// Bounds fallback fetches per subscription. Stream processing is sequential per peer,
+/// so this also bounds fetch concurrency to one.
+struct FallbackBudget {
+    window: u32,
+    max_fetches: u32,
+    blocks_seen: u32,
+    fetches_used: u32,
+}
+
+impl FallbackBudget {
+    fn new(window: u32, max_fetches: u32) -> Self {
+        Self {
+            window,
+            max_fetches,
+            blocks_seen: 0,
+            fetches_used: 0,
+        }
+    }
+
+    /// Records one received minimal block, rolling the window over when it fills.
+    fn record_block(&mut self) {
+        if self.blocks_seen >= self.window {
+            self.blocks_seen = 0;
+            self.fetches_used = 0;
+        }
+        self.blocks_seen += 1;
+    }
+
+    /// Consumes one fetch from the budget; false when the window is exhausted.
+    fn try_fetch(&mut self) -> bool {
+        if self.fetches_used < self.max_fetches {
+            self.fetches_used += 1;
+            true
+        } else {
+            false
+        }
+    }
+}
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
 /// when subscription streams break. Blocks returned from the peer are sent to the authority
@@ -128,12 +174,15 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
     /// Replaces a minimal-form block with its inflated full serialization, falling back to
     /// a strict fetch from the sending peer, which authored the block and must hold it.
+    /// Fallback fetches are bounded by `budget`; a block dropped over budget is recovered
+    /// via the descendant-driven missing-ancestor path once other validators reference it.
     async fn inflate_received_block(
         context: &Context,
         block_inflater: &BlockInflater,
         network_client: &C,
         peer: AuthorityIndex,
         mut block: ExtendedSerializedBlock,
+        budget: &mut FallbackBudget,
     ) -> ConsensusResult<ExtendedSerializedBlock> {
         let Some(minimal) = block.minimal.take() else {
             return Ok(block);
@@ -144,7 +193,25 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .minimal_blocks_received
             .with_label_values(&[peer_hostname])
             .inc();
-        match block_inflater.inflate_with_retry(&minimal).await {
+        budget.record_block();
+
+        // Cap the envelope before decoding: a legitimate minimal block is bounded by the
+        // max transaction payload plus small per-ancestor structure, so anything larger
+        // is a peer fault and must not cost a BCS parse of attacker-sized buffers.
+        let max_minimal_size =
+            (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2);
+        if minimal.len() > max_minimal_size {
+            node_metrics
+                .minimal_block_inflate_fallback
+                .with_label_values(&[peer_hostname, "malformed"])
+                .inc();
+            return Err(ConsensusError::MalformedMinimalBlock(format!(
+                "minimal block of {} bytes exceeds the {max_minimal_size}-byte cap",
+                minimal.len()
+            )));
+        }
+
+        match block_inflater.inflate_with_retry(&minimal, peer).await {
             Ok((_signed_block, serialized)) => {
                 node_metrics
                     .minimal_blocks_received_bytes_saved
@@ -158,14 +225,24 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     .minimal_block_inflate_fallback
                     .with_label_values(&[peer_hostname, reason.label()])
                     .inc();
+                if !budget.try_fetch() {
+                    node_metrics
+                        .minimal_block_inflate_fallback
+                        .with_label_values(&[peer_hostname, "budget_exceeded"])
+                        .inc();
+                    return Err(ConsensusError::FallbackBudgetExceeded(peer));
+                }
                 // Strict fallback: fetch only from the sending peer and require the exact
-                // claimed block in the response — never retry or fan out to other peers for
-                // an unverified claimed digest. A block dropped here is also recovered via
-                // the descendant-driven missing-ancestor path once other validators
-                // reference it.
+                // claimed block in the response — never retry or fan out to other peers
+                // for an unverified claimed digest.
                 let serialized_blocks = network_client
                     .fetch_blocks(peer, vec![block_ref], vec![], false, FALLBACK_FETCH_TIMEOUT)
                     .await?;
+                let fetched_bytes: usize = serialized_blocks.iter().map(|b| b.len()).sum();
+                node_metrics
+                    .minimal_block_fallback_fetch_bytes
+                    .with_label_values(&[peer_hostname])
+                    .inc_by(fetched_bytes as u64);
                 let fetched = serialized_blocks
                     .into_iter()
                     .find(|b| VerifiedBlock::compute_digest(b) == block_ref.digest)
@@ -285,6 +362,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
+            let mut fallback_budget =
+                FallbackBudget::new(FALLBACK_BUDGET_WINDOW, FALLBACK_BUDGET_MAX_FETCHES);
+            let mut malformed_blocks: u32 = 0;
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
@@ -303,6 +383,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             network_client.as_ref(),
                             peer,
                             block,
+                            &mut fallback_budget,
                         )
                         .await
                         {
@@ -312,6 +393,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     "Failed to inflate minimal block from peer {} {}: {}",
                                     peer, peer_hostname, e
                                 );
+                                // A peer repeatedly sending malformed encodings gets its
+                                // stream reset; escalating reconnect backoff is the penalty.
+                                if matches!(e, ConsensusError::MalformedMinimalBlock(_)) {
+                                    malformed_blocks += 1;
+                                    if malformed_blocks > MAX_MALFORMED_PER_SUBSCRIPTION {
+                                        info!(
+                                            "Too many malformed minimal blocks from peer {} {}; resetting subscription",
+                                            peer, peer_hostname
+                                        );
+                                        continue 'subscription;
+                                    }
+                                }
                                 continue 'stream;
                             }
                         };
@@ -553,5 +646,22 @@ mod test {
              recorded resume rounds: {:?}",
             network_client.subscribe_calls()
         );
+    }
+
+    #[tokio::test]
+    async fn fallback_budget_bounds_fetches_per_window() {
+        let mut budget = FallbackBudget::new(4, 2);
+        budget.record_block();
+        assert!(budget.try_fetch());
+        assert!(budget.try_fetch());
+        // Budget exhausted for the rest of this window.
+        assert!(!budget.try_fetch());
+        budget.record_block();
+        budget.record_block();
+        budget.record_block();
+        assert!(!budget.try_fetch());
+        // The next block rolls the window over and restores the budget.
+        budget.record_block();
+        assert!(budget.try_fetch());
     }
 }

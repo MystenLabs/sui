@@ -182,6 +182,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_blocks_received: IntCounterVec,
     pub(crate) minimal_blocks_received_bytes_saved: IntCounterVec,
     pub(crate) minimal_block_inflate_fallback: IntCounterVec,
+    pub(crate) minimal_block_fallback_fetch_bytes: IntCounterVec,
+    pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
@@ -610,6 +612,18 @@ impl NodeMetrics {
                 "minimal_block_inflate_fallback",
                 "Minimal blocks that could not be inflated locally, per peer and reason",
                 &["authority", "reason"],
+                registry,
+            ).unwrap(),
+            minimal_block_fallback_fetch_bytes: register_int_counter_vec_with_registry!(
+                "minimal_block_fallback_fetch_bytes",
+                "Serialized bytes fetched from the sending peer to recover un-inflatable minimal blocks",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
+                "subscribe_blocks_response_bytes",
+                "Encoded (pre-compression) payload bytes streamed to block subscribers, per subscriber and form (full|minimal)",
+                &["authority", "form"],
                 registry,
             ).unwrap(),
             observer_subscribed_blocks_batch_size: register_histogram_with_registry!(

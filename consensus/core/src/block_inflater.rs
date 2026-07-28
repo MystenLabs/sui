@@ -17,6 +17,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, Round};
 use parking_lot::RwLock;
 
@@ -91,9 +92,19 @@ impl BlockInflater {
         serialize_minimal(block, &DagStateResolver(self), min_omittable_round)
     }
 
-    /// One inflation attempt against current DAG state.
-    pub(crate) fn inflate(&self, minimal: &[u8]) -> Result<(SignedBlock, Bytes), InflateError> {
-        deserialize_minimal(minimal, &self.context.committee, &DagStateResolver(self))
+    /// One inflation attempt against current DAG state. `author` is the peer the bytes
+    /// arrived from; a block claiming any other author is rejected before DAG access.
+    pub(crate) fn inflate(
+        &self,
+        minimal: &[u8],
+        author: AuthorityIndex,
+    ) -> Result<(SignedBlock, Bytes), InflateError> {
+        deserialize_minimal(
+            minimal,
+            &self.context.committee,
+            author,
+            &DagStateResolver(self),
+        )
     }
 
     /// Inflation with a single bounded retry on a missing ancestor. Any remaining failure
@@ -101,14 +112,15 @@ impl BlockInflater {
     pub(crate) async fn inflate_with_retry(
         &self,
         minimal: &[u8],
+        author: AuthorityIndex,
     ) -> Result<(SignedBlock, Bytes), InflateError> {
-        match self.inflate(minimal) {
+        match self.inflate(minimal, author) {
             Err(InflateError::NeedFullBlock {
                 reason: FallbackReason::MissingAncestor(_),
                 ..
             }) => {
                 tokio::time::sleep(INFLATE_RETRY_DELAY).await;
-                self.inflate(minimal)
+                self.inflate(minimal, author)
             }
             result => result,
         }
@@ -121,7 +133,10 @@ mod tests {
     use consensus_types::block::BlockRef;
 
     use super::*;
-    use crate::{block::TestBlock, storage::mem_store::MemStore};
+    use crate::{
+        block::{BlockAPI as _, TestBlock},
+        storage::mem_store::MemStore,
+    };
 
     fn setup(
         committee_size: usize,
@@ -183,7 +198,7 @@ mod tests {
         drop(dag_state);
         // ...and with the state gone, inflation degrades to a fallback, not a panic.
         assert!(matches!(
-            inflater.inflate(&minimal).map(|_| ()),
+            inflater.inflate(&minimal, block.author()).map(|_| ()),
             Err(InflateError::NeedFullBlock { .. })
         ));
     }
@@ -201,7 +216,7 @@ mod tests {
             VerifiedBlock::new_for_test(TestBlock::new(3, 0).set_ancestors_raw(ancestors).build());
 
         let minimal = inflater.serialize(&block, 0).unwrap();
-        let (_signed, serialized) = inflater.inflate(&minimal).unwrap();
+        let (_signed, serialized) = inflater.inflate(&minimal, block.author()).unwrap();
         assert_eq!(&serialized, block.serialized());
         assert!(minimal.len() < block.serialized().len());
     }
@@ -216,7 +231,7 @@ mod tests {
             TestBlock::new(1, 0).set_ancestors_raw(genesis_refs).build(),
         );
         let minimal = inflater.serialize(&block, 0).unwrap();
-        let (_signed, serialized) = inflater.inflate(&minimal).unwrap();
+        let (_signed, serialized) = inflater.inflate(&minimal, block.author()).unwrap();
         assert_eq!(&serialized, block.serialized());
     }
 
@@ -252,7 +267,11 @@ mod tests {
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
         accept_round(&receiver_dag_state, 4, 1, &genesis_refs);
 
-        match receiver.inflate_with_retry(&minimal).await.map(|_| ()) {
+        match receiver
+            .inflate_with_retry(&minimal, block.author())
+            .await
+            .map(|_| ())
+        {
             Err(InflateError::NeedFullBlock { block_ref, reason }) => {
                 assert_eq!(block_ref, block.reference());
                 assert_eq!(
@@ -265,7 +284,7 @@ mod tests {
 
         // Once the in-flight ancestor lands, the same bytes inflate cleanly.
         receiver_dag_state.write().accept_block(late_block);
-        let (_signed, serialized) = receiver.inflate(&minimal).unwrap();
+        let (_signed, serialized) = receiver.inflate(&minimal, block.author()).unwrap();
         assert_eq!(&serialized, block.serialized());
     }
 
@@ -293,7 +312,7 @@ mod tests {
         let minimal = inflater.serialize(&block, 0).unwrap();
         // The sender attaches an explicit digest for the equivocating slot, so its own
         // (ambiguous) view still inflates the exact referenced block.
-        let (_signed, serialized) = inflater.inflate(&minimal).unwrap();
+        let (_signed, serialized) = inflater.inflate(&minimal, block.author()).unwrap();
         assert_eq!(&serialized, block.serialized());
     }
 }

@@ -22,7 +22,7 @@
 #![allow(dead_code)]
 
 use bytes::Bytes;
-use consensus_config::Committee;
+use consensus_config::{AuthorityIndex, Committee};
 use consensus_types::block::{BlockDigest, BlockRef, Round};
 use prost::Message as _;
 
@@ -171,6 +171,7 @@ pub(crate) fn serialize_minimal(
 pub(crate) fn deserialize_minimal(
     serialized: &[u8],
     committee: &Committee,
+    expected_author: AuthorityIndex,
     resolver: &impl AncestorDigestResolver,
 ) -> Result<(SignedBlock, Bytes), InflateError> {
     let minimal = MinimalBlock::decode(serialized)
@@ -194,6 +195,22 @@ pub(crate) fn deserialize_minimal(
         return Err(InflateError::Malformed(
             "block_sans_ancestors must have empty ancestors".into(),
         ));
+    }
+    // Cheap identity checks before any DAG access: the subscription stream carries only
+    // the serving peer's own proposals, so a foreign author or epoch is a peer fault and
+    // must not cost slot scans or a fallback fetch.
+    if skeleton.author() != expected_author {
+        return Err(InflateError::Malformed(format!(
+            "block author {} does not match the sending peer {expected_author}",
+            skeleton.author()
+        )));
+    }
+    if skeleton.epoch() != committee.epoch() {
+        return Err(InflateError::Malformed(format!(
+            "block epoch {} does not match the committee epoch {}",
+            skeleton.epoch(),
+            committee.epoch()
+        )));
     }
 
     // Bound and validate the untrusted ancestor structure before touching the DAG.
@@ -382,7 +399,7 @@ mod tests {
     ) -> Bytes {
         let minimal = serialize_minimal(block, resolver, min_omittable_round).unwrap();
         let (signed, serialized) =
-            deserialize_minimal(&minimal, &context.committee, resolver).unwrap();
+            deserialize_minimal(&minimal, &context.committee, block.author(), resolver).unwrap();
         assert_eq!(&serialized, block.serialized());
         assert_eq!(VerifiedBlock::compute_digest(&serialized), block.digest());
         signed.verify_signature(context).unwrap();
@@ -504,7 +521,9 @@ mod tests {
         for ancestor in &ancestors[..3] {
             missing.insert(*ancestor);
         }
-        match deserialize_minimal(&minimal, &context.committee, &missing).map(|_| ()) {
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &missing)
+            .map(|_| ())
+        {
             Err(InflateError::NeedFullBlock { block_ref, reason }) => {
                 assert_eq!(block_ref, block.reference());
                 assert_eq!(
@@ -521,7 +540,9 @@ mod tests {
             ambiguous.insert(*ancestor);
         }
         ambiguous.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
-        match deserialize_minimal(&minimal, &context.committee, &ambiguous).map(|_| ()) {
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &ambiguous)
+            .map(|_| ())
+        {
             Err(InflateError::NeedFullBlock { reason, .. }) => {
                 assert_eq!(
                     reason,
@@ -551,7 +572,8 @@ mod tests {
             skewed.insert(*ancestor);
         }
         skewed.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
-        match deserialize_minimal(&minimal, &context.committee, &skewed).map(|_| ()) {
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &skewed).map(|_| ())
+        {
             Err(InflateError::NeedFullBlock { block_ref, reason }) => {
                 assert_eq!(block_ref, block.reference());
                 assert_eq!(reason, FallbackReason::DigestMismatch);
@@ -573,7 +595,7 @@ mod tests {
 
         // Garbage bytes.
         assert!(matches!(
-            deserialize_minimal(b"garbage", committee, &resolver),
+            deserialize_minimal(b"garbage", committee, block.author(), &resolver),
             Err(InflateError::Malformed(_))
         ));
 
@@ -581,7 +603,7 @@ mod tests {
         let tamper = |f: &dyn Fn(&mut MinimalBlock)| {
             let mut m = decoded.clone();
             f(&mut m);
-            deserialize_minimal(&m.encode_to_vec(), committee, &resolver)
+            deserialize_minimal(&m.encode_to_vec(), committee, block.author(), &resolver)
         };
 
         // Tampered claimed digest => mismatch fallback, not acceptance.
@@ -710,5 +732,166 @@ mod tests {
         // The ancestor vector dominates the full block; minimal must reclaim most of it
         // even after zstd has had its shot at the full encoding.
         assert!(minimal_zstd * 2 < full_zstd);
+    }
+
+    #[tokio::test]
+    async fn author_and_epoch_mismatches_rejected_before_dag_access() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(23);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors.clone())
+            .build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+
+        // The subscription stream only carries the sending peer's own proposals: a block
+        // claiming a different author is a peer fault, rejected without slot lookups.
+        assert!(matches!(
+            deserialize_minimal(
+                &minimal,
+                &context.committee,
+                AuthorityIndex::new_for_test(1),
+                &resolver,
+            )
+            .map(|_| ()),
+            Err(InflateError::Malformed(_))
+        ));
+
+        // Same for a block from another epoch.
+        let stale = TestBlock::new(10, 0)
+            .set_epoch(7)
+            .set_ancestors_raw(ancestors)
+            .build();
+        let stale = sign(stale, &context, &key_pairs);
+        let stale_minimal = serialize_minimal(&stale, &resolver, 0).unwrap();
+        assert!(matches!(
+            deserialize_minimal(
+                &stale_minimal,
+                &context.committee,
+                stale.author(),
+                &resolver,
+            )
+            .map(|_| ()),
+            Err(InflateError::Malformed(_))
+        ));
+    }
+
+    /// Randomized codec-identity sweep: diverse blocks (ancestor counts, shuffled tail
+    /// order, off-parent rounds, equivocating slots, cache horizons, payload shapes)
+    /// must reconstruct byte-identically. Targets the ordering/override bug class.
+    #[tokio::test]
+    async fn randomized_codec_identity_sweep() {
+        const COMMITTEE_SIZE: usize = 10;
+        const ITERATIONS: u64 = 200;
+        let (context, key_pairs) = Context::new_for_test(COMMITTEE_SIZE);
+
+        for seed in 0..ITERATIONS {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let round = 2 + (rng.next_u32() % 500);
+            let mut resolver = MapResolver::default();
+
+            // Own ancestor first, then a shuffled subset of other authorities — some at
+            // parent round, some older (round overrides), some in equivocating slots.
+            let mut others: Vec<u32> = (1..COMMITTEE_SIZE as u32).collect();
+            for i in (1..others.len()).rev() {
+                others.swap(i, (rng.next_u32() as usize) % (i + 1));
+            }
+            let ancestor_count = 1 + (rng.next_u32() as usize) % others.len();
+            let mut ancestors = vec![BlockRef::new(
+                round - 1,
+                AuthorityIndex::new_for_test(0),
+                test_digest(&mut rng),
+            )];
+            for &author in &others[..ancestor_count] {
+                let ancestor_round = if rng.next_u32() % 4 == 0 {
+                    1 + rng.next_u32() % (round - 1)
+                } else {
+                    round - 1
+                };
+                ancestors.push(BlockRef::new(
+                    ancestor_round,
+                    AuthorityIndex::new_for_test(author),
+                    test_digest(&mut rng),
+                ));
+            }
+            for ancestor in &ancestors {
+                resolver.insert(*ancestor);
+                // Occasionally equivocate the slot so the sender must attach a digest.
+                if rng.next_u32() % 5 == 0 {
+                    resolver.insert(BlockRef::new(
+                        ancestor.round,
+                        ancestor.author,
+                        test_digest(&mut rng),
+                    ));
+                }
+            }
+
+            let transactions = (0..(rng.next_u32() % 4))
+                .map(|_| {
+                    let mut data = vec![0u8; 1 + (rng.next_u32() as usize % 300)];
+                    rng.fill_bytes(&mut data);
+                    Transaction::new(data)
+                })
+                .collect();
+            let block = TestBlock::new(round, 0)
+                .set_ancestors_raw(ancestors)
+                .set_transactions(transactions)
+                .set_timestamp_ms(rng.next_u32() as u64)
+                .build();
+            let block = sign(block, &context, &key_pairs);
+
+            let min_omittable_round = rng.next_u32() % round;
+            let minimal = serialize_minimal(&block, &resolver, min_omittable_round).unwrap();
+            let (_signed, serialized) =
+                deserialize_minimal(&minimal, &context.committee, block.author(), &resolver)
+                    .unwrap_or_else(|e| panic!("seed {seed} failed to inflate: {e}"));
+            assert_eq!(&serialized, block.serialized(), "seed {seed}");
+        }
+    }
+
+    /// Decoder fuzz: random mutations and truncations of a valid encoding must produce
+    /// a clean error or a digest-mismatch fallback — never a panic, never acceptance.
+    #[tokio::test]
+    async fn decoder_mutation_fuzz_never_panics() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(31);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors)
+            .set_transactions(vec![Transaction::new(vec![7; 64])])
+            .build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+
+        for _ in 0..500 {
+            let mut bytes = minimal.to_vec();
+            match rng.next_u32() % 3 {
+                // Flip 1-4 bytes anywhere.
+                0 => {
+                    for _ in 0..1 + rng.next_u32() % 4 {
+                        let i = rng.next_u32() as usize % bytes.len();
+                        bytes[i] ^= (1 + rng.next_u32() % 255) as u8;
+                    }
+                }
+                // Truncate at a random point.
+                1 => bytes.truncate(rng.next_u32() as usize % bytes.len()),
+                // Pure garbage of random length.
+                _ => {
+                    bytes = vec![0u8; rng.next_u32() as usize % 512];
+                    rng.fill_bytes(&mut bytes);
+                }
+            }
+            // A mutation that still inflates must have produced the original bytes
+            // (e.g. it only touched redundant varint encoding); anything else must
+            // have failed the digest check on the way out.
+            if let Ok((_signed, serialized)) =
+                deserialize_minimal(&bytes, &context.committee, block.author(), &resolver)
+            {
+                assert_eq!(&serialized, block.serialized());
+            }
+        }
     }
 }

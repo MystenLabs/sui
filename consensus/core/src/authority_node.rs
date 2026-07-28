@@ -1205,9 +1205,9 @@ mod tests {
 
         for (index, _authority_info) in committee.authorities() {
             let registry = Registry::new();
+            // Minimal-block emission is on via ConsensusProtocolConfig::for_testing().
             let parameters = Parameters {
                 db_path: temp_dirs[index.value()].path().to_path_buf(),
-                emit_minimal_blocks: true,
                 ..Default::default()
             };
             let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
