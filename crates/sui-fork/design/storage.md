@@ -57,16 +57,15 @@ when absent) and the highest indexed checkpoint (the indexer watermark, with the
 persisted checkpoint standing in before the first watermark is written).
 
 *Events are the one entry in that list whose correctness is borrowed rather than intrinsic.
-The read in question is the `ReadStore` trait method, not an endpoint: no gRPC route
+The read in question is the `ReadStore` trait method, not an endpoint. No gRPC route
 fetches events by digest, and clients reach them either through a transaction read or
 through `ListEvents`. The fork's impl reads the rpc-store and stops there, yet a pre-fork
 transaction's events are in that store only because the transaction fallback pulled them in
-alongside the transaction row. Both callers are safe, for different reasons.
+alongside the transaction row.
 
 A transaction read is safe by ordering. `sui-rpc-api` resolves a transaction, then its
-effects, then its events, and does so unconditionally — the read mask governs rendering,
-not resolution — so the fork's transaction policy has always run by the time the events
-read happens. `ListEvents` gets no such help: the fork does not override `multi_get_events`,
+effects, then its events, and does so unconditionally, so the fork's transaction policy
+has always run by the time the events read happens. `ListEvents` gets no such help: the fork does not override `multi_get_events`,
 whose trait default maps over the same per-digest read, so it arrives with no transaction
 read in front of it. It is safe instead because of what it can name. Its cursor comes from
 the event bitmap and ledger tx-seq index families, which the embedded indexer writes only
@@ -120,9 +119,9 @@ each object row and the authority making it current commit in a single batch.
 
 ## Executing and indexing
 
-Everything canonical is written synchronously; everything derived is left to the indexer.
-Simulacrum inserts the pieces of an in-flight checkpoint as it executes; they stage in the
-`PendingCheckpointBuffer` until the seal writes them out atomically. Each
+Everything canonical is written synchronously and everything derived is left to the indexer.
+Simulacrum inserts the pieces of an in-flight checkpoint as it executes. These pieces are staged in
+`PendingCheckpointBuffer` until the seal writes them out atomically to the DBs. Each
 executed transaction writes its object version rows, tombstones, and checkpoint-pinned
 version rows before execution proceeds, and sealing writes the checkpoint summary, contents, and every
 transaction's data, effects, and events. These writes cannot wait: the executor needs
@@ -204,15 +203,32 @@ fix direction is to short-circuit only on an authoritative current-version row o
 tombstone, and otherwise merge the remote `RootVersion(bound)` result with the local
 candidate by maximum version.
 
-Pre-fork history cannot be *enumerated*, only looked up. `ListEvents` and
-`ListTransactions` drive off the event bitmap and ledger tx-seq index families, which the
-embedded indexer writes and which therefore begin one checkpoint after the fork point. A
-scan over a range predating the fork finds no rows and returns an empty stream rather than
-an error — silence a client reads as "nothing matched" rather than "not available here."
-Any filtered scan inherits the same limit, since filters are evaluated against the
-bitmaps. Closing this needs the treatment objects, transactions, and checkpoints already
-get — resolve from the remote, persist what came back — but in the inventory shape rather
-than the point-read one: the client asks by checkpoint range and filter, not by a key the
-fork can hand to a point lookup, so the fallback has to be a bounded, checkpoint-pinned
-remote enumeration that backfills the index families behind a completion marker, the way
-owner-scoped reads already work.
+The fork's ledger index begins at the fork point, and the range below it is permanently
+empty. This is a different kind of limit from everything else here, so it is worth
+separating two kinds of index. A *state* index — owner, type, coin, balance, dynamic
+fields, package versions — answers "what is true as of checkpoint C", which a remote query
+pinned at C can answer, which is why seeding and inventories work. A *log-position* index
+answers "what sits at position K in the total order of every transaction ever executed",
+which is not a function of state at any checkpoint. The ledger tx-seq family is the second
+kind, and the two bitmap families bucket over the same coordinate.
+
+Positions are inherited rather than restarted. Simulacrum is seeded with the real fork
+checkpoint, whose summary carries the chain's `network_total_transactions`, and each
+transaction's position is derived from it, so the fork's transactions continue the real
+chain's numbering. Every position below that value therefore names a real transaction the
+fork's index does not hold.
+
+The visible effects are `ledger_tx_seq_digest` returning nothing for any pre-fork position,
+and `ListTransactions` and `ListEvents` returning an empty stream rather than an error for
+a pre-fork checkpoint range — silence a client reads as "nothing matched" rather than "not
+available here." Filtered scans inherit the same limit, since filters are evaluated against
+the bitmaps.
+
+Positional lookups cannot be closed by falling back to the remote. GraphQL exposes
+transactions by digest, by checkpoint, and by filter, never by global ordinal, so deriving
+what sits at a position would mean counting every transaction from genesis. The range
+queries are closable in principle — they are parameterized by checkpoint range and filter,
+both of which a checkpoint-pinned remote query can express — but at a cost that scales with
+the range rather than with the result, and the filter would have to be delegated to the
+remote rather than evaluated against local bitmaps. Neither is planned. The fork's ledger
+starts at the fork point.
