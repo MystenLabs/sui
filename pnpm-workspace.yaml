@@ -7,6 +7,7 @@ packages:
   - '!examples/deepbook-spot'
   - '!examples/deepbook-margin'
   - '!examples/oracle-adapter/ts'
+  - '!examples/ptb-cookbook'
   - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'
   - '!**/.next/**'
