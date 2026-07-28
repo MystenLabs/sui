@@ -22,7 +22,7 @@ public struct PriceRead has copy, drop {
 
 /// Read the Pyth feed through the adapter with a staleness bound, then emit the
 /// normalized price. Aborts if the feed is older than `max_age_secs`.
-public entry fun read_and_emit(price_info: &PriceInfoObject, clock: &Clock, max_age_secs: u64) {
+public fun read_and_emit(price_info: &PriceInfoObject, clock: &Clock, max_age_secs: u64) {
     let p = price_adapter::price_from_pyth(price_info, clock, max_age_secs);
     event::emit(PriceRead {
         magnitude: price_adapter::magnitude(&p),

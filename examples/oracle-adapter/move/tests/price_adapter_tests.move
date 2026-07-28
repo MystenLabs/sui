@@ -6,7 +6,6 @@ module oracle_adapter::price_adapter_tests;
 
 use oracle_adapter::price_adapter as pa;
 use sui::clock;
-use sui::tx_context;
 
 // The reads that touch a PriceInfoObject (`price_from_pyth`, `price_or_fallback`)
 // cannot be unit-tested, because a PriceInfoObject cannot be minted in a test.

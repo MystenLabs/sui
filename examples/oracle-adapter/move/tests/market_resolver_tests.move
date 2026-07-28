@@ -6,7 +6,6 @@ module oracle_adapter::market_resolver_tests;
 
 use oracle_adapter::market_resolver as mr;
 use sui::clock;
-use sui::tx_context;
 
 // `resolve` touches a PriceInfoObject, which a test cannot mint, so it is
 // verified by Testnet execution. These tests cover the resolvability guard: too

@@ -11,10 +11,10 @@
 /// can be added as a sibling `price_from_switchboard` without changing consumers.
 module oracle_adapter::price_adapter;
 
-use pyth::pyth;
-use pyth::price::{Self as pyth_price, Price as PythPrice};
 use pyth::i64;
+use pyth::price::{Self as pyth_price, Price as PythPrice};
 use pyth::price_info::PriceInfoObject;
+use pyth::pyth;
 use sui::clock::{Self, Clock};
 
 const EPriceNegative: u64 = 1;
@@ -22,7 +22,6 @@ const EZeroPrice: u64 = 2;
 const EConfidenceTooWide: u64 = 3;
 const EPriceDeviates: u64 = 4;
 const EPriceStale: u64 = 5;
-
 
 /// A normalized, provider-neutral price. The magnitude is non-negative; the
 /// exponent is base-10 and carried separately because provider feeds report
@@ -37,15 +36,10 @@ public struct Price has copy, drop, store {
     timestamp: u64,
 }
 
-
 /// Read a Pyth price, rejecting it if it is older than `max_age_secs`, and
 /// normalize it. This delegates the staleness gate to Pyth's own
 /// `get_price_no_older_than`, which aborts on a stale feed.
-public fun price_from_pyth(
-    price_info: &PriceInfoObject,
-    clock: &Clock,
-    max_age_secs: u64,
-): Price {
+public fun price_from_pyth(price_info: &PriceInfoObject, clock: &Clock, max_age_secs: u64): Price {
     let p = pyth::get_price_no_older_than(price_info, clock, max_age_secs);
     from_pyth_price(&p)
 }
@@ -72,7 +66,6 @@ public fun price_or_fallback(
     }
 }
 
-
 fun from_pyth_price(p: &PythPrice): Price {
     let raw = pyth_price::get_price(p);
     // Consumers value collateral and settle in positive prices; a negative or
@@ -95,7 +88,6 @@ fun from_pyth_price(p: &PythPrice): Price {
         timestamp: pyth_price::get_timestamp(p),
     }
 }
-
 
 /// True if the price's publish time is within `max_age_secs` of the clock. Uses
 /// the same strict bound and absolute difference as Pyth's own staleness check,
@@ -127,12 +119,8 @@ public fun assert_confidence(p: &Price, max_conf_bps: u64) {
 /// spike before it drives a liquidation. Both values must share the exponent.
 public fun assert_within_deviation(p: &Price, ref_mag: u64, max_dev_bps: u64) {
     let diff = if (p.mag > ref_mag) p.mag - ref_mag else ref_mag - p.mag;
-    assert!(
-        (diff as u128) * 10000 <= (ref_mag as u128) * (max_dev_bps as u128),
-        EPriceDeviates,
-    );
+    assert!((diff as u128) * 10000 <= (ref_mag as u128) * (max_dev_bps as u128), EPriceDeviates);
 }
-
 
 public fun magnitude(p: &Price): u64 { p.mag }
 
@@ -143,7 +131,6 @@ public fun timestamp(p: &Price): u64 { p.timestamp }
 public fun expo_magnitude(p: &Price): u64 { p.expo_magnitude }
 
 public fun expo_is_negative(p: &Price): bool { p.expo_negative }
-
 
 #[test_only]
 public fun new_for_testing(
@@ -157,7 +144,13 @@ public fun new_for_testing(
 }
 
 #[test_only]
-public fun pyth_price_for_testing(mag: u64, negative: bool, expo: u64, conf: u64, ts: u64): PythPrice {
+public fun pyth_price_for_testing(
+    mag: u64,
+    negative: bool,
+    expo: u64,
+    conf: u64,
+    ts: u64,
+): PythPrice {
     pyth_price::new(i64::new(mag, negative), conf, i64::new(expo, true), ts)
 }
 
