@@ -23,6 +23,7 @@ use sui_types::base_types::SuiAddress;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
+use super::inert_bytes::InertBytesWorkloadBuilder;
 use super::composite::{CompositeWorkloadBuilder, CompositeWorkloadConfig};
 use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
 use super::randomized_transaction::RandomizedTransactionWorkloadBuilder;
@@ -37,6 +38,7 @@ pub struct WorkloadWeights {
     pub batch_payment: u32,
     pub shared_deletion: u32,
     pub adversarial: u32,
+    pub inert_bytes: u32,
     pub expected_failure: u32,
     pub randomness: u32,
     pub randomized_transaction: u32,
@@ -52,6 +54,7 @@ pub struct WorkloadConfig {
     pub num_transfer_accounts: u64,
     pub weights: WorkloadWeights,
     pub adversarial_cfg: AdversarialPayloadCfg,
+    pub inert_bytes_size: u64,
     pub expected_failure_cfg: ExpectedFailurePayloadCfg,
     pub batch_payment_size: u32,
     pub slow_vectors: u64,
@@ -92,6 +95,8 @@ impl WorkloadConfiguration {
                 delegation,
                 batch_payment,
                 adversarial,
+                inert_bytes,
+                inert_bytes_size,
                 expected_failure,
                 randomness,
                 randomized_transaction,
@@ -166,6 +171,7 @@ impl WorkloadConfiguration {
                             batch_payment: batch_payment[i],
                             shared_deletion: shared_deletion[i],
                             adversarial: adversarial[i],
+                            inert_bytes: inert_bytes[i],
                             expected_failure: expected_failure[i],
                             randomness: randomness[i],
                             randomized_transaction: randomized_transaction[i],
@@ -174,6 +180,7 @@ impl WorkloadConfiguration {
                             conflicting_transfer: conflicting_transfer[i],
                             composite: composite[i],
                         },
+                        inert_bytes_size: inert_bytes_size[i],
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
                         expected_failure_cfg: ExpectedFailurePayloadCfg {
@@ -290,6 +297,7 @@ impl WorkloadConfiguration {
             num_transfer_accounts,
             weights,
             adversarial_cfg,
+            inert_bytes_size,
             expected_failure_cfg,
             batch_payment_size,
             slow_vectors,
@@ -347,6 +355,7 @@ impl WorkloadConfiguration {
             + weights.delegation
             + weights.batch_payment
             + weights.adversarial
+            + weights.inert_bytes
             + weights.randomness
             + weights.expected_failure
             + weights.randomized_transaction
@@ -419,6 +428,16 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(adversarial_workload);
+        let inert_bytes_workload = InertBytesWorkloadBuilder::from(
+            weights.inert_bytes as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            inert_bytes_size,
+            duration,
+            group,
+        );
+        workload_builders.push(inert_bytes_workload);
         let randomness_workload = RandomnessWorkloadBuilder::from(
             weights.randomness as f32 / total_weight as f32,
             target_qps,
