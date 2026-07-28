@@ -74,11 +74,11 @@ or by passing in the constants (usable for any network).
 ```js
 import { SuinsClient } from '@mysten/suins';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
- 
+
 // You need a Sui client. You can re-use the Sui client of your project
 // (it's not recommended to create a new one).
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
- 
+
 // Now you can use it to create a SuiNS client.
 const suinsClient = new SuinsClient({
 	client,
@@ -91,11 +91,11 @@ const suinsClient = new SuinsClient({
 ```js
 import { SuinsClient } from '@mysten/suins';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
- 
+
 // You need a Sui client. You can re-use the Sui client of your project
 // (it's not recommended to create a new one).
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
- 
+
 // Now you can use it to create a SuiNS client.
 const suinsClient = new SuinsClient({
 	client,

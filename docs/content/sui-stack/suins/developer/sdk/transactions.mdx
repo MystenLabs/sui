@@ -45,14 +45,13 @@ const register = async (name: string, years: number) => {
     const coinConfig = suinsClient.config.coins.USDC;
 
     // priceInfoObjectId is required for SUI/NS
-    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0];
+    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(transaction, coinConfig.feed))[0];
 
     // Build the transaction to register the name, specifying a year from 1 to 5.
-    const nft = suinsTx.register({
+    const nft = suinsTransaction.register({
         domain: 'myname.sui',
         years: 3,
         coinConfig,
-        coin,
         priceInfoObjectId, // Only required for SUI/NS
     });
 
@@ -75,14 +74,13 @@ const renew = async (nftId: string, name: string, years: number) => {
     const coinConfig = suinsClient.config.coins.USDC;
 
     // priceInfoObjectId is required for SUI/NS
-    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0];
+    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(transaction, coinConfig.feed))[0];
 
     // Build the transaction to renew the name, specifying a year from 1 to 5.
-    suinsTx.renew({
+    suinsTransaction.renew({
         nft: '0xMyNftObject',
         years: 3,
         coinConfig,
-        coin,
         priceInfoObjectId, // Only required for SUI/NS
     });
 
@@ -209,14 +207,14 @@ const composedExample = async (name: string, years: number) => {
     const coinConfig = suinsClient.config.coins.NS;
 
     // priceInfoObjectId is required for SUI/NS
-    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0];
+    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(transaction, coinConfig.feed))[0];
 
     // Build the transaction to register the name, specifying a year from 1 to 5.
-    const nft = suinsTx.register({
+    const nft = suinsTransaction.register({
         domain: 'myname.sui',
         years,
         coinConfig,
-        coinId: '0xMyCoinObject', // Only required for NS/USDC
+        coin: '0xMyCoinObject', // Only required for NS/USDC
         priceInfoObjectId, // Only required for SUI/NS
     });
 

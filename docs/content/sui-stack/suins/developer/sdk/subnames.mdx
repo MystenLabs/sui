@@ -63,7 +63,7 @@ const createSubname = async (subName: string, parentNftId: string, expirationMs:
 Allows the parent holder to edit the setup (allow child creation and allow time extension) for a subname.
 
 ```js
-const editSetup = async (name: stringify, parentNftId: string, allowChildCreation: boolean, allowTimeExtension: boolean) => {
+const editSetup = async (name: string, parentNftId: string, allowChildCreation: boolean, allowTimeExtension: boolean) => {
     // Create a transaction block as usual in your PTBs.
     const transaction = new Transaction();
     // Pass in the transaction block & the app's global SuinsClient.
@@ -107,7 +107,7 @@ const extendExpiration = async (nftId: string, expirationMs: number) => {
 Read more about the differences between a [subname and a leaf subname](../../developer.mdx#subname-types).
 
 ```js
-const createLeafSubname = async (name: stringify, parentNftId: string, targetAddress: string) => {
+const createLeafSubname = async (name: string, parentNftId: string, targetAddress: string) => {
     // Create a transaction block as usual in your PTBs.
     const transaction = new Transaction();
     // Pass in the transaction block & the app's global SuinsClient.
