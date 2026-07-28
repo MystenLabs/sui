@@ -7,6 +7,7 @@ mod authority_node;
 mod authority_service;
 mod base_committer;
 mod block;
+mod block_inflater;
 mod block_manager;
 mod block_sync_service;
 mod block_verifier;
