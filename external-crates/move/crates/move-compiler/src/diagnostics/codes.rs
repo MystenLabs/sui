@@ -22,7 +22,6 @@ pub enum DiagnosticOrigin {
     SuiCompiler,
     SuiLint,
     UpgradeCompatibility,
-    External(&'static str),
 }
 
 impl DiagnosticOrigin {
@@ -33,16 +32,13 @@ impl DiagnosticOrigin {
             Self::SuiCompiler => "SC",
             Self::SuiLint => "SL",
             Self::UpgradeCompatibility => "UC",
-            Self::External(code) => code,
         }
     }
 
     pub const fn filter_prefix(self) -> Option<&'static str> {
         match self {
             Self::Lint | Self::SuiLint => Some("lint"),
-            Self::Compiler | Self::SuiCompiler | Self::UpgradeCompatibility | Self::External(_) => {
-                None
-            }
+            Self::Compiler | Self::SuiCompiler | Self::UpgradeCompatibility => None,
         }
     }
 }

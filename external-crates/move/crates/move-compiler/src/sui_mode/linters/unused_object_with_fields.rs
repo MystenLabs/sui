@@ -58,13 +58,13 @@ use crate::{
     naming::ast::StructFields,
     parser::ast::Ability_,
     shared::program_info::TypingProgramInfo,
-    sui_mode::linters::{LINT_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode},
+    sui_mode::linters::{LinterDiagnosticCategory, LinterDiagnosticCode},
 };
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 const UNUSED_OBJ_WITH_FIELDS_DIAG: DiagnosticInfo = custom(
-    LINT_ORIGIN,
+    crate::diagnostics::codes::DiagnosticOrigin::SuiLint,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::UnusedObjWithFields as u8,

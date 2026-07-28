@@ -17,10 +17,10 @@ use move_binary_format::{
 use move_bytecode_utils::{Modules, layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{Diagnostics, report_diagnostics_to_buffer, report_warnings},
-    linters::LINT_ORIGIN as MOVE_LINT_ORIGIN,
+    diagnostics::{
+        Diagnostics, codes::DiagnosticOrigin, report_diagnostics_to_buffer, report_warnings,
+    },
     shared::files::MappedFiles,
-    sui_mode::linters::LINT_ORIGIN as SUI_LINT_ORIGIN,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -250,7 +250,7 @@ impl BuildConfig {
 /// There may be additional information that needs to be displayed after diagnostics are reported
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
-    let lint_origins = [MOVE_LINT_ORIGIN, SUI_LINT_ORIGIN];
+    let lint_origins = [DiagnosticOrigin::Lint, DiagnosticOrigin::SuiLint];
     let any_linter_warnings = lint_origins
         .iter()
         .any(|origin| warning_diags.any_with_origin(*origin));

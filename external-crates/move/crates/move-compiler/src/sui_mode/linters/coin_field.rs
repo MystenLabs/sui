@@ -14,12 +14,10 @@ use crate::{
     typing::{ast as T, visitor::simple_visitor},
 };
 
-use super::{
-    COIN_MOD_NAME, COIN_STRUCT_NAME, LINT_ORIGIN, LinterDiagnosticCategory, LinterDiagnosticCode,
-};
+use super::{COIN_MOD_NAME, COIN_STRUCT_NAME, LinterDiagnosticCategory, LinterDiagnosticCode};
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
-    LINT_ORIGIN,
+    crate::diagnostics::codes::DiagnosticOrigin::SuiLint,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::CoinField as u8,
