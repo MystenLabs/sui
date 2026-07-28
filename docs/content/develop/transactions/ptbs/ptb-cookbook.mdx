@@ -114,9 +114,9 @@ Combine sponsorship with a kiosk purchase: the buyer selects and pays for the it
 
 Sui supports both coin objects and address balances. You can explicitly choose which source to use in a PTB.
 
-### Send from address balances
+### Send to a recipient's address balance
 
-Use `tx.balance()` to create a `Balance<T>` input from the sender's address balance, then pass it to `balance::send_funds`:
+Use `tx.balance()` to create a `Balance<T>` input (the SDK selects the funding source automatically), then pass it to `balance::send_funds` to deposit into the recipient's address balance:
 
 <ImportContent source="examples/ptb-cookbook/src/coin-selection.ts" mode="code" tag="send-from-balance" />
 

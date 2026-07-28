@@ -12,7 +12,7 @@ const recipientAddress = '0xRecipient...';
 // docs::#send-from-balance
 const tx = new Transaction();
 
-// Send 1 SUI from the sender's address balance to a recipient's address balance.
+// Send 1 SUI to the recipient's address balance. The SDK selects the funding source.
 tx.moveCall({
 	target: '0x2::balance::send_funds',
 	typeArguments: ['0x2::sui::SUI'],

@@ -126,7 +126,7 @@ If you do not call `make_supply_fixed` or `make_supply_burn_only`, the supply re
 
 To create a currency with deny-list support, call `make_regulated` on the `CurrencyInitializer` before calling `finalize`. This returns a `DenyCapV2` that you use to manage the deny list.
 
-<ImportContent source="examples/move/coin/sources/regcoin_new.move" mode="code" tag="regulate" noComments />
+<ImportContent source="examples/move/coin/sources/regcoin_new.move" mode="code" fun="init" noComments />
 
 The `make_regulated` function takes a `bool` parameter controlling whether global pause is allowed. When `true`, the `DenyCapV2` holder can freeze all transfers of the token across the network. See [Regulated Tokens](/onchain-finance/fungible-tokens/regulated-tokens) for details on managing the deny list.
 
