@@ -39,7 +39,7 @@ questions:
   - Should I use Pyth or Switchboard on Sui?
   - How does price data live in Sui objects?
 answer: >-
-  A price oracle brings off-chain prices onchain. On Sui, price data lives in
+  A price oracle brings offchain prices onchain. On Sui, price data lives in
   shared objects that you update and read in the same transaction. Pyth is a
   pull oracle: you fetch a signed update from Hermes, apply it to a
   PriceInfoObject, and read it with a built-in staleness gate. Switchboard is
@@ -53,7 +53,7 @@ builder_paths:
     stage: Oracles
 ---
 
-A price oracle brings off-chain data, most often an asset price, onchain so a smart contract can act on it. Any DeFi app that values collateral, liquidates a position, prices a swap, or settles a market against a real-world number needs one, because that number does not exist onchain until an oracle publishes it.
+A price oracle brings offchain data, most often an asset price, onchain so a smart contract can act on it. Any DeFi app that values collateral, liquidates a position, prices a swap, or settles a market against a real-world number needs one, because that number does not exist onchain until an oracle publishes it.
 
 The stakes are high: a wrong or stale price can drain a lending pool or liquidate a healthy position. Reading a feed is a few lines; reading it safely is the real work, and it is the subject of this cluster.
 
@@ -61,7 +61,7 @@ The stakes are high: a wrong or stale price can drain a lending pool or liquidat
 
 Two models put a price onchain, and the difference shapes your integration.
 
-- **Pull (on-demand).** Nobody keeps the onchain price current for you. Your transaction fetches a fresh, signed update off-chain, applies it onchain, and reads it, all in one atomic transaction. You pay for the update only when you use it, and the price is as fresh as the moment you transact. Pyth and Switchboard on Sui are both pull oracles.
+- **Pull (on-demand).** Nobody keeps the onchain price current for you. Your transaction fetches a fresh, signed update offchain, applies it onchain, and reads it, all in one atomic transaction. You pay for the update only when you use it, and the price is as fresh as the moment you transact. Pyth and Switchboard on Sui are both pull oracles.
 - **Push.** A separate service, a keeper, posts prices to an onchain object on a schedule or when the price moves past a threshold. Consumers read the last posted value. The freshness of a push feed is only as good as the keeper's cadence, so a push consumer must still check how old the stored price is.
 
 The pull model is the default on Sui because it puts freshness in the consumer's control: the update and the read happen together, so a consumer never acts on a price the transaction did not just refresh.

@@ -1,6 +1,6 @@
 ---
-title: Consuming price feeds
-sidebar_label: Consuming price feeds
+title: Consuming Price Feeds
+sidebar_label: Consuming Price Feeds
 description: >-
   Read Pyth and Switchboard price feeds on Sui: fetch a signed update, apply it
   onchain, and read it in one transaction, with working Testnet TypeScript and
@@ -55,7 +55,7 @@ builder_paths:
     stage: Oracles
 ---
 
-Both Pyth and Switchboard on Sui are pull oracles: a transaction fetches a fresh signed update off-chain, applies it onchain, and reads it, in that order, atomically. This walkthrough reads a Pyth feed end to end on Testnet, then shows the Switchboard on-demand variant.
+Both Pyth and Switchboard on Sui are pull oracles: a transaction fetches a fresh signed update offchain, applies it onchain, and reads it, in that order, atomically. This walkthrough reads a Pyth feed end to end on Testnet, then shows the Switchboard on-demand variant.
 
 The TypeScript samples live in the `examples/oracle-adapter/ts` package and type-check with `tsc --noEmit`. They pin the network's package and object IDs in a config module rather than inline, so a rotated ID is a one-line change:
 
@@ -71,7 +71,7 @@ The Pyth and Wormhole state object IDs and the Hermes endpoint come from the [Py
 
 ## Set up the clients
 
-Three clients: a Sui RPC client, the Pyth onchain client (which builds the Wormhole-verify and price-update commands), and a Hermes connection (which serves the signed off-chain updates).
+Three clients: a Sui RPC client, the Pyth onchain client (which builds the Wormhole-verify and price-update commands), and a Hermes connection (which serves the signed offchain updates).
 
 <ImportContent source="examples/oracle-adapter/ts/src/client.ts" mode="code" tag="client" />
 
