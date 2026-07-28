@@ -6,6 +6,7 @@ pub mod adversarial;
 pub mod batch_payment;
 pub mod composite;
 pub mod delegation;
+pub mod inert_bytes;
 pub mod expected_failure;
 pub mod party;
 pub mod payload;
