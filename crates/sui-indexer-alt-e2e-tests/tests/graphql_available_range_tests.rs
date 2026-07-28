@@ -253,44 +253,87 @@ async fn test_transaction_pagination_pruning() {
 /// never calls `active_filters()`).
 #[tokio::test]
 async fn test_transaction_affected_object_filter_requires_pipeline() {
-    let mut cluster = cluster_with_pipelines(PipelineLayer {
-        cp_sequence_numbers: Some(ConcurrentLayer::default()),
-        tx_digests: Some(ConcurrentLayer::default()),
-        kv_transactions: Some(ConcurrentLayer::default()),
-        // tx_affected_objects is intentionally left unconfigured.
-        ..Default::default()
-    })
-    .await;
-
-    // Ensure the configured pipelines have a watermark row (from indexing the genesis checkpoint)
-    // before querying, so the error below is specifically about the *missing* tx_affected_objects
-    // pipeline, not about the others not having caught up yet.
-    cluster.create_checkpoint().await;
-
-    let response = query_transactions(
-        &cluster,
+    assert_filter_requires_pipeline(
+        TRANSACTIONS_QUERY,
         json!({ "affectedObject": SuiAddress::ZERO.to_string() }),
+        "transactions",
+        "filtering transactions by affected object not available",
     )
     .await;
+}
 
-    assert_json_snapshot!(response["errors"], @r###"
-    [
-      {
-        "message": "filtering transactions by affected object not available",
-        "locations": [
-          {
-            "line": 3,
-            "column": 9
-          }
-        ],
-        "path": [
-          "transactions"
-        ],
-        "extensions": {
-          "code": "FEATURE_UNAVAILABLE"
-        }
-      }
-    ]"###);
+/// Same as above, for the `affectedAddress` filter and its backing `tx_affected_addresses`
+/// pipeline.
+#[tokio::test]
+async fn test_transaction_affected_address_filter_requires_pipeline() {
+    assert_filter_requires_pipeline(
+        TRANSACTIONS_QUERY,
+        json!({ "affectedAddress": SuiAddress::ZERO.to_string() }),
+        "transactions",
+        "filtering transactions by affected address not available",
+    )
+    .await;
+}
+
+/// Same as above, for the `sentAddress` filter, which also backs onto `tx_affected_addresses`.
+#[tokio::test]
+async fn test_transaction_sent_address_filter_requires_pipeline() {
+    assert_filter_requires_pipeline(
+        TRANSACTIONS_QUERY,
+        json!({ "sentAddress": SuiAddress::ZERO.to_string() }),
+        "transactions",
+        "filtering transactions by affected address not available",
+    )
+    .await;
+}
+
+/// Same as above, for the `function` filter and its backing `tx_calls` pipeline.
+#[tokio::test]
+async fn test_transaction_function_filter_requires_pipeline() {
+    assert_filter_requires_pipeline(
+        TRANSACTIONS_QUERY,
+        json!({ "function": "0x2::coin::join" }),
+        "transactions",
+        "filtering transactions by function calls not available",
+    )
+    .await;
+}
+
+/// Same as above, for the `kind` filter and its backing `tx_kinds` pipeline.
+#[tokio::test]
+async fn test_transaction_kind_filter_requires_pipeline() {
+    assert_filter_requires_pipeline(
+        TRANSACTIONS_QUERY,
+        json!({ "kind": "PROGRAMMABLE_TX" }),
+        "transactions",
+        "filtering transactions by kind not available",
+    )
+    .await;
+}
+
+/// Same as above, but for the `events` resolver: the `module` filter requires `ev_emit_mod`.
+#[tokio::test]
+async fn test_event_module_filter_requires_pipeline() {
+    assert_filter_requires_pipeline(
+        EVENTS_QUERY,
+        json!({ "module": SuiAddress::ZERO.to_string() }),
+        "events",
+        "querying events by emitting module not available",
+    )
+    .await;
+}
+
+/// Same as above: the `events` resolver's default path — taken whenever `module` isn't set (e.g.
+/// filtering by `type`, or no filter at all) — requires the `ev_struct_inst` pipeline.
+#[tokio::test]
+async fn test_event_type_filter_requires_pipeline() {
+    assert_filter_requires_pipeline(
+        EVENTS_QUERY,
+        json!({ "type": SuiAddress::ZERO.to_string() }),
+        "events",
+        "querying events by type not available",
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -582,4 +625,37 @@ async fn query_events(cluster: &FullCluster, filter: Value) -> Value {
         })),
     )
     .await
+}
+
+/// Build a cluster with only `cp_sequence_numbers`, `tx_digests`, and `kv_transactions`
+/// configured (every filter-specific pipeline is left out), run `query` with `filter`, and assert
+/// it fails with a `FEATURE_UNAVAILABLE` error for `message` at the top-level `path` field —
+/// proving that the pipeline backing that filter is genuinely required to serve it.
+async fn assert_filter_requires_pipeline(query: &str, filter: Value, path: &str, message: &str) {
+    let mut cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
+        tx_digests: Some(ConcurrentLayer::default()),
+        kv_transactions: Some(ConcurrentLayer::default()),
+        ..Default::default()
+    })
+    .await;
+
+    cluster.create_checkpoint().await;
+
+    let response = execute_graphql_query(
+        &cluster,
+        query,
+        Some(json!({ "filter": filter, "first": 50 })),
+    )
+    .await;
+
+    let errors = response["errors"].as_array().cloned().unwrap_or_default();
+    assert_eq!(
+        errors.len(),
+        1,
+        "expected exactly one error, got: {errors:#?}"
+    );
+    assert_eq!(errors[0]["message"], message);
+    assert_eq!(errors[0]["path"], json!([path]));
+    assert_eq!(errors[0]["extensions"]["code"], "FEATURE_UNAVAILABLE");
 }
