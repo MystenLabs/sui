@@ -1,6 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
-assertion_line: 5077
+assertion_line: 5080
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 132
@@ -108,7 +108,6 @@ feature_flags:
   record_additional_state_digest_in_prologue: true
   move_native_context: true
   consensus_median_based_commit_timestamp: true
-  consensus_minimal_block_propagation: true
   normalize_ptb_arguments: true
   consensus_batched_block_sync: true
   enforce_checkpoint_timestamp_monotonicity: true
