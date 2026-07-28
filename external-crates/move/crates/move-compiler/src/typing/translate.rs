@@ -586,6 +586,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: nvalue,
     } = nconstant;
@@ -629,6 +630,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value: *value,
     }
@@ -4310,6 +4312,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             index: _,
             attributes,
             defined_loc,
+            visibility: _,
             signature: _,
             value: _,
         } = context.constant_info(module_ident, constant_name).clone();
@@ -4324,6 +4327,19 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
                 )));
                 return;
             };
+            if !context.is_current_module(module_ident) {
+                let msg = format!(
+                    "Invalid use of '#[error]' constant '{}::{}' in {}",
+                    module_ident, constant_name, abort_or_assert_str
+                );
+                let defined_msg =
+                    "'#[error]' constants can only be used in the module that defines them";
+                context.add_diag(diag!(
+                    TypeSafety::InvalidErrorUsage,
+                    (*const_loc, msg),
+                    (defined_loc, defined_msg)
+                ));
+            }
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,
                 error_constant: Some(*constant_name),

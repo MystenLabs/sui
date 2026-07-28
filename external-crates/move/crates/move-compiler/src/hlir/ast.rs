@@ -385,7 +385,7 @@ pub enum UnannotatedExp_ {
         from_user: bool,
         var: Var,
     },
-    Constant(ConstantName),
+    Constant(ModuleIdent, ConstantName),
     ErrorConstant {
         line_number_loc: Loc,
         error_constant: Option<ConstantName>,
@@ -1531,7 +1531,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("copy@");
                 v.ast_debug(w)
             }
-            E::Constant(c) => w.write(format!("{}", c)),
+            E::Constant(m, c) => w.write(format!("{}::{}", m, c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }

@@ -1226,7 +1226,13 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         }
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
-        E::Constant(c) => {
+        E::Constant(m, c) => {
+            // cross-module references are replaced with module-local copies during CFGIR
+            assert!(
+                context.current_module() == Some(&m),
+                "ICE cross-module constant should have been replaced with a module-local constant \
+                 copy"
+            );
             // load the constant by value; it deduplicates onto the pool entry seeded by the
             // constant's definition
             let (ty, value) = context
