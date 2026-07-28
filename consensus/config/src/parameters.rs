@@ -51,6 +51,13 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_blocks_per_fetch")]
     pub max_blocks_per_fetch: usize,
 
+    /// Whether to emit minimal (ancestor-compressed) blocks on the validator block
+    /// subscription stream. Receivers always accept both full and minimal forms, so this
+    /// only controls sending: it can be enabled on a subset of validators and rolled back
+    /// instantly without a protocol change.
+    #[serde(default)]
+    pub emit_minimal_blocks: bool,
+
     /// Time to wait during node start up until the node has synced the last proposed block via the
     /// network peers. When set to `0` the sync mechanism is disabled. This property is meant to be
     /// used for amnesia recovery.
@@ -233,6 +240,7 @@ impl Default for Parameters {
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             max_blocks_per_sync: Parameters::default_max_blocks_per_sync(),
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
+            emit_minimal_blocks: false,
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
             round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),

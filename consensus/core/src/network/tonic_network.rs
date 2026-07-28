@@ -150,6 +150,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
+                        minimal: response.minimal_block,
                     }),
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
@@ -581,6 +582,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
+            minimal: None,
         };
         self.service()?
             .handle_send_block(peer_index, block)
@@ -623,9 +625,17 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
             .map(|block| {
+                // Exactly one of the two forms rides the wire: sending the full bytes
+                // alongside the minimal form would forfeit the bandwidth saving.
+                let has_minimal = block.minimal.is_some();
                 Ok(SubscribeBlocksResponse {
-                    block: block.block,
+                    block: if has_minimal {
+                        Bytes::new()
+                    } else {
+                        block.block
+                    },
                     excluded_ancestors: block.excluded_ancestors,
+                    minimal_block: block.minimal,
                 })
             });
         let rate_limited_stream =
@@ -1379,6 +1389,10 @@ pub(crate) struct SubscribeBlocksResponse {
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     #[prost(bytes = "vec", repeated, tag = "2")]
     excluded_ancestors: Vec<Vec<u8>>,
+    // Minimal encoding of the block (see minimal_block.rs). When set, `block` is empty
+    // and the receiver reconstructs the full serialized block from local DAG state.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    minimal_block: Option<Bytes>,
 }
 
 #[derive(Clone, prost::Message)]

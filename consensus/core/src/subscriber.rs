@@ -15,13 +15,18 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, error, info};
 
 use crate::{
-    block::BlockAPI as _,
+    block::{BlockAPI as _, VerifiedBlock},
+    block_inflater::BlockInflater,
     context::Context,
     dag_state::DagState,
-    error::ConsensusError,
-    network::{ValidatorNetworkClient, ValidatorNetworkService},
+    error::{ConsensusError, ConsensusResult},
+    minimal_block::InflateError,
+    network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
+
+/// Timeout for the strict full-block fetch after a failed minimal-block inflation.
+const FALLBACK_FETCH_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
 /// when subscription streams break. Blocks returned from the peer are sent to the authority
@@ -33,6 +38,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     network_client: Arc<C>,
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
+    block_inflater: Arc<BlockInflater>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -48,11 +54,13 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
+        let block_inflater = Arc::new(BlockInflater::new(context.clone(), dag_state.clone()));
         Self {
             context,
             network_client,
             authority_service,
             dag_state,
+            block_inflater,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
@@ -69,6 +77,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         // references so they do not become additional owners during shutdown.
         let authority_service = Arc::downgrade(&self.authority_service);
         let dag_state = Arc::downgrade(&self.dag_state);
+        let block_inflater = self.block_inflater.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -77,6 +86,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             network_client,
             authority_service,
             dag_state,
+            block_inflater,
             peer,
         )));
     }
@@ -116,11 +126,72 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .set(0);
     }
 
+    /// Replaces a minimal-form block with its inflated full serialization, falling back to
+    /// a strict fetch from the sending peer, which authored the block and must hold it.
+    async fn inflate_received_block(
+        context: &Context,
+        block_inflater: &BlockInflater,
+        network_client: &C,
+        peer: AuthorityIndex,
+        mut block: ExtendedSerializedBlock,
+    ) -> ConsensusResult<ExtendedSerializedBlock> {
+        let Some(minimal) = block.minimal.take() else {
+            return Ok(block);
+        };
+        let peer_hostname = context.committee.authority(peer).hostname.as_str();
+        let node_metrics = &context.metrics.node_metrics;
+        node_metrics
+            .minimal_blocks_received
+            .with_label_values(&[peer_hostname])
+            .inc();
+        match block_inflater.inflate_with_retry(&minimal).await {
+            Ok((_signed_block, serialized)) => {
+                node_metrics
+                    .minimal_blocks_received_bytes_saved
+                    .with_label_values(&[peer_hostname])
+                    .inc_by(serialized.len().saturating_sub(minimal.len()) as u64);
+                block.block = serialized;
+                Ok(block)
+            }
+            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+                node_metrics
+                    .minimal_block_inflate_fallback
+                    .with_label_values(&[peer_hostname, reason.label()])
+                    .inc();
+                // Strict fallback: fetch only from the sending peer and require the exact
+                // claimed block in the response — never retry or fan out to other peers for
+                // an unverified claimed digest. A block dropped here is also recovered via
+                // the descendant-driven missing-ancestor path once other validators
+                // reference it.
+                let serialized_blocks = network_client
+                    .fetch_blocks(peer, vec![block_ref], vec![], false, FALLBACK_FETCH_TIMEOUT)
+                    .await?;
+                let fetched = serialized_blocks
+                    .into_iter()
+                    .find(|b| VerifiedBlock::compute_digest(b) == block_ref.digest)
+                    .ok_or(ConsensusError::UnexpectedFetchedBlock {
+                        index: peer,
+                        block_ref,
+                    })?;
+                block.block = fetched;
+                Ok(block)
+            }
+            Err(error @ InflateError::Malformed(_)) => {
+                node_metrics
+                    .minimal_block_inflate_fallback
+                    .with_label_values(&[peer_hostname, "malformed"])
+                    .inc();
+                Err(ConsensusError::MalformedMinimalBlock(error.to_string()))
+            }
+        }
+    }
+
     async fn subscription_loop(
         context: Arc<Context>,
         network_client: Arc<C>,
         authority_service: Weak<S>,
         dag_state: Weak<RwLock<DagState>>,
+        block_inflater: Arc<BlockInflater>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -226,6 +297,24 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
+                        let block = match Self::inflate_received_block(
+                            &context,
+                            &block_inflater,
+                            network_client.as_ref(),
+                            peer,
+                            block,
+                        )
+                        .await
+                        {
+                            Ok(block) => block,
+                            Err(e) => {
+                                info!(
+                                    "Failed to inflate minimal block from peer {} {}: {}",
+                                    peer, peer_hostname, e
+                                );
+                                continue 'stream;
+                            }
+                        };
                         let result = authority_service.handle_send_block(peer, block).await;
                         if let Err(e) = result {
                             match e {
@@ -317,6 +406,7 @@ mod test {
             let block_stream = stream::unfold((), |_| async {
                 sleep(Duration::from_millis(1)).await;
                 let block = ExtendedSerializedBlock {
+                    minimal: None,
                     block: Bytes::from(vec![1u8; 8]),
                     excluded_ancestors: vec![],
                 };
@@ -400,6 +490,7 @@ mod test {
             assert_eq!(
                 *block,
                 ExtendedSerializedBlock {
+                    minimal: None,
                     block: Bytes::from(vec![1u8; 8]),
                     excluded_ancestors: vec![]
                 }

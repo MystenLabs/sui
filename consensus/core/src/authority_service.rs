@@ -18,6 +18,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
+    block_inflater::BlockInflater,
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
@@ -45,6 +46,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
+    block_inflater: Arc<BlockInflater>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -61,6 +63,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
+        let block_inflater = Arc::new(BlockInflater::new(context.clone(), dag_state.clone()));
         Self {
             context,
             block_verifier,
@@ -73,6 +76,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
+            block_inflater,
         }
     }
 
@@ -378,6 +382,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .map(|block| ExtendedSerializedBlock {
                         block: block.serialized().clone(),
                         excluded_ancestors: vec![],
+                        minimal: None,
                     }),
             )
         };
@@ -391,14 +396,43 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             self.subscription_counter.clone(),
         );
 
+        // Minimal blocks are emitted for live broadcasts only: the catch-up replay above
+        // serves rounds where the subscriber's cache state is unpredictable, so it always
+        // sends full blocks.
+        let emit_minimal = self.context.parameters.emit_minimal_blocks;
+        let block_inflater = self.block_inflater.clone();
+        let context = self.context.clone();
+        let peer_hostname = context.committee.authority(peer).hostname.clone();
+
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(|items| {
+            broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
                     items.len() <= MAX_BLOCKS_PER_POLL,
                     "Too many blocks received from broadcast"
                 );
-                stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
+                let block_inflater = block_inflater.clone();
+                let context = context.clone();
+                let peer_hostname = peer_hostname.clone();
+                stream::iter(items.into_iter().map(move |extended_block| {
+                    let minimal = emit_minimal
+                        .then(|| block_inflater.serialize(&extended_block.block, 0).ok())
+                        .flatten();
+                    let mut serialized = ExtendedSerializedBlock::from(extended_block);
+                    if let Some(minimal) = &minimal {
+                        let node_metrics = &context.metrics.node_metrics;
+                        node_metrics
+                            .minimal_blocks_sent
+                            .with_label_values(&[peer_hostname.as_str()])
+                            .inc();
+                        node_metrics
+                            .minimal_blocks_sent_bytes_saved
+                            .with_label_values(&[peer_hostname.as_str()])
+                            .inc_by(serialized.block.len().saturating_sub(minimal.len()) as u64);
+                    }
+                    serialized.minimal = minimal;
+                    serialized
+                }))
             }),
         )))
     }
@@ -713,7 +747,8 @@ mod tests {
 
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
+        block_inflater::BlockInflater,
         block_sync_service::BlockSyncService,
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
@@ -944,6 +979,7 @@ mod tests {
 
         let service = authority_service.clone();
         let serialized = ExtendedSerializedBlock {
+            minimal: None,
             block: input_block.serialized().clone(),
             excluded_ancestors: vec![],
         };
@@ -969,6 +1005,7 @@ mod tests {
         let invalid_block =
             VerifiedBlock::new_for_test(TestBlock::new(10, 1000).set_timestamp_ms(10).build());
         let extended_block = ExtendedSerializedBlock {
+            minimal: None,
             block: invalid_block.serialized().clone(),
             excluded_ancestors: vec![],
         };
@@ -992,6 +1029,7 @@ mod tests {
             bcs::to_bytes(&invalid_block.reference()).unwrap(),
         ];
         let extended_block = ExtendedSerializedBlock {
+            minimal: None,
             block: input_block.serialized().clone(),
             excluded_ancestors: invalid_excluded_ancestors,
         };
@@ -1398,6 +1436,103 @@ mod tests {
             let block2: SignedBlock = bcs::from_bytes(&stream.next().await.unwrap().block).unwrap();
             assert_eq!(block2.round(), 15, "Should return block at round 15");
         }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_subscribe_blocks_emits_minimal_for_live_only() {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context.parameters.emit_minimal_blocks = true;
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_vote_tracker.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            peers_pool.clone(),
+            false,
+        );
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+
+        // Proposed block for the catch-up replay, and one block per authority at round 15
+        // to serve as resolvable ancestors of the live block.
+        let own_block = VerifiedBlock::new_for_test(TestBlock::new(15, 0).build());
+        dag_state.write().accept_block(own_block.clone());
+        let mut ancestors = vec![own_block.reference()];
+        for authority in 1..4 {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(15, authority).build());
+            ancestors.push(block.reference());
+            dag_state.write().accept_block(block);
+        }
+
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
+            transaction_vote_tracker,
+            dag_state.clone(),
+            block_sync_service,
+        ));
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let mut stream = authority_service
+            .handle_subscribe_blocks(peer, 10)
+            .await
+            .unwrap();
+
+        // The replayed block must ride full, without a minimal form.
+        let replayed = stream.next().await.unwrap();
+        assert_eq!(replayed.block, *own_block.serialized());
+        assert!(replayed.minimal.is_none());
+
+        // A live broadcast must carry the minimal form alongside the full serialization
+        // (the tonic layer sends only one of the two on the wire).
+        let live_block =
+            VerifiedBlock::new_for_test(TestBlock::new(16, 0).set_ancestors_raw(ancestors).build());
+        tx_block_broadcast
+            .send(ExtendedBlock {
+                block: live_block.clone(),
+                excluded_ancestors: vec![],
+            })
+            .unwrap();
+        let live = stream.next().await.unwrap();
+        assert_eq!(live.block, *live_block.serialized());
+        let minimal = live
+            .minimal
+            .expect("live block should carry a minimal form");
+        assert!(minimal.len() < live.block.len());
+
+        // A receiver holding the same ancestors inflates the minimal form byte-identically.
+        let receiver_inflater = BlockInflater::new(context.clone(), dag_state.clone());
+        let (_signed, serialized) = receiver_inflater.inflate(&minimal).unwrap();
+        assert_eq!(&serialized, live_block.serialized());
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -19,6 +19,9 @@ pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(bcs::Error),
 
+    #[error("Malformed minimal block: {0}")]
+    MalformedMinimalBlock(String),
+
     #[error("Error deserializing commit: {0}")]
     MalformedCommit(bcs::Error),
 

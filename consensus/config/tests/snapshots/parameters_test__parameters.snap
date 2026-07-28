@@ -14,6 +14,7 @@ max_forward_time_drift:
   nanos: 500000000
 max_blocks_per_sync: 32
 max_blocks_per_fetch: 1000
+emit_minimal_blocks: false
 sync_last_known_own_block_timeout:
   secs: 5
   nanos: 0

@@ -374,11 +374,16 @@ pub(crate) struct ExtendedSerializedBlock {
     pub(crate) block: Bytes,
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
+    // Minimal encoding of the same block, attached when the sender emits minimal blocks.
+    // On the wire only one of the two forms rides; a receiver holding `minimal` inflates
+    // it back into `block` before further processing.
+    pub(crate) minimal: Option<Bytes>,
 }
 
 impl From<ExtendedBlock> for ExtendedSerializedBlock {
     fn from(extended_block: ExtendedBlock) -> Self {
         Self {
+            minimal: None,
             block: extended_block.block.serialized().clone(),
             excluded_ancestors: extended_block
                 .excluded_ancestors

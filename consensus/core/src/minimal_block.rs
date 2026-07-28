@@ -87,6 +87,16 @@ pub(crate) enum FallbackReason {
     DigestMismatch,
 }
 
+impl FallbackReason {
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            FallbackReason::MissingAncestor(_) => "missing_ancestor",
+            FallbackReason::AmbiguousSlot(_) => "ambiguous_slot",
+            FallbackReason::DigestMismatch => "digest_mismatch",
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum InflateError {
     /// The encoding itself is invalid — a peer fault, not a local-state issue.
