@@ -145,7 +145,7 @@ sui external-keys generate ledger-signer
 3. List available keys to confirm the Ledger key appears:
 
 ```bash
-sui external-keys list-keys
+sui external-keys list-keys ledger-signer
 ```
 
 The Ledger key automatically delegates signing to the hardware device when you execute transactions that require the account key. Generate the remaining three keys (protocol, network, worker) locally or on an air-gapped machine.

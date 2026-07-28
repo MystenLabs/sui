@@ -189,37 +189,17 @@ This "watch-and-act" pattern keeps the sanctions list offchain (where it belongs
 
 For bulk deny-list updates (for example, after importing a new sanctions list), submit multiple `deny_list_v2_add` calls in a single [programmable transaction block](/develop/transactions/ptbs/building-ptb). This reduces gas costs and ensures all updates apply atomically:
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-const addressesToFreeze = ['0xAddr1...', '0xAddr2...', '0xAddr3...'];
-
-for (const addr of addressesToFreeze) {
-  tx.moveCall({
-    target: '0x2::coin::deny_list_v2_add',
-    typeArguments: ['0xPACKAGE::module::MY_COIN'],
-    arguments: [
-      tx.object('0x403'),        // DenyList shared object
-      tx.object(denyCapId),       // DenyCapV2
-      tx.pure.address(addr),      // Address to freeze
-    ],
-  });
-}
-
-await client.signAndExecuteTransaction({ signer: adminKeypair, transaction: tx });
-```
+<ImportContent source="examples/regulated-payments/src/batch-screening.ts" mode="code" tag="batch-screening" />
 
 ## Event-based compliance logging
 
-Sui emits events for every payment, approval, and deny-list change. Build your compliance audit trail by subscribing to these events and storing them in your offchain logging system.
+Payment Kit and PAS emit events for payments, approvals, and request resolutions. Build your compliance audit trail by subscribing to these events and storing them in your offchain logging system.
 
 ### Event sources
 
 - **Payment Kit** emits events on every processed payment (both registry and ephemeral modes), including nonce, amount, coin type, and receiver. See [Payment Kit](/onchain-finance/payment-kit) for the event schema.
 - **PAS** emits events for every request creation, approval, and resolution. See [PAS Workflows](/onchain-finance/pas/pas-workflows) for details.
-- **Deny list changes** emit events when addresses are added or removed, or when global pause is toggled.
+- **Deny list operations** do not emit per-change events. The `deny_list_v2_add`, `deny_list_v2_remove`, and global pause functions mutate DenyList state without emitting audit events. To build an admin audit trail, emit your own events from a wrapper module that calls the deny-list functions, or monitor DenyList object changes and transaction history.
 
 ### Subscribing to events
 
