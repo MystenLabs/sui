@@ -30,43 +30,55 @@ execute(tx)                          (Simulacrum, with ForkStore as its Simulato
   └─ publish                         (blocks until every pipeline has caught up)
 ```
 
-The pieces the diagram names each have one job. `ServiceManager` owns everything that must
-exist before any of it can run: the RocksDB instance, the `fork_metadata.json` check
+In the above diagram, the RocksDB instance, the `fork_metadata.json` check
 that a data directory belongs to the network and fork checkpoint it claims, and the
-embedded indexer, started with the manager and watched for the lifetime of the node.
-`ForkStore` orchestrates the rest — local-first reads with remote fallback, checkpoint
-sealing, and the `SimulatorStore` surface Simulacrum executes against — delegating row
+embedded indexer are handled by a service manager and watched for the lifetime of the node.
+`ForkStore` orchestrates the split between local-first reads and remote fallback, checkpoint
+sealing. The `SimulatorStore` surface Simulacrum executes against — delegating row
 access to `LocalStore` (object materialization, checkpoint and transaction persistence,
-the latest-object-status lookup) and every GraphQL round-trip to `RemoteSource`. All
-remote-read policy lives in that one place: queries pinned at the fork checkpoint, the
-gates that refuse to ask the remote about post-fork checkpoints and transactions, and
-validation of the references a response carries.
+the latest-object-status lookup) and every GraphQL round-trip to `RemoteSource`.
+Queries are pinned at the fork checkpoint and will ignore fetching post-fork data from
+GraphQL RPC. Any post-fork data will go through the local store.
 
 ## Where reads resolve
 
 `ForkStore` implements the upstream RPC storage traits (`ReadStore`, `RpcStateReader`,
-`RpcIndexes`) itself — there is no adapter struct in between; startup hands the store to
-`RpcService` directly. The impls are deliberately thin: every read the fork has policy
-for resolves through the store's inherent helpers, which are already local-first — they
-check the rpc-store rows before consulting the remote — so a second routing layer would
-only repeat the same point-get. The impls touch the stock reader directly only for
-surfaces the fork keeps no policy for at all — events, full checkpoint contents,
+`RpcIndexes`) itself. Startup hands the store to `RpcService` directly.
+The impls are a thin layer. Every read the fork has policy for resolving through the store's
+inherent helpers, which are already local-first. They check the rpc-store RocksDB rows 
+before consulting the remote RPC. The impls touch the stock reader directly only for
+surfaces the fork keeps no policy for at all, e.g., events, full checkpoint contents,
 committees, epoch info, struct layouts, and the ledger and bitmap indexes, all written by
-the embedded indexer and correct to serve as-is — plus two genuinely hybrid reads: the
+the embedded indexer and correct to serve as-is. For events, see * below.
+
+There are two other reads that the fork does not resolve through the stock reader: the
 chain identifier (the framework table seeded at open, derived from the fork checkpoint
 when absent) and the highest indexed checkpoint (the indexer watermark, with the highest
 persisted checkpoint standing in before the first watermark is written).
 
-Events are the one entry in that list whose correctness is borrowed rather than intrinsic.
-`get_events` reads the rpc-store and stops there, but a pre-fork transaction's events reach
-that store only because `fetch_and_save_transaction` pulled them in alongside the
-transaction row. What makes the stock read sufficient is an ordering property of the
-caller: `sui-rpc-api` resolves a transaction, then its effects, then its events, and it
-does so unconditionally — the read mask governs rendering, not resolution — so the fork's
-transaction policy has always run by the time the events read happens. Nothing enforces
-that ordering from this crate. Were an events-by-digest entrypoint added upstream, or the
-resolution order changed, pre-fork transactions would report *no* events rather than
-missing ones — a wrong answer shaped like a valid one.
+*Events are the one entry in that list whose correctness is borrowed rather than intrinsic.
+The read in question is the `ReadStore` trait method, not an endpoint: no gRPC route
+fetches events by digest, and clients reach them either through a transaction read or
+through `ListEvents`. The fork's impl reads the rpc-store and stops there, yet a pre-fork
+transaction's events are in that store only because the transaction fallback pulled them in
+alongside the transaction row. Both callers are safe, for different reasons.
+
+A transaction read is safe by ordering. `sui-rpc-api` resolves a transaction, then its
+effects, then its events, and does so unconditionally — the read mask governs rendering,
+not resolution — so the fork's transaction policy has always run by the time the events
+read happens. `ListEvents` gets no such help: the fork does not override `multi_get_events`,
+whose trait default maps over the same per-digest read, so it arrives with no transaction
+read in front of it. It is safe instead because of what it can name. Its cursor comes from
+the event bitmap and ledger tx-seq index families, which the embedded indexer writes only
+for the checkpoints the fork executed, so every digest it can produce belongs to a locally
+executed transaction whose events are already on disk. That is the same property recorded
+under "Known gaps" as the reason pre-fork history cannot be enumerated.
+
+Neither guarantee is enforced from this crate, and the exposure is wider than a change in
+resolution order. Any caller that reaches the trait method with a pre-fork digest it has
+not first resolved as a transaction — an events-by-digest endpoint added upstream, or a
+scan whose cursor is not indexer-written — would see those transactions report *no* events
+rather than missing ones, a wrong answer shaped like a valid one.
 
 Latest-semantics reads are why that routing exists at all. The stock reader
 answers `get_object` without a version by reverse-scanning the `objects` column family,
@@ -180,7 +192,8 @@ Address balances held in the accumulator, as opposed to in coin objects, are nei
 seeded nor served. The balance index reflects only coin objects materialized pre-fork plus
 what the indexer derives post-fork.
 
-`simulate_transaction` is stubbed; there is no Simulacrum entrypoint for it yet.
+`simulate_transaction` is stubbed; there is no Simulacrum entrypoint for it yet. This
+is done in a follow-up PR.
 
 Bounded child reads can serve stale history. `get_object_lt_or_eq_version` trusts the
 highest *local* row at or below the bound, but the sparse cache can be polluted by an
