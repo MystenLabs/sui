@@ -251,11 +251,6 @@ async fn test_transaction_pagination_pruning() {
 /// resolver (and so `TransactionFilter::active_filters()`) directly, rather than the
 /// `serviceConfig.availableRange` diagnostic query (which takes filter names as raw strings and so
 /// never calls `active_filters()`).
-///
-/// TODO(affectedObject typo): `TransactionFilter::active_filters()` currently pushes
-/// `"affectedObjects"` (plural) instead of `"affectedObject"`, so the `tx_affected_objects`
-/// pipeline is never checked and this query silently succeeds instead of erroring. The assertion
-/// below captures that current (buggy) behavior; fixed in the next commit.
 #[tokio::test]
 async fn test_transaction_affected_object_filter_requires_pipeline() {
     let mut cluster = cluster_with_pipelines(PipelineLayer {
@@ -278,7 +273,24 @@ async fn test_transaction_affected_object_filter_requires_pipeline() {
     )
     .await;
 
-    assert_json_snapshot!(response["errors"], @"null");
+    assert_json_snapshot!(response["errors"], @r###"
+    [
+      {
+        "message": "filtering transactions by affected object not available",
+        "locations": [
+          {
+            "line": 3,
+            "column": 9
+          }
+        ],
+        "path": [
+          "transactions"
+        ],
+        "extensions": {
+          "code": "FEATURE_UNAVAILABLE"
+        }
+      }
+    ]"###);
 }
 
 #[tokio::test]
