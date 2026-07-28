@@ -6,6 +6,7 @@ packages:
   - '!examples/deepbook-predict'
   - '!examples/deepbook-spot'
   - '!examples/deepbook-margin'
+  - '!examples/oracle-adapter/ts'
   - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'
   - '!**/.next/**'

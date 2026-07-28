@@ -529,6 +529,17 @@ export default {
     },
     {
       type: 'category',
+      label: 'Oracles',
+      link: { type: 'doc', id: 'onchain-finance/oracles/index' },
+      items: [
+        'onchain-finance/oracles/consuming-price-feeds',
+        'onchain-finance/oracles/move-adapter',
+        'onchain-finance/oracles/oracle-safety',
+        'onchain-finance/oracles/resolution-patterns',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Kiosk',
       link: { type: 'doc', id: 'onchain-finance/kiosk/index' },
       items: [

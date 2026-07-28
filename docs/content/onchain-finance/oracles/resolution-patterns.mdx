@@ -1,0 +1,123 @@
+---
+title: Resolution Patterns
+sidebar_label: Resolution Patterns
+description: >-
+  Resolve DeFi outcomes on Sui: price-based settlement for parametric outcomes
+  with a Move resolver, and an optimistic dispute pattern for subjective
+  outcomes, expressed as an illustrative interface with no canonical Sui
+  protocol.
+keywords:
+  - resolution
+  - settlement
+  - prediction market
+  - optimistic oracle
+  - dispute
+  - parametric
+  - pyth
+  - defi
+goal:
+  description: >-
+    Reader can resolve a parametric outcome against an oracle price, and knows
+    that subjective outcomes need an optimistic dispute process with no
+    canonical Sui protocol.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I resolve a prediction market on Sui?
+  - How do I settle an outcome against a price?
+  - Is there an optimistic oracle on Sui?
+  - How do I resolve a subjective outcome onchain?
+answer: >-
+  A parametric outcome is a deterministic function of a price, so resolve it by
+  freezing an oracle price at expiry through a staleness-checked read, settling
+  once. A subjective outcome is not a price, so no oracle resolves it; you need
+  an optimistic process where someone proposes an answer, posts a bond, and
+  anyone can dispute and escalate. No canonical optimistic-oracle protocol
+  exists on Sui today, so that pattern is something you build.
+builder_paths:
+  - path_id: oracle-integration
+    path_name: Oracles for DeFi
+    step: Resolution patterns
+    stage: Oracles
+---
+
+Resolving an outcome means fixing the value a market pays out against. Two kinds of outcome need two different approaches, and the difference is whether the answer is a number a price feed already reports.
+
+## Price-based resolution for parametric outcomes
+
+A parametric outcome is a deterministic function of a price: a settlement at expiry, whether the price crossed a strike, whether it touched a barrier. An oracle already reports the number, so resolution is reading it at the right moment and freezing it.
+
+The pattern is a market that settles exactly once, at or after a defined expiry, through the same staleness-checked read a liquidation uses. The resolver holds the expiry and the frozen settlement:
+
+<ImportContent source="examples/oracle-adapter/move/sources/market_resolver.move" mode="code" struct="Market" />
+
+<ImportContent source="examples/oracle-adapter/move/sources/market_resolver.move" mode="code" fun="resolve" />
+
+Two failure modes stay separate from any oracle failure: settling before expiry and settling twice, both rejected before the oracle is read. Because `resolve` goes through the adapter's `price_from_pyth`, a market cannot settle against a stale price.
+
+For a production worked example, DeepBook Predict's [`OracleSVI`](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) does exactly this at scale: it accepts live price updates before expiry, then freezes a settlement price on the first post-expiry update, after which price updates are rejected. The mechanism, freeze once at expiry, is the same.
+
+## Optimistic resolution for subjective outcomes
+
+A subjective outcome is not a price: did a team win, did a proposal pass, did an event occur? No price feed reports it, so no oracle resolves it for you. The established design is optimistic: someone proposes an answer and posts a bond, a challenge window opens, and if nobody disputes, the answer stands; if someone disputes, a higher authority decides and the loser's bond pays the winner.
+
+:::caution
+
+No canonical optimistic-oracle protocol exists on Sui as of this writing. UMA's Optimistic Oracle, the reference design that resolves Polymarket, is an EVM protocol with no Sui Move equivalent. The interface below is an illustrative pattern to build against your own governance, not a deployable dependency you can import.
+
+:::
+
+A minimal optimistic resolver on Sui is a state machine over proposal, bond, dispute, and escalation:
+
+```move
+// ILLUSTRATIVE PATTERN, NOT A DEPLOYABLE PACKAGE. Sketch of an optimistic
+// resolver you would implement and audit yourself; no canonical Sui protocol
+// provides this.
+module example::optimistic_resolver {
+    public enum Status has store { Proposed, Disputed, Resolved }
+
+    public struct Question<phantom T> has key {
+        id: UID,
+        proposer: address,
+        answer: vector<u8>,
+        bond: Balance<T>,
+        challenge_ends_ms: u64,
+        status: Status,
+    }
+
+    // Propose an answer and lock a bond. Starts the challenge window.
+    public fun propose<T>(/* question, answer, bond, clock */) { /* ... */ }
+
+    // Dispute within the window, matching the bond. Routes to escalation.
+    public fun dispute<T>(/* question, counter_bond, clock */) { /* ... */ }
+
+    // After an undisputed window, the proposed answer stands and the bond returns.
+    public fun settle_undisputed<T>(/* question, clock */) { /* ... */ }
+
+    // A disputed question is decided by an escalation authority you define
+    // (a multisig, a token vote, a court); the loser's bond pays the winner.
+    public fun resolve_disputed<T>(/* question, ruling, authority_cap */) { /* ... */ }
+}
+```
+
+The load-bearing decisions are the escalation authority and the bond sizing, and both are yours to design: a multisig for a small market, a token vote for a large one, and a bond large enough that a false proposal is unprofitable. Build and audit this yourself rather than assuming a protocol provides it.
+
+## Choosing
+
+If the outcome is a number a feed reports, resolve it against the oracle with a staleness-checked read and settle once. If the outcome is a judgment, no oracle helps: implement an optimistic process with a bond, a dispute window, and an escalation authority you control.
