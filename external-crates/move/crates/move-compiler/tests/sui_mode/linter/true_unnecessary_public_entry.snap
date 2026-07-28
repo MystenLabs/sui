@@ -13,3 +13,4 @@ warning[Lint W99010]: unnecessary `entry` on a `public` function
   │
   = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
   = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain public_entry` for more information

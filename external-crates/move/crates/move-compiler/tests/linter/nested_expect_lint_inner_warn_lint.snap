@@ -20,3 +20,5 @@ warning[Lint W04001]: constant should follow naming convention
   │                 --------------- the lint level is defined here
 6 │     const Another_BadName: u64 = 42;
   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'Another_BadName' should be ALL_CAPS. Or for error constants, use PascalCase
+  │
+  = run `move lint --explain constant_naming` for more information

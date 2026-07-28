@@ -16,6 +16,7 @@ use crate::{
 pub mod abort_constant;
 pub mod combinable_comparisons;
 pub mod constant_naming;
+pub mod docs;
 pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
@@ -48,10 +49,37 @@ pub enum LinterDiagnosticCategory {
     Sui = 99,
 }
 
+impl LinterDiagnosticCategory {
+    /// All categories, in the order they should be displayed.
+    pub const ALL: &'static [Self] = &[
+        Self::Correctness,
+        Self::Complexity,
+        Self::Suspicious,
+        Self::Deprecated,
+        Self::Style,
+        Self::Sui,
+    ];
+
+    pub fn try_from_u8(value: u8) -> Option<Self> {
+        Self::ALL.iter().copied().find(|c| *c as u8 == value)
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Correctness => "Correctness",
+            Self::Complexity => "Complexity",
+            Self::Suspicious => "Suspicious",
+            Self::Deprecated => "Deprecated",
+            Self::Style => "Style",
+            Self::Sui => "Sui",
+        }
+    }
+}
+
 macro_rules! lints {
     (
         $(
-            ($enum_name:ident, $category:expr, $filter_name:expr, $code_msg:expr)
+            ($enum_name:ident, $category:ident, $filter_name:expr, $code_msg:expr)
         ),* $(,)?
     ) => {
         #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
@@ -64,42 +92,32 @@ macro_rules! lints {
         }
 
         impl StyleCodes {
-            const fn category_code_and_message(&self) -> (u8, u8, &'static str) {
+            pub(crate) const fn diag_info(&self) -> DiagnosticInfo {
                 let code = *self as u8;
                 debug_assert!(code > 0);
                 match self {
                     Self::DontStartAtZeroPlaceholder =>
                         panic!("ICE do not use placeholder error code"),
-                    $(Self::$enum_name => ($category as u8, code, $code_msg),)*
+                    // A lint has an explanation iff
+                    // `diagnostics/explanations/<Category>_<CodeName>.md` exists -- keyed by
+                    // identifiers rather than the rendered code since the numeric portions are
+                    // positional (see `codes!` in diagnostics/codes.rs).
+                    $(Self::$enum_name => custom(
+                        LINT_WARNING_PREFIX,
+                        Severity::Warning,
+                        LinterDiagnosticCategory::$category as u8,
+                        code,
+                        $code_msg,
+                    ).with_explanation(move_proc_macros::optional_include_str!(
+                        "src/diagnostics/explanations/", $category, "_", $enum_name, ".md"
+                    )),)*
                 }
-            }
-
-            const fn category_code_and_filter_name(&self) -> (u8, u8, &'static str) {
-                let code = *self as u8;
-                debug_assert!(code > 0);
-                match self {
-                    Self::DontStartAtZeroPlaceholder =>
-                        panic!("ICE do not use placeholder error code"),
-                    $(Self::$enum_name => ($category as u8, code, $filter_name),)*
-                }
-            }
-
-            const fn diag_info(&self) -> DiagnosticInfo {
-                let (category, code, msg) = self.category_code_and_message();
-                custom(
-                    LINT_WARNING_PREFIX,
-                    Severity::Warning,
-                    category,
-                    code,
-                    msg,
-                )
             }
         }
 
-        const STYLE_WARNING_FILTERS: &[(u8, u8, &str)] = &[
-            $(
-                StyleCodes::$enum_name.category_code_and_filter_name(),
-            )*
+        /// Every Move lint as `(filter name, diagnostic info)`, in code order.
+        pub(crate) const MOVE_LINTS: &[(&str, DiagnosticInfo)] = &[
+            $(($filter_name, StyleCodes::$enum_name.diag_info()),)*
         ];
     }
 }
@@ -107,79 +125,74 @@ macro_rules! lints {
 lints!(
     (
         ConstantNaming,
-        LinterDiagnosticCategory::Style,
+        Style,
         "constant_naming",
         "constant should follow naming convention"
     ),
     (
         WhileTrueToLoop,
-        LinterDiagnosticCategory::Style,
+        Style,
         "while_true",
         "unnecessary 'while (true)', replace with 'loop'"
     ),
     (
         MeaninglessMath,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "unnecessary_math",
         "math operator can be simplified"
     ),
-    (
-        UnneededReturn,
-        LinterDiagnosticCategory::Style,
-        "unneeded_return",
-        "unneeded return"
-    ),
+    (UnneededReturn, Style, "unneeded_return", "unneeded return"),
     (
         AbortWithoutConstant,
-        LinterDiagnosticCategory::Style,
+        Style,
         "abort_without_constant",
         "'abort' or 'assert' without named constant"
     ),
     (
         LoopWithoutExit,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "loop_without_exit",
         "'loop' without 'break' or 'return'"
     ),
     (
         UnnecessaryConditional,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "unnecessary_conditional",
         "'if' expression can be removed"
     ),
     (
         SelfAssignment,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "self_assignment",
         "assignment preserves the same value"
     ),
     (
         RedundantRefDeref,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "redundant_ref_deref",
         "redundant reference/dereference"
     ),
     (
         UnnecessaryUnit,
-        LinterDiagnosticCategory::Style,
+        Style,
         "unnecessary_unit",
         "unit `()` expression can be removed or simplified"
     ),
     (
         EqualOperands,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "always_equal_operands",
         "redundant, always-equal operands for binary operation"
     ),
     (
         CombinableComparisons,
-        LinterDiagnosticCategory::Complexity,
+        Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
     ),
     (
         UnusedReturnValue,
-        LinterDiagnosticCategory::Suspicious,
+        Suspicious,
         "unused_return_value",
         "return value of a non-mutating call is discarded"
     ),
@@ -194,18 +207,9 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
     )];
     filters.extend(
-        STYLE_WARNING_FILTERS
+        MOVE_LINTS
             .iter()
-            .map(|(category, code, filter_name)| {
-                (
-                    Symbol::from(*filter_name),
-                    vec![DiagnosticsID::exact(
-                        Some(LINT_WARNING_PREFIX),
-                        *category,
-                        *code,
-                    )],
-                )
-            }),
+            .map(|(filter_name, info)| (Symbol::from(*filter_name), vec![info.id()])),
     );
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }

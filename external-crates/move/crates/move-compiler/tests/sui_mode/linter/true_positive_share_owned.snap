@@ -21,6 +21,7 @@ warning[Lint W99000]: possible owned object share
    │         Potential abort from a (potentially) owned object created by a different transaction.
    │
    = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain share_owned` for more information
 
 warning[Lint W99000]: possible owned object share
    ┌─ tests/sui_mode/linter/true_positive_share_owned.move:42:9
@@ -38,3 +39,4 @@ warning[Lint W99000]: possible owned object share
    │         Potential abort from a (potentially) owned object created by a different transaction.
    │
    = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain share_owned` for more information

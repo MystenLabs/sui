@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/src/linters/docs.rs
+expression: explanation.to_string()
+---
+freeze_wrapped (W99004): attempting to freeze wrapped objects
+
+Freezing makes an object immutable forever. If the frozen object wraps another object — a field
+whose type has `key`, directly or transitively — that inner object is frozen and made unrecoverable
+too, which is almost never intended.
+
+This lint is on by default.
+
+## Example
+
+Flagged:
+
+```move
+public struct Inner has key, store { id: UID }
+public struct Wrapper has key, store { id: UID, inner: Inner }
+
+public fun freeze_wrapper(w: Wrapper) {
+    transfer::public_freeze_object(w)
+}
+```
+
+Suggested:
+
+```move
+public struct Config has key, store { id: UID, fee: u64 }
+
+public fun freeze_config(c: Config) {
+    transfer::public_freeze_object(c)
+}
+```
+
+Suppress a specific case with `#[allow(lint(freeze_wrapped))]`.

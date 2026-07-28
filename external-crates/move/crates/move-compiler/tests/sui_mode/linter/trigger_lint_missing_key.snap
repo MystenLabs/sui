@@ -14,3 +14,4 @@ warning[Lint W99007]: struct with id but missing key ability
   │ ╰─────^ Struct's first field has an 'id' field of type 'sui::object::UID' but is missing the 'key' ability.
   │  
   = This warning can be suppressed with '#[allow(lint(missing_key))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain missing_key` for more information

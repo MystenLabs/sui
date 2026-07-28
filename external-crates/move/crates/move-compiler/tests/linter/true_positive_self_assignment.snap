@@ -15,6 +15,7 @@ warning[Lint W02008]: assignment preserves the same value
   │         This location
   │
   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:10:9
@@ -26,6 +27,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:13:9
@@ -37,6 +39,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:15:9
@@ -48,6 +51,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:18:10
@@ -59,6 +63,7 @@ warning[Lint W02008]: assignment preserves the same value
    │          This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:18:20
@@ -70,6 +75,7 @@ warning[Lint W02008]: assignment preserves the same value
    │                    This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:27:9
@@ -82,6 +88,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:28:9
@@ -94,6 +101,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:28:17
@@ -102,6 +110,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:29:9
@@ -114,6 +123,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:29:17
@@ -122,6 +132,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:30:9
@@ -134,6 +145,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:30:23
@@ -142,6 +154,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                       ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:31:9
@@ -154,6 +167,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:31:23
@@ -162,6 +176,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                       ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:33:9
@@ -174,6 +189,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:34:9
@@ -186,6 +202,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:34:17
@@ -194,6 +211,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:35:9
@@ -206,6 +224,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:35:17
@@ -214,6 +233,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                 ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:36:9
@@ -226,6 +246,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:36:23
@@ -234,6 +255,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                       ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:37:9
@@ -246,6 +268,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:37:23
@@ -254,6 +277,7 @@ warning[Lint W01009]: redundant reference/dereference
    │                       ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:43:9
@@ -266,6 +290,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         This location
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:47:9
@@ -278,6 +303,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:49:9
@@ -290,6 +316,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:50:9
@@ -302,6 +329,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:53:9
@@ -314,6 +342,7 @@ warning[Lint W02008]: assignment preserves the same value
    │         Unnecessary self-mutation. The mutation is redundant and will not change the value
    │
    = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain self_assignment` for more information
 
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/true_positive_self_assignment.move:53:19
@@ -322,3 +351,4 @@ warning[Lint W01009]: redundant reference/dereference
    │                   ^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain redundant_ref_deref` for more information

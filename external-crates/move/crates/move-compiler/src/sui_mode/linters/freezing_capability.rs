@@ -6,15 +6,12 @@
 
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
+    diagnostics::codes::DiagnosticInfo,
     naming::ast::TypeName_,
     shared::Identifier,
     sui_mode::{
         SUI_ADDR_VALUE,
-        linters::{
-            FREEZE_FUN, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-            PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
-        },
+        linters::{FREEZE_FUN, LinterDiagnosticCode, PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME},
     },
     typing::{ast as T, core, visitor::simple_visitor},
 };
@@ -25,13 +22,7 @@ use regex::Regex;
 
 use std::sync::LazyLock;
 
-const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::FreezingCapability as u8,
-    "freezing potential capability",
-);
+const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = LinterDiagnosticCode::FreezingCapability.diag_info();
 
 const FREEZE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),

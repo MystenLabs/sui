@@ -15,6 +15,7 @@ warning[Lint W01003]: math operator can be simplified
   │         This operation has no effect and can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:4:9
@@ -26,6 +27,7 @@ warning[Lint W01003]: math operator can be simplified
   │         Because of this operand
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:5:9
@@ -37,6 +39,7 @@ warning[Lint W01003]: math operator can be simplified
   │         This operation has no effect and can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:6:9
@@ -48,6 +51,7 @@ warning[Lint W01003]: math operator can be simplified
   │         This operation has no effect and can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:7:9
@@ -59,6 +63,7 @@ warning[Lint W01003]: math operator can be simplified
   │         Because of this operand
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:8:9
@@ -70,6 +75,7 @@ warning[Lint W01003]: math operator can be simplified
   │         This operation has no effect and can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
   ┌─ tests/linter/true_positive_meaningless_math_operation.move:9:9
@@ -81,6 +87,7 @@ warning[Lint W01003]: math operator can be simplified
   │         This operation has no effect and can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:10:9
@@ -92,6 +99,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:14:9
@@ -103,6 +111,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:15:9
@@ -114,6 +123,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:16:9
@@ -125,6 +135,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:17:9
@@ -136,6 +147,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:18:9
@@ -147,6 +159,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:22:9
@@ -158,6 +171,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:27:9
@@ -168,6 +182,7 @@ warning[Lint W01003]: math operator can be simplified
    │         ^^^^^ This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:28:9
@@ -179,6 +194,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:32:9
@@ -190,6 +206,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:33:9
@@ -201,6 +218,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:34:9
@@ -212,6 +230,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:38:9
@@ -223,6 +242,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:39:9
@@ -234,6 +254,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:40:9
@@ -245,6 +266,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:44:9
@@ -256,6 +278,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:45:9
@@ -267,6 +290,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:46:9
@@ -278,6 +302,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:50:9
@@ -289,6 +314,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:51:9
@@ -300,6 +326,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:52:9
@@ -311,6 +338,7 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:56:9
@@ -322,6 +350,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation has no effect and can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:57:9
@@ -333,6 +362,7 @@ warning[Lint W01003]: math operator can be simplified
    │         This operation is always zero and can be replaced with '0'
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information
 
 warning[Lint W01003]: math operator can be simplified
    ┌─ tests/linter/true_positive_meaningless_math_operation.move:58:9
@@ -344,3 +374,4 @@ warning[Lint W01003]: math operator can be simplified
    │         Because of this operand
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_math))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unnecessary_math` for more information

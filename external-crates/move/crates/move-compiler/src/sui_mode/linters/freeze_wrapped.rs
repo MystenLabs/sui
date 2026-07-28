@@ -8,9 +8,7 @@
 use crate::{
     diag,
     diagnostics::{
-        Diagnostic, DiagnosticReporter, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-        filter::FilterScope,
+        Diagnostic, DiagnosticReporter, Diagnostics, codes::DiagnosticInfo, filter::FilterScope,
     },
     expansion::ast as E,
     naming::ast as N,
@@ -18,10 +16,7 @@ use crate::{
     shared::{CompilationEnv, Identifier, program_info::TypingProgramInfo},
     sui_mode::{
         SUI_ADDR_VALUE,
-        linters::{
-            FREEZE_FUN, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
-            PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
-        },
+        linters::{FREEZE_FUN, LinterDiagnosticCode, PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME},
     },
     typing::{
         ast as T,
@@ -33,13 +28,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, sync::Arc};
 
-const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
-    LINT_WARNING_PREFIX,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::FreezeWrapped as u8,
-    "attempting to freeze wrapped objects",
-);
+const FREEZE_WRAPPING_DIAG: DiagnosticInfo = LinterDiagnosticCode::FreezeWrapped.diag_info();
 
 const FREEZE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_FREEZE_FUN),

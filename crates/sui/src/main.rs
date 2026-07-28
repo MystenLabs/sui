@@ -44,5 +44,9 @@ async fn main() {
 
     let _guard = builder.init();
     debug!("Sui CLI version: {VERSION}");
+    // Lint diagnostics are rendered by every compile path (`sui client publish`/`upgrade`,
+    // `sui move build`, ...), not just `sui move lint` — set the `--explain` hint command for the
+    // whole binary so no path falls back to the default `move lint`.
+    move_compiler::diagnostics::set_explain_command("sui move lint");
     exit_main!(args.command.execute().await);
 }

@@ -12,6 +12,7 @@ warning[Lint W04004]: unneeded return
   │                 ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return.move:5:17
@@ -20,6 +21,7 @@ warning[Lint W04004]: unneeded return
   │                 ^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
   ┌─ tests/linter/move_2024/unneeded_return.move:9:15
@@ -28,6 +30,7 @@ warning[Lint W04004]: unneeded return
   │               ^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
   │
   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:15:15
@@ -36,6 +39,7 @@ warning[Lint W04004]: unneeded return
    │               ^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:17:25
@@ -44,6 +48,7 @@ warning[Lint W04004]: unneeded return
    │                         ^^^^^^^^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:19:12
@@ -52,6 +57,7 @@ warning[Lint W04004]: unneeded return
    │            ^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:21:28
@@ -60,6 +66,7 @@ warning[Lint W04004]: unneeded return
    │                            ^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:25:5
@@ -68,6 +75,7 @@ warning[Lint W04004]: unneeded return
    │     ^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:30:17
@@ -76,6 +84,7 @@ warning[Lint W04004]: unneeded return
    │                 ^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:34:5
@@ -84,6 +93,7 @@ warning[Lint W04004]: unneeded return
    │     ^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 error[E07004]: invalid return of locally borrowed state
    ┌─ tests/linter/move_2024/unneeded_return.move:34:5
@@ -101,6 +111,7 @@ warning[Lint W04004]: unneeded return
    │                  ^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:39:19
@@ -109,6 +120,7 @@ warning[Lint W04004]: unneeded return
    │                   ^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:41:25
@@ -117,6 +129,7 @@ warning[Lint W04004]: unneeded return
    │                         ^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:43:25
@@ -125,6 +138,7 @@ warning[Lint W04004]: unneeded return
    │                         ^^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:45:18
@@ -133,6 +147,7 @@ warning[Lint W04004]: unneeded return
    │                  ^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
 
 warning[Lint W04004]: unneeded return
    ┌─ tests/linter/move_2024/unneeded_return.move:47:18
@@ -141,3 +156,4 @@ warning[Lint W04004]: unneeded return
    │                  ^^^^^^^^^^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
    │
    = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = run `move lint --explain unneeded_return` for more information
