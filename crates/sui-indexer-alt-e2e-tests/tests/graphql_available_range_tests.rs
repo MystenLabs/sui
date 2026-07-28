@@ -203,7 +203,9 @@ async fn test_transaction_pagination_pruning() {
         cluster.create_checkpoint().await;
     }
 
-    let transactions_in_range = query_transactions(&cluster, b).await;
+    let affected_address_filter = json!({ "affectedAddress": b.to_string() });
+
+    let transactions_in_range = query_transactions(&cluster, affected_address_filter.clone()).await;
     let actual = collect_digests(&transactions_in_range);
     assert_eq!(&a_txs, &actual);
 
@@ -218,7 +220,7 @@ async fn test_transaction_pagination_pruning() {
         .await
         .unwrap();
 
-    let transactions_in_range = query_transactions(&cluster, b).await;
+    let transactions_in_range = query_transactions(&cluster, affected_address_filter.clone()).await;
     let actual = collect_digests(&transactions_in_range);
     assert_eq!(&a_txs[1..], &actual);
 
@@ -238,9 +240,45 @@ async fn test_transaction_pagination_pruning() {
         .await
         .unwrap();
 
-    let transactions_in_range = query_transactions(&cluster, b).await;
+    let transactions_in_range = query_transactions(&cluster, affected_address_filter).await;
     let actual = collect_digests(&transactions_in_range);
     assert_eq!(&a_txs[6..], &actual);
+}
+
+/// Test that querying `transactions` with the `affectedObject` filter returns a clean
+/// "feature unavailable" error when the `tx_affected_objects` pipeline isn't configured, mirroring
+/// `test_available_range_pipeline_unavailable`'s pattern but exercising the real `transactions`
+/// resolver (and so `TransactionFilter::active_filters()`) directly, rather than the
+/// `serviceConfig.availableRange` diagnostic query (which takes filter names as raw strings and so
+/// never calls `active_filters()`).
+///
+/// TODO(affectedObject typo): `TransactionFilter::active_filters()` currently pushes
+/// `"affectedObjects"` (plural) instead of `"affectedObject"`, so the `tx_affected_objects`
+/// pipeline is never checked and this query silently succeeds instead of erroring. The assertion
+/// below captures that current (buggy) behavior; fixed in the next commit.
+#[tokio::test]
+async fn test_transaction_affected_object_filter_requires_pipeline() {
+    let mut cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
+        tx_digests: Some(ConcurrentLayer::default()),
+        kv_transactions: Some(ConcurrentLayer::default()),
+        // tx_affected_objects is intentionally left unconfigured.
+        ..Default::default()
+    })
+    .await;
+
+    // Ensure the configured pipelines have a watermark row (from indexing the genesis checkpoint)
+    // before querying, so the error below is specifically about the *missing* tx_affected_objects
+    // pipeline, not about the others not having caught up yet.
+    cluster.create_checkpoint().await;
+
+    let response = query_transactions(
+        &cluster,
+        json!({ "affectedObject": SuiAddress::ZERO.to_string() }),
+    )
+    .await;
+
+    assert_json_snapshot!(response["errors"], @"null");
 }
 
 #[tokio::test]
@@ -510,12 +548,12 @@ async fn query_available_range(
     .await
 }
 
-async fn query_transactions(cluster: &FullCluster, affected_address: SuiAddress) -> Value {
+async fn query_transactions(cluster: &FullCluster, filter: Value) -> Value {
     execute_graphql_query(
         cluster,
         TRANSACTIONS_QUERY,
         Some(json!({
-            "filter": { "affectedAddress": affected_address.to_string() },
+            "filter": filter,
             "first": 50
         })),
     )
