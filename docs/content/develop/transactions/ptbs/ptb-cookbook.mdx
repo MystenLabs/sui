@@ -1,5 +1,5 @@
 ---
-title: PTB Cookbook
+title: PTB cookbook
 sidebar_label: Cookbook
 description: >-
   End-to-end TypeScript examples for common PTB patterns: sponsored
@@ -48,11 +48,19 @@ answer: >-
   transfers.
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 This page provides copy-paste TypeScript recipes for common PTB patterns. Each recipe is a complete, self-contained example.
 
-**Prerequisites:**
-- `@mysten/sui` installed (`npm install @mysten/sui`)
-- A configured `SuiClient` or `SuiGrpcClient`
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Install `@mysten/sui` by running `npm install @mysten/sui`.
+- [x] Configure a `SuiClient` or `SuiGrpcClient`.
+
+</TabItem>
+</Tabs>
 
 For PTB fundamentals, see [Building Transactions](/develop/transactions/ptbs/building-ptb). For project setup, see [TypeScript SDK PTB Template](/develop/transactions/ptbs/ts-sdk-ptb-template).
 

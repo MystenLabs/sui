@@ -82,13 +82,14 @@ Each recipe pairs a JSON-RPC call with its gRPC replacement and explains the key
 
 :::
 
-## Before you start
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-All gRPC examples use the `@mysten/sui` TypeScript SDK. Install the SDK with the following command:
+- [x] Install the `@mysten/sui` TypeScript SDK by running `npm install @mysten/sui`.
+- [x] Obtain access to a gRPC-enabled full node and note its endpoint.
 
-```sh
-$ npm install @mysten/sui
-```
+</TabItem>
+</Tabs>
 
 Create a client once and reuse it:
 
