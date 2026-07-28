@@ -42,60 +42,133 @@ GraphQL RPC. Any post-fork data will go through the local store.
 
 ## Where reads resolve
 
-`ForkStore` implements the upstream RPC storage traits (`ReadStore`, `RpcStateReader`,
-`RpcIndexes`) itself. Startup hands the store to `RpcService` directly.
-The impls are a thin layer. Every read the fork has policy for resolving through the store's
-inherent helpers, which are already local-first. They check the rpc-store RocksDB rows 
-before consulting the remote RPC. The impls touch the stock reader directly only for
-surfaces the fork keeps no policy for at all, e.g., events, full checkpoint contents,
-committees, epoch info, struct layouts, and the ledger and bitmap indexes, all written by
-the embedded indexer and correct to serve as-is. For events, see * below.
+A fork is a chain that diverged from another at a checkpoint. Call that checkpoint the fork
+point. Its world is made of two disjoint parts: the shared history at or below the fork
+point, which belongs to both chains and which the fork can obtain on demand from the
+forked-from chain, and the fork's own history above it, which exists nowhere else. Every
+read is a question about that composite world, and three rules decide how it is answered.
 
-There are two other reads that the fork does not resolve through the stock reader: the
-chain identifier (the framework table seeded at open, derived from the fork checkpoint
-when absent) and the highest indexed checkpoint (the indexer watermark, with the highest
-persisted checkpoint standing in before the first watermark is written).
+Local knowledge, when it is authoritative, always wins. The forked-from chain is consulted
+only for shared history, and only through queries pinned at or below the fork point.
+Anything the forked-from chain finalized *after* the fork point is never admitted, because
+that history did not happen here — the two chains disagree from the fork point onward, and
+importing the other one's later state would silently merge two worlds.
 
-*Events are the one entry in that list whose correctness is borrowed rather than intrinsic.
-The read in question is the `ReadStore` trait method, not an endpoint. No gRPC route
-fetches events by digest, and clients reach them either through a transaction read or
-through `ListEvents`. The fork's impl reads the rpc-store and stops there, yet a pre-fork
-transaction's events are in that store only because the transaction fallback pulled them in
-alongside the transaction row.
+What differs between reads is only how the request lets the fork decide which part of the
+world it is asking about. That decision is made by the kind of key the request carries.
 
-A transaction read is safe by ordering. `sui-rpc-api` resolves a transaction, then its
-effects, then its events, and does so unconditionally, so the fork's transaction policy
-has always run by the time the events read happens. `ListEvents` gets no such help: the fork does not override `multi_get_events`,
-whose trait default maps over the same per-digest read, so it arrives with no transaction
-read in front of it. It is safe instead because of what it can name. Its cursor comes from
-the event bitmap and ledger tx-seq index families, which the embedded indexer writes only
-for the checkpoints the fork executed, so every digest it can produce belongs to a locally
-executed transaction whose events are already on disk. That is the same property recorded
-under "Known gaps" as the reason pre-fork history cannot be enumerated.
+### Requests keyed by a checkpoint
 
-Neither guarantee is enforced from this crate, and the exposure is wider than a change in
-resolution order. Any caller that reaches the trait method with a pre-fork digest it has
-not first resolved as a transaction — an events-by-digest endpoint added upstream, or a
-scan whose cursor is not indexer-written — would see those transactions report *no* events
-rather than missing ones, a wrong answer shaped like a valid one.
+The key already answers the question. A checkpoint above the fork point can only have been
+produced by this fork, so it is served locally and a miss is a final answer; asking the
+forked-from chain would return a checkpoint that happens to share a sequence number while
+containing different transactions. A checkpoint at or below the fork point is shared
+history, so a local miss is resolved from the forked-from chain, pinned at that checkpoint,
+and persisted so the question is not asked twice.
 
-Latest-semantics reads are why that routing exists at all. The stock reader
-answers `get_object` without a version by reverse-scanning the `objects` column family,
-which is only correct when the version history is complete. The fork's history is sparse:
-a historical version is present only because something once fetched it. Serving the
-highest cached row as "current" would be silently stale, so latest reads resolve through
-the checkpoint-pinned version index instead.
+Reads for the *latest* checkpoint ask a different question, and they always mean the
+fork's own tip. A fork that has executed nothing is at
+the fork point; a fork that has executed is ahead of it. The forked-from chain's tip is
+irrelevant and must never be consulted.
+
+### Requests keyed by a digest
+
+A digest carries no information about which side of the fork point it falls on, so the fork
+cannot classify the request before answering it. Transactions, their effects, and the
+checkpoint that finalized them all have this shape.
+
+Local knowledge is tried first and is authoritative when present. On a miss the forked-from
+chain is asked, and its answer includes the checkpoint that finalized the transaction. That
+checkpoint is what classifies the request after the fact: at or below the fork point it is
+shared history and is persisted and returned, and above it the transaction belongs to the
+other chain's divergent future and the correct answer is that it does not exist here. A
+digest unknown to both is simply unknown.
+
+### Requests keyed by an object
+
+An object can be asked about in three ways, and they are not variations of one rule.
+
+An exact version is an immutable key: a given version of an object never changes, so a local
+row can be served without further thought, and a miss can be resolved from the forked-from
+chain pinned at the fork point. Pinning is what enforces divergence here — a version created
+after the fork point does not exist in a query pinned at it, so no separate guard is needed.
+
+A request with no version asks what is *current*, which is a question about the fork's own
+state rather than about history, and it is the one object read that cannot be answered from
+stored object rows alone. The fork holds versions sparsely, caching whatever some earlier
+read happened to need, so the highest stored version is not necessarily the live one, and
+finding nothing stored cannot distinguish an object that was removed from one that was never
+fetched. That distinction decides whether to consult the forked-from chain at all, which is
+why currency is tracked explicitly; the following section describes how.
+
+A request bounded by a version — the highest version at or below some bound, which is how
+child objects are read during execution — is the subtle one. A stored row at or below the
+bound is only trustworthy if the fork knows nothing newer can exist below it, which holds
+when that row carries currency authority or is a tombstone. Absent that, the sparse cache
+may hold some older version that an unrelated historical read left behind, and serving it
+would be wrong, so the bound must also be resolved against the forked-from chain and the
+higher of the two answers taken.
+
+### Derived reads compose over policy
+
+Some reads are not lookups at all but functions of other reads. A transaction's events are
+stored with the transaction. A type's layout is a function of the packages it references,
+and packages are objects.
+
+Such reads must resolve their inputs through the fork's own read policy rather than by
+reaching into stored rows directly. A layout resolved by loading packages straight from
+local storage cannot render a pre-fork type whose package has never been materialized, even
+though the object policy one layer down would have fetched it happily. The rule is that
+composing a derived read out of raw storage discards the policy that makes its inputs
+correct, so derived reads compose over the policy, never under it.
+
+Events are the same principle seen from the other side. They need no policy of their own
+precisely because the transaction read that produces them has one: whatever pulled the
+transaction in pulled its events with it. That holds only while every path to the events
+reaches them through a transaction, which is a property of the callers rather than of this
+crate, and one worth stating because nothing here enforces it.
+
+### Requests keyed by nothing: indexes and enumeration
+
+Reads that enumerate rather than look up split into two kinds, and conflating them is the
+easiest mistake to make here.
+
+A *state* index answers what is true as of a checkpoint — which objects an address owns,
+which objects have a type, what an address's balance is, which versions of a package exist.
+Because that is a question about state at a point in time, the forked-from chain can answer
+it pinned at the fork point. The fork therefore takes one complete enumeration there,
+records that it did so, and lets local execution maintain the answer forward; later reads
+are purely local. Completeness is the point, so a partial answer is worse than none: a scan
+that could not run must never be recorded as one that ran and found nothing.
+
+A *log-position* index answers what sits at a given position in the total order of every
+transaction ever executed. That is not a function of state at any checkpoint, and no query
+pinned anywhere can produce it. The fork inherits its position numbering from the fork point
+and starts writing at the next position, so every position below is a real transaction on
+the other chain that this fork does not hold and cannot obtain. The fork's ledger begins at
+the fork point, and this is a permanent property of forking rather than a missing feature.
+
+### Absence must not be mistaken for emptiness
+
+Three of the cases above have a range the fork cannot serve: positions below the fork point
+in the ledger, enumerations over pre-fork history, and any pre-fork read at all when the
+fork point falls outside the window of history the forked-from chain still retains. In each
+the natural failure is an empty result, which a client cannot tell from a true answer of
+"nothing matches."
+
+A read that cannot be served must therefore be distinguishable from one that was served and
+found nothing. This matters most where the fork records its own conclusions: an enumeration
+that could not run must not be marked complete, because a fork that caches "this address
+owns nothing" from a scan that never happened will keep answering that way forever.
 
 ## The current-version authority
 
-The `objects` family is keyed by `(id, version)`, and because the fork's copy is sparse, a
-reverse scan that finds nothing cannot distinguish *removed* from *never cached* — which
-is exactly the distinction that decides whether to fall back to the remote chain.
-`object_by_owner` and `object_by_type` do record latest live versions, but they are keyed
-by owner and type and cover only indexed objects. What answers the question is
-`object_version_by_checkpoint`, which maps `(ObjectID, checkpoint)` to the version the
-object ended that checkpoint at, and which the embedded indexer already maintains for
-every checkpoint the fork executes. A currency read is a floor scan over it, bounded at
+Currency is recorded in `object_version_by_checkpoint`, which maps `(ObjectID, checkpoint)`
+to the version the object ended that checkpoint at, and which the embedded indexer already
+maintains for every checkpoint the fork executes. The owner and type indexes also record
+latest live versions, but they are keyed by owner and type and cover only indexed objects,
+so neither can answer for an arbitrary id. A currency read is a floor scan over the version
+index, bounded at
 the checkpoint the fork is currently producing, and its three outcomes are the three the
 fork needs: a row at a live version, a row at a tombstone version (never fall back), and
 no row at all (no local knowledge, ask the remote).
@@ -186,6 +259,21 @@ unsealed checkpoint and its transactions, while the object rows and version-inde
 that checkpoint had already written persist. On restart the fork resumes producing the
 same checkpoint number, so those orphaned rows still fall within a currency read's bound
 and are served as though the checkpoint had sealed. This is the main known gap.
+
+Type layout resolution reaches under the object policy rather than composing over it. It
+loads the packages a type references straight from stored rows, so a pre-fork type whose
+package has never been materialized resolves to no layout at all, even though an object
+read for that same package would have fetched it. Every read that renders Move values as
+JSON depends on this. The same shortcut also picks packages by scanning stored versions,
+which is safe for ordinary packages, immutable at one version per id, but not for system
+packages, which carry every version they have ever had under one id.
+
+An inventory scan that could not run is recorded as one that ran and found nothing. The
+forked-from chain retains only a window of history, and a fork point below that window
+cannot be enumerated at all; the fork already learns the window's floor and reports it to
+clients, but does not check its own fork point against it. A scan attempted below the
+window returns empty, is marked complete, and that emptiness then answers every later read
+for that owner.
 
 Address balances held in the accumulator, as opposed to in coin objects, are neither
 seeded nor served. The balance index reflects only coin objects materialized pre-fork plus
