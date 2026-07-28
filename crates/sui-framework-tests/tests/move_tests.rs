@@ -28,7 +28,6 @@ pub(crate) const FRAMEWORK: &str = "../sui-framework/packages";
 // fix commit pulls a Wormhole rev that double-defines the `wormhole` address
 // (unresolvable by consumer overrides), and later `main` uses the new package
 // format an old-style manifest cannot depend on.
-// Upstream backport request: <link once filed>
 #[cfg(not(msim))]
 const DIRS_TO_EXCLUDE: &[&str] = &["oracle-adapter/move"];
 /// We cannot support packages that depend on git dependencies on simtests.
