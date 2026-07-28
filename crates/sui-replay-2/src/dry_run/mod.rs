@@ -7,8 +7,10 @@
 //! replay consumes trusted on-chain transaction data, while a dry-run must first
 //! validate transaction data and its inputs.
 
+mod input_loader;
 mod preparation;
 
+pub use input_loader::{PreparedLocalDryRun, prepare_checked_local_dry_run};
 pub use preparation::{
     PreparedLocalSimulationTransaction, prepare_transaction_for_local_simulation,
 };

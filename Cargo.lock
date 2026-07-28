@@ -16773,6 +16773,7 @@ dependencies = [
  "sui-move-build",
  "sui-package-alt",
  "sui-protocol-config",
+ "sui-transaction-checks",
  "sui-types",
  "tabled",
  "telemetry-subscribers",

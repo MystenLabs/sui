@@ -36,6 +36,7 @@ sui-types.workspace = true
 serde_json.workspace = true
 tabled.workspace = true
 sui-package-alt.workspace = true
+sui-transaction-checks.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 toml.workspace = true
