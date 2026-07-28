@@ -1363,6 +1363,9 @@ bridge
 address_alias_state
 	public(package) fun
 	0x2::object
+forwarding_address_registry
+	public(package) fun
+	0x2::object
 uid_as_inner
 	public fun
 	0x2::object
@@ -1402,7 +1405,7 @@ new_uid_from_hash
 delete_impl
 	fun
 	0x2::object
-record_new_uid
+record_new_uid_from_hash
 	fun
 	0x2::object
 Receiving
@@ -3019,6 +3022,12 @@ new_display
 create
 	fun
 	0x2::display_registry
+ForwardingAddressRegistry
+	public struct
+	0x2::forwarding_address
+create
+	fun
+	0x2::forwarding_address
 Curve
 	public struct
 	0x2::groth16
@@ -3766,6 +3775,12 @@ verify_bulletproofs_with_dst_ristretto255_internal
 Permit
 	public struct
 	0x2::scratch
+BorrowMarker
+	public struct
+	0x2::scratch
+BorrowMarkerKey
+	public struct
+	0x2::scratch
 permit
 	public fun
 	0x2::scratch
@@ -3792,6 +3807,15 @@ remove_opt
 	0x2::scratch
 replace
 	public fun
+	0x2::scratch
+begin_borrow
+	public fun
+	0x2::scratch
+end_borrow
+	public fun
+	0x2::scratch
+borrow_marker
+	fun
 	0x2::scratch
 hash_type_and_key
 	fun

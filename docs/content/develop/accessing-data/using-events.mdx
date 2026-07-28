@@ -66,7 +66,7 @@ answer: >-
 
 Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates.
 
-Move supports activity monitoring through emitting events. Emitting events consists of three steps:
+Move supports activity monitoring through emitting events. Emitting events consists of 3 steps:
 
 1. Defining an event struct in your Move module that captures the data you want to track.
 
@@ -118,18 +118,45 @@ When you process events, each event object contains the following attributes:
 
 ### Querying events with gRPC
 
-Use `getTransaction` with `include: { events: true }` to retrieve events for a specific transaction. For continuous event processing, stream finalized checkpoints with `SubscriptionService.SubscribeCheckpoints` and read events from each checkpoint's transactions. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
+gRPC provides 3 ways to access events:
+
+- `LedgerService.ListEvents`: Paginated, filtered queries over a checkpoint range. Use an `EventFilter` to match by event type, sender, or emitting module. This is the direct replacement for `suix_queryEvents`.
+- `SubscriptionService.SubscribeEvents`: Live streaming of events matching an `EventFilter`. Use this for real-time event-driven applications. Subscriptions start at the current tip of the chain.
+- `LedgerService.GetTransaction`: Retrieve events for a specific transaction by digest.
+
+To combine historical and real-time data, open a `SubscribeEvents` stream first, note the first `Watermark` you receive, then backfill with `ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. This avoids missing data between the final list response and the subscription start. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
+
+:::info
+The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents` or `SubscribeEvents`. Use the generated proto client directly until the SDK adds wrappers, or use `grpcurl` / Buf CLI. The `GetTransaction` example below uses the existing SDK.
+:::
 
 ```ts
-import { SuiGrpcClient } from '@mysten/sui/grpc';
+// Use the generated proto client for ListEvents
+import { createGrpcTransport } from '@connectrpc/connect-node';
 
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
+const stream = client.ledgerService.listEvents({
+  startCheckpoint: BigInt(1000000),
+  endCheckpoint: BigInt(1000100),
+  filter: {
+    terms: [{
+      literals: [{
+        eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+      }],
+    }],
+  },
+  options: { limit: 50 },
 });
 
+for await (const response of stream.responses) {
+  console.log('Event:', response.event);
+}
+```
+
+To get events for a single known transaction:
+
+```ts
 async function getEventsForTransaction(digest: string) {
-  const result = await client.getTransaction({
+  const result = await client.core.getTransaction({
     digest,
     include: { events: true },
   });
@@ -185,7 +212,7 @@ Event connection
 
 ### Querying events in Rust
 
-Use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate to read events over gRPC. Fetch a transaction with its events through the `LedgerService` client, or stream checkpoints through `SubscriptionService` and read events from each checkpoint's transactions. See the [sui-rust-sdk README](https://github.com/MystenLabs/sui-rust-sdk) for client setup and the [gRPC service reference](/references/fullnode-protocol) for the available RPCs.
+Use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate to read events over gRPC. Use `LedgerService.ListEvents` with an `EventFilter` for paginated historical queries, `SubscriptionService.SubscribeEvents` for live streaming, or fetch a specific transaction's events through `LedgerService.GetTransaction`. See the [sui-rust-sdk README](https://github.com/MystenLabs/sui-rust-sdk) for client setup and the [gRPC service reference](/references/fullnode-protocol) for the available RPCs.
 
 :::info
 The legacy `sui_sdk::SuiClientBuilder` JSON-RPC client is deprecated. Use `sui-rust-sdk` for new integrations.
@@ -325,7 +352,7 @@ Use the GraphQL `EventFilter` to narrow event queries. The available filter fiel
 {
   events(
     filter: {
-      type: "0xPACKAGE::swap::SwapEvent"
+      type: "<PACKAGE>::swap::SwapEvent"
     }
     after: null
     first: 50

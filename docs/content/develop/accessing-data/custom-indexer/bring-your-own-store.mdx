@@ -164,8 +164,8 @@ async fn main() -> anyhow::Result<()> {
                 ..Default::default()
             },
             streaming: StreamingClientArgs {
-                // Stream live checkpoints from full node gRPC for steady-state
-                // low-latency ingestion.
+                // Public-good Testnet endpoint for testing only. Production
+                // indexers must use a fullnode endpoint from an RPC provider.
                 streaming_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
                 ..Default::default()
             },
@@ -187,6 +187,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+The public-good fullnode URL in this example is for testing only. For production, replace it with a production-grade fullnode gRPC endpoint from an [RPC provider](/develop/accessing-data/rpc-providers).
 
 ### Example: ClickHouse implementation
 

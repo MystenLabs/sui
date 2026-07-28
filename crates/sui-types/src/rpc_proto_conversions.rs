@@ -1419,11 +1419,6 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
-            // Node-local, transient retry marker that is never committed to effects, so RPC
-            // (which only ever serves committed effects) must never observe it.
-            E::SystemObjectNotAvailableLocally => {
-                panic!("SystemObjectNotAvailableLocally is never committed to effects")
-            }
         };
 
         message.set_kind(kind);
@@ -2709,6 +2704,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
             K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
+            K::ForwardingAddressRegistryCreate => {
+                message.with_kind(Kind::ForwardingAddressRegistryCreate)
+            }
             K::WriteAccumulatorStorageCost(storage_cost) => message
                 .with_kind(Kind::WriteAccumulatorStorageCost)
                 .with_storage_cost(storage_cost.storage_cost),

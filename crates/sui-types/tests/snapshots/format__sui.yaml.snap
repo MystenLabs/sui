@@ -504,6 +504,8 @@ EndOfEpochTransactionKind:
       WriteAccumulatorStorageCost:
         NEWTYPE:
           TYPENAME: WriteAccumulatorStorageCost
+    13:
+      ForwardingAddressRegistryCreate: UNIT
 Event:
   STRUCT:
     - package_id:
@@ -666,8 +668,6 @@ ExecutionErrorKind:
         STRUCT:
           - id:
               TYPENAME: ObjectID
-    42:
-      SystemObjectNotAvailableLocally: UNIT
 ExecutionFailure:
   STRUCT:
     - error:

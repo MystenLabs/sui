@@ -949,11 +949,6 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
-            // Node-local, transient retry marker that is never committed to effects, so the SDK
-            // (which only ever reads committed effects) must never observe it.
-            crate::execution_status::ExecutionErrorKind::SystemObjectNotAvailableLocally => {
-                panic!("SystemObjectNotAvailableLocally is never committed to effects")
-            }
         }
     }
 }
@@ -1632,6 +1627,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             ) => Self::WriteAccumulatorStorageCost {
                 storage_cost: storage_cost.storage_cost,
             },
+            crate::transaction::EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                Self::ForwardingAddressRegistryCreate
+            }
         }
     }
 }

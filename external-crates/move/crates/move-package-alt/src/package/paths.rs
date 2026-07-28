@@ -221,12 +221,12 @@ impl PackagePath {
     pub(crate) async fn read_legacy_manifest<F: MoveFlavor>(
         &self,
         default_env: &Environment,
-        is_root: bool,
+        display_warnings: bool,
         _mtx: &PackageSystemLock,
         flavor: &F,
     ) -> FileResult<Option<(FileHandle, ParsedManifest)>> {
         let path = self.manifest_path().to_path_buf();
-        try_load_legacy_manifest::<F>(self, default_env, is_root, flavor)
+        try_load_legacy_manifest::<F>(self, default_env, display_warnings, flavor)
             .await
             .map_err(|err| FileError::LegacyError {
                 file: path,

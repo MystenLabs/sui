@@ -507,6 +507,7 @@ pub enum EndOfEpochTransactionKind {
     DisplayRegistryCreate,
     AddressAliasStateCreate,
     WriteAccumulatorStorageCost(WriteAccumulatorStorageCost),
+    ForwardingAddressRegistryCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -568,6 +569,10 @@ impl EndOfEpochTransactionKind {
 
     pub fn new_address_alias_state_create() -> Self {
         Self::AddressAliasStateCreate
+    }
+
+    pub fn new_forwarding_address_registry_create() -> Self {
+        Self::ForwardingAddressRegistryCreate
     }
 
     pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
@@ -638,6 +643,7 @@ impl EndOfEpochTransactionKind {
                     mutability: SharedObjectMutability::Mutable,
                 }]
             }
+            Self::ForwardingAddressRegistryCreate => vec![],
         }
     }
 
@@ -679,6 +685,7 @@ impl EndOfEpochTransactionKind {
             Self::WriteAccumulatorStorageCost(_) => {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
+            Self::ForwardingAddressRegistryCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -767,6 +774,13 @@ impl EndOfEpochTransactionKind {
                 if !config.enable_accumulators() {
                     return Err(UserInputError::Unsupported(
                         "accumulators not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::ForwardingAddressRegistryCreate => {
+                if !config.create_forwarding_address_registry() {
+                    return Err(UserInputError::Unsupported(
+                        "forwarding address registry not enabled".to_string(),
                     ));
                 }
             }

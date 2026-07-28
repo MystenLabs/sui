@@ -12,12 +12,12 @@ use crate::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, DatatypeHandle,
         EnumDefInstantiation, EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
         FunctionDefinitionIndex, FunctionHandle, FunctionInstantiation, JumpTableInner, LocalIndex,
-        ModuleHandle, Signature, SignatureToken, StructDefInstantiation, StructDefinition,
-        StructFieldInformation, TableIndex, VariantDefinition, VariantHandle,
+        ModuleHandle, Signature, SignatureIndex, SignatureToken, StructDefInstantiation,
+        StructDefinition, StructFieldInformation, TableIndex, VariantDefinition, VariantHandle,
         VariantInstantiationHandle, VariantJumpTable,
     },
     internals::ModuleIndex,
-    safe_assert,
+    partial_vm_error_with_debug_message, safe_assert, safe_unwrap,
 };
 use move_core_types::vm_status::StatusCode;
 
@@ -29,6 +29,7 @@ pub struct BoundsChecker<'a> {
     module: &'a CompiledModule,
     context: BoundsCheckingContext,
     deprecate_global_storage_ops: bool,
+    signature_max_type_params: Vec<Option<u16>>,
 }
 
 impl<'a> BoundsChecker<'a> {
@@ -40,6 +41,7 @@ impl<'a> BoundsChecker<'a> {
             module,
             context: BoundsCheckingContext::Module,
             deprecate_global_storage_ops,
+            signature_max_type_params: Vec::new(),
         };
         if bounds_check.module.module_handles().is_empty() {
             let status =
@@ -72,10 +74,20 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
-    fn check_signatures(&self) -> PartialVMResult<()> {
-        for signature in self.module.signatures() {
-            self.check_signature(signature)?
-        }
+    // Checks all signatures and populates the `signature_max_type_params` memo with the maximum
+    // type parameter index used in each signature (`None` if none).
+    fn check_signatures(&mut self) -> PartialVMResult<()> {
+        debug_assert!(self.signature_max_type_params.is_empty());
+        self.signature_max_type_params = self
+            .module
+            .signatures()
+            .iter()
+            .map(|signature| self.check_signature(signature))
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        debug_assert_eq!(
+            self.signature_max_type_params.len(),
+            self.module.signatures().len()
+        );
         Ok(())
     }
 
@@ -205,24 +217,8 @@ impl<'a> BoundsChecker<'a> {
         check_bounds_impl(self.module.signatures(), function_handle.return_)?;
         // function signature type paramters must be in bounds to the function type parameters
         let type_param_count = function_handle.type_parameters.len();
-        if let Some(sig) = self
-            .module
-            .signatures()
-            .get(function_handle.parameters.into_index())
-        {
-            for ty in &sig.0 {
-                self.check_type_parameter(ty, type_param_count)?
-            }
-        }
-        if let Some(sig) = self
-            .module
-            .signatures()
-            .get(function_handle.return_.into_index())
-        {
-            for ty in &sig.0 {
-                self.check_type_parameter(ty, type_param_count)?
-            }
-        }
+        self.check_signature_type_parameters(function_handle.parameters, type_param_count)?;
+        self.check_signature_type_parameters(function_handle.return_, type_param_count)?;
         Ok(())
     }
 
@@ -337,15 +333,17 @@ impl<'a> BoundsChecker<'a> {
         )
     }
 
-    fn check_signature(&self, signature: &Signature) -> PartialVMResult<()> {
-        for ty in &signature.0 {
-            self.check_type(ty)?
-        }
-        Ok(())
+    /// Validates every token in `signature` and returns the maximum `TypeParameter` index it
+    /// contains (`None` if no type parameters present).
+    fn check_signature(&self, signature: &Signature) -> PartialVMResult<Option<u16>> {
+        signature.0.iter().try_fold(None, |max_type_param, ty| {
+            self.check_type(ty).map(|ty_max| max_type_param.max(ty_max))
+        })
     }
 
     fn check_constant(&self, constant: &Constant) -> PartialVMResult<()> {
-        self.check_type(&constant.type_)
+        self.check_type(&constant.type_)?;
+        Ok(())
     }
 
     fn check_struct_def(&self, struct_def: &StructDefinition) -> PartialVMResult<()> {
@@ -455,9 +453,7 @@ impl<'a> BoundsChecker<'a> {
 
         // if there are locals check that the type parameters in local signature are in bounds.
         let type_param_count = type_parameters.len();
-        for local in locals {
-            self.check_type_parameter(local, type_param_count)?
-        }
+        self.check_signature_type_parameters(code_unit.locals, type_param_count)?;
 
         // check bytecodes
         let code_len = code_unit.code.len();
@@ -484,14 +480,11 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in borrow are bound to the function type parameters
                     if let Some(field_inst) =
                         self.module.field_instantiations().get(idx.into_index())
-                        && let Some(sig) = self
-                            .module
-                            .signatures()
-                            .get(field_inst.type_parameters.into_index())
                     {
-                        for ty in &sig.0 {
-                            self.check_type_parameter(ty, type_param_count)?
-                        }
+                        self.check_signature_type_parameters(
+                            field_inst.type_parameters,
+                            type_param_count,
+                        )?;
                     }
                 }
                 Call(idx) => self.check_code_unit_bounds_impl(
@@ -508,14 +501,11 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in call are bound to the function type parameters
                     if let Some(func_inst) =
                         self.module.function_instantiations().get(idx.into_index())
-                        && let Some(sig) = self
-                            .module
-                            .signatures()
-                            .get(func_inst.type_parameters.into_index())
                     {
-                        for ty in &sig.0 {
-                            self.check_type_parameter(ty, type_param_count)?
-                        }
+                        self.check_signature_type_parameters(
+                            func_inst.type_parameters,
+                            type_param_count,
+                        )?;
                     }
                 }
                 Pack(idx) | Unpack(idx) => self.check_code_unit_bounds_impl(
@@ -544,14 +534,11 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in type operations are bound to the function type parameters
                     if let Some(struct_inst) =
                         self.module.struct_instantiations().get(idx.into_index())
-                        && let Some(sig) = self
-                            .module
-                            .signatures()
-                            .get(struct_inst.type_parameters.into_index())
                     {
-                        for ty in &sig.0 {
-                            self.check_type_parameter(ty, type_param_count)?
-                        }
+                        self.check_signature_type_parameters(
+                            struct_inst.type_parameters,
+                            type_param_count,
+                        )?;
                     }
                 }
                 ExistsGenericDeprecated(idx)
@@ -568,14 +555,11 @@ impl<'a> BoundsChecker<'a> {
                     // check type parameters in type operations are bound to the function type parameters
                     if let Some(struct_inst) =
                         self.module.struct_instantiations().get(idx.into_index())
-                        && let Some(sig) = self
-                            .module
-                            .signatures()
-                            .get(struct_inst.type_parameters.into_index())
                     {
-                        for ty in &sig.0 {
-                            self.check_type_parameter(ty, type_param_count)?
-                        }
+                        self.check_signature_type_parameters(
+                            struct_inst.type_parameters,
+                            type_param_count,
+                        )?;
                     }
                 }
                 // Instructions that refer to this code block.
@@ -620,11 +604,7 @@ impl<'a> BoundsChecker<'a> {
                         *idx,
                         bytecode_offset,
                     )?;
-                    if let Some(sig) = self.module.signatures().get(idx.into_index()) {
-                        for ty in &sig.0 {
-                            self.check_type_parameter(ty, type_param_count)?;
-                        }
-                    }
+                    self.check_signature_type_parameters(*idx, type_param_count)?;
                 }
 
                 // List out the other options explicitly so there's a compile error if a new
@@ -656,10 +636,10 @@ impl<'a> BoundsChecker<'a> {
                     // Invariant: pool indices have already been checked at this point.
                     let handle = self.module.variant_instantiation_handle_at(*vi_handle);
                     let enum_inst = self.module.enum_instantiation_at(handle.enum_def);
-                    let sig = self.module.signature_at(enum_inst.type_parameters);
-                    for ty in &sig.0 {
-                        self.check_type_parameter(ty, type_param_count)?
-                    }
+                    self.check_signature_type_parameters(
+                        enum_inst.type_parameters,
+                        type_param_count,
+                    )?;
                 }
                 VariantSwitch(jti) => {
                     self.check_code_unit_bounds_impl(
@@ -707,13 +687,18 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
-    fn check_type(&self, ty: &SignatureToken) -> PartialVMResult<()> {
+    /// Validates `ty` (datatype-handle bounds and type-argument arity) and returns the maximum
+    /// `TypeParameter` index it contains (`None` if none), for the `signature_max_type_params`
+    /// memo.
+    fn check_type(&self, ty: &SignatureToken) -> PartialVMResult<Option<u16>> {
         use self::SignatureToken::*;
 
+        let mut max_type_param = None;
         for ty in ty.preorder_traversal() {
             match ty {
-                Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | TypeParameter(_)
-                | Reference(_) | MutableReference(_) | Vector(_) => (),
+                Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | Reference(_)
+                | MutableReference(_) | Vector(_) => (),
+                TypeParameter(idx) => max_type_param = max_type_param.max(Some(*idx)),
                 Datatype(idx) => {
                     check_bounds_impl(self.module.datatype_handles(), *idx)?;
                     if let Some(sh) = self.module.datatype_handles().get(idx.into_index())
@@ -746,7 +731,37 @@ impl<'a> BoundsChecker<'a> {
                 }
             }
         }
-        Ok(())
+        Ok(max_type_param)
+    }
+
+    fn check_signature_type_parameters(
+        &self,
+        sig_idx: SignatureIndex,
+        type_param_count: usize,
+    ) -> PartialVMResult<()> {
+        let index = sig_idx.into_index();
+        // None => means the signature index is out of bounds, which is caught higher up.
+        //      - Raise an invariant violation via `safe_unwrap!`.
+        // Some(Some(max)) => means the signature has type parameters.
+        //      - the max index must be in bounds.
+        // Some(None) => means the signature has no type parameters.
+        //      - So it's always (vacuously) in bounds.
+        match safe_unwrap!(self.signature_max_type_params.get(index)) {
+            Some(max) if (*max as usize) < type_param_count => Ok(()),
+            None => Ok(()),
+            Some(_) => {
+                // Rejection path: re-traverse to surface the first offending type parameter.
+                if let Some(signature) = self.module.signatures().get(index) {
+                    for ty in &signature.0 {
+                        self.check_type_parameter(ty, type_param_count)?;
+                    }
+                }
+                Err(partial_vm_error_with_debug_message!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "type parameter memo reported an out-of-bounds index that re-traversal did not find"
+                ))
+            }
+        }
     }
 
     fn check_type_parameter(

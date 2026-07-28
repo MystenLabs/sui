@@ -78,7 +78,7 @@ pub struct LegacyPackageMetadata {
 pub async fn try_load_legacy_manifest<F: MoveFlavor>(
     path: &PackagePath,
     default_env: &Environment,
-    is_root: bool,
+    display_warnings: bool,
     flavor: &F,
 ) -> anyhow::Result<Option<(FileHandle, ParsedManifest)>> {
     let Ok(file_handle) = FileHandle::new(path.path().join("Move.toml")) else {
@@ -106,7 +106,8 @@ pub async fn try_load_legacy_manifest<F: MoveFlavor>(
     }
 
     debug!("parsing legacy manifest");
-    let manifest = parse_source_manifest::<F>(parsed, is_root, path, default_env, flavor).await?;
+    let manifest =
+        parse_source_manifest::<F>(parsed, display_warnings, path, default_env, flavor).await?;
     debug!("successfully parsed");
     Ok(Some((file_handle, manifest)))
 }
@@ -117,7 +118,7 @@ fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
 
 async fn parse_source_manifest<F: MoveFlavor>(
     tval: TV,
-    is_root: bool,
+    display_warnings: bool,
     path: &PackagePath,
     env: &Environment,
     flavor: &F,
@@ -199,7 +200,7 @@ async fn parse_source_manifest<F: MoveFlavor>(
 
             let implicit_dependencies = check_implicits(
                 metadata.legacy_name.as_str(),
-                is_root,
+                display_warnings,
                 &dependencies,
                 metadata.implicit_deps,
                 env,
@@ -257,9 +258,12 @@ async fn parse_source_manifest<F: MoveFlavor>(
 ///  - `implicit_deps_flag` is false,
 ///  - `name` is a system dep name,
 ///  - `deps` contains a system dep name
+///
+/// When `display_warnings` is set and the package redundantly declares an implicit dependency, an
+/// advisory note is printed suggesting its removal.
 async fn check_implicits<F: MoveFlavor>(
     name: &str,
-    is_root: bool,
+    display_warnings: bool,
     deps: &BTreeMap<Identifier, DefaultDependency>,
     implicit_deps_flag: bool,
     env: &Environment,
@@ -286,7 +290,7 @@ async fn check_implicits<F: MoveFlavor>(
         return true;
     }
 
-    if is_root {
+    if display_warnings {
         user_note!(
             "Dependencies on {} are automatically added, but this feature is \
                 disabled for your package because you have explicitly included dependencies on {}. Consider \

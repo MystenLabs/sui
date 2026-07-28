@@ -10,7 +10,7 @@ use move_binary_format::{
 };
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
 use sui_move_build::BuildConfig;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::{
     Identifier, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -189,11 +189,22 @@ struct UpgradeStateRunner {
 
 impl UpgradeStateRunner {
     pub async fn new(base_package_name: &str) -> Self {
+        Self::new_with_protocol_config(base_package_name, None).await
+    }
+
+    pub async fn new_with_protocol_config(
+        base_package_name: &str,
+        protocol_config: Option<ProtocolConfig>,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-        let authority_state = TestAuthorityBuilder::new().build().await;
+        let mut builder = TestAuthorityBuilder::new();
+        if let Some(protocol_config) = protocol_config {
+            builder = builder.with_protocol_config(protocol_config);
+        }
+        let authority_state = builder.build().await;
         authority_state.insert_genesis_object(gas_object);
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
@@ -1158,15 +1169,11 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
 #[tokio::test]
 async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     // Allow new modules in deps-only mode for this test.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_execution_version_for_testing(3);
-        // set up config values that would otherwise be incompatible with the execution version
-        config.set_gas_model_version_for_testing(11);
-        config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
-        config
-    });
+    let mut config = ProtocolConfig::get_for_version(118.into(), Chain::Unknown);
+    config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
 
-    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let mut runner =
+        UpgradeStateRunner::new_with_protocol_config("move_upgrade/base", Some(config)).await;
     let base_pkg = "dep_only_upgrade";
     assert_valid_dep_only_upgrade(&mut runner, base_pkg).await;
     let (digest, modules, dep_ids) = build_upgrade_test_modules_with_overlay(

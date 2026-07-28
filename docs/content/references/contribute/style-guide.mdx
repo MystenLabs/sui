@@ -46,23 +46,26 @@ This document defines the styles, vocabulary usage, and content formatting for t
 
 ## Editorial considerations {#editorial-considerations}
 
-- **Use simple words and concise sentences.**  
-  Prefer plain, direct language over complex or academic phrasing. Short sentences improve readability and are easier to localize.  
+- **Use simple words and concise sentences.**
+  Prefer plain, direct language over complex or academic phrasing. Short sentences improve readability and are easier to localize. Eliminate filler words and reduce sentence length wherever possible.
 
-- **Avoid redefining common words.**  
-  Do not give familiar words new or unexpected meanings (for example, do not use "object" to mean something other than its standard technical or everyday sense). This prevents confusion, especially for new readers.  
+- **Do not start introductions with "this page" or "this guide".**
+  Opening lines like "This page explains..." or "This guide walks you through..." are poor for answer engine optimization (AEO) and generative engine optimization (GEO). Lead with the topic itself, not a meta-reference to the document. For example, write "Every agent writes durable memory objects to two systems..." instead of "This page explains how agents write durable memory objects."
 
-- **Use technical terms with care.**  
-  Introduce technical terms only when necessary. Define them clearly the first time, and use them consistently throughout the documentation.  
+- **Avoid redefining common words.**
+  Do not give familiar words new or unexpected meanings (for example, do not use "object" to mean something other than its standard technical or everyday sense). This prevents confusion, especially for new readers.
 
-- **Avoid jargon and slang.**  
-  Do not assume readers understand informal expressions, company-specific shorthand, or unnecessary buzzwords. Use precise terms instead.  
+- **Use technical terms with care.**
+  Introduce technical terms only when necessary. Define them clearly the first time, and use them consistently throughout the documentation.
 
-- **Prefer active, descriptive phrasing.**  
-  Instead of vague phrases like, "do the thing," explain the action explicitly: "Deploy the contract" or "Restart the node."  
+- **Avoid jargon and slang.**
+  Do not assume readers understand informal expressions, company-specific shorthand, or unnecessary buzzwords. Use precise terms instead.
 
-- **Write for a global audience.**  
-  Keep in mind that many readers are non-native English speakers. Favor clarity over cleverness, and avoid idioms or culturally specific references.  
+- **Prefer active, descriptive phrasing.**
+  Instead of vague phrases like, "do the thing," explain the action explicitly: "Deploy the contract" or "Restart the node."
+
+- **Write for a global audience.**
+  Keep in mind that many readers are non-native English speakers. Favor clarity over cleverness, and avoid idioms or culturally specific references.
 
 ---
 
@@ -239,6 +242,8 @@ Proper nouns include:
 
 Product names are proper nouns. Capitalize all words of a product name. When referring to a product, use only the product name without "the". When referring specifically to a Sui wallet, specify the name of the wallet such as Slush Wallet. Use 'wallet' generically when referring to the concept of a wallet.
 
+Only capitalize terms that are official product names. If a term is not an established product name, use lowercase. For example, write "security delete API" unless "Security Delete API" is the official branded name of that feature.
+
 > There are several types of wallets to choose from.
 
 > Never share the recovery passphrase for your wallet with anyone.
@@ -376,9 +381,9 @@ Use uppercase with underscores for placeholder variables that the reader must re
 
 ## Titles and headings 
 
-Use enough words in headings and titles to make it easy to know which link to click on a search results page. One-word titles (for example, Installing) do not provide enough information to determine the contents of a topic.
+Headings and titles must be descriptive enough to distinguish pages in search results, but concise. Avoid one-word titles (for example, "Installing") that give no context. Also avoid overly long or wordy headings. Prefer short, direct phrases: "Renew memories" rather than "How to renew your stored memories." If a heading can say the same thing in fewer words, shorten it.
 
-#### Page titles 
+#### Page titles
 
 Do not title a page "Overview", and avoid using "Overview" in conjunction with other terms, such as "Package Overview". Opt for more descriptive, action based titles, such as "Using Packages".
 
@@ -785,6 +790,10 @@ Deploy the contract.
 </TabItem>
 </Tabs>
 
+### Numbered subheading consistency
+
+If you number steps in prose (for example, "there are three stages"), the corresponding subheadings must also be numbered ("1. Initialize," "2. Configure," "3. Deploy"). Do not describe a numbered sequence in text and then use unnumbered subheadings, or vice versa.
+
 ### Multiple-procedure pages {#multiple-procedures}
 
 When a page contains multiple sets of step-by-step instructions (for example, separate installation procedures for different operating systems, or multiple distinct workflows), use H5 headings (`#####`) to label each step within its procedure. This keeps steps visually distinct across multiple groups.
@@ -871,7 +880,7 @@ Format UI elements, such as field labels, button names, and menu commands, in bo
 
 ## Prerequisites {#prerequisites}
 
-Use a prerequisites section to list what the reader must have installed, configured, or completed before starting a procedure.
+Use a prerequisites section to list what the reader must have installed, configured, or completed before starting a procedure. Do not use prose headings like "Before you begin" or "Before you start." Use the prerequisite tab component instead, which provides a consistent, scannable format across all pages.
 
 ### Sui docs {#prerequisites-sui}
 
@@ -1255,6 +1264,12 @@ import DocCardList from '@theme/DocCardList';
 ```
 
 The `<DocCardList />` component auto-populates the page with card modules for every sub-category and sub-page as defined in the sidebar file.
+
+## Footer sections {#footer-sections}
+
+Do not manually add footer sections such as "Related topics," "Next steps," or "Related links" to the bottom of a page. These sections are autogenerated by the site build. Manually written footer sections create duplicates and go stale when pages are renamed or moved.
+
+---
 
 ## Accessibility {#accessibility}
 

@@ -605,6 +605,7 @@ async fn subscribe_events_filtered() {
     let expected_digest = tx.digest().to_owned();
     let tx_checkpoint = tx.checkpoint.expect("executed tx has a checkpoint");
 
+    let mut saw_start_frame = false;
     loop {
         let frame = stream.next().await.expect("stream open").unwrap();
         let watermark = frame.watermark.as_ref().expect("frame watermark");
@@ -613,8 +614,17 @@ async fn subscribe_events_filtered() {
             "frame watermark carries a cursor"
         );
         let Some(proto_event) = frame.event.as_ref() else {
+            assert!(
+                watermark.checkpoint.is_some(),
+                "event start and progress frames carry checkpoint coverage"
+            );
+            saw_start_frame = true;
             continue;
         };
+        assert!(
+            saw_start_frame,
+            "filtered event subscription delivers its start frame before a matching event"
+        );
         assert_eq!(
             proto_event.transaction_digest.as_deref(),
             Some(&*expected_digest)
@@ -731,10 +741,9 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
         start_watermark.cursor.is_some(),
         "start frame carries a resume cursor"
     );
-    assert_eq!(
-        start_watermark.checkpoint, None,
-        "start frame has not fully covered a checkpoint in the subscription interval"
-    );
+    let start_checkpoint = start_watermark
+        .checkpoint
+        .expect("start frame covers the checkpoint before subscription entry");
 
     let mut ticks = Vec::new();
     while ticks.len() < 3 {
@@ -751,6 +760,11 @@ async fn subscribe_watermark_ticks_on_sparse_filter() {
             .expect("ascending stream sets checkpoint");
         ticks.push(checkpoint);
     }
+    assert!(
+        ticks[0] > start_checkpoint,
+        "periodic ticks must advance beyond the start boundary: {start_checkpoint} -> {}",
+        ticks[0]
+    );
     assert!(
         ticks.windows(2).all(|pair| pair[0] < pair[1]),
         "tick boundaries must strictly increase: {ticks:?}"
@@ -926,13 +940,13 @@ async fn filtered_subscription_first_frame_is_progress_only() {
             .is_some_and(|watermark| watermark.cursor.is_some()),
         "transaction start frame carries a watermark and cursor"
     );
-    assert_eq!(
+    assert!(
         transaction_start
             .watermark
             .as_ref()
-            .and_then(|watermark| watermark.checkpoint),
-        None,
-        "the start-frame watermark has not fully covered a checkpoint in the subscription interval",
+            .and_then(|watermark| watermark.checkpoint)
+            .is_some(),
+        "transaction start frame covers the checkpoint before subscription entry",
     );
 
     let checkpoint_start = checkpoints

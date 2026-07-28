@@ -60,6 +60,7 @@ ecdsa_r1.json
 ecvrf.json
 ed25519.json
 event.json
+forwarding_address.json
 funds_accumulator.json
 groth16.json
 group_ops.json

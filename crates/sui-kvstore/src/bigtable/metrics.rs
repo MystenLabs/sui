@@ -3,9 +3,11 @@
 
 use std::sync::Arc;
 
+use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
+use prometheus::register_gauge_vec_with_registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
 
@@ -26,6 +28,12 @@ pub(crate) struct KvMetrics {
     pub kv_bt_read_rows_started_total: IntCounterVec,
     pub kv_bt_chunk_rows_returned_count: IntCounterVec,
     pub kv_bt_chunk_rows_seen_count: IntCounterVec,
+    pub kv_bt_flow_control_effective_qps: GaugeVec,
+    pub kv_bt_flow_control_last_observation_start_qps: GaugeVec,
+    pub kv_bt_flow_control_write_latency_window_avg_ms: GaugeVec,
+    pub kv_bt_flow_control_write_latency_baseline_ms: GaugeVec,
+    pub kv_bt_flow_control_throttle_ms: HistogramVec,
+    pub kv_bt_flow_control_events_total: IntCounterVec,
 }
 
 impl KvMetrics {
@@ -161,6 +169,51 @@ impl KvMetrics {
                 "kv_bt_chunk_rows_seen_count",
                 "Reported BigTable rows seen count for a single chunk",
                 &["client", "table"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_effective_qps: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_effective_qps",
+                "Effective MutateRows admission limit in requests per second",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_last_observation_start_qps: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_last_observation_start_qps",
+                "MutateRows start rate from the most recently completed feedback observation; may remain unchanged between observations",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_write_latency_window_avg_ms: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_write_latency_window_avg_ms",
+                "Window-average MutateRows RPC latency observed by BigTable batch-write flow control",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_write_latency_baseline_ms: register_gauge_vec_with_registry!(
+                "kv_bt_flow_control_write_latency_baseline_ms",
+                "Learned healthy-baseline MutateRows RPC latency used for flow-control classification",
+                &["client"],
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_throttle_ms: register_histogram_vec_with_registry!(
+                "kv_bt_flow_control_throttle_ms",
+                "Time spent waiting for BigTable adaptive batch-write flow-control admission",
+                &["client"],
+                prometheus::exponential_buckets(1.0, 1.6, 32)
+                    .unwrap()
+                    .to_vec(),
+                registry,
+            )
+            .unwrap(),
+            kv_bt_flow_control_events_total: register_int_counter_vec_with_registry!(
+                "kv_bt_flow_control_events_total",
+                "BigTable adaptive batch-write flow-control feedback and observation lifecycle events",
+                &["client", "event"],
                 registry,
             )
             .unwrap(),
