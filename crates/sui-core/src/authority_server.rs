@@ -70,7 +70,9 @@ use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
-    consensus_handler::{SequencedConsensusTransactionKey, resolve_owned_object_lock_states},
+    consensus_handler::{
+        SequencedConsensusTransactionKey, owned_lock_refs, resolve_owned_object_lock_states,
+    },
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -997,20 +999,12 @@ impl ValidatorService {
                     .transaction_data()
                     .input_objects()
                 {
-                    let immutable_object_ids = self
+                    let immutable_object_ids: HashSet<_> = self
                         .collect_immutable_object_ids(verified_transaction.tx(), state)
-                        .await?;
-                    let owned_object_refs: Vec<_> = input_objects
-                        .iter()
-                        .filter_map(|obj| match obj {
-                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
-                                if !immutable_object_ids.contains(&obj_ref.0) =>
-                            {
-                                Some(*obj_ref)
-                            }
-                            _ => None,
-                        })
+                        .await?
+                        .into_iter()
                         .collect();
+                    let owned_object_refs = owned_lock_refs(&input_objects, &immutable_object_ids);
                     let (existing_locks, _stats) = resolve_owned_object_lock_states(
                         &epoch_store,
                         state.get_object_cache_reader().as_ref(),
@@ -1023,6 +1017,13 @@ impl ValidatorService {
                         &existing_locks,
                         state.get_object_cache_reader().as_ref(),
                     ) {
+                        // Only a genuine lock conflict is a terminal verdict; a failed
+                        // read (e.g. an epoch-boundary race) must surface as a
+                        // retriable RPC error, not a Rejected the client treats as
+                        // final.
+                        if !matches!(error.as_inner(), SuiErrorKind::ObjectLockConflict { .. }) {
+                            return Err(error);
+                        }
                         debug!(
                             ?tx_digest,
                             "handle_submit_transaction: processed transaction rejected on lock conflict: {error}"

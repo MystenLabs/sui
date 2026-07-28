@@ -458,8 +458,10 @@ impl DeferredTransactionLocks {
         self.by_tx.insert(digest, refs);
     }
 
-    /// Removes and returns the lock refs held by `digest`. The caller decides whether
-    /// they re-enter this map (re-deferral) or the current commit's locks (scheduling).
+    /// Removes and returns the lock refs held by `digest`. Called only when the commit
+    /// that scheduled the reloaded transaction flushes - by then the transaction is
+    /// executed and the objects table covers its consumed inputs (the caller bumps the
+    /// live-object bounds within the same critical section).
     pub fn remove_tx(&mut self, digest: &TransactionDigest) -> Option<Vec<ObjectRef>> {
         let refs = self.by_tx.remove(digest)?;
         for obj_ref in &refs {

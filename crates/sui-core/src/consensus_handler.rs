@@ -130,7 +130,7 @@ pub(crate) struct LockResolutionStats {
 
 /// Resolves the cross-commit claim state of owned object refs for post-consensus
 /// conflict detection, without reading the owned-object lock table (except the narrow
-/// immutable backstop). Layers, per ref (see docs/objects_locking.md Part 3):
+/// immutable backstop). Layers, per ref:
 ///
 /// 1. Quarantined (un-flushed) commit locks - in memory.
 /// 2. Deferred-transaction locks - in memory (finalized but unexecuted, so invisible to
@@ -243,13 +243,8 @@ pub(crate) fn resolve_owned_object_lock_states(
                                         object_cache.get_latest_object_ref_or_tombstone(obj_ref.0)
                                         && latest_ref.1 > claimed_version
                                     {
-                                        live_object_cache.record(
-                                            obj_ref.0,
-                                            VersionLowerBound::Version {
-                                                version: latest_ref.1,
-                                                immutable: None,
-                                            },
-                                        );
+                                        live_object_cache
+                                            .record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                                         resolutions
                                             .insert(*obj_ref, LockResolution::ConsumedSinceClaim);
                                     }
@@ -275,13 +270,7 @@ pub(crate) fn resolve_owned_object_lock_states(
         match object_cache.get_latest_object_ref_or_tombstone(obj_ref.0) {
             Some(latest_ref) => {
                 if latest_ref.1 > claimed_version {
-                    live_object_cache.record(
-                        obj_ref.0,
-                        VersionLowerBound::Version {
-                            version: latest_ref.1,
-                            immutable: None,
-                        },
-                    );
+                    live_object_cache.record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
                 } else if latest_ref.1 == claimed_version {
                     // Latest at exactly the claimed version: the backstop applies if the
@@ -298,23 +287,11 @@ pub(crate) fn resolve_owned_object_lock_states(
                             }
                         }
                         None => {
-                            live_object_cache.record(
-                                obj_ref.0,
-                                VersionLowerBound::Version {
-                                    version: latest_ref.1,
-                                    immutable: None,
-                                },
-                            );
+                            live_object_cache.record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                         }
                     }
                 } else {
-                    live_object_cache.record(
-                        obj_ref.0,
-                        VersionLowerBound::Version {
-                            version: latest_ref.1,
-                            immutable: None,
-                        },
-                    );
+                    live_object_cache.record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                 }
                 // Latest at or below the claimed version: unclaimed (below ⇒ a
                 // pipelined input whose producer has not executed locally yet; the
@@ -1416,7 +1393,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let make_checkpoint = should_accept_tx || final_round;
         if !make_checkpoint {
-            // No need for any further processing
+            // No need for any further processing. `state.output` is dropped without
+            // flushing, so deferred-locks / deferred-transactions map entries inserted
+            // above outlive it; benign because certs are closed by now - subsequent
+            // commits drop user transactions before conflict detection, so the stale
+            // entries are never read, and they die with the epoch.
             return;
         }
 
@@ -1690,7 +1671,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         let mut total_deferred_txns = 0;
-        let mut redeferred_digests = HashSet::new();
+        // Reloaded transactions that re-defer are removed inside the loop below; what
+        // remains was scheduled (or cancelled, which still executes) this commit.
+        let mut finalized_reloaded: HashSet<TransactionDigest> =
+            previously_deferred_tx_digests.keys().copied().collect();
         {
             // Fresh deferrals move this commit's acquired lock refs into the
             // deferred-locks map. The refs are recovered by inverting the commit's lock
@@ -1728,7 +1712,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 total_deferred_txns += txns.len();
                 for tx in &txns {
                     let digest = *tx.tx().digest();
-                    redeferred_digests.insert(digest);
+                    finalized_reloaded.remove(&digest);
                     if let Some(refs) = fresh_lock_sets.remove(&digest) {
                         deferred_locks.insert(digest, refs);
                     } else {
@@ -1743,19 +1727,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        // Reloaded deferred transactions that did not re-defer are being scheduled (or
-        // cancelled, which still executes). Their deferred-locks entries stay in place
+        // Deferred-locks entries of scheduled reloaded transactions stay in place
         // until this commit flushes - the flush gate guarantees they are executed by
         // then, at which point the objects table covers their consumed inputs.
-        let finalized_reloaded: Vec<TransactionDigest> = previously_deferred_tx_digests
-            .keys()
-            .filter(|digest| !redeferred_digests.contains(*digest))
-            .copied()
-            .collect();
         if !finalized_reloaded.is_empty() {
             state
                 .output
-                .set_finalized_reloaded_deferred_txns(finalized_reloaded);
+                .set_finalized_reloaded_deferred_txns(finalized_reloaded.into_iter().collect());
         }
 
         self.metrics
@@ -3641,11 +3619,31 @@ fn authenticator_state_update_transaction(
     VerifiedExecutableTransaction::new_system(transaction, epoch)
 }
 
-/// The owned (non-immutable `ImmOrOwnedMoveObject`) object refs that a
-/// `UserTransactionV2` must lock post-consensus. Immutable objects are excluded as
-/// they can be used concurrently. Returns `None` if the transaction's input objects
-/// are invalid. Used both to prefetch existing locks for the whole commit and, per
-/// transaction, to perform conflict detection — keeping the two in sync.
+/// The owned (non-immutable `ImmOrOwnedMoveObject`) refs among `input_objects`,
+/// excluding `immutable_object_ids`. Shared by post-consensus conflict detection
+/// and the submit-path advisory check so both derive identical lock sets.
+pub(crate) fn owned_lock_refs(
+    input_objects: &[InputObjectKind],
+    immutable_object_ids: &HashSet<ObjectID>,
+) -> Vec<ObjectRef> {
+    input_objects
+        .iter()
+        .filter_map(|obj| match obj {
+            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                if !immutable_object_ids.contains(&obj_ref.0) =>
+            {
+                Some(*obj_ref)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The owned object refs that a `UserTransactionV2` must lock post-consensus.
+/// Immutable objects are excluded as they can be used concurrently. Returns `None`
+/// if the transaction's input objects are invalid. Used both to prefetch existing
+/// locks for the whole commit and, per transaction, to perform conflict detection
+/// — keeping the two in sync.
 fn owned_object_refs_to_lock(
     tx_with_claims: &PlainTransactionWithClaims,
 ) -> Option<Vec<ObjectRef>> {
@@ -3656,19 +3654,7 @@ fn owned_object_refs_to_lock(
         .transaction_data()
         .input_objects()
         .ok()?;
-    Some(
-        input_objects
-            .iter()
-            .filter_map(|obj| match obj {
-                InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
-                    if !immutable_object_ids.contains(&obj_ref.0) =>
-                {
-                    Some(*obj_ref)
-                }
-                _ => None,
-            })
-            .collect(),
-    )
+    Some(owned_lock_refs(&input_objects, &immutable_object_ids))
 }
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {

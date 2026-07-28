@@ -1904,10 +1904,9 @@ impl AuthorityPerEpochStore {
             .get(obj_ref)
     }
 
-    /// Direct epoch-DB read of the lock table, bypassing the quarantine. Used only as the
-    /// backstop for refs whose object is immutable at the claimed version (see
-    /// docs/objects_locking.md §3.6a); the quarantine layer has already been consulted
-    /// for these refs.
+    /// Direct epoch-DB read of the lock table, bypassing the quarantine. Used only as
+    /// the backstop for refs whose object is immutable at the claimed version; the
+    /// quarantine layer has already been consulted for these refs.
     pub fn multi_get_owned_object_locks_from_db(
         &self,
         obj_refs: &[ObjectRef],
@@ -1916,10 +1915,10 @@ impl AuthorityPerEpochStore {
     }
 
     /// Batched read of existing owned-object locks, returned as a map containing only
-    /// the refs that are currently locked. The consensus commit handler prefetches the
-    /// cross-commit lock state (constant for the duration of a commit) once with this,
-    /// rather than reading per transaction inside
-    /// `try_acquire_owned_object_locks_post_consensus`.
+    /// the refs that are currently locked. Production resolution no longer reads the
+    /// lock table this way; this survives for the debug-build differential check
+    /// against the table-based verdict (and its unit test), and is the natural
+    /// deletion target when the table write is removed.
     pub fn get_owned_object_locks_map(
         &self,
         obj_refs: &[ObjectRef],
