@@ -1,0 +1,9 @@
+[package]
+name = "oracle_adapter"
+edition = "2024.beta"
+
+[dependencies]
+Pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "sui-contract-testnet" }
+
+[addresses]
+oracle_adapter = "0x0"
