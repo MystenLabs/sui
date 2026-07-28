@@ -1179,6 +1179,150 @@ mod tests {
         }
     }
 
+    /// End-to-end committee run with minimal-block emission on: all submitted
+    /// transactions commit on every node (parity with the full-block path), the
+    /// subscription streams actually exercise minimal blocks (sent/received/inflated
+    /// counters > 0), and no unexplained inflation failures occur.
+    #[rstest]
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_committee_with_minimal_blocks(
+        #[values(NetworkType::Tonic)] network_type: NetworkType,
+    ) {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        const NUM_AUTHORITIES: usize = 4;
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1; NUM_AUTHORITIES]);
+        let protocol_config = ConsensusProtocolConfig::for_testing();
+        let temp_dirs = (0..NUM_AUTHORITIES)
+            .map(|_| TempDir::new().unwrap())
+            .collect::<Vec<_>>();
+
+        let mut output_receivers = Vec::with_capacity(committee.size());
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut registries = Vec::with_capacity(committee.size());
+
+        for (index, _authority_info) in committee.authorities() {
+            let registry = Registry::new();
+            let parameters = Parameters {
+                db_path: temp_dirs[index.value()].path().to_path_buf(),
+                emit_minimal_blocks: true,
+                ..Default::default()
+            };
+            let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
+            let authority = ConsensusAuthority::start(
+                network_type,
+                0,
+                committee.clone(),
+                parameters,
+                protocol_config.clone(),
+                Some(keypairs[index].1.clone()),
+                keypairs[index].0.clone(),
+                Arc::new(Clock::default()),
+                Arc::new(NoopTransactionVerifier {}),
+                None,
+                commit_consumer,
+                registry.clone(),
+                0,
+                None,
+            )
+            .await;
+            output_receivers.push(commit_receiver);
+            authorities.push(authority);
+            registries.push(registry);
+        }
+
+        const NUM_TRANSACTIONS: u8 = 15;
+        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i; 16];
+            submitted_transactions.insert(txn.clone());
+            authorities[i as usize % authorities.len()]
+                .transaction_client()
+                .submit(vec![txn], Priority::Normal)
+                .await
+                .unwrap();
+        }
+
+        for receiver in &mut output_receivers {
+            let mut expected_transactions = submitted_transactions.clone();
+            loop {
+                let committed_subdag =
+                    tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                for b in committed_subdag.blocks {
+                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+                        assert!(
+                            expected_transactions.remove(&txn),
+                            "Transaction not submitted or already seen: {:?}",
+                            txn
+                        );
+                    }
+                }
+                if expected_transactions.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        fn counter_sum(registry: &Registry, name: &str, reason: Option<&str>) -> u64 {
+            registry
+                .gather()
+                .iter()
+                .filter(|mf| mf.name() == name)
+                .flat_map(|mf| mf.get_metric())
+                .filter(|m| {
+                    reason.is_none_or(|r| {
+                        m.get_label()
+                            .iter()
+                            .any(|l| l.name() == "reason" && l.value() == r)
+                    })
+                })
+                .map(|m| m.get_counter().value() as u64)
+                .sum()
+        }
+
+        let mut total_sent = 0;
+        let mut total_inflated_bytes_saved = 0;
+        for registry in &registries {
+            total_sent += counter_sum(registry, "minimal_blocks_sent", None);
+            total_inflated_bytes_saved +=
+                counter_sum(registry, "minimal_blocks_received_bytes_saved", None);
+            // Digest mismatches or malformed encodings between honest nodes would be
+            // codec bugs; missing-ancestor fallbacks are legitimate races.
+            assert_eq!(
+                counter_sum(
+                    registry,
+                    "minimal_block_inflate_fallback",
+                    Some("digest_mismatch")
+                ),
+                0
+            );
+            assert_eq!(
+                counter_sum(
+                    registry,
+                    "minimal_block_inflate_fallback",
+                    Some("malformed")
+                ),
+                0
+            );
+        }
+        // The re-inflation path must have actually run: an always-fallback or
+        // never-minimal configuration cannot pass this test.
+        assert!(total_sent > 0, "no minimal blocks were emitted");
+        assert!(
+            total_inflated_bytes_saved > 0,
+            "no minimal blocks were successfully inflated"
+        );
+
+        for authority in authorities {
+            authority.stop().await;
+        }
+    }
+
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
     async fn test_amnesia_recovery_success(#[values(5, 10)] gc_depth: u32) {
