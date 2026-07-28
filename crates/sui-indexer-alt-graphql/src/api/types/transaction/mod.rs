@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Bound;
+use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -438,6 +440,21 @@ impl Transaction {
             return Ok(Connection::new(false, false).into());
         };
 
+        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+
+        build_grpc_connection(scope, &page, result)
+    }
+
+    /// Scan a page of transactions over the checkpoint range `cp_bounds` via the streaming gRPC
+    /// List API. Computing checkpoint bounds is the caller's responsibility; an unbounded end
+    /// scans forward to whatever is indexed. Items are returned in scan order (descending when
+    /// paginating from the back).
+    pub(crate) async fn scan_grpc(
+        reader: &AlphaLedgerGrpcReader,
+        cp_bounds: impl RangeBounds<u64>,
+        page: &Page<CTransaction>,
+        filter: &TransactionFilter,
+    ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
         // Extract the cursor and pass through to grpc.
         let after = page.after().map(|c| CursorToken::from(&**c).encode());
         // Pg-minted cursors set checkpoint as 0. Substitute the checkpoint with u64::max on the
@@ -463,18 +480,23 @@ impl Transaction {
         let mut request = v2::ListTransactionsRequest::default();
         // Digest only — contents hydrate lazily via `KvLoader` on field access.
         request.read_mask = Some(FieldMask::from_paths(["digest"]));
-        request.start_checkpoint = Some(*cp_bounds.start());
-        // `cp_bounds` end is inclusive; the request bound is exclusive.
-        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.start_checkpoint = match cp_bounds.start_bound() {
+            Bound::Included(&s) => Some(s),
+            Bound::Excluded(&s) => Some(s.saturating_add(1)),
+            Bound::Unbounded => None,
+        };
+        request.end_checkpoint = match cp_bounds.end_bound() {
+            Bound::Included(&e) => Some(e.saturating_add(1)),
+            Bound::Excluded(&e) => Some(e),
+            Bound::Unbounded => None,
+        };
         request.filter = filter.to_grpc_filter();
         request.options = Some(options);
 
-        let result = reader
+        Ok(reader
             .list_transactions(request)
             .await
-            .context("Failed to list transactions")?;
-
-        build_grpc_connection(scope, &page, result)
+            .context("Failed to list transactions")?)
     }
 }
 
