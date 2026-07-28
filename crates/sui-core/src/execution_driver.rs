@@ -114,6 +114,10 @@ pub async fn execution_process(
         // Certificate execution is CPU-bound and can take significant time, so run it on a
         // blocking thread to avoid stalling the async runtime's worker threads.
         let epoch_store_clone = epoch_store.clone();
+        let execution_span = error_span!("execution_driver", tx_digest = ?digest);
+        // spawn_blocking runs on a thread that does not inherit the current tracing span,
+        // so re-enter the span inside the blocking closure to keep execution logs attributed.
+        let blocking_span = execution_span.clone();
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
             let _permit = permit;
@@ -127,12 +131,14 @@ pub async fn execution_process(
             // for in-flight execution to finish (previously guaranteed by `within_alive_epoch`,
             // since execution has no yield points). Skip if the epoch has already ended.
             let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
+                info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
                 return;
             };
 
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
             tokio::task::spawn_blocking(move || {
+                let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(
                     &certificate,
@@ -162,6 +168,6 @@ pub async fn execution_process(
             })
             .await
             .expect("transaction execution task panicked");
-        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
+        }.instrument(execution_span));
     }
 }
