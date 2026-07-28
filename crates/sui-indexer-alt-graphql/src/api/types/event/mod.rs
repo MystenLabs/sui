@@ -33,6 +33,7 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
+use tokio::sync::OnceCell;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::ByteCursor;
@@ -96,19 +97,11 @@ pub(crate) struct Event {
     pub(crate) transaction_digest: TransactionDigest,
     /// Position of this event within the transaction's events list (0-indexed)
     pub(crate) sequence_number: u64,
-    /// Timestamp of the checkpoint that includes the transaction containing this event.
-    pub(crate) timestamp: EventTimestamp,
-}
-
-/// Where the timestamp of the checkpoint containing the event's transaction comes from.
-#[derive(Clone, Copy)]
-pub(crate) enum EventTimestamp {
-    /// Timestamp known at construction time. `None` when the transaction is not part of a
-    /// checkpoint (simulated or just-executed transactions).
-    Known(Option<u64>),
-    /// Timestamp not resolved yet (events hydrated from the gRPC scan stream); the emitting
-    /// transaction's contents are loaded on demand if the timestamp is requested.
-    Lazy,
+    /// Timestamp of the checkpoint that includes the transaction containing this event. Seeded at
+    /// construction when known (`None` when the transaction is not part of a checkpoint —
+    /// simulated or just-executed transactions), or left empty (events hydrated from the gRPC
+    /// scan stream) to be fetched from the kv store on demand.
+    pub(crate) timestamp_ms: OnceCell<Option<u64>>,
 }
 
 /// Custom `Connection` for events to support partially-filled pages.
@@ -159,19 +152,20 @@ impl Event {
     /// `null` for simulated/executed transactions as they are not included in a checkpoint.
     async fn timestamp(&self, ctx: &Context<'_>) -> Option<Result<DateTime, RpcError>> {
         async {
-            let timestamp_ms = match self.timestamp {
-                EventTimestamp::Known(timestamp_ms) => timestamp_ms,
-                EventTimestamp::Lazy => {
+            let timestamp_ms = self
+                .timestamp_ms
+                .get_or_try_init(async || {
                     let kv_loader: &KvLoader = ctx.data()?;
-                    kv_loader
-                        .load_one_transaction(self.transaction_digest)
-                        .await
-                        .context("Failed to fetch transaction contents")?
-                        .and_then(|contents| contents.timestamp_ms())
-                }
-            };
+                    Ok::<_, RpcError>(
+                        kv_loader
+                            .load_one_transaction_timestamp(self.transaction_digest)
+                            .await
+                            .context("Failed to fetch transaction timestamp")?,
+                    )
+                })
+                .await?;
 
-            let Some(timestamp_ms) = timestamp_ms else {
+            let Some(timestamp_ms) = *timestamp_ms else {
                 return Ok(None);
             };
 
@@ -345,7 +339,7 @@ impl Event {
 
         let mut request = v2::ListEventsRequest::default();
         // Everything the GraphQL node needs rides on the stream item: the event envelope and its
-        // position (the timestamp resolves lazily via the emitting transaction's contents).
+        // position (the timestamp resolves lazily via a timestamp-only KV lookup).
         request.read_mask = Some(FieldMask::from_paths([
             "contents",
             "event_type",
@@ -503,8 +497,8 @@ impl From<Connection<String, Event>> for EventConnection {
 }
 
 /// Hydrate an `Event` node from a `ListEvents` stream item. The read mask requests everything the
-/// node needs — the event envelope and its position — so no KV lookup is required; a missing field
-/// is an internal inconsistency.
+/// node needs — the event envelope and its position — so no KV lookup is required (the timestamp
+/// resolves lazily); a missing field is an internal inconsistency.
 fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
     // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
     let transaction_digest = payload
@@ -534,7 +528,7 @@ fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, Rp
         native: Arc::new(native),
         transaction_digest,
         sequence_number: event_index as u64,
-        timestamp: EventTimestamp::Lazy,
+        timestamp_ms: OnceCell::new(),
     })
 }
 
@@ -823,7 +817,7 @@ mod tests {
                 edge.node.native.type_,
                 parse_sui_struct_tag("0x0::m::T").unwrap()
             );
-            assert!(matches!(edge.node.timestamp, EventTimestamp::Lazy));
+            assert!(edge.node.timestamp_ms.get().is_none());
         }
     }
 

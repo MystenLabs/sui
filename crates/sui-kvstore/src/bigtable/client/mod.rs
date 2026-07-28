@@ -1886,6 +1886,39 @@ impl KeyValueStoreReader for BigTableClient {
         Ok(results)
     }
 
+    async fn get_transaction_timestamps(
+        &mut self,
+        transaction_digests: &[TransactionDigest],
+    ) -> Result<Vec<(TransactionDigest, u64)>> {
+        let query = self.multi_get(
+            tables::transactions::NAME,
+            transaction_digests
+                .iter()
+                .map(tables::transactions::encode_key)
+                .collect(),
+            Some(RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(
+                    format!("^{}$", tables::transactions::col::TIMESTAMP).into(),
+                )),
+            }),
+        );
+        let mut results = vec![];
+
+        for (key, row) in query.await? {
+            let timestamp_ms = tables::transactions::decode_timestamp(&row)?;
+
+            let key_array: [u8; 32] = key
+                .as_ref()
+                .try_into()
+                .context("Failed to deserialize transaction digest")?;
+            let transaction_digest = TransactionDigest::from(key_array);
+
+            results.push((transaction_digest, timestamp_ms));
+        }
+
+        Ok(results)
+    }
+
     async fn get_package_original_ids(
         &mut self,
         package_ids: &[ObjectID],

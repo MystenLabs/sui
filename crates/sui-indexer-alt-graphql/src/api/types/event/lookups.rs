@@ -11,11 +11,11 @@ use itertools::Either;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_types::digests::TransactionDigest;
+use tokio::sync::OnceCell;
 
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventCursor;
-use crate::api::types::event::EventTimestamp;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::event::filter::tx_ev_bounds;
 use crate::api::types::transaction::tx_digests;
@@ -97,7 +97,7 @@ fn tx_events_paginated<'e>(
                 native: Arc::new(native.clone()),
                 transaction_digest,
                 sequence_number: ev_sequence_number as u64,
-                timestamp: EventTimestamp::Known(contents.timestamp_ms()),
+                timestamp_ms: OnceCell::from(contents.timestamp_ms()),
             };
 
             results.push((event_cursor, event));

@@ -340,6 +340,12 @@ pub trait KeyValueStoreReader {
         &mut self,
         keys: &[TransactionDigest],
     ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
+    /// Fetch only the checkpoint timestamp for each transaction, avoiding a read of the full
+    /// transaction row.
+    async fn get_transaction_timestamps(
+        &mut self,
+        keys: &[TransactionDigest],
+    ) -> Result<Vec<(TransactionDigest, u64)>>;
 
     /// Resolve package_ids to their original_ids.
     async fn get_package_original_ids(

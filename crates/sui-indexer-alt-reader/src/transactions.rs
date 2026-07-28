@@ -27,6 +27,12 @@ use crate::pg_reader::PgReader;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionKey(pub TransactionDigest);
 
+/// Key for fetching just the checkpoint timestamp of a transaction by digest. Cheaper than
+/// `TransactionKey`, as every backend supports fetching the timestamp without the rest of the
+/// transaction's contents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TransactionTimestampKey(pub TransactionDigest);
+
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for PgReader {
     type Value = StoredTransaction;
@@ -145,6 +151,117 @@ impl Loader<TransactionKey> for LedgerGrpcReader {
                     transaction,
                 );
             }
+        }
+        Ok(results)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<TransactionTimestampKey> for PgReader {
+    type Value = u64;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[TransactionTimestampKey],
+    ) -> Result<HashMap<TransactionTimestampKey, Self::Value>, Error> {
+        use kv_transactions::dsl as t;
+
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut conn = self.connect().await?;
+
+        let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
+        let timestamps: Vec<(Vec<u8>, i64)> = conn
+            .results(
+                t::kv_transactions
+                    .select((t::tx_digest, t::timestamp_ms))
+                    .filter(t::tx_digest.eq_any(digests)),
+            )
+            .await?;
+
+        let digest_to_timestamp: HashMap<_, _> = timestamps.into_iter().collect();
+
+        Ok(keys
+            .iter()
+            .filter_map(|key| {
+                let slice: &[u8] = key.0.as_ref();
+                Some((*key, *digest_to_timestamp.get(slice)? as u64))
+            })
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<TransactionTimestampKey> for BigtableReader {
+    type Value = u64;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[TransactionTimestampKey],
+    ) -> Result<HashMap<TransactionTimestampKey, Self::Value>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let digests: Vec<_> = keys.iter().map(|k| k.0).collect();
+        Ok(self
+            .transaction_timestamps(&digests)
+            .await?
+            .into_iter()
+            .map(|(digest, timestamp_ms)| (TransactionTimestampKey(digest), timestamp_ms))
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<TransactionTimestampKey> for LedgerGrpcReader {
+    type Value = u64;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[TransactionTimestampKey],
+    ) -> Result<HashMap<TransactionTimestampKey, Self::Value>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let digests = keys.iter().map(|key| key.0.to_string()).collect();
+
+        let mut request = proto::BatchGetTransactionsRequest::default();
+        request.digests = digests;
+        request.read_mask = Some(FieldMask::from_paths(["digest", "timestamp"]));
+
+        let batch_response = self.batch_get_transactions(request).await?;
+
+        let mut results = HashMap::new();
+        for tx_result in batch_response.transactions {
+            let Some(proto::get_transaction_result::Result::Transaction(executed)) =
+                tx_result.result
+            else {
+                continue;
+            };
+
+            let digest = executed
+                .digest
+                .as_deref()
+                .context("BatchGetTransactions response missing digest")?
+                .parse::<TransactionDigest>()
+                .context("Failed to parse transaction digest")?;
+
+            // Transactions served by the ledger service are always checkpointed, but tolerate a
+            // missing timestamp by treating the transaction as not found.
+            let Some(timestamp) = executed.timestamp else {
+                continue;
+            };
+            let timestamp_ms = proto_to_timestamp_ms(timestamp)
+                .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
+
+            results.insert(TransactionTimestampKey(digest), timestamp_ms);
         }
         Ok(results)
     }
