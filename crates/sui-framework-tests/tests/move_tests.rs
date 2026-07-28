@@ -14,20 +14,21 @@ use sui_package_alt::SuiFlavor;
 pub(crate) const EXAMPLES: &str = "../../examples";
 pub(crate) const FRAMEWORK: &str = "../sui-framework/packages";
 
-// `oracle-adapter/move` depends on the Pyth Sui contracts on the frozen
-// `sui-contract-testnet` branch (which it must, to match the deployed Testnet
-// package `0xabf837...`). That branch's `price.move` has an unattached doc
-// comment (a stray `//` splits a `///` block), and this harness builds with
-// `warnings_are_errors`, so the dependency's warning fails the build. The
-// package is verified locally instead: `sui move build` is clean and
-// `sui move test` passes 13/13.
+// `oracle-adapter/move` pins the Pyth Sui contracts to commit `62c7a5b` (the
+// resolved tip of the frozen `sui-contract-testnet` branch), which it must, to
+// match the deployed Testnet package `0xabf837...`. That revision's `price.move`
+// has an unattached doc comment (a stray `//` splits a `///` block), and this
+// harness builds with `warnings_are_errors`, so the dependency's warning fails
+// the build. The package is verified locally instead: `sui move build` is clean
+// and `sui move test` passes 13/13.
 //
-// Re-inclusion condition: once Pyth backports the doc-comment fix (commit
-// `c0e3b9f`, pyth-network/pyth-crosschain#3165) to `sui-contract-testnet`, pin
-// that revision and remove this exclusion. The fix cannot be pinned today: the
-// fix commit pulls a Wormhole rev that double-defines the `wormhole` address
-// (unresolvable by consumer overrides), and later `main` uses the new package
-// format an old-style manifest cannot depend on.
+// Re-inclusion condition: once Pyth ships a warning-clean revision that is still
+// published-at `0xabf837...` (the doc-comment fix is commit `c0e3b9f`,
+// pyth-network/pyth-crosschain#3165), pin that revision and remove this
+// exclusion. The fix cannot be pinned today: the fix commit pulls a Wormhole rev
+// that double-defines the `wormhole` address (unresolvable by consumer
+// overrides), and later `main` uses the new package format an old-style manifest
+// cannot depend on.
 #[cfg(not(msim))]
 const DIRS_TO_EXCLUDE: &[&str] = &["oracle-adapter/move"];
 /// We cannot support packages that depend on git dependencies on simtests.
