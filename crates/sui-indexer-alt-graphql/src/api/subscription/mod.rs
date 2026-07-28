@@ -10,8 +10,8 @@ use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
-use sui_rpc_cursor::CursorToken;
 use tokio::sync::OnceCell;
+use tokio::sync::watch;
 
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
@@ -20,8 +20,8 @@ use crate::api::types::checkpoint::CheckpointToken;
 use crate::api::types::event::Event;
 use crate::api::types::event::EventToken;
 use crate::api::types::event::filter::EventFilter;
+use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionToken;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::config::Limits;
 use crate::config::SubscriptionConfig;
@@ -31,6 +31,7 @@ use crate::scope::Scope;
 use crate::task::streaming::StreamingPackageStore;
 use crate::task::streaming::SubscriptionBroadcast;
 use crate::task::streaming::broadcast_error;
+use crate::task::watermark::Watermarks;
 
 mod transactions;
 
@@ -136,9 +137,9 @@ impl Subscription {
 
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
-        let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
+        let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
 
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
@@ -153,12 +154,12 @@ impl Subscription {
             return Err(bad_user_input(Error::CheckpointBoundsUnsupported));
         }
 
-        // Decode `after` here so a bad cursor surfaces as `BadUserInput`. Re-encode to the server's
-        // opaque bytes, the form the scan resumes from.
+        // Decode `after` here so a bad cursor surfaces as `BadUserInput`; the backfill resumes
+        // pagination from it.
         let resume = if let Some(cursor) = after {
-            let opaque = OpaqueCursor::<CursorToken>::decode_cursor(&cursor)
+            let ctransaction = CTransaction::decode_cursor(&cursor)
                 .map_err(|_| bad_user_input(Error::InvalidCursor(cursor)))?;
-            Some(ResumeFrom::Cursor(opaque.encode()))
+            Some(ResumeFrom::Cursor(ctransaction))
         } else {
             after_checkpoint.map(|cp| ResumeFrom::Checkpoint(u64::from(cp)))
         };
@@ -166,9 +167,9 @@ impl Subscription {
         Ok(transactions_stream(
             reader.clone(),
             broadcast.clone(),
-            config.clone(),
             package_store,
             resolver_limits,
+            watermarks_rx.clone(),
             filter,
             resume,
         ))

@@ -580,10 +580,6 @@ impl EffectsContents {
             });
         }
 
-        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
-            return Ok(self.clone());
-        };
-
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
@@ -593,12 +589,15 @@ impl EffectsContents {
             return Ok(self.clone());
         };
 
-        let cp_num = transaction
-            .cp_sequence_number()
-            .context("Fetched transaction should have checkpoint sequence number")?;
-
-        if cp_num > checkpoint_viewed_at {
-            return Ok(self.clone());
+        // Enforce the consistency cutoff only when viewing as of a specific checkpoint. A
+        // subscription backfill has no `checkpoint_viewed_at` and takes the indexed contents as-is.
+        if let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() {
+            let cp_num = transaction
+                .cp_sequence_number()
+                .context("Fetched transaction should have checkpoint sequence number")?;
+            if cp_num > checkpoint_viewed_at {
+                return Ok(self.clone());
+            }
         }
 
         Ok(Self {

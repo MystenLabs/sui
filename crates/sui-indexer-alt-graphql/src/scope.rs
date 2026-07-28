@@ -61,13 +61,6 @@ pub(crate) enum DataSource {
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
     },
-    /// A scanned, already-finalized transaction's input/output objects, taken from the scanning
-    /// API's `ExecutedTransaction`. Used by subscription backfills that hydrate a scanned
-    /// transaction.
-    #[cfg(feature = "staging")]
-    Scanned {
-        execution_objects: ExecutionObjectMap,
-    },
 }
 
 /// Identifies the transaction whose effects are currently in view. Descendant resolvers default
@@ -180,25 +173,26 @@ impl Scope {
         }
     }
 
-    /// Create a scope for a transaction replayed from the scanning API (subscription backfill).
-    /// Like [`for_streamed_checkpoint`], lookups resolve in memory: the transaction's input/output
-    /// objects come from the proto `ExecutedTransaction`, and `checkpoint_viewed_at` is `None`
-    /// because the data is not bounded by an indexed checkpoint.
+    /// Create a scope for transactions backfilled through the indexed pathway during a
+    /// subscription's catch-up phase. Unlike the live [`for_streamed_checkpoint`] path, backfilled
+    /// transactions are already finalized and indexed, so their fields resolve lazily through the
+    /// index (`KvLoader`) rather than from an in-memory payload. `checkpoint_viewed_at` is `None`,
+    /// matching the live path: a subscription does not resolve as of a single consistent checkpoint,
+    /// so checkpoint-anchored fields (balances, latest object versions) stay null and transaction
+    /// contents hydrate by digest.
     #[cfg(feature = "staging")]
-    pub(crate) fn for_scanned_transaction(
+    pub(crate) fn for_backfilled_transactions(
         package_store: Arc<StreamingPackageStore>,
         resolver_limits: sui_package_resolver::Limits,
-        executed_transaction: &grpc::ExecutedTransaction,
-    ) -> Result<Self, RpcError> {
-        let execution_objects = extract_objects_from_executed_transaction(executed_transaction)?;
-        Ok(Self {
+    ) -> Self {
+        Self {
             checkpoint_viewed_at: None,
             active_transaction: None,
             root_bound: None,
-            data_source: DataSource::Scanned { execution_objects },
+            data_source: DataSource::Indexed,
             package_store,
             resolver_limits,
-        })
+        }
     }
 
     /// Anchor a nested scope to a transaction by digest only. Used when the caller does not yet
@@ -387,8 +381,6 @@ impl Scope {
             DataSource::Executed { execution_objects } => Some(execution_objects),
             #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
-            #[cfg(feature = "staging")]
-            DataSource::Scanned { execution_objects } => Some(execution_objects),
         }
     }
 

@@ -275,7 +275,14 @@ impl Default for RpcArgs {
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
 pub fn schema() -> SchemaBuilder<Query, Mutation, Subscription> {
+    // EXPERIMENT (do not commit): how many subscription payloads resolve concurrently. Env-tunable
+    // so serial (1) vs concurrent (N) can be compared without a rebuild. Default 1 = upstream serial.
+    let concurrency = std::env::var("SUB_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
     Schema::build(Query::default(), Mutation, Subscription)
+        .subscription_resolution_concurrency(concurrency)
         .register_output_type::<IAddressable>()
         .register_output_type::<IMoveDatatype>()
         .register_output_type::<IMoveObject>()
@@ -457,6 +464,10 @@ pub async fn start_rpc(
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
+    // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
+    // needs a live view of them. Captured before the watermark task is consumed by `run()`.
+    let subscription_watermarks_rx = watermark_task.watermarks_rx();
+
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
 
@@ -483,7 +494,9 @@ pub async fn start_rpc(
                     _broadcaster,
                     first_live_checkpoint,
                 ));
-                rpc = rpc.data(subscription_broadcast);
+                rpc = rpc
+                    .data(subscription_broadcast)
+                    .data(subscription_watermarks_rx);
             }
             Some((s_stream, s_eviction))
         } else {

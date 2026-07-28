@@ -12,6 +12,7 @@ use async_graphql::connection::CursorType;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt_graphql::CTransaction;
+use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::SuiAddress;
 use tokio_stream::StreamExt;
@@ -33,10 +34,7 @@ fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
         .as_str()
         .expect("transaction edge missing cursor");
     let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
-    let CTransaction::Primary(opaque) = ct else {
-        panic!("expected an opaque transaction cursor");
-    };
-    match opaque.position {
+    match CursorToken::from(&*ct).position {
         Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
         position => panic!("expected a transactions cursor, got {position:?}"),
     }
@@ -593,7 +591,9 @@ async fn test_transaction_subscription_live_backfill_parity() {
         .await;
     let backfill_nodes = collect_nodes(&mut backfill, &expected).await;
 
-    // 5. The two phases must resolve the same transactions identically.
+    // 5. The two phases resolve the same transactions identically. Both run with no
+    // `checkpoint_viewed_at` (backfill matches live), so even checkpoint-anchored fields like
+    // `effects.checkpoint` are null on both and compare equal without any normalization.
     assert_eq!(
         live_nodes, backfill_nodes,
         "live and backfill resolved the same transactions differently",

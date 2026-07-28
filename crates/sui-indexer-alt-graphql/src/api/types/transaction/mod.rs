@@ -412,6 +412,10 @@ impl Transaction {
 
     /// Serve transaction pagination by streaming gRPC. Returns pages that may
     /// be partially filled, with valid cursors if there are more pages to paginate through.
+    ///
+    /// Exposed to the subscription backfill, which pages the bitmap index directly (digest-only,
+    /// with fields hydrated lazily through the index) rather than through the `ctx`-driven
+    /// [`Self::paginate`] wrapper.
     async fn paginate_grpc(
         reader: &AlphaLedgerGrpcReader,
         scope: Scope,
@@ -498,6 +502,25 @@ impl Transaction {
             .await
             .context("Failed to list transactions")?)
     }
+
+    /// Scan one page of indexed transactions over `cp_bounds` and build a connection. Unlike
+    /// [`Transaction::paginate_grpc`], the caller supplies the checkpoint range directly, so this
+    /// works with a scope that has no `checkpoint_viewed_at` (the subscription backfill, which does
+    /// not resolve as of a single consistent checkpoint).
+    pub(crate) async fn scan_grpc_page(
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        cp_bounds: impl RangeBounds<u64>,
+        page: Page<CTransaction>,
+        filter: &TransactionFilter,
+    ) -> Result<TransactionConnection, RpcError> {
+        if page.limit() == 0 {
+            return Ok(Connection::new(false, false).into());
+        }
+
+        let result = Self::scan_grpc(reader, cp_bounds, &page, filter).await?;
+        build_grpc_connection(scope, &page, result)
+    }
 }
 
 impl TransactionContents {
@@ -529,10 +552,6 @@ impl TransactionContents {
             });
         }
 
-        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
-            return Ok(self.clone());
-        };
-
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
@@ -542,12 +561,15 @@ impl TransactionContents {
             return Ok(self.clone());
         };
 
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        let cp_num = transaction
-            .cp_sequence_number()
-            .context("Any transaction fetched from the DB should have a checkpoint set")?;
-        if cp_num > checkpoint_viewed_at {
-            return Ok(self.clone());
+        // Enforce the consistency cutoff only when viewing as of a specific checkpoint. A
+        // subscription backfill has no `checkpoint_viewed_at` and takes the indexed contents as-is.
+        if let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() {
+            let cp_num = transaction
+                .cp_sequence_number()
+                .context("Any transaction fetched from the DB should have a checkpoint set")?;
+            if cp_num > checkpoint_viewed_at {
+                return Ok(self.clone());
+            }
         }
 
         Ok(Self {
