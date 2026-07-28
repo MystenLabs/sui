@@ -109,12 +109,12 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
     let filters = vec![
         (
             Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-            vec![DiagnosticsID::all(Some(DiagnosticOrigin::SuiLint))],
+            vec![DiagnosticsID::all(DiagnosticOrigin::SuiLint)],
         ),
         (
             Symbol::from(SHARE_OWNED_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::ShareOwned as u8,
             )],
@@ -122,7 +122,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(SELF_TRANSFER_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::SelfTransfer as u8,
             )],
@@ -130,7 +130,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(CUSTOM_STATE_CHANGE_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::CustomStateChange as u8,
             )],
@@ -138,7 +138,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(COIN_FIELD_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::CoinField as u8,
             )],
@@ -146,7 +146,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(FREEZE_WRAPPED_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::FreezeWrapped as u8,
             )],
@@ -154,7 +154,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(COLLECTION_EQUALITY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::CollectionEquality as u8,
             )],
@@ -162,7 +162,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(PUBLIC_RANDOM_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::PublicRandom as u8,
             )],
@@ -170,7 +170,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(MISSING_KEY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::MissingKey as u8,
             )],
@@ -178,7 +178,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(FREEZING_CAPABILITY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::FreezingCapability as u8,
             )],
@@ -186,7 +186,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::PreferMutableTxContext as u8,
             )],
@@ -194,7 +194,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
             )],
@@ -202,7 +202,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(UNCALLABLE_FUNCTION_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::UncallableFunction as u8,
             )],
@@ -210,7 +210,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         (
             Symbol::from(UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME),
             vec![DiagnosticsID::exact(
-                Some(DiagnosticOrigin::SuiLint),
+                DiagnosticOrigin::SuiLint,
                 sui,
                 LinterDiagnosticCode::UnusedObjWithFields as u8,
             )],

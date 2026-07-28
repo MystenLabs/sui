@@ -7,7 +7,7 @@
 //! keyed by [`FilterTarget`] (which encodes specificity) and associated with a [`FilterKind`].
 //!
 //! Resolution walks the stack innermost-first; within a scope, the most specific match wins
-//! (exact diagnostic > category > prefix > all-for-dependency).
+//! (exact diagnostic > category > origin > all-for-dependency).
 //!
 //! `#[expect]` fulfillment lives on the scope itself (one `AtomicBool` per expect entry),
 //! so the same [`FilterScope`] re-pushed across compilation passes shares state.
@@ -33,7 +33,7 @@ use move_symbol_pool::Symbol;
 use crate::diagnostics::{
     Diagnostic,
     codes::{
-        Category, Declarations, DiagnosticsID, ExternalPrefix, Severity, TypeSafety, UnusedItem,
+        Category, Declarations, DiagnosticOrigin, DiagnosticsID, Severity, TypeSafety, UnusedItem,
     },
 };
 use crate::shared::{format_allow_attr, known_attributes};
@@ -121,12 +121,11 @@ impl std::fmt::Display for FilterKind {
 enum FilterTarget {
     /// Matches a single diagnostic by its exact code ID.
     Diagnostic(DiagnosticsID),
-    /// Matches all diagnostics in a category, scoped to a prefix.
-    Category(ExternalPrefix, u8),
-    /// Matches all diagnostics with the given prefix. `None` matches unprefixed diagnostics
-    /// only — this is what user-facing `#[allow(all)]` maps to.
-    Prefix(ExternalPrefix),
-    /// Matches every diagnostic regardless of prefix. Used for dependency compilation.
+    /// Matches all diagnostics in a category from the given origin.
+    Category(DiagnosticOrigin, u8),
+    /// Matches all diagnostics from the given origin.
+    Origin(DiagnosticOrigin),
+    /// Matches every diagnostic regardless of origin. Used for dependency compilation.
     AllForDependency,
 }
 
@@ -134,8 +133,8 @@ impl From<DiagnosticsID> for FilterTarget {
     fn from(id: DiagnosticsID) -> Self {
         use crate::diagnostics::codes::DIAGNOSTIC_FILTER_WILDCARD;
         match (id.category, id.code) {
-            (DIAGNOSTIC_FILTER_WILDCARD, _) => FilterTarget::Prefix(id.prefix),
-            (_, DIAGNOSTIC_FILTER_WILDCARD) => FilterTarget::Category(id.prefix, id.category),
+            (DIAGNOSTIC_FILTER_WILDCARD, _) => FilterTarget::Origin(id.origin),
+            (_, DIAGNOSTIC_FILTER_WILDCARD) => FilterTarget::Category(id.origin, id.category),
             _ => FilterTarget::Diagnostic(id),
         }
     }
@@ -205,7 +204,7 @@ static EMPTY_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 });
 
 static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let target = FilterTarget::Prefix(None);
+    let target = FilterTarget::Origin(DiagnosticOrigin::Compiler);
     FilterScope(Arc::new(FilterScopeData {
         filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), FilterKind::Allow))]),
         expects: vec![],
@@ -226,8 +225,11 @@ static UNUSED_FOR_TEST_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     let filter_entries = UNUSED_ITEM_CODES
         .into_iter()
         .map(|c| {
-            let target =
-                FilterTarget::Diagnostic(DiagnosticsID::exact(None, UNUSED_ITEM_CATEGORY, c));
+            let target = FilterTarget::Diagnostic(DiagnosticsID::exact(
+                DiagnosticOrigin::Compiler,
+                UNUSED_ITEM_CATEGORY,
+                c,
+            ));
             (target, sp(Loc::invalid(), FilterKind::Allow))
         })
         .collect();
@@ -250,7 +252,7 @@ pub fn empty_filter_scope() -> FilterScope {
     EMPTY_FILTER_SCOPE.clone()
 }
 
-/// Scope that allows all unprefixed diagnostics (used for `--silence-warnings`).
+/// Scope that allows all compiler diagnostics (used for `--silence-warnings`).
 pub fn all_filter_scope() -> FilterScope {
     ALL_FILTER_SCOPE.clone()
 }
@@ -280,7 +282,11 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
         let cat_unused = Category::UnusedItem as u8;
         macro_rules! code {
             ($cat:ident :: $code:ident) => {
-                DiagnosticsID::exact(None, Category::$cat as u8, $cat::$code as u8)
+                DiagnosticsID::exact(
+                    DiagnosticOrigin::Compiler,
+                    Category::$cat as u8,
+                    $cat::$code as u8,
+                )
             };
         }
         // Deliberate leak: these slices live for the process lifetime (behind LazyLock)
@@ -289,10 +295,16 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             Box::leak(v.into_boxed_slice())
         }
         vec![
-            (FILTER_ALL, leak(vec![DiagnosticsID::all(None)])),
+            (
+                FILTER_ALL,
+                leak(vec![DiagnosticsID::all(DiagnosticOrigin::Compiler)]),
+            ),
             (
                 FILTER_UNUSED,
-                leak(vec![DiagnosticsID::category(None, cat_unused)]),
+                leak(vec![DiagnosticsID::category(
+                    DiagnosticOrigin::Compiler,
+                    cat_unused,
+                )]),
             ),
             (
                 FILTER_MISSING_PHANTOM,
@@ -326,8 +338,16 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             (
                 FILTER_UNUSED_TYPE_PARAMETER,
                 leak(vec![
-                    DiagnosticsID::exact(None, cat_unused, UnusedItem::StructTypeParam as u8),
-                    DiagnosticsID::exact(None, cat_unused, UnusedItem::FunTypeParam as u8),
+                    DiagnosticsID::exact(
+                        DiagnosticOrigin::Compiler,
+                        cat_unused,
+                        UnusedItem::StructTypeParam as u8,
+                    ),
+                    DiagnosticsID::exact(
+                        DiagnosticOrigin::Compiler,
+                        cat_unused,
+                        UnusedItem::FunTypeParam as u8,
+                    ),
                 ]),
             ),
             (FILTER_UNUSED_CONST, leak(vec![code!(UnusedItem::Constant)])),
@@ -374,7 +394,7 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
             (
                 FILTER_IDE_PATH_AUTOCOMPLETE,
                 leak(vec![DiagnosticsID::exact(
-                    None,
+                    DiagnosticOrigin::Compiler,
                     cat_ide,
                     IDE::PathAutocomplete as u8,
                 )]),
@@ -382,7 +402,7 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
             (
                 FILTER_IDE_DOT_AUTOCOMPLETE,
                 leak(vec![DiagnosticsID::exact(
-                    None,
+                    DiagnosticOrigin::Compiler,
                     cat_ide,
                     IDE::DotAutocomplete as u8,
                 )]),
@@ -422,16 +442,16 @@ impl FilterScope {
         }))
     }
 
-    /// Iterate over the scope's filter entries as the external format, with loc information.
+    /// Iterate over the scope's filter entries as diagnostics IDs, with loc information.
     pub fn filter_entries(
         &self,
     ) -> impl Iterator<Item = (DiagnosticsID, Spanned<FilterKind>)> + '_ {
         self.0.filter_entries.iter().map(|(target, kind)| {
             let id = match target {
                 FilterTarget::Diagnostic(id) => *id,
-                FilterTarget::Category(prefix, cat) => DiagnosticsID::category(*prefix, *cat),
-                FilterTarget::Prefix(prefix) => DiagnosticsID::all(*prefix),
-                FilterTarget::AllForDependency => DiagnosticsID::all(None),
+                FilterTarget::Category(origin, cat) => DiagnosticsID::category(*origin, *cat),
+                FilterTarget::Origin(origin) => DiagnosticsID::all(*origin),
+                FilterTarget::AllForDependency => DiagnosticsID::all(DiagnosticOrigin::Compiler),
             };
             (id, *kind)
         })
@@ -530,8 +550,8 @@ impl FilterStack {
     fn resolve(&self, key: DiagnosticsID) -> Option<Resolved<'_>> {
         let candidates = [
             FilterTarget::Diagnostic(key),
-            FilterTarget::Category(key.prefix, key.category),
-            FilterTarget::Prefix(key.prefix),
+            FilterTarget::Category(key.origin, key.category),
+            FilterTarget::Origin(key.origin),
             FilterTarget::AllForDependency,
         ];
         for scope in self.stack.iter().rev() {

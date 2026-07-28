@@ -667,10 +667,7 @@ impl Diagnostics {
         else {
             return false;
         };
-        inner
-            .diagnostics
-            .iter()
-            .any(|d| d.info.origin() == Some(origin))
+        inner.diagnostics.iter().any(|d| d.info.origin() == origin)
     }
 
     /// Returns true if any diagnostic in the Syntax category have already been recorded.
@@ -701,7 +698,7 @@ impl Diagnostics {
         let mut filtered_diags_num = 0;
         let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
-            if d.info.origin() == Some(origin) {
+            if d.info.origin() == origin {
                 filtered_diags_num += 1;
                 unique.insert((d.info.category(), d.info.code()));
             }

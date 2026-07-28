@@ -188,7 +188,7 @@ lints!(
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-        vec![DiagnosticsID::all(Some(DiagnosticOrigin::Lint))],
+        vec![DiagnosticsID::all(DiagnosticOrigin::Lint)],
     )];
     filters.extend(
         STYLE_WARNING_FILTERS
@@ -197,7 +197,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
                 (
                     Symbol::from(*filter_name),
                     vec![DiagnosticsID::exact(
-                        Some(DiagnosticOrigin::Lint),
+                        DiagnosticOrigin::Lint,
                         *category,
                         *code,
                     )],
