@@ -476,7 +476,8 @@ fn seed_precompiled_constants(
     }
 }
 
-/// Rebuilds an HLIR value from a folded runtime value, driven by the constant's signature
+// Precompiled constants arrive as MoveValues, but we need them as H::Value to include them.
+// This should only matter for partial compilation, such as for the IDE.
 #[growing_stack]
 fn value_from_move_value(mv: &MoveValue, ty: &H::BaseType) -> Option<Value> {
     use H::TypeName_ as TN;
