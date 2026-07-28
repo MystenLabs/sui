@@ -5,9 +5,9 @@
 //! post-consensus owned-object conflict detection.
 //!
 //! The consensus commit handler decides conflicts with the rule
-//! `conflict ⟺ latest_version(id) > claimed_version` (see
-//! `docs/objects_locking.md` Part 3). Reading the objects table for that on the
-//! CPU-bound handler thread is expensive, so this cache memoizes *observations*
+//! `conflict ⟺ latest_version(id) > claimed_version`. Reading the objects
+//! table for that on the CPU-bound handler thread is expensive, so this cache
+//! memoizes *observations*
 //! of latest-object state made elsewhere — primarily by vote-time validation in
 //! `SuiTxValidator`, which reads every owned input of every transaction it
 //! votes on, shortly before the same refs reach the commit handler.
@@ -24,8 +24,16 @@
 //! (see `record`). The one equality case a bound cannot decide is an object
 //! immutable at exactly the claimed version - immutable refs never bump -
 //! which is routed through the lock-table backstop using the `immutable` bit,
-//! re-reading the object when the bit is unknown (see
-//! `docs/objects_locking.md` §3.5/§3.6a).
+//! re-reading the object when the bit is unknown.
+//!
+//! One theoretical hole in the bump-before-removal argument: eviction of a
+//! full shard can drop a just-recorded consumption bump, after which a stale
+//! warm (an object read taken before the consumption, recorded late) could
+//! re-insert the pre-consumption bound as a fresh entry. This needs a thread
+//! suspended between two adjacent statements for an entire
+//! finalize-flush-evict span while the shard is at capacity; accepted as
+//! practically unreachable, but it is why shards should stay large enough
+//! that steady-state eviction is rare.
 //!
 //! Entries do not survive restarts (in-memory), and each epoch store owns its
 //! own instance: observations can include executed-but-not-finalized state,
@@ -218,7 +226,6 @@ impl LiveObjectCache {
     pub fn get(&self, id: &ObjectID) -> Option<VersionLowerBound> {
         self.shard(id).read().get(id).copied()
     }
-
 }
 
 impl Default for LiveObjectCache {
