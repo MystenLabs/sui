@@ -10,30 +10,28 @@ have. Its storage therefore answers two questions at once: *what has this fork w
 served from a stock `sui-rpc-store` RocksDB, the same schema and indexes a real RPC node
 uses — and *what did the forked-from chain look like?* — answered lazily, by querying
 GraphQL pinned at the fork checkpoint and caching the result into that same database.
-Nothing upstream changes to make this work: `sui-rpc-store` and `sui-rpc-node` are
-untouched, everything fork-specific lives in this crate, and gRPC is served directly
-through `sui-rpc-api`'s `RpcService` rather than through `sui-rpc-node`.
 
 A read and a write each pass through the same small set of components:
 
 ```
 get_object(id)                       (latest semantics — an RPC read on ForkStore)
-  ├─ consult the pointer table       (LiveState: Live(v) | Removed | absent)
+  ├─ consult the version index       (object_version_by_checkpoint: live | tombstone | absent)
   ├─ Live(v):  objects[(id, v)]      (LocalStore, a stock rpc-store row)
   ├─ Removed:  not found             (authoritative tombstone, no fallback)
   └─ absent:   fetch from GraphQL    (RemoteSource, pinned at the fork checkpoint;
-                                      the row is persisted, then the pointer set)
+                                      the row and its index entry are persisted together)
 
 execute(tx)                          (Simulacrum, with ForkStore as its SimulatorStore)
   ├─ stage the outputs               (PendingCheckpointBuffer, in memory)
-  ├─ write rows and pointers         (synchronous: object versions, tombstones, LiveState)
+  ├─ write the rows                  (synchronous, one batch: object versions,
+  │                                  tombstones, checkpoint-pinned versions)
   ├─ seal the checkpoint             (summary, contents, per-tx data/effects/events)
   ├─ index it                        (embedded rpc-store Indexer, every stock pipeline)
   └─ publish                         (blocks until every pipeline has caught up)
 ```
 
 The pieces the diagram names each have one job. `ServiceManager` owns everything that must
-exist before any of it can run: the two RocksDB instances, the `fork_metadata.json` check
+exist before any of it can run: the RocksDB instance, the `fork_metadata.json` check
 that a data directory belongs to the network and fork checkpoint it claims, and the
 embedded indexer, started with the manager and watched for the lifetime of the node.
 `ForkStore` orchestrates the rest — local-first reads with remote fallback, checkpoint
@@ -74,37 +72,47 @@ Latest-semantics reads are why that routing exists at all. The stock reader
 answers `get_object` without a version by reverse-scanning the `objects` column family,
 which is only correct when the version history is complete. The fork's history is sparse:
 a historical version is present only because something once fetched it. Serving the
-highest cached row as "current" would be silently stale, so latest reads consult the
-`LiveState` pointer instead.
+highest cached row as "current" would be silently stale, so latest reads resolve through
+the checkpoint-pinned version index instead.
 
-## `LiveState`: the current-version authority
+## The current-version authority
 
-Nothing in the stock schema can tell the fork "this object's current version is *v*, and
-it is live" — or "it was removed." `object_by_owner` and `object_by_type` do record latest
-live versions, but they are keyed by owner and type and cover only indexed objects. The
-`objects` family is keyed by `(id, version)`, and because the fork's copy is sparse, a
+The `objects` family is keyed by `(id, version)`, and because the fork's copy is sparse, a
 reverse scan that finds nothing cannot distinguish *removed* from *never cached* — which
 is exactly the distinction that decides whether to fall back to the remote chain.
-`LiveState`, a fork-owned single-column-family RocksDB, records that distinction per
-`ObjectID`:
+`object_by_owner` and `object_by_type` do record latest live versions, but they are keyed
+by owner and type and cover only indexed objects. What answers the question is
+`object_version_by_checkpoint`, which maps `(ObjectID, checkpoint)` to the version the
+object ended that checkpoint at, and which the embedded indexer already maintains for
+every checkpoint the fork executes. A currency read is a floor scan over it, bounded at
+the checkpoint the fork is currently producing, and its three outcomes are the three the
+fork needs: a row at a live version, a row at a tombstone version (never fall back), and
+no row at all (no local knowledge, ask the remote).
 
-- `Live(version)` — read `objects[(id, version)]` locally; never fall back.
-- `Removed { version, kind }` — an authoritative tombstone; never fall back.
-- absent — no local knowledge; ask the remote.
+That index infers liveness — "the object changed to *v* at checkpoint *C*, and no row
+exists above *C*" — which holds only where the fork's change history is complete. Three
+write rules confine it to where that is true. Pre-fork materialization records a
+`from_restore` floor row at the fork checkpoint, the same shape a live-set restore writes
+at its anchor, because a remote query pinned at the fork checkpoint establishes exactly
+that: the object was live there, at that version. Locally executed checkpoints record
+ordinary rows keyed by the checkpoint producing them, a range that is complete because the
+fork executed all of it. And a version-keyed fetch records nothing at all: it is evidence
+about one point in history and none about what is live, so keying it at the fork
+checkpoint would falsely claim currency, while keying it at the version's creation
+checkpoint would assert the absence of later changes that a sparse store cannot rule out.
 
-Two write orderings keep this fail-safe. Rpc-store rows commit *before* the pointer that
-makes them authoritative, so a reader racing the update can transiently miss the pointer —
-which degrades to "unknown" and a redundant remote fetch, never to a wrong answer. And
-within one checkpoint's application, removals stage *before* writes, so an object wrapped and
-re-created in the same result lands `Live` rather than tombstoned.
+Within one checkpoint's application, removals stage before writes, so an object wrapped
+and re-created in the same result ends up live: both write the same checkpoint-pinned key
+and the later put wins. Because the index shares a database with the rows it describes,
+each object row and the authority making it current commit in a single batch.
 
 ## Executing and indexing
 
 Everything canonical is written synchronously; everything derived is left to the indexer.
 Simulacrum inserts the pieces of an in-flight checkpoint as it executes; they stage in the
 `PendingCheckpointBuffer` until the seal writes them out atomically. Each
-executed transaction writes its object version rows, tombstones, and `LiveState` pointers
-before execution proceeds, and sealing writes the checkpoint summary, contents, and every
+executed transaction writes its object version rows, tombstones, and checkpoint-pinned
+version rows before execution proceeds, and sealing writes the checkpoint summary, contents, and every
 transaction's data, effects, and events. These writes cannot wait: the executor needs
 read-your-writes for the next transaction's inputs, and the indexer ingests each sealed
 checkpoint by reading it back out of the same rows.
@@ -158,25 +166,15 @@ fall back to lazy initialization.
   seed_manifest.json        immutable seed record (exclusive create)
   inventory_metadata.json   completion markers for inventory scans (temp+rename)
   rpc_store/                stock sui-rpc-store RocksDB (RpcStoreSchema)
-  live_state/               fork-owned RocksDB (single CF fork_live_state)
 ```
 
 ## Known gaps
 
 The pending checkpoint buffer is memory only, so a crash mid-publication loses the
-unsealed checkpoint and its transactions while their object rows and live pointers
-persist. There is no startup reconciliation yet between `live_state` and the highest
-sealed checkpoint; this is the main known gap, and it has a fail-open corner: a crash
-inside the small window between a row commit and its pointer update leaves a locally
-written object pointer-less, and a later read would re-resolve it from pre-fork GraphQL.
-
-The rpc-store and `live_state` are separate RocksDB instances. Each commit is atomic
-within its own database but nothing is atomic across the two; the write orderings above
-are what make the inconsistency windows fail-safe rather than fail-open. The split is
-historical rather than forced: `sui-consistent-store`'s `Schema` trait composes publicly,
-so a fork-owned schema could host the live-state column family in the main database and
-make row and pointer commits atomic — a candidate follow-up that would retire both the
-orderings and the reconciliation gap above.
+unsealed checkpoint and its transactions, while the object rows and version-index entries
+that checkpoint had already written persist. On restart the fork resumes producing the
+same checkpoint number, so those orphaned rows still fall within a currency read's bound
+and are served as though the checkpoint had sealed. This is the main known gap.
 
 Address balances held in the accumulator, as opposed to in coin objects, are neither
 seeded nor served. The balance index reflects only coin objects materialized pre-fork plus
@@ -189,7 +187,7 @@ highest *local* row at or below the bound, but the sparse cache can be polluted 
 exact-historical-version read — an RPC client fetching an old dynamic-field version, say —
 leaving a row lower than the true highest-≤-bound, which then wins without the remote ever
 being consulted. This affects `read_child_object` on both the RPC and executor paths. The
-fix direction is to short-circuit only on live-state authority or an authoritative
+fix direction is to short-circuit only on an authoritative current-version row or a
 tombstone, and otherwise merge the remote `RootVersion(bound)` result with the local
 candidate by maximum version.
 
