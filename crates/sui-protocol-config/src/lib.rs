@@ -375,6 +375,8 @@ const MAINNET_USDB: &str =
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
+//              Enable consensus_minimal_block_propagation on devnet: broadcast blocks
+//              travel without ancestor digests and are reconstructed at the receiver.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4581,6 +4583,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                         cfg.feature_flags.create_forwarding_address_registry = true;
+                        cfg.feature_flags.consensus_minimal_block_propagation = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                 }
