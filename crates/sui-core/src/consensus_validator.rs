@@ -274,6 +274,7 @@ impl SuiTxValidator {
                         .authority_state
                         .get_object_cache_reader()
                         .get_latest_object_ref_or_tombstone(*object_id);
+                    assert_reachable!("vote rejection warmed the live-object cache");
                     epoch_store
                         .live_object_cache()
                         .record_latest_lookup(*object_id, latest_ref.map(|r| r.1));
@@ -380,6 +381,7 @@ impl SuiTxValidator {
             .handle_vote_transaction(epoch_store, inner_tx.clone())?;
 
         if vote_result == VoteTransactionResult::AlreadyFinalized {
+            assert_reachable!("vote skipped claims verification for already-finalized transaction");
             // The transaction's own execution consumed its inputs, so input-based claims
             // verification would spuriously reject a transaction that is already final.
             // Duplicate sequencing is handled post-consensus by the same-digest carve-out.

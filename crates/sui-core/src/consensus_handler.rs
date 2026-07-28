@@ -182,11 +182,13 @@ pub(crate) fn resolve_owned_object_lock_states(
 
     for obj_ref in obj_refs {
         if let Some(lock) = quarantine.get_owned_object_lock_in_memory(obj_ref) {
+            assert_reachable!("owned-object claim resolved from quarantined commit locks");
             stats.quarantine += 1;
             resolutions.insert(*obj_ref, LockResolution::LockedBy(lock));
             continue;
         }
         if let Some(lock) = deferred_locks.get(obj_ref) {
+            assert_reachable!("owned-object claim resolved from deferred-transaction locks");
             stats.deferred += 1;
             resolutions.insert(*obj_ref, LockResolution::LockedBy(lock));
             continue;
@@ -205,13 +207,18 @@ pub(crate) fn resolve_owned_object_lock_states(
             Some(VersionLowerBound::Version { version, immutable }) => {
                 stats.cache += 1;
                 if version > claimed_version {
+                    assert_reachable!("owned-object conflict decided by live-object cache bound");
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
                 } else if version == claimed_version {
                     match immutable {
                         // Known mutable at the claimed version: any lock on this ref
                         // would have bumped past it by every path that removes locks
                         // from the memory layers, so the ref is unclaimed.
-                        Some(false) => (),
+                        Some(false) => {
+                            assert_reachable!(
+                                "equality bound with known-mutable bit cleared in memory"
+                            );
+                        }
                         Some(true) => backstop_refs.push(*obj_ref),
                         // The bound came from an observation that did not inspect the
                         // object at this version (a consumption bump or ref-only read);
@@ -219,6 +226,9 @@ pub(crate) fn resolve_owned_object_lock_states(
                         // to learn it - once per (id, version), since the read upgrades
                         // the cached bit.
                         None => {
+                            assert_reachable!(
+                                "equality bound with unknown immutability re-read the object"
+                            );
                             stats.objects_db += 1;
                             match object_cache.get_object(&obj_ref.0) {
                                 Some(object) => {
@@ -243,6 +253,9 @@ pub(crate) fn resolve_owned_object_lock_states(
                                         object_cache.get_latest_object_ref_or_tombstone(obj_ref.0)
                                         && latest_ref.1 > claimed_version
                                     {
+                                        assert_reachable!(
+                                            "owned-object conflict decided by tombstone version"
+                                        );
                                         live_object_cache
                                             .record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                                         resolutions
@@ -260,6 +273,7 @@ pub(crate) fn resolve_owned_object_lock_states(
                 continue;
             }
             Some(VersionLowerBound::KnownAbsent) => {
+                assert_reachable!("pipelined owned input resolved as known-absent");
                 stats.cache += 1;
                 continue;
             }
@@ -270,6 +284,9 @@ pub(crate) fn resolve_owned_object_lock_states(
         match object_cache.get_latest_object_ref_or_tombstone(obj_ref.0) {
             Some(latest_ref) => {
                 if latest_ref.1 > claimed_version {
+                    assert_reachable!(
+                        "owned-object conflict decided by objects-table latest version"
+                    );
                     live_object_cache.record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
                 } else if latest_ref.1 == claimed_version {
@@ -1714,8 +1731,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     let digest = *tx.tx().digest();
                     finalized_reloaded.remove(&digest);
                     if let Some(refs) = fresh_lock_sets.remove(&digest) {
+                        assert_reachable!(
+                            "fresh deferral moved lock refs into the deferred-locks map"
+                        );
                         deferred_locks.insert(digest, refs);
                     } else {
+                        assert_reachable!("re-deferred transaction kept its deferred-locks entry");
                         debug_assert!(
                             deferred_locks.contains_tx(&digest),
                             "re-deferred transaction {digest:?} has no deferred-locks entry"

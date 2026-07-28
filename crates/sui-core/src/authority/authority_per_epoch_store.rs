@@ -1937,6 +1937,7 @@ impl AuthorityPerEpochStore {
                 Some(LockResolution::LockedBy(locked_tx_digest))
                     if *locked_tx_digest != tx_digest =>
                 {
+                    assert_reachable!("owned-object conflict detected from in-memory lock state");
                     return Err(SuiErrorKind::ObjectLockConflict {
                         obj_ref: *obj_ref,
                         pending_transaction: *locked_tx_digest,
@@ -1958,6 +1959,9 @@ impl AuthorityPerEpochStore {
                         }
                     };
                     if !executed {
+                        assert_reachable!(
+                            "owned-object conflict detected from objects-table consumption"
+                        );
                         // Winner digest is best-effort error enrichment: the transaction
                         // that produced the current live version (which for multi-hop
                         // consumption may be downstream of the actual first consumer).
@@ -1971,6 +1975,9 @@ impl AuthorityPerEpochStore {
                         }
                         .into());
                     }
+                    assert_reachable!(
+                        "duplicate of an executed transaction re-acquired its consumed inputs"
+                    );
                 }
                 _ => (),
             }

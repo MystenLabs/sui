@@ -803,6 +803,12 @@ impl ConsensusOutputQuarantine {
                     for obj_ref in output.owned_object_locks.keys() {
                         if deferred_locks.get(obj_ref).is_none() {
                             live_object_cache.record_consumed(obj_ref);
+                        } else {
+                            // The holder is deferred and unexecuted; bumping now would
+                            // be premature (its entry covers the ref until it runs).
+                            mysten_common::assert_reachable!(
+                                "flush skipped consumption bump for ref held by deferred transaction"
+                            );
                         }
                     }
                     // Reloaded deferred transactions covered by this commit are
@@ -812,6 +818,9 @@ impl ConsensusOutputQuarantine {
                     // neither.
                     for digest in &output.finalized_reloaded_deferred_txns {
                         if let Some(refs) = deferred_locks.remove_tx(digest) {
+                            mysten_common::assert_reachable!(
+                                "deferred-locks entry released at scheduling-commit flush"
+                            );
                             for obj_ref in &refs {
                                 live_object_cache.record_consumed(obj_ref);
                             }
