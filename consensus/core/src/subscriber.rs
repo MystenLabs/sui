@@ -20,7 +20,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    minimal_block::InflateError,
+    minimal_block::{FallbackReason, InflateError},
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
@@ -225,7 +225,16 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     .minimal_block_inflate_fallback
                     .with_label_values(&[peer_hostname, reason.label()])
                     .inc();
-                if !budget.try_fetch() {
+                // Missing-ancestor fetches bypass the budget: they are legitimate
+                // catch-up work (a receiver that is behind fails on most live blocks),
+                // and dropping them can deadlock the committee — the budget only refills
+                // as blocks arrive, but blocks only arrive if recovery proceeds. They
+                // are naturally rate-limited anyway: fetches are sequential per peer,
+                // sender-only, and the wait slows only that peer's own stream. The
+                // budget bounds the state-divergence reasons, where repeated fetches
+                // suggest equivocation games or claimed-digest abuse.
+                let budgeted = !matches!(reason, FallbackReason::MissingAncestor(_));
+                if budgeted && !budget.try_fetch() {
                     node_metrics
                         .minimal_block_inflate_fallback
                         .with_label_values(&[peer_hostname, "budget_exceeded"])
