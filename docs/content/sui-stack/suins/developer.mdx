@@ -1,0 +1,242 @@
+---
+title: Integration Guide
+sidebar_label: Integration Guide
+description: Integrate Sui Name Service (SuiNS) into your applications using onchain or offchain resolution to enable human-readable names for wallet addresses.
+keywords: [ SuiNS, Sui Name Service, name resolution, domain names, NFT, subnames, indexer, onchain resolution, offchain resolution ]
+goal:
+  description: >-
+    Reader can integrate SuiNS into applications using onchain or offchain
+    resolution, understand active constants, and work with subnames
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I integrate SuiNS name resolution into my app?
+  - What are the active SuiNS package IDs on Mainnet and Testnet?
+  - What is the difference between node subnames and leaf subnames?
+answer: >-
+  Integrate SuiNS through offchain resolution using Sui RPC endpoints or
+  onchain resolution using the SuiNS core Move package, with support for
+  lookup, reverse lookup, subnames, and indexing.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Sui Name Service (SuiNS) is a decentralized naming service on the Sui blockchain that enables users to replace complex wallet addresses with human-readable names. You can integrate SuiNS into your application using either onchain or offchain resolution.
+
+## Active constants
+
+This is a list of the current active objects to interact with SuiNS. 
+
+:::info
+
+Look here for the latest state, as some active constants might change.
+These changes come from secondary packages responsible for registering a name, renewing a name, and associated utilities.
+The core package cannot change, nor can the core SuiNS object.
+
+:::
+ 
+<Tabs groupId='network'>
+    <TabItem label="Mainnet" value='mainnet'>
+      SuiNS deploys, authorizes, and maintains the following packages on Mainnet.
+        <Tabs groupId='packageobject'>
+            <TabItem label="Packages" value='packages'>
+| Kind  	| Package ID                                                            	|
+|--------------	|----------------------------------------------------------------------	|
+| SuiNS Core V3 | `0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5` |
+| SuiNS Core V2     	| `0xb7004c7914308557f7afbaf0dca8dd258e18e306cb7a45b28019f3d0a693f162`                                        	|
+| SuiNS Core V1 | `0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0` |
+| Subnames | `0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430` |
+| Registration | `0x9d451fa0139fef8f7c1f0bd5d7e45b7fa9dbb84c2e63c2819c7abd0a7f7d749d` |
+| Renewal | `0xd5e5f74126e7934e35991643b0111c3361827fc0564c83fa810668837c6f0b0f` |
+| Utilities (setup) | `0xdac22652eb400beb1f5e2126459cae8eedc116b73b8ad60b71e3e8d7fdb317e2` |
+| Discounts Package | `0x6a6ea140e095ddd82f7c745905054b3203129dd04a09d0375416c31161932d2d` |
+            </TabItem>
+            <TabItem label="Objects" value='objects'>
+| Kind  	| Object ID                                                            	|
+|--------------	|----------------------------------------------------------------------	|
+| SuiNS Core Object 	| `0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871` 	|
+| SuiNS Discounts 	| `0x7fdd883c0b7427f18cdb498c4c87a4a79d6bec4783cb3f21aa3816bbc64ce8ef` 	|
+            </TabItem>
+        </Tabs>
+    </TabItem>
+    <TabItem label="Testnet" value='testnet'>
+      SuiNS deploys, authorizes, and maintains the following packages on Testnet.
+        <Tabs groupId='packageobject'>
+            <TabItem label="Packages" value='packages'>
+| Kind  	| Package ID                                                            	|
+|--------------	|----------------------------------------------------------------------	|
+| SuiNS Core | `0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93` |
+| Registration | `0x4255184a0143c0ce4394a3f16a6f5aa5d64507269e54e51ea396d569fe8f1ba5` |
+| Renewal | `0x54800ebb4606fd0c03b4554976264373b3374eeb3fd63e7ff69f31cac786ba8c` |
+| Utilities (setup) | `0x6ed81fd808a23eae2da488052334d50478b36527474fc99707c1aed0e43104b1` |
+| Subnames | `0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636` |
+| Subnames Proxy | `0x3489ab5dcd346afee8b681267bcab2583a5eba9855680ec9931355e50e21c148` |
+            </TabItem>
+            <TabItem label="Objects" value='objects'>
+| Kind  	| Object ID                                                            	|
+|--------------	|----------------------------------------------------------------------	|
+| SuiNS Core Object 	| `0x300369e8909b9a6464da265b9a5a9ab6fe2158a040e84e808628cde7a07ee5a3` 	|
+            </TabItem>
+        </Tabs>
+    </TabItem>
+</Tabs>
+
+## Integration 
+
+You can integrate SuiNS in multiple ways depending on your use case. For apps, you typically integrate SuiNS through offchain resolution using remote procedural calls (RPCs). The calls enable you to interact with the Sui network or display names instead of addresses. For example, your RPCs might create transactions that send assets to names, or show names instead of addresses on a leaderboard.
+
+### Resolution types
+
+SuiNS supports 2 types of resolution:
+
+- **Lookup:** A name can point to an address or an object (target address). This allows you to resolve a name like `example.sui` to its target address.
+
+- **Reverse lookup:** An address can have a default name. This allows you to find the name associated with a particular address.
+
+### Address types
+
+Lookups work with different types of addresses:
+
+- **Target address:** The address that a SuiNS name resolves to. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`. Lookup resolution retrieves this information.
+
+- **Default address:** The SuiNS name that the owner of a particular address has selected to represent that address. For example, if you own `0x2` you can make `example.sui` its default address. The owner must sign and execute a set default transaction to establish this connection. The default address resets anytime the target address changes. Reverse lookup resolution retrieves this name.
+
+### SuiNS NFT ownership
+
+Do not use ownership of a SuiNS NFT as a resolution method. An NFT is used as the key (capability) to change the target address, but should not be used to identify any name with an address.
+
+SuiNS NFT ownership allows any address to be set as the target address. So, the `example.sui` address used in the previous section can point to any address, not just `0x2`. Consequently, when you want to display default addresses, you should trust the default address over target address because it is guaranteed onchain.
+
+### Offchain resolution
+
+For offchain resolution, use the available Sui API endpoints:
+
+- [JSON-RPC](https://docs.sui.io/sui-api-ref#suix_resolvenameserviceaddress)
+
+- [GraphQL](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address)
+
+:::info
+
+For GraphQL's default name resolution, use the [`defaultSuinsName` field](https://docs.sui.io/references/sui-api/sui-graphql/reference/types/objects/address).
+
+:::
+
+### Onchain resolution
+
+Use the SuiNS core package for onchain resolution. Add the following dependency in your `Move.toml` file depending on which network you are targeting:
+
+<Tabs groupId='network'>
+  <TabItem label="Mainnet" value='mainnet'>
+    ```sh
+    [dependencies]
+    suins = { git = "https://github.com/mystenlabs/suins-contracts/", subdir = "packages/suins", rev = "releases/mainnet/core/v3" }
+    ```
+  </TabItem>
+  <TabItem label="Testnet" value='testnet'>
+    ```sh
+    [dependencies]
+    suins = { git = "https://github.com/mystenlabs/suins-contracts/", subdir = "packages/suins", rev = "releases/testnet/core/v2" }
+    ```
+  </TabItem>
+</Tabs>
+
+#### Example: Transfer object to SuiNS name
+
+The following `demo` module demonstrates how to transfer an object of any type to a SuiNS name. This is a basic example of how to interact with SuiNS onchain.
+
+```rust
+module demo::demo {
+    use std::string::String;
+    use sui::clock::Clock;
+
+    /// Import the SuiNS dependency.
+    use suins::{ 
+        suins::SuiNS,
+        registry::Registry,
+        domain
+    };
+
+    /// Different custom error messages.
+    const ENameNotFound: u64 = 0;
+    const ENameNotPointingToAddress: u64 = 1;
+    const ENameExpired: u64 = 2;
+
+    /// A function to transfer an object of any type T to a name (for instance `example.sui`)
+    public fun send_to_name<T: key + store>(suins: &SuiNS, obj: T, name: String, clock: &Clock) {
+        // Look up the name on the registry.
+        let mut optional = suins.registry<Registry>().lookup(domain::new(name));
+        // Check that the name indeed exists.
+        assert!(optional.is_some(), ENameNotFound);
+
+        let name_record = optional.extract();
+        // Check that name has not expired. 
+        // This check is optional, but it's recommended you perform the verification.
+        assert!(!name_record.has_expired(clock), ENameExpired);
+        // Check that the name has a target address set.
+        assert!(name_record.target_address().is_some(), ENameNotPointingToAddress);
+
+        // Transfer the object to that name.
+        transfer::public_transfer(obj, name_record.target_address().extract())
+    }
+}
+```
+
+:::caution
+
+You should integrate SuiNS onchain using the core package only. The utility packages are likely to be replaced, rendering your logic non-functional unless you update your code with each change.
+
+:::
+
+## Indexing 
+
+The indexer enables more expressive queries about the active domain state when onchain resolution is not sufficient to power your interface.
+
+This allows for complex queries such as:
+
+- **Get all the subnames for a given parent:** Retrieve every subdomain linked to a parent domain, enhancing the ability to manage and analyze domain structures.
+
+- **Get all names pointing to a specified address:** Identify all domain names associated with a specific wallet address to track ownership and usage.
+
+You can find the indexer in the [`suins-indexer` GitHub repository](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer). Feel free to spin up your own service if you are looking to index data tailored to your needs.
+
+For a deeper understanding of how the indexer works and how to integrate it into your projects, refer to [Sui's custom indexer documentation](https://docs.sui.io/guides/developer/advanced/custom-indexer).
+
+## Subnames 
+
+Subnames are nested names under a parent name. Unlike regular names, there is no cost associated with creating subnames.
+
+The maximum nesting depth is 8 levels. The total depth, including the second-level domain (SLD) and top-level domain (TLD), means the maximum total depth is 10 levels.
+
+Parent rules control whether you can create nested names or not and can also allow a subname to extend the expiration to match the parent's expiration. You can alter the parent rules at any time, but revoking or burning follows the same rules.
+
+### Subname types {#subname-types}
+
+Subnames can be one of 2 types:
+
+1. **Node subnames**: Similar to regular names, they have an NFT associated with them that gives access to all extra features (personalization, avatars, and so on).
+
+1. **Leaf subnames**: These are subnames that are created under a node subname. They do not have an NFT associated with them, so the parent controls their configuration. Consequently, the typical use case for leaf subnames is to use them programmatically.
+
+The following table provides more details on the differences between the types of names:
+
+| Capabilities/Category | Node subnames | Leaf subnames |
+| --- | --- | --- |
+| Has NFT | ✅ Yes, <ul style={{listStyle: 'disc', paddingLeft: 1 + 'rem'}}><li>`SuinsRegistration` for SLD*</li><li>`SubDomainRegistration` for nested names</li></ul> | ❌ No, parent's NFT acts as the capability |
+| Can create children (node or leaf) | ✅ Yes, provided the name is an SLD or the parent allows it | ❌ No |
+| Expiration | ✅ Yes, SuiNS determines expiration for SLDs, otherwise the parent determines | ❌ No, the parent's expiration determines the leaf expiration |
+| Extend expiration | ✅ Yes, you can extend expiration if parent rules allow it (or you can pay for it for SLD) | ✅ Yes, leaf names do not expire |
+| Target address | ✅ Yes, NFT holder can update the target address; address can be empty | ✅ Yes, active parent's NFT holder can update the target address; address cannot be empty |
+| Reverse registry | ✅ Yes | ✅ Yes |
+| Revoke | ❌ No, you cannot remove a node name (except when expired) | ✅ Yes, active parent holder can remove a leaf name |
+| Burn | ✅ Yes, post-expiration only | ✅ Yes, burn and revoking is the same for leaf names |
+| Transfer ownership | ✅ Yes, the NFT determines node name ownership | ❌ No, SuiNS preserves ownership for the active parent name holder |
+
+*SLD - Second-level domain (for example, example in example.sui)*

@@ -1,0 +1,239 @@
+---
+title: Building Transactions
+description: Build programmable transaction blocks using SuinsTransaction to register names, manage subnames, and configure SuiNS records.
+keywords: [ SuiNS, transactions, PTB, programmable transaction blocks, SuinsTransaction, register, renew, subnames ]
+goal:
+  description: >-
+    Reader can build PTBs using SuinsTransaction to register names, set target
+    addresses, configure metadata, and compose multiple operations
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I register a SuiNS name using the SDK?
+  - How do I set a target address for a SuiNS name?
+  - How do I compose multiple SuiNS operations in a single PTB?
+answer: >-
+  Use SuinsTransaction to build PTBs for SuiNS operations including register,
+  renew, setTargetAddress, setDefault, setUserData, and burnExpired, with the
+  ability to compose multiple operations in a single transaction.
+---
+
+`SuinsTransaction` is the client you use similar to `Transaction`, and helps in building a transaction.
+You need to instantiate it once in every programmable transaction block (PTB) that you are building.
+
+## Available functions
+
+This is a list of all the available PTB commands supported through the SDK.
+
+### Register a name
+
+```js
+
+const register = async (name: string, years: number) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+    // Specify the coin type used for the transaction, can be SUI/NS/USDC
+    const coinConfig = suinsClient.config.coins.USDC;
+
+    // priceInfoObjectId is required for SUI/NS
+    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0];
+
+    // Build the transaction to register the name, specifying a year from 1 to 5.
+    const nft = suinsTx.register({
+        domain: 'myname.sui',
+        years: 3,
+        coinConfig,
+        coin,
+        priceInfoObjectId, // Only required for SUI/NS
+    });
+
+    // Transfer the name's NFT
+    transaction.transferObjects([nft], transaction.pure.address('0xMyAddress'));
+
+    // ... sign and execute the transaction
+}
+```
+
+### Renew a name
+
+```js
+const renew = async (nftId: string, name: string, years: number) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+    // Specify the coin type used for the transaction, can be SUI/NS/USDC
+    const coinConfig = suinsClient.config.coins.USDC;
+
+    // priceInfoObjectId is required for SUI/NS
+    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0];
+
+    // Build the transaction to renew the name, specifying a year from 1 to 5.
+    suinsTx.renew({
+        nft: '0xMyNftObject',
+        years: 3,
+        coinConfig,
+        coin,
+        priceInfoObjectId, // Only required for SUI/NS
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+### Set a name's target address
+
+This works the same for names and subnames.
+
+```js
+const setTargetAddress = async (nftId: string, address: string) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // We build the transaction to set the target address.
+    suinsTransaction.setTargetAddress({
+        nft: nftId,
+        address,
+        isSubname: false,
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+### Set a name as default
+
+This works the same for names and subnames.
+
+```js
+const setDefault = async (name: string) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // We build the transaction to set that name as default for the sender.
+    // Important: This is only possible if the address signing/executing
+    // the transaction is the same as the target address of that name.
+    suinsTransaction.setDefault(name);
+
+    // ... sign and execute the transaction
+}
+```
+
+For subname operations (create, edit, extend, and remove subnames), see [Subname Transactions](./subnames).
+
+### Set a name's metadata
+
+Currently supports AVATAR and IPFS hash.
+
+```js
+const setUserData = async (nft: string, avatar: string, contentHash: string) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // Build the transaction to set the metadata.
+    // Set the avatar to the supplied value.
+    suinsTransaction.setUserData({
+        nft,
+        key: ALLOWED_METADATA.avatar,
+        value: avatar,
+        isSubname: false,
+    });
+    // Set the contentHash to the supplied value.
+    suinsTransaction.setUserData({
+        nft,
+        key: ALLOWED_METADATA.contentHash,
+        value: contentHash,
+        isSubname: false,
+    });
+    // Set the walrusSiteId to the supplied value.
+    suinsTransaction.setUserData({
+        nft,
+        key: ALLOWED_METADATA.walrusSiteId,
+        value: walrusSiteId,
+        isSubname: false,
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+### Burn an expired name
+
+Allows burning an expired name to get back storage rebates.
+
+```js
+const burnExpired = async (nftId: string) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+
+    // Build the transaction to burn the expired name.
+    suinsTransaction.burnExpired({
+        nft: nftId,
+        isSubname: false,
+    });
+
+    // ... sign and execute the transaction
+}
+```
+
+
+## Combined example
+
+The following code snippet registers a SuiNS name using NS, sets its target address, and sets it as the default name for the target address in a single PTB. You could also add transaction commands to do even more in the same PTB if you wanted to, like create subnames and so on, but that is beyond the scope of this example.
+
+```js
+// Years must be between 1-5.
+const composedExample = async (name: string, years: number) => {
+    // Create a transaction block as usual in your PTBs.
+    const transaction = new Transaction();
+    // Pass in the transaction block & the app's global SuinsClient.
+    const suinsTransaction = new SuinsTransaction(suinsClient, transaction);
+    // Specify the coin type used for the transaction, can be SUI/NS/USDC
+    const coinConfig = suinsClient.config.coins.NS;
+
+    // priceInfoObjectId is required for SUI/NS
+    const priceInfoObjectId = (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0];
+
+    // Build the transaction to register the name, specifying a year from 1 to 5.
+    const nft = suinsTx.register({
+        domain: 'myname.sui',
+        years,
+        coinConfig,
+        coinId: '0xMyCoinObject', // Only required for NS/USDC
+        priceInfoObjectId, // Only required for SUI/NS
+    });
+
+    // You can now use this NFT, for instance to set its target address.
+    suinsTransaction.setTargetAddress({
+        nft,
+        address,
+        isSubname: false,
+    });
+
+    // And you could also set this name as the default name for `0xMyAddress`.
+    // This is only possible if the address signs and executes the transaction.
+    suinsTransaction.setDefault(name);
+
+    // Transfer the name's NFT to the address.
+    transaction.transferObjects([nft], transaction.pure.address('0xMyAddress'));
+
+    // ... sign and execute the transaction
+}
+```
