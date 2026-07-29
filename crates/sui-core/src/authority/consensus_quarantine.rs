@@ -214,6 +214,10 @@ impl ConsensusCommitOutput {
         self.deferred_txns.push((key, transactions));
     }
 
+    pub fn deferred_txn_keys(&self) -> impl Iterator<Item = DeferralKey> + use<'_> {
+        self.deferred_txns.iter().map(|(key, _)| *key)
+    }
+
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
         self.deleted_deferred_txns
             .extend(deferral_keys.iter().cloned());
