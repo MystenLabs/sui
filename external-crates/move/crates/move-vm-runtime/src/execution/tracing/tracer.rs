@@ -16,7 +16,7 @@ use crate::{
         dispatch_tables::VMDispatchTables, interpreter::state::MachineState,
         values::Value as RuntimeValue,
     },
-    jit::execution::ast::{ArenaType, Function, Type},
+    jit::execution::ast::{Function, SizedType, Type},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
@@ -1984,10 +1984,10 @@ impl FunctionTypeInfo {
             })
         }
 
-        let subst_and_layout_type = |ty: &ArenaType| -> Option<TagWithLayoutInfoOpt> {
+        let subst_and_layout_type = |ty: &SizedType| -> Option<TagWithLayoutInfoOpt> {
             // Unchecked substitution is fine here: the tracer is observational and never runs on
             // a network execution path, so it needn't re-check the traversal limits.
-            let subst_ty = ty.subst_unchecked(ty_args).ok()?;
+            let subst_ty = ty.ty.subst_unchecked(ty_args).ok()?;
             let (ty, ref_type) = deref_ty(subst_ty)?;
             let tag = vtables.type_to_type_tag(&ty).ok()?;
             // NB: This may fail if the type represents a value greater than the max

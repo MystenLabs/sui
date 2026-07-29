@@ -113,9 +113,10 @@ pub(crate) struct Module {
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
 
-    /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that represents it.
+    /// a map from signatures in instantiations to the `ArenaVec<SizedType>` that represents
+    /// it -- each entry paired with its JIT-compiled size formula.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
+    pub instantiation_signatures: ArenaVec<ArenaVec<SizedType>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -151,9 +152,9 @@ pub(crate) struct Function {
     pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     pub code: ArenaVec<Bytecode>,
-    pub parameters: ArenaVec<ArenaType>,
-    pub locals: ArenaVec<ArenaType>,
-    pub return_: ArenaVec<ArenaType>,
+    pub parameters: ArenaVec<SizedType>,
+    pub locals: ArenaVec<SizedType>,
+    pub return_: ArenaVec<SizedType>,
     pub type_parameters: ArenaVec<AbilitySet>,
     // NOTE: This field is manually dropped in Function::drop() to prevent Arc leaks
     // Any value holding a `Function` needs to ensure it is correctly dropped.
@@ -234,7 +235,7 @@ pub(crate) struct VariantDef {
 #[derive(Debug)]
 pub(crate) struct FunctionInstantiation {
     pub handle: CallType,
-    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) instantiation: VMPointer<ArenaVec<SizedType>>,
 }
 
 #[derive(Debug)]
@@ -242,7 +243,7 @@ pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
-    pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) type_params: VMPointer<ArenaVec<SizedType>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -266,7 +267,7 @@ pub(crate) struct EnumInstantiation {
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<ArenaType>>,
+    pub type_params: VMPointer<ArenaVec<SizedType>>,
 }
 
 // A variant instantiation.
@@ -296,6 +297,15 @@ pub(crate) enum ArenaType {
     U16,
     U32,
     U256,
+}
+
+/// A type *term* paired with its JIT-compiled size formula: every type the runtime must know the
+/// size of (instruction operands, instantiation signature entries, function parameter/return
+/// types). These are used to avoid re-deriving the size formulae from the type's structure.
+#[derive(Debug)]
+pub(crate) struct SizedType {
+    pub ty: ArenaType,
+    pub size_formula: ArenaTypeSizeFormula,
 }
 
 #[derive(Debug)]
@@ -733,51 +743,51 @@ pub(crate) enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., e1, e2, ..., eN -> ..., vec[e1, e2, ..., eN]```
-    VecPack(VMPointer<ArenaType>, u64),
+    VecPack(VMPointer<SizedType>, u64),
     /// Return the length of the vector,
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., u64_value```
-    VecLen(VMPointer<ArenaType>),
+    VecLen(VMPointer<SizedType>),
     /// Acquire an immutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecImmBorrow(VMPointer<ArenaType>),
+    VecImmBorrow(VMPointer<SizedType>),
     /// Acquire a mutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecMutBorrow(VMPointer<ArenaType>),
+    VecMutBorrow(VMPointer<SizedType>),
     /// Add an element to the end of the vector.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, element -> ...```
-    VecPushBack(VMPointer<ArenaType>),
+    VecPushBack(VMPointer<SizedType>),
     /// Pop an element from the end of vector. Aborts if the vector is empty.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., element```
-    VecPopBack(VMPointer<ArenaType>),
+    VecPopBack(VMPointer<SizedType>),
     /// Destroy the vector and unpack a statically known number of elements onto the stack. Aborts
     /// if the vector does not have a length N.
     ///
     /// Stack transition:
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
-    VecUnpack(VMPointer<ArenaType>, u64),
+    VecUnpack(VMPointer<SizedType>, u64),
     /// Swaps the elements at two indices in the vector. Abort the execution if any of the indices
     /// is out of bounds.
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
-    VecSwap(VMPointer<ArenaType>),
+    VecSwap(VMPointer<SizedType>),
     /// Push a U16 constant onto the stack.
     ///
     /// Stack transition:
@@ -1101,7 +1111,7 @@ impl DatatypeDescriptor {
 }
 
 impl Type {
-    /// The abstract memory size of this type — one unit per syntactic node. Kept only for
+    /// The abstract memory size of this type -- one unit per syntactic node. Kept only for
     /// legacy gas metering; new applications should not use this. (Fallible for call-site
     /// compatibility; the syntactic size saturates and never errors.)
     pub fn size(&self) -> PartialVMResult<AbstractMemorySize> {
@@ -1539,6 +1549,12 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         let str = self.to_short_string(interner);
         write!(f, "{}", str)
+    }
+}
+
+impl<B: std::fmt::Write> InternedDisplay<B> for SizedType {
+    fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
+        self.ty.fmt(f, interner)
     }
 }
 
