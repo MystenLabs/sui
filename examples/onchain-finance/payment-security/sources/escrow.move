@@ -9,18 +9,14 @@ use sui::event;
 use sui::sui::SUI;
 
 #[error]
-const ENotRecipient: vector<u8> = b"Only the designated recipient can claim";
-#[error]
-const ENotSender: vector<u8> = b"Only the sender can cancel";
-#[error]
 const EWrongEscrowCap: vector<u8> = b"Capability does not match this escrow";
 
-public struct SenderCap has key {
+public struct SenderCap has key, store {
     id: UID,
     escrow_id: ID,
 }
 
-public struct RecipientCap has key {
+public struct RecipientCap has key, store {
     id: UID,
     escrow_id: ID,
 }
@@ -55,14 +51,14 @@ public fun create(coin: Coin<SUI>, recipient: address, ctx: &mut TxContext): Sen
     };
     let escrow_id = object::id(&escrow);
     let recipient_cap = RecipientCap { id: object::new(ctx), escrow_id };
-    transfer::transfer(recipient_cap, recipient);
+    transfer::public_transfer(recipient_cap, recipient);
     transfer::share_object(escrow);
     SenderCap { id: object::new(ctx), escrow_id }
 }
 
 /// Claim the escrow. Only the recipient can call this.
 /// Pays out through address balances.
-public fun claim(escrow: Escrow, cap: RecipientCap, ctx: &mut TxContext) {
+public fun claim(escrow: Escrow, cap: RecipientCap) {
     assert!(cap.escrow_id == object::id(&escrow), EWrongEscrowCap);
     let RecipientCap { id: cap_id, escrow_id: _ } = cap;
     cap_id.delete();
@@ -75,7 +71,7 @@ public fun claim(escrow: Escrow, cap: RecipientCap, ctx: &mut TxContext) {
 
 /// Cancel the escrow and return funds. Only the sender can call this.
 /// Returns funds through address balances.
-public fun cancel(escrow: Escrow, cap: SenderCap, ctx: &mut TxContext) {
+public fun cancel(escrow: Escrow, cap: SenderCap) {
     assert!(cap.escrow_id == object::id(&escrow), EWrongEscrowCap);
     let SenderCap { id: cap_id, escrow_id: _ } = cap;
     cap_id.delete();

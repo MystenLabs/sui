@@ -12,7 +12,7 @@ Sui Name Service (SuiNS) is a decentralized naming service on the Sui blockchain
 
 ## Active constants
 
-This is a list of the current active objects to interact with SuiNS. 
+This is a list of the current active objects to interact with SuiNS.
 
 :::info
 
@@ -21,7 +21,7 @@ These changes come from secondary packages responsible for registering a name, r
 The core package cannot change, nor can the core SuiNS object.
 
 :::
- 
+
 <Tabs groupId='network'>
     <TabItem label="Mainnet" value='mainnet'>
       SuiNS deploys, authorizes, and maintains the following packages on Mainnet.
@@ -68,7 +68,7 @@ The core package cannot change, nor can the core SuiNS object.
     </TabItem>
 </Tabs>
 
-## Integration 
+## Integration
 
 You can integrate SuiNS in multiple ways depending on your use case. For dApps, you typically integrate SuiNS through off-chain resolution using remote procedural calls (RPCs). The calls enable you to interact with the Sui network or display names instead of addresses. For example, your RPCs might create transactions that send assets to names, or show names instead of addresses on a leaderboard.
 
@@ -137,7 +137,7 @@ module demo::demo {
     use sui::clock::Clock;
 
     /// Import the SuiNS dependency.
-    use suins::{ 
+    use suins::{
         suins::SuiNS,
         registry::Registry,
         domain
@@ -156,7 +156,7 @@ module demo::demo {
         assert!(optional.is_some(), ENameNotFound);
 
         let name_record = optional.extract();
-        // Check that name has not expired. 
+        // Check that name has not expired.
         // This check is optional, but it's recommended you perform the verification.
         assert!(!name_record.has_expired(clock), ENameExpired);
         // Check that the name has a target address set.
@@ -174,7 +174,7 @@ You should integrate SuiNS on chain using the core package only. The utility pac
 
 :::
 
-## Indexing 
+## Indexing
 
 The indexer enables more expressive queries about the active domain state when onchain resolution is not sufficient to power your interface.
 
@@ -188,7 +188,7 @@ You can find the indexer in the [`suins-indexer` GitHub repository](https://gith
 
 For a deeper understanding of how the indexer works and how to integrate it into your projects, refer to [Sui's custom indexer documentation](https://docs.sui.io/guides/developer/advanced/custom-indexer).
 
-## Subnames 
+## Subnames
 
 Subnames are nested names under a parent name. Unlike regular names, there is no cost associated with creating subnames.
 

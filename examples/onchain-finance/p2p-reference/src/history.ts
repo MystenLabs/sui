@@ -14,20 +14,14 @@ const gqlClient = new SuiGraphQLClient({
 });
 
 const { data } = await gqlClient.query<any>({
-	variables: {},
-	query: `{
-    address(address: "${senderAddress}") {
+	variables: { sender: senderAddress },
+	query: `query AgentHistory($sender: SuiAddress!) {
+    address(address: $sender) {
       transactions(last: 20) {
         nodes {
           digest
           effects {
-            balanceChanges {
-              nodes {
-                owner { address }
-                amount
-                coinType { repr }
-              }
-            }
+            balanceChangesJson
           }
         }
       }
@@ -36,26 +30,26 @@ const { data } = await gqlClient.query<any>({
 });
 
 for (const txn of data?.address?.transactions?.nodes ?? []) {
-	const changes = txn.effects?.balanceChanges?.nodes ?? [];
+	const changes: any[] = JSON.parse(txn.effects?.balanceChangesJson ?? '[]');
 
 	// Pair the sender's negative change with the recipient's positive change
 	const sent = changes.find(
 		(c: any) =>
-			c.coinType?.repr === USDC &&
-			c.owner?.address === senderAddress &&
+			c.coinType === USDC &&
+			c.owner === senderAddress &&
 			BigInt(c.amount) < 0n,
 	);
 	const received = changes.find(
 		(c: any) =>
-			c.coinType?.repr === USDC &&
-			c.owner?.address !== senderAddress &&
+			c.coinType === USDC &&
+			c.owner !== senderAddress &&
 			BigInt(c.amount) > 0n,
 	);
 
 	if (sent && received) {
 		console.log(
 			`Sent ${Math.abs(Number(sent.amount)) / 1_000_000} USDC`,
-			`to ${received.owner?.address}`,
+			`to ${received.owner}`,
 		);
 	}
 }
