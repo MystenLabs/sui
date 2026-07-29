@@ -34,13 +34,6 @@ impl DiagnosticOrigin {
             Self::UpgradeCompatibility => "UC",
         }
     }
-
-    pub const fn filter_prefix(self) -> Option<&'static str> {
-        match self {
-            Self::Lint | Self::SuiLint => Some("lint"),
-            Self::Compiler | Self::SuiCompiler | Self::UpgradeCompatibility => None,
-        }
-    }
 }
 
 /// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] filter key.

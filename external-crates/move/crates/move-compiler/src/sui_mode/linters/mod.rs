@@ -11,6 +11,7 @@ use crate::{
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     linters::{LintLevel, LinterDiagnosticCategory},
+    shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
@@ -217,10 +218,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
         ),
     ];
 
-    (
-        DiagnosticOrigin::SuiLint.filter_prefix().map(Symbol::from),
-        filters,
-    )
+    (Some(DiagnosticAttribute::LINT_SYMBOL), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {

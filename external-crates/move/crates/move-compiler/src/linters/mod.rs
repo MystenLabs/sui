@@ -10,6 +10,7 @@ use crate::{
         codes::{DiagnosticInfo, DiagnosticOrigin, DiagnosticsID, Severity, custom},
         filter::FilterName,
     },
+    shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
 
@@ -204,10 +205,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
                 )
             }),
     );
-    (
-        DiagnosticOrigin::Lint.filter_prefix().map(Symbol::from),
-        filters,
-    )
+    (Some(DiagnosticAttribute::LINT_SYMBOL), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {

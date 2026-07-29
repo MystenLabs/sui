@@ -279,8 +279,13 @@ pub type KnownFilterExpansion = &'static [DiagnosticsID];
 /// Built-in filter names recognized by `#[allow(...)]` etc. in source code.
 pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>> =
     LazyLock::new(|| {
-        let cat_unused = Category::UnusedItem as u8;
         macro_rules! code {
+            (all) => {
+                DiagnosticsID::all(DiagnosticOrigin::Compiler)
+            };
+            ($cat:ident) => {
+                DiagnosticsID::category(DiagnosticOrigin::Compiler, Category::$cat as u8)
+            };
             ($cat:ident :: $code:ident) => {
                 DiagnosticsID::exact(
                     DiagnosticOrigin::Compiler,
@@ -295,17 +300,8 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             Box::leak(v.into_boxed_slice())
         }
         vec![
-            (
-                FILTER_ALL,
-                leak(vec![DiagnosticsID::all(DiagnosticOrigin::Compiler)]),
-            ),
-            (
-                FILTER_UNUSED,
-                leak(vec![DiagnosticsID::category(
-                    DiagnosticOrigin::Compiler,
-                    cat_unused,
-                )]),
-            ),
+            (FILTER_ALL, leak(vec![code!(all)])),
+            (FILTER_UNUSED, leak(vec![code!(UnusedItem)])),
             (
                 FILTER_MISSING_PHANTOM,
                 leak(vec![code!(Declarations::InvalidNonPhantomUse)]),
@@ -338,16 +334,8 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             (
                 FILTER_UNUSED_TYPE_PARAMETER,
                 leak(vec![
-                    DiagnosticsID::exact(
-                        DiagnosticOrigin::Compiler,
-                        cat_unused,
-                        UnusedItem::StructTypeParam as u8,
-                    ),
-                    DiagnosticsID::exact(
-                        DiagnosticOrigin::Compiler,
-                        cat_unused,
-                        UnusedItem::FunTypeParam as u8,
-                    ),
+                    code!(UnusedItem::StructTypeParam),
+                    code!(UnusedItem::FunTypeParam),
                 ]),
             ),
             (FILTER_UNUSED_CONST, leak(vec![code!(UnusedItem::Constant)])),
@@ -389,13 +377,12 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
         fn leak(v: Vec<DiagnosticsID>) -> KnownFilterExpansion {
             Box::leak(v.into_boxed_slice())
         }
-        let cat_ide = Category::IDE as u8;
         vec![
             (
                 FILTER_IDE_PATH_AUTOCOMPLETE,
                 leak(vec![DiagnosticsID::exact(
                     DiagnosticOrigin::Compiler,
-                    cat_ide,
+                    Category::IDE as u8,
                     IDE::PathAutocomplete as u8,
                 )]),
             ),
@@ -403,7 +390,7 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
                 FILTER_IDE_DOT_AUTOCOMPLETE,
                 leak(vec![DiagnosticsID::exact(
                     DiagnosticOrigin::Compiler,
-                    cat_ide,
+                    Category::IDE as u8,
                     IDE::DotAutocomplete as u8,
                 )]),
             ),
