@@ -19,6 +19,7 @@ use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CO
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
@@ -70,6 +71,8 @@ use tracing::{error, info};
 pub mod addr_balance_test_env;
 
 const NUM_VALIDATOR: usize = 4;
+// Keep direct test submissions bounded like the production TransactionOrchestrator.
+const TRANSACTION_FINALITY_TIMEOUT: Duration = Duration::from_secs(90);
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNodeHandle,
@@ -1028,8 +1031,7 @@ impl TestCluster {
     }
 
     /// Different from `execute_transaction` which returns RPC effects types, this function
-    /// returns raw effects, events and extra objects returned by the validators,
-    /// aggregated manually (without authority aggregator).
+    /// returns raw effects and events from the transaction driver.
     /// It also does not check whether the transaction is executed successfully.
     /// Before returning, it waits for the transaction to settle on the fullnode so that
     /// subsequent queries there read consistent results.
@@ -1049,149 +1051,34 @@ impl TestCluster {
             .with(|node| node.clone_authority_aggregator().unwrap())
     }
 
-    /// Submit a transaction and wait for it to be executed.
-    /// With MFP, transactions are submitted to consensus and executed by validators.
-    /// Returns the transaction effects and events on success.
+    /// Submit a transaction through the transaction driver and wait for finality.
+    /// Returns the raw transaction effects and events without checking execution status.
     pub async fn submit_and_execute(
         &self,
         tx: Transaction,
         client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
-        // The consensus position handed back on submission is the *first* one, even when the
-        // consensus adapter internally retries (e.g. the block was garbage-collected before being
-        // sequenced, which is most likely right after a reconfiguration). If we wait for effects on
-        // that stale position, the validator can neither produce effects nor expire the position
-        // within its wait window, surfacing as a timeout/`Expired`. The consensus adapter documents
-        // that clients must retry in that case, and the production `TransactionDriver` does exactly
-        // that. Mirror it here with a bounded resubmit loop so tests don't flake on this transient
-        // condition. Definite outcomes (executed / rejected) return immediately.
-        const MAX_ATTEMPTS: usize = 5;
-        let mut last_transient_err: Option<anyhow::Error> = None;
-        for attempt in 0..MAX_ATTEMPTS {
-            if attempt > 0 {
-                // Brief backoff before resubmitting to obtain a fresh consensus position.
-                sleep(Duration::from_secs(1)).await;
-            }
-
-            let agg = self.authority_aggregator();
-            // Pick a validator to submit to using seeded RNG for deterministic simtest selection
-            let clients = &agg.authority_clients;
-            let index = rand::thread_rng().gen_range(0..clients.len());
-            let (_, client) = clients
-                .iter()
-                .nth(index)
-                .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
-
-            // Submit the transaction
-            let submit_request = SubmitTxRequest::new_transaction(tx.clone());
-            let submit_response = match client.submit_transaction(submit_request, client_addr).await
-            {
-                Ok(response) => response,
-                // Retry only transient submission failures (e.g. validator overloaded, or
-                // consensus not yet ready right after reconfiguration); surface definite errors
-                // (invalid transaction, lock conflict, internal) immediately.
-                Err(err) if err.as_inner().categorize().is_submission_retriable() => {
-                    last_transient_err = Some(err.into());
-                    continue;
-                }
-                Err(err) => return Err(err.into()),
-            };
-
-            let mut consensus_position = None;
-            let mut rejected_transient = false;
-            for result in submit_response.results {
-                match result {
-                    SubmitTxResult::Executed { details, .. } => {
-                        let data =
-                            details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
-                        let events = data.events.unwrap_or_default();
-                        return Ok((data.effects, events));
-                    }
-                    SubmitTxResult::Rejected { error } => {
-                        // Mirror the production `TransactionDriver`: a rejection with a
-                        // retriable category (e.g. validator overloaded) is resubmitted.
-                        if error.as_inner().categorize().is_submission_retriable() {
-                            last_transient_err = Some(error.into());
-                            rejected_transient = true;
-                            break;
-                        }
-                        return Err(error.into());
-                    }
-                    SubmitTxResult::Submitted {
-                        consensus_position: position,
-                    } => {
-                        consensus_position = Some(position);
-                    }
-                }
-            }
-            if rejected_transient {
-                continue;
-            }
-
-            let consensus_position = consensus_position
-                .ok_or_else(|| anyhow::anyhow!("Expected submitted transaction result"))?;
-
-            // Wait for effects
-            let wait_request = WaitForEffectsRequest {
-                transaction_digest: Some(*tx.digest()),
-                consensus_position: Some(consensus_position),
-                include_details: true,
-                ping_type: None,
-            };
-
-            match client.wait_for_effects(wait_request, client_addr).await {
-                Ok(WaitForEffectsResponse::Executed { details, .. }) => {
-                    let data =
-                        details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
-                    let events = data.events.unwrap_or_default();
-                    return Ok((data.effects, events));
-                }
-                Ok(WaitForEffectsResponse::Rejected { error }) => match error {
-                    // The validator cast a reject vote with a definite cause (e.g. an
-                    // invalid transaction); surface it unless the category is retriable.
-                    Some(err) if !err.as_inner().categorize().is_submission_retriable() => {
-                        return Err(err.into());
-                    }
-                    Some(err) => {
-                        last_transient_err = Some(err.into());
-                    }
-                    // No reject vote was cast locally: the position was indirectly
-                    // rejected at commit time because finalization did not complete
-                    // within INDIRECT_REJECT_DEPTH leader rounds — typically when the
-                    // proposer's block disseminates slowly right after reconfiguration.
-                    // The transaction itself may be perfectly valid, so mirror the
-                    // production `TransactionDriver` (`RejectedByConsensus` maps to the
-                    // retriable `ErrorCategory::Aborted`) and resubmit for a fresh
-                    // position.
-                    None => {
-                        last_transient_err = Some(
-                            SuiErrorKind::GenericAuthorityError {
-                                error: "Transaction was rejected by consensus without a \
-                                    reject vote; resubmitting"
-                                    .to_string(),
-                            }
-                            .into(),
-                        );
-                    }
+        let transaction_driver = self.fullnode_handle.sui_node.with(|node| {
+            node.transaction_orchestrator()
+                .expect("fullnode must have a transaction orchestrator")
+                .transaction_driver()
+                .clone()
+        });
+        let response = transaction_driver
+            .drive_transaction(
+                SubmitTxRequest::new_transaction(tx),
+                SubmitTransactionOptions {
+                    forwarded_client_addr: client_addr,
+                    ..Default::default()
                 },
-                // The position we waited on was garbage-collected before being sequenced; resubmit
-                // to obtain a fresh position.
-                Ok(WaitForEffectsResponse::Expired { .. }) => {
-                    last_transient_err = Some(SuiErrorKind::TransactionExpired.into());
-                }
-                // A transient wait failure (e.g. the validator's "Timeout waiting for effects")
-                // means the watched position never resolved; resubmit for a fresh one. Surface
-                // definite errors immediately.
-                Err(err) if err.as_inner().categorize().is_submission_retriable() => {
-                    last_transient_err = Some(err.into());
-                }
-                Err(err) => return Err(err.into()),
-            }
-        }
+                Some(TRANSACTION_FINALITY_TIMEOUT),
+            )
+            .await?;
 
-        Err(last_transient_err.unwrap_or_else(|| {
-            anyhow::anyhow!("submit_and_execute exhausted retries without a result")
-        }))
+        Ok((
+            response.effects.effects,
+            response.events.unwrap_or_default(),
+        ))
     }
 
     /// This call sends some funds from the seeded address to the funding
