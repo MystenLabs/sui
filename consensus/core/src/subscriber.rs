@@ -12,16 +12,21 @@ use consensus_types::block::{BlockRef, Round};
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
-use tokio::{sync::Semaphore, task::JoinHandle, time::sleep};
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+    time::sleep,
+};
 use tracing::{debug, error, info};
 
 use crate::{
-    block::{BlockAPI as _, VerifiedBlock},
+    block::{BlockAPI as _, SignedBlock, Slot, VerifiedBlock},
     block_inflater::BlockInflater,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    minimal_block::InflateError,
+    minimal_block::{self, InflateError},
+    minimal_block_recovery::{HintCache, RecoveryCommand, RecoveryManager},
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
@@ -30,37 +35,17 @@ use crate::{
 /// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
 const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 
-/// In-flight off-stream recovery fetches allowed per peer. Recovery beyond this bound is
-/// skipped: later blocks from the same peer keep spawning recoveries, and blocks that do
-/// inflate register the gap with block_manager, so a lost recovery is never load-bearing.
-const MAX_INFLIGHT_RECOVERIES: usize = 8;
-
-/// Timeout for one off-stream recovery fetch. Generous because nothing waits on it: the
-/// subscription stream has already moved on.
-const RECOVERY_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Delays between local inflation re-attempts for a dropped block, prior to any network
-/// fetch (attempts land ~10/30/60/120 ms after the drop). A missing ancestor is almost
-/// always simply in flight on its own stream: at production round cadence it lands within
-/// tens of milliseconds, so cheap local retries resolve the vast majority of drops. Live
-/// measurement behind this: ~47% of received minimal blocks hit an in-flight ancestor,
-/// and fetching each one cost a full-block round trip that fed into commit tail latency.
-/// The total local window stays ~2 rounds so a genuinely unavailable block is not fetched
-/// too late; tune against the drop-to-submission latency histogram.
-const RECOVERY_INFLATE_RETRY_DELAYS: [Duration; 4] = [
-    Duration::from_millis(10),
-    Duration::from_millis(20),
-    Duration::from_millis(30),
-    Duration::from_millis(60),
-];
-
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
     /// A full-form block, or a minimal block successfully inflated to full form.
     Block(ExtendedSerializedBlock),
-    /// A minimal block that local state cannot inflate right now. It is dropped from the
-    /// stream; the retained encoding and claimed ref drive off-stream recovery.
-    Dropped { block_ref: BlockRef, minimal: Bytes },
+    /// A minimal block that local state cannot inflate right now. It is dropped from
+    /// the stream and parked with the recovery manager, keyed by the slot it is missing.
+    Dropped {
+        block_ref: BlockRef,
+        minimal: Bytes,
+        missing: Slot,
+    },
 }
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
@@ -74,6 +59,9 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
     block_inflater: Arc<BlockInflater>,
+    hint_cache: Arc<HintCache>,
+    recovery_commands: mpsc::Sender<RecoveryCommand>,
+    recovery_manager: Mutex<Option<JoinHandle<()>>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -85,17 +73,44 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         network_client: Arc<C>,
         authority_service: Arc<S>,
         dag_state: Arc<RwLock<DagState>>,
+        accepted_blocks: broadcast::Receiver<VerifiedBlock>,
     ) -> Self {
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
-        let block_inflater = Arc::new(BlockInflater::new(context.clone(), dag_state.clone()));
+        // Hint horizon matches DagState's in-memory cache: hints older than what the
+        // DAG itself would remember cannot aid inflation anyway.
+        let hint_cache = Arc::new(HintCache::new(
+            context.parameters.dag_state_cached_rounds as Round,
+        ));
+        let block_inflater = Arc::new(BlockInflater::with_hints(
+            context.clone(),
+            dag_state.clone(),
+            Some(hint_cache.clone()),
+        ));
+        // Bounded: a peer burst cannot accumulate unbounded minimal-block bytes in the
+        // command queue ahead of the actor's own caps. A full queue sheds work safely —
+        // a lost Park is recovered by sync once descendants reference the block, and a
+        // lost SlotHeard is covered by the at-park recheck and the accepted broadcast.
+        let (recovery_commands, command_receiver) = mpsc::channel(1024);
+        let recovery_manager = RecoveryManager::new(
+            context.clone(),
+            block_inflater.clone(),
+            hint_cache.clone(),
+            network_client.clone(),
+            Arc::downgrade(&authority_service),
+        );
+        let recovery_task =
+            spawn_monitored_task!(recovery_manager.run(command_receiver, accepted_blocks,));
         Self {
             context,
             network_client,
             authority_service,
             dag_state,
             block_inflater,
+            hint_cache,
+            recovery_commands,
+            recovery_manager: Mutex::new(Some(recovery_task)),
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
@@ -113,6 +128,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let authority_service = Arc::downgrade(&self.authority_service);
         let dag_state = Arc::downgrade(&self.dag_state);
         let block_inflater = self.block_inflater.clone();
+        let hint_cache = self.hint_cache.clone();
+        let recovery_commands = self.recovery_commands.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -122,6 +139,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             authority_service,
             dag_state,
             block_inflater,
+            hint_cache,
+            recovery_commands,
             peer,
         )));
     }
@@ -139,6 +158,19 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         for subscription in subscriptions {
             join_and_propagate_panic(subscription).await;
         }
+        // With the producers stopped, stop the recovery manager and AWAIT it: dropping
+        // the actor drops its JoinSet, which aborts every detached fetch/submission —
+        // nothing recovery-related outlives this call.
+        let manager = self.recovery_manager.lock().take();
+        if let Some(manager) = manager {
+            manager.abort();
+            let _ = manager.await;
+        }
+        self.context
+            .metrics
+            .node_metrics
+            .minimal_block_recovery_parked
+            .set(0);
     }
 
     fn unsubscribe_locked(&self, peer: AuthorityIndex, subscription: &mut Option<JoinHandle<()>>) {
@@ -164,8 +196,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     /// Replaces a minimal-form block with its inflated full serialization.
     ///
     /// Returns `Dropped` when the block cannot be inflated from local state; the caller
-    /// continues the stream immediately and recovers the block off-stream (see
-    /// `recover_dropped_block`). Dropping without recovery is not an option: a receiver
+    /// continues the stream immediately and parks the block with the recovery manager
+    /// (see `minimal_block_recovery`). Dropping without recovery is not an option: a receiver
     /// that falls a round behind finds every subsequent block from every peer
     /// un-inflatable (each references blocks it lacks), nothing reaches `block_manager`,
     /// so no missing ancestor is ever registered and the node wedges permanently.
@@ -222,7 +254,19 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     .minimal_block_inflate_drop
                     .with_label_values(&[peer_hostname, reason.label()])
                     .inc();
-                Ok(InflateOutcome::Dropped { block_ref, minimal })
+                // Ambiguity/mismatch park on their own slot: never woken, so the
+                // manager's immediate at-park re-attempt escalates them straight to the
+                // digest-verified fetch (waiting cannot repair them).
+                let missing = match reason {
+                    crate::minimal_block::FallbackReason::MissingAncestor(slot)
+                    | crate::minimal_block::FallbackReason::AmbiguousSlot(slot) => slot,
+                    crate::minimal_block::FallbackReason::DigestMismatch => Slot::from(block_ref),
+                };
+                Ok(InflateOutcome::Dropped {
+                    block_ref,
+                    minimal,
+                    missing,
+                })
             }
             Err(error @ InflateError::Malformed(_)) => {
                 node_metrics
@@ -234,109 +278,51 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         }
     }
 
-    /// Recovers a dropped minimal block off the subscription stream: first by re-trying
-    /// local inflation on a short schedule (the missing ancestor is almost always in
-    /// flight on its own stream and lands within tens of milliseconds), then — only if
-    /// local state still cannot resolve it — by fetching the full form from the sending
-    /// peer. Either way the block is submitted through the normal `handle_send_block`
-    /// path and enters `block_manager` like any other, so residual gaps suspend and the
-    /// regular missing-ancestor sync takes over recursively.
-    ///
-    /// Sleeping here is safe precisely because this task is off the stream; the same
-    /// sleeps on the stream path caused the Run 1 regional collapse.
-    ///
-    /// The fetch targets the sender only: the stream carries only the peer's own
-    /// proposals, so the sender is the author and must hold the full block, and an
-    /// unverified claimed ref is never injected into the shared sync machinery. The
-    /// response must hash to the claimed digest, so the peer cannot substitute a
-    /// different block.
-    async fn recover_dropped_block(
-        context: Arc<Context>,
-        block_inflater: Arc<BlockInflater>,
-        network_client: Arc<C>,
-        authority_service: Weak<S>,
+    /// Publishes a receipt-time digest hint for a just-received block, both forms:
+    /// a full block's digest is a hash of its bytes; a minimal block carries its claimed
+    /// digest. Identity is validated (author == authenticated peer, current epoch)
+    /// before insertion so a peer can only hint its own slots. Newly inserted hints wake
+    /// any blocks parked on that slot.
+    fn publish_hint(
+        context: &Context,
+        hint_cache: &HintCache,
+        recovery_commands: &mpsc::Sender<RecoveryCommand>,
         peer: AuthorityIndex,
-        block_ref: BlockRef,
-        minimal: Bytes,
+        block: &ExtendedSerializedBlock,
     ) {
-        let dropped_at = std::time::Instant::now();
-        let peer_hostname = context.committee.authority(peer).hostname.as_str();
-        let node_metrics = &context.metrics.node_metrics;
-        let recovery_metric = &node_metrics.minimal_block_recovery;
-
-        let mut recovered: Option<(Bytes, &'static str, &'static str)> = None;
-        const ATTEMPTS: [&str; RECOVERY_INFLATE_RETRY_DELAYS.len()] = ["1", "2", "3", "4"];
-        for (index, delay) in RECOVERY_INFLATE_RETRY_DELAYS.into_iter().enumerate() {
-            let attempt = ATTEMPTS[index];
-            sleep(delay).await;
-            match block_inflater.inflate(&minimal, peer) {
-                Ok((_signed_block, serialized)) => {
-                    node_metrics
-                        .minimal_blocks_received_bytes_saved
-                        .with_label_values(&[peer_hostname])
-                        .inc_by(serialized.len().saturating_sub(minimal.len()) as u64);
-                    recovered = Some((serialized, "inflated_late", attempt));
-                    break;
-                }
-                Err(InflateError::NeedFullBlock { .. }) => continue,
-                // Structurally invalid bytes cannot become valid; the stream path has
-                // already counted the peer fault.
-                Err(InflateError::Malformed(_)) => return,
-            }
-        }
-        if recovered.is_none() {
-            let result = network_client
-                .fetch_blocks(peer, vec![block_ref], vec![], false, RECOVERY_FETCH_TIMEOUT)
-                .await;
-            let serialized = match result {
-                Ok(blocks) => blocks
-                    .into_iter()
-                    .find(|bytes| VerifiedBlock::compute_digest(bytes) == block_ref.digest),
-                Err(e) => {
-                    debug!(
-                        "Recovery fetch of dropped block {} from peer {} {} failed: {}",
-                        block_ref, peer, peer_hostname, e
-                    );
-                    recovery_metric
-                        .with_label_values(&[peer_hostname, "fetch_failed", "fetch"])
-                        .inc();
+        let identity = match &block.minimal {
+            Some(minimal) => {
+                // Enforce the envelope cap before any decoding: hint extraction must not
+                // become a parse-DoS bypass around the inflation path's same check.
+                let max_minimal_size = (context.protocol_config.max_transactions_in_block_bytes()
+                    as usize)
+                    .saturating_mul(2);
+                if minimal.len() > max_minimal_size {
                     return;
                 }
-            };
-            let Some(serialized) = serialized else {
-                // The author could not produce its own claimed block: a peer fault.
-                recovery_metric
-                    .with_label_values(&[peer_hostname, "digest_mismatch", "fetch"])
-                    .inc();
-                return;
-            };
-            recovered = Some((serialized, "fetch_recovered", "fetch"));
+                minimal_block::peek_identity(minimal, &context.committee, peer)
+            }
+            None => {
+                let Ok(signed) = bcs::from_bytes::<SignedBlock>(&block.block) else {
+                    return;
+                };
+                if signed.author() != peer || signed.epoch() != context.committee.epoch() {
+                    return;
+                }
+                Some(BlockRef::new(
+                    signed.round(),
+                    signed.author(),
+                    VerifiedBlock::compute_digest(&block.block),
+                ))
+            }
+        };
+        let Some(identity) = identity else {
+            return;
+        };
+        let slot = Slot::from(identity);
+        if hint_cache.insert(slot, identity.digest) {
+            let _ = recovery_commands.try_send(RecoveryCommand::SlotHeard(slot));
         }
-
-        let Some((serialized, result, attempt)) = recovered else {
-            return;
-        };
-        let Some(authority_service) = authority_service.upgrade() else {
-            return;
-        };
-        let block = ExtendedSerializedBlock {
-            block: serialized,
-            excluded_ancestors: vec![],
-            minimal: None,
-        };
-        // A service rejection is counted as such, not as success. Ok covers accepted,
-        // suspended, and duplicate blocks alike (block_manager dedups), so this measures
-        // delivery, not acceptance.
-        let outcome = match authority_service.handle_send_block(peer, block).await {
-            Ok(()) => result,
-            Err(_) => "rejected",
-        };
-        recovery_metric
-            .with_label_values(&[peer_hostname, outcome, attempt])
-            .inc();
-        node_metrics
-            .minimal_block_recovery_latency
-            .observe(dropped_at.elapsed().as_secs_f64());
     }
 
     async fn subscription_loop(
@@ -345,6 +331,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         authority_service: Weak<S>,
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
+        hint_cache: Arc<HintCache>,
+        recovery_commands: mpsc::Sender<RecoveryCommand>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -357,8 +345,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
         let peer_hostname = &context.committee.authority(peer).hostname;
         let mut retries: i64 = 0;
-        // Bounds concurrent off-stream recovery fetches to this peer, across reconnects.
-        let recovery_permits = Arc::new(Semaphore::new(MAX_INFLIGHT_RECOVERIES));
         'subscription: loop {
             context
                 .metrics
@@ -453,59 +439,40 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
+                        Self::publish_hint(&context, &hint_cache, &recovery_commands, peer, &block);
                         let block = match Self::inflate_received_block(
                             &context,
                             &block_inflater,
                             peer,
                             block,
                         ) {
-                            // Dropped from the stream, recovered off it. The stream
-                            // itself is healthy — it delivered a well-formed block — so
-                            // the reconnect backoff resets as for an accepted block.
-                            // (Malformed errors below deliberately do NOT reset:
-                            // escalating backoff is the penalty for a misbehaving peer.)
-                            Ok(InflateOutcome::Dropped { block_ref, minimal }) => {
+                            // Dropped from the stream, parked with the recovery
+                            // manager. The stream itself is healthy — it delivered a
+                            // well-formed block — so the reconnect backoff resets as
+                            // for an accepted block. (Malformed errors below
+                            // deliberately do NOT reset: escalating backoff is the
+                            // penalty for a misbehaving peer.)
+                            Ok(InflateOutcome::Dropped {
+                                block_ref,
+                                minimal,
+                                missing,
+                            }) => {
                                 retries = 0;
                                 backoff.reset();
-                                match recovery_permits.clone().try_acquire_owned() {
-                                    Ok(permit) => {
-                                        let context = context.clone();
-                                        let block_inflater = block_inflater.clone();
-                                        let network_client = network_client.clone();
-                                        // Weak: a detached recovery task must not keep the
-                                        // service (and through it DagState) alive across
-                                        // an authority shutdown.
-                                        let authority_service = Arc::downgrade(&authority_service);
-                                        spawn_monitored_task!(async move {
-                                            let _permit = permit;
-                                            Self::recover_dropped_block(
-                                                context,
-                                                block_inflater,
-                                                network_client,
-                                                authority_service,
-                                                peer,
-                                                block_ref,
-                                                minimal,
-                                            )
-                                            .await;
-                                        });
-                                    }
-                                    Err(_) => {
-                                        // Saturated: skip. Later drops keep spawning
-                                        // recoveries, and any block that does inflate
-                                        // registers the gap with block_manager, so no
-                                        // single recovery is load-bearing.
-                                        context
-                                            .metrics
-                                            .node_metrics
-                                            .minimal_block_recovery
-                                            .with_label_values(&[
-                                                peer_hostname.as_str(),
-                                                "saturated",
-                                                "none",
-                                            ])
-                                            .inc();
-                                    }
+                                if recovery_commands
+                                    .try_send(RecoveryCommand::Park {
+                                        peer,
+                                        block_ref,
+                                        minimal,
+                                        missing,
+                                    })
+                                    .is_err()
+                                {
+                                    context
+                                        .metrics
+                                        .node_metrics
+                                        .minimal_block_recovery_intents_dropped
+                                        .inc();
                                 }
                                 continue 'stream;
                             }
@@ -808,11 +775,13 @@ mod test {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag,
+            accepted_rx,
         );
         subscriber.subscribe(peer);
 
@@ -857,12 +826,11 @@ mod test {
         );
     }
 
-    /// The common production case: the ancestor a dropped block was missing arrives on
-    /// its own stream milliseconds later, so recovery resolves by local re-inflation —
-    /// no network fetch at all. This is what keeps recovery traffic near zero (live
-    /// measurement: ~47% of received blocks drop on an in-flight ancestor).
+    /// A parked block wakes when its missing ancestor is announced on Core's
+    /// accepted-block broadcast (the path for ancestors that arrive via sync rather
+    /// than our streams) and heals by re-inflation — no network fetch at all.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn dropped_block_inflates_late_without_fetch() {
+    async fn parked_block_wakes_on_accepted_broadcast_without_fetch() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -910,19 +878,23 @@ mod test {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
+        let (accepted_tx, accepted_rx) = broadcast::channel(64);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag.clone(),
+            accepted_rx,
         );
         subscriber.subscribe(peer);
 
-        // Let the stream deliver and drop A (its ancestors are unknown), then land the
-        // ancestors locally before the first 10 ms recovery retry fires.
+        // Let the stream deliver and park A (its ancestors are unknown), then land the
+        // ancestors and announce them on the accepted-block broadcast — the wake path
+        // used by blocks that arrive via sync rather than our streams.
         tokio::time::sleep(Duration::from_millis(2)).await;
         for block in round2_blocks {
-            receiver_dag.write().accept_block(block);
+            receiver_dag.write().accept_block(block.clone());
+            accepted_tx.send(block).unwrap();
         }
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -942,10 +914,345 @@ mod test {
                 .metrics
                 .node_metrics
                 .minimal_block_recovery
-                .with_label_values(&[peer_hostname.as_str(), "inflated_late", "1"])
+                .with_label_values(&[peer_hostname.as_str(), "inflated_late", "event"])
                 .get(),
             1
         );
+    }
+
+    /// The receipt-time hint path end-to-end: a parked block heals the moment digests
+    /// for its missing slots are HEARD (bytes-arrival), with an empty DAG and zero
+    /// fetches — the property that recreates baseline's verify-during-arrival overlap.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_block_wakes_on_receipt_hint_without_dag_or_fetch() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
+            .iter()
+            .map(|b| b.reference())
+            .collect();
+        let mut round2_refs = Vec::new();
+        for authority in 0..4u32 {
+            let block = VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(2, authority)
+                    .set_ancestors_raw(genesis_refs.clone())
+                    .build(),
+            );
+            round2_refs.push(block.reference());
+            sender_dag.write().accept_block(block);
+        }
+        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        let block_a = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(3, peer.value() as u32)
+                .set_ancestors_raw(round2_refs.clone())
+                .build(),
+        );
+        let network_client = Arc::new(FixedStreamClient {
+            blocks: vec![ExtendedSerializedBlock {
+                block: block_a.serialized().clone(),
+                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
+                excluded_ancestors: vec![],
+            }],
+            fetchable: vec![],
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+
+        // A parks (round-2 ancestors unknown). Publish receipt-time hints carrying the
+        // TRUE digests — as if the ancestors' bytes just landed on their own streams —
+        // and announce the slots. The receiver DAG stays empty throughout.
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        for ancestor in &round2_refs {
+            let slot = Slot::from(*ancestor);
+            assert!(subscriber.hint_cache.insert(slot, ancestor.digest));
+            subscriber
+                .recovery_commands
+                .try_send(RecoveryCommand::SlotHeard(slot))
+                .unwrap();
+        }
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            if !authority_service.lock().handle_send_block.is_empty() {
+                break;
+            }
+        }
+
+        let received = authority_service.lock().handle_send_block.clone();
+        assert_eq!(received.len(), 1);
+        assert_eq!(&received[0].1.block, block_a.serialized());
+        assert!(network_client.fetch_calls.lock().is_empty());
+        let peer_hostname = &context.committee.authority(peer).hostname;
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery
+                .with_label_values(&[peer_hostname.as_str(), "hint_inflated", "event"])
+                .get(),
+            1
+        );
+    }
+
+    /// A block missing several ancestors re-parks from slot to slot as each hint lands,
+    /// healing with zero fetches once the last gap closes.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_block_rekeys_across_missing_slots() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
+            .iter()
+            .map(|b| b.reference())
+            .collect();
+        let mut round2_refs = Vec::new();
+        for authority in 0..4u32 {
+            let block = VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(2, authority)
+                    .set_ancestors_raw(genesis_refs.clone())
+                    .build(),
+            );
+            round2_refs.push(block.reference());
+            sender_dag.write().accept_block(block);
+        }
+        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        let block_a = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(3, peer.value() as u32)
+                .set_ancestors_raw(round2_refs.clone())
+                .build(),
+        );
+        let network_client = Arc::new(FixedStreamClient {
+            blocks: vec![ExtendedSerializedBlock {
+                block: block_a.serialized().clone(),
+                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
+                excluded_ancestors: vec![],
+            }],
+            fetchable: vec![],
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        // Feed the missing digests ONE slot at a time; each hint wakes the entry,
+        // which re-parks on the next gap until the final hint completes it.
+        for ancestor in round2_refs.iter().filter(|r| r.author != peer) {
+            assert!(authority_service.lock().handle_send_block.is_empty());
+            let slot = Slot::from(*ancestor);
+            assert!(subscriber.hint_cache.insert(slot, ancestor.digest));
+            subscriber
+                .recovery_commands
+                .try_send(RecoveryCommand::SlotHeard(slot))
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            if !authority_service.lock().handle_send_block.is_empty() {
+                break;
+            }
+        }
+        let received = authority_service.lock().handle_send_block.clone();
+        assert_eq!(received.len(), 1);
+        assert_eq!(&received[0].1.block, block_a.serialized());
+        assert!(network_client.fetch_calls.lock().is_empty());
+    }
+
+    /// Beyond the per-peer parking cap, new drops divert to the digest-verified fetch
+    /// path instead of being silently discarded.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parking_cap_overflow_diverts_to_fetch() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
+            .iter()
+            .map(|b| b.reference())
+            .collect();
+        let mut round2_refs = Vec::new();
+        for authority in 0..4u32 {
+            let block = VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(2, authority)
+                    .set_ancestors_raw(genesis_refs.clone())
+                    .build(),
+            );
+            round2_refs.push(block.reference());
+            sender_dag.write().accept_block(block);
+        }
+        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        // 257 distinct un-inflatable blocks from one peer: one more than the per-peer
+        // parking cap.
+        let mut wire = Vec::new();
+        let mut fetchable = Vec::new();
+        for i in 0..257u64 {
+            let block = VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(3, peer.value() as u32)
+                    .set_ancestors_raw(round2_refs.clone())
+                    .set_timestamp_ms(1000 + i)
+                    .build(),
+            );
+            wire.push(ExtendedSerializedBlock {
+                block: block.serialized().clone(),
+                minimal: Some(sender_inflater.serialize(&block, 0).unwrap()),
+                excluded_ancestors: vec![],
+            });
+            fetchable.push(block.serialized().clone());
+        }
+        let network_client = Arc::new(FixedStreamClient {
+            blocks: wire,
+            fetchable,
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+
+        for _ in 0..20 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            if context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_overflow
+                .get()
+                > 0
+            {
+                break;
+            }
+        }
+        // The 257th drop overflowed the per-peer cap and went straight to fetch.
+        assert!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_overflow
+                .get()
+                >= 1
+        );
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            if !network_client.fetch_calls.lock().is_empty() {
+                break;
+            }
+        }
+        assert!(!network_client.fetch_calls.lock().is_empty());
+        assert!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get()
+                <= 256
+        );
+    }
+
+    /// Hint identity is validated before insertion: a block authored by someone other
+    /// than the authenticated stream peer, or from a foreign epoch, publishes nothing.
+    #[tokio::test]
+    async fn foreign_author_and_epoch_hints_are_rejected() {
+        let (context, _keys) = Context::new_for_test(4);
+        let peer = context.committee.to_authority_index(2).unwrap();
+        let hint_cache = HintCache::new(512);
+        let (commands, mut command_rx) = mpsc::channel(16);
+
+        // Full-form block authored by authority 1, delivered over peer 2's stream.
+        let foreign = VerifiedBlock::new_for_test(crate::block::TestBlock::new(5, 1).build());
+        let envelope = ExtendedSerializedBlock {
+            block: foreign.serialized().clone(),
+            minimal: None,
+            excluded_ancestors: vec![],
+        };
+        Subscriber::<FixedStreamClient, Mutex<TestService>>::publish_hint(
+            &context,
+            &hint_cache,
+            &commands,
+            peer,
+            &envelope,
+        );
+        assert!(
+            hint_cache
+                .candidates(Slot::from(foreign.reference()))
+                .is_empty()
+        );
+        assert!(command_rx.try_recv().is_err());
+
+        // Correct author publishes and wakes.
+        let own = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(5, peer.value() as u32).build(),
+        );
+        let envelope = ExtendedSerializedBlock {
+            block: own.serialized().clone(),
+            minimal: None,
+            excluded_ancestors: vec![],
+        };
+        Subscriber::<FixedStreamClient, Mutex<TestService>>::publish_hint(
+            &context,
+            &hint_cache,
+            &commands,
+            peer,
+            &envelope,
+        );
+        assert_eq!(
+            hint_cache.candidates(Slot::from(own.reference())),
+            vec![own.reference().digest]
+        );
+        assert!(command_rx.try_recv().is_ok());
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -961,6 +1268,7 @@ mod test {
             network_client,
             authority_service.clone(),
             dag_state,
+            broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1010,6 +1318,7 @@ mod test {
             network_client.clone(),
             authority_service,
             dag_state.clone(),
+            broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();

@@ -25,13 +25,24 @@ use prost::Message as _;
 
 use crate::block::{Block, BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock};
 
-/// Digests of blocks known locally at a slot. Backed by DagState in production and by
-/// simple maps in tests.
+/// Ordered digest candidates for a slot. Backed in production by accepted DAG state
+/// (authoritative, first) plus receipt-time hints (untrusted, after), and by simple maps
+/// in tests.
 pub(crate) trait AncestorDigestResolver {
-    /// All digests known at `slot`, including genesis blocks at round 0.
-    /// May return 0 (unknown slot), 1 (unique block), or more (equivocation).
+    /// Ordered candidate digests at `slot`, including genesis blocks at round 0:
+    /// accepted-DAG candidates first, then hints. May return 0 (unknown slot), 1
+    /// (unique), or more (equivocation and/or hints). Callers bound how many
+    /// candidates they will try; an untrusted hint must never displace or precede an
+    /// accepted digest.
     fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest>;
 }
+
+/// Total reconstruction attempts per block. Bounds the work an equivocating or
+/// hint-flooding peer can force; anything deeper falls back to fetching the full block.
+const MAX_RECONSTRUCTION_ATTEMPTS: usize = 3;
+
+/// Candidates tolerated at one slot before reconstruction gives up as ambiguous.
+const MAX_SLOT_CANDIDATES: usize = 3;
 
 /// The `Minimal` arm of the block wire envelope.
 #[derive(Clone, prost::Message)]
@@ -166,6 +177,31 @@ pub(crate) fn serialize_minimal(
     Ok(minimal.encode_to_vec().into())
 }
 
+/// Cheaply decodes a minimal block's claimed identity — (round, author, claimed digest)
+/// — validating that the author matches the authenticated stream peer and the epoch is
+/// current. Used to publish receipt-time hints; returns None on any irregularity (the
+/// inflation path is where faults are counted and penalized).
+pub(crate) fn peek_identity(
+    serialized: &[u8],
+    committee: &Committee,
+    expected_author: AuthorityIndex,
+) -> Option<BlockRef> {
+    let minimal = MinimalBlock::decode(serialized).ok()?;
+    let claimed_digest: [u8; 32] = minimal.claimed_block_digest.as_ref().try_into().ok()?;
+    let skeleton: Block = bcs::from_bytes(&minimal.block_sans_ancestors).ok()?;
+    if matches!(skeleton, Block::V3(_))
+        || skeleton.author() != expected_author
+        || skeleton.epoch() != committee.epoch()
+    {
+        return None;
+    }
+    Some(BlockRef::new(
+        skeleton.round(),
+        skeleton.author(),
+        BlockDigest(claimed_digest),
+    ))
+}
+
 /// Decodes and inflates a minimal block back into an unverified `SignedBlock` and its
 /// canonical serialized bytes, ready for the normal `verify_and_vote` path.
 ///
@@ -227,6 +263,12 @@ pub(crate) fn deserialize_minimal(
             committee.size()
         )));
     }
+    if authors.is_empty() {
+        // Every non-genesis block carries at least its own parent, and genesis blocks
+        // are never broadcast; an empty ancestor list is a peer fault (and would
+        // otherwise leave the reconstruction search with nothing to vary).
+        return Err(InflateError::Malformed("empty ancestor authors".into()));
+    }
     let mut seen = vec![false; committee.size()];
     for &author in authors {
         let Some(_) = committee.to_authority_index(author as usize) else {
@@ -279,7 +321,11 @@ pub(crate) fn deserialize_minimal(
 
     let block_ref = BlockRef::new(skeleton.round(), skeleton.author(), claimed_digest);
     let default_round = skeleton.round().saturating_sub(1);
-    let mut ancestors = Vec::with_capacity(authors.len());
+    // Collect ordered digest candidates per ancestor. Slots the sender resolved explicitly
+    // have exactly one candidate; omitted slots take the resolver's ordered candidates
+    // (accepted-DAG digests first, then receipt-time hints — see AncestorDigestResolver).
+    let mut candidates: Vec<(Round, AuthorityIndex, Vec<BlockDigest>)> =
+        Vec::with_capacity(authors.len());
     for &author in authors {
         let authority = committee
             .to_authority_index(author as usize)
@@ -287,39 +333,104 @@ pub(crate) fn deserialize_minimal(
         let o = minimal.overrides.iter().find(|o| o.author == author);
         let round = o.and_then(|o| o.round).unwrap_or(default_round);
         let slot = Slot::new(round, authority);
-        let digest = match o.and_then(|o| o.digest.as_ref()) {
-            Some(digest) => BlockDigest(digest.as_ref().try_into().expect("validated above")),
-            None => match resolver.digests_at_slot(slot).as_slice() {
-                [digest] => *digest,
-                [] => {
+        let slot_candidates = match o.and_then(|o| o.digest.as_ref()) {
+            Some(digest) => {
+                vec![BlockDigest(
+                    digest.as_ref().try_into().expect("validated above"),
+                )]
+            }
+            None => {
+                let resolved = resolver.digests_at_slot(slot);
+                if resolved.is_empty() {
                     return Err(InflateError::NeedFullBlock {
                         block_ref,
                         reason: FallbackReason::MissingAncestor(slot),
                     });
                 }
-                _ => {
+                if resolved.len() > MAX_SLOT_CANDIDATES {
+                    // Heavy equivocation (or hint flooding): reconstruction search space
+                    // is not worth exploring; the full block resolves it.
                     return Err(InflateError::NeedFullBlock {
                         block_ref,
                         reason: FallbackReason::AmbiguousSlot(slot),
                     });
                 }
-            },
+                resolved
+            }
         };
-        ancestors.push(BlockRef::new(round, authority, digest));
+        candidates.push((round, authority, slot_candidates));
     }
 
-    let signed_block =
-        SignedBlock::from_parts(skeleton.with_ancestors(ancestors), minimal.signature);
-    let serialized_block = signed_block
-        .serialize()
-        .map_err(|e| InflateError::Malformed(format!("bcs encode: {e}")))?;
-    if VerifiedBlock::compute_digest(&serialized_block) != claimed_digest {
-        return Err(InflateError::NeedFullBlock {
-            block_ref,
-            reason: FallbackReason::DigestMismatch,
-        });
+    // Bounded reconstruction search: the baseline attempt takes every slot's first
+    // candidate; each further attempt varies a single ambiguous slot to its next
+    // candidate. The budget bounds TOTAL work per block, not per slot, so several
+    // ambiguous slots cannot multiply into a combinatorial search. The claimed digest
+    // selects the correct combination; equivocation deep enough to defeat this bound is
+    // resolved by fetching the full block instead.
+    let mut attempts_left = MAX_RECONSTRUCTION_ATTEMPTS;
+    let mut variant: Option<(usize, usize)> = None; // (slot index, candidate index)
+    loop {
+        let mut ancestors = Vec::with_capacity(candidates.len());
+        for (index, (round, authority, slot_candidates)) in candidates.iter().enumerate() {
+            let candidate = match variant {
+                Some((slot, choice)) if slot == index => slot_candidates[choice],
+                _ => slot_candidates[0],
+            };
+            ancestors.push(BlockRef::new(*round, *authority, candidate));
+        }
+        let signed_block = SignedBlock::from_parts(
+            skeleton.clone().with_ancestors(ancestors),
+            minimal.signature.clone(),
+        );
+        let serialized_block = signed_block
+            .serialize()
+            .map_err(|e| InflateError::Malformed(format!("bcs encode: {e}")))?;
+        if VerifiedBlock::compute_digest(&serialized_block) == claimed_digest {
+            return Ok((signed_block, serialized_block));
+        }
+        attempts_left -= 1;
+        if attempts_left == 0 {
+            return Err(InflateError::NeedFullBlock {
+                block_ref,
+                reason: FallbackReason::DigestMismatch,
+            });
+        }
+        variant = match next_variant(&candidates, variant) {
+            Some(v) => Some(v),
+            None => {
+                return Err(InflateError::NeedFullBlock {
+                    block_ref,
+                    reason: FallbackReason::DigestMismatch,
+                });
+            }
+        };
     }
-    Ok((signed_block, serialized_block))
+}
+
+/// Advances the single-slot variation cursor over ambiguous slots, in slot order then
+/// candidate order. Returns None when all single-slot variations are exhausted.
+fn next_variant(
+    candidates: &[(Round, AuthorityIndex, Vec<BlockDigest>)],
+    current: Option<(usize, usize)>,
+) -> Option<(usize, usize)> {
+    if candidates.is_empty() {
+        return None;
+    }
+    let (mut slot, mut choice) = match current {
+        None => (0, 0),
+        Some((slot, choice)) => (slot, choice),
+    };
+    loop {
+        choice += 1;
+        if choice < candidates[slot].2.len() {
+            return Some((slot, choice));
+        }
+        slot += 1;
+        choice = 0;
+        if slot >= candidates.len() {
+            return None;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -590,13 +701,26 @@ mod tests {
             other => panic!("expected MissingAncestor fallback, got {other:?}"),
         }
 
-        // Receiver seeing an equivocation the sender didn't => AmbiguousSlot.
+        // Receiver seeing an equivocation the sender didn't: bounded multi-try lets the
+        // claimed digest select the right candidate — reconstruction now SUCCEEDS.
         let mut ambiguous = MapResolver::default();
         for ancestor in &ancestors {
             ambiguous.insert(*ancestor);
         }
         ambiguous.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
-        match deserialize_minimal(&minimal, &context.committee, block.author(), &ambiguous)
+        let (_signed, serialized) =
+            deserialize_minimal(&minimal, &context.committee, block.author(), &ambiguous).unwrap();
+        assert_eq!(&serialized, block.serialized());
+
+        // Beyond the per-slot candidate bound, the search space is refused outright.
+        let mut flooded = MapResolver::default();
+        for ancestor in &ancestors {
+            flooded.insert(*ancestor);
+        }
+        for _ in 0..MAX_SLOT_CANDIDATES {
+            flooded.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
+        }
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &flooded)
             .map(|_| ())
         {
             Err(InflateError::NeedFullBlock { reason, .. }) => {
@@ -607,6 +731,53 @@ mod tests {
             }
             other => panic!("expected AmbiguousSlot fallback, got {other:?}"),
         }
+    }
+
+    /// The reconstruction budget bounds TOTAL attempts, not per-slot candidates: with
+    /// two ambiguous slots whose correct digests both sit in second position, no
+    /// single-slot variation within the budget can satisfy the claimed digest, so the
+    /// codec refuses (DigestMismatch => fetch) instead of searching combinatorially.
+    #[tokio::test]
+    async fn reconstruction_attempt_budget_is_global() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(31);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors.clone())
+            .build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+
+        // Two slots each gain a bogus candidate that sorts BEFORE the real digest.
+        let mut skewed = MapResolver::default();
+        for (index, ancestor) in ancestors.iter().enumerate() {
+            if index == 2 || index == 3 {
+                skewed.insert(BlockRef::new(9, ancestor.author, BlockDigest::MIN));
+            }
+            skewed.insert(*ancestor);
+        }
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &skewed).map(|_| ())
+        {
+            // Baseline (both wrong) + two single-slot variations cannot fix two slots
+            // at once: the budget correctly refuses rather than expanding the search.
+            Err(InflateError::NeedFullBlock { reason, .. }) => {
+                assert_eq!(reason, FallbackReason::DigestMismatch);
+            }
+            other => panic!("expected DigestMismatch fallback, got {other:?}"),
+        }
+
+        // One ambiguous slot alone resolves within the budget.
+        let mut single = MapResolver::default();
+        for (index, ancestor) in ancestors.iter().enumerate() {
+            if index == 2 {
+                single.insert(BlockRef::new(9, ancestor.author, BlockDigest::MIN));
+            }
+            single.insert(*ancestor);
+        }
+        let (_signed, serialized) =
+            deserialize_minimal(&minimal, &context.committee, block.author(), &single).unwrap();
+        assert_eq!(&serialized, block.serialized());
     }
 
     #[tokio::test]
@@ -677,6 +848,15 @@ mod tests {
         // Bad digest length.
         assert!(matches!(
             tamper(&|m| m.claimed_block_digest = Bytes::from_static(&[1, 2, 3])),
+            Err(InflateError::Malformed(_))
+        ));
+        // Empty ancestor list (would otherwise reach the reconstruction search with
+        // nothing to vary — regression guard for a remote panic).
+        assert!(matches!(
+            tamper(&|m| {
+                m.ancestor_authors.clear();
+                m.overrides.clear();
+            }),
             Err(InflateError::Malformed(_))
         ));
         // Duplicate ancestor author.

@@ -23,6 +23,7 @@ use crate::{
         AncestorDigestResolver, InflateError, MinimalBlockError, deserialize_minimal,
         serialize_minimal,
     },
+    minimal_block_recovery::HintCache,
 };
 
 /// Minimal-block codec bound to live DAG state, usable on both the send side (digest
@@ -39,6 +40,10 @@ pub(crate) struct BlockInflater {
     // Genesis digests by authority index: deterministic from the committee, so round-0
     // refs never depend on cache contents and are never treated as missing.
     genesis_digests: Vec<BlockDigest>,
+    // Receipt-time digest hints (receive side only; None on the send side). Candidates
+    // from accepted DAG state always precede hints — an untrusted hint must never
+    // displace an accepted digest (the codec tries candidates in order).
+    hint_cache: Option<Arc<HintCache>>,
 }
 
 struct DagStateResolver<'a>(&'a BlockInflater);
@@ -48,20 +53,38 @@ impl AncestorDigestResolver for DagStateResolver<'_> {
         if slot.round == GENESIS_ROUND {
             return vec![self.0.genesis_digests[slot.authority]];
         }
-        let Some(dag_state) = self.0.dag_state.upgrade() else {
-            return vec![];
+        let mut candidates: Vec<BlockDigest> = match self.0.dag_state.upgrade() {
+            Some(dag_state) => {
+                let guard = dag_state.read();
+                guard
+                    .get_uncommitted_blocks_at_slot(slot)
+                    .iter()
+                    .map(|block| block.digest())
+                    .collect()
+            }
+            None => vec![],
         };
-        let guard = dag_state.read();
-        guard
-            .get_uncommitted_blocks_at_slot(slot)
-            .iter()
-            .map(|block| block.digest())
-            .collect()
+        if let Some(hints) = &self.0.hint_cache {
+            for hint in hints.candidates(slot) {
+                if !candidates.contains(&hint) {
+                    candidates.push(hint);
+                }
+            }
+        }
+        candidates
     }
 }
 
 impl BlockInflater {
     pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+        Self::with_hints(context, dag_state, None)
+    }
+
+    pub(crate) fn with_hints(
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+        hint_cache: Option<Arc<HintCache>>,
+    ) -> Self {
         let genesis_digests = genesis_blocks(&context)
             .iter()
             .map(|block| block.digest())
@@ -70,6 +93,7 @@ impl BlockInflater {
             context,
             dag_state: Arc::downgrade(&dag_state),
             genesis_digests,
+            hint_cache,
         }
     }
 
