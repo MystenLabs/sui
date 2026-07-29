@@ -15473,6 +15473,7 @@ dependencies = [
  "shared-crypto",
  "sui-display",
  "sui-futures",
+ "sui-indexer-alt-graphql-macros",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
@@ -15497,6 +15498,15 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "sui-indexer-alt-graphql-macros"
+version = "1.77.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

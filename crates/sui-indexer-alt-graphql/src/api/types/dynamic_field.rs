@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::TypeTag;
 use sui_types::dynamic_field::DYNAMIC_FIELD_FIELD_STRUCT_NAME;
@@ -134,7 +135,7 @@ pub(crate) enum Error {
 ///
 /// - Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
 /// - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
-#[Object]
+#[GatedObject]
 impl DynamicField {
     /// The dynamic field's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {

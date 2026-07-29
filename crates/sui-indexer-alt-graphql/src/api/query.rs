@@ -11,6 +11,7 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
 use prost_types::FieldMask;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_rpc::field::FieldMaskUtil;
@@ -29,6 +30,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::address::AddressKey;
+use crate::api::types::available_range::gate_filtered;
 use crate::api::types::checkpoint;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
@@ -86,7 +88,7 @@ pub struct Query {
     pub(crate) scope: Option<Scope>,
 }
 
-#[Object]
+#[GatedObject]
 impl Query {
     /// Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
     async fn node(&self, ctx: &Context<'_>, id: Id) -> Option<Result<Node, RpcError>> {
@@ -178,6 +180,16 @@ impl Query {
         at_checkpoint: Option<UInt53>,
     ) -> Option<Result<Address, RpcError<address::Error>>> {
         async {
+            // `name` is looked up via `obj_versions` (see collect_pipelines!'s `Query.[address]`
+            // entry) -- gate explicitly rather than relying on #[GatedObject]'s automatic,
+            // unconditional check, since the requirement depends on whether `name` was provided.
+            gate_filtered(
+                ctx,
+                "Query",
+                "address",
+                name.is_some().then(|| vec!["name".to_string()]),
+            )
+            .map_err(upcast)?;
             Address::by_key(
                 ctx,
                 self.scope(ctx)?,
@@ -319,7 +331,13 @@ impl Query {
                 let limits = pagination.limits("Query", "events");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                Event::paginate(ctx, scope, page, filter.unwrap_or_default()).await
+                // `collect_pipelines!`'s `Query.[events]` entry picks between `ev_emit_mod` and
+                // `ev_struct_inst` based on the `module` filter -- gate explicitly with the real
+                // filter rather than relying on #[GatedObject]'s automatic, unconditional check,
+                // which would always assume the `module`-absent branch.
+                let filter = filter.unwrap_or_default();
+                gate_filtered(ctx, "Query", "events", Some(filter.active_filters()))?;
+                Event::paginate(ctx, scope, page, filter).await
             }
             .await,
         )
@@ -494,6 +512,17 @@ impl Query {
         at_checkpoint: Option<UInt53>,
     ) -> Option<Result<Object, RpcError<object::Error>>> {
         async {
+            // `version` exempts this query from needing `obj_versions` (see
+            // collect_pipelines!'s `Query.[object]` entry) -- gate explicitly rather than relying
+            // on #[GatedObject]'s automatic, unconditional check, which would always require
+            // `obj_versions` even when `version` pins an exact, already-known version.
+            gate_filtered(
+                ctx,
+                "Query",
+                "object",
+                version.is_some().then(|| vec!["version".to_string()]),
+            )
+            .map_err(upcast)?;
             Object::by_key(
                 ctx,
                 self.scope(ctx)?,

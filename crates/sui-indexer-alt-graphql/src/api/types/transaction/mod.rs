@@ -48,6 +48,7 @@ use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::PipelineContext;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
@@ -370,6 +371,9 @@ impl Transaction {
             type_: "Query".to_string(),
             field: Some("transactions".to_string()),
             filters: Some(filter.active_filters()),
+            // Reachable only when the `if let Some(reader) = ...` branch above wasn't taken, so
+            // there's no alpha ledger reader configured here.
+            pipeline_context: PipelineContext::default(),
         };
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 

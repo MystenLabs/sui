@@ -8,6 +8,7 @@ use async_graphql::Context;
 use async_graphql::Interface;
 use async_graphql::Object;
 use async_graphql::SimpleObject;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_package_resolver::DataDef;
 use sui_package_resolver::MoveData;
 use sui_package_resolver::OpenSignatureBody;
@@ -100,7 +101,7 @@ struct MoveField<'f> {
 }
 
 /// Description of a datatype, defined in a Move module.
-#[Object]
+#[GatedObject]
 impl MoveDatatype {
     /// The module that this datatype is defined in.
     async fn module(&self, _ctx: &Context<'_>) -> Result<&MoveModule, RpcError> {
@@ -168,7 +169,7 @@ impl MoveDatatype {
 }
 
 /// Description of an enum type, defined in a Move module.
-#[Object]
+#[GatedObject]
 impl MoveEnum {
     /// The module that this enum is defined in.
     async fn module(&self, ctx: &Context<'_>) -> Result<&MoveModule, RpcError> {
@@ -216,7 +217,7 @@ impl MoveEnum {
 }
 
 /// Description of a struct type, defined in a Move module.
-#[Object]
+#[GatedObject]
 impl MoveStruct {
     /// The module that this struct is defined in.
     async fn module(&self, ctx: &Context<'_>) -> Result<&MoveModule, RpcError> {

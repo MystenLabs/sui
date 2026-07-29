@@ -9,6 +9,7 @@ use async_graphql::Object;
 use async_graphql::SimpleObject;
 use async_graphql::connection::Connection;
 use move_core_types::language_storage::StructTag;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress as NativeAddress;
@@ -116,7 +117,7 @@ enum NativeContents {
 }
 
 /// An object representing metadata about a coin type.
-#[Object]
+#[GatedObject]
 impl CoinMetadata {
     /// The CoinMetadata's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {

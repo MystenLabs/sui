@@ -20,6 +20,7 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
@@ -238,7 +239,7 @@ pub(crate) type CVersion = JsonCursor<u64>;
 /// An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 ///
 /// Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
-#[Object]
+#[GatedObject]
 impl Object {
     /// The object's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
