@@ -1,0 +1,30 @@
+// the old checker guard on UnpackVariantImmRef can never fire: type safety forces an immutable
+// operand
+
+//# run
+mvir 0xa02::imm_unpack_with_live_mut_field {
+
+public enum X has drop { V { a: u64, b: u64 } }
+
+// the configuration the dead guard was written for, reachable only through freeze
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let m: &mut u64;
+    let unused: &mut u64;
+    let ia: &u64;
+    let ib: &u64;
+label b0:
+    e = X::V { a: 1, b: 2 };
+    r = &mut e;
+    &mut X::V { a: m, b: unused } = copy(r);
+    _ = move(unused);
+    &X::V { a: ia, b: ib } = freeze(move(r));
+    assert(*copy(ia) == 1, 42);
+    *move(m) = 9;
+    assert(*move(ia) == 9, 43);
+    assert(*move(ib) == 2, 44);
+    return;
+}
+
+}

@@ -1,0 +1,79 @@
+// enum programs the new checker accepts and the old rejects, executed
+
+//# run
+mvir 0xd01::aliased_mut_unpacks {
+
+public enum X has drop { V { a: u64 } }
+
+// old: UnpackVariantMutRef needs no full borrows; new: the field refs are epsilon aliases
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let alias: &mut Self::X;
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+    e = X::V { a: 0 };
+    r = &mut e;
+    alias = copy(r);
+    &mut X::V { a: a } = move(r);
+    &mut X::V { a: b } = move(alias);
+    *move(a) = 1;
+    *copy(b) = 2;
+    assert(*move(b) == 2, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0xd02::copy_enum_with_live_field {
+
+public enum X has copy, drop { V { a: u64 } }
+
+// old: COPYLOC_EXISTS_BORROW_ERROR
+entry fun t() {
+    let e: Self::X;
+    let c: Self::X;
+    let a: &mut u64;
+    let ca: &u64;
+label b0:
+    e = X::V { a: 7 };
+    &mut X::V { a: a } = &mut e;
+    c = copy(e);
+    *move(a) = 9;
+    &X::V { a: ca } = &c;
+    assert(*move(ca) == 7, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0xd03::switch_while_field_live {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// old: freeze with a live mutable extension is rejected
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    &mut X::One { a: a } = copy(r);
+    variant_switch X (freeze(move(r))) {
+        One: b1,
+        Two: b2
+    };
+label b1:
+    *copy(a) = 1;
+    assert(*move(a) == 1, 42);
+    return;
+label b2:
+    *move(a) = 2;
+    return;
+}
+
+}

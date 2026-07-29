@@ -1,0 +1,114 @@
+// Ret ordering: locals released, then is_any_local_borrowed, then are_transferrable
+
+//# publish
+mvir 0x2::ret_imm_parent_mut_child {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+// an imm parent and a mut child returned together
+fun t(o: &mut Self::Outer): &Self::Outer * &mut Self::Inner {
+    let m: &mut Self::Inner;
+    let i: &Self::Outer;
+label b0:
+    m = &mut copy(o).Outer::f;
+    i = freeze(move(o));
+    return (move(i), move(m));
+}
+
+}
+
+//# publish
+mvir 0x3::ret_imm_parent_imm_child {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { f: Self::Inner }
+
+// two imm refs where one extends the other
+fun t(o: &Self::Outer): &Self::Outer * &Self::Inner {
+label b0:
+    return (copy(o), &move(o).Outer::f);
+}
+
+}
+
+//# publish
+mvir 0x4::ret_two_imm_aliases {
+
+// two imm epsilon aliases returned together
+fun t(o: &u64): &u64 * &u64 {
+label b0:
+    return (copy(o), move(o));
+}
+
+}
+
+//# publish
+mvir 0x5::ret_mut_with_dead_imm_extension {
+
+public struct S has copy, drop { f: u64 }
+
+// build an imm extension, drop it, return the mut
+fun t(s: &mut Self::S): &mut Self::S {
+    let c: &u64;
+label b0:
+    c = &copy(s).S::f;
+    _ = *move(c);
+    return move(s);
+}
+
+}
+
+//# publish
+mvir 0x6::ret_mut_with_live_imm_extension {
+
+public struct S has copy, drop { f: u64 }
+
+// a non-epsilon extension of a returned mut ref
+fun t(s: &mut Self::S): &mut Self::S * &u64 {
+label b0:
+    return (copy(s), &move(s).S::f);
+}
+
+}
+
+//# publish
+mvir 0x7::ret_local_ref_via_call {
+
+fun id(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+// a call result that borrows a local, released before the check
+fun t(): &mut u64 {
+    let a: u64;
+    let m: &mut u64;
+label b0:
+    a = 0;
+    m = Self::id(&mut a);
+    return move(m);
+}
+
+}
+
+//# publish
+mvir 0x8::ret_two_mut_from_one_call {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &mut u64 {
+label b0:
+    return (&mut copy(s).S::f, &mut copy(s).S::g);
+}
+
+// two mut refs from a call, returned again
+fun t(s: &mut Self::S): &mut u64 * &mut u64 {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    x, y = Self::split(move(s));
+    return (move(x), move(y));
+}
+
+}

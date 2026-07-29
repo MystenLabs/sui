@@ -1,3 +1,6 @@
+// the imm element borrow is allowed, but transferring the mut element ref while it is live
+// is not: both element refs are the same dot-star extension of the vector
+
 //# publish
 
 mvir 0x2::vector_ops_mixed_borrow {

@@ -1,0 +1,75 @@
+// Eq/Neq release both operands with no readability check; the old checker required is_readable
+
+//# run
+mvir 0x2::eq_mut_and_its_frozen_alias {
+
+entry fun t() {
+    let a: u64;
+    let x: &mut u64;
+    let y: &u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    y = freeze(copy(x));
+    // a mut ref against its own imm epsilon alias
+    assert(freeze(copy(x)) == copy(y), 42);
+    *move(x) = 1;
+    assert(*move(y) == 1, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::eq_while_mut_extension_live {
+
+public struct S has copy, drop { f: u64 }
+
+entry fun t() {
+    let s: Self::S;
+    let x: &mut Self::S;
+    let y: &Self::S;
+    let f: &mut u64;
+label b0:
+    s = S { f: 0 };
+    x = &mut s;
+    y = &s;
+    // f is a live mut extension of both x and y
+    f = &mut copy(x).S::f;
+    assert(freeze(copy(x)) == move(y), 42);
+    *move(f) = 1;
+    assert(*&mut move(x).S::f == 1, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::eq_enum_refs_after_alias_write {
+
+public enum E has copy, drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e1: Self::E;
+    let e2: Self::E;
+    let r1: &mut Self::E;
+    let r2: &mut Self::E;
+    let i1: &Self::E;
+label b0:
+    e1 = E::One { a: 0 };
+    e2 = E::One { a: 0 };
+    r1 = &mut e1;
+    r2 = &mut e2;
+    i1 = freeze(copy(r1));
+    assert(copy(i1) == freeze(copy(r2)), 42);
+    // change the variant through the mut alias while i1 is live
+    *copy(r1) = E::Two { b: 0x0 };
+    assert(move(i1) != freeze(move(r2)), 43);
+    _ = move(r1);
+    return;
+}
+
+}

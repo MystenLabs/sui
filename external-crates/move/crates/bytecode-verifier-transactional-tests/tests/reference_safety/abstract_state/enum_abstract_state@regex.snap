@@ -1,0 +1,110 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 26:
+//# view-abstract-state 0xb01::variant_field_labels::t
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true
+      },
+      "outgoing": {}
+    }
+  }
+}
+
+task 3, line 51:
+//# view-abstract-state 0xb02::variant_field_join::t
+{
+  "l0": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l1": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l2": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l3": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      },
+      "p": {
+        "Reference": "r#p"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true,
+        "r#p": true
+      },
+      "outgoing": {
+        "r#e": {
+          "r#p": [
+            {
+              "labels": [
+                "X::One.a"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "X::Two.b"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

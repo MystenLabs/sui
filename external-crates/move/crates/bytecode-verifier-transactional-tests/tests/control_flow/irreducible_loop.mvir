@@ -1,0 +1,27 @@
+// irreducible CFG: two entries into a 2-node cycle
+
+//# publish
+
+mvir 0x2::irred {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(cond: bool, s: &mut Self::S) {
+    let r: &mut Self::S;
+    let x: &mut u64;
+label l0:
+    r = move(s);
+    jump_if (move(cond)) lb;
+label la:
+    x = &mut copy(r).S::f;
+    *move(x) = 1;
+    jump lb;
+label lb:
+    *copy(r) = S { f: 2 };
+    jump_if (false) la;
+label lc:
+    _ = move(r);
+    return;
+}
+
+}

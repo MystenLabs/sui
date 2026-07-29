@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-22:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000101::stloc_overwrite'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x101::stloc_overwrite,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 1, lines 24-43:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000102::second_borrow_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x102::second_borrow_write,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}
+
+task 2, lines 45-66:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000103::vec_swap_under_field'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x103::vec_swap_under_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 18)],
+}
+
+task 3, lines 68-88:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000104::vec_pop_under_field'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x104::vec_pop_under_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}

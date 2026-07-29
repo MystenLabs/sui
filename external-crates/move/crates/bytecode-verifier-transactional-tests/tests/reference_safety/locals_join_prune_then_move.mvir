@@ -1,0 +1,46 @@
+// both checkers drop r from locals at the join, so MoveLoc(x) is accepted even though the b1
+// path still holds &mut x in slot r
+
+//# run
+mvir 0x42::m {
+    entry fun t() {
+        let x: u64;
+        let y: u64;
+        let r: &mut u64;
+    label b0:
+        x = 1;
+        jump_if (false) b2;
+    label b1:
+        r = &mut x;
+        jump b3;
+    label b2:
+        jump b3;
+    label b3:
+        y = move(x);
+        assert(move(y) == 1, 600);
+        return;
+    }
+}
+
+//# publish
+mvir 0x43::m2 {
+    // reading r afterwards is rejected by locals-safety
+    fun t() {
+        let x: u64;
+        let y: u64;
+        let r: &mut u64;
+    label b0:
+        x = 1;
+        jump_if (false) b2;
+    label b1:
+        r = &mut x;
+        jump b3;
+    label b2:
+        jump b3;
+    label b3:
+        y = move(x);
+        *move(r) = 7;
+        _ = move(y);
+        return;
+    }
+}

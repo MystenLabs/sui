@@ -1,0 +1,78 @@
+// Ensure coverage of VecUnpack with borrows
+
+//# run
+mvir 0x31::unpack_with_elem_ref {
+
+entry fun t() {
+    let v: vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(1);
+    e = vec_mut_borrow<u64>(&mut v, 0);
+    vector<u64; 1>(_) = move(v);
+    *move(e) = 5;
+    return;
+}
+
+}
+
+//# run
+mvir 0x32::unpack_struct_field_vector {
+
+public struct S has drop { v: vector<u64> }
+
+entry fun t() {
+    let s: Self::S;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let out: vector<u64>;
+label b0:
+    s = S { v: vector<u64; 1>(1) };
+    vr = &mut (&mut s).S::v;
+    e = vec_mut_borrow<u64>(move(vr), 0);
+    S { v: out } = move(s);
+    vector<u64; 1>(_) = move(out);
+    *move(e) = 5;
+    return;
+}
+
+}
+
+//# run
+mvir 0x33::unpack_inner_popped_from_outer {
+
+entry fun t() {
+    let vv: vector<vector<u64>>;
+    let o: &mut vector<vector<u64>>;
+    let i: &mut vector<u64>;
+    let out: vector<u64>;
+label b0:
+    vv = vector<vector<u64>; 1>(vector<u64; 1>(7));
+    o = &mut vv;
+    i = vec_mut_borrow<vector<u64>>(copy(o), 0);
+    out = vec_pop_back<vector<u64>>(copy(o));
+    vector<u64; 1>(_) = move(out);
+    vec_push_back<u64>(move(i), 3);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# run
+mvir 0x34::unpack_after_elem_ref_dead_ok {
+
+entry fun t() {
+    let v: vector<u64>;
+    let e: &mut u64;
+    let x: u64;
+label b0:
+    v = vector<u64; 1>(1);
+    e = vec_mut_borrow<u64>(&mut v, 0);
+    *move(e) = 5;
+    vector<u64; 1>(x) = move(v);
+    assert(move(x) == 5, 42);
+    return;
+}
+
+}

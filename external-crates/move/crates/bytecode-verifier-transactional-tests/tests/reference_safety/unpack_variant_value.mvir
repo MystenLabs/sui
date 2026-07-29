@@ -1,0 +1,44 @@
+// Basic UnpackVariant coverage
+
+//# run
+mvir 0x1::unpack_variant_value_ok {
+
+public enum E has drop {
+    One { x: u64 },
+    Two { x: u64, y: u64 },
+}
+
+entry fun t() {
+    let e: Self::E;
+    let x: u64;
+label b0:
+    e = E::One { x: 7 };
+    E::One { x: x } = move(e);
+    assert(move(x) == 7, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x2::unpack_variant_value_after_borrow_invalid {
+
+public enum E has drop {
+    One { x: u64 },
+    Two { x: u64, y: u64 },
+}
+
+fun t() {
+    let e: Self::E;
+    let r: &mut u64;
+    let x: u64;
+label b0:
+    e = E::One { x: 7 };
+    &mut E::One { x: r } = &mut e;
+    E::One { x: x } = move(e);
+    *move(r) = 1;
+    _ = move(x);
+    return;
+}
+
+}

@@ -1,0 +1,24 @@
+// the Generic unpack-by-ref forms; the label uses the enum definition index, so instantiations
+// share labels
+
+//# publish
+mvir 0x404::generic_imm_and_mut {
+
+public enum X<T> has drop { One { a: T, c: T } }
+
+fun t(e: &mut Self::X<u64>) {
+    let a: &mut u64;
+    let c: &mut u64;
+    let ia: &u64;
+    let ic: &u64;
+label b0:
+    &mut X::One<u64> { a: a, c: c } = copy(e);
+    &X::One<u64> { a: ia, c: ic } = freeze(move(e));
+    *move(a) = 1;
+    _ = *move(ia);
+    _ = *move(ic);
+    _ = move(c);
+    return;
+}
+
+}

@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, lines 26-47:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000602::write_parent_in_loop_invalid'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x602::write_parent_in_loop_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}
+
+task 4, lines 97-113:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000605::recursive_enum_rejected'. Got VMError: {
+    major_status: RECURSIVE_DATATYPE_DEFINITION,
+    sub_status: None,
+    location: 0x605::recursive_enum_rejected,
+    indices: [(EnumDefinition, 0)],
+    offsets: [],
+}

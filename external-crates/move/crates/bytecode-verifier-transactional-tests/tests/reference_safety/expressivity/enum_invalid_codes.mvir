@@ -1,0 +1,41 @@
+// invalid enum programs: the checkers must agree on status code and offset
+
+//# publish
+mvir 0x805::unpack_mut_with_full_borrow {
+
+public enum X has drop { One { a: u64 } }
+
+fun t(e: &mut Self::X) {
+    let alias: &mut Self::X;
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+    alias = copy(e);
+    &mut X::One { a: a } = move(e);
+    &mut X::One { a: b } = move(alias);
+    *move(a) = 1;
+    *move(b) = 2;
+    return;
+}
+
+}
+
+//# publish
+mvir 0x807::copyloc_enum_with_live_field {
+
+public enum X has copy, drop { One { a: u64 } }
+
+fun t() {
+    let e: Self::X;
+    let c: Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    &mut X::One { a: a } = &mut e;
+    c = copy(e);
+    *move(a) = 1;
+    _ = move(c);
+    return;
+}
+
+}

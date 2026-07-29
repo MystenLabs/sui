@@ -1,0 +1,108 @@
+// every ancestor of a call argument, including epsilon aliases and the local root, must inherit
+// the dot-star edge
+
+//# publish
+mvir 0x2::dotstar_blocks_alias_write {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t() {
+    let s: Self::S;
+    let a: &mut Self::S;
+    let b: &mut Self::S;
+    let r: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    a = &mut s;
+    b = copy(a);
+    r = Self::id(copy(b));
+    // a --.*--> r must exist
+    *copy(a) = S { f: 1 };
+    _ = move(r);
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::dotstar_blocks_stloc {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t() {
+    let s: Self::S;
+    let r: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    r = Self::id(&mut s);
+    // local_root --local#s_*--> r, so StLoc(s) must be rejected
+    s = S { f: 1 };
+    _ = move(r);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::dotstar_blocks_moveloc {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+fun t() {
+    let s: Self::S;
+    let r: &mut Self::S;
+    let s2: Self::S;
+label b0:
+    s = S { f: 0 };
+    r = Self::id(&mut s);
+    s2 = move(s);
+    _ = move(r);
+    _ = move(s2);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::write_through_dotstar_result {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+// the result is writable: the parent is an ancestor, not an extension
+entry fun t() {
+    let s: Self::S;
+    let a: &mut Self::S;
+    let r: &mut Self::S;
+label b0:
+    s = S { f: 0 };
+    a = &mut s;
+    r = Self::id(copy(a));
+    *copy(r) = S { f: 7 };
+    assert(*(&move(r).S::f) == 7, 42);
+    _ = move(a);
+    return;
+}
+
+}

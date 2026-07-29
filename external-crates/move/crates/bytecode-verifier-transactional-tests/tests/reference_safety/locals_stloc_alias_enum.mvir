@@ -1,0 +1,25 @@
+// StLoc changing the VARIANT of an enum local that has a live epsilon alias
+
+//# run
+mvir 0x42::m {
+    public enum X has drop {
+        One { x: u64 },
+        Two { x: u64, y: u64 },
+    }
+
+    entry fun t() {
+        let e: Self::X;
+        let r: &mut Self::X;
+        let a: &mut u64;
+        let b: &mut u64;
+    label b0:
+        e = X::Two { x: 1, y: 2 };
+        r = &mut e;
+        e = X::One { x: 9 };
+        // unpack r as the variant it was created for
+        &mut X::Two { x: a, y: b } = move(r);
+        *move(a) = 10;
+        *move(b) = 11;
+        return;
+    }
+}

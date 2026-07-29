@@ -1,0 +1,98 @@
+// remove_prefix(".*") on a two-label path yields {x.y, y, epsilon}; the epsilon must not make
+// the pair look like a mere alias
+
+//# publish
+mvir 0x71::zzds_suffix {
+
+public struct In has copy, drop, store { z: u64 }
+public struct Mid has copy, drop, store { y: Self::In }
+public struct Top has copy, drop, store { x: Self::Mid }
+
+fun id_imm(t: &Self::Top): &Self::Top {
+label b0:
+    return move(t);
+}
+
+fun shape(t: &mut Self::Top) {
+    let i: &Self::Top;
+    let m1: &mut Self::Mid;
+    let m2: &mut Self::In;
+    let n: &Self::Top;
+label b0:
+    i = freeze(copy(t));
+    m1 = &mut copy(t).Top::x;
+    m2 = &mut move(m1).Mid::y;
+    n = Self::id_imm(move(i));
+    jump b1;
+label b1:
+    _ = move(m2);
+    _ = move(n);
+    _ = move(t);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x71::zzds_suffix::shape
+
+// write through the deep ref while the dot-star result is live
+//# publish
+mvir 0x72::zzds_suffix_write {
+
+public struct In has copy, drop, store { z: u64 }
+public struct Mid has copy, drop, store { y: Self::In }
+public struct Top has copy, drop, store { x: Self::Mid }
+
+fun id_imm(t: &Self::Top): &Self::Top {
+label b0:
+    return move(t);
+}
+
+fun t(tp: &mut Self::Top) {
+    let i: &Self::Top;
+    let m1: &mut Self::Mid;
+    let m2: &mut Self::In;
+    let n: &Self::Top;
+label b0:
+    i = freeze(copy(tp));
+    m1 = &mut copy(tp).Top::x;
+    m2 = &mut move(m1).Mid::y;
+    n = Self::id_imm(move(i));
+    *move(m2) = In { z: 1 };
+    _ = move(n);
+    _ = move(tp);
+    return;
+}
+
+}
+
+// same, result released first
+//# publish
+mvir 0x73::zzds_suffix_write_ok {
+
+public struct In has copy, drop, store { z: u64 }
+public struct Mid has copy, drop, store { y: Self::In }
+public struct Top has copy, drop, store { x: Self::Mid }
+
+fun id_imm(t: &Self::Top): &Self::Top {
+label b0:
+    return move(t);
+}
+
+fun t(tp: &mut Self::Top) {
+    let i: &Self::Top;
+    let m1: &mut Self::Mid;
+    let m2: &mut Self::In;
+    let n: &Self::Top;
+label b0:
+    i = freeze(copy(tp));
+    m1 = &mut copy(tp).Top::x;
+    m2 = &mut move(m1).Mid::y;
+    n = Self::id_imm(move(i));
+    _ = move(n);
+    *move(m2) = In { z: 1 };
+    _ = move(tp);
+    return;
+}
+
+}

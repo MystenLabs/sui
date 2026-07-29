@@ -1,0 +1,115 @@
+// an element ref is a dot-star extension of the vector ref, whichever alias mutates it
+
+//# publish
+mvir 0x11::elem_via_alias_push_via_original {
+
+fun t(v: &mut vector<u64>) {
+    let a: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    a = copy(v);
+    e = vec_mut_borrow<u64>(move(a), 0);
+    vec_push_back<u64>(copy(v), 1);
+    *move(e) = 7;
+    _ = move(v);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x12::elem_via_original_push_via_alias {
+
+fun t(v: &mut vector<u64>) {
+    let a: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    a = copy(v);
+    e = vec_mut_borrow<u64>(copy(v), 0);
+    vec_push_back<u64>(move(a), 1);
+    *move(e) = 7;
+    _ = move(v);
+    return;
+}
+
+}
+
+//# run
+mvir 0x13::elem_then_reborrow_local_push {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(move(vr), 0);
+    vec_push_back<u64>(&mut v, 1);
+    *move(e) = 7;
+    return;
+}
+
+}
+
+//# run
+mvir 0x14::imm_elem_via_freeze_push_via_mut {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &u64;
+label b0:
+    v = vector<u64; 1>(5);
+    vr = &mut v;
+    e = vec_imm_borrow<u64>(freeze(copy(vr)), 0);
+    vec_push_back<u64>(copy(vr), 1);
+    _ = *move(e);
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0x15::elem_from_call_then_push {
+
+fun get(v: &mut vector<u64>): &mut u64 {
+label b0:
+    return vec_mut_borrow<u64>(move(v), 0);
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(5);
+    vr = &mut v;
+    e = Self::get(copy(vr));
+    vec_push_back<u64>(copy(vr), 1);
+    *move(e) = 7;
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0x16::elem_released_then_push_ok {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(5);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    *move(e) = 9;
+    vec_push_back<u64>(copy(vr), 1);
+    assert(vec_len<u64>(freeze(move(vr))) == 2, 42);
+    return;
+}
+
+}

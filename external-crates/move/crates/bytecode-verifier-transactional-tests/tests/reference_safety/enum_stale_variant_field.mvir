@@ -1,0 +1,88 @@
+// keeping a variant-field reference live across a change of the active variant
+
+//# run
+mvir 0x101::stloc_overwrite {
+
+public enum X has drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    &mut X::One { a: a } = &mut e;
+    e = X::Two { b: 0x0 };
+    *move(a) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x102::second_borrow_write {
+
+public enum X has drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    &mut X::One { a: a } = &mut e;
+    *(&mut e) = X::Two { b: 0x0 };
+    *move(a) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x103::vec_swap_under_field {
+
+public enum X has drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let v: vector<Self::X>;
+    let a: &mut u64;
+label b0:
+    v = vector<Self::X; 0>();
+    vec_push_back<Self::X>(&mut v, X::One { a: 0 });
+    vec_push_back<Self::X>(&mut v, X::Two { b: 0x0 });
+    &mut X::One { a: a } = vec_mut_borrow<Self::X>(&mut v, 0);
+    vec_swap<Self::X>(&mut v, 0, 1);
+    *move(a) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x104::vec_pop_under_field {
+
+public enum X has drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let v: vector<Self::X>;
+    let a: &mut u64;
+label b0:
+    v = vector<Self::X; 0>();
+    vec_push_back<Self::X>(&mut v, X::One { a: 0 });
+    &mut X::One { a: a } = vec_mut_borrow<Self::X>(&mut v, 0);
+    _ = vec_pop_back<Self::X>(&mut v);
+    *move(a) = 1;
+    return;
+}
+
+}

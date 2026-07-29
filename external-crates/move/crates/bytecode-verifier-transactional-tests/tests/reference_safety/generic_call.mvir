@@ -1,0 +1,63 @@
+// CallGeneric, accept and reject
+
+//# publish
+mvir 0x1::gcall_ok {
+    public struct S<T> has drop { f: T, g: T }
+
+    fun id<T>(x: &mut T): &mut T {
+    label b0:
+        return move(x);
+    }
+
+    fun two<T>(a: &mut T, b: &mut T) {
+    label b0:
+        abort 0;
+    }
+
+    fun ok(s: &mut Self::S<u64>) {
+        let a: &mut u64;
+        let b: &mut u64;
+    label b0:
+        a = Self::id<u64>(&mut copy(s).S<u64>::f);
+        b = Self::id<u64>(&mut move(s).S<u64>::g);
+        Self::two<u64>(move(a), move(b));
+        return;
+    }
+}
+
+//# publish
+mvir 0x2::gcall_two_aliases_invalid {
+    fun two<T>(a: &mut T, b: &mut T) {
+    label b0:
+        abort 0;
+    }
+
+    fun bad() {
+        let x: u64;
+        let r: &mut u64;
+    label b0:
+        x = 0;
+        r = &mut x;
+        Self::two<u64>(copy(r), move(r));
+        return;
+    }
+}
+
+//# publish
+mvir 0x3::gcall_extension_invalid {
+    public struct S<T> has drop { f: T, g: T }
+
+    fun one<T>(a: &mut T) {
+    label b0:
+        abort 0;
+    }
+
+    fun bad(s: &mut Self::S<u64>) {
+        let a: &mut u64;
+    label b0:
+        a = &mut copy(s).S<u64>::f;
+        Self::one<Self::S<u64>>(move(s));
+        *move(a) = 1;
+        return;
+    }
+}

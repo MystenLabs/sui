@@ -1,0 +1,113 @@
+// variant unpack in loops: the graph must reach a fixed point over VariantField labels
+
+//# publish
+mvir 0x601::unpack_loop_valid {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+fun t(e: &mut Self::X, n: u64) {
+    let a: &mut u64;
+label b0:
+    &mut X::One { a: a } = copy(e);
+label l1:
+    jump_if (copy(n) == 0) done;
+    n = move(n) - 1;
+    *copy(a) = 0;
+    &mut X::One { a: a } = copy(e);
+    jump l1;
+label done:
+    *move(a) = 1;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x602::write_parent_in_loop_invalid {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+fun t(e: &mut Self::X, n: u64) {
+    let a: &mut u64;
+label b0:
+    &mut X::One { a: a } = copy(e);
+label l1:
+    jump_if (copy(n) == 0) done;
+    n = move(n) - 1;
+    *copy(e) = X::Two { b: 0 };
+    &mut X::One { a: a } = copy(e);
+    jump l1;
+label done:
+    *move(a) = 1;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x603::loop_carried_extension_invalid {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// safe on the first pass, unsafe once the back edge carries a into the head
+fun t(e: &mut Self::X, n: u64) {
+    let a: &mut u64;
+label b0:
+    jump l1;
+label l1:
+    *copy(e) = X::One { a: 0 };
+    &mut X::One { a: a } = copy(e);
+    jump_if (copy(n) == 0) done;
+    n = move(n) - 1;
+    jump l1;
+label done:
+    *move(a) = 1;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x604::loop_carried_released_valid {
+
+public enum X has drop { One { a: u64 }, Two { b: u64 } }
+
+// same but a is consumed before the back edge
+fun t(e: &mut Self::X, n: u64) {
+    let a: &mut u64;
+label b0:
+    jump l1;
+label l1:
+    *copy(e) = X::One { a: 0 };
+    &mut X::One { a: a } = copy(e);
+    *move(a) = 5;
+    jump_if (copy(n) == 0) done;
+    n = move(n) - 1;
+    jump l1;
+label done:
+    _ = move(e);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x605::recursive_enum_rejected {
+
+// recursive enums are rejected outright, so VariantField chains are bounded
+public enum L has drop { Nil { }, Cons { h: u64, t: vector<Self::L> } }
+
+fun t(l: &mut Self::L) {
+    let h: &mut u64;
+    let tv: &mut vector<Self::L>;
+label b0:
+    &mut L::Cons { h: h, t: tv } = move(l);
+    *move(h) = 1;
+    _ = move(tv);
+    return;
+}
+
+}

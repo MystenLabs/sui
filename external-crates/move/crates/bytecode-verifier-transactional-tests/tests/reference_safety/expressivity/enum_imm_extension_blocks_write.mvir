@@ -1,0 +1,28 @@
+// is_writable ignores the mutability of extensions, so an imm variant-field ref blocks the write
+
+//# run
+mvir 0xc03::imm_field_released_then_write {
+
+public enum X has drop { V { a: u64, b: u64 } }
+
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let ia: &u64;
+    let ib: &u64;
+    let m: &mut u64;
+    let mb: &mut u64;
+label b0:
+    e = X::V { a: 0, b: 0 };
+    r = &mut e;
+    &mut X::V { a: m, b: mb } = copy(r);
+    _ = move(mb);
+    &X::V { a: ia, b: ib } = freeze(copy(r));
+    _ = *move(ia);
+    _ = *move(ib);
+    *move(m) = 3;
+    *move(r) = X::V { a: 1, b: 2 };
+    return;
+}
+
+}

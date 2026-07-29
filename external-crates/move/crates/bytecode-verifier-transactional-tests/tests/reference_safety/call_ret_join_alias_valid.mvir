@@ -1,0 +1,51 @@
+// multiple mut results that really are disjoint on every path, and a caller that writes through
+// both of them
+
+//# publish
+mvir 0x2::disjoint_on_both_branches {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S, cond: bool): &mut u64 * &mut u64 {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    x = &mut copy(s).S::f;
+    jump_if (move(cond)) b2;
+label b1:
+    y = &mut copy(s).S::g;
+    jump b3;
+label b2:
+    y = &mut copy(s).S::g;
+    jump b3;
+label b3:
+    _ = move(s);
+    return (move(x), move(y));
+}
+
+}
+
+//# publish
+mvir 0x3::two_mut_results_used_as_disjoint {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S): &mut u64 * &mut u64 {
+label b0:
+    return (&mut copy(s).S::f, &mut copy(s).S::g);
+}
+
+// write through both results; sound only because Ret proved them disjoint
+fun t(s: &mut Self::S) {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    x, y = Self::split(move(s));
+    *copy(x) = 1;
+    *copy(y) = 2;
+    *move(x) = 3;
+    *move(y) = 4;
+    return;
+}
+
+}

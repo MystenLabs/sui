@@ -1,0 +1,64 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 0, lines 3-24:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::alias_write_struct'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::alias_write_struct,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}
+
+task 1, lines 26-50:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::alias_write_enum_then_read'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::alias_write_enum_then_read,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 2, lines 52-69:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::alias_write_primvec'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::alias_write_primvec,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}
+
+task 3, lines 71-90:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::alias_write_vec_of_struct'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::alias_write_vec_of_struct,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 14)],
+}
+
+task 4, lines 92-122:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::alias_mutate_vector_of_resource'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::alias_mutate_vector_of_resource,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 13)],
+}
+
+task 5, lines 124-155:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::alias_write_nested_then_reborrow'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x7::alias_write_nested_then_reborrow,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}

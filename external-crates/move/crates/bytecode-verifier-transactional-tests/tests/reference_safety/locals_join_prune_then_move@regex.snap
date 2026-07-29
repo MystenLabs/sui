@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 25-46:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::m2'. Got VMError: {
+    major_status: MOVELOC_UNAVAILABLE_ERROR,
+    sub_status: None,
+    location: 0x43::m2,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}

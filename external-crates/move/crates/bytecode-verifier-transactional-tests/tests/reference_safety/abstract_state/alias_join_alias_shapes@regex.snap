@@ -1,0 +1,192 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 3-29:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::eps_alias_or_field_extension'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::eps_alias_or_field_extension,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 15)],
+}
+
+task 1, lines 31-62:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::imm_parent_on_one_path'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::imm_parent_on_one_path,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 24)],
+}
+
+task 2, lines 64-96:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::alias_only_on_both_paths'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::alias_only_on_both_paths,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 18)],
+}
+
+task 4, line 125:
+//# view-abstract-state 0x5::view_join_alias_shapes::t
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "l1": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "x": {
+        "Reference": "r#x"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#x": true
+      },
+      "outgoing": {
+        "r#s": {
+          "r#x": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#x": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "l2": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "x": {
+        "Reference": "r#x"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#x": true
+      },
+      "outgoing": {
+        "r#s": {
+          "r#x": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#x": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "l3": {
+    "local_root": "ROOT",
+    "locals": {
+      "s": {
+        "Reference": "r#s"
+      },
+      "x": {
+        "Reference": "r#x"
+      },
+      "y": {
+        "Reference": "r#y"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#s": true,
+        "r#x": true,
+        "r#y": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#y": [
+            {
+              "labels": [
+                "z"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#s": {
+          "r#x": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#y": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#x": {
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#y": [
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

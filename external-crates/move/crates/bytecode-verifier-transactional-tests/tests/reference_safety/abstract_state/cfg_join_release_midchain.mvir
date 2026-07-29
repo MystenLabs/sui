@@ -1,0 +1,91 @@
+// the join releases the middle of a borrow chain; the root -> p relation must survive
+
+//# publish
+mvir 0x2::release_alias_parent {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(cond: bool): Self::S {
+    let s: Self::S;
+    let u: Self::S;
+    let p: &mut u64;
+    let q: &mut u64;
+label l0:
+    s = S { f: 0 };
+    u = S { f: 0 };
+    jump_if (move(cond)) l2;
+label l1:
+    q = &mut (&mut s).S::f;
+    p = copy(q);
+    jump l3;
+label l2:
+    p = &mut (&mut u).S::f;
+label l3:
+    *copy(p) = 1;
+    // p is still live: move(s) must be rejected
+    return move(s);
+}
+
+}
+
+//# publish
+mvir 0x3::release_struct_parent {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { inner: Self::Inner }
+
+fun t(cond: bool): Self::Outer {
+    let s: Self::Outer;
+    let u: Self::Outer;
+    let q: &mut Self::Outer;
+    let p: &mut Self::Inner;
+label l0:
+    s = Outer { inner: Inner { v: 0 } };
+    u = Outer { inner: Inner { v: 0 } };
+    jump_if (move(cond)) l2;
+label l1:
+    q = &mut s;
+    p = &mut copy(q).Outer::inner;
+    jump l3;
+label l2:
+    p = &mut (&mut u).Outer::inner;
+label l3:
+    *copy(p) = Inner { v: 1 };
+    // p is still live: move(s) must be rejected
+    return move(s);
+}
+
+}
+
+//# publish
+mvir 0x4::release_midchain_deep {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Outer has copy, drop { inner: Self::Inner }
+
+fun t(cond: bool): Self::Outer {
+    let s: Self::Outer;
+    let u: Self::Outer;
+    let q: &mut Self::Outer;
+    let m: &mut Self::Inner;
+    let p: &mut u64;
+label l0:
+    s = Outer { inner: Inner { v: 0 } };
+    u = Outer { inner: Inner { v: 0 } };
+    jump_if (move(cond)) l2;
+label l1:
+    q = &mut s;
+    m = &mut copy(q).Outer::inner;
+    p = &mut copy(m).Inner::v;
+    jump l3;
+label l2:
+    p = &mut (&mut (&mut u).Outer::inner).Inner::v;
+label l3:
+    *copy(p) = 1;
+    // p is still live: move(s) must be rejected
+    return move(s);
+}
+
+}
+
+//# view-abstract-state 0x4::release_midchain_deep::t

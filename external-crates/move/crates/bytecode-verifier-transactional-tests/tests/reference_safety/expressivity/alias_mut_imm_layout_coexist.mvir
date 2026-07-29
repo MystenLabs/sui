@@ -1,0 +1,117 @@
+// mutating through a &mut while an imm epsilon alias is live; the layout it observes changes
+// underneath it
+
+//# run
+mvir 0x2::push_through_mut_alias_len_through_imm {
+
+entry fun t() {
+    let v: vector<u64>;
+    let m: &mut vector<u64>;
+    let i: &vector<u64>;
+label b0:
+    v = vector<u64; 1>(1);
+    m = &mut v;
+    i = freeze(copy(m));
+    assert(vec_len<u64>(copy(i)) == 1, 42);
+    vec_push_back<u64>(copy(m), 2);
+    // the alias observes the new length
+    assert(vec_len<u64>(copy(i)) == 2, 43);
+    assert(*vec_imm_borrow<u64>(move(i), 1) == 2, 44);
+    _ = move(m);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::variant_switch_through_imm_alias {
+
+public enum E has copy, drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::E;
+    let m: &mut Self::E;
+    let i: &Self::E;
+label b0:
+    e = E::One { a: 0 };
+    m = &mut e;
+    i = freeze(copy(m));
+    *copy(m) = E::Two { b: 0x0 };
+    variant_switch E (move(i)) { One: l1, Two: l2 };
+label l1:
+    assert(false, 42);
+    jump l3;
+label l2:
+    jump l3;
+label l3:
+    _ = move(m);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::mutate_resource_holder_through_alias {
+
+// R is a resource: no drop
+public struct R has store { n: u64 }
+public struct Holder has store { r: Self::R, tag: u64 }
+
+entry fun t() {
+    let h: Self::Holder;
+    let m: &mut Self::Holder;
+    let i: &Self::Holder;
+    let tag: &mut u64;
+    let r: Self::R;
+    let n: u64;
+    let t: u64;
+label b0:
+    h = Holder { r: R { n: 1 }, tag: 0 };
+    m = &mut h;
+    i = freeze(copy(m));
+    // droppable field of a value containing a resource
+    tag = &mut move(m).Holder::tag;
+    *move(tag) = 7;
+    assert(*&move(i).Holder::tag == 7, 42);
+    Holder { r: r, tag: t } = move(h);
+    R { n: n } = move(r);
+    assert(move(n) == 1, 43);
+    assert(move(t) == 7, 44);
+    return;
+}
+
+}
+
+//# run
+mvir 0x6::swap_through_mut_alias_of_resource_vector {
+
+public struct R has store { n: u64 }
+
+entry fun t() {
+    let v: vector<Self::R>;
+    let m: &mut vector<Self::R>;
+    let i: &vector<Self::R>;
+    let a: Self::R;
+    let b: Self::R;
+    let na: u64;
+    let nb: u64;
+label b0:
+    v = vector<Self::R; 2>(R { n: 1 }, R { n: 2 });
+    m = &mut v;
+    i = freeze(copy(m));
+    vec_swap<Self::R>(copy(m), 0, 1);
+    assert(vec_len<Self::R>(move(i)) == 2, 42);
+    b = vec_pop_back<Self::R>(copy(m));
+    a = vec_pop_back<Self::R>(move(m));
+    R { n: nb } = move(b);
+    R { n: na } = move(a);
+    assert(move(na) == 2, 43);
+    assert(move(nb) == 1, 44);
+    vector<Self::R; 0>() = move(v);
+    return;
+}
+
+}

@@ -1,0 +1,71 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, line 23:
+//# view-abstract-state 0x2::stloc_alias::t
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {},
+    "graph": {
+      "nodes": {
+        "ROOT": true
+      },
+      "outgoing": {}
+    }
+  },
+  "done": {
+    "local_root": "ROOT",
+    "locals": {
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#r": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "mid": {
+    "local_root": "ROOT",
+    "locals": {
+      "r": {
+        "Reference": "r#r"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#r": true
+      },
+      "outgoing": {
+        "ROOT": {
+          "r#r": [
+            {
+              "labels": [
+                "x"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

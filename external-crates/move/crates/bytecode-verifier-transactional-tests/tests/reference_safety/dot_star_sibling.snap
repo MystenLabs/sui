@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 3-26:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000021::b1_write_sibling'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x21::b1_write_sibling,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}
+
+task 1, lines 28-51:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000022::b2_write_call_result'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x22::b2_write_call_result,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}
+
+task 3, lines 78-101:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000024::b4_imm_sibling_of_call'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x24::b4_imm_sibling_of_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 5)],
+}
