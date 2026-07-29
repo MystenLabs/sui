@@ -110,15 +110,7 @@ impl ChunkedLoader<TransactionKey> for LedgerGrpcReader {
 
         let mut request = proto::BatchGetTransactionsRequest::default();
         request.digests = digests;
-        request.read_mask = Some(FieldMask::from_paths([
-            "transaction.bcs",
-            "effects.bcs",
-            "events.bcs",
-            "signatures.bcs",
-            "checkpoint",
-            "timestamp",
-            "balance_changes",
-        ]));
+        request.read_mask = Some(CheckpointedTransaction::read_mask());
 
         let batch_response = self.batch_get_transactions(request).await?;
 
@@ -127,25 +119,7 @@ impl ChunkedLoader<TransactionKey> for LedgerGrpcReader {
             if let Some(proto::get_transaction_result::Result::Transaction(executed)) =
                 tx_result.result
             {
-                let full_tx: sui_types::full_checkpoint_content::ExecutedTransaction = (&executed)
-                    .try_into()
-                    .context("Failed to convert ExecutedTransaction from proto")?;
-
-                let timestamp_ms = executed
-                    .timestamp
-                    .map(proto_to_timestamp_ms)
-                    .transpose()
-                    .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
-
-                let transaction = CheckpointedTransaction {
-                    effects: Box::new(full_tx.effects),
-                    events: full_tx.events.map(|events| events.data),
-                    transaction_data: Box::new(full_tx.transaction),
-                    signatures: full_tx.signatures,
-                    timestamp_ms,
-                    cp_sequence_number: executed.checkpoint,
-                    balance_changes: executed.balance_changes,
-                };
+                let transaction = CheckpointedTransaction::try_from(&executed)?;
                 results.insert(
                     TransactionKey(transaction.transaction_data.digest()),
                     transaction,

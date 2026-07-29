@@ -10,7 +10,10 @@ use async_graphql::dataloader::DataLoader;
 use async_graphql::dataloader::Loader;
 use futures::future::try_join_all;
 use prometheus::Registry;
+use prost_types::FieldMask;
 use sui_rpc::Client;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::Event;
@@ -131,6 +134,28 @@ impl LedgerGrpcArgs {
     pub fn statement_timeout(&self) -> Option<std::time::Duration> {
         self.ledger_grpc_statement_timeout_ms
             .map(Duration::from_millis)
+    }
+}
+
+impl CheckpointedTransaction {
+    /// Read mask selecting everything needed to reconstruct a `CheckpointedTransaction`.
+    ///
+    /// Contents are selected as BCS (`*.bcs`) rather than the decomposed proto fields: the
+    /// decomposed rendering is a pure function of the BCS, so selecting it would ship the same
+    /// information twice and pay for server-side rendering — including the object-set lookups
+    /// behind `effects.*.object_type` — to produce fields that deserializing the BCS yields
+    /// anyway. Consumers that need the server-rendered protos (e.g. `effectsJson`) fetch them
+    /// separately, on demand.
+    pub fn read_mask() -> FieldMask {
+        FieldMask::from_paths([
+            "transaction.bcs",
+            "effects.bcs",
+            "events.bcs",
+            "signatures.bcs",
+            "checkpoint",
+            "timestamp",
+            "balance_changes",
+        ])
     }
 }
 
@@ -262,6 +287,32 @@ impl LedgerGrpcReader {
             request.set_timeout(timeout);
         }
         request
+    }
+}
+
+impl TryFrom<&grpc::ExecutedTransaction> for CheckpointedTransaction {
+    type Error = anyhow::Error;
+
+    fn try_from(executed: &grpc::ExecutedTransaction) -> anyhow::Result<Self> {
+        let full_tx: sui_types::full_checkpoint_content::ExecutedTransaction = executed
+            .try_into()
+            .context("Failed to convert ExecutedTransaction from proto")?;
+
+        let timestamp_ms = executed
+            .timestamp
+            .map(proto_to_timestamp_ms)
+            .transpose()
+            .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
+
+        Ok(Self {
+            effects: Box::new(full_tx.effects),
+            events: full_tx.events.map(|events| events.data),
+            transaction_data: Box::new(full_tx.transaction),
+            signatures: full_tx.signatures,
+            timestamp_ms,
+            cp_sequence_number: executed.checkpoint,
+            balance_changes: executed.balance_changes.clone(),
+        })
     }
 }
 
