@@ -4,19 +4,11 @@
 #[test_only]
 module example::spending_mandate_tests;
 
-use example::spending_mandate::{
-    Self,
-    SpendingMandate,
-    create_mandate,
-    execute_spend,
-    remaining_cap
-};
+use example::spending_mandate::{SpendingMandate, create_mandate, execute_spend, remaining_cap};
 use sui::clock;
 use sui::coin;
 use sui::sui::SUI;
 use sui::test_scenario;
-
-const EExceedsPerTxLimit: u64 = 1;
 
 // docs::#mandate-tests
 #[test]
@@ -54,7 +46,7 @@ fun test_spend_within_limits() {
 }
 
 #[test]
-#[expected_failure(abort_code = EExceedsPerTxLimit)]
+#[expected_failure(abort_code = example::spending_mandate::EExceedsPerTxLimit)]
 fun test_spend_exceeds_per_tx_limit() {
     let owner = @0xA;
     let agent = @0xB;
