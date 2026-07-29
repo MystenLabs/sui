@@ -26,8 +26,6 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::CoinMetadata;
-use sui_types::coin::RegulatedCoinMetadata;
-use sui_types::coin::TreasuryCap;
 use sui_types::crypto::KeypairTraits;
 use sui_types::digests::CheckpointDigest;
 use sui_types::digests::ObjectDigest;
@@ -50,6 +48,9 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 
 use super::*;
+use crate::seed::SeedEntry;
+use crate::seed::SeedManifest;
+use crate::seed::load_seed_objects;
 use crate::services::ServiceManager;
 
 /// Build a `Simulacrum<OsRng, ForkStore>` from a fresh genesis NetworkConfig.
@@ -199,33 +200,6 @@ fn objects_response(objects: &[Option<&Object>]) -> serde_json::Value {
     })
 }
 
-fn inventory_objects_response(objects: &[&Object]) -> serde_json::Value {
-    serde_json::json!({
-        "data": {
-            "checkpoint": {
-                "query": {
-                    "objects": {
-                        "nodes": objects
-                            .iter()
-                            .map(|object| {
-                                serde_json::json!({
-                                    "address": object.id().to_string(),
-                                    "version": object.version().value(),
-                                    "digest": object.digest().to_string(),
-                                })
-                            })
-                            .collect::<Vec<_>>(),
-                        "pageInfo": {
-                            "hasNextPage": false,
-                            "endCursor": null,
-                        },
-                    }
-                }
-            }
-        }
-    })
-}
-
 fn address_objects_response(objects: &[&Object]) -> serde_json::Value {
     serde_json::json!({
         "data": {
@@ -271,58 +245,6 @@ async fn mock_address_owner_inventory(
             }
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(address_objects_response(objects)))
-        .mount(server)
-        .await;
-
-    for object in objects {
-        mock_seed_object(server, checkpoint, object).await;
-    }
-}
-
-async fn mock_object_owner_inventory(
-    server: &MockServer,
-    checkpoint: u64,
-    owner: ObjectID,
-    objects: &[&Object],
-) {
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .and(body_partial_json(serde_json::json!({
-            "variables": {
-                "sequenceNumber": checkpoint,
-                "filter": {
-                    "owner": owner.to_string(),
-                },
-                "after": null,
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(inventory_objects_response(objects)))
-        .mount(server)
-        .await;
-
-    for object in objects {
-        mock_seed_object(server, checkpoint, object).await;
-    }
-}
-
-async fn mock_type_inventory(
-    server: &MockServer,
-    checkpoint: u64,
-    object_type: &StructTag,
-    objects: &[&Object],
-) {
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .and(body_partial_json(serde_json::json!({
-            "variables": {
-                "sequenceNumber": checkpoint,
-                "filter": {
-                    "type": object_type.to_string(),
-                },
-                "after": null,
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(inventory_objects_response(objects)))
         .mount(server)
         .await;
 
@@ -424,48 +346,81 @@ fn test_rpc_store_tombstone_blocks_remote_current_fallback() {
     );
 }
 
+/// Index reads are answered from the seed load and local execution alone.
+///
+/// An owner, parent, or coin type outside the seed set reads as empty — the
+/// checkpoint-pinned enumeration that could answer it belongs to fork creation
+/// and is not re-runnable at read time. The endpoint here is deliberately
+/// unreachable, so these calls only succeed because no remote scan is attempted.
 #[tokio::test]
-async fn test_rpc_owned_objects_initializes_address_inventory_from_graphql() {
+async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let checkpoint = 42;
-    let owner = SuiAddress::random_for_testing_only();
-    let object_id = ObjectID::random();
-    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
-
-    let server = MockServer::start().await;
-    mock_address_owner_inventory(&server, checkpoint, owner, &[&object]).await;
-
-    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
-
+    let (store, _services) =
+        test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
     let reader = store.clone();
+
+    let seeded_owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(seeded_owner));
+    store.local_store().restore_seed_objects(&[object]).unwrap();
+
+    // A seeded owner has the full derived surface: owner index, balance, and
+    // balance iteration.
     let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should initialize address inventory")
+        RpcIndexes::owned_objects_iter(&reader, seeded_owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should read the seeded index")
             .map(|result| result.expect("owned-object entry should decode"))
             .collect();
     assert_eq!(infos.len(), 1);
-    assert_eq!(infos[0].owner, owner);
+    assert_eq!(infos[0].owner, seeded_owner);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
     assert_eq!(infos[0].balance, Some(1_000_000));
 
-    let balance = RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
-        .expect("balance lookup should use initialized address inventory")
+    let balance = RpcIndexes::get_balance(&reader, &seeded_owner, &GAS::type_())
+        .expect("balance lookup should read the seeded index")
         .expect("gas balance should exist");
     assert_eq!(balance.coin_balance, 1_000_000);
     assert_eq!(balance.address_balance, 0);
 
-    let balances: Vec<_> = RpcIndexes::balance_iter(&reader, &owner, None)
-        .expect("balance iterator should use initialized address inventory")
+    let balances: Vec<_> = RpcIndexes::balance_iter(&reader, &seeded_owner, None)
+        .expect("balance iteration should read the seeded index")
         .map(|entry| entry.expect("balance row should decode"))
         .collect();
     assert_eq!(balances.len(), 1);
     assert_eq!(balances[0].0, GAS::type_());
     assert_eq!(balances[0].1.coin_balance, 1_000_000);
+
+    // Everything outside the seed set answers empty rather than erroring or
+    // reaching for the remote.
+    let unseeded = SuiAddress::random_for_testing_only();
+    assert_eq!(
+        RpcIndexes::owned_objects_iter(&reader, unseeded, Some(GasCoin::type_()), None)
+            .expect("unseeded owner read should not error")
+            .count(),
+        0,
+    );
+    assert!(
+        RpcIndexes::get_balance(&reader, &unseeded, &GAS::type_())
+            .expect("unseeded balance read should not error")
+            .is_none(),
+    );
+    assert_eq!(
+        RpcIndexes::dynamic_field_iter(&reader, ObjectID::random(), None)
+            .expect("unseeded parent read should not error")
+            .count(),
+        0,
+    );
+    assert!(
+        RpcIndexes::get_coin_info(&reader, &GAS::type_())
+            .expect("unseeded coin-info read should not error")
+            .is_none(),
+    );
 }
 
 #[tokio::test]
-async fn test_seed_save_survives_restart_without_remote() {
+async fn test_seed_load_survives_restart_without_remote() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let checkpoint = 42;
     let owner = SuiAddress::random_for_testing_only();
@@ -474,60 +429,73 @@ async fn test_seed_save_survives_restart_without_remote() {
 
     let server = MockServer::start().await;
     mock_seed_object(&server, checkpoint, &object).await;
-    mock_address_owner_inventory(&server, checkpoint, owner, &[&object]).await;
-    let object_ref = object.compute_object_reference();
+    let manifest = SeedManifest {
+        network: "custom".to_owned(),
+        checkpoint,
+        addresses: vec![owner],
+        entries: vec![SeedEntry {
+            object_ref: object.compute_object_reference(),
+        }],
+    };
 
     {
         let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
-        store
-            .save_address_owned_seed_objects(&[object_ref])
-            .expect("seed object should be saved");
+        load_seed_objects(&store, &manifest).expect("seed load should hydrate from the remote");
+
         let reader = store.clone();
         let infos: Vec<_> =
             RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-                .expect("owned-object iterator should use saved seed")
+                .expect("owned-object iterator should read the seeded index")
                 .map(|result| result.expect("owned-object entry should decode"))
                 .collect();
         assert_eq!(infos.len(), 1);
         let balance = RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
-            .expect("balance lookup should use saved seed")
+            .expect("balance lookup should read the seeded index")
             .expect("gas balance should exist");
         assert_eq!(balance.coin_balance, 1_000_000);
         drop(services);
     }
 
+    // Reopened against an unreachable endpoint: everything the seed established
+    // is durable, and the load recognizes that it already ran rather than
+    // re-fetching (which would fail here) or re-merging the balance (which
+    // would silently double it).
     let (store, _services) =
         test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
-    store
-        .save_address_owned_seed_objects(&[object_ref])
-        .expect("existing seed object should be saved without remote");
+    load_seed_objects(&store, &manifest).expect("a resumed seed load must not touch the remote");
+
     let reader = store.clone();
     let infos: Vec<_> =
         RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should use reopened seed index")
+            .expect("owned-object iterator should read the reopened seed index")
             .map(|result| result.expect("owned-object entry should decode"))
             .collect();
-
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
+    assert_eq!(
+        RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
+            .expect("balance lookup should succeed")
+            .expect("gas balance should exist")
+            .coin_balance,
+        1_000_000,
+        "a resumed seed load must not re-credit the balance",
+    );
 }
 
-#[tokio::test]
-async fn test_rpc_dynamic_field_iter_initializes_object_owner_inventory_from_graphql() {
-    let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let checkpoint = 42;
+/// `ObjectByOwner::restore` keys object-owned children under their parent, so a
+/// seeded child is reachable as a dynamic field without any read-time scan.
+#[test]
+fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
+    let (_temp, store) = test_data_store();
     let parent = ObjectID::random();
     let child_id = ObjectID::random();
     let child = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
 
-    let server = MockServer::start().await;
-    mock_object_owner_inventory(&server, checkpoint, parent, &[&child]).await;
-
-    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    store.local_store().restore_seed_objects(&[child]).unwrap();
 
     let reader = store.clone();
     let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None)
-        .expect("dynamic-field iterator should initialize object-owner inventory")
+        .expect("dynamic-field iterator should read the seeded object-owner index")
         .map(|result| result.expect("dynamic-field row should decode"))
         .collect();
 
@@ -536,10 +504,11 @@ async fn test_rpc_dynamic_field_iter_initializes_object_owner_inventory_from_gra
     assert_eq!(fields[0].field_id, child_id);
 }
 
-#[tokio::test]
-async fn test_rpc_get_coin_info_initializes_type_inventory_from_graphql() {
-    let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let checkpoint = 42;
+/// Coin metadata is assembled from three type-keyed lookups against the type
+/// index, which `ObjectByType::restore` populates during the seed load.
+#[test]
+fn test_rpc_get_coin_info_reads_seeded_type_index() {
+    let (_temp, store) = test_data_store();
     let coin_type = GAS::type_();
     let metadata_id = ObjectID::random();
     let metadata_object = Object::coin_metadata_for_testing(
@@ -555,34 +524,14 @@ async fn test_rpc_get_coin_info_initializes_type_inventory_from_graphql() {
     );
     assert_eq!(metadata_object.id(), metadata_id);
 
-    let server = MockServer::start().await;
-    mock_type_inventory(
-        &server,
-        checkpoint,
-        &CoinMetadata::type_(coin_type.clone()),
-        &[&metadata_object],
-    )
-    .await;
-    mock_type_inventory(
-        &server,
-        checkpoint,
-        &TreasuryCap::type_(coin_type.clone()),
-        &[],
-    )
-    .await;
-    mock_type_inventory(
-        &server,
-        checkpoint,
-        &RegulatedCoinMetadata::type_(coin_type.clone()),
-        &[],
-    )
-    .await;
-
-    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    store
+        .local_store()
+        .restore_seed_objects(&[metadata_object])
+        .unwrap();
 
     let reader = store.clone();
     let info = RpcIndexes::get_coin_info(&reader, &coin_type)
-        .expect("coin-info lookup should initialize type inventories")
+        .expect("coin-info lookup should read the seeded type index")
         .expect("coin info should be assembled from indexed wrapper objects");
     assert_eq!(info.coin_metadata_object_id, Some(metadata_id));
     assert_eq!(info.treasury_object_id, None);
@@ -820,39 +769,22 @@ async fn test_transfer_sui_executes_and_persists() {
 }
 
 #[test]
-fn test_owned_objects_reads_seeded_index_across_owner_moves() {
+fn test_owned_objects_reads_seeded_index() {
     let (_temp, store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
-    let recipient = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
 
-    // Pre-fork materialization (the seed/inventory path) writes the owner
-    // index synchronously; `owned_objects` joins those rows against current
-    // canonical state.
-    store
-        .local_store()
-        .save_address_owned_seed_object(&object)
-        .unwrap();
+    // The seed load writes the owner index; `owned_objects` joins those rows
+    // against current canonical state. Retracting a row when the object later
+    // moves is the embedded indexer's job — it reads each executed checkpoint
+    // as a diff and deletes at the prior owner key — so nothing here has to
+    // reconcile.
+    store.local_store().restore_seed_objects(&[object]).unwrap();
+
     let owner_objects: Vec<_> = SimulatorStore::owned_objects(&store, owner).collect();
     assert_eq!(owner_objects.len(), 1);
     assert_eq!(owner_objects[0].id(), object_id);
-
-    let transferred = make_gas_object(object_id, 2, Owner::AddressOwner(recipient));
-    store
-        .local_store()
-        .save_address_owned_seed_object(&transferred)
-        .unwrap();
-
-    assert_eq!(
-        SimulatorStore::owned_objects(&store, owner).count(),
-        0,
-        "object should leave the previous owner's index",
-    );
-    let recipient_objects: Vec<_> = SimulatorStore::owned_objects(&store, recipient).collect();
-    assert_eq!(recipient_objects.len(), 1);
-    assert_eq!(recipient_objects[0].id(), object_id);
-    assert_eq!(recipient_objects[0].version(), SequenceNumber::from_u64(2));
 }
 
 #[test]
@@ -869,12 +801,9 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
         },
     );
 
-    // The seed/inventory path collapses ConsensusAddressOwner into the
-    // address-owner index kind.
-    store
-        .local_store()
-        .save_address_owned_seed_object(&object)
-        .unwrap();
+    // The seed load collapses ConsensusAddressOwner into the address-owner
+    // index kind, so a consensus-owned object is reachable by its address.
+    store.local_store().restore_seed_objects(&[object]).unwrap();
 
     let reader = store.local_store().reader().clone();
     let infos: Vec<_> =
@@ -887,19 +816,6 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(infos[0].version, SequenceNumber::from_u64(1));
     assert_eq!(infos[0].balance, Some(1_000_000));
-
-    // Indexing a newer non-address-owned version removes the address row.
-    let immutable = make_gas_object(object_id, 2, Owner::Immutable);
-    store
-        .local_store()
-        .save_type_inventory_object(&immutable)
-        .unwrap();
-    assert_eq!(
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .count(),
-        0,
-    );
 }
 
 #[test]
@@ -1219,12 +1135,10 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     let second = make_gas_object(second_id, 1, Owner::AddressOwner(owner));
     let other = make_gas_object(other_id, 1, Owner::AddressOwner(other_owner));
 
-    for object in [&first, &second, &other] {
-        store
-            .local_store()
-            .save_address_owned_seed_object(object)
-            .unwrap();
-    }
+    store
+        .local_store()
+        .restore_seed_objects(&[first, second, other])
+        .unwrap();
 
     let reader = store.local_store().reader().clone();
     let infos: Vec<_> =
@@ -1267,10 +1181,7 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
-    store
-        .local_store()
-        .save_address_owned_seed_object(&object)
-        .unwrap();
+    store.local_store().restore_seed_objects(&[object]).unwrap();
 
     let cloned_store = store.clone();
     let local_snapshot_guard = store

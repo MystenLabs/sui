@@ -7,7 +7,6 @@ pub mod cli;
 pub(crate) mod context;
 mod gql;
 pub(crate) mod ingestion;
-pub(crate) mod inventory;
 pub(crate) mod local_store;
 pub(crate) mod metadata;
 mod node;
