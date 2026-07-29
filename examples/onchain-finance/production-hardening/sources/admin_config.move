@@ -34,11 +34,13 @@ public fun assert_not_paused(config: &AdminConfig) {
     assert!(!config.is_paused, EPaused);
 }
 
-public fun pause(config: &mut AdminConfig, _cap: &AdminCap) {
+public fun pause(config: &mut AdminConfig, cap: &AdminCap) {
+    assert!(cap.config_id == config.id.to_inner());
     config.is_paused = true;
 }
 
-public fun unpause(config: &mut AdminConfig, _cap: &AdminCap) {
+public fun unpause(config: &mut AdminConfig, cap: &AdminCap) {
+    assert!(cap.config_id == config.id.to_inner());
     config.is_paused = false;
 }
 // docs::/#admin_config
