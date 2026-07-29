@@ -33,6 +33,12 @@ pub struct TransactionKey(pub TransactionDigest);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionTimestampKey(pub TransactionDigest);
 
+/// Key for fetching a transaction's effects as rendered by the server, which carries fields
+/// that cannot be derived from the effects BCS client-side (object type annotations,
+/// runtime-loaded objects).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RenderedEffectsKey(pub TransactionDigest);
+
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for PgReader {
     type Value = StoredTransaction;
@@ -236,6 +242,56 @@ impl ChunkedLoader<TransactionTimestampKey> for LedgerGrpcReader {
                 .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
 
             results.insert(TransactionTimestampKey(digest), timestamp_ms);
+        }
+        Ok(results)
+    }
+}
+
+#[async_trait::async_trait]
+impl ChunkedLoader<RenderedEffectsKey> for LedgerGrpcReader {
+    type Value = proto::TransactionEffects;
+    type Error = Error;
+
+    fn chunk_size(&self) -> usize {
+        MAX_BATCH_GET_TRANSACTIONS
+    }
+
+    async fn load_chunk(
+        &self,
+        keys: &[RenderedEffectsKey],
+    ) -> Result<HashMap<RenderedEffectsKey, Self::Value>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let digests = keys.iter().map(|key| key.0.to_string()).collect();
+
+        let mut request = proto::BatchGetTransactionsRequest::default();
+        request.digests = digests;
+        request.read_mask = Some(FieldMask::from_paths(["digest", "effects"]));
+
+        let batch_response = self.batch_get_transactions(request).await?;
+
+        let mut results = HashMap::new();
+        for tx_result in batch_response.transactions {
+            let Some(proto::get_transaction_result::Result::Transaction(executed)) =
+                tx_result.result
+            else {
+                continue;
+            };
+
+            let digest = executed
+                .digest
+                .as_deref()
+                .context("BatchGetTransactions response missing digest")?
+                .parse::<TransactionDigest>()
+                .context("Failed to parse transaction digest")?;
+
+            let Some(effects) = executed.effects else {
+                continue;
+            };
+
+            results.insert(RenderedEffectsKey(digest), effects);
         }
         Ok(results)
     }

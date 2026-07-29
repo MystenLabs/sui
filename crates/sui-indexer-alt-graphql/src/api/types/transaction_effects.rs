@@ -366,12 +366,30 @@ impl EffectsContents {
     }
 
     /// The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
-    async fn effects_json(&self) -> Option<Result<Json, RpcError>> {
+    async fn effects_json(&self, ctx: &Context<'_>) -> Option<Result<Json, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
             async {
-                let mut proto_effects = content.proto_effects()?;
+                // Prefer the proto cached from an execution or streaming response (rendered by
+                // the fullnode). Otherwise ask the ledger service to render the effects — the
+                // rendering carries fields that cannot be derived from the effects BCS locally
+                // (object type annotations, runtime-loaded objects). Fall back to local
+                // conversion when no rendering backend is configured, or the transaction is not
+                // indexed (yet).
+                let mut proto_effects = if let Some(proto) = content.cached_proto_effects() {
+                    proto.clone()
+                } else {
+                    let kv_loader: &KvLoader = ctx.data()?;
+                    match kv_loader
+                        .load_one_rendered_effects(content.digest()?)
+                        .await
+                        .context("Failed to fetch rendered effects")?
+                    {
+                        Some(proto) => proto,
+                        None => content.proto_effects()?,
+                    }
+                };
                 // Clear the bcs field as effectsJson is intended to provide a full structured output
                 proto_effects.bcs = None;
                 let json_value = serde_json::to_value(&proto_effects)

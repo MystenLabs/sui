@@ -43,6 +43,7 @@ use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
+use crate::transactions::RenderedEffectsKey;
 use crate::transactions::TransactionKey;
 use crate::transactions::TransactionTimestampKey;
 
@@ -396,6 +397,22 @@ impl KvLoader {
         }
     }
 
+    /// Load a transaction's effects as rendered by the ledger service. The rendered proto
+    /// carries fields that cannot be derived from the effects BCS client-side (object type
+    /// annotations joined from the transaction's object set, and runtime-loaded objects, which
+    /// are stored outside the effects). Returns `None` for the Bigtable and Postgres backends,
+    /// which have no rendering server — callers are expected to fall back to converting native
+    /// effects locally.
+    pub async fn load_one_rendered_effects(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<grpc::TransactionEffects>, Error> {
+        match self {
+            Self::LedgerGrpc(loader) => loader.load_one(RenderedEffectsKey(digest)).await,
+            Self::Bigtable(_) | Self::Pg(_) => Ok(None),
+        }
+    }
+
     pub async fn load_many_transaction_events(
         &self,
         digests: Vec<TransactionDigest>,
@@ -608,6 +625,15 @@ impl TransactionContents {
                     .map(|c| BalanceChangeContents::Native(c.clone()))
                     .collect(),
             ),
+            _ => None,
+        }
+    }
+
+    /// The proto TransactionEffects cached from a gRPC execution or streaming response, if any.
+    /// Unlike `proto_effects`, does not fall back to converting native effects.
+    pub fn cached_proto_effects(&self) -> Option<&grpc::TransactionEffects> {
+        match self {
+            Self::ExecutedTransaction(tx) => tx.proto_effects.as_ref(),
             _ => None,
         }
     }
