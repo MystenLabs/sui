@@ -75,6 +75,7 @@ use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
+use sui_types::execution::ExecutionRetryError;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
@@ -279,6 +280,8 @@ pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
     total_effects: IntCounter,
+    system_object_unavailable_retries: IntCounterVec,
+    system_object_unavailable_retry_wait_latency: HistogramVec,
     // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
     sponsored_tx: IntCounter,
@@ -322,6 +325,13 @@ pub struct AuthorityMetrics {
     post_processing_total_tx_indexed: IntCounter,
     post_processing_total_tx_had_event_processed: IntCounter,
     post_processing_total_failures: IntCounter,
+
+    /// Number of GCP `(iss, kid)` ids for which two or more distinct JWKs reached quorum
+    /// within the same activation batch; none of the conflicting keys are activated.
+    pub gcp_jwk_activation_conflicts: IntCounter,
+    /// Number of GCP JWKs that reached quorum but were not activated because activating them
+    /// would have exceeded the configured `max_gcp_active_jwks` cap.
+    pub gcp_jwk_activation_cap_exceeded: IntCounter,
 
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
@@ -433,6 +443,21 @@ impl AuthorityMetrics {
             total_effects: register_int_counter_with_registry!(
                 "total_transaction_effects",
                 "Total number of transaction effects produced",
+                registry,
+            )
+            .unwrap(),
+            system_object_unavailable_retries: register_int_counter_vec_with_registry!(
+                "system_object_unavailable_retries",
+                "Number of executions retried while a system object catches up locally",
+                &["object_id"],
+                registry,
+            )
+            .unwrap(),
+            system_object_unavailable_retry_wait_latency: register_histogram_vec_with_registry!(
+                "system_object_unavailable_retry_wait_latency",
+                "Seconds spent waiting for a required system object before retrying execution",
+                &["object_id"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -655,6 +680,18 @@ impl AuthorityMetrics {
                 &["class", "outcome"],
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
+            ).unwrap(),
+            gcp_jwk_activation_conflicts: register_int_counter_with_registry!(
+                "gcp_jwk_activation_conflicts",
+                "Number of GCP (iss, kid) ids for which multiple distinct JWKs reached quorum \
+                 in the same activation batch, so none of them were activated",
+                registry,
+            ).unwrap(),
+            gcp_jwk_activation_cap_exceeded: register_int_counter_with_registry!(
+                "gcp_jwk_activation_cap_exceeded",
+                "Number of GCP JWKs that reached quorum but were not activated because doing so \
+                 would have exceeded the configured max_gcp_active_jwks cap",
+                registry,
             ).unwrap(),
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",
@@ -1979,6 +2016,50 @@ impl AuthorityState {
         )
     }
 
+    fn wait_for_system_object_and_reenqueue(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        object_id: ObjectID,
+        version: SequenceNumber,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        self.metrics
+            .system_object_unavailable_retries
+            .with_label_values(&[object_id.to_string().as_str()])
+            .inc();
+        let initial_shared_version = epoch_store
+            .epoch_start_config()
+            .system_object_initial_shared_version(object_id)
+            .expect("system object must be registered in the epoch start config");
+        let full_object_id = FullObjectID::Consensus((object_id, initial_shared_version));
+        let cache_reader = self.get_object_cache_reader().clone();
+        let scheduler = self.execution_scheduler.clone();
+        let certificate = certificate.clone();
+        let execution_env = execution_env.clone();
+        let epoch_store = epoch_store.clone();
+        let metrics = self.metrics.clone();
+        tokio::task::spawn(async move {
+            let _ = epoch_store
+                .within_alive_epoch(async move {
+                    let wait_start = Instant::now();
+                    cache_reader
+                        .notify_read_system_object_at_version(full_object_id, version)
+                        .await;
+                    metrics
+                        .system_object_unavailable_retry_wait_latency
+                        .with_label_values(&[object_id.to_string().as_str()])
+                        .observe(wait_start.elapsed().as_secs_f64());
+                    scheduler.send_transaction_for_execution(
+                        &certificate,
+                        execution_env,
+                        tokio::time::Instant::now(),
+                    );
+                })
+                .await;
+        });
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -2091,6 +2172,30 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
+
+        if let Some(ExecutionRetryError::SystemObjectUnavailable { object_id, version }) =
+            inner_temp_store.retry_request.as_ref()
+        {
+            assert_reachable!("retry on unavailable system object");
+            self.wait_for_system_object_and_reenqueue(
+                certificate,
+                *object_id,
+                *version,
+                &execution_env,
+                epoch_store,
+            );
+            return ExecutionOutput::RetryLater;
+        }
+
+        if let Err(err) = &execution_error_opt {
+            assert!(
+                !matches!(
+                    err.kind(),
+                    ExecutionErrorKind::SystemObjectNotAvailableLocally
+                ),
+                "transaction {tx_digest} unwound for an unavailable system object without a retry request",
+            );
+        }
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()

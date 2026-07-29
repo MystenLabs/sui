@@ -6,7 +6,7 @@ use crate::accumulator_root::AccumulatorObjId;
 use crate::base_types::{SequenceNumber, VersionDigest};
 use crate::effects::TransactionEvents;
 use crate::error::SuiResult;
-use crate::execution::DynamicallyLoadedObjectMetadata;
+use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionRetryError};
 use crate::storage::BackingPackageStore;
 use crate::storage::PackageObject;
 use crate::{
@@ -46,6 +46,8 @@ pub struct InnerTemporaryStore {
     /// Then the accumulator_running_max_withdraws for this account will be 100,
     /// because at any given moment, the net withdraws is at most 100.
     pub accumulator_running_max_withdraws: BTreeMap<AccumulatorObjId, u128>,
+    /// Set when execution must be discarded and retried after a node-local dependency arrives.
+    pub retry_request: Option<ExecutionRetryError>,
 }
 
 pub struct TemporaryModuleResolver<'a, R> {

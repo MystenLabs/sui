@@ -306,3 +306,62 @@ async fn test_receiving_object_higher_version() {
         .now_or_never()
         .unwrap();
 }
+
+#[tokio::test]
+async fn test_notify_read_system_object_at_version() {
+    let cache = create_writeback_cache().await;
+    let object_id = ObjectID::random();
+    let initial_shared_version = SequenceNumber::from(1);
+    let full_object_id = FullObjectID::Consensus((object_id, initial_shared_version));
+    let target_version = SequenceNumber::from(3);
+
+    assert!(
+        timeout(
+            Duration::from_secs(1),
+            cache.notify_read_system_object_at_version(full_object_id, target_version),
+        )
+        .await
+        .is_err()
+    );
+
+    cache.write_object_entry_for_test(Object::with_id_owner_version_for_testing(
+        object_id,
+        SequenceNumber::from(2),
+        Owner::Shared {
+            initial_shared_version,
+        },
+    ));
+    assert!(
+        timeout(
+            Duration::from_secs(1),
+            cache.notify_read_system_object_at_version(full_object_id, target_version),
+        )
+        .await
+        .is_err()
+    );
+
+    tokio::spawn({
+        let cache = cache.clone();
+        async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            cache.write_object_entry_for_test(Object::with_id_owner_version_for_testing(
+                object_id,
+                target_version,
+                Owner::Shared {
+                    initial_shared_version,
+                },
+            ));
+        }
+    });
+    timeout(
+        Duration::from_secs(3),
+        cache.notify_read_system_object_at_version(full_object_id, target_version),
+    )
+    .await
+    .unwrap();
+
+    cache
+        .notify_read_system_object_at_version(full_object_id, target_version)
+        .now_or_never()
+        .unwrap();
+}

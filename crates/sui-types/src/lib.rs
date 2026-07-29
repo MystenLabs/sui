@@ -61,6 +61,7 @@ pub mod funds_accumulator;
 pub mod gas;
 pub mod gas_coin;
 pub mod gas_model;
+pub mod gcp_attestation;
 pub mod global_state_hash;
 pub mod governance;
 pub mod id;

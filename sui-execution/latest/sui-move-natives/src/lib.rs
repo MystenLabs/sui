@@ -51,6 +51,7 @@ use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
+use crypto::gcp_attestation::{self as gcp_attestation_mod, GcpAttestationCostParams};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -216,9 +217,297 @@ pub struct NativesCostTable {
 
     // bulletproofs range proofs
     pub bulletproofs_cost_params: BulletproofsCostParams,
+
+    // gcp attestation
+    pub gcp_attestation_cost_params: GcpAttestationCostParams,
 }
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
+
+/// Cached GCP-only JWK map populated at execution setup from AuthenticatorState, keyed by `kid`.
+///
+/// Only JWKs whose issuer exactly matches [`sui_types::gcp_attestation::GCP_ISSUER`] are
+/// retained; entries for any other issuer (e.g. zkLogin OIDC providers) are filtered out. If two
+/// active JWKs share the same `kid` with conflicting values, both are dropped: a `kid` with an
+/// ambiguous key is treated the same as an absent `kid` (fail closed) rather than risk silently
+/// picking one of the conflicting keys. `ActiveJwk`s older than the configured GCP max age (in
+/// epochs, measured against the current execution epoch) are excluded entirely, before conflict
+/// detection, so a stale key can never suppress a fresh one that shares its `kid`.
+#[derive(Tid, Default)]
+pub struct JwkMap {
+    map: std::collections::HashMap<String, fastcrypto_zkp::bn254::zk_login::JWK>,
+}
+
+impl NativeExtensionMarker<'_> for JwkMap {}
+
+impl JwkMap {
+    /// Builds the map from `active_jwks`, keeping only GCP-issuer entries whose age (in epochs,
+    /// `current_epoch - active_jwk.epoch`) is at most `max_age_epochs`. `current_epoch` should be
+    /// the current execution epoch (from the transaction context), not the epoch the key became
+    /// active in.
+    pub fn from_active_jwks(
+        active_jwks: Vec<sui_types::authenticator_state::ActiveJwk>,
+        current_epoch: u64,
+        max_age_epochs: u64,
+    ) -> Self {
+        use std::collections::{HashMap, HashSet};
+
+        let mut accepted: HashMap<String, fastcrypto_zkp::bn254::zk_login::JWK> = HashMap::new();
+        let mut conflicted: HashSet<String> = HashSet::new();
+        for active_jwk in active_jwks {
+            if active_jwk.jwk_id.iss != sui_types::gcp_attestation::GCP_ISSUER {
+                continue;
+            }
+            // Exclude stale entries before conflict detection: an expired key must never be
+            // able to poison (or be poisoned by) a fresh one that happens to share its `kid`.
+            if current_epoch.saturating_sub(active_jwk.epoch) > max_age_epochs {
+                continue;
+            }
+            let kid = active_jwk.jwk_id.kid;
+            if conflicted.contains(&kid) {
+                continue;
+            }
+            match accepted.get(&kid) {
+                // Same kid, different key material: ambiguous. Fail closed by removing it,
+                // and remember not to re-insert it if a third conflicting entry follows.
+                Some(existing) if existing != &active_jwk.jwk => {
+                    accepted.remove(&kid);
+                    conflicted.insert(kid);
+                }
+                _ => {
+                    accepted.insert(kid, active_jwk.jwk);
+                }
+            }
+        }
+        Self { map: accepted }
+    }
+
+    /// Look up the trusted RSA JWK for `kid`. Returns `None` for unknown or conflicting kids.
+    pub fn get(&self, kid: &str) -> Option<&fastcrypto_zkp::bn254::zk_login::JWK> {
+        self.map.get(kid)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod jwk_map_tests {
+    use super::JwkMap;
+    use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+    use sui_types::authenticator_state::ActiveJwk;
+
+    fn jwk(n: &str, e: &str) -> JWK {
+        JWK {
+            kty: "RSA".to_string(),
+            e: e.to_string(),
+            n: n.to_string(),
+            alg: "RS256".to_string(),
+        }
+    }
+
+    fn active_jwk(iss: &str, kid: &str, jwk: JWK) -> ActiveJwk {
+        ActiveJwk {
+            jwk_id: JwkId {
+                iss: iss.to_string(),
+                kid: kid.to_string(),
+            },
+            jwk,
+            epoch: 0,
+        }
+    }
+
+    const GCP_ISS: &str = sui_types::gcp_attestation::GCP_ISSUER;
+    const OTHER_ISS: &str = "https://accounts.google.com";
+
+    /// Most tests don't care about staleness: use a huge max age so nothing is ever excluded.
+    const NO_STALENESS: u64 = u64::MAX;
+
+    #[test]
+    fn filters_out_non_gcp_issuers() {
+        let map = JwkMap::from_active_jwks(
+            vec![
+                active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+                active_jwk(OTHER_ISS, "kid-b", jwk("nB", "AQAB")),
+            ],
+            0,
+            NO_STALENESS,
+        );
+        assert!(map.get("kid-a").is_some());
+        assert!(map.get("kid-b").is_none());
+    }
+
+    #[test]
+    fn looks_up_by_kid() {
+        let key = jwk("nA", "AQAB");
+        let map = JwkMap::from_active_jwks(
+            vec![active_jwk(GCP_ISS, "kid-a", key.clone())],
+            0,
+            NO_STALENESS,
+        );
+        assert_eq!(map.get("kid-a"), Some(&key));
+        assert_eq!(map.get("unknown-kid"), None);
+    }
+
+    #[test]
+    fn conflicting_duplicate_kid_is_treated_as_absent() {
+        let map = JwkMap::from_active_jwks(
+            vec![
+                active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+                active_jwk(GCP_ISS, "kid-a", jwk("nA-different", "AQAB")),
+            ],
+            0,
+            NO_STALENESS,
+        );
+        // Fail closed: ambiguous kid must not resolve to either key.
+        assert!(map.get("kid-a").is_none());
+    }
+
+    #[test]
+    fn duplicate_kid_with_identical_key_is_not_treated_as_conflict() {
+        let key = jwk("nA", "AQAB");
+        let map = JwkMap::from_active_jwks(
+            vec![
+                active_jwk(GCP_ISS, "kid-a", key.clone()),
+                active_jwk(GCP_ISS, "kid-a", key.clone()),
+            ],
+            0,
+            NO_STALENESS,
+        );
+        assert_eq!(map.get("kid-a"), Some(&key));
+    }
+
+    #[test]
+    fn third_conflicting_entry_stays_absent_after_prior_conflict() {
+        let map = JwkMap::from_active_jwks(
+            vec![
+                active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+                active_jwk(GCP_ISS, "kid-a", jwk("nA-different", "AQAB")),
+                active_jwk(GCP_ISS, "kid-a", jwk("nA", "AQAB")),
+            ],
+            0,
+            NO_STALENESS,
+        );
+        assert!(map.get("kid-a").is_none());
+    }
+
+    #[test]
+    fn empty_active_jwks_yields_empty_map() {
+        let map = JwkMap::from_active_jwks(vec![], 0, NO_STALENESS);
+        assert!(map.get("anything").is_none());
+    }
+
+    fn active_jwk_at_epoch(iss: &str, kid: &str, jwk: JWK, epoch: u64) -> ActiveJwk {
+        ActiveJwk {
+            jwk_id: JwkId {
+                iss: iss.to_string(),
+                kid: kid.to_string(),
+            },
+            jwk,
+            epoch,
+        }
+    }
+
+    #[test]
+    fn excludes_active_jwk_older_than_max_age() {
+        // Became active at epoch 0; current epoch 2, max age 1 -> age 2 > 1, excluded.
+        let map = JwkMap::from_active_jwks(
+            vec![active_jwk_at_epoch(GCP_ISS, "kid-a", jwk("nA", "AQAB"), 0)],
+            2,
+            1,
+        );
+        assert!(map.get("kid-a").is_none());
+    }
+
+    #[test]
+    fn keeps_active_jwk_exactly_at_max_age_boundary() {
+        // age == max_age_epochs is still within bounds (not "older than").
+        let map = JwkMap::from_active_jwks(
+            vec![active_jwk_at_epoch(GCP_ISS, "kid-a", jwk("nA", "AQAB"), 1)],
+            2,
+            1,
+        );
+        assert!(map.get("kid-a").is_some());
+    }
+
+    #[test]
+    fn keeps_fresh_active_jwk_within_max_age() {
+        let map = JwkMap::from_active_jwks(
+            vec![active_jwk_at_epoch(GCP_ISS, "kid-a", jwk("nA", "AQAB"), 2)],
+            2,
+            1,
+        );
+        assert!(map.get("kid-a").is_some());
+    }
+
+    /// Documents the fail-closed contract at the consensus/execution boundary for a GCP key
+    /// rotation that happens within a single epoch.
+    ///
+    /// At the consensus layer, `activate_gcp_jwks` explicitly permits this: a new, distinct
+    /// key reaching quorum for a `kid` that was already activated in an earlier round/batch of
+    /// the same epoch is *not* treated as a same-batch conflict (see
+    /// `gcp_jwk_activation_allows_rotation_across_batches` in `sui-core`'s
+    /// `consensus_handler.rs`), so both the old and new `ActiveJwk` can legitimately exist for
+    /// the same epoch.
+    ///
+    /// `JwkMap` does not know (or trust) which one of two same-kid entries is "older" or
+    /// "authoritative" -- it has only the flattened list handed to it at execution setup. If
+    /// both ever end up in that list together (whatever the reason: replay ordering, a future
+    /// change to how `AuthenticatorStateUpdate` merges entries, etc.), `JwkMap` must preserve
+    /// fail-closed semantics and refuse to arbitrarily pick one, exactly like any other
+    /// same-kid conflict. There is currently no code path in this crate that safely resolves
+    /// "replace old key with new key for the same kid," so this test intentionally asserts the
+    /// conservative (kid absent) outcome rather than picking either key.
+    #[test]
+    fn same_epoch_same_kid_rotation_fails_closed_rather_than_trusting_either_key() {
+        let old_key = jwk("n-old", "AQAB");
+        let new_key = jwk("n-new", "AQAB");
+        let epoch = 7;
+
+        // Old-then-new order (mirrors chronological activation order across rounds)...
+        let map_old_then_new = JwkMap::from_active_jwks(
+            vec![
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", old_key.clone(), epoch),
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", new_key.clone(), epoch),
+            ],
+            epoch,
+            NO_STALENESS,
+        );
+        assert!(
+            map_old_then_new.get("rotating-kid").is_none(),
+            "same-epoch same-kid rotation must fail closed, not silently trust the newer key"
+        );
+
+        // ... and new-then-old order must be symmetric: JwkMap's fail-closed behavior must not
+        // depend on which of the two rotated keys happens to appear first in the input list.
+        let map_new_then_old = JwkMap::from_active_jwks(
+            vec![
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", new_key, epoch),
+                active_jwk_at_epoch(GCP_ISS, "rotating-kid", old_key, epoch),
+            ],
+            epoch,
+            NO_STALENESS,
+        );
+        assert!(
+            map_new_then_old.get("rotating-kid").is_none(),
+            "fail-closed outcome must not depend on input ordering"
+        );
+    }
+
+    #[test]
+    fn stale_entry_does_not_conflict_with_fresh_entry_for_same_kid() {
+        // A stale key sharing a kid with a fresh key must not poison the fresh one: staleness
+        // filtering happens before conflict detection.
+        let fresh_key = jwk("n-fresh", "AQAB");
+        let map = JwkMap::from_active_jwks(
+            vec![
+                active_jwk_at_epoch(GCP_ISS, "kid-a", jwk("n-stale", "AQAB"), 0),
+                active_jwk_at_epoch(GCP_ISS, "kid-a", fresh_key.clone(), 2),
+            ],
+            2,
+            1,
+        );
+        assert_eq!(map.get("kid-a"), Some(&fresh_key));
+    }
+}
 
 impl NativesCostTable {
     pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
@@ -846,6 +1135,14 @@ impl NativesCostTable {
                     .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment_as_option()
                     .map(Into::into),
             },
+            gcp_attestation_cost_params: GcpAttestationCostParams {
+                verify_base_cost: protocol_config
+                    .gcp_attestation_verify_base_cost_as_option()
+                    .map(Into::into),
+                verify_cost_per_byte: protocol_config
+                    .gcp_attestation_verify_cost_per_byte_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -1361,6 +1658,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "nitro_attestation",
             "load_nitro_attestation_internal",
             make_native!(nitro_attestation::load_nitro_attestation_internal),
+        ),
+        (
+            "gcp_attestation",
+            "verify_gcp_attestation_internal",
+            make_native!(gcp_attestation_mod::verify_gcp_attestation_internal),
         ),
         (
             "rangeproofs",

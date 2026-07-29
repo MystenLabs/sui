@@ -1958,6 +1958,34 @@ impl ObjectCacheRead for WritebackCache {
             .map(|_| ())
             .boxed()
     }
+
+    fn notify_read_system_object_at_version<'a>(
+        &'a self,
+        full_object_id: FullObjectID,
+        version: SequenceNumber,
+    ) -> BoxFuture<'a, ()> {
+        let object_id = full_object_id.id();
+        let key = InputKey::VersionedObject {
+            id: full_object_id,
+            version,
+        };
+        async move {
+            self.object_notify_read
+                .read(
+                    "notify_read_system_object_at_version",
+                    &[key],
+                    move |_keys| {
+                        vec![if self.object_exists_by_key(&object_id, version) {
+                            Some(())
+                        } else {
+                            None
+                        }]
+                    },
+                )
+                .await;
+        }
+        .boxed()
+    }
 }
 
 impl TransactionCacheRead for WritebackCache {

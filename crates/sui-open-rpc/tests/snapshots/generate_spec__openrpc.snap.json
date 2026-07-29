@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "132",
+              "maxSupportedProtocolVersion": "134",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1365,6 +1365,8 @@
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_gasless": false,
+                "enable_gcp_attestation": false,
+                "enable_gcp_consensus_validation": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_init_on_upgrade": false,
@@ -1717,6 +1719,8 @@
                 "gasless_max_tps": null,
                 "gasless_max_tx_size_bytes": null,
                 "gasless_max_unused_inputs": null,
+                "gcp_attestation_verify_base_cost": null,
+                "gcp_attestation_verify_cost_per_byte": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },
@@ -1819,6 +1823,7 @@
                 "max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_mysticeti_commit": null,
                 "max_accumulated_txn_cost_per_object_in_narwhal_commit": null,
+                "max_age_of_gcp_jwk_in_epochs": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -1862,6 +1867,7 @@
                   "u64": "100000"
                 },
                 "max_gas_price_rgp_factor_for_aborted_transactions": null,
+                "max_gcp_active_jwks": null,
                 "max_generic_instantiation_length": {
                   "u64": "32"
                 },
@@ -2255,6 +2261,8 @@
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_gasless": false,
+                "enable_gcp_attestation": false,
+                "enable_gcp_consensus_validation": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_init_on_upgrade": false,

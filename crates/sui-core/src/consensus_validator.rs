@@ -118,8 +118,27 @@ impl SuiTxValidator {
                 }
 
                 ConsensusTransactionKind::EndOfPublish(_)
-                | ConsensusTransactionKind::NewJWKFetched(_, _, _)
                 | ConsensusTransactionKind::CapabilityNotificationV2(_) => {}
+
+                ConsensusTransactionKind::NewJWKFetched(_, id, jwk) => {
+                    // GCP-issuer JWKs get additional, protocol-gated live validation here so
+                    // that malformed/invalid GCP keys never even enter consensus. This is
+                    // gated identically to the catch-up/replay check in
+                    // `authority_per_epoch_store.rs` (`enable_gcp_consensus_validation`), and
+                    // has no effect on non-GCP (e.g. zkLogin OIDC) issuers.
+                    if epoch_store
+                        .protocol_config()
+                        .enable_gcp_consensus_validation()
+                        && id.iss == sui_types::gcp_attestation::GCP_ISSUER
+                        && let Err(err) = sui_types::gcp_attestation::validate_gcp_jwk(id, jwk)
+                    {
+                        warn!(?id, %err, "rejecting invalid GCP JWK in NewJWKFetched");
+                        return Err(SuiErrorKind::UnexpectedMessage(format!(
+                            "invalid GCP JWK for {id:?}: {err}"
+                        ))
+                        .into());
+                    }
+                }
 
                 ConsensusTransactionKind::UserTransaction(_) => {
                     return Err(SuiErrorKind::UnexpectedMessage(
@@ -1250,5 +1269,185 @@ mod tests {
         );
         let snapshot = manager.peer_configs_snapshot();
         assert_eq!(snapshot.get(&state.name).unwrap().generation(), now_ms);
+    }
+
+    /// Minimal base64url (no padding) encoder, so these tests don't need a `base64` crate
+    /// dependency just to build fixture strings.
+    fn base64url_nopad(bytes: &[u8]) -> String {
+        const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let mut out = String::new();
+        for chunk in bytes.chunks(3) {
+            let b0 = chunk[0] as u32;
+            let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+            let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+            let n = (b0 << 16) | (b1 << 8) | b2;
+            let chars = [
+                ALPHABET[(n >> 18 & 0x3F) as usize],
+                ALPHABET[(n >> 12 & 0x3F) as usize],
+                ALPHABET[(n >> 6 & 0x3F) as usize],
+                ALPHABET[(n & 0x3F) as usize],
+            ];
+            out.push_str(std::str::from_utf8(&chars).unwrap());
+            out.truncate(out.len() - (3 - chunk.len()));
+        }
+        out
+    }
+
+    /// A structurally valid GCP-issuer JWK: RSA/RS256, a 2048-bit odd modulus (0x80 followed
+    /// by 255 bytes of 0xFF) with no leading zero byte, and exponent 65537 ("AQAB").
+    /// `validate_gcp_jwk` only checks structural validity, so this does not need to be an
+    /// actual working RSA keypair.
+    fn valid_gcp_jwk() -> (
+        fastcrypto_zkp::bn254::zk_login::JwkId,
+        fastcrypto_zkp::bn254::zk_login::JWK,
+    ) {
+        let mut n = vec![0xFFu8; 256];
+        n[0] = 0x80; // top bit set: exactly 2048 numeric bits, no leading zero byte.
+        (
+            fastcrypto_zkp::bn254::zk_login::JwkId {
+                iss: sui_types::gcp_attestation::GCP_ISSUER.to_string(),
+                kid: "test-kid".to_string(),
+            },
+            fastcrypto_zkp::bn254::zk_login::JWK {
+                kty: "RSA".to_string(),
+                e: "AQAB".to_string(),
+                n: base64url_nopad(&n),
+                alg: sui_types::gcp_attestation::RS256_ALG.to_string(),
+            },
+        )
+    }
+
+    fn jwk_fetched_bytes(
+        authority: sui_types::base_types::AuthorityName,
+        id: fastcrypto_zkp::bn254::zk_login::JwkId,
+        jwk: fastcrypto_zkp::bn254::zk_login::JWK,
+    ) -> Vec<u8> {
+        bcs::to_bytes(&ConsensusTransaction::new_jwk_fetched(authority, id, jwk)).unwrap()
+    }
+
+    /// Builds a `ProtocolConfig` at the max supported version with
+    /// `enable_gcp_consensus_validation` explicitly forced to `gated_on`. Uses
+    /// `TestAuthorityBuilder::with_protocol_config` (a config baked directly into the built
+    /// authority) instead of `ProtocolConfig::apply_overrides_for_testing`, whose single
+    /// process-wide override slot is not safe to use from tests that may run concurrently
+    /// with each other in the same test binary.
+    fn protocol_config_with_gcp_consensus_validation(gated_on: bool) -> ProtocolConfig {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_enable_gcp_consensus_validation_for_testing(gated_on);
+        config
+    }
+
+    #[tokio::test]
+    async fn reject_invalid_gcp_jwk_when_consensus_validation_gated_on() {
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(protocol_config_with_gcp_consensus_validation(true))
+            .build()
+            .await;
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let (id, mut jwk) = valid_gcp_jwk();
+        jwk.kty = "EC".to_string(); // structurally invalid: wrong key type.
+        let bytes = jwk_fetched_bytes(state.name, id, jwk);
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(
+            res.is_err(),
+            "invalid GCP JWK must be rejected when enable_gcp_consensus_validation is on"
+        );
+    }
+
+    #[tokio::test]
+    async fn accept_valid_gcp_jwk_when_consensus_validation_gated_on() {
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(protocol_config_with_gcp_consensus_validation(true))
+            .build()
+            .await;
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let (id, jwk) = valid_gcp_jwk();
+        let bytes = jwk_fetched_bytes(state.name, id, jwk);
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(res.is_ok(), "valid GCP JWK should be accepted: {res:?}");
+    }
+
+    #[tokio::test]
+    async fn accept_invalid_gcp_jwk_when_consensus_validation_gated_off() {
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(protocol_config_with_gcp_consensus_validation(false))
+            .build()
+            .await;
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let (id, mut jwk) = valid_gcp_jwk();
+        jwk.kty = "EC".to_string(); // structurally invalid, but the gate is off.
+        let bytes = jwk_fetched_bytes(state.name, id, jwk);
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(
+            res.is_ok(),
+            "when the gate is off, GCP JWK validation must not run: {res:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn accept_invalid_non_gcp_jwk_when_consensus_validation_gated_on() {
+        // Generic (non-GCP) issuers must never be touched by validate_gcp_jwk, even when the
+        // gate is on: an "invalid" generic JWK sails through untouched, exactly as before.
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .with_protocol_config(protocol_config_with_gcp_consensus_validation(true))
+            .build()
+            .await;
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            SuiTxValidatorMetrics::new(&Default::default()),
+        );
+
+        let id = fastcrypto_zkp::bn254::zk_login::JwkId {
+            iss: "https://accounts.google.com".to_string(),
+            kid: "generic-kid".to_string(),
+        };
+        let jwk = fastcrypto_zkp::bn254::zk_login::JWK {
+            kty: "not-even-RSA".to_string(),
+            e: "not-base64!!".to_string(),
+            n: "not-base64!!".to_string(),
+            alg: "none".to_string(),
+        };
+        let bytes = jwk_fetched_bytes(state.name, id, jwk);
+
+        let res = validator.verify_batch(&[&bytes]);
+        assert!(
+            res.is_ok(),
+            "non-GCP issuers must be unaffected by GCP JWK validation: {res:?}"
+        );
     }
 }

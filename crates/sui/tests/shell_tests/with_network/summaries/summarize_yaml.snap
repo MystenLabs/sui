@@ -50,6 +50,7 @@ ed25519.yaml
 event.yaml
 forwarding_address.yaml
 funds_accumulator.yaml
+gcp_attestation.yaml
 groth16.yaml
 group_ops.yaml
 hash.yaml
@@ -417,6 +418,9 @@ type_origins:
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: forwarding_address
       datatype_name: ForwardingAddressRegistry
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: gcp_attestation
+      datatype_name: GcpAttestationDocument
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: groth16
       datatype_name: Curve

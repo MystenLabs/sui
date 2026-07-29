@@ -163,6 +163,7 @@ pub mod address_prober;
 pub mod admin;
 pub mod db_shell;
 mod handle;
+mod jwk_updater;
 pub mod metrics;
 
 pub struct ValidatorComponents {
@@ -228,6 +229,8 @@ mod simulator {
     }
 
     static JWK_INJECTOR: Mutex<Option<Arc<JwkInjector>>> = Mutex::new(None);
+    // Separate from JWK_INJECTOR: TestClusterBuilder overwrites the zkLogin injector.
+    static GCP_JWK_INJECTOR: Mutex<Vec<(JwkId, JWK)>> = Mutex::new(Vec::new());
 
     pub(super) fn get_jwk_injector() -> Arc<JwkInjector> {
         JWK_INJECTOR
@@ -240,8 +243,18 @@ mod simulator {
     pub fn set_jwk_injector(injector: Arc<JwkInjector>) {
         *JWK_INJECTOR.lock().unwrap() = Some(injector);
     }
+
+    pub fn set_gcp_jwk_injector(jwks: Vec<(JwkId, JWK)>) {
+        *GCP_JWK_INJECTOR.lock().unwrap() = jwks;
+    }
+
+    pub(super) fn get_gcp_jwk_injector() -> Vec<(JwkId, JWK)> {
+        GCP_JWK_INJECTOR.lock().unwrap().clone()
+    }
 }
 
+#[cfg(msim)]
+pub use simulator::set_gcp_jwk_injector;
 #[cfg(msim)]
 pub use simulator::set_jwk_injector;
 #[cfg(msim)]
@@ -320,8 +333,6 @@ impl fmt::Debug for SuiNode {
     }
 }
 
-static MAX_JWK_KEYS_PER_FETCH: usize = 100;
-
 impl SuiNode {
     pub async fn start(
         config: NodeConfig,
@@ -359,21 +370,15 @@ impl SuiNode {
             "Starting JWK updater tasks with supported providers: {:?}", supported_providers
         );
 
-        fn validate_jwk(
-            metrics: &Arc<SuiNodeMetrics>,
-            provider: &OIDCProvider,
-            id: &JwkId,
-            jwk: &JWK,
-        ) -> bool {
+        // Best-effort per-key sanity checks (provider match, total size). This is intentionally
+        // a plain predicate with no metrics side effects of its own: `jwk_updater` centrally
+        // accounts every rejection (from this or from fetch/parse) into `invalid_jwks`.
+        fn validate_jwk(provider: &OIDCProvider, id: &JwkId, jwk: &JWK) -> bool {
             let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
                 warn!(
                     "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
                     id.iss, provider
                 );
-                metrics
-                    .invalid_jwks
-                    .with_label_values(&[&provider.to_string()])
-                    .inc();
                 return false;
             };
 
@@ -382,92 +387,93 @@ impl SuiNode {
                     "JWK iss {:?} (retrieved from {:?}) does not match provider {:?}",
                     id.iss, provider, iss_provider
                 );
-                metrics
-                    .invalid_jwks
-                    .with_label_values(&[&provider.to_string()])
-                    .inc();
                 return false;
             }
 
             if !check_total_jwk_size(id, jwk) {
                 warn!("JWK {:?} (retrieved from {:?}) is too large", id, provider);
-                metrics
-                    .invalid_jwks
-                    .with_label_values(&[&provider.to_string()])
-                    .inc();
                 return false;
             }
 
             true
         }
 
-        // metrics is:
-        //  pub struct SuiNodeMetrics {
-        //      pub jwk_requests: IntCounterVec,
-        //      pub jwk_request_errors: IntCounterVec,
-        //      pub total_jwks: IntCounterVec,
-        //      pub unique_jwks: IntCounterVec,
-        //  }
-
         for p in supported_providers.into_iter() {
             let provider_str = p.to_string();
             let epoch_store = epoch_store.clone();
             let consensus_adapter = consensus_adapter.clone();
             let metrics = metrics.clone();
-            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(
-                async move {
-                    // note: restart-safe de-duplication happens after consensus, this is
-                    // just best-effort to reduce unneeded submissions.
-                    let mut seen = HashSet::new();
-                    loop {
-                        jwk_log!("fetching JWK for provider {:?}", p);
-                        metrics.jwk_requests.with_label_values(&[&provider_str]).inc();
-                        match Self::fetch_jwks(authority, &p).await {
-                            Err(e) => {
-                                metrics.jwk_request_errors.with_label_values(&[&provider_str]).inc();
-                                warn!("Error when fetching JWK for provider {:?} {:?}", p, e);
-                                // Retry in 30 seconds
-                                tokio::time::sleep(Duration::from_secs(30)).await;
-                                continue;
+            let fetch_provider = p.clone();
+            let validate_provider = p.clone();
+            spawn_monitored_task!(
+                epoch_store.clone().within_alive_epoch(
+                    jwk_updater::run_jwk_updater_loop(
+                        jwk_updater::JwkUpdaterLabels {
+                            metric_label: provider_str,
+                            source_name: format!("JWK for provider {:?}", p),
+                        },
+                        fetch_interval,
+                        jwk_updater::JwkCapTiming::AfterDedup,
+                        metrics,
+                        authority,
+                        epoch_store,
+                        consensus_adapter,
+                        move || {
+                            let p = fetch_provider.clone();
+                            async move {
+                                Self::fetch_jwks(authority, &p)
+                                    .await
+                                    .map(|keys| (keys, 0usize))
                             }
-                            Ok(mut keys) => {
-                                metrics.total_jwks
-                                    .with_label_values(&[&provider_str])
-                                    .inc_by(keys.len() as u64);
-
-                                keys.retain(|(id, jwk)| {
-                                    validate_jwk(&metrics, &p, id, jwk) &&
-                                    !epoch_store.jwk_active_in_current_epoch(id, jwk) &&
-                                    seen.insert((id.clone(), jwk.clone()))
-                                });
-
-                                metrics.unique_jwks
-                                    .with_label_values(&[&provider_str])
-                                    .inc_by(keys.len() as u64);
-
-                                // prevent oauth providers from sending too many keys,
-                                // inadvertently or otherwise
-                                if keys.len() > MAX_JWK_KEYS_PER_FETCH {
-                                    warn!("Provider {:?} sent too many JWKs, only the first {} will be used", p, MAX_JWK_KEYS_PER_FETCH);
-                                    keys.truncate(MAX_JWK_KEYS_PER_FETCH);
-                                }
-
-                                for (id, jwk) in keys.into_iter() {
-                                    jwk_log!("Submitting JWK to consensus: {:?}", id);
-
-                                    let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
-                                    consensus_adapter.submit(txn, None, &epoch_store, None, None)
-                                        .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
-                                        .ok();
-                                }
-                            }
-                        }
-                        tokio::time::sleep(fetch_interval).await;
-                    }
-                }
-                .instrument(error_span!("jwk_updater_task", epoch)),
-            ));
+                        },
+                        move |id: &JwkId, jwk: &JWK| validate_jwk(&validate_provider, id, jwk),
+                    )
+                    .instrument(error_span!("jwk_updater_task", epoch)),
+                )
+            );
         }
+    }
+
+    fn start_gcp_jwk_updater(
+        config: &NodeConfig,
+        metrics: Arc<SuiNodeMetrics>,
+        authority: AuthorityName,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) {
+        let fetch_interval = Duration::from_secs(config.jwk_fetch_interval_seconds);
+
+        jwk_log!(?fetch_interval, "Starting GCP JWK updater task");
+
+        let epoch = epoch_store.epoch();
+        spawn_monitored_task!(
+            epoch_store.clone().within_alive_epoch(
+                jwk_updater::run_jwk_updater_loop(
+                    jwk_updater::JwkUpdaterLabels {
+                        metric_label: "gcp".to_string(),
+                        source_name: "GCP JWKs".to_string(),
+                    },
+                    fetch_interval,
+                    // Cap before dedup: a malicious/misconfigured endpoint sending far more
+                    // than the cap's worth of distinctly-shaped keys must not have all of them
+                    // influence which keys survive de-duplication. See `jwk_updater::JwkCapTiming`.
+                    jwk_updater::JwkCapTiming::BeforeDedup,
+                    metrics,
+                    authority,
+                    epoch_store.clone(),
+                    consensus_adapter,
+                    move || Self::fetch_gcp_jwks(authority),
+                    |id: &JwkId, jwk: &JWK| {
+                        if !check_total_jwk_size(id, jwk) {
+                            warn!("GCP JWK {:?} is too large, skipping", id);
+                            return false;
+                        }
+                        true
+                    },
+                )
+                .instrument(error_span!("gcp_jwk_updater_task", epoch)),
+            )
+        );
     }
 
     pub async fn start_async(
@@ -1625,11 +1631,21 @@ impl SuiNode {
         if node_role.is_validator() && epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
                 config,
-                sui_node_metrics,
+                sui_node_metrics.clone(),
                 state.name,
                 epoch_store.clone(),
                 consensus_adapter.clone(),
             );
+
+            if epoch_store.protocol_config().enable_gcp_attestation() {
+                Self::start_gcp_jwk_updater(
+                    config,
+                    sui_node_metrics,
+                    state.name,
+                    epoch_store.clone(),
+                    consensus_adapter.clone(),
+                );
+            }
         }
 
         if let Some(ctx) = &admission_queue {
@@ -2696,6 +2712,50 @@ impl SuiNode {
             .await
             .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
+
+    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<(Vec<(JwkId, JWK)>, usize)> {
+        use futures::StreamExt;
+        use sui_types::error::SuiErrorKind;
+        use sui_types::gcp_attestation::GCP_ISSUER as GCP_ISS;
+
+        const GCP_JWKS_URL: &str = "https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com";
+        // Bound response size to prevent memory exhaustion from a malicious or misconfigured endpoint.
+        const GCP_JWKS_MAX_RESPONSE_BYTES: usize = 64 * 1024;
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            // `GCP_JWKS_URL` is a fixed, hardcoded endpoint with no legitimate reason to
+            // redirect; disabling redirects entirely (a strict superset of "no cross-origin
+            // redirects") rules out a compromised or misconfigured endpoint using a redirect
+            // to redirect key ingestion to an attacker-controlled origin.
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        let resp = client
+            .get(GCP_JWKS_URL)
+            .send()
+            .await
+            .map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        validate_gcp_jwks_http_status(resp.status())?;
+        if let Some(len) = resp.content_length()
+            && len > GCP_JWKS_MAX_RESPONSE_BYTES as u64
+        {
+            return Err(SuiErrorKind::JWKRetrievalError.into());
+        }
+
+        // Stream-read with a hard body cap (do not `.text()` then check).
+        let mut body = Vec::new();
+        let mut stream = resp.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+            if body.len().saturating_add(chunk.len()) > GCP_JWKS_MAX_RESPONSE_BYTES {
+                return Err(SuiErrorKind::JWKRetrievalError.into());
+            }
+            body.extend_from_slice(&chunk);
+        }
+        let body = String::from_utf8(body).map_err(|_| SuiErrorKind::JWKRetrievalError)?;
+        parse_gcp_jwks(&body, GCP_ISS).map_err(|_| SuiErrorKind::JWKRetrievalError.into())
+    }
 }
 
 #[cfg(msim)]
@@ -2718,6 +2778,143 @@ impl SuiNode {
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         get_jwk_injector()(authority, provider)
     }
+
+    #[allow(unused_variables)]
+    async fn fetch_gcp_jwks(_authority: AuthorityName) -> SuiResult<(Vec<(JwkId, JWK)>, usize)> {
+        // msim-injected keys must pass the same shared `validate_gcp_jwk` policy as
+        // production ingestion (`parse_gcp_jwks`), so tests can never exercise a path that
+        // bypasses production validation by injecting keys that would otherwise be rejected.
+        use sui_types::gcp_attestation::validate_gcp_jwk;
+        let mut rejected = 0usize;
+        let accepted = get_gcp_jwk_injector()
+            .into_iter()
+            .filter(|(id, jwk)| match validate_gcp_jwk(id, jwk) {
+                Ok(()) => true,
+                Err(err) => {
+                    warn!(?id, %err, "msim-injected GCP JWK failed shared validation, dropping");
+                    rejected += 1;
+                    false
+                }
+            })
+            .collect();
+        Ok((accepted, rejected))
+    }
+}
+
+#[cfg(not(msim))]
+fn validate_gcp_jwks_http_status(status: reqwest::StatusCode) -> SuiResult<()> {
+    if status.is_success() {
+        Ok(())
+    } else {
+        warn!("GCP JWKS endpoint returned HTTP status {status}");
+        Err(sui_types::error::SuiErrorKind::JWKRetrievalError.into())
+    }
+}
+
+/// Parse a GCP JWKS JSON response into `(JwkId, JWK)` pairs, plus a count of entries rejected
+/// during parsing/validation.
+///
+/// Every candidate is validated with the same, issuer-scoped
+/// [`sui_types::gcp_attestation::validate_gcp_jwk`] used by consensus (live and replay) and by
+/// the native verifier, so ingestion enforces exactly the same policy as everything downstream
+/// of it (exact GCP issuer; non-empty, bounded `kid`; `kty`/`alg`; strict canonical unpadded
+/// base64url `n`/`e`; modulus 2048-4096 numeric bits, odd, no leading zero; exponent odd,
+/// >=65537, <=8 bytes, no leading zero).
+///
+/// If two entries in the same response share a `kid` but disagree on key material, both are
+/// rejected: an ambiguous `kid` is treated the same as an absent one (fail closed) rather than
+/// risk silently picking one of the conflicting keys. A `kid` repeated with byte-for-byte
+/// identical key material is not a conflict.
+///
+/// This function does not touch node metrics; the caller (the shared `jwk_updater` loop) is
+/// responsible for accounting the returned rejected count into `invalid_jwks`, so all
+/// `invalid_jwks` bookkeeping lives in one place.
+#[cfg(not(msim))]
+fn parse_gcp_jwks(body: &str, iss: &str) -> Result<(Vec<(JwkId, JWK)>, usize)> {
+    use sui_types::gcp_attestation::validate_gcp_jwk;
+
+    let v: serde_json::Value = serde_json::from_str(body)?;
+    let keys = v
+        .get("keys")
+        .and_then(|keys| keys.as_array())
+        .ok_or_else(|| anyhow!("GCP JWKS response is missing the keys array"))?;
+    let mut result: Vec<(JwkId, JWK)> = Vec::new();
+    let mut rejected: usize = 0;
+    // Tracks the accepted key material for each `kid` seen so far, and the set of `kid`s that
+    // have already been found to conflict (so a third, later entry doesn't get re-inserted).
+    let mut accepted_by_kid: HashMap<String, JWK> = HashMap::new();
+    let mut conflicting_kids: HashSet<String> = HashSet::new();
+    for key in keys {
+        let mut reject = |reason: &str| {
+            let kid = key.get("kid").and_then(|value| value.as_str());
+            warn!(?kid, reason, "Rejecting invalid GCP JWK");
+            rejected += 1;
+        };
+
+        let kid = key
+            .get("kid")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let id = JwkId {
+            iss: iss.to_string(),
+            kid: kid.clone(),
+        };
+        let jwk = JWK {
+            kty: key
+                .get("kty")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            e: key
+                .get("e")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            n: key
+                .get("n")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            alg: key
+                .get("alg")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+        };
+
+        if let Err(err) = validate_gcp_jwk(&id, &jwk) {
+            reject(&err.to_string());
+            continue;
+        }
+
+        if conflicting_kids.contains(&kid) {
+            reject("duplicate kid with conflicting key material");
+            continue;
+        }
+        match accepted_by_kid.get(&kid) {
+            Some(existing) if existing != &jwk => {
+                // Ambiguous: drop the previously-accepted entry too, and remember this kid as
+                // permanently conflicted for the rest of this response.
+                result.retain(|(rid, _)| rid.kid != kid);
+                accepted_by_kid.remove(&kid);
+                conflicting_kids.insert(kid);
+                reject("duplicate kid with conflicting key material");
+                continue;
+            }
+            // Byte-for-byte identical duplicate: not a conflict, just skip re-inserting it.
+            Some(_) => continue,
+            None => {
+                accepted_by_kid.insert(kid, jwk.clone());
+            }
+        }
+
+        result.push((id, jwk));
+    }
+    if result.is_empty() {
+        warn!("GCP JWKS response contained no usable keys");
+    }
+    Ok((result, rejected))
 }
 
 enum SpawnOnce {
@@ -3183,6 +3380,155 @@ mod tests {
     use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
     use sui_core::checkpoints::{CheckpointMetrics, CheckpointStore};
     use sui_types::digests::{CheckpointDigest, TransactionDigest, TransactionEffectsDigest};
+
+    #[cfg(not(msim))]
+    mod gcp_jwks_tests {
+        use super::*;
+        use base64::Engine;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use sui_types::gcp_attestation::GCP_ISSUER as TEST_GCP_ISSUER;
+
+        /// A structurally valid GCP RSA modulus: 2048 numeric bits (top byte 0x80), no
+        /// leading zero byte, and odd (last byte 0xFF).
+        fn valid_gcp_modulus() -> Vec<u8> {
+            let mut n = vec![0xFFu8; 256];
+            n[0] = 0x80;
+            n
+        }
+
+        fn valid_gcp_jwk_json() -> String {
+            serde_json::json!({
+                "keys": [{
+                    "kty": "RSA",
+                    "alg": "RS256",
+                    "kid": "gcp-key-1",
+                    "n": URL_SAFE_NO_PAD.encode(valid_gcp_modulus()),
+                    "e": "AQAB"
+                }]
+            })
+            .to_string()
+        }
+
+        #[test]
+        fn parse_gcp_jwks_accepts_valid_rs256_key() {
+            let (keys, rejected) = parse_gcp_jwks(&valid_gcp_jwk_json(), TEST_GCP_ISSUER).unwrap();
+
+            assert_eq!(keys.len(), 1);
+            assert_eq!(keys[0].0.iss, TEST_GCP_ISSUER);
+            assert_eq!(keys[0].0.kid, "gcp-key-1");
+            assert_eq!(keys[0].1.alg, "RS256");
+            assert_eq!(rejected, 0);
+        }
+
+        #[test]
+        fn parse_gcp_jwks_counts_rejected_keys() {
+            let body = serde_json::json!({
+                "keys": [
+                    {"kty": "EC", "alg": "RS256", "kid": "wrong-kty", "n": "AA", "e": "AQAB"},
+                    {"kty": "RSA", "alg": "RS512", "kid": "wrong-alg", "n": "AA", "e": "AQAB"},
+                    {
+                        "kty": "RSA",
+                        "alg": "RS256",
+                        "kid": "weak-e",
+                        "n": URL_SAFE_NO_PAD.encode(valid_gcp_modulus()),
+                        "e": "Aw"
+                    }
+                ]
+            })
+            .to_string();
+
+            let (keys, rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
+            assert!(keys.is_empty());
+            assert_eq!(rejected, 3);
+        }
+
+        #[test]
+        fn parse_gcp_jwks_rejects_missing_keys_array() {
+            assert!(parse_gcp_jwks("{}", TEST_GCP_ISSUER).is_err());
+        }
+
+        #[test]
+        fn validate_gcp_jwks_http_status_rejects_errors() {
+            assert!(validate_gcp_jwks_http_status(reqwest::StatusCode::OK).is_ok());
+            assert!(validate_gcp_jwks_http_status(reqwest::StatusCode::BAD_GATEWAY).is_err());
+        }
+
+        /// `parse_gcp_jwks` must reuse the shared `validate_gcp_jwk` validator (issuer, kid,
+        /// canonical base64url, modulus 2048-4096 bits/odd/no-leading-zero, exponent
+        /// odd/>=65537/<=8 bytes), not just the older, looser `validate_rsa_public_key` bounds
+        /// check. An even modulus passes `validate_rsa_public_key` but must still be rejected.
+        #[test]
+        fn parse_gcp_jwks_rejects_even_modulus_via_shared_validator() {
+            let mut n = vec![0xFFu8; 256];
+            n[0] = 0x80; // 2048 numeric bits, no leading zero byte.
+            n[255] = 0xFE; // deliberately even.
+            let body = serde_json::json!({
+                "keys": [{
+                    "kty": "RSA",
+                    "alg": "RS256",
+                    "kid": "even-modulus",
+                    "n": URL_SAFE_NO_PAD.encode(&n),
+                    "e": "AQAB"
+                }]
+            })
+            .to_string();
+
+            let (keys, rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
+            assert!(
+                keys.is_empty(),
+                "even modulus must be rejected by the shared GCP validator"
+            );
+            assert_eq!(rejected, 1);
+        }
+
+        /// If a single GCP JWKS response contains two entries with the same `kid` but
+        /// different key material, both must be rejected (fail closed on ambiguity) rather
+        /// than silently picking one.
+        #[test]
+        fn parse_gcp_jwks_rejects_conflicting_duplicate_kid() {
+            let mut n_a = vec![0xFFu8; 256];
+            n_a[0] = 0x80;
+            let mut n_b = n_a.clone();
+            n_b[1] = 0xFE; // still odd (last byte untouched), but different key material.
+
+            let body = serde_json::json!({
+                "keys": [
+                    {"kty": "RSA", "alg": "RS256", "kid": "dup-kid", "n": URL_SAFE_NO_PAD.encode(&n_a), "e": "AQAB"},
+                    {"kty": "RSA", "alg": "RS256", "kid": "dup-kid", "n": URL_SAFE_NO_PAD.encode(&n_b), "e": "AQAB"},
+                ]
+            })
+            .to_string();
+
+            let (keys, _rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
+            assert!(
+                keys.iter().all(|(id, _)| id.kid != "dup-kid"),
+                "conflicting duplicate kid must not be present in the result: {keys:?}"
+            );
+        }
+
+        /// A duplicate `kid` with byte-for-byte identical key material (e.g. GCP re-serving
+        /// the same key across a poll boundary, or included twice in one response) is not a
+        /// conflict and must resolve to that one key.
+        #[test]
+        fn parse_gcp_jwks_allows_identical_duplicate_kid() {
+            let mut n = vec![0xFFu8; 256];
+            n[0] = 0x80;
+            let body = serde_json::json!({
+                "keys": [
+                    {"kty": "RSA", "alg": "RS256", "kid": "same-kid", "n": URL_SAFE_NO_PAD.encode(&n), "e": "AQAB"},
+                    {"kty": "RSA", "alg": "RS256", "kid": "same-kid", "n": URL_SAFE_NO_PAD.encode(&n), "e": "AQAB"},
+                ]
+            })
+            .to_string();
+
+            let (keys, _rejected) = parse_gcp_jwks(&body, TEST_GCP_ISSUER).unwrap();
+            assert_eq!(
+                keys.iter().filter(|(id, _)| id.kid == "same-kid").count(),
+                1,
+                "identical duplicate kid must resolve to exactly one entry: {keys:?}"
+            );
+        }
+    }
 
     #[test]
     fn deny_config_broadcast_payload_decisions() {

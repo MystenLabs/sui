@@ -908,6 +908,43 @@ impl ConsensusOutputQuarantine {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
+    /// Number of GCP-issuer `(JwkId, JWK)` pairs that have *actually been activated* so far
+    /// this epoch: i.e. entries that some past call to `insert_active_jwk` recorded, whether
+    /// still queued in memory (not yet below the checkpoint watermark) or already flushed to
+    /// the persisted `active_jwks` table. This deliberately does not consult the JWK quorum
+    /// aggregator, which also tracks keys that reached quorum but were never activated (same-
+    /// batch conflicts, or candidates dropped by the `max_gcp_active_jwks` cap): counting those
+    /// would let non-activated keys wrongly consume cap headroom.
+    ///
+    /// Restart/replay-safe: on restart, in-memory queued outputs are gone, but every activation
+    /// they contained was either already flushed to the persisted table, or will be
+    /// re-derived and re-inserted deterministically by replaying the same consensus commits
+    /// (which produce the same votes and thus the same activations).
+    pub(super) fn count_active_gcp_jwks(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<u64> {
+        let in_memory = self
+            .output_queue
+            .iter()
+            .flat_map(|output| output.active_jwks.iter())
+            .filter(|(_, (id, _))| id.iss == sui_types::gcp_attestation::GCP_ISSUER)
+            .count() as u64;
+
+        // Outputs are only ever removed from `output_queue` by flushing them to this table (see
+        // `commit_with_batch`), so the two sources are disjoint and safe to sum.
+        let persisted = epoch_store
+            .tables()?
+            .active_jwks
+            .safe_iter()
+            .map_ok(|((_, (id, _)), _)| id)
+            .filter_ok(|id| id.iss == sui_types::gcp_attestation::GCP_ISSUER)
+            .collect::<Result<Vec<_>, _>>()?
+            .len() as u64;
+
+        Ok(in_memory + persisted)
+    }
+
     pub(super) fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
         self.output_queue
             .iter()

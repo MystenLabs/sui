@@ -1419,6 +1419,9 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            E::SystemObjectNotAvailableLocally => {
+                unreachable!("node-local retry errors must never be serialized")
+            }
         };
 
         message.set_kind(kind);

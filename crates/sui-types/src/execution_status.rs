@@ -298,6 +298,10 @@ pub enum ExecutionErrorKind {
 
     #[error("Non-exclusive write input object {id} has been modified")]
     NonExclusiveWriteInputObjectModified { id: ObjectID },
+    /// Node-local, transient failure used to unwind execution when an implicitly read system
+    /// object has not reached the consensus-assigned version. This is never committed.
+    #[error("System object not available locally; transaction must be retried")]
+    SystemObjectNotAvailableLocally,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

@@ -3,10 +3,13 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
@@ -17,10 +20,11 @@ use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
-    TransactionEffectsV2, TransactionEvents,
+    TransactionEffectsV2, TransactionEvents, UnchangedConsensusKind,
 };
 use sui_types::execution::{
-    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, ExecutionRetryError,
+    SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
@@ -31,6 +35,7 @@ use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
@@ -96,6 +101,15 @@ pub struct TemporaryStore<'backing> {
     /// (SUI conservation, balance-accumulator authorization, object ownership). See
     /// [`invariants::InvariantChecker`].
     invariants: InvariantChecker,
+
+    /// Consensus-assigned versions of system objects this transaction may read.
+    system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+
+    /// System objects read implicitly during execution, recorded for deterministic effects.
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
+
+    /// Node-local request to discard this execution and retry when the required object arrives.
+    retry_request: OnceCell<ExecutionRetryError>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -108,7 +122,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        _system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -151,7 +165,41 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
+            retry_request: OnceCell::new(),
         }
+    }
+
+    /// Ensure an implicitly read system object is available at its consensus-assigned version.
+    pub fn check_system_object_available(&self, object_id: &ObjectID) -> PartialVMResult<()> {
+        let Some(required_version) = self.system_object_versions.get(object_id).copied() else {
+            debug_fatal!("system object {object_id} read without an assigned version");
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("system object {object_id} read without an assigned version"),
+                ),
+            );
+        };
+
+        let Some(object_at_required) = self.store.get_object_by_key(object_id, required_version)
+        else {
+            let retry = ExecutionRetryError::SystemObjectUnavailable {
+                object_id: *object_id,
+                version: required_version,
+            };
+            let message = retry.to_string();
+            let _ = self.retry_request.set(retry);
+            return Err(
+                PartialVMError::new(StatusCode::SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY)
+                    .with_message(message),
+            );
+        };
+
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (required_version, object_at_required.digest()));
+        Ok(())
     }
 
     // Helpers to access private fields
@@ -323,6 +371,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_version: self.lamport_timestamp,
             binary_config: self.protocol_config.binary_config(None),
             accumulator_running_max_withdraws,
+            retry_request: self.retry_request.into_inner(),
         }
     }
 
@@ -433,11 +482,20 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
-        let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
-            shared_object_refs,
-            loaded_per_epoch_config_objects,
-            &object_changes,
-        );
+        let mut unchanged_consensus_objects =
+            TransactionEffectsV2::compute_unchanged_consensus_objects(
+                shared_object_refs,
+                loaded_per_epoch_config_objects,
+                &object_changes,
+            );
+        unchanged_consensus_objects.extend(self.loaded_system_objects.borrow().iter().map(
+            |(id, (version, digest))| {
+                (
+                    *id,
+                    UnchangedConsensusKind::ReadOnlyRoot((*version, *digest)),
+                )
+            },
+        ));
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
         let effects = TransactionEffects::new_from_execution_v2(
@@ -1067,6 +1125,29 @@ impl Storage for TemporaryStore<'_> {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         TemporaryStore::read_object(self, id)
+    }
+
+    fn read_system_object(
+        &self,
+        id: &ObjectID,
+    ) -> PartialVMResult<Option<(Object, SequenceNumber)>> {
+        self.check_system_object_available(id)?;
+        let version = self.system_object_versions[id];
+        Ok(self
+            .store
+            .get_object_by_key(id, version)
+            .map(|object| (object, version)))
+    }
+
+    fn get_object_by_key_including_store(
+        &self,
+        id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Object> {
+        TemporaryStore::read_object(self, id)
+            .filter(|object| object.version() == version)
+            .cloned()
+            .or_else(|| self.store.get_object_by_key(id, version))
     }
 
     /// Take execution results v2, and translate it back to be compatible with effects v1.

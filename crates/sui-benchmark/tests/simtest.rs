@@ -839,6 +839,12 @@ mod test {
             config.set_cancel_for_failed_dkg_early_for_testing(true);
             config.set_use_mfp_txns_in_load_initial_object_debts_for_testing(true);
             config.set_authority_capabilities_v2_for_testing(true);
+            // Intermediate, unreleased protocol versions intentionally have no framework
+            // snapshots. Do not activate a system object whose Move module is only present in
+            // the latest framework until that framework is injected at MAX.
+            if version < ProtocolVersion::MAX {
+                config.set_create_forwarding_address_registry_for_testing(false);
+            }
             config
         });
 

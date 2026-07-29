@@ -384,6 +384,31 @@ impl ExecutionTiming {
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
+/// Signals that transaction execution should be retried later rather than committed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionRetryError {
+    /// A system object has not yet been committed locally at the required version.
+    SystemObjectUnavailable {
+        object_id: ObjectID,
+        version: SequenceNumber,
+    },
+}
+
+impl std::fmt::Display for ExecutionRetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionRetryError::SystemObjectUnavailable { object_id, version } => {
+                write!(
+                    f,
+                    "system object {object_id} not yet available at version {version}; retry requested",
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ExecutionRetryError {}
+
 /// Captures the output of executing a transaction in the execution driver.
 #[derive(Debug)]
 pub enum ExecutionOutput<T> {

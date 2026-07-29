@@ -88,6 +88,7 @@ ciborium.workspace = true
 x509-parser.workspace = true
 p384.workspace = true
 rustls-pki-types.workspace = true
+ring = { version = "0.17", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 base64.workspace = true

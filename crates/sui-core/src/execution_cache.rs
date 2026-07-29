@@ -430,6 +430,13 @@ pub trait ObjectCacheRead: Send + Sync {
         receiving_keys: &'a HashSet<InputKey>,
         epoch: EpochId,
     ) -> BoxFuture<'a, ()>;
+
+    /// Wait until an implicitly read consensus system object is committed at an exact version.
+    fn notify_read_system_object_at_version<'a>(
+        &'a self,
+        full_object_id: FullObjectID,
+        version: SequenceNumber,
+    ) -> BoxFuture<'a, ()>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {
