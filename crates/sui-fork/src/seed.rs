@@ -19,13 +19,17 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use anyhow::Context as _;
 use anyhow::Error;
 use anyhow::bail;
 use itertools::Itertools as _;
+use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::warn;
 
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
@@ -230,12 +234,85 @@ async fn resolve_address_seed(
     address: SuiAddress,
     checkpoint: CheckpointSequenceNumber,
 ) -> Result<Vec<SeedEntry>, Error> {
-    Ok(gql
+    let mut entries: Vec<SeedEntry> = gql
         .get_address_owned_objects_at_checkpoint(address, checkpoint)
         .await?
         .into_iter()
         .map(SeedEntry::from)
-        .collect())
+        .collect();
+    entries.extend(resolve_address_balance_seed(gql, address, checkpoint).await?);
+    Ok(entries)
+}
+
+/// Resolve the accumulator balance fields belonging to `address`.
+///
+/// An address balance is not an object the address owns — it is a dynamic field
+/// under the accumulator root — so the owned-object enumeration above never
+/// surfaces it, and seeding an address without this would establish its coins
+/// while silently leaving its balance at zero. Worse than merely missing: local
+/// execution *does* maintain address balances, so a withdrawal would then apply
+/// a delta to a baseline that was never seeded.
+///
+/// The field's id is derivable from `(address, coin type)`, so the only thing
+/// that has to come from the remote is which coin types to derive for, which is
+/// the one part nothing local can know. Each derived id is then resolved like
+/// any other object reference and seeded as an ordinary object, so the stock
+/// `Balance` restore pipeline picks it up through its accumulator-root arm
+/// without this crate writing a balance row itself.
+async fn resolve_address_balance_seed(
+    gql: &GraphQLClient,
+    address: SuiAddress,
+    checkpoint: CheckpointSequenceNumber,
+) -> Result<Vec<SeedEntry>, Error> {
+    let coin_types = gql
+        .get_address_balance_coin_types_at_checkpoint(address, checkpoint)
+        .await
+        .with_context(|| format!("failed to resolve address balances for {address}"))?;
+    if coin_types.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut field_ids = Vec::with_capacity(coin_types.len());
+    for coin_type in &coin_types {
+        match accumulator_field_id(address, coin_type) {
+            Ok(field_id) => field_ids.push(field_id),
+            // A coin type the accumulator cannot key on is not a failure of the
+            // seed: it just has no field to fetch.
+            Err(e) => warn!(%address, %coin_type, "skipping address balance seed: {e:#}"),
+        }
+    }
+
+    let refs = gql
+        .get_object_refs_at_checkpoint(&field_ids, checkpoint)
+        .await
+        .with_context(|| format!("failed to resolve accumulator fields for {address}"))?;
+
+    let mut entries = Vec::new();
+    for (field_id, object_ref) in field_ids.iter().zip_eq(refs) {
+        match object_ref {
+            Some(object_ref) => entries.push(SeedEntry { object_ref }),
+            // The balances connection reported a coin type, but no field exists
+            // at the fork checkpoint. Nothing to seed, and nothing wrong.
+            None => warn!(
+                %address,
+                %field_id,
+                checkpoint,
+                "address balance field not found at fork checkpoint",
+            ),
+        }
+    }
+    Ok(entries)
+}
+
+/// Object id of the accumulator field holding `address`'s balance of `coin_type`.
+///
+/// `coin_type` arrives as the inner type (`0x2::sui::SUI`); the accumulator keys
+/// on the wrapped `0x2::balance::Balance<T>`.
+fn accumulator_field_id(address: SuiAddress, coin_type: &str) -> Result<ObjectID, Error> {
+    let inner: TypeTag = coin_type
+        .parse()
+        .with_context(|| format!("invalid coin type {coin_type}"))?;
+    Ok(*AccumulatorValue::get_field_id(address, &Balance::type_tag(inner))?.inner())
 }
 
 async fn resolve_object_seeds(
@@ -699,6 +776,9 @@ mod tests {
         })
     }
 
+    /// The owned-objects and balances queries take the same variables, so both
+    /// mocks must discriminate on the selection set or the first-mounted one
+    /// swallows the other's requests.
     async fn mock_address_objects(
         server: &MockServer,
         checkpoint: u64,
@@ -707,6 +787,7 @@ mod tests {
     ) {
         Mock::given(method("POST"))
             .and(path("/"))
+            .and(body_string_contains("objects"))
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": checkpoint,
@@ -716,6 +797,55 @@ mod tests {
             })))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(address_objects_response(objects)),
+            )
+            .mount(server)
+            .await;
+    }
+
+    fn address_balances_response(balances: &[(&str, i128)]) -> serde_json::Value {
+        json!({
+            "data": {
+                "checkpoint": {
+                    "query": {
+                        "address": {
+                            "balances": {
+                                "nodes": balances
+                                    .iter()
+                                    .map(|(coin_type, address_balance)| json!({
+                                        "addressBalance": address_balance.to_string(),
+                                        "coinType": { "repr": coin_type },
+                                    }))
+                                    .collect::<Vec<_>>(),
+                                "pageInfo": {
+                                    "hasNextPage": false,
+                                    "endCursor": null,
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    async fn mock_address_balances(
+        server: &MockServer,
+        checkpoint: u64,
+        owner: SuiAddress,
+        balances: &[(&str, i128)],
+    ) {
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_string_contains("balances"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": checkpoint,
+                    "address": owner.to_string(),
+                    "after": null,
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(address_balances_response(balances)),
             )
             .mount(server)
             .await;
@@ -753,6 +883,8 @@ mod tests {
             .await;
         mock_address_objects(&server, 11, owner, &[&object]).await;
         mock_address_objects(&server, 11, empty_owner, &[]).await;
+        mock_address_balances(&server, 11, owner, &[]).await;
+        mock_address_balances(&server, 11, empty_owner, &[]).await;
 
         let temp = tempfile::tempdir().expect("tempdir");
         let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
@@ -778,5 +910,133 @@ mod tests {
             object.compute_object_reference()
         );
         assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
+    }
+
+    /// An address balance lives in a dynamic field under the accumulator root,
+    /// not on the address, so the owned-object scan never reaches it. Seeding
+    /// has to derive the field id from `(address, coin type)` and pull it in as
+    /// an ordinary object, or the address seeds with its coins and a silently
+    /// zero balance.
+    #[tokio::test]
+    async fn address_seed_pulls_in_the_accumulator_balance_field() {
+        let server = MockServer::start().await;
+        let owner = SuiAddress::random_for_testing_only();
+        let coin_type = "0x2::sui::SUI";
+        let field_id =
+            accumulator_field_id(owner, coin_type).expect("field id should derive for SUI");
+        let field = Object::with_id_owner_version_for_testing(
+            field_id,
+            SequenceNumber::from_u64(8),
+            Owner::ObjectOwner(sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID.into()),
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_string_contains("availableRange"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(available_range_response(0)))
+            .mount(&server)
+            .await;
+        mock_address_objects(&server, 11, owner, &[]).await;
+        mock_address_balances(&server, 11, owner, &[(coin_type, 5_000)]).await;
+        // The derived id is resolved through the owner-agnostic ref lookup: the
+        // field is object-owned, so the address-owned check that guards
+        // user-named seeds would reject it.
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "keys": [{
+                        "address": field_id.to_string(),
+                        "atCheckpoint": 11,
+                    }]
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": {
+                    "multiGetObjects": [{
+                        "version": field.version().value(),
+                        "digest": field.digest().to_string(),
+                        "owner": { "__typename": "ObjectOwner" },
+                    }]
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
+            &store,
+            "custom".to_owned(),
+            &SeedInput {
+                addresses: vec![owner],
+                object_ids: vec![],
+            },
+        )
+        .await
+        .expect("seed manifest should resolve");
+
+        assert_eq!(manifest.entries.len(), 1, "{:?}", manifest.entries);
+        assert_eq!(
+            manifest.entries[0].object_ref,
+            field.compute_object_reference(),
+        );
+    }
+
+    /// A coin type reported with no accumulator balance has no field to seed;
+    /// deriving and fetching one would be a wasted round-trip per coin type the
+    /// address merely holds coins of.
+    #[tokio::test]
+    async fn address_seed_skips_coin_types_without_an_accumulator_balance() {
+        let server = MockServer::start().await;
+        let owner = SuiAddress::random_for_testing_only();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_string_contains("availableRange"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(available_range_response(0)))
+            .mount(&server)
+            .await;
+        mock_address_objects(&server, 11, owner, &[]).await;
+        mock_address_balances(&server, 11, owner, &[("0x2::sui::SUI", 0)]).await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
+            &store,
+            "custom".to_owned(),
+            &SeedInput {
+                addresses: vec![owner],
+                object_ids: vec![],
+            },
+        )
+        .await
+        .expect("seed manifest should resolve");
+
+        // No multiGetObjects mock is mounted, so resolving a field here would
+        // have failed the query rather than quietly returning nothing.
+        assert!(manifest.entries.is_empty());
+    }
+
+    /// The accumulator keys on the wrapped `Balance<T>`, while the balances
+    /// connection reports the inner `T`. Getting that wrapping wrong yields a
+    /// plausible-looking id that simply never resolves.
+    #[test]
+    fn accumulator_field_id_keys_on_the_wrapped_balance_type() {
+        let owner = SuiAddress::random_for_testing_only();
+        let expected = AccumulatorValue::get_field_id(
+            owner,
+            &Balance::type_tag("0x2::sui::SUI".parse().unwrap()),
+        )
+        .expect("wrapped balance type should key");
+
+        assert_eq!(
+            accumulator_field_id(owner, "0x2::sui::SUI").unwrap(),
+            *expected.inner(),
+        );
+        assert!(
+            accumulator_field_id(owner, "not::a::type").is_err(),
+            "an unparseable coin type must not derive an id",
+        );
     }
 }
