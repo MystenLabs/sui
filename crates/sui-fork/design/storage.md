@@ -8,8 +8,16 @@ SPDX-License-Identifier: Apache-2.0
 A fork node executes transactions locally on top of a chain whose state it mostly does not
 have. Its storage therefore answers two questions at once. *What has this fork written?* is
 served from a stock `sui-rpc-store` RocksDB, the same schema and indexes a real RPC node
-uses. *What did the forked-from chain look like?* is answered lazily, by querying GraphQL
-pinned at the fork checkpoint and caching the result into that same database.
+uses. *What did the forked-from chain look like?* is answered by querying GraphQL pinned at
+the fork checkpoint and caching the result into that same database.
+
+When that second question gets asked splits the design in two. A request that carries a key —
+an object id, a version, a digest — can be answered whenever it arrives, because the key is
+still valid later; so those are resolved on demand and cached. A request that carries no key
+but asks for a *set* — which objects an address owns, which have a type — cannot, because
+the enumeration that answers it is only available for a window after the fork point and
+nothing reconstructs it afterwards. Those are settled once, at fork creation, by seeding.
+Everything below follows from that split.
 
 A read and a write each pass through the same small set of components:
 
@@ -92,27 +100,58 @@ fully indexed, and any RPC read issued afterwards sees complete derived state. S
 receive checkpoints from the indexer's broadcast pipeline, so their ordering is inherited
 from indexing rather than from sealing.
 
-Pre-fork state is the one exception, because it never flows through the indexer at all.
-When a seed brings a pre-fork object in, its derived rows are written synchronously
-alongside it. A pre-fork object writes the owner, type, package, balance rows, and
-package-version row for fetched packages.
+Pre-fork state is the one exception, because it never flows through the indexer at all: the
+indexer starts one checkpoint above the fork point and so never sees the state the fork
+inherited. The seed load therefore writes those derived rows itself, but it does so through
+the same `Restore` implementations the indexer's pipelines carry — `Objects`,
+`ObjectByOwner`, `ObjectByType`, `Balance`, `PackageVersions`, and
+`ObjectVersionByCheckpoint` anchored at the fork checkpoint — rather than through a parallel
+set of writes maintained here. That matters beyond tidiness: a hand-written derived index has
+to be kept in step with the schema it imitates, and the one place the fork previously did
+that, an inverse of `Balance::restore` used to retract a coin's contribution, was exactly the
+kind of duplicate that goes stale silently.
 
 The `SimulatorStore` write surface cannot return errors, so a failed persist panics rather
 than letting execution continue on state that has diverged from disk. An indexer stoppage
 is likewise surfaced the moment it happens, because the startup loop watches for it as a
 liveness watchdog, instead of appearing later as a publication timeout.
 
-## Seeding objects, owned objects, and types 
+## Seeding
 
-At startup time, the user has the option to seed the fork with various data that exists
-on-chain. From a storage perspective, seeding is a one-time data insertion that
-reconstructs these indexes:
-- owned objects (per address)
-- object types (per type)
+Seeding is how the fork acquires pre-fork state that no read can ask for by key. A user names
+addresses and objects at startup; the fork resolves them against the forked-from chain and
+loads them, once, before anything executes.
 
-In addition to the basic owned objects, the seed for owned objects also includes the 
-address balance accumulator.
+It happens once because it cannot happen twice. The enumeration behind an address seed is a
+question about state at a checkpoint — which objects this address held at the fork point —
+and it is answerable only while the remote still retains ownership data for that checkpoint,
+which is a window of roughly an hour on the hosted endpoints. A fork that deferred the
+question until something asked would find it unanswerable by then. So the fork asks up front,
+and what it gets back is the boundary of everything it can later say about ownership.
 
+Resolution and loading are separate steps for that reason. Resolution enumerates and records
+object *references* in `seed_manifest.json`, which is written exclusively and never rewritten;
+loading fetches what those references contain and hands each object to the `Restore`
+pipelines. Only the first step is time-critical. The second is a set of exact `(id, version)`
+keys, and an exact version is immutable, so it can be fetched whenever — which is also why an
+address that could not be enumerated must not be recorded in the manifest at all. A partial
+answer written down as a complete one is worse than no answer, because nothing afterwards
+distinguishes the two.
+
+The load runs as a single atomic batch carrying its own completion marker. Both halves of
+that are load-bearing. Atomicity is what lets the load write blind — no reconciliation
+against existing state, no retraction of stale rows — because it precedes execution, so
+either the whole seed set is present or none of it is, and there is never a half-loaded fork
+to reason about. The marker is what makes it unrepeatable: `Balance` accumulates through a
+merge operator, so a replayed load would silently double every seeded coin. The marker lives
+in the database rather than beside it, in the framework's restore column family under a
+synthetic key, precisely so it commits with the rows it describes; a JSON sidecar could not
+make that claim. A resumed fork finds the marker and skips.
+
+Nothing maintains the seeded indexes afterwards, and nothing needs to. When a seeded object
+moves, the checkpoint that moved it is a local checkpoint, and the indexer reads each such
+checkpoint as a diff: inputs retract at the prior key, outputs write at the posterior one. The
+seeded row is retracted by the same mechanism that maintains every other row.
 
 ## Where reads resolve
 
@@ -190,10 +229,17 @@ composing a derived read out of raw storage discards the policy that makes its i
 correct, so derived reads compose over the policy, never under it.
 
 Coin metadata is worth naming here because it looks like an enumeration and is not. It
-resolves three type-keyed lookups and composes them into one answer, so it belongs to this
-section rather than to the inventories below: an inventory is complete over an owner, and
-nothing enumerates the coin types a fork might be asked about, so there is no scan to take
-in advance. Each of the three lookups resolves through the object policy when something asks.
+resolves three type-keyed lookups — `CoinMetadata`, `TreasuryCap`, `RegulatedCoinMetadata`
+for the coin type — and composes them into one answer, so it belongs to this section rather
+than to the enumerations below: an enumeration is complete over an owner, and nothing
+enumerates the coin types a fork might be asked about, so there is no scan to take in
+advance. Each of the three should resolve on demand, as a targeted type-keyed lookup that
+caches like any other object read and claims completeness over nothing.
+
+That is not what happens today. The three lookups read the local type index, which only the
+seed populates, and the seed cannot reach them: `CoinMetadata` and `RegulatedCoinMetadata`
+are frozen after creation, and the seed admits only address-owned objects. So coin metadata
+resolves to nothing in practice. See "Known gaps".
 
 Events are the same principle seen from the other side. They need no policy of their own
 precisely because the transaction read that produces them has one: whatever pulled the
@@ -208,17 +254,24 @@ Reads that enumerate rather than look up split into two kinds.
 A *state* index answers what is true as of a checkpoint: which objects an address owns,
 which objects have a type, what an address's balance is, which versions of a package exist.
 Because that is a question about state at a point in time, the live network can answer
-it pinned at the fork point.
+it pinned at the fork point — but only for as long as the remote retains ownership data for
+that checkpoint, and only if something thought to ask.
 
-It answers it as a set of object references rather than as a set of objects, and keeping
-those two apart is what makes the enumeration affordable. Establishing *which* objects an
-owner held is the part that has to be complete and has to happen while the question is still
-answerable: it is one query pinned at the fork point, and nothing the fork does afterwards
-reconstructs it. Fetching what each of those objects *contains* is a different question, an
-exact version and so an immutable key, and the object policy above already answers it on
-demand. So the fork enumerates eagerly and materializes lazily: it takes the complete
-reference set up front and records that it did so, and each object is hydrated the first time
-something asks for it, through the same path any other version-keyed read would take.
+Nothing asks at read time. These indexes are populated once, by the seed, and read locally
+ever after; an owner, parent, or type outside the seed set answers empty. That is a real
+limit and it is worth being plain about which way it fails: an empty answer is
+indistinguishable from a complete one that found nothing, so a client cannot tell "this
+address owns nothing" from "this fork was never told about this address."
+
+The alternative was to run the enumeration on first read, and it was tried. What sinks it is
+not cost but timing and honesty. A read arriving an hour after the fork point finds the
+ownership window closed, so the scan that was supposed to make the answer complete cannot
+run — and the read still has to return something. Worse, the scans that would be most useful
+to defer are precisely the ones with no enumerable domain: nothing says in advance which
+dynamic-field parents or which coin types a fork will be asked about, so there is no scan to
+take up front and no bound on how many might be needed later. Seeding draws the boundary
+where the user can see it, at startup, instead of leaving it to be discovered one failed read
+at a time.
 
 Local execution maintains the answer forward from there, so later reads are purely local.
 Completeness is the point, so a partial answer is worse than none: a scan that could not run
@@ -273,6 +326,18 @@ read for that same package would have fetched it. Every read that renders Move v
 JSON depends on this. The same shortcut also picks packages by scanning stored versions,
 which is safe for ordinary packages, immutable at one version per id, but not for system
 packages, which carry every version they have ever had under one id.
+
+Coin metadata never resolves. `get_coin_info` composes three type-keyed lookups, but it
+takes them from the local type index rather than resolving each on demand, and the seed is
+the only thing that writes that index. The seed cannot supply them: `CoinMetadata` and
+`RegulatedCoinMetadata` are frozen after creation, and seed resolution admits only
+address-owned objects, so the two frozen wrappers cannot enter the seed set at all. Only
+`TreasuryCap` can arrive, and only if its holder was seeded as an address. The result is a
+method that returns nothing rather than one that returns less than it used to. Closing it
+means what "Derived reads compose over policy" already prescribes: resolve each wrapper as a
+targeted type-keyed lookup against the forked-from chain when something asks, and cache the
+resulting object like any other. This is not a limit of forking — unlike the ledger range
+below — just work not done.
 
 `simulate_transaction` is stubbed; there is no Simulacrum entrypoint for it yet. It is
 planned as a follow-up.
