@@ -151,7 +151,7 @@ impl TransactionFilter {
             filters.push("function".to_string());
         }
         if self.affected_object.is_some() {
-            filters.push("affectedObjects".to_string());
+            filters.push("affectedObject".to_string());
         }
         if self.at_checkpoint.is_some() {
             filters.push("atCheckpoint".to_string());
