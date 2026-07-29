@@ -13,9 +13,9 @@
 //! instantiation tests, which run the whole VM; here we test the pure algebra in isolation.
 
 use crate::{
-    cache::{arena::ArenaBuilder, identifier_interner::IdentifierInterner},
+    cache::identifier_interner::IdentifierInterner,
     execution::dispatch_tables::VirtualTableKey,
-    jit::execution::ast::{ArenaType, Type},
+    jit::execution::ast::Type,
     shared::{
         constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
         type_size_formulae::{
@@ -42,38 +42,6 @@ fn dt_key() -> VirtualTableKey {
 #[allow(dead_code)]
 fn dt(children: Vec<Type>) -> Type {
     Type::DatatypeInstantiation(Box::new((dt_key(), children)))
-}
-
-/// Mirror a runtime type term into `arena` as an `ArenaType`, so tests can write terms in the
-/// readable runtime syntax and still exercise the arena-term entry points.
-pub(crate) fn to_arena(arena: &ArenaBuilder, ty: &Type) -> ArenaType {
-    match ty {
-        Type::Bool => ArenaType::Bool,
-        Type::U8 => ArenaType::U8,
-        Type::U16 => ArenaType::U16,
-        Type::U32 => ArenaType::U32,
-        Type::U64 => ArenaType::U64,
-        Type::U128 => ArenaType::U128,
-        Type::U256 => ArenaType::U256,
-        Type::Address => ArenaType::Address,
-        Type::Signer => ArenaType::Signer,
-        Type::TyParam(idx) => ArenaType::TyParam(*idx),
-        Type::Vector(t) => ArenaType::Vector(arena.alloc_box(to_arena(arena, t)).unwrap()),
-        Type::Reference(t) => ArenaType::Reference(arena.alloc_box(to_arena(arena, t)).unwrap()),
-        Type::MutableReference(t) => {
-            ArenaType::MutableReference(arena.alloc_box(to_arena(arena, t)).unwrap())
-        }
-        Type::Datatype(key) => ArenaType::Datatype(key.clone()),
-        Type::DatatypeInstantiation(inst) => {
-            let (key, tys) = &**inst;
-            let children = tys.iter().map(|t| to_arena(arena, t)).collect::<Vec<_>>();
-            ArenaType::DatatypeInstantiation(
-                arena
-                    .alloc_box((key.clone(), arena.alloc_vec(children.into_iter()).unwrap()))
-                    .unwrap(),
-            )
-        }
-    }
 }
 
 #[allow(dead_code)]
