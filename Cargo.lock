@@ -1740,7 +1740,7 @@ dependencies = [
 [[package]]
 name = "async-graphql"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
+source = "git+https://github.com/tpham-mysten/async-graphql?branch=tpham-mysten%2Fbuffered-subscription-resolution#f5d40c34c2fe7fe4a2c76ef506534d1ed59b85fa"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -1777,7 +1777,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-axum"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
+source = "git+https://github.com/tpham-mysten/async-graphql?branch=tpham-mysten%2Fbuffered-subscription-resolution#f5d40c34c2fe7fe4a2c76ef506534d1ed59b85fa"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1794,7 +1794,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-derive"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
+source = "git+https://github.com/tpham-mysten/async-graphql?branch=tpham-mysten%2Fbuffered-subscription-resolution#f5d40c34c2fe7fe4a2c76ef506534d1ed59b85fa"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -1810,7 +1810,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-parser"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
+source = "git+https://github.com/tpham-mysten/async-graphql?branch=tpham-mysten%2Fbuffered-subscription-resolution#f5d40c34c2fe7fe4a2c76ef506534d1ed59b85fa"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -1821,7 +1821,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-value"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#7be9351958ef7ebcbb7fed2f45dd3e9c92398df1"
+source = "git+https://github.com/tpham-mysten/async-graphql?branch=tpham-mysten%2Fbuffered-subscription-resolution#f5d40c34c2fe7fe4a2c76ef506534d1ed59b85fa"
 dependencies = [
  "bytes",
  "indexmap 2.8.0",

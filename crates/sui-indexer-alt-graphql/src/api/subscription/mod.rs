@@ -116,7 +116,7 @@ impl Subscription {
     ///
     /// Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number), but not both, to resume from a known point. The subscription first backfills the matching transactions after that point via the scanning API, then continues with the live stream.
     ///
-    /// Each payload is a batch of matching transactions — edges ordered by checkpoint, then by position within the checkpoint — and a single batch may span multiple checkpoints. Matches are delivered in batches, rather than one per payload, for efficiency. Each edge carries a cursor for resumption.
+    /// Each matching transaction is yielded individually as an edge, ordered by checkpoint and then by position within the checkpoint. Each edge carries a cursor for resumption.
     ///
     /// This subscription is not yet available for use.
     async fn transactions(
@@ -126,7 +126,7 @@ impl Subscription {
         after: Option<String>,
         after_checkpoint: Option<UInt53>,
     ) -> Result<
-        impl futures::Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>>,
+        impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
         RpcError<Error>,
     > {
         // `after` (resume from a specific transaction) and `afterCheckpoint` (resume from a
@@ -137,6 +137,7 @@ impl Subscription {
 
         let package_store: &Arc<StreamingPackageStore> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
+        let config: &SubscriptionConfig = ctx.data()?;
         let broadcast: &Arc<SubscriptionBroadcast> = ctx.data()?;
         let reader: &AlphaLedgerGrpcReader = ctx.data()?;
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
@@ -144,6 +145,13 @@ impl Subscription {
         let package_store = package_store.clone();
         let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
+
+        // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs
+        // the previous page's cursor), so feeding one window of `n` concurrent resolutions takes
+        // ceil(n / page) scans: a page much smaller than the concurrency makes scanning the
+        // bottleneck, a much larger one just holds a bigger page in memory. Matching them is roughly
+        // one scan per resolution window.
+        let scan_page_size = config.max_concurrent_resolutions;
 
         // A subscription streams forward from its resume point, so filter-level checkpoint bounds
         // have no meaning; reject them rather than silently dropping them.
@@ -172,6 +180,7 @@ impl Subscription {
             watermarks_rx.clone(),
             filter,
             resume,
+            scan_page_size,
         ))
     }
 

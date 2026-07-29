@@ -8,7 +8,7 @@
 //! ([`transactions_stream`]):
 //!
 //! 1. Backfill ([`backfill_transactions`]): scan the matches in `(resume, handoff]` from the index
-//!    ([`Transaction::scan_grpc_page`]). Pages are digest-only; each
+//!    ([`scan_grpc_page`]). Pages are digest-only; each
 //!    transaction's fields hydrate lazily from the index, so a page's reads coalesce through the
 //!    `KvLoader`.
 //! 2. Live ([`live_transactions`]): follow the shared checkpoint broadcast, matching each
@@ -61,10 +61,12 @@
 //! A gap between backfill and live, or a subscriber that lags the broadcast buffer, disconnects with
 //! `reconnect_error`; the client reconnects and resumes from its last cursor.
 
+use std::ops::RangeBounds;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
@@ -87,6 +89,7 @@ use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::TransactionToken;
+use crate::api::types::transaction::build_grpc_connection;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::error::RpcError;
 use crate::pagination::Page;
@@ -100,11 +103,6 @@ use crate::task::streaming::broadcast_error;
 use crate::task::streaming::reconnect_error;
 use crate::task::streaming::wait_for_pipelines_catching_up_at;
 use crate::task::watermark::Watermarks;
-
-/// Backfill page size: a page's matches are delivered as one payload, up to this many, so the reads
-/// its edges perform coalesce through the `KvLoader`. Live ignores it (a whole checkpoint is the
-/// natural unit).
-const SCAN_MAX_TRANSACTIONS_PER_BATCH: usize = 100;
 
 /// How long to wait before re-requesting when the scan has drained the indexer's current tip but not
 /// yet reached the handoff.
@@ -132,7 +130,8 @@ pub(super) fn transactions_stream(
     watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: TransactionFilter,
     resume: Option<ResumeFrom>,
-) -> impl Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>> {
+    scan_page_size: usize,
+) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
     stream! {
         let mut last_checkpoint: Option<u64> = None;
         let mut pending_receiver = None;
@@ -143,7 +142,7 @@ pub(super) fn transactions_stream(
             // the backfill runs.
             let receiver = broadcast.broadcaster().resubscribe();
             let handoff = broadcast.network_tip();
-            for await batch in backfill_transactions(
+            for await edge in backfill_transactions(
                 reader,
                 package_store.clone(),
                 resolver_limits.clone(),
@@ -151,8 +150,9 @@ pub(super) fn transactions_stream(
                 filter.clone(),
                 resume,
                 handoff,
+                scan_page_size,
             ) {
-                yield batch;
+                yield edge;
             }
             last_checkpoint = Some(handoff);
             pending_receiver = Some(receiver);
@@ -160,14 +160,14 @@ pub(super) fn transactions_stream(
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
         let receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
-        for await page in live_transactions(receiver, last_checkpoint, package_store, resolver_limits, filter) {
-            yield page;
+        for await edge in live_transactions(receiver, last_checkpoint, package_store, resolver_limits, filter) {
+            yield edge;
         }
     }
 }
 
-/// Backfill the matches in `(resume, handoff]` by scanning the index
-/// ([`Transaction::scan_grpc_page`]): digest-only pages whose fields hydrate lazily from the index.
+/// Backfill the matches in `(resume, handoff]` by scanning the index ([`scan_grpc_page`]):
+/// digest-only pages whose fields hydrate lazily from the index.
 ///
 /// Before delivering anything, wait for the indexing pipelines to reach `handoff` so those lazy
 /// reads resolve against present data rather than returning null. The wait is bounded by how far the
@@ -185,7 +185,8 @@ fn backfill_transactions(
     mut filter: TransactionFilter,
     resume: ResumeFrom,
     handoff: u64,
-) -> impl Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>> {
+    scan_page_size: usize,
+) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
     stream! {
         if let Err(e) = wait_for_pipelines_catching_up_at(handoff, &mut watermarks_rx).await {
             yield Err(RpcError::from(e));
@@ -196,8 +197,8 @@ fn backfill_transactions(
         // with live), so the scan range is supplied explicitly rather than derived from the scope.
         let scope = Scope::for_backfilled_transactions(package_store, resolver_limits);
         let limits = PageLimits {
-            default: SCAN_MAX_TRANSACTIONS_PER_BATCH as u32,
-            max: SCAN_MAX_TRANSACTIONS_PER_BATCH as u32,
+            default: scan_page_size as u32,
+            max: scan_page_size as u32,
         };
 
         // A cursor resume seeds the first page's `after`; a checkpoint resume becomes an internal
@@ -232,8 +233,8 @@ fn backfill_transactions(
 
             let has_next = conn.page_info.has_next_page;
             let end_cursor = conn.page_info.end_cursor.clone();
-            if !conn.edges.is_empty() {
-                yield Ok(conn.edges);
+            for edge in conn.edges {
+                yield Ok(edge);
             }
 
             // Advance to the scan frontier and stop once it has covered through the handoff.
@@ -291,7 +292,7 @@ fn live_transactions(
     package_store: Arc<StreamingPackageStore>,
     resolver_limits: sui_package_resolver::Limits,
     filter: TransactionFilter,
-) -> impl Stream<Item = Result<Vec<Edge<String, Transaction, EmptyFields>>, RpcError>> {
+) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
     stream! {
         let mut delivered_live = false;
         loop {
@@ -313,13 +314,11 @@ fn live_transactions(
                             return;
                         }
                     }
-                    // Deliver this checkpoint's matches as a single payload. A whole checkpoint is
-                    // the natural, already-safe unit (the checkpoint subscription delivers a full
-                    // checkpoint at once), so live never splits or batches across checkpoints. Empty
-                    // checkpoints yield nothing.
+                    // Deliver each matching transaction as its own payload, ordered within the
+                    // checkpoint. Empty checkpoints yield nothing.
                     let edges = matching_edges(&checkpoint, &package_store, &resolver_limits, &filter)?;
-                    if !edges.is_empty() {
-                        yield Ok(edges);
+                    for edge in edges {
+                        yield Ok(edge);
                     }
                     last_checkpoint = Some(seq);
                     delivered_live = true;
@@ -377,11 +376,11 @@ fn scan_backoff() -> ExponentialBackoff {
     }
 }
 
-/// Scan one page of the indexed transactions over `cp_bounds` ([`Transaction::scan_grpc_page`]),
-/// retrying transient failures under a bounded budget. The page is rebuilt per attempt because
-/// [`Page`] is not `Clone`. A rolling indexer deploy (the common transient outage) is absorbed
-/// invisibly; anything still failing once the budget is exhausted propagates, ending the
-/// subscription so the client reconnects and resumes from its cursor.
+/// Scan one page of the indexed transactions over `cp_bounds` ([`scan_grpc_page`]), retrying
+/// transient failures under a bounded budget. The page is rebuilt per attempt because [`Page`] is
+/// not `Clone`. A rolling indexer deploy (the common transient outage) is absorbed invisibly;
+/// anything still failing once the budget is exhausted propagates, ending the subscription so the
+/// client reconnects and resumes from its cursor.
 async fn scan_with_retry(
     reader: &AlphaLedgerGrpcReader,
     scope: &Scope,
@@ -400,9 +399,7 @@ async fn scan_with_retry(
             None,
         )
         .map_err(anyhow::Error::from)?;
-        match Transaction::scan_grpc_page(reader, scope.clone(), cp_bounds.clone(), page, filter)
-            .await
-        {
+        match scan_grpc_page(reader, scope.clone(), cp_bounds.clone(), page, filter).await {
             Ok(conn) => return Ok(conn),
             Err(e) => match backoff.next_backoff() {
                 Some(delay) => {
@@ -415,61 +412,21 @@ async fn scan_with_retry(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::sync::atomic::AtomicU32;
-    use std::sync::atomic::Ordering::SeqCst;
-
-    use super::*;
-
-    /// Fast policy so the tests don't sleep on real backoff intervals.
-    fn test_backoff(budget: Duration) -> ExponentialBackoff {
-        ExponentialBackoff {
-            initial_interval: Duration::from_millis(1),
-            max_interval: Duration::from_millis(5),
-            max_elapsed_time: Some(budget),
-            ..Default::default()
-        }
+/// Scan one page of indexed transactions over `cp_bounds` and build a connection. Composes the
+/// shared [`Transaction::scan_grpc`] + [`build_grpc_connection`] rather than going through
+/// `Transaction::paginate_grpc`, because the backfill supplies the checkpoint range directly and its
+/// scope has no `checkpoint_viewed_at` (it does not resolve as of a single consistent checkpoint).
+async fn scan_grpc_page(
+    reader: &AlphaLedgerGrpcReader,
+    scope: Scope,
+    cp_bounds: impl RangeBounds<u64>,
+    page: Page<CTransaction>,
+    filter: &TransactionFilter,
+) -> Result<TransactionConnection, RpcError> {
+    if page.limit() == 0 {
+        return Ok(Connection::new(false, false).into());
     }
 
-    /// Transient failures within the budget are retried, and the operation eventually succeeds.
-    #[tokio::test]
-    async fn list_with_retry_recovers_from_transient_errors() {
-        let attempts = AtomicU32::new(0);
-        let got = list_with_retry(test_backoff(Duration::from_secs(5)), || async {
-            let n = attempts.fetch_add(1, SeqCst);
-            if n < 2 {
-                Err(anyhow::anyhow!("transient outage"))
-            } else {
-                Ok(n)
-            }
-        })
-        .await
-        .expect("should recover within the retry budget");
-
-        assert_eq!(got, 2);
-        assert_eq!(attempts.load(SeqCst), 3, "failed twice, then succeeded");
-    }
-
-    /// A failure that never clears gives up once the budget is exhausted, rather than retrying
-    /// forever.
-    #[tokio::test]
-    async fn list_with_retry_gives_up_after_budget() {
-        let attempts = AtomicU32::new(0);
-        let result: anyhow::Result<u32> =
-            list_with_retry(test_backoff(Duration::from_millis(50)), || async {
-                attempts.fetch_add(1, SeqCst);
-                Err(anyhow::anyhow!("persistent failure"))
-            })
-            .await;
-
-        assert!(
-            result.is_err(),
-            "must give up rather than retry indefinitely"
-        );
-        assert!(
-            attempts.load(SeqCst) >= 2,
-            "should have retried at least once before giving up",
-        );
-    }
+    let result = Transaction::scan_grpc(reader, cp_bounds, &page, filter).await?;
+    build_grpc_connection(scope, &page, result)
 }

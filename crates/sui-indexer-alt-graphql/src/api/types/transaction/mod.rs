@@ -502,25 +502,6 @@ impl Transaction {
             .await
             .context("Failed to list transactions")?)
     }
-
-    /// Scan one page of indexed transactions over `cp_bounds` and build a connection. Unlike
-    /// [`Transaction::paginate_grpc`], the caller supplies the checkpoint range directly, so this
-    /// works with a scope that has no `checkpoint_viewed_at` (the subscription backfill, which does
-    /// not resolve as of a single consistent checkpoint).
-    pub(crate) async fn scan_grpc_page(
-        reader: &AlphaLedgerGrpcReader,
-        scope: Scope,
-        cp_bounds: impl RangeBounds<u64>,
-        page: Page<CTransaction>,
-        filter: &TransactionFilter,
-    ) -> Result<TransactionConnection, RpcError> {
-        if page.limit() == 0 {
-            return Ok(Connection::new(false, false).into());
-        }
-
-        let result = Self::scan_grpc(reader, cp_bounds, &page, filter).await?;
-        build_grpc_connection(scope, &page, result)
-    }
 }
 
 impl TransactionContents {
@@ -687,7 +668,7 @@ impl From<Connection<String, Transaction>> for TransactionConnection {
 /// Build a `TransactionConnection` from draining a bitmap-scan page.
 ///
 /// Edges are returned in ascending order.
-fn build_grpc_connection(
+pub(crate) fn build_grpc_connection(
     scope: Scope,
     page: &Page<CTransaction>,
     result: StreamPage<v2::ExecutedTransaction>,

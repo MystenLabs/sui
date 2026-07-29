@@ -31,6 +31,7 @@ use axum::routing::post;
 use axum_extra::TypedHeader;
 use config::LoggingConfig;
 use config::RpcConfig;
+use config::SubscriptionConfig;
 use extensions::query_limits::QueryLimitsChecker;
 use extensions::query_limits::rich;
 use extensions::query_limits::show_usage::ShowUsage;
@@ -274,15 +275,11 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, Mutation, Subscription> {
-    // EXPERIMENT (do not commit): how many subscription payloads resolve concurrently. Env-tunable
-    // so serial (1) vs concurrent (N) can be compared without a rebuild. Default 1 = upstream serial.
-    let concurrency = std::env::var("SUB_CONCURRENCY")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
+pub fn schema(
+    subscription_config: &SubscriptionConfig,
+) -> SchemaBuilder<Query, Mutation, Subscription> {
     Schema::build(Query::default(), Mutation, Subscription)
-        .subscription_resolution_concurrency(concurrency)
+        .subscription_resolution_concurrency(subscription_config.max_concurrent_resolutions)
         .register_output_type::<IAddressable>()
         .register_output_type::<IMoveDatatype>()
         .register_output_type::<IMoveObject>()
@@ -324,7 +321,7 @@ pub async fn start_rpc(
     pg_pipelines: Vec<String>,
     registry: &Registry,
 ) -> anyhow::Result<Service> {
-    let rpc = RpcService::new(args, version, schema(), registry);
+    let rpc = RpcService::new(args, version, schema(&config.subscription), registry);
     let metrics = rpc.metrics();
 
     // Create gRPC full node client wrapper. If left unconfigured, the client will not be stored in
@@ -630,7 +627,9 @@ mod tests {
     #[test]
     fn test_schema_sdl_export() {
         let options = SDLExportOptions::new().sorted_fields();
-        let sdl = schema().finish().sdl_with_options(options);
+        let sdl = schema(&SubscriptionConfig::default())
+            .finish()
+            .sdl_with_options(options);
 
         let file = if cfg!(feature = "staging") {
             "staging.graphql"
