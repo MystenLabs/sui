@@ -46,7 +46,7 @@ To create a new application, you must provide a SuiNS name and a package name, a
   const appCap = transaction.moveCall({
     target: `@mvr/core::move_registry::register`,
     arguments: [
-      // the registry obj: Can also be resolved as `registry-obj@mvr` from mainnet SuiNS.
+      // the registry obj: Can also be resolved as `registry-obj@mvr` from Mainnet SuiNS.
       transaction.object('0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727'),
       transaction.object(suinsObjectId),
       transaction.pure.string(name),
@@ -54,7 +54,7 @@ To create a new application, you must provide a SuiNS name and a package name, a
     ],
   });
 
-  // we can then use the appCap to attach packages directly, or transfer (e.g. to a safe address)
+  // You can then use the appCap to attach packages directly, or transfer (for example to a safe address)
   // and register packages later.
   ```
   </TabItem>
@@ -100,12 +100,12 @@ sui client ptb --move-call @mvr/core::move_registry::set_metadata \
 
 ## Attach a Mainnet package to an application
 
-When attaching a Mainnet package to an application, you must provide the `PackageInfo` object. This call is permanent, so after a `PackageInfo` object is attached to an application, it cannot be detached in the future. Consequently, an app is always linked to a specific package.
+When attaching a Mainnet package to an application, you must provide the `PackageInfo` object. This call is permanent, so after you attach a `PackageInfo` object to an application, you cannot detach it in the future. Consequently, an app is always linked to a specific package.
 
 <Tabs groupId='language'>
   <TabItem label="TypeScript" value='typescript'>
   ```typescript
-// we can then use the appCap to attach packages directly, or transfer (e.g. to a safe address)
+// You can then use the appCap to attach packages directly, or transfer (for example to a safe address)
 // and register packages later.
 
 const transaction = new Transaction();
@@ -113,10 +113,10 @@ const transaction = new Transaction();
  transaction.moveCall({
     target: `@mvr/core::move_registry::assign_package`,
     arguments: [
-        // the registry obj: Can also be resolved as `registry-obj@mvr` from mainnet SuiNS.
+        // the registry obj: Can also be resolved as `registry-obj@mvr` from Mainnet SuiNS.
         transaction.object(`0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727`),
         transaction.object('<The AppCap object>'),
-        transaction.object('<The PackageInfo object on mainnet>'),
+        transaction.object('<The PackageInfo object on Mainnet>'),
     ],
 });
 ```
@@ -125,7 +125,7 @@ const transaction = new Transaction();
   ```bash
 sui client ptb --move-call @mvr/core::move_registry::assign_package \
     @0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727 \
-    @<The AppCap object> @<The PackageInfo object on mainnet>
+    @<The AppCap object> @<The PackageInfo object on Mainnet>
 ```
   </TabItem>
 </Tabs>
@@ -157,10 +157,10 @@ const appInfo = transaction.moveCall({
 transaction.moveCall({
     target: `@mvr/core::move_registry::set_network`,
     arguments: [
-        // the registry obj: Can also be resolved as `registry-obj@mvr` from mainnet SuiNS.
+        // the registry obj: Can also be resolved as `registry-obj@mvr` from Mainnet SuiNS.
         transaction.object('0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727'),
         transaction.object('<The AppCap object>'),
-        transaction.pure.string("<chain id of the network: use `4c78adac` for testnet>"),
+        transaction.pure.string("<chain id of the network: use `4c78adac` for Testnet>"),
         appInfo,
     ],
 });
@@ -179,7 +179,7 @@ sui client ptb \
     --assign appInfo \
     --move-call @mvr/core::move_registry::set_network \
     @0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727 @<The AppCap object> \
-    \"<chain id of the network: use 4c78adac for testnet>\" appInfo
+    \"<chain id of the network: use 4c78adac for Testnet>\" appInfo
 ```
   </TabItem>
 </Tabs>

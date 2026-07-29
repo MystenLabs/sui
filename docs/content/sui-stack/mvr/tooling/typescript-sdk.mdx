@@ -128,7 +128,7 @@ The examples in the tabs are simplified for clarity. Actual addresses or names m
     ```typescript
     const transaction = new Transaction();
 
-    // testnet
+    // Testnet
     // Notice how the suifren type has a V1 outer package id, and a V2 inner type package id,
     // even if they are part of the same package upgrades.
     transaction.moveCall({
@@ -139,7 +139,7 @@ The examples in the tabs are simplified for clarity. Actual addresses or names m
         ]
     });
 
-    // mainnet
+    // Mainnet
     transaction.moveCall({
         target: `0x54800ebb4606fd0c03b4554976264373b3374eeb3fd63e7ff69f31cac786ba8c::accessories::equip`,
         arguments: [..],

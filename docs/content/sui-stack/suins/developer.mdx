@@ -33,7 +33,7 @@ Sui Name Service (SuiNS) is a decentralized naming service on the Sui blockchain
 
 ## Active constants
 
-This is a list of the current active objects to interact with SuiNS.
+The following list shows the current active objects for interacting with SuiNS.
 
 :::info
 
@@ -148,7 +148,7 @@ Use the SuiNS core package for onchain resolution. Add the following dependency 
   </TabItem>
 </Tabs>
 
-#### Example: Transfer object to SuiNS name
+#### Example: transfer object to SuiNS name
 
 The following `demo` module demonstrates how to transfer an object of any type to a SuiNS name. This is a basic example of how to interact with SuiNS onchain.
 
@@ -211,7 +211,7 @@ For a deeper understanding of how the indexer works and how to integrate it into
 
 ## Subnames
 
-Subnames are nested names under a parent name. Unlike regular names, there is no cost associated with creating subnames.
+Subnames are nested names under a parent name. Unlike regular names, creating subnames has no cost.
 
 The maximum nesting depth is 8 levels. The total depth, including the second-level domain (SLD) and top-level domain (TLD), means the maximum total depth is 10 levels.
 
@@ -223,7 +223,7 @@ Subnames can be one of 2 types:
 
 1. **Node subnames**: Similar to regular names, they have an NFT associated with them that gives access to all extra features (personalization, avatars, and so on).
 
-1. **Leaf subnames**: These are subnames that are created under a node subname. They do not have an NFT associated with them, so the parent controls their configuration. Consequently, the typical use case for leaf subnames is to use them programmatically.
+1. **Leaf subnames**: These subnames exist under a node subname. They do not have an NFT associated with them, so the parent controls their configuration. Consequently, the typical use case for leaf subnames is to use them programmatically.
 
 The following table provides more details on the differences between the types of names:
 

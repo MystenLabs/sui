@@ -45,17 +45,17 @@ The following example works for both Mainnet and Testnet.
   ```typescript
 const transaction = new Transaction();
 // ... (other code, could also include a `transaction.publish()`
-// call to publish & register in one step.)
+// call to publish and register in one step.)
 
-/// We pass in our UpgradeCap
+/// Pass in the UpgradeCap
 const packageInfo = transaction.moveCall({
   target: `@mvr/metadata::package_info::new`,
   arguments: [transaction.object('<Your UpgradeCap (by value or object id)>')],
 });
 
-// We also need to create the visual representation of our "info" object.
+// Also create the visual representation of the "info" object.
 // You can also call `@mvr/metadata::display::new` instead,
-// that allows customizing the colors of your metadata object!
+// that allows customizing the colors of your metadata object.
 const display = transaction.moveCall({
   target: `@mvr/metadata::display::default`,
   arguments: [
@@ -63,7 +63,7 @@ const display = transaction.moveCall({
   ],
 });
 
-// Set that display object to our info object.
+// Set the display object to the info object.
 transaction.moveCall({
   target: `@mvr/metadata::package_info::set_display`,
   arguments: [transaction.object(packageInfo), display],
@@ -157,13 +157,13 @@ To update the source for a version, first call `@mvr/metadata::package_info::uns
   const transaction = new Transaction();
   // adding source code info:
 
-  // 1. Create our `GitInfo` object.
+  // 1. Create the `GitInfo` object.
   const git = transaction.moveCall({
   target: `@mvr/metadata::git::new`,
   arguments: [
-  transaction.pure.string('<Your git repository, e.g. `https://github.com/mystenlabs/mvr`>'),
-  transaction.pure.string('<Your git subdirectory, e.g. `packages/mvr`>'),
-  transaction.pure.string('<Your git commit hash or tag, e.g. `636d22d6bc4195afec9a1c0a8563b61fc813acfc`>'),
+  transaction.pure.string('<Your git repository, for example `https://github.com/mystenlabs/mvr`>'),
+  transaction.pure.string('<Your git subdirectory, for example `packages/mvr`>'),
+  transaction.pure.string('<Your git commit hash or tag, for example `636d22d6bc4195afec9a1c0a8563b61fc813acfc`>'),
   ],
   });
 
@@ -171,7 +171,7 @@ To update the source for a version, first call `@mvr/metadata::package_info::uns
   target: `@mvr/metadata::package_info::set_git_versioning`,
   arguments: [
   transaction.object(`<Your PackageInfo object>`),
-  transaction.pure.u64(`<The version number for the given source code (e.g. 1)>`),
+  transaction.pure.u64(`<The version number for the given source code (for example 1)>`),
   git,
   ],
   });
@@ -180,11 +180,11 @@ To update the source for a version, first call `@mvr/metadata::package_info::uns
   <TabItem label="Sui CLI" value='cli'>
   ```bash
   sui client ptb --move-call @mvr/metadata::git::new \
-  "\"<Your git repository, e.g. https://github.com/mystenlabs/mvr>\"" \
-  \"<Your git subdirectory, e.g. packages/mvr>\" \
-  \"<Your git commit hash or tag, e.g. 636d22d6bc4195afec9a1c0a8563b61fc813acfc>\" --assign git \
+  "\"<Your git repository, for example https://github.com/mystenlabs/mvr>\"" \
+  \"<Your git subdirectory, for example packages/mvr>\" \
+  \"<Your git commit hash or tag, for example 636d22d6bc4195afec9a1c0a8563b61fc813acfc>\" --assign git \
   --move-call @mvr/metadata::package_info::set_git_versioning @<Your PackageInfo object> \
-  <The version number for the given source code (e.g. 1)> git
+  <The version number for the given source code (for example 1)> git
   ```
   </TabItem>
 </Tabs>
@@ -200,7 +200,7 @@ To update the source for a version, first call `@mvr/metadata::package_info::uns
   target: `@mvr/metadata::package_info::unset_git_versioning`,
   arguments: [
   transaction.object(`<Your PackageInfo object>`),
-  transaction.pure.u64(`<The version number for the given source code (e.g. 1)>`),
+  transaction.pure.u64(`<The version number for the given source code (for example 1)>`),
   ],
   });
   // .. you could then follow the previous steps to add the new source code info for that version.
