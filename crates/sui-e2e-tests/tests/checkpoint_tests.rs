@@ -8,13 +8,11 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use sui_macros::register_fail_point_arg;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
-use sui_types::base_types::AuthorityName;
 use sui_types::transaction::{Argument, CallArg, Command, ObjectArg};
 use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
@@ -77,19 +75,17 @@ async fn test_checkpoint_split_brain() {
         }
     );
 
-    register_fail_point_arg("simulate_fork_during_execution", || {
-        Some((
-            std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::<
-                AuthorityName,
-            >::new())),
-            true, // full_halt
-            std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::<
-                String,
-                String,
-            >::new())),
-            false, // fork_on_executor_path: consensus/builder path
-        ))
-    });
+    #[cfg(msim)]
+    {
+        use sui_core::authority::SimulatedForkConfig;
+        use sui_macros::register_fail_point_arg;
+        register_fail_point_arg("simulate_fork_during_execution", || {
+            Some(SimulatedForkConfig {
+                split_brain: true,
+                ..Default::default()
+            })
+        });
+    }
 
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(committee_size)

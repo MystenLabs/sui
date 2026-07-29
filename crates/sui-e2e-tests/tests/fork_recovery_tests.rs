@@ -8,13 +8,19 @@ mod test {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
-    use sui_core::authority::{CheckpointTimeoutConfig, init_checkpoint_timeout_config};
+    use sui_core::authority::{
+        CheckpointTimeoutConfig, SimulatedForkConfig, init_checkpoint_timeout_config,
+    };
+    use sui_core::checkpoints::CheckpointStore;
     use sui_macros::{clear_fail_point, register_fail_point_arg, register_fail_point_if, sim_test};
+    use sui_simulator::task::NodeId;
     use sui_test_transaction_builder::make_transfer_sui_transaction;
     use sui_types::base_types::AuthorityName;
     use test_cluster::{TestCluster, TestClusterBuilder};
+    use tracing::info;
 
     async fn build_test_cluster() -> Arc<TestCluster> {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         TestClusterBuilder::new()
             .with_num_validators(4)
             .with_epoch_duration_ms(10_000)
@@ -25,9 +31,7 @@ mod test {
             .into()
     }
 
-    fn node_to_authority_map(
-        test_cluster: &TestCluster,
-    ) -> HashMap<sui_simulator::task::NodeId, AuthorityName> {
+    fn authorities_by_node(test_cluster: &TestCluster) -> HashMap<NodeId, AuthorityName> {
         test_cluster
             .swarm
             .validator_nodes()
@@ -40,56 +44,137 @@ mod test {
             .collect()
     }
 
-    // Intercept fork fatal!s for forked validators, shutting the node down (so it can restart into
-    // recovery) instead of aborting the sim.
-    fn register_fork_kill_failpoints(
-        forked_validators: Arc<Mutex<HashSet<AuthorityName>>>,
-        checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>>,
-        resolve_authority: impl Fn(sui_simulator::task::NodeId) -> Option<AuthorityName>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ) {
-        register_fail_point_arg("kill_checkpoint_fork_node", {
-            let forked_validators = forked_validators.clone();
-            let checkpoint_overrides = checkpoint_overrides.clone();
-            let resolve_authority = resolve_authority.clone();
-            move || {
-                let current = resolve_authority(sui_simulator::current_simnode_id())?;
-                if forked_validators.lock().unwrap().contains(&current) {
-                    Some(checkpoint_overrides.clone())
-                } else {
-                    None
-                }
-            }
-        });
-        register_fail_point_if("kill_transaction_fork_node", {
-            let forked_validators = forked_validators.clone();
-            let resolve_authority = resolve_authority.clone();
-            move || {
-                resolve_authority(sui_simulator::current_simnode_id())
-                    .is_some_and(|current| forked_validators.lock().unwrap().contains(&current))
-            }
-        });
-        // Split-brain bookkeeping: record the canonical (non-forked) digest into checkpoint_overrides.
-        register_fail_point_arg("kill_split_brain_node", {
-            let checkpoint_overrides = checkpoint_overrides.clone();
-            let forked_validators = forked_validators.clone();
-            move || Some((checkpoint_overrides.clone(), forked_validators.clone()))
-        });
-        // check_for_split_brain's debug_fatal! logs-and-continues in release; make the sim match that
-        // (instead of panicking) so validators ride through split brain.
-        register_debug_fatal_handler!(
-            "Split brain detected in checkpoint signature aggregation",
-            || {}
-        );
+    // Runs `f` against the checkpoint store of `name`'s node, or returns None if it is down.
+    fn with_checkpoint_store<T>(
+        test_cluster: &TestCluster,
+        name: AuthorityName,
+        f: impl FnOnce(&CheckpointStore) -> T,
+    ) -> Option<T> {
+        test_cluster
+            .swarm
+            .validator_nodes()
+            .find(|validator| validator.name() == name)?
+            .get_node_handle()
+            .map(|handle| handle.with(|node| f(node.state().get_checkpoint_store())))
     }
 
-    fn clear_fork_kill_failpoints() {
-        clear_fail_point("kill_checkpoint_fork_node");
-        clear_fail_point("kill_transaction_fork_node");
-        clear_fail_point("kill_split_brain_node");
+    // Bookkeeping shared with the fork failpoints. `forked_validators` is written by the injection
+    // as soon as it diverges a validator; `transaction_forks` and `checkpoint_overrides` are
+    // written by the kill hooks, which run only after the node has recorded an actual fork. Wait
+    // on the latter two when you need proof that detection fired, not just that the injection did.
+    #[derive(Clone, Default)]
+    struct ForkHarness {
+        forked_validators: Arc<Mutex<HashSet<AuthorityName>>>,
+        transaction_forks: Arc<Mutex<HashSet<AuthorityName>>>,
+        checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>>,
+    }
+
+    impl ForkHarness {
+        // Arms the fork injection on every validator `should_fork` accepts, plus the kill hooks
+        // that intercept the fork fatal!s and shut the node down (so it can restart into recovery)
+        // instead of aborting the sim.
+        //
+        // `resolve_authority` maps a sim node id to its authority; it is a closure rather than a
+        // map because a validator restarted mid-test gets a new, unpredictable sim node id.
+        fn arm(
+            &self,
+            split_brain: bool,
+            fork_on_executor_path: bool,
+            resolve_authority: impl Fn(NodeId) -> Option<AuthorityName> + Clone + Send + Sync + 'static,
+            should_fork: impl Fn(AuthorityName) -> bool + Clone + Send + Sync + 'static,
+        ) {
+            register_fail_point_arg("simulate_fork_during_execution", {
+                let forked_validators = self.forked_validators.clone();
+                let resolve_authority = resolve_authority.clone();
+                let should_fork = should_fork.clone();
+                move || {
+                    let current = resolve_authority(sui_simulator::current_simnode_id())?;
+                    should_fork(current).then(|| SimulatedForkConfig {
+                        forked_validators: forked_validators.clone(),
+                        split_brain,
+                        fork_on_executor_path,
+                    })
+                }
+            });
+
+            register_fail_point_arg("kill_checkpoint_fork_node", {
+                let forked_validators = self.forked_validators.clone();
+                let checkpoint_overrides = self.checkpoint_overrides.clone();
+                let resolve_authority = resolve_authority.clone();
+                move || {
+                    let current = resolve_authority(sui_simulator::current_simnode_id())?;
+                    if forked_validators.lock().unwrap().contains(&current) {
+                        Some(checkpoint_overrides.clone())
+                    } else {
+                        None
+                    }
+                }
+            });
+            // Reached only after record_transaction_fork_detected, so recording here is proof that
+            // the effects-digest check tripped, not merely that the injection fired.
+            register_fail_point_if("kill_transaction_fork_node", {
+                let forked_validators = self.forked_validators.clone();
+                let transaction_forks = self.transaction_forks.clone();
+                let resolve_authority = resolve_authority.clone();
+                move || {
+                    let Some(current) = resolve_authority(sui_simulator::current_simnode_id())
+                    else {
+                        return false;
+                    };
+                    if !forked_validators.lock().unwrap().contains(&current) {
+                        return false;
+                    }
+                    transaction_forks.lock().unwrap().insert(current);
+                    true
+                }
+            });
+            // Split-brain bookkeeping: record the canonical (non-forked) digest.
+            register_fail_point_arg("kill_split_brain_node", {
+                let checkpoint_overrides = self.checkpoint_overrides.clone();
+                let forked_validators = self.forked_validators.clone();
+                move || Some((checkpoint_overrides.clone(), forked_validators.clone()))
+            });
+            // check_for_split_brain's debug_fatal! logs-and-continues in release; make the sim
+            // match that (instead of panicking) so validators ride through split brain.
+            register_debug_fatal_handler!(
+                "Split brain detected in checkpoint signature aggregation",
+                || {}
+            );
+        }
+
+        fn disarm_injection(&self) {
+            clear_fail_point("simulate_fork_during_execution");
+        }
+
+        fn disarm_kill_hooks(&self) {
+            clear_fail_point("kill_checkpoint_fork_node");
+            clear_fail_point("kill_transaction_fork_node");
+            clear_fail_point("kill_split_brain_node");
+        }
+
+        fn forked(&self) -> HashSet<AuthorityName> {
+            self.forked_validators.lock().unwrap().clone()
+        }
+
+        fn transaction_forked(&self) -> HashSet<AuthorityName> {
+            self.transaction_forks.lock().unwrap().clone()
+        }
+
+        // Every checkpoint fork / split brain detected, as the `seq -> canonical digest` map an
+        // operator would pass to ForkRecoveryConfig::checkpoint_overrides.
+        fn checkpoint_overrides(&self) -> BTreeMap<u64, String> {
+            self.checkpoint_overrides.lock().unwrap().clone()
+        }
+
+        // The earliest sequence at which a checkpoint fork or split brain was detected, if any.
+        fn forked_seq(&self) -> Option<u64> {
+            self.checkpoint_overrides
+                .lock()
+                .unwrap()
+                .keys()
+                .next()
+                .copied()
+        }
     }
 
     // Executes one finalized transfer. The fork injection only touches non-system transactions, so
@@ -99,21 +184,33 @@ mod test {
         test_cluster.execute_transaction(tx).await;
     }
 
-    async fn wait_until(timeout: Duration, description: &str, done: impl Fn() -> bool) {
+    async fn wait_for(timeout: Duration, done: impl Fn() -> bool) -> bool {
         let deadline = tokio::time::Instant::now() + timeout;
         while tokio::time::Instant::now() < deadline {
             if done() {
-                return;
+                return true;
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
-        panic!("condition not reached within {timeout:?}: {description}");
+        false
+    }
+
+    async fn wait_until(timeout: Duration, description: &str, done: impl Fn() -> bool) {
+        assert!(
+            wait_for(timeout, done).await,
+            "condition not reached within {timeout:?}: {description}"
+        );
     }
 
     // Restarts `target` under RecoverOncePerVersion with a new binary version reported via the
     // override_binary_version failpoint (recovery refuses to clear a fork under the version that
-    // produced it), then waits for the fork markers to clear.
-    async fn recover_target_once_per_version(test_cluster: &TestCluster, target: AuthorityName) {
+    // produced it), disarms the kill hooks so they cannot interrupt reconvergence, then waits for
+    // the fork markers to clear.
+    async fn recover_forked_target(
+        test_cluster: &TestCluster,
+        harness: &ForkHarness,
+        target: AuthorityName,
+    ) {
         register_fail_point_arg("override_binary_version", || {
             Some(Arc::new(Mutex::new("corrected-binary".to_string())))
         });
@@ -136,28 +233,55 @@ mod test {
         target_node.start().await.unwrap();
         tokio::time::sleep(Duration::from_secs(2)).await;
 
-        clear_fork_kill_failpoints();
+        harness.disarm_kill_hooks();
         clear_fail_point("override_binary_version");
 
-        // The recovered validator cleared its fork markers.
         wait_until(
             Duration::from_secs(30),
             "fork markers should be cleared after auto-recovery",
             || {
+                with_checkpoint_store(test_cluster, target, |cp| {
+                    cp.get_checkpoint_fork_detected().unwrap().is_none()
+                        && cp.get_transaction_fork_detected().unwrap().is_none()
+                })
+                .unwrap_or(false)
+            },
+        )
+        .await;
+    }
+
+    // Liveness (advancing an epoch) only proves a recovered validator rejoined; it would not catch
+    // one that rejoined carrying divergent history. Checkpoint digests chain, so agreeing with the
+    // fullnode on a checkpoint past `min_seq` — the sequence where the fork was injected — proves
+    // the validator's whole history up to that point is canonical again.
+    async fn assert_converged_with_fullnode(
+        test_cluster: &TestCluster,
+        name: AuthorityName,
+        min_seq: u64,
+    ) {
+        wait_until(
+            Duration::from_secs(60),
+            &format!("{name:?} should agree with the fullnode past checkpoint {min_seq}"),
+            || {
+                let Some(Some(local_tip)) = with_checkpoint_store(test_cluster, name, |cp| {
+                    cp.get_highest_executed_checkpoint().unwrap()
+                }) else {
+                    return false;
+                };
+                let seq = *local_tip.sequence_number();
+                if seq <= min_seq {
+                    return false;
+                }
                 test_cluster
-                    .swarm
-                    .validator_nodes()
-                    .find(|validator| validator.name() == target)
-                    .unwrap()
-                    .get_node_handle()
-                    .is_some_and(|handle| {
-                        handle.with(|node| {
-                            let state = node.state();
-                            let cp = state.get_checkpoint_store();
-                            cp.get_checkpoint_fork_detected().unwrap().is_none()
-                                && cp.get_transaction_fork_detected().unwrap().is_none()
-                        })
+                    .fullnode_handle
+                    .sui_node
+                    .with(|node| {
+                        node.state()
+                            .get_checkpoint_store()
+                            .get_checkpoint_by_sequence_number(seq)
+                            .unwrap()
                     })
+                    .is_some_and(|canonical| canonical.digest() == local_tip.digest())
             },
         )
         .await;
@@ -171,88 +295,50 @@ mod test {
     #[sim_test]
     async fn test_auto_fork_recovery_checkpoint_fork() {
         let test_cluster = build_test_cluster().await;
-
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
-
-        let node_to_authority_map = node_to_authority_map(&test_cluster);
+        let harness = ForkHarness::default();
+        let authorities = authorities_by_node(&test_cluster);
 
         // Fork exactly one validator so the other three keep a quorum.
         let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
 
-        // Baseline traffic before the injection is armed: these finalize with all four validators
-        // agreeing.
-        for _ in 0..2 {
-            execute_transfer(&test_cluster).await;
-        }
-
-        register_fail_point_arg("simulate_fork_during_execution", {
-            let forked_validators = forked_validators.clone();
-            let effects_overrides = effects_overrides.clone();
-            let node_to_authority_map = node_to_authority_map.clone();
-            move || {
-                let current = node_to_authority_map.get(&sui_simulator::current_simnode_id())?;
-                if *current == target {
-                    Some((
-                        forked_validators.clone(),
-                        /* full_halt: */ false,
-                        effects_overrides.clone(),
-                        /* fork_on_executor_path: */ false,
-                    ))
-                } else {
-                    None
-                }
-            }
-        });
-        register_fork_kill_failpoints(forked_validators.clone(), checkpoint_overrides.clone(), {
-            let node_to_authority_map = node_to_authority_map.clone();
-            move |id| node_to_authority_map.get(&id).copied()
-        });
+        harness.arm(
+            /* split_brain */ false,
+            /* fork_on_executor_path */ false,
+            move |id| authorities.get(&id).copied(),
+            move |name| name == target,
+        );
 
         // Fork on demand: the injection is armed on the consensus/builder path only, so the first
         // transfer the target executes there diverges, its builder constructs a divergent
         // checkpoint, and detection fires when the canonical certified checkpoint reaches it
         // (kill_checkpoint_fork_node records the canonical digest). A transfer the target happens
         // to receive via the checkpoint executor instead — it was momentarily behind — is left
-        // untouched by the injection, so drive further transfers until one lands on the builder
-        // path.
-        let detected = {
-            let checkpoint_overrides = checkpoint_overrides.clone();
-            move || !checkpoint_overrides.lock().unwrap().is_empty()
-        };
-        for _ in 0..10 {
-            if detected() {
-                break;
-            }
+        // untouched by the path-exclusive injection, so drive further transfers until one lands on
+        // the builder path.
+        let mut transfers = 0;
+        while harness.forked_seq().is_none() && transfers < 10 {
+            transfers += 1;
             execute_transfer(&test_cluster).await;
-            for _ in 0..12 {
-                if detected() {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(500)).await;
-            }
+            wait_for(Duration::from_secs(6), || harness.forked_seq().is_some()).await;
         }
-        assert!(detected(), "target should detect a checkpoint fork");
+        let forked_seq = harness
+            .forked_seq()
+            .expect("target should detect a checkpoint fork");
+        // Logged so the retry bound above stays justified by observation rather than assumption:
+        // if this is always 1, the loop can collapse to a single transfer.
+        info!(transfers, forked_seq, "checkpoint fork detected");
 
-        // Exactly one validator forked and detected a checkpoint fork.
-        assert_eq!(forked_validators.lock().unwrap().len(), 1);
-        assert_eq!(
-            forked_validators.lock().unwrap().iter().next(),
-            Some(&target)
-        );
+        assert_eq!(harness.forked(), HashSet::from([target]));
 
         // Corrected binary: stop injecting forks before recovering.
-        clear_fail_point("simulate_fork_during_execution");
-
-        recover_target_once_per_version(&test_cluster, target).await;
+        harness.disarm_injection();
+        recover_forked_target(&test_cluster, &harness, target).await;
 
         // Liveness: every node, including the recovered validator, advances an epoch, proving it
         // rejoined (a fullnode-only wait could be satisfied by the other three).
         test_cluster.wait_for_next_epoch_all_nodes().await;
+
+        assert_converged_with_fullnode(&test_cluster, target, forked_seq).await;
     }
 
     // A quorum-breaking fork: no checkpoint digest reaches quorum, so nothing certifies (split
@@ -271,35 +357,17 @@ mod test {
         });
 
         let test_cluster = build_test_cluster().await;
+        let harness = ForkHarness::default();
+        let authorities = authorities_by_node(&test_cluster);
 
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
-
-        let node_to_authority_map = node_to_authority_map(&test_cluster);
-
-        // full_halt forks validity-threshold stake (two of four validators), and the shared
-        // effects_overrides map makes them fork identically, so no checkpoint digest can reach
-        // quorum.
-        register_fail_point_arg("simulate_fork_during_execution", {
-            let forked_validators = forked_validators.clone();
-            let effects_overrides = effects_overrides.clone();
-            move || {
-                Some((
-                    forked_validators.clone(),
-                    /* full_halt: */ true,
-                    effects_overrides.clone(),
-                    /* fork_on_executor_path: */ false,
-                ))
-            }
-        });
-        register_fork_kill_failpoints(forked_validators.clone(), checkpoint_overrides.clone(), {
-            let node_to_authority_map = node_to_authority_map.clone();
-            move |id| node_to_authority_map.get(&id).copied()
-        });
+        // split_brain forks past the validity threshold (two of four validators), and every forked
+        // validator diverges on the same transaction, so no checkpoint digest can reach quorum.
+        harness.arm(
+            /* split_brain */ true,
+            /* fork_on_executor_path */ false,
+            move |id| authorities.get(&id).copied(),
+            |_| true,
+        );
 
         // Fork on demand: one user transaction is enough — it executes on every validator
         // post-consensus and the injection forks it on the two forked validators. It can never
@@ -316,27 +384,22 @@ mod test {
         wait_until(
             Duration::from_secs(60),
             "expected a quorum-breaking fork with split brain detected",
-            {
-                let forked_validators = forked_validators.clone();
-                let checkpoint_overrides = checkpoint_overrides.clone();
-                move || {
-                    forked_validators.lock().unwrap().len() > 1
-                        && !checkpoint_overrides.lock().unwrap().is_empty()
-                }
-            },
+            || harness.forked().len() > 1 && harness.forked_seq().is_some(),
         )
         .await;
         submit_task.abort();
 
+        let forked_seq = harness.forked_seq().unwrap();
+
         // Corrected binary: stop injecting forks and clear the kill failpoints so they can't
         // interrupt reconvergence.
-        clear_fail_point("simulate_fork_during_execution");
-        clear_fork_kill_failpoints();
+        harness.disarm_injection();
+        harness.disarm_kill_hooks();
 
         // Operator recovery: stop all (discards the in-memory forked effects), then restart with
         // checkpoint_overrides naming the canonical digest. Forked validators clear locally_computed
         // and re-execute canonically, so quorum re-forms.
-        let overrides = checkpoint_overrides.lock().unwrap().clone();
+        let overrides = harness.checkpoint_overrides();
         for validator in test_cluster.swarm.validator_nodes() {
             validator.stop();
         }
@@ -359,23 +422,26 @@ mod test {
         // Liveness: every node, including both recovered validators, advances an epoch — i.e. quorum
         // re-formed and the forked validators rejoined.
         test_cluster.wait_for_next_epoch_all_nodes().await;
+
+        let names: Vec<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .map(|validator| validator.name())
+            .collect();
+        for name in names {
+            assert_converged_with_fullnode(&test_cluster, name, forked_seq).await;
+        }
     }
 
     // A transaction fork (vs the checkpoint fork above): a fallen-behind validator
     // re-executes a certified checkpoint's transactions via the checkpoint executor (where
     // expected_effects_digest is set) and diverges, tripping the per-transaction fork check. The
-    // executor_path_only injection flag forks only on that path, guaranteeing a transaction fork; it
-    // then recovers under RecoverOncePerVersion.
+    // fork_on_executor_path injection flag forks only on that path, guaranteeing a transaction
+    // fork; it then recovers under RecoverOncePerVersion.
     #[sim_test]
     async fn test_auto_fork_recovery_transaction_fork() {
         let test_cluster = build_test_cluster().await;
-
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
+        let harness = ForkHarness::default();
 
         let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
 
@@ -391,12 +457,12 @@ mod test {
         // re-execute a user transaction it has never executed. Land one to checkpoint
         // finality: submitted after the stop, the target cannot have executed it. Retrying
         // the same signed transaction on transient failures cannot equivocate the gas object.
-        let tx_data = test_cluster
-            .test_transaction_builder()
-            .await
-            .transfer_sui(Some(1), test_cluster.get_address_1())
-            .build();
-        let tx = test_cluster.sign_transaction(&tx_data).await;
+        let tx = make_transfer_sui_transaction(
+            &test_cluster.wallet,
+            Some(test_cluster.get_address_1()),
+            Some(1),
+        )
+        .await;
         while test_cluster
             .wallet
             .execute_transaction_may_fail(tx.clone())
@@ -423,7 +489,7 @@ mod test {
         // returns, so match by exclusion instead: while the target is down, snapshot the sim
         // ids of every running node — any id outside that set executing transactions must be
         // the restarted target (nothing else starts during this test).
-        let known_other_ids: HashSet<sui_simulator::task::NodeId> = test_cluster
+        let known_other_ids: HashSet<NodeId> = test_cluster
             .swarm
             .all_nodes()
             .filter_map(|node| {
@@ -431,35 +497,27 @@ mod test {
                     .map(|handle| handle.with(|n| n.get_sim_node_id()))
             })
             .collect();
-        let node_to_authority_map = node_to_authority_map(&test_cluster);
+        let authorities = authorities_by_node(&test_cluster);
 
         // Fork the target only on the executor path, so its catch-up re-execution trips the tx check.
-        register_fail_point_arg("simulate_fork_during_execution", {
-            let forked_validators = forked_validators.clone();
-            let effects_overrides = effects_overrides.clone();
-            let known_other_ids = known_other_ids.clone();
-            move || {
-                if known_other_ids.contains(&sui_simulator::current_simnode_id()) {
-                    None
-                } else {
-                    Some((
-                        forked_validators.clone(),
-                        /* full_halt: */ false,
-                        effects_overrides.clone(),
-                        /* fork_on_executor_path: */ true,
-                    ))
-                }
-            }
-        });
-        register_fork_kill_failpoints(forked_validators.clone(), checkpoint_overrides.clone(), {
-            let node_to_authority_map = node_to_authority_map.clone();
-            let known_other_ids = known_other_ids.clone();
+        harness.arm(
+            /* split_brain */ false,
+            /* fork_on_executor_path */ true,
             move |id| {
-                node_to_authority_map
+                authorities
                     .get(&id)
                     .copied()
                     .or_else(|| (!known_other_ids.contains(&id)).then_some(target))
-            }
+            },
+            move |name| name == target,
+        );
+
+        let fork_point = test_cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .unwrap()
+                .unwrap_or(0)
         });
 
         test_cluster
@@ -471,30 +529,31 @@ mod test {
             .await
             .unwrap();
 
-        // Wait until the target forks (after which kill_transaction_fork_node shuts it down).
+        // Waits on transaction_forks, which the kill hook writes only after the effects-digest
+        // check tripped and the fork was recorded. Waiting on forked() instead would be satisfied
+        // by the injection merely firing, letting the rest of the test pass vacuously.
         wait_until(
             Duration::from_secs(60),
             "target should transaction-fork while catching up on the executor path",
-            {
-                let forked_validators = forked_validators.clone();
-                move || forked_validators.lock().unwrap().contains(&target)
-            },
+            || harness.transaction_forked().contains(&target),
         )
         .await;
 
         // Corrected binary: stop injecting forks before recovering.
-        clear_fail_point("simulate_fork_during_execution");
+        harness.disarm_injection();
 
-        // Confirm it was a transaction fork: checkpoint_overrides (set only by the checkpoint/split-
-        // brain failpoints) is empty even though the target forked.
+        // Confirm it was a transaction fork: the checkpoint/split-brain hooks recorded nothing
+        // even though the target forked.
         assert!(
-            checkpoint_overrides.lock().unwrap().is_empty(),
+            harness.forked_seq().is_none(),
             "expected a transaction fork (no checkpoint fork should have been recorded)"
         );
 
-        recover_target_once_per_version(&test_cluster, target).await;
+        recover_forked_target(&test_cluster, &harness, target).await;
 
         // Liveness: every node, including the recovered validator, advances an epoch.
         test_cluster.wait_for_next_epoch_all_nodes().await;
+
+        assert_converged_with_fullnode(&test_cluster, target, fork_point).await;
     }
 }
