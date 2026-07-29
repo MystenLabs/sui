@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// FlexCommitter will be wired into Core in a follow-up PR.
-#![allow(dead_code)]
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
