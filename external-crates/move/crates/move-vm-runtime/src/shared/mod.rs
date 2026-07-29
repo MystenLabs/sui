@@ -13,6 +13,7 @@ use move_vm_config::runtime::VMConfig;
 use std::{collections::HashMap, hash::Hash};
 
 pub mod binary_cache;
+pub(crate) mod bounded_map;
 pub mod constants;
 pub mod gas;
 pub mod linkage_context;
