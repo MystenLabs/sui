@@ -527,6 +527,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         index,
         attributes,
         loc,
+        visibility: _,
         signature: tsignature,
         value: tvalue,
     } = cdef;
@@ -676,7 +677,7 @@ fn base_types<'a, R: std::iter::FromIterator<H::BaseType>>(
     tys.into_iter().map(|t| base_type(reporter, t)).collect()
 }
 
-fn base_type(reporter: &DiagnosticReporter, sp!(loc, nb_): &N::Type) -> H::BaseType {
+pub(crate) fn base_type(reporter: &DiagnosticReporter, sp!(loc, nb_): &N::Type) -> H::BaseType {
     use H::BaseType_ as HB;
     use N::TypeInner as NT;
     let b_ = match &*nb_.0 {
@@ -1468,7 +1469,7 @@ fn value(
             make_exp(new_unit)
         }
         E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
-        E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
+        E::Constant(m, c) => make_exp(HE::Constant(m, c)),
         E::ErrorConstant {
             line_number_loc,
             error_constant,

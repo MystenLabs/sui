@@ -9,7 +9,7 @@ use crate::{
         codes::{NameResolution, TypeSafety},
         filter::FilterScope,
     },
-    editions::FeatureGate,
+    editions::{self, FeatureGate},
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
@@ -1953,31 +1953,132 @@ pub fn make_constant_type(
     m: &ModuleIdent,
     c: &ConstantName,
 ) -> Type {
-    let in_current_module = context.is_current_module(m);
     context.emit_warning_if_deprecated(m, c.0, None);
-    let (defined_loc, signature) = {
+    let (defined_loc, visibility, signature) = {
         let ConstantInfo {
             doc: _,
             index: _,
             attributes: _,
             defined_loc,
+            visibility,
             signature,
             value: _,
         } = context.constant_info(m, c);
-        (*defined_loc, signature.clone())
+        (*defined_loc, *visibility, signature.clone())
     };
-    if !in_current_module {
-        let msg = format!("Invalid access of '{}::{}'", m, c);
-        let internal_msg = "Constants are internal to their module, and cannot can be accessed \
-                            outside of their module";
-        context.add_diag(diag!(
-            TypeSafety::Visibility,
-            (loc, msg),
-            (defined_loc, internal_msg)
-        ));
-    }
-
+    check_constant_visibility(context, defined_loc, loc, m, c, visibility);
     signature
+}
+
+fn check_constant_visibility(
+    context: &mut Context,
+    defined_loc: Loc,
+    usage_loc: Loc,
+    m: &ModuleIdent,
+    c: &ConstantName,
+    visibility: Visibility,
+) {
+    let in_current_module = context.is_current_module(m);
+    // Inside a macro function definition, visibility is resolved in the scope of the caller at
+    // each expansion site
+    if in_current_module || context.in_macro_function {
+        return;
+    }
+    let cross_module_constants = context
+        .env()
+        .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
+    if !cross_module_constants {
+        let msg = format!("Invalid access of '{}::{}'", m, c);
+        let internal_msg = "Constants are internal to their module, and cannot be \
+                            accessed outside of their module";
+        let mut diag = diag!(
+            TypeSafety::Visibility,
+            (usage_loc, msg),
+            (defined_loc, internal_msg)
+        );
+        if let Some(note) = editions::feature_edition_error_msg(
+            context.env().edition(context.current_package()),
+            FeatureGate::CrossModuleConstants,
+        ) {
+            diag.add_note(note);
+        }
+        context.add_diag(diag);
+        return;
+    }
+    match visibility {
+        // The use is resolved entirely at compile time: constant-definition uses fold the value
+        // in, and function-body uses compile to a module-local copy of the constant synthesized
+        // during CFGIR translation. No friend relationship is created.
+        Visibility::Package(_) if context.current_module_shares_package_and_address(m) => (),
+        Visibility::Package(vis_loc) => {
+            let msg = format!(
+                "Invalid access of '{}' visible constant '{}::{}'",
+                Visibility::PACKAGE,
+                m,
+                c
+            );
+            let internal_msg = format!(
+                "A '{}' constant can only be accessed from the same address and package as \
+                 module '{}' in package '{}'. This access is from address '{}' in package '{}'",
+                Visibility::PACKAGE,
+                m,
+                context
+                    .module_info(m)
+                    .package
+                    .map(|pkg_name| format!("{}", pkg_name))
+                    .unwrap_or("<unknown package>".to_string()),
+                &context
+                    .current_module()
+                    .map(|cur_module| cur_module.value.address.to_string())
+                    .unwrap_or("<unknown addr>".to_string()),
+                &context
+                    .current_module()
+                    .and_then(|cur_module| context.module_info(cur_module).package)
+                    .map(|pkg_name| format!("{}", pkg_name))
+                    .unwrap_or("<unknown package>".to_string())
+            );
+            context.add_diag(diag!(
+                TypeSafety::Visibility,
+                (usage_loc, msg),
+                (vis_loc, internal_msg)
+            ));
+        }
+        Visibility::Internal => {
+            let msg = format!("Invalid access of '{}::{}'", m, c);
+            let internal_msg = format!(
+                "The constant '{}::{}' is internal to its module. Declare it '{}' to allow \
+                 access from other modules in its package",
+                m,
+                c,
+                Visibility::PACKAGE,
+            );
+            context.add_diag(diag!(
+                TypeSafety::Visibility,
+                (usage_loc, msg),
+                (defined_loc, internal_msg)
+            ));
+        }
+        Visibility::Public(vis_loc) => {
+            // the parser rejects 'public' on constants
+            context.add_diag(ice!(
+                (usage_loc, format!("Invalid access of '{}::{}'", m, c)),
+                (
+                    vis_loc,
+                    "ICE constant declared with disallowed 'public' visibility"
+                )
+            ));
+        }
+        Visibility::Friend(vis_loc) => {
+            // the parser rejects 'public(friend)' on constants
+            context.add_diag(ice!(
+                (usage_loc, format!("Invalid access of '{}::{}'", m, c)),
+                (
+                    vis_loc,
+                    "ICE constant declared with disallowed 'public(friend)' visibility"
+                )
+            ));
+        }
+    }
 }
 
 //**************************************************************************************************

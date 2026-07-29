@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_2024/constants/invalid_const_package_with_friend.move:8:1
+   │
+ 8 │ friend 0x42::b;
+   │ ^^^^^^^^^^^^^^^ Cannot define 'friend' modules and use 'public(package)' visibility in the same module
+ 9 │ 
+10 │ public(package) const MAX: u64 = 100;
+   │ --------------- 'public(package)' visibility used here
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/constants/invalid_const_package_with_friend.move:8:1
+  │
+8 │ friend 0x42::b;
+  │ ^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E02016]: invalid visibility modifier
+   ┌─ tests/move_2024/constants/invalid_const_package_with_friend.move:10:1
+   │
+ 8 │ friend 0x42::b;
+   │ --------------- Cannot mix 'friend' and 'package' visibilities in the same module
+ 9 │ 
+10 │ public(package) const MAX: u64 = 100;
+   │ ^^^^^^^^^^^^^^^ Cannot mix 'package' and 'friend' visibilities in the same module

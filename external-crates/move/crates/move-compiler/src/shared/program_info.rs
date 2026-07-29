@@ -42,6 +42,8 @@ pub struct ConstantInfo {
     pub index: usize,
     pub attributes: Attributes,
     pub defined_loc: Loc,
+    /// `public(package)` makes the constant usable in other modules of the package
+    pub visibility: Visibility,
     pub signature: Type,
     // Set after compilation
     pub value: OnceLock<runtime_value::MoveValue>,
@@ -110,6 +112,7 @@ macro_rules! program_info {
                 index: cdef.index,
                 attributes: cdef.attributes.clone(),
                 defined_loc: cname.loc(),
+                visibility: cdef.visibility,
                 signature: cdef.signature.clone(),
                 value: OnceLock::new(),
             });
