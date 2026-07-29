@@ -38,20 +38,91 @@ local-first reads and remote fallback and the sealing of checkpoints; it delegat
 access to `LocalStore` (object materialization, checkpoint and transaction persistence, the
 latest-object-status lookup) and every GraphQL round-trip to `RemoteSource`. Those
 round-trips are pinned at the fork checkpoint wherever the request allows it, so they cannot
-see what the forked-from chain did afterwards; everything above the fork point is the fork's
+see what the forked-from chain did afterwards. Everything above the fork point is the fork's
 own and comes from the local store.
+
+## The object live state
+
+Object live state is recorded in `object_version_by_checkpoint`, which maps `(ObjectID, checkpoint)`
+to the version the object ended that checkpoint at, and which the embedded indexer already
+maintains for every checkpoint the fork executes. The owner and type indexes also record
+latest live versions, but they are keyed by owner and type and cover only indexed objects,
+so neither can be used to query for an arbitrary object id at the latest version.
+
+A live-state read is a floor scan over that index, bounded at the checkpoint the fork is
+currently producing, and it has exactly the three outcomes the fork needs: a row at a live
+version, a row at a tombstone version, which is authoritative and never falls back, and no
+row at all, meaning no local knowledge, so ask the remote.
+
+The index infers liveness: the object changed to *v* at checkpoint *C*, and no row exists
+above *C*. That holds only where the fork's change history is complete, so what may write to
+it is confined to where that is true. Locally executed checkpoints record ordinary rows
+keyed by the checkpoint producing them, a range complete because the fork executed all of
+it. Pre-fork materialization records a floor row at the fork checkpoint, the same shape a
+live-set restore writes at its anchor, because a query pinned there establishes exactly
+that: the object was live at the fork point, at that version. A version-keyed fetch records
+nothing at all because it's a one point in history and not about what is live, so
+keying it at the fork checkpoint would falsely claim the version is current, while keying it
+at the version's own creation checkpoint would assert an absence of later changes that a
+sparse store cannot rule out.
+
+Within one checkpoint's application, removals stage before writes, so an object wrapped
+and re-created in the same result ends up live: both write the same checkpoint-pinned key
+and the later put wins. Because the index shares a database with the rows it describes,
+each object row and the live-state row covering it commit in a single batch.
+
+## Executing and indexing
+
+Everything canonical is written synchronously and everything derived is left to the indexer.
+Simulacrum inserts the pieces of an in-flight checkpoint as it executes. These pieces are staged in
+`PendingCheckpointBuffer` until the seal writes them out atomically to the DBs. Each
+executed transaction writes its object version rows, tombstones, and checkpoint-pinned
+version rows before execution proceeds, and sealing writes the checkpoint summary, contents, and every
+transaction's data, effects, and events. The executor needs
+read-your-writes for the next transaction's inputs, and the indexer ingests each sealed
+checkpoint by reading it back out of the same rows.
+
+The derived indexes (owner, type, package-version, balance, bitmaps) are written for
+local checkpoints by the embedded indexer alone, which runs every stock pipeline starting
+one checkpoint after the fork point; the fork gets the full derived-index surface without
+maintaining any of it. Sealing and publication are serialized through `Context`'s
+publication lock, and publication blocks on the minimum watermark across every pipeline the
+stock layer enables, so by the time an execution returns to its caller the checkpoint is
+fully indexed, and any RPC read issued afterwards sees complete derived state. Subscribers
+receive checkpoints from the indexer's broadcast pipeline, so their ordering is inherited
+from indexing rather than from sealing.
+
+Pre-fork state is the one exception, because it never flows through the indexer at all.
+When a seed brings a pre-fork object in, its derived rows are written synchronously
+alongside it. A pre-fork object writes the owner, type, package, balance rows, and
+package-version row for fetched packages.
+
+The `SimulatorStore` write surface cannot return errors, so a failed persist panics rather
+than letting execution continue on state that has diverged from disk. An indexer stoppage
+is likewise surfaced the moment it happens, because the startup loop watches for it as a
+liveness watchdog, instead of appearing later as a publication timeout.
+
+## Seeding objects, owned objects, and types 
+
+At startup time, the user has the option to seed the fork with various data that exists
+on-chain. From a storage perspective, seeding is a one-time data insertion that
+reconstructs these indexes:
+- owned objects (per address)
+- object types (per type)
+
+In addition to the basic owned objects, the seed for owned objects also includes the 
+address balance accumulator.
+
 
 ## Where reads resolve
 
 A fork is a chain that diverged from another at a checkpoint. It shares history at or below
-the fork point, which belongs to both chains and which the fork can obtain on demand from
-the forked-from chain, and the fork's own history above it, which exists nowhere else. Every
-read is a question about that composite world, and three rules decide how it is answered.
+the fork point, which belongs to both chains and which the fork can obtain on demand 
+(with some limitations) from the live network, and the fork's own history above that forked checkpoint
+which exists only locally.
 
-Local knowledge, when it is authoritative, always wins. The real network is consulted
-only for shared history, and only through queries pinned at the fork point.
-Anything the forked network finalized *after* the fork point is never admitted, because
-that history did not happen here.
+The real network is consulted only at startup for initializing various indexes, and for shared history prior to the
+forked checkpoint. The latter is done through queries pinned at the fork point.
 
 What differs between reads is only how the request lets the fork decide which part of the
 data it is asking about.
@@ -89,10 +160,12 @@ pinned at the fork point.
 - A request with no version asks what is *current*, which is a question about the fork's own
 state rather than about history, and it is the one object read that cannot be answered from
 stored object rows alone. The fork holds versions sparsely, caching whatever some earlier
-read happened to need, so the highest stored version is not necessarily the live one, and
-finding nothing stored cannot distinguish an object that was removed from one that was never
-fetched. That distinction decides whether to consult the live network RPC at all, which is
-why live state is tracked explicitly; the following section describes how.
+read happened to need, so the highest stored row need not be the live one, and finding
+nothing stored cannot distinguish an object that was removed from one that was never
+fetched. That distinction decides whether to consult the live network RPC at all, and it is
+`object_version_by_checkpoint` that carries it: a tombstone row means removed and is
+authoritative, no row means never fetched and sends the read to the remote. "The object live
+state" below sets out what may write to that index and why.
 
 - A request bounded by a version is the subtle one. It asks for the highest version at or
 below some bound, which is how child objects are read during execution. A stored row at or
@@ -134,7 +207,7 @@ Reads that enumerate rather than look up split into two kinds.
 
 A *state* index answers what is true as of a checkpoint: which objects an address owns,
 which objects have a type, what an address's balance is, which versions of a package exist.
-Because that is a question about state at a point in time, the forked-from chain can answer
+Because that is a question about state at a point in time, the live network can answer
 it pinned at the fork point.
 
 It answers it as a set of object references rather than as a set of objects, and keeping
@@ -158,90 +231,6 @@ and starts writing at the next position, so every position below is a real trans
 the other chain that this fork does not hold and cannot obtain. The fork's ledger begins at
 the fork point, and this is a permanent property of forking rather than a missing feature.
 
-## The object live state
-
-Object live state is recorded in `object_version_by_checkpoint`, which maps `(ObjectID, checkpoint)`
-to the version the object ended that checkpoint at, and which the embedded indexer already
-maintains for every checkpoint the fork executes. The owner and type indexes also record
-latest live versions, but they are keyed by owner and type and cover only indexed objects,
-so neither can be used to query for an arbitrary object id.
-
-A live-state read is a floor scan over that index, bounded at the checkpoint the fork is
-currently producing, and it has exactly the three outcomes the fork needs: a row at a live
-version, a row at a tombstone version, which is authoritative and never falls back, and no
-row at all, meaning no local knowledge, so ask the remote.
-
-The index infers liveness: the object changed to *v* at checkpoint *C*, and no row exists
-above *C*. That holds only where the fork's change history is complete, so what may write to
-it is confined to where that is true. Locally executed checkpoints record ordinary rows
-keyed by the checkpoint producing them, a range complete because the fork executed all of
-it. Pre-fork materialization records a floor row at the fork checkpoint, the same shape a
-live-set restore writes at its anchor, because a query pinned there establishes exactly
-that: the object was live at the fork point, at that version. A version-keyed fetch records
-nothing at all. It is evidence about one point in history and none about what is live, so
-keying it at the fork checkpoint would falsely claim the version is current, while keying it
-at the version's own creation checkpoint would assert an absence of later changes that a
-sparse store cannot rule out.
-
-Within one checkpoint's application, removals stage before writes, so an object wrapped
-and re-created in the same result ends up live: both write the same checkpoint-pinned key
-and the later put wins. Because the index shares a database with the rows it describes,
-each object row and the live-state row covering it commit in a single batch.
-
-## Executing and indexing
-
-Everything canonical is written synchronously and everything derived is left to the indexer.
-Simulacrum inserts the pieces of an in-flight checkpoint as it executes. These pieces are staged in
-`PendingCheckpointBuffer` until the seal writes them out atomically to the DBs. Each
-executed transaction writes its object version rows, tombstones, and checkpoint-pinned
-version rows before execution proceeds, and sealing writes the checkpoint summary, contents, and every
-transaction's data, effects, and events. These writes cannot wait: the executor needs
-read-your-writes for the next transaction's inputs, and the indexer ingests each sealed
-checkpoint by reading it back out of the same rows.
-
-The derived indexes (owner, type, package-version, balance, bitmaps) are written for
-local checkpoints by the embedded indexer alone, which runs every stock pipeline starting
-one checkpoint after the fork point; the fork gets the full derived-index surface without
-maintaining any of it. Sealing and publication are serialized through `Context`'s
-publication lock, and publication blocks on the minimum watermark across every pipeline the
-stock layer enables, so by the time an execution returns to its caller the checkpoint is
-fully indexed, and any RPC read issued afterwards sees complete derived state. Subscribers
-receive checkpoints from the indexer's broadcast pipeline, so their ordering is inherited
-from indexing rather than from sealing.
-
-Pre-fork state is the one exception, because it never flows through the indexer at all.
-When a seed, an inventory, or a lazy materialization brings a pre-fork object in, its
-derived rows are written synchronously alongside it: the saves that hydrate a pre-fork
-object write the owner, type, package, and balance rows, and lazy materialization writes the
-package-version row for fetched packages. This does not create a second writer for any
-row: those saves cover versions at or before the fork checkpoint, a range the indexer
-never touches.
-
-The `SimulatorStore` write surface cannot return errors, so a failed persist panics rather
-than letting execution continue on state that has diverged from disk. An indexer stoppage
-is likewise surfaced the moment it happens, because the startup loop watches for it as a
-liveness watchdog, instead of appearing later as a publication timeout.
-
-## Seeding and inventories
-
-An **inventory** is the one-time, complete enumeration of what an owner held at the fork
-checkpoint, per address owner or per object owner. It runs at startup, and it stores the
-reference set rather than the objects: the completion marker recorded in
-`inventory_metadata.json` means the fork knows exactly which ids that owner held there, and
-each object is materialized on first use through the ordinary version-keyed read. Once the
-marker exists, owner-scoped reads are served locally.
-
-Startup is not an incidental choice. The enumeration is the one part that cannot be
-recovered later, and running it before any read can depend on it is what keeps a failure
-attributable: the fork either has a complete reference set or knows it does not, and never
-has to decide mid-request what an empty answer meant.
-
-Seeding (`--address`, `--object-id`) is the same mechanism made explicit. An address seed is
-an inventory named on the command line, so it enumerates, records the address in an
-immutable manifest, and marks its inventory complete. An address that owns nothing at the
-fork checkpoint is authoritatively empty and is marked as well, because that is a complete
-answer and not a missing one. Explicit object-id seeds mark nothing, because naming objects
-is not a complete enumeration of any owner.
 
 ## Data-dir layout
 
@@ -249,7 +238,6 @@ is not a complete enumeration of any owner.
 {root}/
   fork_metadata.json        network + fork checkpoint + chain id (validated on open)
   seed_manifest.json        immutable seed record (exclusive create)
-  inventory_metadata.json   completion markers for inventory scans (temp+rename)
   rpc_store/                stock sui-rpc-store RocksDB (RpcStoreSchema)
 ```
 
@@ -268,18 +256,6 @@ read for that same package would have fetched it. Every read that renders Move v
 JSON depends on this. The same shortcut also picks packages by scanning stored versions,
 which is safe for ordinary packages, immutable at one version per id, but not for system
 packages, which carry every version they have ever had under one id.
-
-An enumeration that could not run is still recorded as one that ran and found nothing. The
-forked-from chain retains only a window of history, and a fork point below that window
-cannot be enumerated at all. Taking enumerations at startup is what makes this detectable,
-since the fork learns the window's floor and can compare it against its own fork point
-before recording anything, but that comparison is not yet made for every enumeration, so a
-scan attempted below the window returns empty, is marked complete, and that emptiness then
-answers every later read for that owner.
-
-Address balances held in the accumulator, as opposed to in coin objects, are neither
-seeded nor served. The balance index reflects only coin objects materialized pre-fork plus
-what the indexer derives post-fork.
 
 `simulate_transaction` is stubbed; there is no Simulacrum entrypoint for it yet. It is
 planned as a follow-up.
