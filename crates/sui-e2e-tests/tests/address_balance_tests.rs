@@ -104,6 +104,10 @@ async fn test_accumulators_root_created() {
             if version == ProtocolVersion::MAX - 1 {
                 cfg.disable_accumulators_for_testing();
                 cfg.set_create_root_accumulator_object_for_testing(false);
+                // This test starts from a historical framework snapshot, which predates the
+                // forwarding-address module. Keep unrelated system-object creation disabled
+                // until the protocol/framework upgrade under test.
+                cfg.set_create_forwarding_address_registry_for_testing(false);
             } else if version == ProtocolVersion::MAX {
                 // accumulators are enabled for devnet/tests, so we need to disable them to run
                 // this test
@@ -187,6 +191,10 @@ async fn test_accumulators_disabled() {
             if version == ProtocolVersion::MAX - 1 {
                 cfg.disable_accumulators_for_testing();
                 cfg.set_create_root_accumulator_object_for_testing(false);
+                // This test starts from a historical framework snapshot, which predates the
+                // forwarding-address module. Keep unrelated system-object creation disabled
+                // until the protocol/framework upgrade under test.
+                cfg.set_create_forwarding_address_registry_for_testing(false);
             } else if version == ProtocolVersion::MAX {
                 // accumulators are enabled for devnet/tests, so we need to disable them to run
                 // this test
