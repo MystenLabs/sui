@@ -38,6 +38,7 @@ use crate::api::types::balance_change::BalanceChangeContents;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::Event;
+use crate::api::types::event::EventConnection;
 use crate::api::types::execution_error::ExecutionError;
 use crate::api::types::gas_effects::GasEffects;
 use crate::api::types::object_change::ObjectChange;
@@ -210,7 +211,7 @@ impl EffectsContents {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+    ) -> Option<Result<EventConnection, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
@@ -237,6 +238,7 @@ impl EffectsContents {
                         timestamp_ms,
                     })
                 })
+                .map(Into::into)
             }
             .await,
         )
