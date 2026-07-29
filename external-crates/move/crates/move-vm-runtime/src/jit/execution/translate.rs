@@ -95,7 +95,7 @@ struct Definitions {
     field_handles: Vec<VMPointer<FieldHandle>>,
     field_instantiations: Vec<VMPointer<FieldInstantiation>>,
     function_instantiations: Vec<VMPointer<FunctionInstantiation>>,
-    signatures: Vec<VMPointer<ArenaVec<ArenaType>>>,
+    signatures: Vec<VMPointer<ArenaVec<SizedType>>>,
     constants: Vec<VMPointer<Constant>>,
 }
 
@@ -191,7 +191,7 @@ impl FunctionContext<'_, '_> {
     fn get_vec_type(
         &self,
         signature_index: &SignatureIndex,
-    ) -> PartialVMResult<VMPointer<ArenaType>> {
+    ) -> PartialVMResult<VMPointer<SizedType>> {
         let Some(tys) = self.definitions.signatures.get(signature_index.0 as usize) else {
             return Err(partial_vm_error!(
                 VERIFIER_INVARIANT_VIOLATION,
@@ -457,8 +457,9 @@ fn module(
     let type_refs = initialize_type_refs(context, cmodule)?;
 
     let (structs, enums, datatype_descriptors) = datatypes(context, &version_id, &mkey, cmodule)?;
-    // NB: the descriptors go into the vtable before signatures are cached, so signature-term
-    // folding can resolve this module's own datatypes.
+    // NB: signature terms (and their size formulae) reference datatypes symbolically, by vtable
+    // key, so nothing below needs the descriptors resolved; they go into the vtable here so the
+    // package vtable is complete for runtime resolution.
     context.insert_vtable_datatypes(datatype_descriptors.to_ptrs())?;
     let (instantiation_signatures, _signature_map) = cache_signatures(context, cmodule)?;
     dbg_println!("Module types loaded");
@@ -610,7 +611,7 @@ fn datatypes(
 
     // Build every datatype's arena-form size formula from its fields. Purely local field
     // structure (primitives, parameters, vectors) is folded into constants; each datatype
-    // application — same-package or cross-package — is left symbolic, resolved under a
+    // application (same-package or cross-package) is left symbolic, resolved under a
     // transaction's linkage at runtime. An enum's value depth is the maximum over all its
     // variants (so every variant's fields are folded in), and its layout counts one node per
     // variant on top of the fields, mirroring the layout traversal.
@@ -833,8 +834,8 @@ fn cache_signatures(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
 ) -> PartialVMResult<(
-    ArenaVec<ArenaVec<ArenaType>>,
-    BTreeMap<SignatureIndex, VMPointer<ArenaVec<ArenaType>>>,
+    ArenaVec<ArenaVec<SizedType>>,
+    BTreeMap<SignatureIndex, VMPointer<ArenaVec<SizedType>>>,
 )> {
     let signatures = module
         .signatures()
@@ -843,7 +844,7 @@ fn cache_signatures(
             let tys = sig
                 .0
                 .iter()
-                .map(|ty| make_arena_type(context, module, ty))
+                .map(|ty| make_sized_type(context, module, ty))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             context.arena_vec(tys.into_iter())
         })
@@ -911,7 +912,7 @@ fn struct_instantiations(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
     structs: &[StructDef],
-    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+    signatures: &[VMPointer<ArenaVec<SizedType>>],
 ) -> PartialVMResult<ArenaVec<StructInstantiation>> {
     let struct_insts = module
         .struct_instantiations()
@@ -939,7 +940,7 @@ fn enum_instantiations(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
     enums: &[EnumDef],
-    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+    signatures: &[VMPointer<ArenaVec<SizedType>>],
 ) -> PartialVMResult<ArenaVec<EnumInstantiation>> {
     let enum_insts = module
         .enum_instantiations()
@@ -977,7 +978,7 @@ fn enum_instantiations(
 fn function_instantiations(
     package_context: &mut PackageContext,
     module: &CompiledModule,
-    signatures: &[VMPointer<ArenaVec<ArenaType>>],
+    signatures: &[VMPointer<ArenaVec<SizedType>>],
 ) -> PartialVMResult<ArenaVec<FunctionInstantiation>> {
     dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
 
@@ -1206,7 +1207,7 @@ fn alloc_function(
         .signature_at(handle.parameters)
         .0
         .iter()
-        .map(|tok| make_arena_type(context, module, tok))
+        .map(|tok| make_sized_type(context, module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
     let parameters = context.arena_vec(parameters.into_iter())?;
     // Native functions do not have a code unit
@@ -1220,7 +1221,7 @@ fn alloc_function(
                     .signature_at(code.locals)
                     .0
                     .iter()
-                    .map(|tok| make_arena_type(context, module, tok))
+                    .map(|tok| make_sized_type(context, module, tok))
                     .collect::<PartialVMResult<Vec<_>>>()?
                     .into_iter(),
             )?;
@@ -1232,7 +1233,7 @@ fn alloc_function(
         .signature_at(handle.return_)
         .0
         .iter()
-        .map(|tok| make_arena_type(context, module, tok))
+        .map(|tok| make_sized_type(context, module, tok))
         .collect::<PartialVMResult<Vec<_>>>()?;
     let return_ = context.arena_vec(return_.into_iter())?;
     let type_parameters = context.arena_vec(handle.type_parameters.clone().into_iter())?;
@@ -1724,6 +1725,20 @@ fn call(
 // -------------------------------------------------------------------------------------------------
 // Type Translation
 // -------------------------------------------------------------------------------------------------
+
+/// Convert a signature token into an execution type paired with its JIT-compiled size formula
+/// ([`ArenaTypeSizeFormula::from_term`]) -- the form every runtime-sized type travels in, so
+/// sizing never re-derives anything from the type's structure.
+// [ALLOC] Resultant type is allocated in the arena
+fn make_sized_type(
+    context: &PackageContext,
+    module: &CompiledModule,
+    tok: &SignatureToken,
+) -> PartialVMResult<SizedType> {
+    let ty = make_arena_type(context, module, tok)?;
+    let size_formula = ArenaTypeSizeFormula::from_term(&ty, &context.package_arena)?;
+    Ok(SizedType { ty, size_formula })
+}
 
 /// Convert a signature token type into its execution counterpart, including converting datatypes
 /// into their VTable entry keys.

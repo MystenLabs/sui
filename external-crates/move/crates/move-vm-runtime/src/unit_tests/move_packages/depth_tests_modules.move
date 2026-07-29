@@ -118,3 +118,32 @@ module 0x2::I {
         f: u64
     }
 }
+
+module 0x2::W {
+    // A family with nested datatype applications in field position, exercising the linearized
+    // size-formula path: subterm vs. field-root applications, vector layers on arguments, and
+    // term merging across fields (value depths max, layout sizes sum).
+    public struct SS<A> {
+        x: vector<A>,
+    }
+
+    public struct Z {
+        z: u64,
+    }
+
+    public struct KK<X, Y> {
+        a: X,
+        b: Y,
+    }
+
+    public struct T<P, Q> {
+        p: P,
+        q: vector<Q>,
+    }
+
+    public struct W<A> {
+        f: T<SS<A>, vector<KK<u64, Z>>>,
+        g: SS<A>,
+        h: SS<A>,
+    }
+}
