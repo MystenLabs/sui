@@ -10,6 +10,7 @@ use reqwest::header::USER_AGENT;
 
 use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -138,6 +139,27 @@ impl GraphQLClient {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Vec<AddressOwnedObject>, Error> {
         queries::address_owned_objects_query::query(address, checkpoint, self).await
+    }
+
+    /// Coin types for which `address` holds an accumulator balance at a
+    /// checkpoint. See [`queries::address_balances_query`] for why the seed
+    /// needs to ask.
+    pub(crate) async fn get_address_balance_coin_types_at_checkpoint(
+        &self,
+        address: SuiAddress,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<String>, Error> {
+        queries::address_balances_query::query(address, checkpoint, self).await
+    }
+
+    /// Resolve object references at a checkpoint without an owner check, for
+    /// ids the fork derived rather than the user named.
+    pub(crate) async fn get_object_refs_at_checkpoint(
+        &self,
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<Option<ObjectRef>>, Error> {
+        queries::object_seed_query::query_refs(object_ids, checkpoint, self).await
     }
 
     /// Fetch lightweight metadata for explicit object seeds at a checkpoint.
