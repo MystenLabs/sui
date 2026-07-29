@@ -12,7 +12,7 @@ public struct ProcessedKeys has key {
     keys: Table<String, bool>,
 }
 
-public fun is_processed(store: &ProcessedKeys, key: &String): bool {
+public fun is_processed(store: &ProcessedKeys, key: String): bool {
     store.keys.contains(key)
 }
 

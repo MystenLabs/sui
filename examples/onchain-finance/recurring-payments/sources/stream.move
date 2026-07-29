@@ -4,7 +4,7 @@
 // docs::#stream
 module example::stream;
 
-use sui::balance::{Self, Balance};
+use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;

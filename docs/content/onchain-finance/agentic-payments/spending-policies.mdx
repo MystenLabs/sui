@@ -68,12 +68,16 @@ The following module implements a spending mandate with per-transaction limits, 
 The owner creates the mandate and receives a `MandateOwnerCap` for later administration. The function automatically transfers the mandate to the agent's address.
 
 <ImportContent source="examples/onchain-finance/spending-policies/src/mandate.ts" mode="code" tag="create-mandate" />
+
 ## Executing a spend (agent side)
 
 The agent reads its `SpendingMandate` object, validates locally, then builds a PTB that calls `execute_spend` with the payment coin.
 
 <ImportContent source="examples/onchain-finance/spending-policies/src/mandate.ts" mode="code" tag="execute-spend" />
+
 ## Expiry and revocation
+
+Use expiry for automatic shutdown and revocation for owner-triggered shutdown.
 
 ### Time-based expiry
 
@@ -84,6 +88,7 @@ The mandate includes an `expires_at_ms` timestamp. The `execute_spend` function 
 To revoke a mandate before it expires, the owner must retrieve the mandate object from the agent. In practice, this means the owner requests the agent to present the mandate in a PTB that calls `revoke_mandate`:
 
 <ImportContent source="examples/onchain-finance/spending-policies/src/mandate.ts" mode="code" tag="revoke-mandate" />
+
 Because the agent owns the mandate object, the agent must co-sign this transaction. If the agent is unresponsive or compromised, the mandate still expires at `expires_at_ms`. Set short expiry windows for high-risk agents.
 
 :::tip Emergency kill-switch

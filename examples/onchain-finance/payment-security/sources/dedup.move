@@ -30,7 +30,7 @@ fun init(ctx: &mut TxContext) {
 /// Call this from your payment/settlement function to prevent duplicates.
 /// Aborts if the payment_id was already processed.
 public fun process_payment(registry: &mut PaymentRegistry, payment_id: vector<u8>) {
-    assert!(!registry.processed.contains(&payment_id), EDuplicatePayment);
+    assert!(!registry.processed.contains(payment_id), EDuplicatePayment);
     registry.processed.add(payment_id, true);
     event::emit(PaymentProcessed { payment_id });
 }

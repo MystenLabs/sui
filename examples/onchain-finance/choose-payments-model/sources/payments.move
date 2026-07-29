@@ -38,7 +38,7 @@ public fun create_config<T>(collector: address, min_amount: u64, ctx: &mut TxCon
 }
 
 /// Pay into the config. The module controls the funds after deposit.
-public fun pay<T>(config: &mut PaymentConfig<T>, payment: Coin<T>, ctx: &TxContext) {
+public fun pay<T>(config: &mut PaymentConfig<T>, payment: Coin<T>, ctx: &mut TxContext) {
     assert!(payment.value() >= config.min_amount, EInsufficientPayment);
     let amount = payment.value();
     config.collected.join(payment.into_balance());

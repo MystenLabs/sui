@@ -138,22 +138,23 @@ declare const digest: string;
 const PACKAGE_ID = '0xPACKAGE';
 const recipient = '0xRECIPIENT';
 const amount = 5_000_000n;
+const requiredAmount = 5_000_000;
 
 const settleTx = new Transaction();
 
 const [coin] = settleTx.splitCoins(settleTx.gas, [amount]);
 
-// Pay and get receipt (hot potato)
-const [receipt] = settleTx.moveCall({
+// Pay and get proof (hot potato)
+const [proof] = settleTx.moveCall({
 	target: `${PACKAGE_ID}::settlement::pay_and_prove`,
 	typeArguments: ['0x2::sui::SUI'],
-	arguments: [coin, settleTx.pure.address(recipient)],
+	arguments: [coin, settleTx.pure.address(recipient), settleTx.pure.u64(requiredAmount)],
 });
 
-// Consume the receipt (mandatory, hot potato)
+// Consume the proof (mandatory, hot potato)
 settleTx.moveCall({
-	target: `${PACKAGE_ID}::settlement::consume_receipt`,
-	arguments: [receipt],
+	target: `${PACKAGE_ID}::settlement::consume_proof`,
+	arguments: [proof],
 });
 // docs::/#onchain-settlement-ptb
 

@@ -14,11 +14,11 @@ public struct SpendingMandate has key {
 // docs::#guarded-spend
 public fun execute_spend<T>(
     config: &AdminConfig,
-    mandate: &mut SpendingMandate,
+    _mandate: &mut SpendingMandate,
     payment: Coin<T>,
     recipient: address,
     _clock: &Clock,
-    _ctx: &TxContext,
+    _ctx: &mut TxContext,
 ) {
     example::admin_config::assert_not_paused(config);
     // ... rest of spend logic

@@ -107,7 +107,7 @@ public fun execute_spend<T>(
     payment: Coin<T>,
     recipient: address,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) {
     let amount = payment.value();
 

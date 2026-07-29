@@ -68,6 +68,7 @@ sequenceDiagram
 The agent runs a basic loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge):
 
 <ImportContent source="examples/onchain-finance/recurring-payments/src/scheduler.ts" mode="code" tag="execute-recurring" />
+
 :::tip Use idempotency keys
 
 If the scheduler might fire twice (at-least-once delivery), track each payment period in a database and skip execution if the period was already paid. See [Production Hardening](/onchain-finance/agentic-payments/production-hardening#idempotency-keys) for the pattern.
