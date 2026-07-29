@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, btree_map},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     hash::Hash,
     num::NonZeroUsize,
     sync::{Arc, Mutex},
@@ -1581,19 +1581,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     fn record_deferral_deletion(&self, state: &mut CommitHandlerState) {
-        // A key both reloaded and re-deferred-to this commit holds the re-deferred
-        // set (the deferral bookkeeping replaced the stale entry); removing it here
-        // would drop those transactions from the in-memory map for good.
-        let redeferred_keys: BTreeSet<DeferralKey> = state.output.deferred_txn_keys().collect();
         let mut deferred_transactions = self
             .epoch_store
             .consensus_output_cache
             .deferred_transactions
             .lock();
         for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
-            if !redeferred_keys.contains(&deleted_deferred_key) {
-                deferred_transactions.remove(&deleted_deferred_key);
-            }
+            deferred_transactions.remove(&deleted_deferred_key);
         }
     }
 
@@ -1735,15 +1729,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // deferred_from_round (for the deferral-rounds limit), so a transaction first
             // deferred for congestion at round N and re-deferred for randomness later maps
             // to Randomness { N } - the same key as round N's fresh randomness deferrals.
-            // Plain insert would clobber those entries in the in-memory map AND (via
-            // last-writer-wins in the flush batch) the durable row, silently dropping the
-            // transactions: never reloaded, never executed, their locks held for the rest
-            // of the epoch. Merge instead - except for keys reloaded by THIS commit, whose
-            // stale in-memory entry (removed only after scheduling, in
-            // record_deferral_deletion) must be replaced, not merged, so already-scheduled
-            // transactions are not resurrected.
+            // The insert below then displaces those entries from the in-memory map AND
+            // (via last-writer-wins in the flush batch) the durable row: the transactions
+            // are never reloaded and never executed, and their owned-object locks stay
+            // held for the rest of the epoch. That matches long-standing behavior, and
+            // changing it changes scheduling - a consensus-visible decision that cannot
+            // differ across binary versions, so it must keep matching until fixed behind
+            // a protocol gate. What we must NOT lose is the displaced transactions' lock
+            // coverage: it backs conflict verdicts (which the lock table keeps durably),
+            // so the displaced set is persisted under a sentinel key that reloads never
+            // touch and restart seeding reads for the deferred-locks map only.
             let reloaded_this_commit: BTreeSet<DeferralKey> =
                 state.output.get_deleted_deferred_txn_keys().collect();
+            let mut displaced: Vec<VerifiedExecutableTransactionWithAliases> = Vec::new();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
                 for tx in &txns {
@@ -1762,19 +1760,26 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         );
                     }
                 }
-                let full_set = match deferred_transactions.entry(key) {
-                    btree_map::Entry::Occupied(mut entry) => {
-                        if reloaded_this_commit.contains(&key) {
-                            entry.insert(txns);
-                        } else {
-                            assert_reachable!("cross-commit deferral key collision merged");
-                            entry.get_mut().extend(txns);
-                        }
-                        entry.get().clone()
-                    }
-                    btree_map::Entry::Vacant(entry) => entry.insert(txns).clone(),
-                };
-                state.output.defer_transactions(key, full_set);
+                if let Some(prev) = deferred_transactions.insert(key, txns.clone())
+                    && !reloaded_this_commit.contains(&key)
+                {
+                    // Cross-commit key collision (a key reloaded by this commit
+                    // legitimately replaces its stale entry instead).
+                    assert_reachable!("colliding deferral key displaced finalized transactions");
+                    warn!(
+                        "deferral key {key:?} collision displaced finalized transactions {:?}; \
+                         they will not execute this epoch, their owned inputs stay locked",
+                        prev.iter().map(|t| *t.tx().digest()).collect::<Vec<_>>(),
+                    );
+                    displaced.extend(prev);
+                }
+                state.output.defer_transactions(key, txns);
+            }
+            if !displaced.is_empty() {
+                state.output.defer_transactions(
+                    DeferralKey::new_lock_coverage_sentinel(commit_info.round),
+                    displaced,
+                );
             }
         }
 
