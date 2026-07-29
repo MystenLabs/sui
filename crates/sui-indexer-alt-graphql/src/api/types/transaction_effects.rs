@@ -26,6 +26,7 @@ use sui_types::execution_status::ExecutionStatus as NativeExecutionStatus;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
+use tokio::sync::OnceCell;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::JsonCursor;
@@ -235,7 +236,7 @@ impl EffectsContents {
                         native: events[i].clone(),
                         transaction_digest,
                         sequence_number: i as u64,
-                        timestamp_ms,
+                        timestamp_ms: OnceCell::from(timestamp_ms),
                     })
                 })
                 .map(Into::into)

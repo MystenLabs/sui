@@ -44,6 +44,7 @@ use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
 use crate::transactions::TransactionKey;
+use crate::transactions::TransactionTimestampKey;
 
 /// Arguments for configuring KV store access (either Bigtable or Ledger gRPC).
 ///
@@ -380,6 +381,18 @@ impl KvLoader {
                 .load_one(key)
                 .await?
                 .map(TransactionContents::LedgerGrpc)),
+        }
+    }
+
+    pub async fn load_one_transaction_timestamp(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<u64>, Error> {
+        let key = TransactionTimestampKey(digest);
+        match self {
+            Self::Bigtable(loader) => loader.load_one(key).await,
+            Self::Pg(loader) => loader.load_one(key).await,
+            Self::LedgerGrpc(loader) => loader.load_one(key).await,
         }
     }
 

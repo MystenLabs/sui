@@ -9,6 +9,7 @@ use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use futures::StreamExt;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use tokio::sync::OnceCell;
 
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
@@ -206,7 +207,7 @@ impl Subscription {
                                         native,
                                         transaction_digest: digest,
                                         sequence_number: idx as u64,
-                                        timestamp_ms,
+                                        timestamp_ms: OnceCell::from(timestamp_ms),
                                     },
                                 ));
                             }
