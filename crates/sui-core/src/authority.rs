@@ -7,6 +7,7 @@ use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
+use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -279,12 +280,7 @@ pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
     total_effects: IntCounter,
-    /// Number of times a transaction was re-enqueued because a system object it read during
-    /// execution had not yet caught up locally to the version it was sequenced against, keyed by
-    /// the unavailable system object's ID.
     system_object_unavailable_retries: IntCounterVec,
-    /// Wall-clock seconds a retried transaction waited for the required system object to catch up
-    /// locally before it was re-enqueued for execution, keyed by the system object's ID.
     system_object_unavailable_retry_wait_latency: HistogramVec,
     // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
@@ -452,16 +448,14 @@ impl AuthorityMetrics {
             .unwrap(),
             system_object_unavailable_retries: register_int_counter_vec_with_registry!(
                 "system_object_unavailable_retries",
-                "Number of transaction executions retried because a system object read during \
-                 execution had not yet caught up locally to the required version",
+                "Number of executions retried while a system object catches up locally",
                 &["object_id"],
                 registry,
             )
             .unwrap(),
             system_object_unavailable_retry_wait_latency: register_histogram_vec_with_registry!(
                 "system_object_unavailable_retry_wait_latency",
-                "Seconds a retried transaction waited for a system object to catch up locally \
-                 before being re-enqueued for execution",
+                "Seconds spent waiting for a required system object before retrying execution",
                 &["object_id"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -1052,6 +1046,7 @@ pub struct AuthorityState {
 
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
+    pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
     /// Tracks transactions whose post-processing (indexing/events) is still in flight.
     /// CheckpointExecutor removes entries and collects the index batches before committing
@@ -2021,10 +2016,6 @@ impl AuthorityState {
         )
     }
 
-    /// Spawns a task that waits until `object_id` reaches `version` (the version this transaction
-    /// requires), then re-enqueues `certificate` for execution. Used by the retry-on-not-ready path
-    /// when execution reports that a required system object had not yet caught up to the version
-    /// this transaction was sequenced against.
     fn wait_for_system_object_and_reenqueue(
         &self,
         certificate: &VerifiedExecutableTransaction,
@@ -2037,35 +2028,30 @@ impl AuthorityState {
             .system_object_unavailable_retries
             .with_label_values(&[object_id.to_string().as_str()])
             .inc();
-        // Recover the object's initial shared version from the epoch start config (every system
-        // object is registered there) to form the full key the object cache waits on.
-        let init_shared_version = epoch_store
+        let initial_shared_version = epoch_store
             .epoch_start_config()
             .system_object_initial_shared_version(object_id)
             .expect("system object must be registered in the epoch start config");
-        let full_object_id = FullObjectID::Consensus((object_id, init_shared_version));
+        let full_object_id = FullObjectID::Consensus((object_id, initial_shared_version));
         let cache_reader = self.get_object_cache_reader().clone();
         let scheduler = self.execution_scheduler.clone();
-        let cert = certificate.clone();
+        let certificate = certificate.clone();
         let execution_env = execution_env.clone();
         let epoch_store = epoch_store.clone();
         let metrics = self.metrics.clone();
         tokio::task::spawn(async move {
-            // Bound the wait to the alive epoch: reconfiguration may finish while we wait.
             let _ = epoch_store
                 .within_alive_epoch(async move {
                     let wait_start = Instant::now();
                     cache_reader
                         .notify_read_system_object_at_version(full_object_id, version)
                         .await;
-                    // Observe only after the read resolves, so a wait cut short by epoch change
-                    // (which cancels this future) is not recorded as a completed wait.
                     metrics
                         .system_object_unavailable_retry_wait_latency
                         .with_label_values(&[object_id.to_string().as_str()])
                         .observe(wait_start.elapsed().as_secs_f64());
                     scheduler.send_transaction_for_execution(
-                        &cert,
+                        &certificate,
                         execution_env,
                         tokio::time::Instant::now(),
                     );
@@ -2132,8 +2118,7 @@ impl AuthorityState {
             &execution_env.funds_withdraw_status,
         );
         // Versions of system objects this transaction may read during execution, each at the version
-        // it was sequenced against. Execution gates reads on these (and records a retry if an object
-        // has not caught up); see `TemporaryStore::check_system_object_available`.
+        // it was sequenced against.
         let system_object_versions = execution_env
             .assigned_versions
             .system_object_versions
@@ -2188,10 +2173,6 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        // Execution recorded that a system object it read had not yet caught up to the version this
-        // transaction requires. The effects it produced are not usable; discard them, wait for that
-        // object to reach the required version, then re-enqueue so execution runs again against the
-        // caught-up state.
         if let Some(ExecutionRetryError::SystemObjectUnavailable { object_id, version }) =
             inner_temp_store.retry_request.as_ref()
         {
@@ -2206,18 +2187,13 @@ impl AuthorityState {
             return ExecutionOutput::RetryLater;
         }
 
-        // Reaching here means no retry request was recorded, so the system-object-unavailable
-        // unwind must not have happened either: the two are minted together, and this transient,
-        // node-local condition must never reach committed effects — doing so would fork this node
-        // from validators that have caught up.
         if let Err(err) = &execution_error_opt {
             assert!(
                 !matches!(
                     err.kind(),
                     ExecutionErrorKind::SystemObjectNotAvailableLocally
                 ),
-                "transaction {tx_digest} unwound with SystemObjectNotAvailableLocally but \
-                 recorded no retry request",
+                "transaction {tx_digest} unwound for an unavailable system object without a retry request",
             );
         }
 
@@ -3002,15 +2978,14 @@ impl AuthorityState {
         >,
         fork_probability: f32,
     ) {
-        use std::cell::RefCell;
-        thread_local! {
-            static TOTAL_FAILING_STAKE: RefCell<u64> = RefCell::new(0);
-        }
+        static TOTAL_FAILING_STAKE: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
-                TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
+                {
+                    let mut total_stake = TOTAL_FAILING_STAKE.lock().unwrap();
+                    let total_stake = &mut *total_stake;
                     let already_forked = forked_validators
                         .lock()
                         .ok()
@@ -3066,7 +3041,7 @@ impl AuthorityState {
                             }
                         }
                     }
-                });
+                }
             }
         }
     }
@@ -3840,6 +3815,12 @@ impl AuthorityState {
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
             object_funds_checker: ArcSwapOption::empty(),
+            // unsettled_object_withdrawals needs to be initialized unconditionally, even on fullnodes.
+            // Once we enable object funds checking during execution, fullnodes will need it to track
+            // unsettled object withdraws as well similar to validators.
+            unsettled_object_withdrawals: Arc::new(UnsettledObjectWithdrawals::new(
+                object_funds_checker_metrics.clone(),
+            )),
             object_funds_checker_metrics,
             pending_post_processing: Arc::new(DashMap::new()),
             post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
@@ -3890,6 +3871,7 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
+        // TODO: Once we enable object funds checking during execution, we will no longer need to initialize the object funds checker here.
         if self.node_role(&epoch_store).runs_consensus()
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
@@ -3897,6 +3879,7 @@ impl AuthorityState {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
                     Arc::new(ObjectFundsChecker::new(
                         o.version(),
+                        self.unsettled_object_withdrawals.clone(),
                         self.object_funds_checker_metrics.clone(),
                     ))
                 });
@@ -6675,17 +6658,15 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 pub mod framework_injection {
     use move_binary_format::CompiledModule;
     use std::collections::BTreeMap;
-    use std::{cell::RefCell, collections::BTreeSet};
+    use std::collections::BTreeSet;
+    use std::sync::Mutex;
     use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
     use sui_types::is_system_package;
 
     type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
-    // Thread local cache because all simtests run in a single unique thread.
-    thread_local! {
-        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::default());
-    }
+    static OVERRIDE: Mutex<FrameworkOverrideConfig> = Mutex::new(BTreeMap::new());
 
     type Framework = Vec<CompiledModule>;
 
@@ -6709,40 +6690,40 @@ pub mod framework_injection {
     }
 
     pub fn set_override(package_id: ObjectID, modules: Vec<CompiledModule>) {
-        OVERRIDE.with(|bs| {
-            bs.borrow_mut()
-                .insert(package_id, PackageOverrideConfig::Global(modules))
-        });
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .insert(package_id, PackageOverrideConfig::Global(modules));
     }
 
     pub fn set_override_cb(package_id: ObjectID, func: PackageUpgradeCallback) {
-        OVERRIDE.with(|bs| {
-            bs.borrow_mut()
-                .insert(package_id, PackageOverrideConfig::PerValidator(func))
-        });
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .insert(package_id, PackageOverrideConfig::PerValidator(func));
     }
 
     pub fn set_system_packages(packages: Vec<SystemPackage>) {
-        OVERRIDE.with(|bs| {
-            let mut new_packages_not_to_include: BTreeSet<_> =
-                BuiltInFramework::all_package_ids().into_iter().collect();
-            for pkg in &packages {
-                new_packages_not_to_include.remove(&pkg.id);
-            }
-            for pkg in packages {
-                bs.borrow_mut()
-                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
-            }
-            for empty_pkg in new_packages_not_to_include {
-                bs.borrow_mut()
-                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
-            }
-        });
+        let mut cfg = OVERRIDE.lock().unwrap();
+        let mut new_packages_not_to_include: BTreeSet<_> =
+            BuiltInFramework::all_package_ids().into_iter().collect();
+        for pkg in &packages {
+            new_packages_not_to_include.remove(&pkg.id);
+        }
+        for pkg in packages {
+            cfg.insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+        }
+        for empty_pkg in new_packages_not_to_include {
+            cfg.insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+        }
     }
 
     pub fn get_override_bytes(package_id: &ObjectID, name: AuthorityName) -> Option<Vec<Vec<u8>>> {
-        OVERRIDE.with(|cfg| {
-            cfg.borrow().get(package_id).and_then(|entry| match entry {
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .get(package_id)
+            .and_then(|entry| match entry {
                 PackageOverrideConfig::Global(framework) => {
                     Some(compiled_modules_to_bytes(framework))
                 }
@@ -6750,19 +6731,20 @@ pub mod framework_injection {
                     func(name).map(|fw| compiled_modules_to_bytes(&fw))
                 }
             })
-        })
     }
 
     pub fn get_override_modules(
         package_id: &ObjectID,
         name: AuthorityName,
     ) -> Option<Vec<CompiledModule>> {
-        OVERRIDE.with(|cfg| {
-            cfg.borrow().get(package_id).and_then(|entry| match entry {
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .get(package_id)
+            .and_then(|entry| match entry {
                 PackageOverrideConfig::Global(framework) => Some(framework.clone()),
                 PackageOverrideConfig::PerValidator(func) => func(name),
             })
-        })
     }
 
     pub fn get_override_system_package(
@@ -6787,12 +6769,12 @@ pub mod framework_injection {
 
     pub fn get_extra_packages(name: AuthorityName) -> Vec<SystemPackage> {
         let built_in = BTreeSet::from_iter(BuiltInFramework::all_package_ids().into_iter());
-        let extra: Vec<ObjectID> = OVERRIDE.with(|cfg| {
-            cfg.borrow()
-                .keys()
-                .filter_map(|package| (!built_in.contains(package)).then_some(*package))
-                .collect()
-        });
+        let extra: Vec<ObjectID> = OVERRIDE
+            .lock()
+            .unwrap()
+            .keys()
+            .filter_map(|package| (!built_in.contains(package)).then_some(*package))
+            .collect();
 
         extra
             .into_iter()

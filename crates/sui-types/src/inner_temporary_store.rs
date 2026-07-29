@@ -46,10 +46,7 @@ pub struct InnerTemporaryStore {
     /// Then the accumulator_running_max_withdraws for this account will be 100,
     /// because at any given moment, the net withdraws is at most 100.
     pub accumulator_running_max_withdraws: BTreeMap<AccumulatorObjId, u128>,
-    /// Set when execution determined the transaction must be retried later rather than committed
-    /// (e.g. a system object it read had not caught up to the required version). The authority
-    /// discards these effects and re-enqueues the transaction instead of committing. Always `None`
-    /// for the v0..=v3 stores, which never request a retry.
+    /// Set when execution must be discarded and retried after a node-local dependency arrives.
     pub retry_request: Option<ExecutionRetryError>,
 }
 

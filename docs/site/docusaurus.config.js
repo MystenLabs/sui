@@ -481,6 +481,7 @@ const config = {
               { type: "doc", docId: "onchain-finance/closed-loop-token/index", label: "Closed Loop Token" },
               { type: "doc", docId: "onchain-finance/pas/index", label: "Permissioned Asset Standard" },
               { type: "doc", docId: "onchain-finance/deepbook/index", label: "DeepBook" },
+              { type: "doc", docId: "onchain-finance/oracles/index", label: "Oracles" },
               { type: "doc", docId: "onchain-finance/kiosk/index", label: "Kiosk" },
               { type: "doc", docId: "onchain-finance/payment-kit", label: "Payment Kit" },
             ],

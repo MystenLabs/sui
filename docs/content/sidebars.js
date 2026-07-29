@@ -130,6 +130,7 @@ export default {
             'develop/transactions/ptbs/building-ptb',
             'develop/transactions/ptbs/inputs-and-results',
             'develop/transactions/ptbs/ts-sdk-ptb-template',
+            'develop/transactions/ptbs/ptb-cookbook',
           ],
         },
         {
@@ -525,6 +526,17 @@ export default {
             'onchain-finance/deepbook/deepbook-margin/deepbook-margin-indexer',
           ],
         },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Oracles',
+      link: { type: 'doc', id: 'onchain-finance/oracles/index' },
+      items: [
+        'onchain-finance/oracles/consuming-price-feeds',
+        'onchain-finance/oracles/move-adapter',
+        'onchain-finance/oracles/oracle-safety',
+        'onchain-finance/oracles/resolution-patterns',
       ],
     },
     {

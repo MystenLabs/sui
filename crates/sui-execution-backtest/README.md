@@ -20,15 +20,18 @@ It runs as a [`sui-indexer-alt-framework`](../sui-indexer-alt-framework) concurr
    multi-gets; see [Packages](#how-execution-context-is-reconstructed)), then re-executes every
    programmable transaction whose on-chain status matches `--status` (default `all`) — serially, on
    a blocking worker — against reconstructed checkpoint state via the `sui-execution` Executor.
-4. Records a **divergence** for any transaction whose recomputed success/failure status disagrees
-   with its on-chain status, plus (unless `--no-stats`) a per-checkpoint `run_stats` row of
-   denominators. The framework's watermark gives crash-resumption.
+4. Records a **divergence** for any transaction whose recomputed effects don't match the effects
+   recorded on chain — compared by **effects digest**, so every field counts (status, changed
+   objects, dependencies, gas, events, consensus objects), not just the success/failure outcome —
+   plus (unless `--no-stats`) a per-checkpoint `run_stats` row of denominators. The framework's
+   watermark gives crash-resumption.
 
 Divergence direction is recoverable from each record: a recomputed error (on-chain succeeded) has a
-non-null `recomputed_error_kind`; a recomputed success (on-chain failed) has it null. `--status
-success` is the strict baseline (a tx that succeeded on chain now erroring is a clear regression);
-`all`/`failed` also replay failures, each row carrying its on-chain status so the differential can
-be applied downstream.
+non-null `recomputed_error_kind`; a recomputed success (on-chain failed) has it null. A fork where
+both sides agree on the outcome but the effects still differ has a null `recomputed_error_kind` and
+names the differing fields in `recomputed_error_detail`. `--status success` is the strict baseline (a
+tx that succeeded on chain now erroring is a clear regression); `all`/`failed` also replay failures,
+each row carrying its on-chain status so the differential can be applied downstream.
 
 ## Run
 
@@ -43,6 +46,7 @@ The output sink is selected with `--store`:
 cargo run --release -p sui-execution-backtest -- \
   --remote-store-url https://checkpoints.mainnet.sui.io \
   --fullnode-url https://mysten-rpc.mainnet.sui.io:443 \
+  --graphql mainnet \
   --start-epoch 1152 --end-epoch 1152 --status all \
   --execute-concurrency 24 \
   --cache ./.package-cache \
@@ -52,6 +56,7 @@ cargo run --release -p sui-execution-backtest -- \
 cargo run --release -p sui-execution-backtest -- \
   --remote-store-url https://checkpoints.mainnet.sui.io \
   --fullnode-url https://mysten-rpc.mainnet.sui.io:443 \
+  --graphql mainnet \
   --start-epoch 1152 --end-epoch 1152 --status all \
   --cache ./.package-cache \
   --store postgres --database-url postgres://localhost/backtest \
@@ -66,6 +71,10 @@ cargo run --release -p sui-execution-backtest -- \
   data](https://docs.sui.io/guides/developer/advanced/custom-indexer#remote-reader)); running
   colocated with the bucket also avoids egress cost and latency. Alternatively a single
   `--rpc-api-url` fullnode can serve as both (slower; see the rate-limit caveat below).
+- **`--graphql`** (required) is the GraphQL endpoint used to read each epoch's framework packages as
+  of its first checkpoint: `mainnet`, `testnet`, or a GraphQL url. See [System
+  packages](#how-execution-context-is-reconstructed) for why the fullnode's gRPC API cannot serve
+  this.
 - `--start-epoch` / `--end-epoch` select the inclusive epoch range.
 - `--max-checkpoints-per-epoch N` caps each epoch at its first `N` checkpoints (for bounded
   samples). Omit it to backtest whole epochs — note a mainnet epoch is ~300–390k checkpoints.
@@ -99,7 +108,8 @@ Two row types, written to two postgres tables (or interleaved as ndjson lines):
 
 - **`divergence`** — one row per divergent transaction: `task, epoch, checkpoint, tx_digest`, the
   on-chain outcome (`original_status`, `original_failure_kind`), the recomputed outcome
-  (`recomputed_status`, `recomputed_error_kind`, `recomputed_error_detail`), and triage columns
+  (`recomputed_status`, `recomputed_error_kind`, `recomputed_error_detail` — the diverging effects
+  fields, followed by ` | ` and the execution error when there was one), and triage columns
   (`missing_modified`, `missing_loaded`, `missing_consensus`, `digest_mismatches`). The triage
   columns count how much of the transaction's read set our reconstructed store was missing or
   disagreed on — nonzero values point at a *reconstruction gap* rather than a genuine execution
@@ -129,12 +139,22 @@ Per transaction the tool builds a read-only `BackingStore` from:
   closure can't see. Over-fetching is harmless: the prefetch only decides what is warm. These
   packages are immutable, so fetching their latest version is faithful.
 - **System (framework) packages** (`0x1`, `0x2`, `0x3`, `0xb`, `0xdee9`): these keep a stable id but
-  are *upgraded* (new bytecode) across protocol versions, so the fullnode's latest version is wrong
-  for a historical epoch. Instead they are loaded **version-correctly per epoch** from the on-disk
-  [`sui-framework-snapshot`](../sui-framework-snapshot) at the epoch's protocol version (the snapshot
-  is sparse, so the greatest snapshot ≤ the protocol version is used), and served directly by
-  `ScanStore` — never fetched from the network. A protocol version newer than any bundled snapshot
-  falls back to the newest available (update the snapshot crate if you need a newer framework).
+  are *upgraded* across protocol versions — new bytecode, and with it a new object version and
+  `previous_transaction` — so the fullnode's latest version is wrong for a historical epoch, and
+  gRPC cannot serve an object as of a checkpoint. They are instead read **version-correctly per
+  epoch** over GraphQL (`--graphql`), with a `multiGetObjects(keys: [{address, atCheckpoint}])` at
+  the epoch's first checkpoint, and served from there by `ScanStore`. This reuses
+  [`sui-data-store`](../sui-data-store) — the same `VersionQuery::AtCheckpoint` read `sui-replay-2`
+  resolves *every* package with. A framework upgrade only ever lands in an epoch-boundary
+  transaction (the authority proposes `system_packages` only when the protocol version bumps), so one
+  read per epoch is exact.
+
+  All three fields matter, and getting them wrong is not subtle. Synthesizing these objects instead
+  (version pinned to `OBJECT_START_VERSION`, `previous_transaction` set to the genesis marker) forks
+  **58%** of transactions: the genesis marker is stripped from the dependency set by the adapter, so
+  every transaction that takes a framework package as an input loses that dependency, and the v1
+  version fails `build_linkage_table`'s dependency-downgrade check against any real on-chain
+  dependency's linkage table, breaking every publish and upgrade.
 
 Execution is **metered** with the transaction's own budget/price (gasless txns are metered at the
 epoch RGP with the gasless compute cap, mirroring `sui-transaction-checks`).
@@ -154,6 +174,11 @@ are counted in `coin_reservation_skipped` and skipped.
   returns HTTP 429 under concurrent load. The fetcher retries with backoff, but prefer
   `--remote-store-url` for checkpoints plus a dedicated/archival fullnode. Public nodes also prune
   old epochs — only recent epochs are available there.
+- **Address-balance state is not reconstructed.** Transactions paying gas or funds from an address
+  balance (the accumulator; counted under `gas_from_balance`) are replayed without it, so a
+  withdrawal that failed on chain with `InsufficientFundsForWithdraw` can succeed here. This is
+  currently the dominant fork class — measured over 6k checkpoints of mainnet epoch 1190, all 365
+  remaining forks in 43,398 replayed transactions were of this shape.
 - Only `ProgrammableTransaction`s are considered; system/consensus transactions are out of scope.
 
 ## Analysis
@@ -173,8 +198,9 @@ Executor. Components, by module:
 |---|---|
 | `main.rs` | CLI (`Args`), startup wiring, run-id derivation, sink selection; builds and runs the `Indexer`. |
 | `grpc.rs` | `RpcClient` — thin fullnode gRPC client: epoch bounds (`GetEpoch`), chain id (`GetServiceInfo`), and package fetches (`GetObject` / `BatchGetObjects`) with retry + backoff. |
+| `graphql.rs` | `GqlClient` — the one read gRPC can't serve: the epoch's framework packages *as of a checkpoint*, over `sui-data-store`'s GraphQL `multiGetObjects`. |
 | `ingestion.rs` | Remote-store ingestion client with the chain id injected up front (`FixedChainId`), so it never derives it from a slow genesis fetch. |
-| `context.rs` | `EpochCtx` (version-correct executor + protocol config + reference gas price + epoch-start timestamp + the epoch's framework packages from the snapshot) and `resolve_epoch_work`, which turns an epoch range into per-epoch contexts plus the overall checkpoint range. |
+| `context.rs` | `EpochCtx` (version-correct executor + protocol config + reference gas price + epoch-start timestamp + the epoch's framework packages) and `resolve_epoch_work`, which turns an epoch range into per-epoch contexts plus the overall checkpoint range. |
 | `handler.rs` | `Backtest<S>` — the framework `Processor` + `Handler`. Per checkpoint: prefetch packages, reconstruct state, re-execute, emit rows; then batch and commit them through the `CommitRows` trait. |
 | `store.rs` | `PackageCache` (shared, in-memory → on-disk → gRPC) with `prefetch_package_closure`, and `ScanStore` — the read-only `BackingStore` execution runs against (serves system packages from the epoch's framework, user packages from the cache). |
 | `execute.rs` | `execute_one_transaction` — per-transaction gas planning, coin-reservation rewrite, metered execution, and divergence detection + triage. |
@@ -191,8 +217,10 @@ client serves both epoch resolution and the indexer.
 flowchart TD
     Args[CLI Args] --> Main[main.rs]
     Main --> Rpc[RpcClient<br/>fullnode gRPC]
+    Main --> Gql[GqlClient<br/>GraphQL]
     Rpc -->|GetServiceInfo| ChainId[chain id]
     Rpc -->|GetEpoch| Resolve[resolve_epoch_work]
+    Gql -->|multiGetObjects<br/>atCheckpoint| Resolve
     Resolve --> Ctx[(EpochCtx per epoch:<br/>executor + protocol config<br/>+ RGP + epoch-start ts)]
     Resolve --> Range[checkpoint range]
 
@@ -230,7 +258,7 @@ flowchart TD
     Blocking --> Exec[execute_one_transaction]
     Exec -->|reads packages| Cache
     Exec -->|EpochCtx.executor| VM[sui-execution Executor]
-    Exec --> Cmp{recomputed status<br/>differs from on-chain?}
+    Exec --> Cmp{recomputed effects digest<br/>differs from on-chain?}
     Cmp -->|yes| Div[DivergenceRow]
     Blocking -->|tally per checkpoint| Stats[RunStatsRow]
 

@@ -1419,10 +1419,8 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
-            // Node-local, transient retry marker that is never committed to effects, so RPC
-            // (which only ever serves committed effects) must never observe it.
             E::SystemObjectNotAvailableLocally => {
-                panic!("SystemObjectNotAvailableLocally is never committed to effects")
+                unreachable!("node-local retry errors must never be serialized")
             }
         };
 

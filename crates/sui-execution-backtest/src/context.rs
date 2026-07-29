@@ -20,8 +20,9 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::metrics::ExecutionMetrics;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
-use tracing::{info, warn};
+use tracing::info;
 
+use crate::graphql::GqlClient;
 use crate::grpc::{EpochBounds, RpcClient};
 
 /// Per-epoch resolved context, shared (by Arc) across all of the epoch's checkpoint workers.
@@ -40,9 +41,10 @@ pub(crate) struct EpochCtx {
     /// `TxContext` differ from passing the tx's own price as the RGP).
     pub(crate) reference_gas_price: u64,
     /// The system (framework) packages live during this epoch, keyed by id. Unlike normal packages,
-    /// these keep a stable id but are upgraded (new bytecode) across protocol versions, so they
-    /// can't be fetched "latest" and replayed faithfully — they are loaded version-correctly from
-    /// the framework snapshot for the epoch's protocol version (see [`load_epoch_system_packages`]).
+    /// these keep a stable id but are upgraded (new bytecode, and a new object version and
+    /// `previous_transaction`) across protocol versions, so they can't be fetched "latest" and
+    /// replayed faithfully — they are read as of the epoch's first checkpoint over GraphQL (see
+    /// [`GqlClient::system_packages_at`]).
     pub(crate) system_packages: Arc<BTreeMap<ObjectID, Object>>,
 }
 
@@ -67,24 +69,13 @@ pub(crate) struct PreparedCheckpoint {
 /// isn't fetched twice). `max_checkpoints_per_epoch` caps each epoch from its first checkpoint.
 pub(crate) async fn resolve_epoch_work(
     rpc: &RpcClient,
+    gql: &GqlClient,
     chain: Chain,
     epochs: RangeInclusive<u64>,
     max_checkpoints_per_epoch: Option<u64>,
     first_bounds: EpochBounds,
     execution_metrics: &Arc<ExecutionMetrics>,
 ) -> Result<(BTreeMap<u64, Arc<EpochCtx>>, u64, u64)> {
-    // System packages are reconstructed from the framework snapshot, which only faithfully
-    // represents released networks (mainnet/testnet). A non-prod chain (devnet/localnet/custom, all
-    // `Chain::Unknown`) may run framework bytecode ahead of, or unrelated to, any snapshot, so the
-    // reconstructed system packages — and thus the backtest — can silently diverge from reality (see
-    // [`load_epoch_system_packages`]).
-    if chain == Chain::Unknown {
-        warn!(
-            "backtesting a non-prod network (chain id resolves to Unknown): system packages are \
-             reconstructed from the framework snapshot and may not match the network's actual \
-             framework, so results may be unreliable"
-        );
-    }
     let start_epoch = *epochs.start();
     let mut epoch_ctxs: BTreeMap<u64, Arc<EpochCtx>> = BTreeMap::new();
     let mut first_checkpoint = u64::MAX;
@@ -101,8 +92,10 @@ pub(crate) async fn resolve_epoch_work(
             ProtocolConfig::get_for_version(ProtocolVersion::new(bounds.protocol_version), chain);
         let executor = sui_execution::executor(&protocol_config, /* silent */ true)
             .map_err(|e| anyhow::anyhow!("building executor for epoch {epoch}: {e}"))?;
+        // Read the framework as of the epoch's first checkpoint.
         let system_packages = Arc::new(
-            load_epoch_system_packages(bounds.protocol_version)
+            gql.system_packages_at(bounds.first_checkpoint)
+                .await
                 .with_context(|| format!("resolving framework packages for epoch {epoch}"))?,
         );
         let ctx = Arc::new(EpochCtx {
@@ -133,6 +126,11 @@ pub(crate) async fn resolve_epoch_work(
             last_checkpoint = last,
             checkpoints = count,
             protocol_version = bounds.protocol_version,
+            framework = ?ctx
+                .system_packages
+                .values()
+                .map(|p| format!("{}@{}", p.id(), p.version().value()))
+                .collect::<Vec<_>>(),
             "queued epoch"
         );
         first_checkpoint = first_checkpoint.min(bounds.first_checkpoint);
@@ -140,33 +138,4 @@ pub(crate) async fn resolve_epoch_work(
         epoch_ctxs.insert(epoch, ctx);
     }
     Ok((epoch_ctxs, first_checkpoint, last_checkpoint))
-}
-
-/// The system (framework) packages live at `protocol_version`, as package `Object`s keyed by id.
-/// `load_bytecode_snapshot` resolves the sparse protocol-version → snapshot mapping itself (the
-/// greatest snapshot at or below the version). The reconstructed object's version number is
-/// synthetic (`OBJECT_START_VERSION`); only its bytecode and linkage matter for execution, and
-/// those resolve system packages by id, not version.
-///
-/// This is faithful only for released networks (mainnet/testnet), whose framework is exactly what a
-/// published snapshot captured. On devnet the running framework can be *ahead* of any snapshot (so
-/// the greatest-snapshot-≤-version lookup returns stale bytecode), and on localnet it is whatever
-/// was built locally (no snapshot corresponds to it at all) — in both cases the reconstruction is
-/// silently wrong. [`resolve_epoch_work`] warns when the chain is non-prod (`Chain::Unknown`).
-///
-/// TODO: If a GraphQL checkpoint source is added, revisit this — GraphQL can read the actual
-///       framework objects at a checkpoint (as `sui-replay-2` does), which is more principled than
-///       reconstructing them from the snapshot and would also fix the non-prod case above.
-fn load_epoch_system_packages(protocol_version: u64) -> Result<BTreeMap<ObjectID, Object>> {
-    let packages =
-        sui_framework_snapshot::load_bytecode_snapshot(protocol_version).with_context(|| {
-            format!("loading framework snapshot for protocol version {protocol_version}")
-        })?;
-    Ok(packages
-        .into_iter()
-        .map(|package| {
-            let object = package.genesis_object();
-            (object.id(), object)
-        })
-        .collect())
 }

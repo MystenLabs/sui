@@ -184,6 +184,19 @@ impl BigtableReader {
         .await
     }
 
+    /// Multi-get checkpoint timestamps for transactions by digest.
+    pub(crate) async fn transaction_timestamps(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> anyhow::Result<Vec<(TransactionDigest, u64)>> {
+        measure(
+            "transaction_timestamps",
+            &keys,
+            self.client.clone().get_transaction_timestamps(keys),
+        )
+        .await
+    }
+
     /// Multi-get objects by object ID and version.
     pub(crate) async fn objects(&self, keys: &[ObjectKey]) -> anyhow::Result<Vec<Object>> {
         measure("objects", &keys, self.client.clone().get_objects(keys)).await

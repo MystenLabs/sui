@@ -188,6 +188,7 @@ pub struct P2pComponents {
 
 #[cfg(msim)]
 mod simulator {
+    use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
     use sui_types::error::SuiErrorKind;
 
@@ -227,26 +228,28 @@ mod simulator {
         .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 
-    thread_local! {
-        static JWK_INJECTOR: std::cell::RefCell<Arc<JwkInjector>> = std::cell::RefCell::new(Arc::new(default_fetch_jwks));
-        // Separate from JWK_INJECTOR: TestClusterBuilder overwrites the zkLogin injector.
-        static GCP_JWK_INJECTOR: std::cell::RefCell<Vec<(JwkId, JWK)>> = std::cell::RefCell::new(vec![]);
-    }
+    static JWK_INJECTOR: Mutex<Option<Arc<JwkInjector>>> = Mutex::new(None);
+    // Separate from JWK_INJECTOR: TestClusterBuilder overwrites the zkLogin injector.
+    static GCP_JWK_INJECTOR: Mutex<Vec<(JwkId, JWK)>> = Mutex::new(Vec::new());
 
     pub(super) fn get_jwk_injector() -> Arc<JwkInjector> {
-        JWK_INJECTOR.with(|injector| injector.borrow().clone())
+        JWK_INJECTOR
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| Arc::new(default_fetch_jwks))
     }
 
     pub fn set_jwk_injector(injector: Arc<JwkInjector>) {
-        JWK_INJECTOR.with(|cell| *cell.borrow_mut() = injector);
+        *JWK_INJECTOR.lock().unwrap() = Some(injector);
     }
 
     pub fn set_gcp_jwk_injector(jwks: Vec<(JwkId, JWK)>) {
-        GCP_JWK_INJECTOR.with(|cell| *cell.borrow_mut() = jwks);
+        *GCP_JWK_INJECTOR.lock().unwrap() = jwks;
     }
 
     pub(super) fn get_gcp_jwk_injector() -> Vec<(JwkId, JWK)> {
-        GCP_JWK_INJECTOR.with(|cell| cell.borrow().clone())
+        GCP_JWK_INJECTOR.lock().unwrap().clone()
     }
 }
 

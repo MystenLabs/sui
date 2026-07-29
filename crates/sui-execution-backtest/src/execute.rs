@@ -22,6 +22,7 @@ use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::full_checkpoint_content::ExecutedTransaction;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GAS;
+use sui_types::message_envelope::Message as _;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::{
@@ -268,13 +269,11 @@ pub(crate) fn execute_one_transaction(
         signer,
         digest,
     };
-    let (recomputed_ok, result) = run_execution(ctx, store, prepared_tx);
+    let (recomputed_effects, result) = run_execution(ctx, store, prepared_tx);
+    let recomputed_ok = recomputed_effects.status().is_ok();
 
     stats.executed += 1;
-    // Divergence: the recomputed success/failure status disagrees with what happened on chain. This
-    // captures any execution-behavior change (e.g. a transaction that succeeded on chain now
-    // erroring, or vice versa); the recomputed error, if any, is recorded for triage.
-    if recomputed_ok != on_chain.is_success {
+    if recomputed_effects.digest() != executed.effects.digest() {
         stats.divergences += 1;
         let err = result.as_ref().err();
         let recomputed_error = err.map(|e| e.to_string());
@@ -465,14 +464,14 @@ fn plan_gas(gas_data: &GasData, ctx: &EpochCtx) -> GasPlan {
     }
 }
 
-/// Run the executor, returning `(recomputed_ok, exec_result)`. The epoch id + start timestamp come
-/// from `ctx` (the executor wants the epoch start timestamp, constant across the epoch, not the
-/// per-checkpoint one).
+/// Run the executor, returning the recomputed effects and execution result. The epoch id + start
+/// timestamp come from `ctx` (the executor wants the epoch start timestamp, constant across the
+/// epoch, not the per-checkpoint one).
 fn run_execution(
     ctx: &EpochCtx,
     store: &ScanStore,
     prepared: PreparedTx,
-) -> (bool, Result<(), ExecutionError>) {
+) -> (TransactionEffects, Result<(), ExecutionError>) {
     let PreparedTx {
         input_objects,
         system_object_versions,
@@ -503,7 +502,7 @@ fn run_execution(
             digest,
             &mut None,
         );
-    (effects.status().is_ok(), exec_res)
+    (effects, exec_res)
 }
 
 /// Counts of the triage signals attached to a divergence row: how much of the transaction's read

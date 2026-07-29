@@ -403,12 +403,8 @@ pub enum StatusCode {
     PACKAGE_ARENA_LIMIT_REACHED = 4031,
     INTERNER_LIMIT_REACHED = 4032,
     EXTERNAL_RESOLUTION_REQUEST_ERROR = 4033,
-    // A system object the transaction must read has not yet caught up, on this node, to the
-    // version the transaction requires. Node-local and transient: the adapter unwinds the VM with
-    // this code and the transaction is retried once the object catches up, so it never appears in
-    // committed effects. Minted in exactly one place (the Sui adapter's temporary store), paired
-    // with an out-of-band retry request; the end of execution enforces that the two only ever
-    // appear together.
+    // Node-local transient used to unwind execution until an implicitly read system object has
+    // reached its consensus-assigned version. It never appears in committed effects.
     SYSTEM_OBJECT_NOT_AVAILABLE_LOCALLY = 4034,
 
     // A reserved status to represent an unknown vm status.
