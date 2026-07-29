@@ -187,6 +187,7 @@ pub struct P2pComponents {
 
 #[cfg(msim)]
 mod simulator {
+    use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
     use sui_types::error::SuiErrorKind;
 
@@ -226,16 +227,18 @@ mod simulator {
         .map_err(|_| SuiErrorKind::JWKRetrievalError.into())
     }
 
-    thread_local! {
-        static JWK_INJECTOR: std::cell::RefCell<Arc<JwkInjector>> = std::cell::RefCell::new(Arc::new(default_fetch_jwks));
-    }
+    static JWK_INJECTOR: Mutex<Option<Arc<JwkInjector>>> = Mutex::new(None);
 
     pub(super) fn get_jwk_injector() -> Arc<JwkInjector> {
-        JWK_INJECTOR.with(|injector| injector.borrow().clone())
+        JWK_INJECTOR
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| Arc::new(default_fetch_jwks))
     }
 
     pub fn set_jwk_injector(injector: Arc<JwkInjector>) {
-        JWK_INJECTOR.with(|cell| *cell.borrow_mut() = injector);
+        *JWK_INJECTOR.lock().unwrap() = Some(injector);
     }
 }
 

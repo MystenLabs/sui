@@ -40,11 +40,12 @@ impl SimAddressManager {
 
 #[cfg(msim)]
 fn get_sim_address_manager() -> Arc<SimAddressManager> {
-    thread_local! {
-        // Uses Arc so that we could return a clone of the thread local singleton.
-        static SIM_ADDRESS_MANAGER: Arc<SimAddressManager> = Arc::new(SimAddressManager::new());
-    }
-    SIM_ADDRESS_MANAGER.with(|s| s.clone())
+    // Uses Arc so that we could return a clone of the process-global singleton.
+    static SIM_ADDRESS_MANAGER: std::sync::OnceLock<Arc<SimAddressManager>> =
+        std::sync::OnceLock::new();
+    SIM_ADDRESS_MANAGER
+        .get_or_init(|| Arc::new(SimAddressManager::new()))
+        .clone()
 }
 
 /// In simtest, we generate a new unique IP each time this function is called.

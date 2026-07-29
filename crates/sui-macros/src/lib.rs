@@ -30,16 +30,6 @@ macro_rules! nondeterministic {
 type FpCallback = dyn Fn() -> Box<dyn std::any::Any + Send + 'static> + Send + Sync;
 type FpMap = HashMap<&'static str, Arc<FpCallback>>;
 
-#[cfg(msim)]
-fn with_fp_map<T>(func: impl FnOnce(&mut FpMap) -> T) -> T {
-    thread_local! {
-        static MAP: std::cell::RefCell<FpMap> = Default::default();
-    }
-
-    MAP.with(|val| func(&mut val.borrow_mut()))
-}
-
-#[cfg(not(msim))]
 fn with_fp_map<T>(func: impl FnOnce(&mut FpMap) -> T) -> T {
     use once_cell::sync::Lazy;
     use std::sync::Mutex;
