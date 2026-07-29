@@ -241,6 +241,23 @@ the fork point, and this is a permanent property of forking rather than a missin
   rpc_store/                stock sui-rpc-store RocksDB (RpcStoreSchema)
 ```
 
+## Storing data in the same DB and CFs and tradeoffs considered
+
+The design presented in this document stores all historical data in the same RocksDB instance,
+and uses the same column families used for storing locally executed raw data and indexes.
+This has the advantage of simplicity, but the fork requires to have a policy to ensure
+that the correct data is served or fetched from the remote RPC as needed.
+
+An alternative that we discussed was to use the same RocksDB instance, but to 
+store the historical data in a separate set of column families. This would have the advantage
+that we can simply embed the indexer from `sui-rpc-store` and not worry about possible
+future changes to the schemas in the `sui-rpc-store` crate. It also allows to create custom
+schemas if more data is required compared to the stock `sui-rpc-store` columns. 
+Finally, it decouples the fork's local history data from the locally executed data and indexes.
+
+Ultimately, as currently there does not seem to be a need to add additional data or column families
+to the current schemas in `sui-rpc-store`, it seems reasonable to use the same column families for both historical and locally executed data.
+
 ## Known gaps
 
 The pending checkpoint buffer is memory only, so a crash mid-publication loses the
