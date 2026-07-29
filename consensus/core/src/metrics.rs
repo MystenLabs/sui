@@ -183,6 +183,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_blocks_received_bytes_saved: IntCounterVec,
     pub(crate) minimal_block_inflate_drop: IntCounterVec,
     pub(crate) minimal_block_recovery: IntCounterVec,
+    pub(crate) minimal_block_recovery_latency: Histogram,
     pub(crate) minimal_block_encode_cache: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
@@ -617,8 +618,14 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_recovery: register_int_counter_vec_with_registry!(
                 "minimal_block_recovery",
-                "Off-stream recovery fetches for dropped minimal blocks, per peer and outcome (recovered|fetch_failed|digest_mismatch|saturated)",
-                &["authority", "result"],
+                "Off-stream recovery of dropped minimal blocks, per peer, final path (inflated_late|fetch_recovered|rejected|fetch_failed|digest_mismatch|saturated), and local retry attempt (1-4|fetch|none)",
+                &["authority", "result", "attempt"],
+                registry,
+            ).unwrap(),
+            minimal_block_recovery_latency: register_histogram_with_registry!(
+                "minimal_block_recovery_latency",
+                "Seconds from dropping a minimal block on the stream to submitting its recovered form; tunes the local retry schedule",
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             minimal_block_encode_cache: register_int_counter_vec_with_registry!(
