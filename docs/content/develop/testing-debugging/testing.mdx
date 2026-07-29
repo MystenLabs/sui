@@ -44,7 +44,7 @@ answer: >-
 ---
 
 <AgentPrompt
-  prompt={"Add Move unit tests for this package's public functions, including success, unauthorized, and edge cases."}
+  prompt={"Add Move unit tests for this package's public functions, including success, unauthorized, and edge cases. For test cleanup, use std::unit_test::destroy (NOT sui::test_utils::destroy, which is deprecated). Use event::emit for events (NOT emit_event). Use vector[] literal syntax (NOT vector::empty())."}
 />
 
 Sui includes a built-in test framework for Move smart contracts. You write tests directly in your Move source files, run them with the `sui move test` CLI command, and use the `test_scenario` module to simulate multi-transaction flows. No external test runner or framework installation is required.

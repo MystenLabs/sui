@@ -36,7 +36,7 @@ answer: Learn how to use the Move package manager system.
 ---
 
 <AgentPrompt
-  prompt={"Inspect this Move package's Move.toml, Move.lock, and dependencies. Fix dependency declarations, prefer MVR where appropriate, and verify sui move build works."}
+  prompt={"Inspect this Move package's Move.toml, Move.lock, and dependencies. Fix dependency declarations, prefer MVR where appropriate, and verify sui move build works. Remember: Move.toml for edition 2024 must NOT have a [dependencies] section for Sui/MoveStdlib — the Sui framework is resolved automatically. Do NOT use Sui = { git = ... } or sui = { version = ... }. A correct Move.toml has only [package] with name and edition = '2024'."}
 />
 
 A Move package is a collection of Move modules that you publish together as a single object on the Sui blockchain. Packages can depend on other packages and can be upgraded over time while maintaining their onchain identity. The Move package manager helps you manage dependencies and publish packages to the network.

@@ -67,7 +67,7 @@ answer: >-
 ---
 
 <AgentPrompt
-  prompt={"Clone the https://github.com/MystenLabs/sui-stack-hello-world example app, build and publish the Move package at move/hello-world to Testnet, then call its entry function and show me the resulting object and transaction on SuiVision."}
+  prompt={"Clone the https://github.com/MystenLabs/sui-stack-hello-world example app, build and publish the Move package at move/hello-world to Testnet, then call its entry function and show me the resulting object and transaction on SuiVision. Remember: The Move.toml uses edition = '2024' and does NOT need a [dependencies] section for Sui — the framework is resolved automatically."}
 />
 
 You'll build a "Hello, World!" program to learn the fundamentals of programming on Sui. You create programs on Sui by writing and deploying smart contracts to the network.
