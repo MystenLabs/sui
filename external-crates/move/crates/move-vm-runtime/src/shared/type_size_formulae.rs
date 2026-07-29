@@ -14,50 +14,48 @@
 //! formula and check the prediction, so rejection is arithmetic and no oversized type, value,
 //! or layout is ever built.
 //!
-//! Each quantity lives in one of two algebras — additive ([`LinearForm`], for `type_size` and
-//! `layout_size`) and max-plus ([`MaxPlusForm`], for `type_depth` and `value_depth`) — both flat
-//! and closed under substitution. The pipeline is a two-stage partial evaluator over three
-//! operations: **resolve**, **substitute**, and **solve**.
+//! Each quantity lives in one of two algebras: additive ([`LinearForm`], for `type_size` and
+//! `layout_size`) and max-plus ([`MaxPlusForm`], for `type_depth` and `value_depth`). Both are
+//! flat and closed under substitution. The pipeline is a partial evaluator built from three
+//! operations: **evaluate**, **substitute**, and **solve**.
 //!
 //! 1. **JIT** builds an [`ArenaTypeSizeFormula`] per datatype: the four forms over the
 //!    datatype's own type parameters. `type_size`/`type_depth` are closed; `value_depth`/
-//!    `layout_size` additionally carry the datatype's field *applications*, whose resolution
-//!    needs a linkage.
-//! 2. **Resolve** ([`ArenaTypeSizeFormula::resolve`]) closes the applications against a linkage
-//!    (the vtable) into a flat [`PartialTypeSizeFormula`], using the vtable for recursive key
-//!    resolution. Resolving a non-datatype ([`VMDispatchTables::arena_type_size_formula`])
-//!    performs a recursive walk, and **substitute** ([`PartialTypeSizeFormula::substitute`])
-//!    composes flat formulae into each other to model datatype instantiation.
+//!    `layout_size` additionally depend on the datatype's field *applications*, which need a
+//!    linkage to resolve. The application trees of every field are **linearized** at JIT time
+//!    into one dependency-ordered sequence ([`Application`]), and the datatypes they mention
+//!    are listed flat ([`ArenaTypeSizeFormula::vtable_keys`]) -- no type walk is ever needed to
+//!    discover or resolve them. Type *terms* (instruction operands and instantiation signature
+//!    entries) compile to the same shape ([`ArenaTypeSizeFormula::from_term`]), with their
+//!    syntactic forms closed entirely at JIT.
+//! 2. **Evaluate** ([`ArenaTypeSizeFormula::evaluate`]) closes the formula against a linkage:
+//!    the dispatch tables resolve the datatype dependency graph as an iterative, cache-backed
+//!    work queue (`VMDispatchTables::virtual_key_size_formula`), then the linearized
+//!    applications are replayed in one pass, one **substitute**
+//!    ([`PartialTypeSizeFormula::substitute`]) per entry, folding field roots into the
+//!    through-field measures inline. This yields the datatype's (or term's) flat
+//!    [`PartialTypeSizeFormula`].
 //! 3. **Solve** ([`PartialTypeSizeFormula::solve`]) evaluates a flat form against concrete
 //!    argument [`TypeSize`]s, yielding a concrete [`TypeSize`].
 //!
 //! All four forms are used for various safety checks across VM execution. All arithmetic
 //! saturates: every quantity exists only to be compared against a limit, and a saturated value
-//! exceeds any limit — the correct verdict.
+//! exceeds any limit -- the correct verdict.
 
 use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
-    execution::dispatch_tables::{VMDispatchTables, VirtualTableKey},
+    execution::dispatch_tables::{TypeCache, VirtualTableKey},
     jit::execution::ast::{ArenaType, Datatype},
-    shared::{
-        constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
-        vm_pointer::VMPointer,
-    },
+    shared::constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
 };
 use move_binary_format::{
     checked_as,
     errors::{PartialVMError, PartialVMResult},
     partial_vm_error,
 };
-use std::collections::HashSet;
 
 /// Index of a type parameter.
 pub(crate) type TyParamIndex = u16;
-
-/// Tracks the datatypes currently being resolved, to guard against cyclic datatype graphs.
-/// A `HashSet` is fine (and never a determinism hazard): it is only ever probed for membership
-/// (`insert`/`remove`/`contains`) and never iterated, so its ordering never affects a result.
-pub(crate) type Visiting = HashSet<VirtualTableKey>;
 
 // -------------------------------------------------------------------------------------------------
 // TypeSize
@@ -303,8 +301,8 @@ impl MaxPlusForm {
 // -------------------------------------------------------------------------------------------------
 
 /// A type's four size formulae over some parameters, fully resolved and flat (no pending
-/// datatype applications). This is the value cached per datatype key on the vtable, and the
-/// intermediate the interpreter threads while resolving a term.
+/// datatype applications): the result of closing any [`ArenaTypeSizeFormula`] (datatype or
+/// term) under a linkage. This is the value cached per datatype key during execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PartialTypeSizeFormula {
     pub(crate) type_size: LinearForm,
@@ -362,7 +360,7 @@ impl PartialTypeSizeFormula {
     /// against the matching measure of the arguments, giving a concrete [`TypeSize`].
     ///
     /// Example: for a `vector<T>` (so every measure is `1 + x0`, and depths `max(1, 1+x0)`) with
-    /// `args = [T's size]` where `T = u64` (all measures `1`), each measure solves to `2` — i.e.
+    /// `args = [T's size]` where `T = u64` (all measures `1`), each measure solves to `2` -- i.e.
     /// `TypeSize` all-`2`, the size of `vector<u64>`.
     pub(crate) fn solve(&self, args: &[TypeSize]) -> PartialVMResult<TypeSize> {
         Ok(TypeSize {
@@ -397,7 +395,7 @@ impl PartialTypeSizeFormula {
     /// is how a datatype instantiation `D<A0, A1, ..>` folds its argument formulae into `D`'s.
     ///
     /// Example: `D`'s `type_size` is `1 + x0`; instantiating with `A0` whose `type_size` is
-    /// `1 + x1` yields `1 + (1 + x1) = 2 + x1` — a formula over the *ambient* parameters.
+    /// `1 + x1` yields `1 + (1 + x1) = 2 + x1` -- a formula over the *ambient* parameters.
     pub(crate) fn substitute(
         &self,
         args: &[PartialTypeSizeFormula],
@@ -427,27 +425,333 @@ fn project<T, U>(items: &[T], f: impl Fn(&T) -> U) -> Vec<U> {
 // ArenaTypeSizeFormula
 // -------------------------------------------------------------------------------------------------
 
-/// A datatype-application field of a datatype, left symbolic until a linkage resolves it.
-/// `field_type` is the field's datatype-application type (`R<a…>`); `value_depth_offset` and
-/// `layout_size_coeff` are how the field folds into the two through-field measures.
+/// Index into [`ArenaTypeSizeFormula::keys`].
+pub(crate) type KeyIndex = u16;
+/// Index into [`ArenaTypeSizeFormula::applications`].
+pub(crate) type ApplicationIndex = u16;
+
+/// One datatype application `D<a0, …, an>` from a field or term type. Evaluating it is a single
+/// [`substitute`](PartialTypeSizeFormula::substitute) of the argument formulae into `D`'s
+/// resolved formula.
+///
+/// Example: in `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }` (`T`, `R`, `S`
+/// datatypes), `y`'s `T<u64>` is `{ datatype: T, arguments: [u64], .. }`, and `z`'s `R<S<A>>`
+/// is `{ datatype: R, arguments: [r1], .. }`, where `r1` references `S<A>`'s own entry,
+/// emitted earlier.
 #[derive(Debug)]
-pub(crate) struct ArenaApply {
-    field_type: VMPointer<ArenaType>,
-    value_depth_offset: u64,
-    layout_size_coeff: u64,
+pub(crate) struct Application {
+    /// The applied datatype, as an index into [`ArenaTypeSizeFormula::keys`].
+    datatype: KeyIndex,
+    arguments: ArenaVec<Argument>,
+    /// `Some(depth)` iff this application is one of the datatype's fields (or a term's root),
+    /// with the field's value sitting `depth` nesting levels below the datatype; `None` for a
+    /// subterm of a later entry, whose size is already counted inside its consumer (folding it
+    /// again would double-count).
+    ///
+    /// Example: in `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }`, `y`'s `T<u64>`
+    /// entry gets `Some(1)` (a direct field), `z`'s `R<..>` entry gets `Some(2)` (one vector
+    /// layer down), and the `S<A>` inside it gets `None` -- `R`'s entry already counts it.
+    field_depth: Option<u64>,
 }
 
-/// A datatype's four size formulae over its own type parameters, built at JIT time.
+/// One type argument of an [`Application`]: a base type under some number of `vector<…>` (or
+/// reference) layers.
+///
+/// Example: `vector<vector<u64>>` is `{ vector_layers: 2, base: Primitive }`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Argument {
+    /// Number of `vector<…>`/reference layers around `base`; each contributes one node and one
+    /// level to every measure (one [`wrap`](PartialTypeSizeFormula::wrap) at evaluation).
+    vector_layers: u16,
+    base: ArgumentBase,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ArgumentBase {
+    /// A non-composite type (`u64`, `address`, …): constant `1` in every measure.
+    Primitive,
+    /// The enclosing datatype's (or, for a term, function's) type parameter `i`: the identity
+    /// formula `xi`. This is what
+    /// makes evaluation produce a *formula* over the datatype's parameters rather than a number.
+    TypeParameter(TyParamIndex),
+    /// The result of an earlier application -- how nesting reads after linearization: for
+    /// datatypes `R` and `S`, in `R<S<u64>>` the entry for `S<u64>` precedes `R`'s, which
+    /// references it here.
+    Application(ApplicationIndex),
+}
+
+/// A datatype's four size formulae over its own type parameters, built at JIT time. (A type
+/// *term* compiles to the same shape via [`from_term`](Self::from_term), over the enclosing
+/// function's type parameters; "field" below then means the term's root.)
+///
 /// `type_size`/`type_depth` are closed. `value_depth`/`layout_size` are the `*_local` part (the
-/// contribution of the datatype's primitive/parameter/vector field structure) plus `apps` (the
-/// datatype-application fields), resolved by [`substitute`](Self::substitute).
+/// contribution of the datatype's primitive/parameter/vector field structure) plus the
+/// datatype-application fields, carried symbolically until a linkage resolves them: given the
+/// resolved formula of every datatype in `keys`, [`evaluate`](Self::evaluate) computes this
+/// formula's own flat form directly.
+///
+/// Example: `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }` (`T`, `R`, `S` datatypes)
+/// builds
+///
+/// ```text
+/// keys         = [T, S, R]                       // first-mention order
+/// applications = [ T<u64>  field_depth: Some(1), // field `y`
+///                  S<x0>,                        // subterm: argument of the next entry
+///                  R<r1>   field_depth: Some(2)] // field `z`, below its vector layer
+/// ```
+///
+/// while `x` and `z`'s vector fold into the locals: `value_depth_local = max(2)` and
+/// `layout_size_local = 3` (the `W` node, the `u64`, the vector).
 #[derive(Debug)]
 pub(crate) struct ArenaTypeSizeFormula {
     pub(crate) type_size: LinearForm,
     pub(crate) type_depth: MaxPlusForm,
     pub(crate) value_depth_local: MaxPlusForm,
     pub(crate) layout_size_local: LinearForm,
-    pub(crate) apps: ArenaVec<ArenaApply>,
+    /// Every datatype mentioned by the field (or term) types (deduplicated, first-mention
+    /// order). These are exactly the formulae [`evaluate`](Self::evaluate) must be handed; the
+    /// dispatch tables' resolution work queue reads this list directly, so dependency
+    /// discovery never touches a type.
+    keys: ArenaVec<VirtualTableKey>,
+    /// The fields' (or term's) datatype applications, **linearized**: the application trees,
+    /// flattened at JIT time into one sequence in dependency order -- an entry's arguments only
+    /// reference the results of strictly earlier entries, so evaluation is one in-order pass
+    /// with no recursion. Every syntactic application occurrence is its own entry (no
+    /// common-subexpression sharing), which is what lets each entry carry its `field_depth`
+    /// role inline.
+    applications: ArenaVec<Application>,
+}
+
+/// JIT-side linearizer state: the deduplicated key list and the applications emitted so far
+/// (heap-side builders, arena-allocated by [`finish`](Linearizer::finish) once emission is
+/// complete).
+struct Linearizer {
+    keys: Vec<VirtualTableKey>,
+    applications: Vec<ApplicationBuilder>,
+}
+
+struct ApplicationBuilder {
+    datatype: KeyIndex,
+    arguments: Vec<Argument>,
+    field_depth: Option<u64>,
+}
+
+impl Linearizer {
+    fn new() -> Self {
+        Self {
+            keys: vec![],
+            applications: vec![],
+        }
+    }
+
+    /// The index of `key` in the deduplicated key list, appending it on first mention.
+    fn intern_key(&mut self, key: &VirtualTableKey) -> PartialVMResult<KeyIndex> {
+        let ndx = match self.keys.iter().position(|k| k == key) {
+            Some(ndx) => ndx,
+            None => {
+                self.keys.push(key.clone());
+                self.keys.len().saturating_sub(1)
+            }
+        };
+        checked_as!(ndx, u16)
+    }
+
+    /// Emit the applications of a datatype-application type in post-order (arguments before the
+    /// application that consumes them -- the linearization invariant) and return the root's
+    /// index. Runs on an explicit work stack: nothing recurs, however deeply the type nests.
+    ///
+    /// Example: for datatypes `R` and `S` and enclosing parameter `A`, `R<S<A>>` emits `S<x0>`
+    /// then `R<r0>` and returns `R`'s index; the argument `vector<vector<A>>` compiles to
+    /// `{ vector_layers: 2, base: TypeParameter(A) }`.
+    fn emit_application(&mut self, ty: &ArenaType) -> PartialVMResult<ApplicationIndex> {
+        // One work item: compile a type into an `Argument`, or assemble an application from
+        // the last `argc` compiled arguments (its own, in order).
+        enum Item<'a> {
+            Compile(&'a ArenaType),
+            Assemble {
+                key: &'a VirtualTableKey,
+                argc: usize,
+                vector_layers: u16,
+            },
+        }
+
+        let mut work = vec![Item::Compile(ty)];
+        let mut compiled: Vec<Argument> = vec![];
+        while let Some(item) = work.pop() {
+            match item {
+                Item::Compile(mut ty) => {
+                    // Strip the vector/reference layers, then dispatch on the base.
+                    let mut vector_layers: usize = 0;
+                    while let ArenaType::Vector(inner)
+                    | ArenaType::Reference(inner)
+                    | ArenaType::MutableReference(inner) = ty
+                    {
+                        vector_layers = vector_layers.saturating_add(1);
+                        ty = inner;
+                    }
+                    let vector_layers = checked_as!(vector_layers, u16)?;
+                    match ty {
+                        ArenaType::TyParam(idx) => compiled.push(Argument {
+                            vector_layers,
+                            base: ArgumentBase::TypeParameter(*idx),
+                        }),
+                        ArenaType::Datatype(key) => work.push(Item::Assemble {
+                            key,
+                            argc: 0,
+                            vector_layers,
+                        }),
+                        ArenaType::DatatypeInstantiation(inst) => {
+                            let (key, args) = &**inst;
+                            work.push(Item::Assemble {
+                                key,
+                                argc: args.len(),
+                                vector_layers,
+                            });
+                            // Reverse-pushed so the arguments compile (and land in
+                            // `compiled`) in argument order.
+                            for arg in args.iter().rev() {
+                                work.push(Item::Compile(arg));
+                            }
+                        }
+                        _ => compiled.push(Argument {
+                            vector_layers,
+                            base: ArgumentBase::Primitive,
+                        }),
+                    }
+                }
+                Item::Assemble {
+                    key,
+                    argc,
+                    vector_layers,
+                } => {
+                    let split = compiled.len().checked_sub(argc).ok_or_else(|| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "argument underflow while linearizing a size formula"
+                        )
+                    })?;
+                    let arguments = compiled.split_off(split);
+                    let datatype = self.intern_key(key)?;
+                    let ndx = self.applications.len();
+                    self.applications.push(ApplicationBuilder {
+                        datatype,
+                        arguments,
+                        field_depth: None,
+                    });
+                    compiled.push(Argument {
+                        vector_layers,
+                        base: ArgumentBase::Application(checked_as!(ndx, u16)?),
+                    });
+                }
+            }
+        }
+        // The caller hands us an application type, so exactly one bare application remains.
+        match compiled.as_slice() {
+            [
+                Argument {
+                    vector_layers: 0,
+                    base: ArgumentBase::Application(root),
+                },
+            ] => Ok(*root),
+            _ => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "emit_application on a non-application type"
+            )),
+        }
+    }
+
+    /// Arena-allocate the emitted keys and applications.
+    fn finish(
+        self,
+        arena: &ArenaBuilder,
+    ) -> PartialVMResult<(ArenaVec<VirtualTableKey>, ArenaVec<Application>)> {
+        let Linearizer { keys, applications } = self;
+        let applications = applications
+            .into_iter()
+            .map(|builder| {
+                Ok(Application {
+                    datatype: builder.datatype,
+                    arguments: arena.alloc_vec(builder.arguments.into_iter())?,
+                    field_depth: builder.field_depth,
+                })
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        Ok((
+            arena.alloc_vec(keys.into_iter())?,
+            arena.alloc_vec(applications.into_iter())?,
+        ))
+    }
+}
+
+/// Fold one field (at `prefix_depth` value-nesting levels below the datatype; 1 for a direct
+/// field of a datatype, 0 for a bare term) into the through-field forms. Interior vector layers
+/// are consumed by the loop; datatype applications are linearized into `Application` entries
+/// with the field root marked by its `field_depth`. Nothing recurs.
+///
+/// Example: for `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }` (`T`, `R`, `S`
+/// datatypes), `x` bumps `value_depth_local`'s constant to 2 and adds one layout node; `y`
+/// emits its application at depth 1 and adds nothing local; `z`'s vector adds one more of each
+/// and its `R<S<A>>` is emitted at depth 2. Had `W` had a field `A` instead, it would add the
+/// terms `1 + x0` (depth) and `x0` (layout).
+fn visit_field(
+    mut ty: &ArenaType,
+    mut prefix_depth: u64,
+    value_depth_local: &mut MaxPlusForm,
+    layout_size_local: &mut LinearForm,
+    linearizer: &mut Linearizer,
+) -> PartialVMResult<()> {
+    loop {
+        match ty {
+            ArenaType::Vector(inner)
+            | ArenaType::Reference(inner)
+            | ArenaType::MutableReference(inner) => {
+                value_depth_local.constant = value_depth_local
+                    .constant
+                    .max(prefix_depth.saturating_add(1));
+                layout_size_local.constant = layout_size_local.constant.saturating_add(1);
+                prefix_depth = prefix_depth.saturating_add(1);
+                ty = inner;
+            }
+            ArenaType::TyParam(idx) => {
+                match value_depth_local.terms.iter_mut().find(|t| t.param == *idx) {
+                    Some(existing) => existing.offset = existing.offset.max(prefix_depth),
+                    None => value_depth_local.terms.push(MaxPlusTerm {
+                        param: *idx,
+                        offset: prefix_depth,
+                    }),
+                }
+                match layout_size_local.terms.iter_mut().find(|t| t.param == *idx) {
+                    Some(existing) => existing.coefficient = existing.coefficient.saturating_add(1),
+                    None => layout_size_local.terms.push(LinearTerm {
+                        param: *idx,
+                        coefficient: 1,
+                    }),
+                }
+                return Ok(());
+            }
+            ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
+                let root = linearizer.emit_application(ty)?;
+                linearizer
+                    .applications
+                    .get_mut(root as usize)
+                    .ok_or_else(|| {
+                        partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "linearizer returned an out-of-bounds application index"
+                        )
+                    })?
+                    .field_depth = Some(prefix_depth);
+                return Ok(());
+            }
+            _ => {
+                value_depth_local.constant = value_depth_local
+                    .constant
+                    .max(prefix_depth.saturating_add(1));
+                layout_size_local.constant = layout_size_local.constant.saturating_add(1);
+                return Ok(());
+            }
+        }
+    }
 }
 
 impl ArenaTypeSizeFormula {
@@ -466,66 +770,6 @@ impl ArenaTypeSizeFormula {
             extra_layout_nodes: u64,
             arena: &ArenaBuilder,
         ) -> PartialVMResult<ArenaTypeSizeFormula> {
-            // Fold one field (at `prefix_depth` value-nesting levels below the datatype) into the
-            // through-field forms. `prefix_depth` starts at 1 (a direct field sits one level below
-            // the datatype itself). Datatype-application fields become symbolic `ArenaApply`s.
-            fn visit_field(
-                ty: &ArenaType,
-                prefix_depth: u64,
-                value_depth_local: &mut MaxPlusForm,
-                layout_size_local: &mut LinearForm,
-                apps: &mut Vec<ArenaApply>,
-            ) {
-                match ty {
-                    ArenaType::TyParam(idx) => {
-                        match value_depth_local.terms.iter_mut().find(|t| t.param == *idx) {
-                            Some(existing) => existing.offset = existing.offset.max(prefix_depth),
-                            None => value_depth_local.terms.push(MaxPlusTerm {
-                                param: *idx,
-                                offset: prefix_depth,
-                            }),
-                        }
-                        match layout_size_local.terms.iter_mut().find(|t| t.param == *idx) {
-                            Some(existing) => {
-                                existing.coefficient = existing.coefficient.saturating_add(1)
-                            }
-                            None => layout_size_local.terms.push(LinearTerm {
-                                param: *idx,
-                                coefficient: 1,
-                            }),
-                        }
-                    }
-                    ArenaType::Vector(inner)
-                    | ArenaType::Reference(inner)
-                    | ArenaType::MutableReference(inner) => {
-                        value_depth_local.constant = value_depth_local
-                            .constant
-                            .max(prefix_depth.saturating_add(1));
-                        layout_size_local.constant = layout_size_local.constant.saturating_add(1);
-                        visit_field(
-                            inner,
-                            prefix_depth.saturating_add(1),
-                            value_depth_local,
-                            layout_size_local,
-                            apps,
-                        );
-                    }
-                    ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
-                        apps.push(ArenaApply {
-                            field_type: VMPointer::from_ref(ty),
-                            value_depth_offset: prefix_depth,
-                            layout_size_coeff: 1,
-                        });
-                    }
-                    _ => {
-                        value_depth_local.constant = value_depth_local
-                            .constant
-                            .max(prefix_depth.saturating_add(1));
-                        layout_size_local.constant = layout_size_local.constant.saturating_add(1);
-                    }
-                }
-            }
-
             // The datatype instantiated over its own parameters, `S<T0..Tn>`: one node plus each
             // parameter, one level deep.
             let type_size = LinearForm {
@@ -549,24 +793,26 @@ impl ArenaTypeSizeFormula {
             let mut value_depth_local = MaxPlusForm::constant(1);
             let mut layout_size_local =
                 LinearForm::constant(1u64.saturating_add(extra_layout_nodes));
-            let mut apps = vec![];
+            let mut linearizer = Linearizer::new();
             for field in field_types {
                 visit_field(
                     field,
                     1,
                     &mut value_depth_local,
                     &mut layout_size_local,
-                    &mut apps,
-                );
+                    &mut linearizer,
+                )?;
             }
             value_depth_local.canonicalize();
             layout_size_local.canonicalize();
+            let (keys, applications) = linearizer.finish(arena)?;
             Ok(ArenaTypeSizeFormula {
                 type_size,
                 type_depth,
                 value_depth_local,
                 layout_size_local,
-                apps: arena.alloc_vec(apps.into_iter())?,
+                keys,
+                applications,
             })
         }
 
@@ -595,21 +841,189 @@ impl ArenaTypeSizeFormula {
         }
     }
 
-    /// Resolve this datatype's formula against a linkage (the vtable is the env), yielding a flat
-    /// [`PartialTypeSizeFormula`] over the datatype's parameters. Each application is resolved by
-    /// interpreting its field type against the vtable (`arena_type_size_formula`, which hits
-    /// `virtual_key_size_formula` and recurs back here through the cache).
-    pub(crate) fn resolve(
+    /// Build the size formulae of a type *term* (an instruction operand or an instantiation
+    /// signature entry) over the enclosing function's type parameters. A term compiles exactly
+    /// like a single datatype field at nesting depth 0 (same locals fold, same linearized
+    /// applications); only `type_size`/`type_depth` differ: syntactic measures are
+    /// linkage-independent (a datatype node is one syntactic node regardless of its
+    /// definition), so they close structurally right here at JIT. Runs on an explicit work
+    /// stack: nothing recurs.
+    ///
+    /// Example: for datatypes `R` and `S`, the term `vector<R<S<u64>>>` gets `type_size = 4`,
+    /// `type_depth = max(4)`, locals `value_depth = max(1)` / `layout_size = 1` (the vector),
+    /// and the application chain `[S<u64>, R<r0>]` with `R`'s entry folded at depth 1.
+    pub(crate) fn from_term(ty: &ArenaType, arena: &ArenaBuilder) -> PartialVMResult<Self> {
+        // The syntactic measures, computed structurally over a worklist: each node is one
+        // `type_size` node at its `type_depth` level; parameters contribute their own measures
+        // (coefficients sum, offsets max on repeated parameters).
+        let mut type_size = LinearForm::constant(0);
+        let mut type_depth = MaxPlusForm::constant(0);
+        let mut work: Vec<(&ArenaType, u64)> = vec![(ty, 0)];
+        while let Some((ty, depth)) = work.pop() {
+            match ty {
+                ArenaType::TyParam(idx) => {
+                    match type_size.terms.iter_mut().find(|t| t.param == *idx) {
+                        Some(existing) => {
+                            existing.coefficient = existing.coefficient.saturating_add(1)
+                        }
+                        None => type_size.terms.push(LinearTerm {
+                            param: *idx,
+                            coefficient: 1,
+                        }),
+                    }
+                    match type_depth.terms.iter_mut().find(|t| t.param == *idx) {
+                        Some(existing) => existing.offset = existing.offset.max(depth),
+                        None => type_depth.terms.push(MaxPlusTerm {
+                            param: *idx,
+                            offset: depth,
+                        }),
+                    }
+                }
+                ArenaType::Vector(inner)
+                | ArenaType::Reference(inner)
+                | ArenaType::MutableReference(inner) => {
+                    type_size.constant = type_size.constant.saturating_add(1);
+                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                    work.push((inner, depth.saturating_add(1)));
+                }
+                ArenaType::DatatypeInstantiation(inst) => {
+                    type_size.constant = type_size.constant.saturating_add(1);
+                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                    let (_, args) = &**inst;
+                    for arg in args.iter() {
+                        work.push((arg, depth.saturating_add(1)));
+                    }
+                }
+                // Primitives and uninstantiated datatypes: one node, one level.
+                _ => {
+                    type_size.constant = type_size.constant.saturating_add(1);
+                    type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
+                }
+            }
+        }
+        type_size.canonicalize();
+        type_depth.canonicalize();
+
+        // The term is a "field" of nothing: no wrapping datatype node, so the locals start at
+        // zero and the fold sits at depth 0.
+        let mut value_depth_local = MaxPlusForm::constant(0);
+        let mut layout_size_local = LinearForm::constant(0);
+        let mut linearizer = Linearizer::new();
+        visit_field(
+            ty,
+            0,
+            &mut value_depth_local,
+            &mut layout_size_local,
+            &mut linearizer,
+        )?;
+        value_depth_local.canonicalize();
+        layout_size_local.canonicalize();
+        let (keys, applications) = linearizer.finish(arena)?;
+        Ok(ArenaTypeSizeFormula {
+            type_size,
+            type_depth,
+            value_depth_local,
+            layout_size_local,
+            keys,
+            applications,
+        })
+    }
+
+    // The syntactic measures never depend on the linkage, so they solve straight off the
+    // JIT-closed forms -- no dependency resolution, for the call sites (`realize_type`) that
+    // need only these two.
+
+    pub(crate) fn solve_type_size(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
+        self.type_size.solve(&project(args, |s| s.type_size))
+    }
+
+    pub(crate) fn solve_type_depth(&self, args: &[TypeSize]) -> PartialVMResult<u64> {
+        self.type_depth.solve(&project(args, |s| s.type_depth))
+    }
+
+    /// The datatypes this formula's applications mention -- exactly the keys
+    /// [`evaluate`](Self::evaluate)'s `key_formulae` must contain. The dispatch tables' work
+    /// queue reads this list directly to resolve dependencies bottom-up (with cycle detection)
+    /// without ever walking an [`ArenaType`].
+    ///
+    /// Example: `[T, S, R]` for `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }`.
+    pub(crate) fn vtable_keys(&self) -> &[VirtualTableKey] {
+        &self.keys
+    }
+
+    /// Close this formula against a linkage: given the resolved formula of every
+    /// datatype in [`vtable_keys`](Self::vtable_keys), replay the linearized applications in
+    /// one pass (one [`substitute`](PartialTypeSizeFormula::substitute) per entry, arguments
+    /// read from earlier results), folding field roots into the through-field measures inline,
+    /// and return the flat [`PartialTypeSizeFormula`] over the formula's own parameters.
+    ///
+    /// Example: `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }`, where `T`, `R`, and
+    /// `S` are all shaped like `struct T<X> { t: X }` and so resolve to
+    /// `value_depth = max(1, 1+x0)`. Starting from `value_depth_local = max(2)` (the `u64` and
+    /// the vector):
+    ///
+    /// ```text
+    /// r0 = T⟨u64⟩ = 2                              // field `y`: fold at depth 1
+    /// r1 = S⟨x0⟩  = max(1, 1+x0)                   // subterm: no fold
+    /// r2 = R⟨r1⟩  = max(2, 2+x0)                   // field `z`: fold at depth 2
+    /// value_depth(W) = max(2, 1+r0, 2+r2) = max(4, 4+x0)
+    /// ```
+    ///
+    /// The layout folds run the same pass but *add*: `layout_size(W) = 3 + r0 + r2 = 7 + x0`.
+    /// (Depth folds on a shared parameter keep the deeper offset instead -- had `A` also been a
+    /// direct field, its `1 + x0` would be absorbed by `z`'s `4 + x0`.)
+    ///
+    /// A missing key or out-of-range index is an invariant violation: the applications are
+    /// JIT-compiled from well-formed types in dependency order, and the dispatch tables resolve
+    /// every key in [`vtable_keys`](Self::vtable_keys) into `key_formulae` (which never evicts)
+    /// before calling this. The cache is only ever probed by key (never iterated), so its
+    /// hashing order is not a determinism hazard.
+    pub(crate) fn evaluate(
         &self,
-        env: &VMDispatchTables,
-        visiting: &mut Visiting,
+        key_formulae: &TypeCache,
     ) -> PartialVMResult<PartialTypeSizeFormula> {
+        fn broken(what: &str) -> PartialVMError {
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "{what} while evaluating a datatype size formula"
+            )
+        }
+
+        // One borrow for the whole evaluation: no mutation happens here, so every lookup below
+        // returns a reference into the cache -- no per-lookup clones.
+        let key_formulae = key_formulae.read();
+        let mut results: Vec<PartialTypeSizeFormula> = Vec::with_capacity(self.applications.len());
         let mut value_depth = self.value_depth_local.clone();
         let mut layout_size = self.layout_size_local.clone();
-        for apply in self.apps.iter() {
-            let applied = env.arena_type_size_formula_impl(apply.field_type.to_ref(), visiting)?;
-            value_depth.absorb(apply.value_depth_offset, &applied.value_depth);
-            layout_size.absorb(apply.layout_size_coeff, &applied.layout_size);
+        for application in self.applications.iter() {
+            let args = application
+                .arguments
+                .iter()
+                .map(|argument| -> PartialVMResult<PartialTypeSizeFormula> {
+                    let base = match argument.base {
+                        ArgumentBase::Primitive => PartialTypeSizeFormula::primitive(),
+                        ArgumentBase::TypeParameter(idx) => PartialTypeSizeFormula::parameter(idx),
+                        ArgumentBase::Application(ndx) => results
+                            .get(ndx as usize)
+                            .cloned()
+                            .ok_or_else(|| broken("out-of-order application reference"))?,
+                    };
+                    Ok((0..argument.vector_layers).fold(base, |formula, _| formula.wrap()))
+                })
+                .collect::<PartialVMResult<Vec<_>>>()?;
+            let key = self
+                .keys
+                .get(application.datatype as usize)
+                .ok_or_else(|| broken("out-of-bounds key index"))?;
+            let formula = key_formulae
+                .get(key)
+                .ok_or_else(|| broken("unresolved datatype dependency"))?;
+            let applied = formula.substitute(&args)?;
+            if let Some(depth) = application.field_depth {
+                value_depth.absorb(depth, &applied.value_depth);
+                layout_size.absorb(1, &applied.layout_size);
+            }
+            results.push(applied);
         }
         value_depth.canonicalize();
         layout_size.canonicalize();

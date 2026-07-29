@@ -774,7 +774,7 @@ fn test_layout_size() {
                 terms: param0(),
             },
         ),
-        // A::S { f1: B::S, f2: C::S } — 1 + 3 + 3, no parameters.
+        // A::S { f1: B::S, f2: C::S } -- 1 + 3 + 3, no parameters.
         (
             "A",
             "S",
@@ -799,7 +799,7 @@ fn test_layout_size() {
                 terms: vec![],
             },
         ),
-        // D::S { f1: B::S } — 1 + 3.
+        // D::S { f1: B::S } -- 1 + 3.
         (
             "D",
             "S",
@@ -808,7 +808,7 @@ fn test_layout_size() {
                 terms: vec![],
             },
         ),
-        // F::S<T> { f1: T, f2: u64 } — 1 + T + 1.
+        // F::S<T> { f1: T, f2: u64 } -- 1 + T + 1.
         (
             "F",
             "S",
@@ -817,7 +817,7 @@ fn test_layout_size() {
                 terms: param0(),
             },
         ),
-        // E::S<T> { f1: F::S<T>, f2: u64 } — 1 + (2 + T) + 1.
+        // E::S<T> { f1: F::S<T>, f2: u64 } -- 1 + (2 + T) + 1.
         (
             "E",
             "S",
@@ -826,7 +826,7 @@ fn test_layout_size() {
                 terms: param0(),
             },
         ),
-        // enum J::E<T> { A(T), B(T, u64) } — E node + 2 variant nodes + 2·T (one per T field) +
+        // enum J::E<T> { A(T), B(T, u64) } -- E node + 2 variant nodes + 2·T (one per T field) +
         // u64 node = 4 + 2·T.
         (
             "J",
@@ -853,7 +853,162 @@ fn test_layout_size() {
     }
 }
 
-/// The `layout_size` formula must equal the actual node count of the generated layout — the
+/// Nested datatype applications through the linearized formula path. `0x2::W::W<A>` exercises
+/// everything at once: subterm applications (whose sizes must fold in exactly once, through
+/// their consumer), field-root applications, vector layers on an application argument, and
+/// term merging across fields (`A` occurs at depths 4 and 3, so depths max; and in three
+/// field positions, so layouts sum). Expected forms are hand-computed:
+///
+///   value_depth(W)  = max(7, 4 + A)     layout_size(W) = 14 + 3·A
+#[test]
+fn test_nested_application_formulas() {
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    adapter.publish_package(get_depth_tests_modules());
+    let module_w = ModuleId::new(ADDR2, Identifier::new("W").unwrap());
+    let w = ident_str!("W");
+
+    assert_eq!(
+        adapter.compute_depth_of_datatype(&module_w, w),
+        MaxPlusForm {
+            constant: 7,
+            terms: vec![MaxPlusTerm {
+                param: 0,
+                offset: 4,
+            }],
+        }
+    );
+    assert_eq!(
+        adapter.compute_layout_of_datatype(&module_w, w),
+        LinearForm {
+            constant: 14,
+            terms: vec![LinearTerm {
+                param: 0,
+                coefficient: 3,
+            }],
+        }
+    );
+
+    // Solve concrete instantiations against the resolved formula, and check the layout measure
+    // against the actually generated layout (the closure property).
+    let w_u64 = adapter.datatype(&module_w, w, vec![Type::U64]);
+    assert_eq!(
+        adapter.type_size_of(&w_u64),
+        TypeSize {
+            type_size: 2,
+            type_depth: 2,
+            value_depth: 7,
+            layout_size: 17,
+        }
+    );
+    assert_eq!(adapter.generated_layout_nodes(&w_u64), 17);
+
+    let ss_u64 = adapter.datatype(&module_w, ident_str!("SS"), vec![Type::U64]);
+    let w_ss_u64 = adapter.datatype(&module_w, w, vec![ss_u64]);
+    assert_eq!(
+        adapter.type_size_of(&w_ss_u64),
+        TypeSize {
+            type_size: 3,
+            type_depth: 3,
+            value_depth: 7,
+            layout_size: 23,
+        }
+    );
+    assert_eq!(adapter.generated_layout_nodes(&w_ss_u64), 23);
+}
+
+/// The term pipeline (`ArenaTypeSizeFormula::from_term` at JIT + `term_size_formula` at
+/// runtime) must preserve argument order. `0x2::W::T<P, Q>` is asymmetric in `value_depth`
+/// (`max(2, 1+P, 2+Q)`), so swapped arguments would produce a wrong-but-plausible answer rather
+/// than an error: `T<u64, vector<u64>>` solves to depth 4 in argument order but 3 reversed. The
+/// nested term also exercises applications and vector layers inside a term's arguments.
+#[test]
+fn test_term_formula_argument_order() {
+    use crate::{
+        cache::arena::ArenaBuilder,
+        jit::execution::ast::{ArenaType, SizedType},
+        shared::type_size_formulae::ArenaTypeSizeFormula,
+    };
+
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    adapter.publish_package(get_depth_tests_modules());
+
+    let vm = adapter.runtime_adapter.write();
+    let session = vm.make_vm(adapter.store.linkage.clone()).unwrap();
+    let module_w = Identifier::new("W").unwrap();
+    let key = |name: &str| {
+        session
+            .virtual_tables
+            .to_virtual_table_key_for_testing(&ADDR2, &module_w, &Identifier::new(name).unwrap())
+            .unwrap()
+    };
+
+    let arena = ArenaBuilder::new_bounded();
+    let apply = |name: &str, args: Vec<ArenaType>| {
+        ArenaType::DatatypeInstantiation(
+            arena
+                .alloc_box((key(name), arena.alloc_vec(args.into_iter()).unwrap()))
+                .unwrap(),
+        )
+    };
+    let vec_of = |inner: ArenaType| ArenaType::Vector(arena.alloc_box(inner).unwrap());
+
+    // T<u64, vector<u64>>: type 4 nodes / 3 deep; value depth max(2, 1+1, 2+2) = 4 (3 if the
+    // arguments were swapped); layout 2 + 1 + 2 = 5.
+    let sized = |ty: ArenaType| SizedType {
+        size_formula: ArenaTypeSizeFormula::from_term(&ty, &arena).unwrap(),
+        ty,
+    };
+
+    let term = sized(apply("T", vec![ArenaType::U64, vec_of(ArenaType::U64)]));
+    let solved = session
+        .virtual_tables
+        .term_size_formula(&term)
+        .unwrap()
+        .solved()
+        .unwrap();
+    assert_eq!(
+        solved,
+        TypeSize {
+            type_size: 4,
+            type_depth: 3,
+            value_depth: 4,
+            layout_size: 5,
+        }
+    );
+
+    // T<SS<u64>, vector<KK<u64, Z>>>: nested applications on both sides, one under a vector.
+    let term = sized(apply(
+        "T",
+        vec![
+            apply("SS", vec![ArenaType::U64]),
+            vec_of(apply(
+                "KK",
+                vec![ArenaType::U64, ArenaType::Datatype(key("Z"))],
+            )),
+        ],
+    ));
+    let solved = session
+        .virtual_tables
+        .term_size_formula(&term)
+        .unwrap()
+        .solved()
+        .unwrap();
+    assert_eq!(
+        solved,
+        TypeSize {
+            type_size: 7,
+            type_depth: 4,
+            value_depth: 6,
+            layout_size: 10,
+        }
+    );
+}
+
+/// The `layout_size` formula must equal the actual node count of the generated layout -- the
 /// closure property, checked here against a spread of concrete instantiations.
 #[test]
 fn test_layout_size_matches_generated_layout() {
