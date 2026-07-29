@@ -28,6 +28,7 @@ use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::PipelineContext;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::checkpoint::filter::cp_by_epoch;
@@ -329,6 +330,7 @@ impl Checkpoint {
             type_: "Query".to_string(),
             field: Some("checkpoints".to_string()),
             filters: Some(filter.active_filters()),
+            pipeline_context: PipelineContext::default(),
         };
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 

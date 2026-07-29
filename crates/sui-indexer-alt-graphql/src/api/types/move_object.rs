@@ -9,6 +9,7 @@ use async_graphql::Interface;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
 use futures::future::try_join_all;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::object::MoveObject as NativeMoveObject;
 use tokio::sync::OnceCell;
@@ -118,7 +119,7 @@ pub(crate) enum IMoveObject {
 }
 
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
-#[Object]
+#[GatedObject]
 impl MoveObject {
     /// The Move object's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {

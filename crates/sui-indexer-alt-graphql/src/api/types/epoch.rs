@@ -14,6 +14,7 @@ use futures::future::OptionFuture;
 use futures::join;
 use futures::try_join;
 use move_core_types::language_storage::StructTag;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
 use sui_indexer_alt_reader::epochs::CheckpointBoundedEpochStartKey;
 use sui_indexer_alt_reader::epochs::EpochEndKey;
@@ -87,7 +88,7 @@ struct SequenceNumbers {
 /// - reference gas price,
 /// - system package versions,
 /// - validators in the committee.
-#[Object]
+#[GatedObject]
 impl Epoch {
     /// The epoch's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {

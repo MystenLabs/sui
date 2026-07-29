@@ -79,6 +79,14 @@ const CHECKPOINT_QUERY: &str = r#"
     }
 "#;
 
+const OBJECT_AT_CHECKPOINT_QUERY: &str = r#"
+    query($address: SuiAddress!, $atCheckpoint: UInt53) {
+        object(address: $address, atCheckpoint: $atCheckpoint) {
+            digest
+        }
+    }
+"#;
+
 /// Test available range queries with retention configurations
 #[tokio::test]
 async fn test_available_range_with_pipelines() {
@@ -256,7 +264,7 @@ async fn test_transaction_affected_object_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         TRANSACTIONS_QUERY,
         json!({ "affectedObject": SuiAddress::ZERO.to_string() }),
-        "transactions",
+        &["transactions"],
         "filtering transactions by affected object not available",
     )
     .await;
@@ -269,7 +277,7 @@ async fn test_transaction_affected_address_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         TRANSACTIONS_QUERY,
         json!({ "affectedAddress": SuiAddress::ZERO.to_string() }),
-        "transactions",
+        &["transactions"],
         "filtering transactions by affected address not available",
     )
     .await;
@@ -281,7 +289,7 @@ async fn test_transaction_sent_address_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         TRANSACTIONS_QUERY,
         json!({ "sentAddress": SuiAddress::ZERO.to_string() }),
-        "transactions",
+        &["transactions"],
         "filtering transactions by affected address not available",
     )
     .await;
@@ -293,7 +301,7 @@ async fn test_transaction_function_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         TRANSACTIONS_QUERY,
         json!({ "function": "0x2::coin::join" }),
-        "transactions",
+        &["transactions"],
         "filtering transactions by function calls not available",
     )
     .await;
@@ -305,7 +313,7 @@ async fn test_transaction_kind_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         TRANSACTIONS_QUERY,
         json!({ "kind": "PROGRAMMABLE_TX" }),
-        "transactions",
+        &["transactions"],
         "filtering transactions by kind not available",
     )
     .await;
@@ -317,7 +325,7 @@ async fn test_event_module_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         EVENTS_QUERY,
         json!({ "module": SuiAddress::ZERO.to_string() }),
-        "events",
+        &["events"],
         "querying events by emitting module not available",
     )
     .await;
@@ -330,10 +338,103 @@ async fn test_event_type_filter_requires_pipeline() {
     assert_filter_requires_pipeline(
         EVENTS_QUERY,
         json!({ "type": SuiAddress::ZERO.to_string() }),
-        "events",
+        &["events"],
         "querying events by type not available",
     )
     .await;
+}
+
+/// `Object::checkpoint_bounded` (reached via `Query.object(atCheckpoint: ...)`, and shared by
+/// `IObject.objectAt`/`objectVersionsAfter`/`objectVersionsBefore` and
+/// `Query.nameRecord`/`Address.defaultNameRecord`) has no manual `AvailableRangeKey` check of its
+/// own -- this test proves it's protected anyway. `Query::object`'s own explicit `gate_filtered`
+/// call (query.rs) catches it first here, since `version` isn't provided; `#[GatedObject]`'s
+/// injected check on `object.rs`'s `objectAt`/etc. is defense-in-depth for the same gap, reachable
+/// directly from those fields.
+#[tokio::test]
+async fn test_object_at_checkpoint_requires_obj_versions_pipeline() {
+    let mut cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
+        kv_transactions: Some(ConcurrentLayer::default()),
+        // obj_versions is intentionally left unconfigured.
+        ..Default::default()
+    })
+    .await;
+
+    cluster.create_checkpoint().await;
+
+    let response = execute_graphql_query(
+        &cluster,
+        OBJECT_AT_CHECKPOINT_QUERY,
+        Some(json!({
+            "address": SuiAddress::ZERO.to_string(),
+            "atCheckpoint": 0,
+        })),
+    )
+    .await;
+
+    assert_json_snapshot!(response["errors"], @r###"
+    [
+      {
+        "message": "querying object versions not available",
+        "locations": [
+          {
+            "line": 3,
+            "column": 9
+          }
+        ],
+        "path": [
+          "object"
+        ],
+        "extensions": {
+          "code": "FEATURE_UNAVAILABLE"
+        }
+      }
+    ]"###);
+}
+
+/// Per-block error-path parity with the removed `PipelineAvailability` extension: `Epoch` is
+/// migrated to `#[GatedObject]`, and `coinDenyList` unconditionally needs `obj_versions` (see
+/// `collect_pipelines!`'s `Epoch.[coinDenyList]` entry) with no manual `AvailableRangeKey` check
+/// of its own -- proves the migration didn't drop this field's protection.
+#[tokio::test]
+async fn test_epoch_coin_deny_list_requires_obj_versions_pipeline() {
+    let mut cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(ConcurrentLayer::default()),
+        kv_transactions: Some(ConcurrentLayer::default()),
+        // obj_versions is intentionally left unconfigured.
+        ..Default::default()
+    })
+    .await;
+
+    cluster.create_checkpoint().await;
+
+    let response = execute_graphql_query(
+        &cluster,
+        "query { epoch { coinDenyList { digest } } }",
+        None,
+    )
+    .await;
+
+    assert_json_snapshot!(response["errors"], @r###"
+    [
+      {
+        "message": "querying object versions not available",
+        "locations": [
+          {
+            "line": 1,
+            "column": 17
+          }
+        ],
+        "path": [
+          "epoch",
+          "coinDenyList"
+        ],
+        "extensions": {
+          "code": "FEATURE_UNAVAILABLE"
+        }
+      }
+    ]"###);
 }
 
 #[tokio::test]
@@ -629,9 +730,12 @@ async fn query_events(cluster: &FullCluster, filter: Value) -> Value {
 
 /// Build a cluster with only `cp_sequence_numbers`, `tx_digests`, and `kv_transactions`
 /// configured (every filter-specific pipeline is left out), run `query` with `filter`, and assert
-/// it fails with a `FEATURE_UNAVAILABLE` error for `message` at the top-level `path` field —
-/// proving that the pipeline backing that filter is genuinely required to serve it.
-async fn assert_filter_requires_pipeline(query: &str, filter: Value, path: &str, message: &str) {
+/// it fails with a `FEATURE_UNAVAILABLE` error for `message` at the given `path` — proving that
+/// the pipeline backing that filter is genuinely required to serve it. These are the manual
+/// `AvailableRangeKey` checks in `transaction/mod.rs`/`event/mod.rs` (execution-time, hence the
+/// `path`), unaffected by the `#[GatedObject]` migration (see the "Out of scope" section of the
+/// `#[GatedObject]` rollout plan).
+async fn assert_filter_requires_pipeline(query: &str, filter: Value, path: &[&str], message: &str) {
     let mut cluster = cluster_with_pipelines(PipelineLayer {
         cp_sequence_numbers: Some(ConcurrentLayer::default()),
         tx_digests: Some(ConcurrentLayer::default()),
@@ -656,6 +760,6 @@ async fn assert_filter_requires_pipeline(query: &str, filter: Value, path: &str,
         "expected exactly one error, got: {errors:#?}"
     );
     assert_eq!(errors[0]["message"], message);
-    assert_eq!(errors[0]["path"], json!([path]));
+    assert_eq!(errors[0]["path"], json!(path));
     assert_eq!(errors[0]["extensions"]["code"], "FEATURE_UNAVAILABLE");
 }

@@ -4,10 +4,12 @@
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::Result;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 
 use crate::api::types::available_range::AvailableRange;
 use crate::api::types::available_range::AvailableRangeKey;
 use crate::api::types::available_range::Error;
+use crate::api::types::available_range::PipelineContext;
 use crate::config::Limits;
 use crate::error::RpcError;
 use crate::pagination::PaginationConfig;
@@ -337,6 +339,10 @@ impl ServiceConfig {
         field: Option<String>,
         filters: Option<Vec<String>>,
     ) -> Result<AvailableRange, RpcError<Error>> {
+        let pipeline_context = PipelineContext {
+            has_alpha_ledger_reader: ctx.data_opt::<AlphaLedgerGrpcReader>().is_some(),
+        };
+
         AvailableRange::new(
             ctx,
             &self.scope,
@@ -344,6 +350,7 @@ impl ServiceConfig {
                 type_,
                 field,
                 filters,
+                pipeline_context,
             },
         )
     }

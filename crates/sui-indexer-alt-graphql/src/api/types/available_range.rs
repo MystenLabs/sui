@@ -9,6 +9,7 @@ use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::registry::MetaType;
 use async_graphql::registry::Registry;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 
 use crate::api::types::checkpoint::Checkpoint;
 use crate::error::RpcError;
@@ -43,6 +44,18 @@ pub(crate) struct AvailableRangeKey {
 
     /// Optional filter to check retention for filtered queries
     pub(crate) filters: Option<Vec<String>>,
+
+    /// Runtime context that affects pipeline requirements beyond filters
+    pub(crate) pipeline_context: PipelineContext,
+}
+
+/// Runtime context that affects which pipelines a query needs, beyond its filters. Currently only
+/// tracks whether the alpha ledger gRPC reader is configured -- `Transaction::paginate` serves
+/// `transactions` from an alternate bitmap-backed store when it is, bypassing the postgres tx_*
+/// pipelines entirely (see `transaction/mod.rs`).
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub(crate) struct PipelineContext {
+    pub(crate) has_alpha_ledger_reader: bool,
 }
 
 #[derive(Clone)]
@@ -97,7 +110,13 @@ impl AvailableRangeKey {
     pub(crate) fn reader_lo(self, watermarks: &Watermarks) -> Result<u64, RpcError> {
         let mut pipelines = BTreeSet::new();
         let filters = BTreeSet::from_iter(self.filters.unwrap_or_default());
-        collect_pipelines(&self.type_, self.field.as_deref(), filters, &mut pipelines);
+        collect_pipelines(
+            &self.type_,
+            self.field.as_deref(),
+            filters,
+            &mut pipelines,
+            &self.pipeline_context,
+        );
 
         pipelines.iter().try_fold(0, |acc, pipeline| {
             let watermark = watermarks
@@ -135,6 +154,58 @@ impl AvailableRangeKey {
     }
 }
 
+/// Checks that `type_`'s `field` (unfiltered) has its backing pipeline(s), if any, configured.
+/// Used by the `#[GatedObject]` macro (`sui-indexer-alt-graphql-macros`) to gate fields whose
+/// pipeline requirement doesn't depend on a filter synthesized at runtime from `self`/scope.
+pub(crate) fn gate(ctx: &Context<'_>, type_: &str, field: &str) -> Result<(), RpcError> {
+    gate_filtered(ctx, type_, field, None)
+}
+
+/// As [`gate`], but for fields whose pipeline requirement depends on a filter -- used by fields
+/// that opt out of `#[GatedObject]`'s automatic injection (see its escape hatch) to gate
+/// themselves explicitly, e.g. `Query::object`/`Query::address`, whose pipeline requirement
+/// depends on a simple argument rather than being unconditional.
+pub(crate) fn gate_filtered(
+    ctx: &Context<'_>,
+    type_: &str,
+    field: &str,
+    filters: Option<Vec<String>>,
+) -> Result<(), RpcError> {
+    let watermarks: &Arc<Watermarks> = ctx.data()?;
+    let pipeline_context = PipelineContext {
+        has_alpha_ledger_reader: ctx.data_opt::<AlphaLedgerGrpcReader>().is_some(),
+    };
+    AvailableRangeKey {
+        type_: type_.to_string(),
+        field: Some(field.to_string()),
+        filters,
+        pipeline_context,
+    }
+    .reader_lo(watermarks)?;
+    Ok(())
+}
+
+/// Lets [`gate`]/[`gate_filtered`]'s error short-circuit a resolver method regardless of whether
+/// it returns a bare `Result` or the `Option<Result<_, _>>` shape used by nullable fields, and
+/// regardless of the method's own error type -- implemented by the `#[GatedObject]` macro's
+/// injected check, not called directly. Uses [`upcast`] since `gate`/`gate_filtered` only ever
+/// produce variants that exist for every error type (never `RpcError::BadUserInput`).
+pub(crate) trait Gateable {
+    fn gate_err(err: RpcError) -> Self;
+}
+
+impl<T, E: std::error::Error> Gateable for Option<Result<T, RpcError<E>>> {
+    fn gate_err(err: RpcError) -> Self {
+        Some(Err(upcast(err)))
+    }
+}
+
+impl<T, E: std::error::Error> Gateable for Result<T, RpcError<E>> {
+    fn gate_err(err: RpcError) -> Self {
+        Err(upcast(err))
+    }
+}
+
 /// Return the appropriate error for the query or filter if the pipeline is not available.
 /// Certain queryies or filters are not available if the pipeline supporting them is not configured.
 pub(crate) fn pipeline_unavailable(pipeline: &str) -> RpcError {
@@ -162,16 +233,17 @@ macro_rules! collect_pipelines {
     (
         $($type:ident . [$($field:ident),*]
         $(=> $delegate_type:ident . $delegate_field:tt $( ( $(.., $f_to_add:literal)? ) )? )?
-        $(|$pipes:ident, $filt:ident| $block:block)?
+        $(|$pipes:ident, $filt:ident, $pctx:ident| $block:block)?
         ;
     )*) => {
         /// Populates `pipelines` with pipeline names by matching the type, field, and filters to their dependent pipelines where data is available.
         /// The mapping is defined in the collect_pipelines! macro innvocation.
-        fn collect_pipelines(
+        pub(crate) fn collect_pipelines(
             type_: &str,
             field: Option<&str>,
             mut filters: BTreeSet<String>,
             pipelines: &mut BTreeSet<String>,
+            pipeline_context: &PipelineContext,
         ) {
             match (type_, field) {
                 $(
@@ -181,11 +253,12 @@ macro_rules! collect_pipelines {
                                 filters.insert($f_to_add.to_string());
                             )?)?
                             let delegate_field = delegate!(_field, $delegate_field);
-                            collect_pipelines(stringify!($delegate_type), delegate_field, filters, pipelines);
+                            collect_pipelines(stringify!($delegate_type), delegate_field, filters, pipelines, pipeline_context);
                         )?
                         $(
                             let $filt = filters;
                             let $pipes = pipelines;
+                            let $pctx = pipeline_context;
                             $block
                         )?
                     }
@@ -231,7 +304,8 @@ macro_rules! delegate {
 // - `=> OtherType.*`: delegate to OtherType using the same field name
 // - `=> OtherType.specificField()`: delegate to OtherType.specificField
 // - `=> OtherType.field(.., "filterName")`: delegate and add filter constraint
-// - `|pipelines, filters| { ... }`: block of statements operating on pipelines and filters to execute
+// - `|pipelines, filters, ctx| { ... }`: block of statements operating on pipelines, filters, and
+//   runtime PipelineContext to execute
 collect_pipelines! {
     Address.[address, addressAt, asTransactionObject] => IAddressable.*;
     Address.[asObject] => IObject.objectAt();
@@ -251,7 +325,7 @@ collect_pipelines! {
     CoinMetadata.[objectAt, objectVersionsAfter, objectVersionsBefore] => IObject.*;
     CoinMetadata.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     CoinMetadata.[receivedTransactions] => IObject.receivedTransactions();
-    CoinMetadata.[allowGlobalPause, denyCap, regulatedState, supply, supplyState] |pipelines, _filters| {
+    CoinMetadata.[allowGlobalPause, denyCap, regulatedState, supply, supplyState] |pipelines, _filters, _ctx| {
         pipelines.insert("consistent".to_string());
     };
 
@@ -265,46 +339,46 @@ collect_pipelines! {
     DynamicField.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     DynamicField.[receivedTransactions] => IObject.receivedTransactions();
 
-    Epoch.[checkpoints] |pipelines, _filters| {
+    Epoch.[checkpoints] |pipelines, _filters, _ctx| {
         pipelines.insert("cp_sequence_numbers".to_string());
     };
-    Epoch.[coinDenyList] |pipelines, _filters| {
+    Epoch.[coinDenyList] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
     Epoch.[transactions] => Query.transactions(.., "atCheckpoint");
 
-    IAddressable.[balance, balances, multiGetBalances, objects] |pipelines, _filters| {
+    IAddressable.[balance, balances, multiGetBalances, objects] |pipelines, _filters, _ctx| {
         pipelines.insert("consistent".to_string());
     };
-    IAddressable.[defaultNameRecord] |pipelines, _filters| {
+    IAddressable.[defaultNameRecord] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
-    IMoveDatatype.[abilities, typeParameters] |pipelines, _filters| {
+    IMoveDatatype.[abilities, typeParameters] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
-    IMoveObject.[dynamicFields] |pipelines, _filters| {
+    IMoveObject.[dynamicFields] |pipelines, _filters, _ctx| {
         pipelines.insert("consistent".to_string());
     };
-    IMoveObject.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] |pipelines, _filters| {
+    IMoveObject.[dynamicField, dynamicObjectField, multiGetDynamicFields, multiGetDynamicObjectFields] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
     IObject.[receivedTransactions] => Query.transactions(.., "affectedAddress");
-    IObject.[objectAt, objectVersionsAfter, objectVersionsBefore] |pipelines, _filters| {
+    IObject.[objectAt, objectVersionsAfter, objectVersionsBefore] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
     MoveDatatype.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveDatatype.[abilities, typeParameters] => IMoveDatatype.*;
-    MoveDatatype.[asMoveEnum, asMoveStruct] |pipelines, _filters| {
+    MoveDatatype.[asMoveEnum, asMoveStruct] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
     MoveEnum.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveEnum.[abilities, typeParameters] => IMoveDatatype.*;
-    MoveEnum.[variants] |pipelines, _filters| {
+    MoveEnum.[variants] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
@@ -327,7 +401,7 @@ collect_pipelines! {
 
     MoveStruct.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveStruct.[abilities, typeParameters] => IMoveDatatype.*;
-    MoveStruct.[fields] |pipelines, _filters| {
+    MoveStruct.[fields] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
 
@@ -340,19 +414,19 @@ collect_pipelines! {
     Object.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     Object.[receivedTransactions] => IObject.receivedTransactions();
 
-    Query.[address] |pipelines, filters| {
+    Query.[address] |pipelines, filters, _ctx| {
         if filters.contains("name") {
             pipelines.insert("obj_versions".to_string());
         }
     };
-    Query.[checkpoints] |pipelines, _filters| {
+    Query.[checkpoints] |pipelines, _filters, _ctx| {
         pipelines.insert("cp_sequence_numbers".to_string());
     };
-    Query.[coinMetadata] |pipelines, _filters| {
+    Query.[coinMetadata] |pipelines, _filters, _ctx| {
         pipelines.insert("consistent".to_string());
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[events] |pipelines, filters| {
+    Query.[events] |pipelines, filters, _ctx| {
         pipelines.insert("tx_digests".to_string());
         if filters.contains("module") {
             pipelines.insert("ev_emit_mod".to_string());
@@ -360,21 +434,27 @@ collect_pipelines! {
             pipelines.insert("ev_struct_inst".to_string());
         }
     };
-    Query.[nameRecord] |pipelines, _filters| {
+    Query.[nameRecord] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[object] |pipelines, filters| {
+    Query.[object] |pipelines, filters, _ctx| {
         if !filters.contains("version") {
             pipelines.insert("obj_versions".to_string());
         }
     };
-    Query.[objects] |pipelines, _filters| {
+    Query.[objects] |pipelines, _filters, _ctx| {
         pipelines.insert("consistent".to_string());
     };
-    Query.[objectVersions] |pipelines, _filters| {
+    Query.[objectVersions] |pipelines, _filters, _ctx| {
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[transactions] |pipelines, filters| {
+    Query.[transactions] |pipelines, filters, ctx| {
+        // Transaction::paginate serves this field from an alternate bitmap-backed gRPC reader
+        // when one is configured, bypassing the postgres pipelines below entirely (it hardcodes
+        // reader_lo = 0 rather than consulting Watermarks) -- see transaction/mod.rs.
+        if ctx.has_alpha_ledger_reader {
+            return;
+        }
         pipelines.insert("cp_sequence_numbers".to_string());
         pipelines.insert("tx_digests".to_string());
         if filters.contains("affectedAddress") {
@@ -390,12 +470,12 @@ collect_pipelines! {
         }
     };
 
-    TransactionEffects.[balanceChanges] |pipelines, _filters| {
+    TransactionEffects.[balanceChanges] |pipelines, _filters, _ctx| {
         pipelines.insert("tx_balance_changes".to_string());
         pipelines.insert("tx_digests".to_string());
     };
 
-    TransactionEffects.[balanceChangesJson] |pipelines, _filters| {
+    TransactionEffects.[balanceChangesJson] |pipelines, _filters, _ctx| {
         pipelines.insert("tx_balance_changes".to_string());
         pipelines.insert("tx_digests".to_string());
     };
@@ -423,18 +503,62 @@ mod field_piplines_tests {
         type_: &str,
         field: Option<&str>,
         filters: BTreeSet<String>,
+        pipeline_context: &PipelineContext,
     ) -> BTreeSet<String> {
         let mut pipelines = BTreeSet::new();
-        collect_pipelines(type_, field, filters, &mut pipelines);
+        collect_pipelines(type_, field, filters, &mut pipelines, pipeline_context);
         pipelines
     }
 
     #[test]
     fn test_catch_all() {
-        let invalid = test_collect_pipelines("UnknownType", Some("field"), BTreeSet::new());
+        let invalid = test_collect_pipelines(
+            "UnknownType",
+            Some("field"),
+            BTreeSet::new(),
+            &PipelineContext::default(),
+        );
         assert!(invalid.is_empty());
-        let valid = test_collect_pipelines("Address", Some("digests"), BTreeSet::new());
+        let valid = test_collect_pipelines(
+            "Address",
+            Some("digests"),
+            BTreeSet::new(),
+            &PipelineContext::default(),
+        );
         assert!(valid.is_empty());
+    }
+
+    /// `Query.transactions` never needs the postgres tx_* pipelines when an alpha ledger reader
+    /// is configured, regardless of which filter is applied -- `Transaction::paginate` bypasses
+    /// them entirely in that case (see transaction/mod.rs). This is the regression guard for that
+    /// wiring: it would have caught the gap that `graphql_bitmap_pagination_tests.rs` originally
+    /// surfaced, directly, without needing a full e2e cluster.
+    #[test]
+    fn test_transactions_skips_pipelines_with_alpha_ledger_reader() {
+        let alpha = PipelineContext {
+            has_alpha_ledger_reader: true,
+        };
+
+        let unfiltered =
+            test_collect_pipelines("Query", Some("transactions"), BTreeSet::new(), &alpha);
+        assert!(unfiltered.is_empty());
+
+        let filtered = test_collect_pipelines(
+            "Query",
+            Some("transactions"),
+            BTreeSet::from(["affectedAddress".to_string()]),
+            &alpha,
+        );
+        assert!(filtered.is_empty());
+
+        // Sanity check: without the alpha reader, the same filtered call is non-empty.
+        let without_alpha = test_collect_pipelines(
+            "Query",
+            Some("transactions"),
+            BTreeSet::from(["affectedAddress".to_string()]),
+            &PipelineContext::default(),
+        );
+        assert!(!without_alpha.is_empty());
     }
 
     /// Helper function that runs a test function with access to the GraphQL schema registry.
@@ -602,6 +726,7 @@ mod field_piplines_tests {
                     Some(field_name),
                     BTreeSet::new(),
                     &mut unfiltered_pipelines,
+                    &PipelineContext::default(),
                 );
                 let unfiltered_output_str =
                     formatted_output_str(type_name, field_name, &unfiltered_pipelines, None);
@@ -612,7 +737,13 @@ mod field_piplines_tests {
                 for filter_field in filter_fields.iter().map(Some) {
                     let filters = filter_field.iter().copied().map(String::from).collect();
                     let mut pipelines = BTreeSet::new();
-                    super::collect_pipelines(type_name, Some(field_name), filters, &mut pipelines);
+                    super::collect_pipelines(
+                        type_name,
+                        Some(field_name),
+                        filters,
+                        &mut pipelines,
+                        &PipelineContext::default(),
+                    );
                     let output_str =
                         formatted_output_str(type_name, field_name, &pipelines, filter_field);
                     if unfiltered_pipelines != pipelines {
@@ -638,6 +769,107 @@ mod field_piplines_tests {
             "registry_collect_pipelines_snapshot"
         };
         insta::assert_snapshot!(snapshot_name, output);
+    }
+
+    /// Every concrete GraphQL type known to gate its pipeline-dependent fields, whether via
+    /// `#[GatedObject]`'s automatic per-method injection or (for fields whose requirement depends
+    /// on a filter synthesized at runtime, e.g. `Query::object`/`Query::address`/`Query::events`)
+    /// an explicit hand-written `gate`/`gate_filtered` call.
+    ///
+    /// This is the automated substitute for the `PipelineAvailability` extension's blanket,
+    /// no-opt-in coverage: if `collect_pipelines!` ever gains a pipeline-dependent `(type, field)`
+    /// entry for a type not on this list, [`gated_types_cover_all_pipeline_dependent_fields`]
+    /// fails loudly -- the same bug class as the originally unguarded `obj_versions` reads in
+    /// `object.rs`. Add a type here only once its fields are confirmed protected.
+    const GATED_TYPES: &[&str] = &[
+        "Address",
+        "Checkpoint",
+        "CoinMetadata",
+        "DynamicField",
+        "Epoch",
+        "Event",
+        "MoveDatatype",
+        "MoveEnum",
+        "MoveObject",
+        "MovePackage",
+        "MoveStruct",
+        "Object",
+        "Query",
+        "Transaction",
+        "TransactionEffects",
+    ];
+
+    #[tokio::test]
+    async fn test_gated_types_cover_all_pipeline_dependent_fields() {
+        with_registry(gated_types_cover_all_pipeline_dependent_fields).await;
+    }
+
+    /// Walks every concrete type/field in the schema (the same traversal as
+    /// [`registry_collect_pipelines_snapshot`]) and asserts that any `(type, field)` combination
+    /// `collect_pipelines!` maps to a non-empty pipeline set -- unfiltered, or under any single
+    /// filter -- belongs to a type on [`GATED_TYPES`].
+    fn gated_types_cover_all_pipeline_dependent_fields(registry: &Registry) {
+        const PAGINATION_ARGS: &[&str] = &["first", "after", "last", "before"];
+
+        for (type_name, meta_type) in registry.types.iter() {
+            // Interfaces are never resolved directly -- each implementing concrete type
+            // re-declares and resolves the field itself, so only concrete types need to be on
+            // GATED_TYPES.
+            let MetaType::Object { fields, .. } = meta_type else {
+                continue;
+            };
+
+            for (field_name, meta_field) in fields.iter() {
+                if should_ignore_in_snapshot(type_name, field_name) {
+                    continue;
+                }
+
+                let filter_fields: Vec<String> = meta_field
+                    .args
+                    .iter()
+                    .filter(|(name, _)| !PAGINATION_ARGS.contains(&name.as_str()))
+                    .flat_map(|(param_name, meta_input_value)| {
+                        let concrete_type = MetaTypeName::concrete_typename(&meta_input_value.ty);
+                        match registry.types.get(concrete_type) {
+                            Some(MetaType::InputObject { input_fields, .. }) => {
+                                input_fields.keys().cloned().collect()
+                            }
+                            Some(MetaType::Scalar { .. }) => vec![param_name.clone()],
+                            _ => vec![],
+                        }
+                    })
+                    .collect();
+
+                let mut unfiltered = BTreeSet::new();
+                collect_pipelines(
+                    type_name,
+                    Some(field_name),
+                    BTreeSet::new(),
+                    &mut unfiltered,
+                    &PipelineContext::default(),
+                );
+                let mut needs_pipeline = !unfiltered.is_empty();
+
+                for filter_field in &filter_fields {
+                    let mut pipelines = BTreeSet::new();
+                    collect_pipelines(
+                        type_name,
+                        Some(field_name),
+                        BTreeSet::from([filter_field.clone()]),
+                        &mut pipelines,
+                        &PipelineContext::default(),
+                    );
+                    needs_pipeline |= !pipelines.is_empty();
+                }
+
+                assert!(
+                    !needs_pipeline || GATED_TYPES.contains(&type_name.as_str()),
+                    "Type '{type_name}' has a pipeline-dependent field '{field_name}' but isn't \
+                     on GATED_TYPES -- it needs #[GatedObject] (or an explicit gate_filtered \
+                     call), then to be added to the list.",
+                );
+            }
+        }
     }
 
     fn formatted_output_str(

@@ -16,6 +16,7 @@ use diesel::QueryDsl;
 use diesel::sql_types::Bool;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -140,7 +141,7 @@ pub(crate) type CPackage = BcsCursor<PackageCursor>;
 pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 
 /// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
-#[Object]
+#[GatedObject]
 impl MovePackage {
     /// The package's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {

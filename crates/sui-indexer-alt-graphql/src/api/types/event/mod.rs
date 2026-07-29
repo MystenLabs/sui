@@ -30,6 +30,7 @@ use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::PipelineContext;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
@@ -166,6 +167,7 @@ impl Event {
             type_: "Query".to_string(),
             field: Some("events".to_string()),
             filters: Some(filter.active_filters()),
+            pipeline_context: PipelineContext::default(),
         };
         let reader_lo = available_range_key.reader_lo(watermarks)?;
 
