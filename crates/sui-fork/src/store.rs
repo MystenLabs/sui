@@ -8,7 +8,6 @@ use std::sync::RwLockWriteGuard;
 
 use anyhow::Context as _;
 use anyhow::anyhow;
-use anyhow::bail;
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
@@ -70,7 +69,6 @@ use typed_store_error::TypedStoreError;
 
 use crate::GraphQLClient;
 use crate::TransactionInfo;
-use crate::inventory::InventoryInitializer;
 use crate::local_store::LocalStore;
 use crate::local_store::ObjectRemoval;
 use crate::metadata::MetadataStore;
@@ -80,10 +78,10 @@ use crate::remote::RemoteSource;
 /// The fork's state store: reads check `LocalStore` first and fall back to
 /// `RemoteSource` (pinned at the fork checkpoint), persisting fetched
 /// pre-fork data back into the local store. The metadata sidecar keeps fork
-/// metadata and completion markers for remote inventory scans.
+/// metadata and the immutable seed manifest.
 ///
 /// Cloned stores share the same inner state and local snapshot guard, so RPC readers and the local
-/// executor coordinate index initialization.
+/// executor serialize their writes against each other.
 ///
 /// Implements [`SimulatorStore`] so it can be passed directly into
 /// [`simulacrum::Simulacrum::new_from_custom_state`], and the upstream RPC
@@ -101,12 +99,9 @@ struct ForkStoreInner {
     remote: RemoteSource,
     metadata: MetadataStore,
     local_store: LocalStore,
-    /// Lazy full-enumeration initializer for the owner/type indexes.
-    inventory: InventoryInitializer,
     /// Staging for the in-flight checkpoint; see [`PendingCheckpointBuffer`].
     pending: PendingCheckpointBuffer,
-    /// Coordinates index initialization and local object writes across cloned
-    /// stores; the same lock is shared with `inventory`.
+    /// Serializes local object writes across cloned stores.
     local_snapshot_lock: Arc<RwLock<()>>,
 }
 
@@ -117,23 +112,14 @@ impl ForkStore {
         metadata: MetadataStore,
         local_store: LocalStore,
     ) -> Self {
-        let remote = RemoteSource::new(gql, forked_at_checkpoint);
-        let local_snapshot_lock = Arc::new(RwLock::new(()));
-        let inventory = InventoryInitializer::new(
-            remote.clone(),
-            metadata.clone(),
-            local_store.clone(),
-            local_snapshot_lock.clone(),
-        );
         Self {
             inner: Arc::new(ForkStoreInner {
                 forked_at_checkpoint,
-                remote,
+                remote: RemoteSource::new(gql, forked_at_checkpoint),
                 metadata,
                 local_store,
-                inventory,
                 pending: PendingCheckpointBuffer::new(),
-                local_snapshot_lock,
+                local_snapshot_lock: Arc::new(RwLock::new(())),
             }),
         }
     }
@@ -549,43 +535,20 @@ impl ForkStore {
             .map_err(|e| StorageError::custom(e.to_string()))
     }
 
-    pub(crate) fn save_address_owned_seed_objects(
+    /// Fetch the objects behind a batch of seed references from the forked-from
+    /// chain, pinned at the fork checkpoint.
+    ///
+    /// Every reference names an exact `(id, version)`, so this is an immutable
+    /// key: the remote either has that version or the manifest is describing a
+    /// chain this fork did not come from, which [`RemoteSource::objects_at_fork`]
+    /// rejects.
+    pub(crate) fn fetch_seed_objects(
         &self,
         object_refs: &[ObjectRef],
-    ) -> anyhow::Result<()> {
-        let local_store = self.local_store();
-        let mut missing = Vec::new();
-
-        for object_ref in object_refs {
-            match local_store.get_object_at_version(object_ref.0, object_ref.1)? {
-                Some(Status::Live(object)) => {
-                    if object.compute_object_reference() != *object_ref {
-                        bail!(
-                            "seed object {} metadata does not match persisted object at version {}",
-                            object_ref.0,
-                            object_ref.1.value(),
-                        );
-                    }
-                    local_store.save_address_owned_seed_object(&object)?;
-                }
-                Some(Status::Tombstone(_)) => bail!(
-                    "seed object {} version {} is stored as removed",
-                    object_ref.0,
-                    object_ref.1.value(),
-                ),
-                None => missing.push(*object_ref),
-            }
-        }
-
-        let objects = self
-            .inner
+    ) -> anyhow::Result<Vec<Object>> {
+        self.inner
             .remote
-            .objects_at_fork(&missing, "seed objects")?;
-        for object in objects {
-            local_store.save_address_owned_seed_object(&object)?;
-        }
-
-        Ok(())
+            .objects_at_fork(object_refs, "seed objects")
     }
 
     /// Seal the staged checkpoint matching `contents` into the rpc-store:
@@ -1110,9 +1073,14 @@ impl RpcIndexes for ForkStore {
         RpcIndexes::get_epoch_info(self.stock_reader(), epoch)
     }
 
-    /// Initialize and iterate address-owned objects from the RPC-store owner
-    /// index. The remote scan is checkpoint-bounded and recorded in the
-    /// metadata store so repeated owner queries read the local index.
+    /// Iterate address-owned objects from the RPC-store owner index.
+    ///
+    /// This and the four reads below are *seed-bounded*: they answer from the
+    /// local index alone, which holds the seed set loaded at fork creation plus
+    /// whatever local execution has produced since. An owner, parent, or type
+    /// outside the seed set reads as empty rather than being resolved against
+    /// the forked-from chain — the checkpoint-pinned enumeration that would
+    /// answer it belongs to fork creation and is not re-runnable here.
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
@@ -1120,61 +1088,42 @@ impl RpcIndexes for ForkStore {
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
-        self.inner
-            .inventory
-            .ensure_address_owner(owner)
-            .map_err(to_storage_error)?;
         RpcIndexes::owned_objects_iter(self.stock_reader(), owner, object_type, cursor)
     }
 
-    /// Initialize and iterate the object-owned children of `parent`, with the
-    /// same checkpoint-bounded remote scan as the owner index.
+    /// Iterate the object-owned children of `parent` from the RPC-store owner
+    /// index. Seed-bounded; see [`Self::owned_objects_iter`].
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
         cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        self.inner
-            .inventory
-            .ensure_object_owner(parent)
-            .map_err(to_storage_error)?;
         RpcIndexes::dynamic_field_iter(self.stock_reader(), parent, cursor)
     }
 
-    /// Initialize the type indexes needed to assemble RPC coin metadata.
+    /// Assemble RPC coin metadata from the RPC-store type index. Seed-bounded;
+    /// see [`Self::owned_objects_iter`].
     fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
-        self.inner
-            .inventory
-            .ensure_coin_info(coin_type)
-            .map_err(to_storage_error)?;
         RpcIndexes::get_coin_info(self.stock_reader(), coin_type)
     }
 
-    /// Initialize address inventory and read an address balance from the
-    /// RPC-store balance index.
+    /// Read an address balance from the RPC-store balance index. Seed-bounded;
+    /// see [`Self::owned_objects_iter`].
     fn get_balance(
         &self,
         owner: &SuiAddress,
         coin_type: &StructTag,
     ) -> StorageResult<Option<BalanceInfo>> {
-        self.inner
-            .inventory
-            .ensure_address_owner(*owner)
-            .map_err(to_storage_error)?;
         RpcIndexes::get_balance(self.stock_reader(), owner, coin_type)
     }
 
-    /// Initialize address inventory and iterate address balances from the
-    /// RPC-store balance index.
+    /// Iterate address balances from the RPC-store balance index. Seed-bounded;
+    /// see [`Self::owned_objects_iter`].
     fn balance_iter(
         &self,
         owner: &SuiAddress,
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> StorageResult<BalanceIterator<'_>> {
-        self.inner
-            .inventory
-            .ensure_address_owner(*owner)
-            .map_err(to_storage_error)?;
         RpcIndexes::balance_iter(self.stock_reader(), owner, cursor)
     }
 

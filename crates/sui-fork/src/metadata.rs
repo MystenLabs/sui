@@ -4,10 +4,8 @@
 //! Fork-local metadata sidecar.
 //!
 //! Raw chain data lives in `sui-rpc-store`. This module only owns data-dir
-//! layout, the immutable seed manifest, and completion markers for the
-//! GraphQL inventory scans that are intentionally initialized from remote data.
+//! layout and the immutable seed manifest.
 
-use std::collections::BTreeSet;
 use std::env;
 use std::ffi::OsString;
 use std::fs;
@@ -18,8 +16,6 @@ use anyhow::Context as _;
 use anyhow::Error;
 use anyhow::bail;
 
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::Node;
@@ -32,27 +28,6 @@ const SUI_FORK_DATA_ENV: &str = "SUI_FORK_DATA";
 const DATA_DIR: &str = "sui_fork_data";
 /// JSON file containing immutable fork metadata and optional pre-fork seed metadata.
 const SEED_MANIFEST_FILE: &str = "seed_manifest.json";
-/// JSON file tracking remote inventory scans that have been fully saved into `sui-rpc-store`.
-const INVENTORY_METADATA_FILE: &str = "inventory_metadata.json";
-
-/// Tracks which remote "inventory" scans have completed.
-///
-/// An *inventory* is the one-time, full GraphQL enumeration of every object owned
-/// by an address / owned by an object / matching a type at the fork checkpoint.
-/// It is distinct from the *index* it populates: running an inventory writes the
-/// results into `sui-rpc-store`'s `object_by_owner` / `object_by_type` index CFs.
-/// Each set below records the owners/types whose inventory has finished, so later
-/// reads serve straight from the local index instead of re-scanning GraphQL. An
-/// owner that legitimately owns nothing still counts as completed.
-#[derive(Default, serde::Deserialize, serde::Serialize)]
-struct InventoryMetadata {
-    #[serde(default)]
-    completed_address_owners: BTreeSet<SuiAddress>,
-    #[serde(default)]
-    completed_object_owners: BTreeSet<ObjectID>,
-    #[serde(default)]
-    completed_type_filters: BTreeSet<String>,
-}
 
 /// Fork-local metadata and data-dir layout.
 #[derive(Clone)]
@@ -149,60 +124,6 @@ impl MetadataStore {
         self.root.join(SEED_MANIFEST_FILE)
     }
 
-    fn inventory_metadata_path(&self) -> PathBuf {
-        self.root.join(INVENTORY_METADATA_FILE)
-    }
-
-    pub(crate) fn object_owner_inventory_complete(&self, owner: ObjectID) -> anyhow::Result<bool> {
-        Ok(self
-            .read_inventory_metadata()?
-            .completed_object_owners
-            .contains(&owner))
-    }
-
-    pub(crate) fn address_owner_inventory_complete(
-        &self,
-        owner: SuiAddress,
-    ) -> anyhow::Result<bool> {
-        Ok(self
-            .read_inventory_metadata()?
-            .completed_address_owners
-            .contains(&owner))
-    }
-
-    pub(crate) fn mark_address_owner_inventory_complete(
-        &self,
-        owner: SuiAddress,
-    ) -> anyhow::Result<()> {
-        let mut metadata = self.read_inventory_metadata()?;
-        metadata.completed_address_owners.insert(owner);
-        self.write_inventory_metadata(&metadata)
-    }
-
-    pub(crate) fn mark_object_owner_inventory_complete(
-        &self,
-        owner: ObjectID,
-    ) -> anyhow::Result<()> {
-        let mut metadata = self.read_inventory_metadata()?;
-        metadata.completed_object_owners.insert(owner);
-        self.write_inventory_metadata(&metadata)
-    }
-
-    pub(crate) fn type_inventory_complete(&self, type_filter: &str) -> anyhow::Result<bool> {
-        Ok(self
-            .read_inventory_metadata()?
-            .completed_type_filters
-            .contains(type_filter))
-    }
-
-    pub(crate) fn mark_type_inventory_complete(&self, type_filter: &str) -> anyhow::Result<()> {
-        let mut metadata = self.read_inventory_metadata()?;
-        metadata
-            .completed_type_filters
-            .insert(type_filter.to_owned());
-        self.write_inventory_metadata(&metadata)
-    }
-
     /// Return whether the immutable seed manifest exists for this fork directory.
     pub(crate) fn seed_manifest_exists(&self) -> bool {
         self.seed_manifest_path().exists()
@@ -220,22 +141,6 @@ impl MetadataStore {
             bail!("Seed manifest already exists: {}", path.display());
         }
         write_json_exclusive(&path, manifest, "seed manifest")
-    }
-
-    fn read_inventory_metadata(&self) -> anyhow::Result<InventoryMetadata> {
-        let path = self.inventory_metadata_path();
-        if !path.exists() {
-            return Ok(InventoryMetadata::default());
-        }
-        read_json(&path, "inventory metadata")
-    }
-
-    fn write_inventory_metadata(&self, metadata: &InventoryMetadata) -> anyhow::Result<()> {
-        write_json_replace(
-            &self.inventory_metadata_path(),
-            metadata,
-            "inventory metadata",
-        )
     }
 }
 
@@ -266,25 +171,6 @@ pub(crate) fn write_json_exclusive<T: serde::Serialize>(
             .with_context(|| format!("Failed to remove temporary file: {}", tmp_path.display()))?;
         bail!("{} already exists: {}", description, path.display());
     }
-    fs::rename(&tmp_path, path)
-        .with_context(|| format!("Failed to replace {description}: {}", path.display()))
-}
-
-fn write_json_replace<T: serde::Serialize>(
-    path: &Path,
-    value: &T,
-    description: &str,
-) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
-    }
-
-    let tmp_path = path.with_extension("json.tmp");
-    let bytes = serde_json::to_vec_pretty(value)
-        .with_context(|| format!("Failed to serialize {description}: {}", path.display()))?;
-    fs::write(&tmp_path, bytes)
-        .with_context(|| format!("Failed to write {description}: {}", tmp_path.display()))?;
     fs::rename(&tmp_path, path)
         .with_context(|| format!("Failed to replace {description}: {}", path.display()))
 }

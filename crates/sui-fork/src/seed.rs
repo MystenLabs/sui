@@ -1,12 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Fork manifest and seed resolution for seed-bounded owned-object tracking.
+//! Fork manifest and seed resolution for seed-bounded index reads.
 //!
-//! The manifest is written for every initialized fork directory. Address and explicit object
-//! seeds resolve lightweight object-ref metadata at the fork checkpoint. Full object BCS is
-//! saved into `sui-rpc-store` during startup so address-owned RPC indexes are bounded by
-//! seed input plus local execution.
+//! Seeding happens once, at fork creation, in two steps. Resolution enumerates
+//! the requested addresses and objects against GraphQL pinned at the fork
+//! checkpoint and records the resulting object references in an immutable
+//! manifest; that enumeration is the part that must be complete and must happen
+//! while the question is still answerable, because nothing the fork does
+//! afterwards reconstructs it. The load then hydrates those references and
+//! hands them to `sui-rpc-store`'s `Restore` pipelines, which is where the
+//! fork's whole pre-fork derived-index surface comes from.
+//!
+//! Everything downstream is bounded by that: an owner, parent, or type outside
+//! the seed set is not indexed, and reads for it answer empty rather than
+//! reaching for the remote at read time.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -38,7 +46,7 @@ pub struct SeedInput {
     pub object_ids: Vec<ObjectID>,
 }
 
-/// Object reference used to seed lazy owned-object index initialization.
+/// Object reference recorded in the manifest and hydrated by the seed load.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SeedEntry {
     pub(crate) object_ref: ObjectRef,
@@ -50,12 +58,11 @@ pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
     /// Addresses whose owned objects were enumerated *completely* at the fork
-    /// checkpoint to produce this manifest. Seeding one of these addresses is
-    /// the same full scan the lazy read-time inventory initialization would
-    /// run, so saving the manifest also marks their owner inventories
-    /// complete. Absent in manifests written before this field existed
-    /// (`serde(default)`), in which case reads fall back to lazy
-    /// initialization.
+    /// checkpoint to produce this manifest — the record of which owners the
+    /// fork can answer for. An address skipped because the enumeration could
+    /// not run must never appear here: a partial answer recorded as a complete
+    /// one is worse than no answer. Absent in manifests written before this
+    /// field existed (`serde(default)`).
     #[serde(default)]
     pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
@@ -152,34 +159,41 @@ pub(crate) async fn prepare_seed_manifest(
     Ok(manifest)
 }
 
-/// Materialize every manifest entry into the rpc-store, then mark the
-/// manifest's fully-scanned addresses as having a complete owner inventory.
+/// Objects hydrated per remote round-trip. The load commits as one batch
+/// regardless; this only bounds the size of an individual GraphQL query.
+const HYDRATE_CHUNK: usize = 50;
+
+/// Load every manifest entry into the rpc-store with its full derived-index
+/// surface, once, before the fork executes anything.
 ///
-/// An address seed is resolved with the same complete owned-objects scan that
-/// lazy read-time inventory initialization would run, so once its entries are
-/// saved (with index rows) the address's inventory *is* initialized;
-/// recording the marker keeps owner-scoped reads from re-running the
-/// identical remote scan. Markers are written only after every entry is
-/// durably saved — a crash in between simply falls back to lazy
-/// initialization. Explicit object-id seeds never mark their owners: they are
-/// not a complete scan.
-pub(crate) fn save_seed_manifest_objects(
-    store: &ForkStore,
-    manifest: &SeedManifest,
-) -> Result<(), Error> {
+/// The manifest holds object references, not objects: establishing *which*
+/// objects an address held is the part that has to be complete and has to
+/// happen while the question is still answerable, and it is already done by
+/// the time this runs. What is left is to fetch what each of those objects
+/// contains — an exact version, and so an immutable key — and hand it to the
+/// stock `Restore` pipelines.
+///
+/// Runs at most once per fork directory. `Balance` accumulates through a merge
+/// operator, so a second pass would double-count every seeded coin; the load
+/// commits its own completion marker atomically with the rows to make that
+/// unrepeatable rather than merely unlikely.
+pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> Result<(), Error> {
+    if store.local_store().seed_load_complete()? {
+        return Ok(());
+    }
+
     let object_refs: Vec<_> = manifest
         .entries
         .iter()
         .map(|entry| entry.object_ref)
         .collect();
-    store.save_address_owned_seed_objects(&object_refs)?;
 
-    for address in &manifest.addresses {
-        store
-            .metadata()
-            .mark_address_owner_inventory_complete(*address)?;
+    let mut objects = Vec::with_capacity(object_refs.len());
+    for chunk in object_refs.chunks(HYDRATE_CHUNK) {
+        objects.extend(store.fetch_seed_objects(chunk)?);
     }
-    Ok(())
+
+    store.local_store().restore_seed_objects(&objects)
 }
 
 fn dedupe_addresses(addresses: &[SuiAddress]) -> Vec<SuiAddress> {
@@ -324,7 +338,6 @@ mod tests {
     use sui_types::digests::CheckpointDigest;
     use sui_types::object::Object;
     use sui_types::object::Owner;
-    use sui_types::storage::RpcIndexes;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
@@ -646,21 +659,14 @@ mod tests {
         .await
         .expect("out-of-window address seed should be skipped, not fatal");
 
-        // The skipped address is NOT recorded as fully scanned (recording it
-        // would wrongly mark its owner inventory complete), while the object
-        // seed still lands.
+        // The skipped address is NOT recorded as fully scanned — recording it
+        // would claim a complete owner enumeration that never ran — while the
+        // object seed still lands.
         assert!(manifest.addresses.is_empty());
         assert_eq!(manifest.entries.len(), 1);
         assert_eq!(
             manifest.entries[0].object_ref,
             object.compute_object_reference()
-        );
-        assert!(
-            !store
-                .metadata()
-                .address_owner_inventory_complete(skipped_address)
-                .unwrap(),
-            "skipped address must not be marked inventory-complete",
         );
     }
 
@@ -718,7 +724,7 @@ mod tests {
     #[test]
     fn seed_manifest_without_addresses_field_deserializes_with_empty_addresses() {
         // Manifests written before the `addresses` field existed must keep
-        // loading; their owners simply fall back to lazy inventory init.
+        // loading; they simply record no fully-scanned owners.
         let manifest: SeedManifest = serde_json::from_value(json!({
             "network": "testnet",
             "checkpoint": 42,
@@ -772,60 +778,5 @@ mod tests {
             object.compute_object_reference()
         );
         assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
-    }
-
-    #[tokio::test]
-    async fn save_seed_manifest_objects_marks_seeded_address_inventories_complete() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let (store, _services) =
-            test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), 11);
-        let owner = SuiAddress::random_for_testing_only();
-        let empty_owner = SuiAddress::random_for_testing_only();
-        let object = Object::with_id_owner_version_for_testing(
-            ObjectID::random(),
-            SequenceNumber::from_u64(3),
-            Owner::AddressOwner(owner),
-        );
-        store
-            .local_store()
-            .save_object_version_only(&object)
-            .unwrap();
-
-        let manifest = SeedManifest {
-            network: "custom".to_owned(),
-            checkpoint: 11,
-            addresses: vec![owner, empty_owner],
-            entries: vec![SeedEntry {
-                object_ref: object.compute_object_reference(),
-            }],
-        };
-        save_seed_manifest_objects(&store, &manifest).expect("seed save should succeed");
-
-        for address in [owner, empty_owner] {
-            assert!(
-                store
-                    .metadata()
-                    .address_owner_inventory_complete(address)
-                    .unwrap(),
-                "seeded address should be marked inventory-complete",
-            );
-        }
-
-        // The GraphQL endpoint is unreachable, so these owner-scoped reads
-        // only succeed if the marker prevents a second full owner scan.
-        let infos: Vec<_> = store
-            .owned_objects_iter(owner, None, None)
-            .expect("seeded owner read should not re-scan the remote")
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert_eq!(infos.len(), 1);
-        assert_eq!(infos[0].object_id, object.id());
-        assert_eq!(
-            store
-                .owned_objects_iter(empty_owner, None, None)
-                .expect("empty seeded owner read should not re-scan the remote")
-                .count(),
-            0,
-        );
     }
 }

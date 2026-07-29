@@ -6,24 +6,25 @@ use std::ops::Bound;
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use move_core_types::language_storage::TypeTag;
 use sui_consistent_store::Db;
+use sui_consistent_store::FrameworkSchema;
+use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Restore as _;
+use sui_consistent_store::RestoreState;
+use sui_consistent_store::restore_state;
 use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::indexer::balance::Balance;
 use sui_rpc_store::indexer::object_by_owner::ObjectByOwner;
 use sui_rpc_store::indexer::object_by_type::ObjectByType;
+use sui_rpc_store::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
 use sui_rpc_store::indexer::objects::Objects;
 use sui_rpc_store::indexer::package_versions::PackageVersions;
-use sui_rpc_store::schema::balance;
 use sui_rpc_store::schema::checkpoint_contents;
 use sui_rpc_store::schema::checkpoint_seq_by_digest;
 use sui_rpc_store::schema::checkpoint_summary;
 use sui_rpc_store::schema::effects as schema_effects;
 use sui_rpc_store::schema::events as schema_events;
-use sui_rpc_store::schema::object_by_owner;
-use sui_rpc_store::schema::object_by_type;
 use sui_rpc_store::schema::object_version_by_checkpoint;
 use sui_rpc_store::schema::objects;
 use sui_rpc_store::schema::objects::Status;
@@ -33,13 +34,8 @@ use sui_rpc_store::schema::primitives::U64Varint;
 use sui_rpc_store::schema::transactions;
 use sui_rpc_store::schema::tx_metadata_by_seq;
 use sui_rpc_store::schema::tx_seq_by_digest;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
-use sui_types::accumulator_root::AccumulatorKey;
-use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
-use sui_types::base_types::SuiAddress;
-use sui_types::coin::Coin;
 use sui_types::digests::CheckpointContentsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -48,8 +44,17 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::object::Owner;
 use sui_types::transaction::VerifiedTransaction;
+
+/// Synthetic pipeline key recording that the one-shot seed load committed.
+///
+/// It lives in the framework's `__restore` column family, which is the right
+/// shape for the claim — "this bulk-load finished at this checkpoint" — and is
+/// the only framework CF nothing reads by iteration: `restore_in_progress`
+/// walks the named pipeline cohorts, and the indexer reads per-pipeline keys,
+/// so a synthetic key here is invisible to both. The `__watermark` CF would
+/// not do, because the pruner takes a minimum over every row it holds.
+const SEED_RESTORE_PIPELINE: &str = "sui_fork_seed";
 
 /// Fork-aware access to the embedded `sui-rpc-store`.
 ///
@@ -341,111 +346,89 @@ impl LocalStore {
         self.stage_object_version(&mut batch, object)?;
         self.stage_package_version(&mut batch, object)?;
         if update_live_pointer {
-            self.stage_restored_object_version(&mut batch, object.id(), object.version())?;
+            self.stage_restored_object_version(&mut batch, object)?;
         }
         batch.commit().context("failed to save live object")?;
         Ok(())
     }
 
-    /// Saves an address-owned seed object into current state and secondary indexes.
+    /// Whether the one-shot seed load has already committed.
     ///
-    /// Seed initialization is bounded by the seed manifest, so the address owner
-    /// and balance indexes can be made visible without a full remote owner
-    /// inventory scan.
-    pub(crate) fn save_address_owned_seed_object(&self, object: &Object) -> anyhow::Result<()> {
+    /// The seed load must run exactly once over the lifetime of a fork
+    /// directory: `Balance` writes through a merge operator, so replaying it
+    /// would double-count every seeded coin. This marker is written inside the
+    /// load's own batch, so it is set if and only if that batch landed.
+    pub(crate) fn seed_load_complete(&self) -> anyhow::Result<bool> {
+        let state = FrameworkSchema::new(self.db.clone())
+            .restore
+            .get(&PipelineTaskKey::new(SEED_RESTORE_PIPELINE))
+            .context("failed to read seed restore state")?;
+        Ok(state
+            .is_some_and(|state| matches!(state.state, Some(restore_state::State::Complete(_)))))
+    }
+
+    /// Bulk-loads the fork's seed objects and every index `sui-rpc-store`
+    /// derives from them, in one atomic batch.
+    ///
+    /// This is the fork's whole pre-fork index surface. The enumerations that
+    /// produced `objects` are checkpoint-pinned and cannot be re-run once the
+    /// fork has diverged, so the load happens once, at fork creation, before
+    /// anything has executed. That ordering is what lets it write blind: there
+    /// is no existing live state to reconcile against, no stale index rows to
+    /// retract, and no balance contribution to reverse.
+    ///
+    /// Atomicity is the idempotence guard. Committing the completion marker
+    /// with the rows means a crash either leaves the fork with the whole seed
+    /// set or with none of it, and a restart can tell which without inspecting
+    /// the rows themselves.
+    pub(crate) fn restore_seed_objects(&self, objects: &[Object]) -> anyhow::Result<()> {
         anyhow::ensure!(
-            address_owner(object).is_some(),
-            "seed object {} is not address-owned",
-            object.id(),
+            !self.seed_load_complete()?,
+            "seed objects have already been loaded into this fork directory",
         );
 
-        self.save_indexed_live_object(object)
-            .context("failed to save address-owned seed object")
-    }
-
-    /// Saves one object from a complete address-owner scan.
-    ///
-    /// The object must be owned by `owner`; the address-owner and balance index
-    /// rows are written with the object.
-    pub(crate) fn save_address_owner_inventory_object(
-        &self,
-        owner: SuiAddress,
-        object: &Object,
-    ) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            address_owner(object) == Some(owner),
-            "object {} is not owned by address {owner}",
-            object.id(),
-        );
-
-        self.save_indexed_live_object(object)
-            .context("failed to save address-owner inventory object")
-    }
-
-    /// Saves one object from a complete object-owner scan.
-    ///
-    /// The object must be owned by `parent`; the corresponding object-owner
-    /// index row is written with the object.
-    pub(crate) fn save_object_owner_inventory_object(
-        &self,
-        parent: ObjectID,
-        object: &Object,
-    ) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            object.owner() == &Owner::ObjectOwner(parent.into()),
-            "object {} is not owned by object {parent}",
-            object.id(),
-        );
-
-        self.save_indexed_live_object(object)
-            .context("failed to save object-owner inventory object")
-    }
-
-    /// Saves one object from a complete type scan.
-    pub(crate) fn save_type_inventory_object(&self, object: &Object) -> anyhow::Result<()> {
-        self.save_indexed_live_object(object)
-            .context("failed to save type inventory object")
-    }
-
-    /// Saves a live object and its owner, type, package, and balance index rows.
-    ///
-    /// Existing newer live state and local tombstones are authoritative. A
-    /// same-version object may add index rows for an object version that was
-    /// previously stored without them.
-    fn save_indexed_live_object(&self, object: &Object) -> anyhow::Result<()> {
-        let status = self.get_latest_object_status(object.id())?;
         let mut batch = self.db.batch();
-        self.stage_object_version(&mut batch, object)?;
-
-        let mut make_current = false;
-        match status {
-            None => {
-                make_current = true;
-                self.stage_put_object_indexes(&mut batch, object, true)?;
-            }
-            Some((_, Status::Live(existing))) if existing.version() < object.version() => {
-                let existing_was_indexed = self.has_object_by_owner_index(&existing)?;
-                make_current = true;
-                self.stage_delete_object_indexes(&mut batch, &existing)?;
-                if existing_was_indexed {
-                    self.stage_object_balance_delta(&mut batch, &existing, -1)?;
-                }
-                self.stage_put_object_indexes(&mut batch, object, true)?;
-            }
-            Some((_, Status::Live(existing))) if existing.version() == object.version() => {
-                let existing_was_indexed = self.has_object_by_owner_index(&existing)?;
-                self.stage_put_object_indexes(&mut batch, object, !existing_was_indexed)?;
-            }
-            Some((_, Status::Live(_))) | Some((_, Status::Tombstone(_))) => {}
+        for object in objects {
+            self.stage_restored_object(&mut batch, object)
+                .with_context(|| format!("failed to stage seed object {}", object.id()))?;
         }
 
-        if make_current {
-            self.stage_restored_object_version(&mut batch, object.id(), object.version())?;
-        }
+        let complete = RestoreState {
+            state: Some(restore_state::State::Complete(restore_state::Complete {
+                restored_at: self.forked_at_checkpoint,
+            })),
+        };
         batch
-            .commit()
-            .context("failed to save indexed live object")?;
+            .put(
+                &FrameworkSchema::new(self.db.clone()).restore,
+                &PipelineTaskKey::new(SEED_RESTORE_PIPELINE),
+                &complete,
+            )
+            .context("failed to stage seed completion marker")?;
+
+        batch.commit().context("failed to load seed objects")?;
         Ok(())
+    }
+
+    /// Stages every row `sui-rpc-store` derives from one live object: the raw
+    /// object version, the owner, type, balance and package-version indexes,
+    /// and the checkpoint-pinned live-state row at the fork point.
+    ///
+    /// This is the same pipeline set a snapshot restore registers, which is the
+    /// point — the derived-index surface comes from the stock `Restore` impls
+    /// rather than from anything this crate maintains itself.
+    fn stage_restored_object(
+        &self,
+        batch: &mut sui_consistent_store::Batch,
+        object: &Object,
+    ) -> anyhow::Result<()> {
+        let schema = self.schema.as_ref();
+        Objects.restore(schema, object, batch)?;
+        ObjectByOwner.restore(schema, object, batch)?;
+        ObjectByType.restore(schema, object, batch)?;
+        Balance.restore(schema, object, batch)?;
+        PackageVersions.restore(schema, object, batch)?;
+        self.stage_restored_object_version(batch, object)
     }
 
     /// Applies local execution object writes and removals to the raw `objects`
@@ -460,9 +443,9 @@ impl LocalStore {
     /// balance, bitmaps) are written by the indexer alone, and checkpoint
     /// publication blocks on `ServiceManager::wait_for_indexed_checkpoint`, so
     /// RPC reads issued after an execution returns always see fully indexed
-    /// state. Pre-fork materialization (seed and inventory saves) still
-    /// writes indexes synchronously because the indexer only processes
-    /// post-fork checkpoints.
+    /// state. The one-shot seed load still writes derived indexes
+    /// synchronously, because the indexer only processes post-fork checkpoints
+    /// and so never sees the pre-fork state the seed establishes.
     ///
     /// When the same result both removes and writes an object (e.g. wrapped
     /// then written again), the write wins and the object stays current; an
@@ -585,66 +568,24 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Stages a restore-floor row asserting that `version` is the object's live
-    /// version as of the fork checkpoint.
+    /// Stages the restore-floor row asserting that the object's version is its
+    /// live version as of the fork checkpoint.
     ///
     /// This is the shape a live-set restore writes at its anchor, and it carries
     /// the same meaning here: the object predates everything the fork executed.
-    /// Callers must have resolved `version` from a remote query pinned at the
+    /// Callers must have resolved the object from a remote query pinned at the
     /// fork checkpoint — an exact-version fetch of some older version proves
     /// nothing about what is live and must not be recorded.
     fn stage_restored_object_version(
         &self,
         batch: &mut sui_consistent_store::Batch,
-        id: ObjectID,
-        version: SequenceNumber,
-    ) -> anyhow::Result<()> {
-        let (key, value) =
-            object_version_by_checkpoint::store_restored(id, self.forked_at_checkpoint, version);
-        batch.put(&self.schema.object_version_by_checkpoint, &key, &value)?;
-        Ok(())
-    }
-
-    /// Returns whether the object currently has an owner-index row.
-    ///
-    /// The local writer uses this as the signal that the object has already
-    /// contributed indexed live-object state.
-    fn has_object_by_owner_index(&self, object: &Object) -> anyhow::Result<bool> {
-        let Some((key, _)) = object_by_owner::store(object) else {
-            return Ok(false);
-        };
-        Ok(self.schema.object_by_owner.get(&key)?.is_some())
-    }
-
-    /// Stages removal of owner and type index rows for the object.
-    fn stage_delete_object_indexes(
-        &self,
-        batch: &mut sui_consistent_store::Batch,
         object: &Object,
     ) -> anyhow::Result<()> {
-        if let Some((key, _)) = object_by_owner::store(object) {
-            batch.delete(&self.schema.object_by_owner, &key)?;
-        }
-        if let Some((key, _)) = object_by_type::store(object) {
-            batch.delete(&self.schema.object_by_type, &key)?;
-        }
-        Ok(())
-    }
-
-    /// Stages owner, type, package-version, and optionally balance rows.
-    fn stage_put_object_indexes(
-        &self,
-        batch: &mut sui_consistent_store::Batch,
-        object: &Object,
-        include_balance: bool,
-    ) -> anyhow::Result<()> {
-        ObjectByOwner.restore(self.schema.as_ref(), object, batch)?;
-        ObjectByType.restore(self.schema.as_ref(), object, batch)?;
-        self.stage_package_version(batch, object)?;
-        if include_balance {
-            Balance.restore(self.schema.as_ref(), object, batch)?;
-        }
-        Ok(())
+        ObjectVersionByCheckpoint::for_restore(self.forked_at_checkpoint).restore(
+            self.schema.as_ref(),
+            object,
+            batch,
+        )
     }
 
     /// Stages the package-version lookup row for a Move package.
@@ -655,79 +596,6 @@ impl LocalStore {
     ) -> anyhow::Result<()> {
         PackageVersions.restore(self.schema.as_ref(), object, batch)
     }
-
-    /// Stages the balance delta for an object that contributes to the balance index.
-    ///
-    /// `sign` is positive when adding an indexed live object and negative when removing one from
-    /// current indexed state.
-    fn stage_object_balance_delta(
-        &self,
-        batch: &mut sui_consistent_store::Batch,
-        object: &Object,
-        sign: i128,
-    ) -> anyhow::Result<()> {
-        let Some((owner, coin_type, coin, address)) = balance_delta(object, sign)? else {
-            return Ok(());
-        };
-        let (key, value) = balance::delta(owner, coin_type, coin, address);
-        batch.merge(&self.schema.balance, &key, &value)?;
-        Ok(())
-    }
-}
-
-/// Returns the address owner used by owner and balance indexes.
-fn address_owner(object: &Object) -> Option<SuiAddress> {
-    match object.owner() {
-        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => Some(*owner),
-        _ => None,
-    }
-}
-
-/// Returns the balance merge operand that reverses or reapplies one indexed object.
-///
-/// This mirrors the object cases handled by `Balance::restore` so replacing an indexed live object
-/// removes the same balance contribution that the restore helper added.
-fn balance_delta(
-    object: &Object,
-    sign: i128,
-) -> anyhow::Result<Option<(SuiAddress, TypeTag, i128, i128)>> {
-    match object.owner() {
-        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
-            let Some((coin_type, value)) = coin_balance(object)? else {
-                return Ok(None);
-            };
-            Ok(Some((*owner, coin_type, sign * i128::from(value), 0)))
-        }
-        Owner::ObjectOwner(parent) if *parent == SUI_ACCUMULATOR_ROOT_OBJECT_ID.into() => {
-            let Some((owner, coin_type, value)) = address_balance(object) else {
-                return Ok(None);
-            };
-            Ok(Some((owner, coin_type, 0, sign * value)))
-        }
-        _ => Ok(None),
-    }
-}
-
-/// Extracts the coin type and coin value from an indexed coin object.
-fn coin_balance(object: &Object) -> anyhow::Result<Option<(TypeTag, u64)>> {
-    Ok(Coin::extract_balance_if_coin(object)
-        .with_context(|| format!("failed to read coin balance from object {}", object.id()))?
-        .and_then(|(coin_type, value)| match coin_type {
-            TypeTag::Struct(struct_tag) => Some((TypeTag::Struct(struct_tag), value)),
-            _ => None,
-        }))
-}
-
-/// Extracts address-balance data from an accumulator-root dynamic-field object.
-fn address_balance(object: &Object) -> Option<(SuiAddress, TypeTag, i128)> {
-    let move_object = object.data.try_as_move()?;
-    let TypeTag::Struct(coin_type) = move_object.type_().balance_accumulator_field_type_maybe()?
-    else {
-        return None;
-    };
-    let (key, value): (AccumulatorKey, AccumulatorValue) = move_object.try_into().ok()?;
-    let value = value.as_u128()? as i128;
-    (value > 0).then_some((key.owner, TypeTag::Struct(coin_type), value))
 }
 
 #[cfg(test)]
@@ -929,58 +797,102 @@ mod tests {
         );
     }
 
+    /// The point of routing the seed load through the stock `Restore` impls:
+    /// one call has to produce the whole derived-index surface, not just the
+    /// raw object row.
     #[test]
-    fn seed_save_indexes_existing_raw_live_object() {
+    fn seed_load_writes_every_derived_index() {
         let (_dir, store) = fresh_store();
         let id = ObjectID::random();
         let owner = SuiAddress::random_for_testing_only();
-        let object = make_object(id, 1, Owner::AddressOwner(owner));
+        let object = make_object(id, 4, Owner::AddressOwner(owner));
 
-        store.save_live_object_if_current(&object).unwrap();
+        store
+            .restore_seed_objects(std::slice::from_ref(&object))
+            .unwrap();
+
         assert_eq!(
-            store
-                .schema
-                .iter_objects_owned_by_address(owner)
-                .unwrap()
-                .count(),
-            0,
+            store.get_latest_object_status(id).unwrap(),
+            Some((SequenceNumber::from_u64(4), Status::Live(object.clone()))),
         );
 
-        store.save_address_owned_seed_object(&object).unwrap();
-        let rows = store
+        let owned: Vec<_> = store
             .schema
             .iter_objects_owned_by_address(owner)
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].0.object_id, id);
-    }
+        assert_eq!(owned.len(), 1);
+        assert_eq!(owned[0].0.object_id, id);
 
-    #[test]
-    fn seed_save_credits_existing_raw_live_coin_once() {
-        let (_dir, store) = fresh_store();
-        let id = ObjectID::random();
-        let owner = SuiAddress::random_for_testing_only();
-        let object = make_object(id, 1, Owner::AddressOwner(owner));
-        let coin_type = GAS::type_();
-
-        store.save_live_object_if_current(&object).unwrap();
-        assert!(
-            RpcIndexes::get_balance(store.reader(), &owner, &coin_type)
+        let object_type: StructTag = object.type_().unwrap().clone().into();
+        assert_eq!(
+            store
+                .schema
+                .iter_objects_of_type(&sui_rpc_store::schema::type_filter::TypeFilter::Type(
+                    object_type,
+                ))
                 .unwrap()
-                .is_none(),
-            "raw live object save should not credit balances before seeding",
+                .count(),
+            1,
         );
 
-        store.save_address_owned_seed_object(&object).unwrap();
-        store.save_address_owned_seed_object(&object).unwrap();
-
-        let balance = RpcIndexes::get_balance(store.reader(), &owner, &coin_type)
+        let balance = RpcIndexes::get_balance(store.reader(), &owner, &GAS::type_())
             .unwrap()
-            .expect("seed initialization should credit coin balance");
+            .expect("seed load should credit the coin balance");
         assert_eq!(balance.coin_balance, 1_000_000);
         assert_eq!(balance.address_balance, 0);
+
+        // Pre-fork state is live *as of the fork checkpoint* and nowhere else:
+        // a row above would outrank locally executed checkpoints, one below
+        // would lose to the indexer's synthetic floors.
+        let rows: Vec<_> = store
+            .schema
+            .iter_object_versions_by_checkpoint(id)
+            .unwrap()
+            .map(|row| row.unwrap().0.checkpoint)
+            .collect();
+        assert_eq!(rows, vec![TEST_FORK_CHECKPOINT]);
+    }
+
+    /// `Balance` accumulates through a merge operator, so a replayed seed load
+    /// would silently double every seeded coin. The completion marker commits
+    /// with the rows precisely so that a second attempt cannot get that far.
+    #[test]
+    fn seed_load_refuses_to_run_twice() {
+        let (_dir, store) = fresh_store();
+        let owner = SuiAddress::random_for_testing_only();
+        let object = make_object(ObjectID::random(), 1, Owner::AddressOwner(owner));
+
+        assert!(!store.seed_load_complete().unwrap());
+        store
+            .restore_seed_objects(std::slice::from_ref(&object))
+            .unwrap();
+        assert!(store.seed_load_complete().unwrap());
+
+        let err = store
+            .restore_seed_objects(&[object])
+            .expect_err("a second seed load must be refused");
+        assert!(format!("{err:#}").contains("already been loaded"));
+
+        let balance = RpcIndexes::get_balance(store.reader(), &owner, &GAS::type_())
+            .unwrap()
+            .expect("balance should exist");
+        assert_eq!(
+            balance.coin_balance, 1_000_000,
+            "balance was double-counted"
+        );
+    }
+
+    /// The marker lives in the database, not in a JSON sidecar, so that it
+    /// commits atomically with the rows it describes and survives reopen.
+    #[test]
+    fn seed_load_marker_survives_reopen() {
+        let (dir, store) = fresh_store();
+        store.restore_seed_objects(&[]).unwrap();
+        drop(store);
+
+        assert!(reopen_store(&dir).seed_load_complete().unwrap());
     }
 
     #[test]
@@ -1088,30 +1000,25 @@ mod tests {
         );
     }
 
+    /// The seed load writes blind — no reconciliation against existing state —
+    /// which is only safe because it runs before the fork executes anything.
+    /// What keeps a seeded object from outliving its own history afterwards is
+    /// the checkpoint ordering: the seed's floor row sits at the fork
+    /// checkpoint, so the first locally executed checkpoint outranks it.
     #[test]
-    fn seed_save_does_not_resurrect_transferred_object() {
+    fn local_execution_supersedes_a_seeded_object() {
         let (_dir, store) = fresh_store();
         let id = ObjectID::random();
         let owner = SuiAddress::random_for_testing_only();
         let recipient = SuiAddress::random_for_testing_only();
-        let base = make_object(id, 1, Owner::AddressOwner(owner));
+        let seeded = make_object(id, 1, Owner::AddressOwner(owner));
         let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
 
+        store.restore_seed_objects(&[seeded]).unwrap();
         store
             .apply_local_object_diff(&BTreeMap::from([(id, transferred.clone())]), &[])
             .unwrap();
-        store.save_address_owned_seed_object(&base).unwrap();
 
-        // The stale pre-fork version must not be re-indexed for its old owner
-        // or become current again.
-        assert_eq!(
-            store
-                .schema
-                .iter_objects_owned_by_address(owner)
-                .unwrap()
-                .count(),
-            0,
-        );
         assert_eq!(
             store.get_latest_object_status(id).unwrap(),
             Some((SequenceNumber::from_u64(2), Status::Live(transferred))),

@@ -42,7 +42,7 @@ use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::seed::SeedInput;
 use crate::seed::ensure_seed_manifest_matches;
-use crate::seed::save_seed_manifest_objects;
+use crate::seed::load_seed_objects;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
@@ -140,7 +140,12 @@ pub async fn initialize(
     store.save_checkpoint(&checkpoint, &checkpoint_contents)?;
     let seed_manifest =
         crate::seed::prepare_seed_manifest(&store, network_name, &seed_input).await?;
-    save_seed_manifest_objects(&store, &seed_manifest)?;
+
+    // Seeding is eager and one-shot: the enumerations behind the manifest are
+    // pinned at the fork checkpoint and cannot be re-run once the fork has
+    // diverged, so the whole seed set is loaded here, before anything executes,
+    // and never again. On a resumed fork the load is a no-op.
+    load_seed_objects(&store, &seed_manifest)?;
 
     // Resume support: the Simulacrum must build its next checkpoint on the
     // fork's own local tip. On a fresh fork that tip is the fork-point

@@ -7,8 +7,6 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use sui_types::base_types::ObjectID;
-
 use super::*;
 
 fn env_value(vars: &BTreeMap<&'static str, &'static str>, key: &str) -> Option<OsString> {
@@ -85,39 +83,4 @@ fn seed_manifest_round_trips_and_is_immutable() {
     assert!(store.seed_manifest_exists());
     assert_eq!(store.read_seed_manifest().unwrap(), manifest);
     assert!(store.write_seed_manifest(&manifest).is_err());
-}
-
-#[test]
-fn inventory_metadata_tracks_remote_completion_sets() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let store = MetadataStore::new_with_root(dir.path().to_path_buf());
-    let parent = ObjectID::random();
-    let type_filter = "0x2::coin::Coin<0x2::sui::SUI>";
-
-    assert!(!store.object_owner_inventory_complete(parent).unwrap());
-    assert!(!store.type_inventory_complete(type_filter).unwrap());
-
-    store.mark_object_owner_inventory_complete(parent).unwrap();
-    store.mark_type_inventory_complete(type_filter).unwrap();
-
-    assert!(store.object_owner_inventory_complete(parent).unwrap());
-    assert!(store.type_inventory_complete(type_filter).unwrap());
-}
-
-#[test]
-fn inventory_metadata_accepts_older_files() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let store = MetadataStore::new_with_root(dir.path().to_path_buf());
-    let parent = ObjectID::random();
-    fs::write(
-        store.inventory_metadata_path(),
-        serde_json::json!({
-            "completed_object_owners": [parent],
-        })
-        .to_string(),
-    )
-    .unwrap();
-
-    assert!(store.object_owner_inventory_complete(parent).unwrap());
-    assert!(!store.type_inventory_complete("0x2::clock::Clock").unwrap());
 }

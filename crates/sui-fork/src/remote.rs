@@ -17,7 +17,6 @@ use tracing::info;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -32,8 +31,6 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::VersionQuery;
-use crate::gql::AddressOwnedObject;
-use crate::gql::InventoryObject;
 
 /// Read access to the forked-from chain, pinned at the fork checkpoint.
 #[derive(Clone)]
@@ -54,11 +51,6 @@ impl RemoteSource {
     /// (seed resolution runs its own checkpoint-scoped queries).
     pub(crate) fn gql(&self) -> &GraphQLClient {
         &self.gql
-    }
-
-    /// The checkpoint this source is pinned at.
-    pub(crate) fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
-        self.forked_at_checkpoint
     }
 
     /// Latest version of an object as of the fork checkpoint.
@@ -204,30 +196,6 @@ impl RemoteSource {
         }
 
         Ok(fetched)
-    }
-
-    /// Full enumeration of the objects owned by `owner` at the fork checkpoint.
-    pub(crate) fn scan_address_owned(
-        &self,
-        owner: SuiAddress,
-    ) -> anyhow::Result<Vec<AddressOwnedObject>> {
-        self.gql
-            .get_address_owned_objects_at_checkpoint_blocking(owner, self.forked_at_checkpoint)
-    }
-
-    /// Full enumeration of the objects owned by object `parent` at the fork checkpoint.
-    pub(crate) fn scan_object_owned(
-        &self,
-        parent: ObjectID,
-    ) -> anyhow::Result<Vec<InventoryObject>> {
-        self.gql
-            .get_object_owned_objects_at_checkpoint_blocking(parent, self.forked_at_checkpoint)
-    }
-
-    /// Full enumeration of the objects matching `type_filter` at the fork checkpoint.
-    pub(crate) fn scan_by_type(&self, type_filter: String) -> anyhow::Result<Vec<InventoryObject>> {
-        self.gql
-            .get_objects_by_type_at_checkpoint_blocking(type_filter, self.forked_at_checkpoint)
     }
 
     /// Lowest checkpoint for which the remote retains checkpoint and transaction data.
