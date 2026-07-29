@@ -13,7 +13,9 @@ pub(crate) mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
-    use mysten_common::{assert_reachable, debug_fatal, in_test_configuration};
+    use mysten_common::{
+        assert_reachable, debug_fatal, debug_fatal_with_metric, in_test_configuration,
+    };
     use std::collections::{BTreeMap, BTreeSet};
     use std::{cell::RefCell, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -306,7 +308,12 @@ pub(crate) mod checked {
                         execution_result,
                     }
                 }
-                Outcome::BumpOnly { gas_status, error } => {
+                Outcome::BumpOnly {
+                    gas_status,
+                    error,
+                    reason,
+                } => {
+                    report_bump_only::<Mode>(reason, &transaction_digest, &error);
                     // Recorded no-op: consume the dropped store and rebuild from its inputs, keeping only
                     // the input version bumps.
                     temporary_store = temporary_store.into_recorded_noop();
@@ -393,7 +400,7 @@ pub(crate) mod checked {
         sponsor: Option<SuiAddress>,
         is_epoch_change: bool,
         transaction_digest: TransactionDigest,
-    ) -> Result<(), Mode::Error> {
+    ) -> Result<(), (Mode::Error, BumpOnlyReason)> {
         // FIXME: we cannot fail the transaction if this is an epoch change transaction.
         // Conservation + ownership read the cached invariant inputs from the store
         // (`set_invariant_inputs`); genesis flag, advance-epoch summary and the reservation budget
@@ -405,7 +412,8 @@ pub(crate) mod checked {
             move_vm,
             enable_expensive_checks,
             gas_cost_summary,
-        )?;
+        )
+        .map_err(|error| (error, BumpOnlyReason::Conservation))?;
 
         // Ownership invariants — only under expensive checks + non-arbitrary mode; a violation is a
         // real bug that should never fire.
@@ -425,7 +433,10 @@ pub(crate) mod checked {
                 "ownership invariants violated; falling back to the no-op exit (State 2): \
                  dropping all writes and charging nothing",
             );
-            return Err(ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation).into());
+            return Err((
+                ExecutionError::from_kind(ExecutionErrorKind::InvariantViolation).into(),
+                BumpOnlyReason::Ownership,
+            ));
         }
 
         Ok(())
@@ -538,7 +549,66 @@ pub(crate) mod checked {
         BumpOnly {
             gas_status: SuiGasStatus,
             error: Mode::Error,
+            reason: BumpOnlyReason,
         },
+    }
+
+    /// Which stage bailed to the `BumpOnly` (recorded no-op) exit. `InsufficientFundsForWithdraw` is
+    /// the one expected reason; every other variant is an execution bug and is reported to
+    /// `execution_bump_only_exits`, whose `reason` label is `Self::label`.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum BumpOnlyReason {
+        InsufficientFundsForWithdraw,
+        /// Resetting writes after a failed execution could not charge even input-only storage.
+        WriteReset,
+        Conservation,
+        Ownership,
+    }
+
+    impl BumpOnlyReason {
+        /// Metric label. Alerts select on these, so keep the values stable.
+        fn label(self) -> &'static str {
+            match self {
+                Self::InsufficientFundsForWithdraw => "insufficient_funds_for_withdraw",
+                Self::WriteReset => "write_reset",
+                Self::Conservation => "conservation",
+                Self::Ownership => "ownership",
+            }
+        }
+
+        fn is_expected(self) -> bool {
+            matches!(self, Self::InsufficientFundsForWithdraw)
+        }
+    }
+
+    /// Report an unexpected `BumpOnly` exit: a transaction whose writes were all dropped and which
+    /// was charged nothing because a stage of the pipeline failed. `debug_fatal` semantics — panics
+    /// under `crash_on_debug()`, counts + logs in production.
+    ///
+    /// Skipped for the expected IFFW short-circuit, and for the simulation paths
+    /// (`Mode::TRACK_EXECUTION`: dev-inspect / dry-run / simulate), where an arbitrary user-supplied
+    /// transaction must not be able to crash a debug node or raise an alert.
+    fn report_bump_only<Mode: ExecutionMode>(
+        reason: BumpOnlyReason,
+        transaction_digest: &TransactionDigest,
+        error: &Mode::Error,
+    ) {
+        if reason.is_expected() || Mode::TRACK_EXECUTION {
+            return;
+        }
+        debug_fatal_with_metric!(
+            |metrics: &mysten_metrics::Metrics| {
+                metrics
+                    .execution_bump_only_exits
+                    .with_label_values(&[reason.label()])
+                    .inc();
+            },
+            "BumpOnly exit (recorded no-op): all writes dropped, no gas charged. \
+             reason={}, tx_digest={:?}, error={:?}",
+            reason.label(),
+            transaction_digest,
+            error
+        );
     }
 
     struct GasOutcome {
@@ -580,6 +650,7 @@ pub(crate) mod checked {
             return Outcome::BumpOnly {
                 gas_status,
                 error: iffw,
+                reason: BumpOnlyReason::InsufficientFundsForWithdraw,
             };
         }
 
@@ -636,10 +707,11 @@ pub(crate) mod checked {
             execution_params,
             trace_builder_opt,
         ) {
-            Err(error) => {
+            Err((error, reason)) => {
                 return Outcome::BumpOnly {
                     gas_status: gas_charger.into_gas_status(),
                     error,
+                    reason,
                 };
             }
             Ok((gas_cost_summary, execution_result, timings)) => {
@@ -666,9 +738,10 @@ pub(crate) mod checked {
                 execution_result,
                 timings,
             },
-            Err(error) => Outcome::BumpOnly {
+            Err((error, reason)) => Outcome::BumpOnly {
                 gas_status: gas_charger.into_gas_status(),
                 error,
+                reason,
             },
         }
     }
@@ -686,7 +759,7 @@ pub(crate) mod checked {
         metrics: Arc<ExecutionMetrics>,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    ) -> Result<ExecutionOutcome<Mode>, Mode::Error> {
+    ) -> Result<ExecutionOutcome<Mode>, (Mode::Error, BumpOnlyReason)> {
         debug_assert!(
             gas_charger.no_charges(),
             "No gas charges must be applied yet"
@@ -728,7 +801,9 @@ pub(crate) mod checked {
         let result = result.and_then(|v| checks.map(|()| v));
 
         if result.is_err() {
-            gas_charger.reset_writes(temporary_store)?;
+            gas_charger
+                .reset_writes(temporary_store)
+                .map_err(|error| (error.into(), BumpOnlyReason::WriteReset))?;
         }
         let cost_summary = gas_charger.charge(temporary_store, &result);
         Ok((cost_summary, result, timings))
