@@ -181,8 +181,9 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_blocks_sent_bytes_saved: IntCounterVec,
     pub(crate) minimal_blocks_received: IntCounterVec,
     pub(crate) minimal_blocks_received_bytes_saved: IntCounterVec,
-    pub(crate) minimal_block_inflate_fallback: IntCounterVec,
-    pub(crate) minimal_block_fallback_fetch_bytes: IntCounterVec,
+    pub(crate) minimal_block_inflate_drop: IntCounterVec,
+    pub(crate) minimal_block_recovery: IntCounterVec,
+    pub(crate) minimal_block_encode_cache: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
@@ -608,16 +609,22 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            minimal_block_inflate_fallback: register_int_counter_vec_with_registry!(
-                "minimal_block_inflate_fallback",
-                "Minimal blocks that could not be inflated locally, per peer and reason",
+            minimal_block_inflate_drop: register_int_counter_vec_with_registry!(
+                "minimal_block_inflate_drop",
+                "Minimal blocks dropped because they could not be inflated from local state, per peer and reason; recovered via the missing-ancestor sync",
                 &["authority", "reason"],
                 registry,
             ).unwrap(),
-            minimal_block_fallback_fetch_bytes: register_int_counter_vec_with_registry!(
-                "minimal_block_fallback_fetch_bytes",
-                "Serialized bytes fetched from the sending peer to recover un-inflatable minimal blocks",
-                &["authority"],
+            minimal_block_recovery: register_int_counter_vec_with_registry!(
+                "minimal_block_recovery",
+                "Off-stream recovery fetches for dropped minimal blocks, per peer and outcome (recovered|fetch_failed|digest_mismatch|saturated)",
+                &["authority", "result"],
+                registry,
+            ).unwrap(),
+            minimal_block_encode_cache: register_int_counter_vec_with_registry!(
+                "minimal_block_encode_cache",
+                "Send-path minimal-encoding cache lookups, by result (hit|miss)",
+                &["result"],
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(

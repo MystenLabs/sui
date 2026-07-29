@@ -4,17 +4,11 @@
 //! Inflates minimal blocks received on the subscription stream back into full serialized
 //! `SignedBlock`s using local DAG state, and produces minimal encodings on the send path.
 //!
-//! A missing ancestor on inflation is often a block still in the acceptance pipeline, so
-//! inflation retries once after a short delay before the caller falls back to fetching the
-//! full block from the sending peer (which authored it — see `minimal_block.rs`).
+//! Inflation is synchronous and never waits: a block whose ancestors are not yet accepted
+//! locally is reported as un-inflatable so the caller can drop it, and the normal
+//! missing-ancestor sync recovers it off the critical path (see `subscriber.rs`).
 
-// TODO(minimal-blocks): remove once wired into the subscribe_blocks path.
-#![allow(dead_code)]
-
-use std::{
-    sync::{Arc, Weak},
-    time::Duration,
-};
+use std::sync::{Arc, Weak};
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
@@ -26,24 +20,10 @@ use crate::{
     context::Context,
     dag_state::DagState,
     minimal_block::{
-        AncestorDigestResolver, FallbackReason, InflateError, MinimalBlockError,
-        deserialize_minimal, serialize_minimal,
+        AncestorDigestResolver, InflateError, MinimalBlockError, deserialize_minimal,
+        serialize_minimal,
     },
 };
-
-/// A missing ancestor is usually a block still in the local accept pipeline, so inflation
-/// backs off and retries instead of giving up.
-///
-/// Sized against the alternative, not against latency in the abstract: falling back costs a
-/// full network round trip to the sender *plus* a full-block payload, so waiting a few
-/// hundred milliseconds is strictly cheaper than fetching. The first private-testnet run
-/// (100 validators, single 20 ms retry) fell back on 15-20% of received blocks, and those
-/// fetches consumed ~30% of the bytes the codec had saved.
-const INFLATE_RETRY_DELAYS: [Duration; 3] = [
-    Duration::from_millis(20),
-    Duration::from_millis(60),
-    Duration::from_millis(150),
-];
 
 /// Minimal-block codec bound to live DAG state, usable on both the send side (digest
 /// omission decisions) and the receive side (re-inflation).
@@ -116,33 +96,6 @@ impl BlockInflater {
             author,
             &DagStateResolver(self),
         )
-    }
-
-    /// Inflation with bounded backoff retries on a missing ancestor. Any remaining failure
-    /// is the caller's cue to fetch the full block from the sending peer.
-    ///
-    /// Only missing ancestors are retried: an ambiguous slot or a digest mismatch reflects a
-    /// durable difference in local state, which waiting cannot resolve.
-    pub(crate) async fn inflate_with_retry(
-        &self,
-        minimal: &[u8],
-        author: AuthorityIndex,
-    ) -> Result<(SignedBlock, Bytes), InflateError> {
-        let mut result = self.inflate(minimal, author);
-        for delay in INFLATE_RETRY_DELAYS {
-            if !matches!(
-                result,
-                Err(InflateError::NeedFullBlock {
-                    reason: FallbackReason::MissingAncestor(_),
-                    ..
-                })
-            ) {
-                break;
-            }
-            tokio::time::sleep(delay).await;
-            result = self.inflate(minimal, author);
-        }
-        result
     }
 }
 
@@ -286,16 +239,14 @@ mod tests {
         let genesis_refs: Vec<_> = genesis.iter().map(|b| b.reference()).collect();
         accept_round(&receiver_dag_state, 4, 1, &genesis_refs);
 
-        match receiver
-            .inflate_with_retry(&minimal, block.author())
-            .await
-            .map(|_| ())
-        {
+        match receiver.inflate(&minimal, block.author()).map(|_| ()) {
             Err(InflateError::NeedFullBlock { block_ref, reason }) => {
                 assert_eq!(block_ref, block.reference());
                 assert_eq!(
                     reason,
-                    FallbackReason::MissingAncestor(Slot::from(late_block.reference()))
+                    crate::minimal_block::FallbackReason::MissingAncestor(Slot::from(
+                        late_block.reference()
+                    ))
                 );
             }
             other => panic!("expected MissingAncestor fallback, got {other:?}"),

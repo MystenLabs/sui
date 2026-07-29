@@ -11,15 +11,12 @@
 //! so order is not derivable from authority indices.
 //!
 //! The sender's `claimed_block_digest` lets the receiver distinguish a failed local
-//! reconstruction (digest mismatch => fetch the full block from the sending peer) from an
-//! invalid block (digest match + bad signature => reject the peer).
+//! reconstruction (digest mismatch => drop the block and let the missing-ancestor sync
+//! recover it) from an invalid block (digest match + bad signature => reject the peer).
 //!
 //! Minimal blocks are emitted only for live broadcasts on the validator `subscribe_blocks`
 //! stream, and only for V1/V2 blocks — V3 is sent full until it ships and gets codec
 //! coverage here.
-
-// TODO(minimal-blocks): remove once the codec is wired into the subscribe_blocks path.
-#![allow(dead_code)]
 
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, Committee};
@@ -50,7 +47,7 @@ pub(crate) struct MinimalBlock {
     overrides: Vec<AncestorOverride>,
     #[prost(bytes = "bytes", tag = "4")]
     signature: Bytes,
-    /// 32 B digest of the full serialized SignedBlock: fallback fetch key + error distinction.
+    /// 32 B digest of the full serialized SignedBlock: reconstruction proof + error distinction.
     #[prost(bytes = "bytes", tag = "5")]
     claimed_block_digest: Bytes,
 }
@@ -102,8 +99,8 @@ pub(crate) enum InflateError {
     /// The encoding itself is invalid — a peer fault, not a local-state issue.
     #[error("malformed minimal block: {0}")]
     Malformed(String),
-    /// Local state cannot resolve the block; fetch the full block by `block_ref` from
-    /// the sending peer (which authored it and must hold it).
+    /// Local state cannot resolve the block right now. The caller drops it; the
+    /// missing-ancestor sync recovers it in the background once descendants reference it.
     #[error("cannot inflate block {block_ref}: {reason:?}")]
     NeedFullBlock {
         block_ref: BlockRef,
@@ -132,8 +129,16 @@ pub(crate) fn serialize_minimal(
         ancestor_authors.push(ancestor.author.value() as u32);
 
         let round = (ancestor.round != default_round).then_some(ancestor.round);
-        let can_omit_digest =
-            ancestor.round == GENESIS_ROUND || ancestor.round > min_omittable_round;
+        // The author's own parent always carries an explicit digest. It costs 32 bytes and
+        // breaks the same-author cascade: a receiver that missed one of this author's blocks
+        // could otherwise never inflate any later block from it (resolving the parent needs
+        // the very block it lacks), so it would never reach acceptance, never register a
+        // missing ancestor, and never fetch. With the parent digest present, inflation always
+        // succeeds along an author's own chain and the block reaches `block_manager`, which
+        // suspends it and lets the normal missing-ancestor sync recover the gap.
+        let is_own_parent = ancestor.author == block.author();
+        let can_omit_digest = !is_own_parent
+            && (ancestor.round == GENESIS_ROUND || ancestor.round > min_omittable_round);
         let uniquely_resolvable = can_omit_digest
             && matches!(
                 resolver.digests_at_slot(Slot::from(*ancestor)).as_slice(),
@@ -419,10 +424,12 @@ mod tests {
         let block = sign(block, &context, &key_pairs);
 
         let minimal = roundtrip(&block, &context, &resolver, 0);
-        // Common case: every digest resolves locally, so no overrides ride the wire and
-        // the encoding is a small fraction of the full block.
+        // Common case: the only override is the author's own parent, whose digest always
+        // rides explicitly (cascade-breaking); every other digest resolves locally.
         let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
-        assert!(decoded.overrides.is_empty());
+        assert_eq!(decoded.overrides.len(), 1);
+        assert_eq!(decoded.overrides[0].author, 0);
+        assert!(decoded.overrides[0].digest.is_some());
         assert!(minimal.len() < block.serialized().len());
     }
 
@@ -478,11 +485,57 @@ mod tests {
         let block = sign(block, &context, &key_pairs);
 
         // With min_omittable_round = 16, the round-15 ancestor also needs an explicit
-        // digest (below the recent-cache horizon), on top of its round override.
+        // digest (below the recent-cache horizon), on top of its round override. The third
+        // override is the own parent's always-explicit digest.
         let minimal = roundtrip(&block, &context, &resolver, 16);
         let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
-        assert_eq!(decoded.overrides.len(), 2);
+        assert_eq!(decoded.overrides.len(), 3);
         assert!(decoded.overrides.iter().all(|o| o.digest.is_some()));
+    }
+
+    /// A receiver that dropped block X from an author must still inflate the author's next
+    /// block X': the own-parent digest rides explicitly, so inflation never needs to resolve
+    /// the one slot the receiver is missing, and the reconstructed ancestors carry X's exact
+    /// ref for block_manager to suspend on and sync to fetch. Without this, dropping one
+    /// block would make every later block from that author un-inflatable.
+    #[tokio::test]
+    async fn own_parent_digest_breaks_missing_parent_cascade() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(29);
+        let mut sender = MapResolver::default();
+        let round9 = ancestor_refs(4, 9, &mut sender, &mut rng);
+
+        // X: author 0's round-10 block, which the receiver dropped.
+        let x = TestBlock::new(10, 0)
+            .set_ancestors_raw(round9.clone())
+            .build();
+        let x = sign(x, &context, &key_pairs);
+        sender.insert(x.reference());
+
+        // The receiver holds everything at round 10 EXCEPT X.
+        let mut receiver = MapResolver::default();
+        let mut round10 = vec![x.reference()];
+        for author in 1..4u32 {
+            let block_ref = BlockRef::new(
+                10,
+                AuthorityIndex::new_for_test(author),
+                test_digest(&mut rng),
+            );
+            sender.insert(block_ref);
+            receiver.insert(block_ref);
+            round10.push(block_ref);
+        }
+
+        // X': author 0's next block, whose own parent is the dropped X.
+        let x2 = TestBlock::new(11, 0).set_ancestors_raw(round10).build();
+        let x2 = sign(x2, &context, &key_pairs);
+        let minimal = serialize_minimal(&x2, &sender, 0).unwrap();
+
+        let (_signed, serialized) =
+            deserialize_minimal(&minimal, &context.committee, x2.author(), &receiver).unwrap();
+        // Byte-identity proves the reconstructed ancestors include X's exact ref.
+        assert_eq!(&serialized, x2.serialized());
+        assert_eq!(x2.ancestors()[0], x.reference());
     }
 
     #[tokio::test]
@@ -498,10 +551,13 @@ mod tests {
         }
         let block = TestBlock::new(1, 0).set_ancestors_raw(genesis).build();
         let block = sign(block, &context, &key_pairs);
-        // Genesis digests are omittable even when the horizon says "explicit below round 5".
+        // Genesis digests are omittable even when the horizon says "explicit below round 5";
+        // only the own parent (itself genesis here) carries its always-explicit digest.
         let minimal = roundtrip(&block, &context, &resolver, 5);
         let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
-        assert!(decoded.overrides.is_empty());
+        assert_eq!(decoded.overrides.len(), 1);
+        assert_eq!(decoded.overrides[0].author, 0);
+        assert!(decoded.overrides[0].digest.is_some());
     }
 
     #[tokio::test]

@@ -1292,21 +1292,17 @@ mod tests {
             total_inflated_bytes_saved +=
                 counter_sum(registry, "minimal_blocks_received_bytes_saved", None);
             // Digest mismatches or malformed encodings between honest nodes would be
-            // codec bugs; missing-ancestor fallbacks are legitimate races.
+            // codec bugs; missing-ancestor drops are legitimate races.
             assert_eq!(
                 counter_sum(
                     registry,
-                    "minimal_block_inflate_fallback",
+                    "minimal_block_inflate_drop",
                     Some("digest_mismatch")
                 ),
                 0
             );
             assert_eq!(
-                counter_sum(
-                    registry,
-                    "minimal_block_inflate_fallback",
-                    Some("malformed")
-                ),
+                counter_sum(registry, "minimal_block_inflate_drop", Some("malformed")),
                 0
             );
         }

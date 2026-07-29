@@ -7,11 +7,11 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use consensus_types::block::Round;
+use consensus_types::block::{BlockRef, Round};
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
-use tokio::{task::JoinHandle, time::sleep};
+use tokio::{sync::Semaphore, task::JoinHandle, time::sleep};
 use tracing::{debug, error, info};
 
 use crate::{
@@ -20,58 +20,31 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    minimal_block::{FallbackReason, InflateError},
+    minimal_block::InflateError,
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
 
-/// Timeout for the strict full-block fetch after a failed minimal-block inflation.
-const FALLBACK_FETCH_TIMEOUT: Duration = Duration::from_secs(2);
-/// Fallback-fetch budget: at most `MAX_FETCHES` in any rolling window of `WINDOW`
-/// received minimal blocks, so varied claimed digests cannot multiply fetch work.
-const FALLBACK_BUDGET_WINDOW: u32 = 32;
-const FALLBACK_BUDGET_MAX_FETCHES: u32 = 4;
 /// Malformed minimal encodings tolerated per subscription session before the stream is
 /// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
 const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 
-/// Bounds fallback fetches per subscription. Stream processing is sequential per peer,
-/// so this also bounds fetch concurrency to one.
-struct FallbackBudget {
-    window: u32,
-    max_fetches: u32,
-    blocks_seen: u32,
-    fetches_used: u32,
-}
+/// In-flight off-stream recovery fetches allowed per peer. Recovery beyond this bound is
+/// skipped: later blocks from the same peer keep spawning recoveries, and blocks that do
+/// inflate register the gap with block_manager, so a lost recovery is never load-bearing.
+const MAX_INFLIGHT_RECOVERIES: usize = 8;
 
-impl FallbackBudget {
-    fn new(window: u32, max_fetches: u32) -> Self {
-        Self {
-            window,
-            max_fetches,
-            blocks_seen: 0,
-            fetches_used: 0,
-        }
-    }
+/// Timeout for one off-stream recovery fetch. Generous because nothing waits on it: the
+/// subscription stream has already moved on.
+const RECOVERY_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 
-    /// Records one received minimal block, rolling the window over when it fills.
-    fn record_block(&mut self) {
-        if self.blocks_seen >= self.window {
-            self.blocks_seen = 0;
-            self.fetches_used = 0;
-        }
-        self.blocks_seen += 1;
-    }
-
-    /// Consumes one fetch from the budget; false when the window is exhausted.
-    fn try_fetch(&mut self) -> bool {
-        if self.fetches_used < self.max_fetches {
-            self.fetches_used += 1;
-            true
-        } else {
-            false
-        }
-    }
+/// Outcome of processing one received block envelope before it is handed to the service.
+enum InflateOutcome {
+    /// A full-form block, or a minimal block successfully inflated to full form.
+    Block(ExtendedSerializedBlock),
+    /// A minimal block that local state cannot inflate right now. It is dropped from the
+    /// stream; the claimed ref drives off-stream recovery from the sender.
+    Dropped(BlockRef),
 }
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
@@ -172,20 +145,29 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .set(0);
     }
 
-    /// Replaces a minimal-form block with its inflated full serialization, falling back to
-    /// a strict fetch from the sending peer, which authored the block and must hold it.
-    /// Fallback fetches are bounded by `budget`; a block dropped over budget is recovered
-    /// via the descendant-driven missing-ancestor path once other validators reference it.
-    async fn inflate_received_block(
+    /// Replaces a minimal-form block with its inflated full serialization.
+    ///
+    /// Returns `Dropped` when the block cannot be inflated from local state; the caller
+    /// continues the stream immediately and recovers the block off-stream (see
+    /// `recover_dropped_block`). Dropping without recovery is not an option: a receiver
+    /// that falls a round behind finds every subsequent block from every peer
+    /// un-inflatable (each references blocks it lacks), nothing reaches `block_manager`,
+    /// so no missing ancestor is ever registered and the node wedges permanently.
+    ///
+    /// This path must never wait on the network. Blocks from a peer are processed
+    /// sequentially, so any await here delays every later block from that peer —
+    /// head-of-line blocking. An earlier version fetched the full block inline (up to a
+    /// 2 s timeout) and slept between inflate retries; on high-latency links that
+    /// compounded into a throughput collapse, because a slower stream falls further
+    /// behind on ancestors, which causes more stalls.
+    fn inflate_received_block(
         context: &Context,
         block_inflater: &BlockInflater,
-        network_client: &C,
         peer: AuthorityIndex,
         mut block: ExtendedSerializedBlock,
-        budget: &mut FallbackBudget,
-    ) -> ConsensusResult<ExtendedSerializedBlock> {
+    ) -> ConsensusResult<InflateOutcome> {
         let Some(minimal) = block.minimal.take() else {
-            return Ok(block);
+            return Ok(InflateOutcome::Block(block));
         };
         let peer_hostname = context.committee.authority(peer).hostname.as_str();
         let node_metrics = &context.metrics.node_metrics;
@@ -193,7 +175,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .minimal_blocks_received
             .with_label_values(&[peer_hostname])
             .inc();
-        budget.record_block();
 
         // Cap the envelope before decoding: a legitimate minimal block is bounded by the
         // max transaction payload plus small per-ancestor structure, so anything larger
@@ -202,7 +183,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2);
         if minimal.len() > max_minimal_size {
             node_metrics
-                .minimal_block_inflate_fallback
+                .minimal_block_inflate_drop
                 .with_label_values(&[peer_hostname, "malformed"])
                 .inc();
             return Err(ConsensusError::MalformedMinimalBlock(format!(
@@ -211,65 +192,91 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             )));
         }
 
-        match block_inflater.inflate_with_retry(&minimal, peer).await {
+        match block_inflater.inflate(&minimal, peer) {
             Ok((_signed_block, serialized)) => {
                 node_metrics
                     .minimal_blocks_received_bytes_saved
                     .with_label_values(&[peer_hostname])
                     .inc_by(serialized.len().saturating_sub(minimal.len()) as u64);
                 block.block = serialized;
-                Ok(block)
+                Ok(InflateOutcome::Block(block))
             }
             Err(InflateError::NeedFullBlock { block_ref, reason }) => {
                 node_metrics
-                    .minimal_block_inflate_fallback
+                    .minimal_block_inflate_drop
                     .with_label_values(&[peer_hostname, reason.label()])
                     .inc();
-                // Missing-ancestor fetches bypass the budget: they are legitimate
-                // catch-up work (a receiver that is behind fails on most live blocks),
-                // and dropping them can deadlock the committee — the budget only refills
-                // as blocks arrive, but blocks only arrive if recovery proceeds. They
-                // are naturally rate-limited anyway: fetches are sequential per peer,
-                // sender-only, and the wait slows only that peer's own stream. The
-                // budget bounds the state-divergence reasons, where repeated fetches
-                // suggest equivocation games or claimed-digest abuse.
-                let budgeted = !matches!(reason, FallbackReason::MissingAncestor(_));
-                if budgeted && !budget.try_fetch() {
-                    node_metrics
-                        .minimal_block_inflate_fallback
-                        .with_label_values(&[peer_hostname, "budget_exceeded"])
-                        .inc();
-                    return Err(ConsensusError::FallbackBudgetExceeded(peer));
-                }
-                // Strict fallback: fetch only from the sending peer and require the exact
-                // claimed block in the response — never retry or fan out to other peers
-                // for an unverified claimed digest.
-                let serialized_blocks = network_client
-                    .fetch_blocks(peer, vec![block_ref], vec![], false, FALLBACK_FETCH_TIMEOUT)
-                    .await?;
-                let fetched_bytes: usize = serialized_blocks.iter().map(|b| b.len()).sum();
-                node_metrics
-                    .minimal_block_fallback_fetch_bytes
-                    .with_label_values(&[peer_hostname])
-                    .inc_by(fetched_bytes as u64);
-                let fetched = serialized_blocks
-                    .into_iter()
-                    .find(|b| VerifiedBlock::compute_digest(b) == block_ref.digest)
-                    .ok_or(ConsensusError::UnexpectedFetchedBlock {
-                        index: peer,
-                        block_ref,
-                    })?;
-                block.block = fetched;
-                Ok(block)
+                Ok(InflateOutcome::Dropped(block_ref))
             }
             Err(error @ InflateError::Malformed(_)) => {
                 node_metrics
-                    .minimal_block_inflate_fallback
+                    .minimal_block_inflate_drop
                     .with_label_values(&[peer_hostname, "malformed"])
                     .inc();
                 Err(ConsensusError::MalformedMinimalBlock(error.to_string()))
             }
         }
+    }
+
+    /// Recovers a dropped minimal block by fetching its full form from the sending peer,
+    /// off the subscription stream, then submitting it through the normal
+    /// `handle_send_block` path. The fetched block enters `block_manager` like any other,
+    /// so if it has missing ancestors of its own it suspends and the regular
+    /// missing-ancestor sync takes over recursively.
+    ///
+    /// The fetch targets the sender only: the stream carries only the peer's own
+    /// proposals, so the sender is the author and must hold the full block, and an
+    /// unverified claimed ref is never injected into the shared sync machinery. The
+    /// response must hash to the claimed digest, so the peer cannot substitute a
+    /// different block.
+    async fn recover_dropped_block(
+        context: Arc<Context>,
+        network_client: Arc<C>,
+        authority_service: Weak<S>,
+        peer: AuthorityIndex,
+        block_ref: BlockRef,
+    ) {
+        let peer_hostname = context.committee.authority(peer).hostname.as_str();
+        let recovery_metric = &context.metrics.node_metrics.minimal_block_recovery;
+        let result = network_client
+            .fetch_blocks(peer, vec![block_ref], vec![], false, RECOVERY_FETCH_TIMEOUT)
+            .await;
+        let serialized = match result {
+            Ok(blocks) => blocks
+                .into_iter()
+                .find(|bytes| VerifiedBlock::compute_digest(bytes) == block_ref.digest),
+            Err(e) => {
+                debug!(
+                    "Recovery fetch of dropped block {} from peer {} {} failed: {}",
+                    block_ref, peer, peer_hostname, e
+                );
+                recovery_metric
+                    .with_label_values(&[peer_hostname, "fetch_failed"])
+                    .inc();
+                return;
+            }
+        };
+        let Some(serialized) = serialized else {
+            // The author could not produce its own claimed block: a peer fault.
+            recovery_metric
+                .with_label_values(&[peer_hostname, "digest_mismatch"])
+                .inc();
+            return;
+        };
+        let Some(authority_service) = authority_service.upgrade() else {
+            return;
+        };
+        let block = ExtendedSerializedBlock {
+            block: serialized,
+            excluded_ancestors: vec![],
+            minimal: None,
+        };
+        // Rejections are the service's business (and its metrics'); recovery only
+        // guarantees delivery.
+        let _ = authority_service.handle_send_block(peer, block).await;
+        recovery_metric
+            .with_label_values(&[peer_hostname, "recovered"])
+            .inc();
     }
 
     async fn subscription_loop(
@@ -290,6 +297,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
         let peer_hostname = &context.committee.authority(peer).hostname;
         let mut retries: i64 = 0;
+        // Bounds concurrent off-stream recovery fetches to this peer, across reconnects.
+        let recovery_permits = Arc::new(Semaphore::new(MAX_INFLIGHT_RECOVERIES));
         'subscription: loop {
             context
                 .metrics
@@ -371,8 +380,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
-            let mut fallback_budget =
-                FallbackBudget::new(FALLBACK_BUDGET_WINDOW, FALLBACK_BUDGET_MAX_FETCHES);
             let mut malformed_blocks: u32 = 0;
             'stream: loop {
                 match blocks.next().await {
@@ -389,14 +396,56 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let block = match Self::inflate_received_block(
                             &context,
                             &block_inflater,
-                            network_client.as_ref(),
                             peer,
                             block,
-                            &mut fallback_budget,
-                        )
-                        .await
-                        {
-                            Ok(block) => block,
+                        ) {
+                            // Dropped from the stream, recovered off it. The stream
+                            // itself is healthy — it delivered a well-formed block — so
+                            // the reconnect backoff resets as for an accepted block.
+                            // (Malformed errors below deliberately do NOT reset:
+                            // escalating backoff is the penalty for a misbehaving peer.)
+                            Ok(InflateOutcome::Dropped(block_ref)) => {
+                                retries = 0;
+                                backoff.reset();
+                                match recovery_permits.clone().try_acquire_owned() {
+                                    Ok(permit) => {
+                                        let context = context.clone();
+                                        let network_client = network_client.clone();
+                                        // Weak: a detached recovery task must not keep the
+                                        // service (and through it DagState) alive across
+                                        // an authority shutdown.
+                                        let authority_service = Arc::downgrade(&authority_service);
+                                        spawn_monitored_task!(async move {
+                                            let _permit = permit;
+                                            Self::recover_dropped_block(
+                                                context,
+                                                network_client,
+                                                authority_service,
+                                                peer,
+                                                block_ref,
+                                            )
+                                            .await;
+                                        });
+                                    }
+                                    Err(_) => {
+                                        // Saturated: skip. Later drops keep spawning
+                                        // recoveries, and any block that does inflate
+                                        // registers the gap with block_manager, so no
+                                        // single recovery is load-bearing.
+                                        context
+                                            .metrics
+                                            .node_metrics
+                                            .minimal_block_recovery
+                                            .with_label_values(&[
+                                                peer_hostname.as_str(),
+                                                "saturated",
+                                            ])
+                                            .inc();
+                                    }
+                                }
+                                continue 'stream;
+                            }
+                            Ok(InflateOutcome::Block(block)) => block,
                             Err(e) => {
                                 info!(
                                     "Failed to inflate minimal block from peer {} {}: {}",
@@ -556,6 +605,192 @@ mod test {
         }
     }
 
+    /// Serves a fixed block sequence, then holds the stream open. `fetchable` seeds the
+    /// blocks the peer can serve to recovery fetches, like the author's store would.
+    struct FixedStreamClient {
+        blocks: Vec<ExtendedSerializedBlock>,
+        fetchable: Vec<Bytes>,
+        subscribe_calls: Mutex<usize>,
+        fetch_calls: Mutex<Vec<Vec<BlockRef>>>,
+    }
+
+    #[async_trait]
+    impl ValidatorNetworkClient for FixedStreamClient {
+        async fn send_block(
+            &self,
+            _peer: AuthorityIndex,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
+        ) -> ConsensusResult<()> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<BlockStream> {
+            *self.subscribe_calls.lock() += 1;
+            Ok(Box::pin(
+                stream::iter(self.blocks.clone()).chain(stream::pending()),
+            ))
+        }
+
+        async fn fetch_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            block_refs: Vec<BlockRef>,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            self.fetch_calls.lock().push(block_refs);
+            Ok(self.fetchable.clone())
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: AuthorityIndex,
+            _commit_range: CommitRange,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_latest_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _authorities: Vec<AuthorityIndex>,
+            _timeout: Duration,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn get_latest_rounds(
+            &self,
+            _peer: AuthorityIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            unimplemented!("Unimplemented")
+        }
+    }
+
+    /// The drop-and-recover path end-to-end at the stream level: an un-inflatable minimal
+    /// block is dropped without stalling or resetting the stream (the peer's next block is
+    /// still inflated and delivered), and the dropped block itself arrives through the
+    /// off-stream recovery fetch. On-stream stalls were the Run 1 incident; dropping
+    /// without recovery wedges any receiver that falls a round behind.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn un_inflatable_block_dropped_and_stream_continues() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        // Sender-side state: round-2 blocks from all authorities, which the receiver
+        // will NOT have.
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
+            .iter()
+            .map(|b| b.reference())
+            .collect();
+        let mut round2_refs = Vec::new();
+        for authority in 0..4u32 {
+            let block = VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(2, authority)
+                    .set_ancestors_raw(genesis_refs.clone())
+                    .build(),
+            );
+            round2_refs.push(block.reference());
+            sender_dag.write().accept_block(block);
+        }
+        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
+        // Keep `sender_dag` alive: the inflater holds DagState weakly, and a dead resolver
+        // silently degrades the encoding to all-explicit digests, voiding the scenario.
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+
+        // Block A: references round-2 ancestors the receiver lacks => un-inflatable there.
+        let block_a = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(3, peer.value() as u32)
+                .set_ancestors_raw(round2_refs)
+                .build(),
+        );
+        // Block B: genesis ancestors resolve deterministically on any receiver.
+        let mut own_first_genesis = genesis_refs.clone();
+        own_first_genesis.sort_by_key(|r| (r.author != peer, r.author));
+        let block_b = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(1, peer.value() as u32)
+                .set_ancestors_raw(own_first_genesis)
+                .build(),
+        );
+        let to_wire = |block: &VerifiedBlock| ExtendedSerializedBlock {
+            block: block.serialized().clone(),
+            minimal: Some(sender_inflater.serialize(block, 0).unwrap()),
+            excluded_ancestors: vec![],
+        };
+
+        let network_client = Arc::new(FixedStreamClient {
+            blocks: vec![to_wire(&block_a), to_wire(&block_b)],
+            fetchable: vec![block_a.serialized().clone()],
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        // Receiver has nothing but genesis.
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+        );
+        subscriber.subscribe(peer);
+
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if authority_service.lock().handle_send_block.len() >= 2 {
+                break;
+            }
+        }
+
+        // A was dropped from the stream and recovered off it; B flowed through directly.
+        // Both reach the service in full inflated form, and the stream never reconnected —
+        // proof the drop neither stalled nor reset it.
+        let received = authority_service.lock().handle_send_block.clone();
+        assert_eq!(received.len(), 2);
+        assert!(received.iter().all(|(from, _)| *from == peer));
+        let received_bytes: Vec<_> = received.iter().map(|(_, b)| &b.block).collect();
+        assert!(received_bytes.contains(&block_b.serialized()));
+        assert!(received_bytes.contains(&block_a.serialized()));
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
+        assert_eq!(
+            network_client.fetch_calls.lock().as_slice(),
+            &[vec![block_a.reference()]]
+        );
+        let peer_hostname = &context.committee.authority(peer).hostname;
+        let node_metrics = &context.metrics.node_metrics;
+        assert_eq!(
+            node_metrics
+                .minimal_block_inflate_drop
+                .with_label_values(&[peer_hostname.as_str(), "missing_ancestor"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            node_metrics
+                .minimal_block_recovery
+                .with_label_values(&[peer_hostname.as_str(), "recovered"])
+                .get(),
+            1
+        );
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn subscriber_retries() {
         let (context, _keys) = Context::new_for_test(4);
@@ -655,22 +890,5 @@ mod test {
              recorded resume rounds: {:?}",
             network_client.subscribe_calls()
         );
-    }
-
-    #[tokio::test]
-    async fn fallback_budget_bounds_fetches_per_window() {
-        let mut budget = FallbackBudget::new(4, 2);
-        budget.record_block();
-        assert!(budget.try_fetch());
-        assert!(budget.try_fetch());
-        // Budget exhausted for the rest of this window.
-        assert!(!budget.try_fetch());
-        budget.record_block();
-        budget.record_block();
-        budget.record_block();
-        assert!(!budget.try_fetch());
-        // The next block rolls the window over and restores the budget.
-        budget.record_block();
-        assert!(budget.try_fetch());
     }
 }

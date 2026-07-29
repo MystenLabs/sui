@@ -80,14 +80,22 @@ impl MinimalBlockCache {
     /// Returns the block's minimal encoding, encoding it only on the first request.
     /// `None` means this block cannot be sent minimally (e.g. an unsupported variant);
     /// the caller falls back to the full form.
-    fn encode(&self, inflater: &BlockInflater, block: &VerifiedBlock) -> Option<Bytes> {
+    fn encode(
+        &self,
+        context: &Context,
+        inflater: &BlockInflater,
+        block: &VerifiedBlock,
+    ) -> Option<Bytes> {
+        let cache_result = &context.metrics.node_metrics.minimal_block_encode_cache;
         let block_ref = block.reference();
         {
             let recent = self.recent.lock();
             if let Some((_, bytes)) = recent.iter().find(|(r, _)| *r == block_ref) {
+                cache_result.with_label_values(&["hit"]).inc();
                 return Some(bytes.clone());
             }
         }
+        cache_result.with_label_values(&["miss"]).inc();
         // Encode outside the lock: a concurrent subscriber may duplicate this work for the
         // same block, which is harmless and far cheaper than serializing all subscribers.
         let bytes = inflater.serialize(block, 0).ok()?;
@@ -476,7 +484,9 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 let minimal_cache = minimal_cache.clone();
                 stream::iter(items.into_iter().map(move |extended_block| {
                     let minimal = emit_minimal
-                        .then(|| minimal_cache.encode(&block_inflater, &extended_block.block))
+                        .then(|| {
+                            minimal_cache.encode(&context, &block_inflater, &extended_block.block)
+                        })
                         .flatten();
                     let mut serialized = ExtendedSerializedBlock::from(extended_block);
                     if let Some(minimal) = &minimal {
