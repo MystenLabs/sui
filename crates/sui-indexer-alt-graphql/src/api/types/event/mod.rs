@@ -14,7 +14,6 @@ use async_graphql::connection::PageInfo;
 use diesel::prelude::QueryableByName;
 use diesel::sql_types::BigInt;
 use itertools::Itertools;
-use move_core_types::identifier::Identifier;
 use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
@@ -32,7 +31,6 @@ use sui_sql_macro::query;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::Event as NativeEvent;
-use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 use tokio::sync::OnceCell;
 
 use crate::api::scalars::base64::Base64;
@@ -89,18 +87,17 @@ pub type CEvent = MultiCursor<OpaqueCursor<EventToken>, JsonCursor<EventCursor>>
 #[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) scope: Scope,
-    /// Shared `Arc` so that multiple subscribers receiving events from the same
-    /// streamed checkpoint avoid a deep clone per yield. Cloning an `Event` is then
-    /// just an atomic refcount bump on the `native` field.
+    /// Shared `Arc` so that multiple subscribers receiving events from the same streamed checkpoint
+    /// avoid a deep clone per yield. Cloning an `Event` is then just an atomic refcount bump on the
+    /// `native` field.
     pub(crate) native: Arc<NativeEvent>,
-    /// Digest of the transaction that emitted this event
+    /// Digest of the transaction that emitted this event.
     pub(crate) transaction_digest: TransactionDigest,
-    /// Position of this event within the transaction's events list (0-indexed)
+    /// Position of this event within the transaction's events list (0-indexed).
     pub(crate) sequence_number: u64,
     /// Timestamp of the checkpoint that includes the transaction containing this event. Seeded at
-    /// construction when known (`None` when the transaction is not part of a checkpoint —
-    /// simulated or just-executed transactions), or left empty (events hydrated from the gRPC
-    /// scan stream) to be fetched from the kv store on demand.
+    /// construction when known (`None` when the transaction is not part of a checkpoint — simulated
+    /// or just-executed transactions), or left empty.
     pub(crate) timestamp_ms: OnceCell<Option<u64>>,
 }
 
@@ -501,27 +498,21 @@ impl From<Connection<String, Event>> for EventConnection {
 /// resolves lazily); a missing field is an internal inconsistency.
 fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, RpcError> {
     // TODO: can we consolidate to using sui_sdk type? To explore, captured in DVX-2189
-    let transaction_digest = payload
+    let transaction_digest: TransactionDigest = payload
         .transaction_digest
         .as_deref()
         .context("ListEvents item missing transaction digest")?
-        .parse::<TransactionDigest>()
+        .parse()
         .context("Failed to parse transaction digest from ListEvents")?;
 
     let event_index = payload
         .event_index
         .context("ListEvents item missing event index")?;
 
-    let event = SdkEvent::try_from(payload).context("Failed to convert ListEvents item")?;
-
-    let native = NativeEvent {
-        package_id: event.package_id.into(),
-        transaction_module: Identifier::new(event.module.as_str())
-            .context("Failed to convert module identifier")?,
-        sender: event.sender.into(),
-        type_: struct_tag_sdk_to_core(event.type_).context("Failed to convert event type")?,
-        contents: event.contents,
-    };
+    let native: NativeEvent = SdkEvent::try_from(payload)
+        .context("Failed to convert ListEvents item")?
+        .try_into()
+        .context("Failed to convert event to native representation")?;
 
     Ok(Event {
         scope,

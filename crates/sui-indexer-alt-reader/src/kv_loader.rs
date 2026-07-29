@@ -384,9 +384,6 @@ impl KvLoader {
         }
     }
 
-    /// Load just the checkpoint timestamp of the transaction with the given digest. Cheaper than
-    /// `load_one_transaction` when only the timestamp is needed, as every backend supports
-    /// fetching it without the rest of the transaction's contents.
     pub async fn load_one_transaction_timestamp(
         &self,
         digest: TransactionDigest,

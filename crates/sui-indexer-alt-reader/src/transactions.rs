@@ -27,9 +27,7 @@ use crate::pg_reader::PgReader;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionKey(pub TransactionDigest);
 
-/// Key for fetching just the checkpoint timestamp of a transaction by digest. Cheaper than
-/// `TransactionKey`, as every backend supports fetching the timestamp without the rest of the
-/// transaction's contents.
+/// Key for fetching just the checkpoint timestamp of a transaction by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionTimestampKey(pub TransactionDigest);
 
