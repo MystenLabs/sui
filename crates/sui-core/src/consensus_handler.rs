@@ -3140,16 +3140,51 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 &owned_object_locks,
                                 &table_locks,
                             );
-                        assert_eq!(
-                            acquire_result.is_ok(),
-                            table_result.is_ok(),
-                            "owned-object conflict verdict diverged from lock table for tx {:?} \
-                             (objects-based: {:?}, table-based: {:?}, refs: {:?})",
-                            tx.digest(),
-                            acquire_result.as_ref().err(),
-                            table_result.as_ref().err(),
-                            owned_object_refs,
-                        );
+                        if acquire_result.is_ok() != table_result.is_ok() {
+                            // Divergence: dump every resolution layer per ref so the
+                            // failing state is reconstructible from the panic alone.
+                            let mut dump = String::new();
+                            for r in owned_object_refs.iter() {
+                                let quarantine_lock = self
+                                    .epoch_store
+                                    .consensus_quarantine
+                                    .read()
+                                    .get_owned_object_lock_in_memory(r);
+                                let deferred_lock = self
+                                    .epoch_store
+                                    .consensus_output_cache
+                                    .deferred_transaction_locks
+                                    .lock()
+                                    .get(r);
+                                let cache_bound = self.epoch_store.live_object_cache().get(&r.0);
+                                let live = self
+                                    .cache_reader
+                                    .get_object(&r.0)
+                                    .map(|o| (o.version(), o.is_immutable()));
+                                let latest =
+                                    self.cache_reader.get_latest_object_ref_or_tombstone(r.0);
+                                let table_lock = table_locks.get(r);
+                                let holder_executed = table_lock.map(|holder| {
+                                    self.epoch_store
+                                        .transactions_executed_in_cur_epoch(&[*holder])
+                                        .map(|v| v[0])
+                                });
+                                dump.push_str(&format!(
+                                    "\n  ref {r:?}: resolution={:?} table_lock={table_lock:?} \
+                                     holder_executed={holder_executed:?} \
+                                     quarantine={quarantine_lock:?} deferred={deferred_lock:?} \
+                                     cache={cache_bound:?} live={live:?} latest={latest:?}",
+                                    existing_locks.get(r),
+                                ));
+                            }
+                            panic!(
+                                "owned-object conflict verdict diverged from lock table for tx {:?} \
+                                 (objects-based: {:?}, table-based: {:?}):{dump}",
+                                tx.digest(),
+                                acquire_result.as_ref().err(),
+                                table_result.as_ref().err(),
+                            );
+                        }
                     }
 
                     match acquire_result {
