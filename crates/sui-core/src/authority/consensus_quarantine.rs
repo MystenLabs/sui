@@ -214,10 +214,6 @@ impl ConsensusCommitOutput {
         self.deferred_txns.push((key, transactions));
     }
 
-    pub fn deferred_txn_keys(&self) -> impl Iterator<Item = DeferralKey> + use<'_> {
-        self.deferred_txns.iter().map(|(key, _)| *key)
-    }
-
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
         self.deleted_deferred_txns
             .extend(deferral_keys.iter().cloned());
@@ -509,9 +505,23 @@ pub(crate) struct ConsensusOutputCache {
 
 impl ConsensusOutputCache {
     pub(crate) fn new(tables: &AuthorityEpochTables, object_store: &dyn ObjectStore) -> Self {
-        let deferred_transactions = tables
+        let mut deferred_transactions = tables
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
+        // Lock-coverage sentinel rows hold transactions displaced by a colliding
+        // deferral-key insert (see the deferral bookkeeping in the consensus handler):
+        // they must never be reloaded or block epoch close, so they seed only the
+        // deferred-locks map below, not the deferred-transactions map.
+        let displaced_rows: Vec<_> = deferred_transactions
+            .keys()
+            .filter(|key| key.is_lock_coverage_sentinel())
+            .copied()
+            .collect();
+        let displaced_transactions: Vec<_> = displaced_rows
+            .iter()
+            .filter_map(|key| deferred_transactions.remove(key))
+            .flatten()
+            .collect();
 
         // Rebuild the in-memory locks of deferred transactions. The stored transactions do
         // not carry their immutable-object claims, so the lock set is re-derived from live
@@ -522,12 +532,14 @@ impl ConsensusOutputCache {
         // the originally-acquired set for immutable refs only - quorum-unreachable once
         // strict vote-time claims verification is universal.
         let mut deferred_transaction_locks = DeferredTransactionLocks::default();
-        for transactions in deferred_transactions.values() {
-            for tx in transactions {
-                let digest = *tx.tx().digest();
-                let refs = derive_deferred_owned_lock_refs(object_store, tx);
-                deferred_transaction_locks.insert(digest, refs);
-            }
+        for tx in deferred_transactions
+            .values()
+            .flatten()
+            .chain(displaced_transactions.iter())
+        {
+            let digest = *tx.tx().digest();
+            let refs = derive_deferred_owned_lock_refs(object_store, tx);
+            deferred_transaction_locks.insert(digest, refs);
         }
 
         let executed_in_epoch_cache_capacity = 50_000;
@@ -1433,6 +1445,74 @@ mod tests {
                 immutable: None,
             })
         );
+    }
+
+    // Restart seeding must rebuild lock coverage for transactions displaced by a
+    // colliding deferral-key insert (persisted under the lock-coverage sentinel key)
+    // WITHOUT feeding them back into the deferred-transactions map: they must never be
+    // reloaded (scheduling stays identical to pre-existing behavior), but claims on
+    // their owned inputs must still resolve as locked, matching the lock table.
+    #[tokio::test]
+    async fn test_sentinel_rows_seed_locks_but_not_reloads() {
+        use crate::consensus_adapter::consensus_tests::test_user_transaction;
+        use sui_types::crypto::deterministic_random_account_key;
+        use sui_types::executable_transaction::VerifiedExecutableTransaction;
+        use sui_types::object::Object;
+        use sui_types::transaction::SenderSignedData;
+
+        let (sender, keypair) = deterministic_random_account_key();
+        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let owned_ref = state
+            .get_object(&owned_object.id())
+            .unwrap()
+            .compute_object_reference();
+
+        let tx = test_user_transaction(&state, sender, &keypair, gas_object, vec![owned_object])
+            .await
+            .into_tx();
+        let executable = VerifiedExecutableTransactionWithAliases::no_aliases(
+            VerifiedExecutableTransaction::new_from_consensus(
+                sui_types::transaction::VerifiedTransaction::new_unchecked(
+                    sui_types::transaction::Transaction::new(SenderSignedData::new(
+                        tx.transaction_data().clone(),
+                        tx.tx_signatures().to_vec(),
+                    )),
+                ),
+                epoch_store.epoch(),
+            ),
+        );
+        let displaced_digest = *executable.tx().digest();
+
+        // Persist a displaced transaction under the sentinel key, as the deferral
+        // bookkeeping does on a key collision.
+        let mut output = make_output(1, 5, true);
+        output.defer_transactions(DeferralKey::new_lock_coverage_sentinel(5), vec![executable]);
+        let mut batch = epoch_store.db_batch_for_test();
+        output.write_to_batch(&epoch_store, &mut batch).unwrap();
+        batch.write().unwrap();
+
+        // Simulated restart: rebuild the caches from durable state.
+        let reseeded = ConsensusOutputCache::new(
+            &epoch_store.tables().unwrap(),
+            state.get_object_store().as_ref(),
+        );
+
+        // Lock coverage is rebuilt...
+        assert_eq!(
+            reseeded.deferred_transaction_locks.lock().get(&owned_ref),
+            Some(displaced_digest)
+        );
+        // ...but the transaction is not eligible for reloading, and does not block
+        // epoch close.
+        assert!(reseeded.deferred_transactions.lock().is_empty());
     }
 }
 
