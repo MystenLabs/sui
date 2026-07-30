@@ -17,6 +17,7 @@ pub mod consensus_commit_summary;
 pub mod consensus_handler;
 pub mod consensus_manager;
 pub mod consensus_throughput_calculator;
+pub mod consensus_transaction_pool;
 pub(crate) mod consensus_types;
 pub mod consensus_validator;
 pub mod db_checkpoint_handler;

@@ -10,10 +10,11 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
-    ExecutionCacheConfig, ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig,
-    FundsWithdrawSchedulerType, Genesis, KeyPairWithPath, StateSnapshotConfig,
-    default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
+    CheckpointExecutorConfig, ConsensusTransactionPoolConfig, DBCheckpointConfig,
+    DEFAULT_GRPC_CONCURRENCY_LIMIT, ExecutionCacheConfig, ExecutionTimeObserverConfig,
+    ExpensiveSafetyCheckConfig, FundsWithdrawSchedulerType, Genesis, KeyPairWithPath,
+    StateSnapshotConfig, default_enable_index_processing,
+    default_end_of_epoch_broadcast_channel_capacity,
 };
 use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -53,6 +54,7 @@ pub struct ValidatorConfigBuilder {
     state_sync_config: Option<StateSyncConfig>,
     observer_config: Option<ObserverParameters>,
     peer_deny_sync_config: Option<PeerDenySyncConfig>,
+    consensus_transaction_pool_config: Option<ConsensusTransactionPoolConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -96,6 +98,14 @@ impl ValidatorConfigBuilder {
 
     pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
         self.authority_overload_config = Some(config);
+        self
+    }
+
+    pub fn with_consensus_transaction_pool_config(
+        mut self,
+        config: ConsensusTransactionPoolConfig,
+    ) -> Self {
+        self.consensus_transaction_pool_config = Some(config);
         self
     }
 
@@ -298,6 +308,7 @@ impl ValidatorConfigBuilder {
             validator_client_monitor_config: None,
             fork_recovery: None,
             transaction_driver_config: Some(TransactionDriverConfig::default()),
+            consensus_transaction_pool: self.consensus_transaction_pool_config,
             congestion_log: None,
         }
     }
@@ -694,6 +705,7 @@ impl FullnodeConfigBuilder {
             transaction_driver_config: self
                 .transaction_driver_config
                 .or(Some(TransactionDriverConfig::default())),
+            consensus_transaction_pool: None,
             congestion_log: None,
         }
     }
