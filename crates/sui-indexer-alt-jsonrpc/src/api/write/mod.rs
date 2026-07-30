@@ -210,9 +210,8 @@ impl Write {
         let kind = parse_transaction_kind(&tx_bytes)?;
         let (reference_gas_price, max_tx_gas) = gas_defaults(&self.context).await?;
 
-        // Synthesize the full TransactionData the caller would have signed, the same way the legacy
-        // fullnode implementation does. An empty gas payment is replaced by a mock gas coin on the
-        // fullnode during simulation.
+        // Synthesize the full TransactionData the caller would have signed. An empty payment is
+        // normalized to an address-balance gas payment by the simulation service.
         let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
             kind,
             sender_address,
@@ -222,10 +221,9 @@ impl Write {
             gas_sponsor.unwrap_or(sender_address),
         );
 
-        // The raw transaction data reflects what the caller specified: the gas payment stays empty
-        // here, and the mock gas coin the fullnode injects during simulation only shows up in the
-        // effects (matching the legacy implementation, which captures these bytes before simulation
-        // for the same reason).
+        // The raw transaction data reflects what the caller specified. In particular, an empty
+        // payment remains empty; simulation may add its `ValidDuring` replay protection before
+        // executing it as an address-balance payment.
         let raw_txn_data = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&tx_data).context("Failed to serialize transaction data")?
         } else {
@@ -243,9 +241,8 @@ impl Write {
             "command_outputs",
         ]);
 
-        // Sending BCS TransactionData makes the fullnode skip transaction resolution and gas
-        // selection, and allows it to inject a mock gas coin -- the exact code path the legacy
-        // devInspect implementation uses.
+        // Sending BCS TransactionData skips transaction resolution and gas selection. An empty
+        // payment is therefore simulated as address-balance gas and requires sufficient funds.
         let grpc_response = client
             .simulate_transaction(proto_tx, !skip_checks, false, read_mask)
             .await

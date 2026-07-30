@@ -3371,8 +3371,10 @@ pub async fn execute_dry_run(
         sponsor.unwrap_or(signer),
     );
     debug!("Executing dry run");
+    // CLI commands use an omitted payment as a request for normal gas selection. Raw simulation
+    // callers can still preserve an empty payment to exercise address-balance gas directly.
     let response = client
-        .simulate_transaction(&tx_data, true, false)
+        .simulate_transaction(&tx_data, true, true)
         .await
         .context("Dry run failed")?;
     debug!("Finished executing dry run");
@@ -3686,9 +3688,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         Some(gas_budget) => gas_budget,
         None => {
             debug!("Estimating gas budget");
-            // Estimate against an empty gas payment so the fullnode simulates with a mock gas
-            // coin. Passing the real payment here would have it checked against the very budget
-            // we are trying to compute.
+            // Estimate without an explicit payment. The simulation service selects either the
+            // address balance or real owned gas coins for its valid estimation transaction.
             let budget = estimate_gas_budget(
                 context,
                 signer,

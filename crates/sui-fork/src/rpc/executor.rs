@@ -138,7 +138,6 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         &self,
         _transaction: TransactionData,
         _checks: TransactionChecks,
-        _allow_mock_gas_coin: bool,
     ) -> Result<SimulateTransactionResult, SuiError> {
         Err(SuiErrorKind::Unknown(
             "simulate_transaction is not supported by the forked network yet".to_string(),

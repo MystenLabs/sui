@@ -57,7 +57,7 @@ use sui_types::{
     base_types::{FullObjectRef, dbg_addr},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     crypto::{Signature, get_key_pair},
-    object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION, Owner},
+    object::{GAS_VALUE_FOR_TESTING, MoveObject, OBJECT_START_VERSION, Owner},
     transaction::PlainTransactionWithClaims,
 };
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
@@ -269,8 +269,6 @@ async fn test_dry_run_transaction_block() {
         .await
         .unwrap();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-    let gas_usage = response.effects.gas_cost_summary();
-
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode.get_object(&gas_object_id).unwrap().version();
     assert_eq!(gas_object_version, OBJECT_START_VERSION);
@@ -286,13 +284,12 @@ async fn test_dry_run_transaction_block() {
         txn_data.gas_price(),
     );
     let (response, _, _, _) = fullnode.dry_exec_transaction(txn_data).await.unwrap();
-    let gas_usage_no_gas = response.effects.gas_cost_summary();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-    assert_eq!(gas_usage, gas_usage_no_gas);
+    assert!(response.effects.gas_cost_summary().computation_cost > 0);
 }
 
 #[tokio::test]
-async fn test_dry_run_no_gas_big_transfer() {
+async fn test_dry_run_big_transfer_with_gas_coin() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
@@ -305,7 +302,12 @@ async fn test_dry_run_no_gas_big_transfer() {
     let pt = builder.finish();
     let data = TransactionData::new_programmable(
         sender,
-        vec![],
+        vec![
+            fullnode
+                .get_object(&gas_object_id)
+                .unwrap()
+                .compute_object_reference(),
+        ],
         pt,
         ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas(),
         fullnode.reference_gas_price_for_testing().unwrap(),
@@ -333,6 +335,7 @@ async fn test_dev_inspect_object_by_bytes() {
     } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "create",
@@ -396,6 +399,7 @@ async fn test_dev_inspect_object_by_bytes() {
     } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "set_value",
@@ -493,6 +497,7 @@ async fn test_dev_inspect_unowned_object() {
     } = call_dev_inspect(
         &fullnode,
         &alice,
+        alice_gas_id,
         &object_basics.0,
         "object_basics",
         "set_value",
@@ -601,6 +606,7 @@ async fn test_dev_inspect_dynamic_field() {
     } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "add_ofield",
@@ -669,6 +675,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "borrow_value_mut",
@@ -696,6 +703,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "borrow_value",
@@ -723,6 +731,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "get_value",
@@ -777,6 +786,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "wrap_object",
@@ -813,6 +823,11 @@ async fn test_dev_inspect_gas_coin_argument() {
     let protocol_config = epoch_store.protocol_config();
 
     let sender = SuiAddress::random_for_testing_only();
+    let gas_object =
+        Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, GAS_VALUE_FOR_TESTING);
+    let gas_object_ref = gas_object.compute_object_reference();
+    validator.insert_genesis_object(gas_object.clone());
+    fullnode.insert_genesis_object(gas_object);
     let recipient = SuiAddress::random_for_testing_only();
     let amount = 500;
     let pt = {
@@ -822,7 +837,16 @@ async fn test_dev_inspect_gas_coin_argument() {
     };
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
-        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, None)
+        .dev_inspect_transaction_block(
+            sender,
+            kind,
+            None,
+            None,
+            None,
+            Some(vec![gas_object_ref]),
+            None,
+            None,
+        )
         .await
         .unwrap()
         .results
@@ -840,7 +864,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     check_coin_value(
         arg_value,
         arg_type,
-        DEV_INSPECT_GAS_COIN_VALUE - protocol_config.max_tx_gas() - amount,
+        GAS_VALUE_FOR_TESTING - protocol_config.max_tx_gas() - amount,
     );
 
     assert_eq!(return_values.len(), 1);
@@ -970,6 +994,7 @@ async fn test_dev_inspect_on_validator() {
     let result = call_dev_inspect(
         &validator,
         &sender,
+        gas_object_id,
         &object_basics.0,
         "object_basics",
         "create",
@@ -4472,6 +4497,7 @@ pub async fn add_ofield(
 pub async fn call_dev_inspect(
     authority: &AuthorityState,
     sender: &SuiAddress,
+    gas_object_id: ObjectID,
     package: &ObjectID,
     module: &str,
     function: &str,
@@ -4493,8 +4519,18 @@ pub async fn call_dev_inspect(
     ));
     let kind = TransactionKind::programmable(builder.finish());
     let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let gas_object = authority.get_object(&gas_object_id).unwrap();
     authority
-        .dev_inspect_transaction_block(*sender, kind, Some(rgp), None, None, None, None, None)
+        .dev_inspect_transaction_block(
+            *sender,
+            kind,
+            Some(rgp),
+            None,
+            None,
+            Some(vec![gas_object.compute_object_reference()]),
+            None,
+            None,
+        )
         .await
 }
 
