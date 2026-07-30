@@ -484,19 +484,23 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             }) => {
                                 retries = 0;
                                 backoff.reset();
-                                // Deep catch-up: the missing ancestor is more than a
-                                // full DAG-cache window ahead of everything this node
-                                // has accepted. No wake can arrive (its hints are
-                                // rejected, its acceptance is a full catch-up away)
-                                // and per-block fetches cannot outrun the tip; commit
-                                // and periodic sync own this regime, so recovery
-                                // stands down rather than backpressure the stream.
-                                // The accepted round is read from DagState, not the
-                                // hint cache's asynchronously advanced horizon, so a
-                                // healthy node can never false-positive here.
-                                if let Some(missing) = missing
+                                // Catch-up: the block itself is more than a full
+                                // DAG-cache window ahead of everything this node has
+                                // accepted. Recovery cannot help there — wakes are a
+                                // full catch-up away, per-block fetches cannot outrun
+                                // the tip, and a lagging node parking tip blocks
+                                // turns them all into deadline-fetch storms — so it
+                                // stands down and replay/sync own the node until it
+                                // re-enters the window. Keyed on the BLOCK's round
+                                // (not the missing ancestor's): a tip block with a
+                                // deep weak link must not slip into parking on a
+                                // lagging node. The accepted round is read from
+                                // DagState, not the hint cache's asynchronously
+                                // advanced horizon, so a healthy node can never
+                                // false-positive here.
+                                if missing.is_some()
                                     && let Some(dag) = dag_state.upgrade()
-                                    && missing.round
+                                    && block_ref.round
                                         > dag.read().highest_accepted_round().saturating_add(
                                             context.parameters.dag_state_cached_rounds as Round,
                                         )
@@ -1050,10 +1054,10 @@ mod test {
         assert!(s.network_client.fetch_calls.lock().is_empty());
     }
 
-    /// In deep catch-up (the missing ancestor is beyond the hint horizon's future
-    /// bound) recovery stands down: no park, no fetch, the stream keeps flowing, and
-    /// the synchronizer owns the block. Parking would be futile — no wake can arrive —
-    /// and its backpressure would throttle the catch-up intake itself.
+    /// In catch-up (the block is beyond the node's DAG-cache future window) recovery
+    /// stands down: no park, no fetch, the stream keeps flowing, and replay/sync own
+    /// the block. Parking would be futile — no wake arrives before the deadline — and
+    /// the resulting fetch storms and backpressure throttle the catch-up itself.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn deep_catchup_blocks_skip_recovery() {
         let (context, _keys) = Context::new_for_test(4);
@@ -1105,12 +1109,14 @@ mod test {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        // The receiver has accepted nothing past round 1000: the incoming ancestors at
-        // 1999 are beyond 1000 + dag_state_cached_rounds (500) — deep catch-up.
+        // The receiver has accepted nothing past round 1499. The BLOCK (round 2000) is
+        // beyond 1499 + dag_state_cached_rounds (500) — catch-up — even though its
+        // missing ancestor (1999) is within the window: a tip block with older
+        // ancestors must not slip into parking on a lagging node.
         receiver_dag
             .write()
             .accept_block(VerifiedBlock::new_for_test(
-                crate::block::TestBlock::new(1000, 0).build(),
+                crate::block::TestBlock::new(1499, 0).build(),
             ));
         let subscriber = Subscriber::new(
             context.clone(),
