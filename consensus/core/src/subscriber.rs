@@ -521,16 +521,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         minimal: Bytes::new(),
                                         missing: None,
                                     };
-                                    if let Err(TrySendError::Full(fetch)) =
-                                        park_commands.try_send(fetch)
-                                    {
-                                        context
-                                            .metrics
-                                            .node_metrics
-                                            .minimal_block_recovery_park_backpressure
-                                            .inc();
-                                        let _ = park_commands.send(fetch).await;
-                                    }
+                                    // Lossy, unlike parks: the divert is a SAMPLE.
+                                    // When the channel is busy — e.g. a full parking
+                                    // table has gated the receive arm — dropping the
+                                    // excess is the sampling; awaiting here would
+                                    // choke the catch-up stream on its own trickle.
+                                    let _ = park_commands.try_send(fetch);
                                     continue 'stream;
                                 }
                                 let park = ParkCommand {
