@@ -309,10 +309,10 @@ would produce an `InsufficientFundsForWithdraw` early error without executing th
 ## 4. Garbage collection
 
 The unsettled withdrawals tracking must be cleaned up to prevent unbounded memory growth.
-This happens via `ObjectFundsChecker::commit_effects`, called once a batch of effects has
-been committed.
+This happens via `UnsettledObjectWithdrawals::commit_accumulator_versions`, called by the
+checkpoint executor once a checkpoint's effects have been committed.
 
-The checker scans the committed effects for transactions whose object changes touch the
+The checkpoint executor scans the committed effects for transactions whose object changes touch the
 accumulator root (i.e., settlement and barrier transactions). For each such version, it
 removes all unsettled withdrawal entries at that version from both `unsettled_withdraws` and
 `unsettled_accounts`.

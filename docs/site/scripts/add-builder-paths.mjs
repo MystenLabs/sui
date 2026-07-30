@@ -324,6 +324,17 @@ const BUILDER_PATHS = [
       { step: 'Harden (retries, cost caps, key custody)', stage: 'Ship', page: null, eval: 'partial' },
     ],
   },
+  {
+    id: 'oracle-integration',
+    name: 'Oracles for DeFi',
+    steps: [
+      { step: 'Oracle integration overview', stage: 'Oracles', page: 'onchain-finance/oracles/index.mdx', eval: null },
+      { step: 'Consume price feeds', stage: 'Oracles', page: 'onchain-finance/oracles/consuming-price-feeds.mdx', eval: null },
+      { step: 'Build a Move price adapter', stage: 'Oracles', page: 'onchain-finance/oracles/move-adapter.mdx', eval: null },
+      { step: 'Oracle safety', stage: 'Oracles', page: 'onchain-finance/oracles/oracle-safety.mdx', eval: null },
+      { step: 'Resolution patterns', stage: 'Oracles', page: 'onchain-finance/oracles/resolution-patterns.mdx', eval: null },
+    ],
+  },
 ];
 
 // ─── Build reverse map: file path → [{pathId, step, stage, eval}] ───────────

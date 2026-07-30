@@ -81,7 +81,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
 
         fn add_path_to_request_header<T>(request: &Request<T>) -> Option<HeaderValue> {
             let path = request.uri().path();
-            Some(HeaderValue::from_str(path).unwrap())
+            HeaderValue::from_str(path).ok()
         }
 
         let limiting_layers = ServiceBuilder::new()

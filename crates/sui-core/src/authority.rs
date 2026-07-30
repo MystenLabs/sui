@@ -7,6 +7,7 @@ use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
+use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -1008,6 +1009,7 @@ pub struct AuthorityState {
 
     pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
+    pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
     /// Tracks transactions whose post-processing (indexing/events) is still in flight.
     /// CheckpointExecutor removes entries and collects the index batches before committing
@@ -2871,15 +2873,14 @@ impl AuthorityState {
         >,
         fork_probability: f32,
     ) {
-        use std::cell::RefCell;
-        thread_local! {
-            static TOTAL_FAILING_STAKE: RefCell<u64> = RefCell::new(0);
-        }
+        static TOTAL_FAILING_STAKE: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
-                TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
+                {
+                    let mut total_stake = TOTAL_FAILING_STAKE.lock().unwrap();
+                    let total_stake = &mut *total_stake;
                     let already_forked = forked_validators
                         .lock()
                         .ok()
@@ -2935,7 +2936,7 @@ impl AuthorityState {
                             }
                         }
                     }
-                });
+                }
             }
         }
     }
@@ -3709,6 +3710,12 @@ impl AuthorityState {
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
             object_funds_checker: ArcSwapOption::empty(),
+            // unsettled_object_withdrawals needs to be initialized unconditionally, even on fullnodes.
+            // Once we enable object funds checking during execution, fullnodes will need it to track
+            // unsettled object withdraws as well similar to validators.
+            unsettled_object_withdrawals: Arc::new(UnsettledObjectWithdrawals::new(
+                object_funds_checker_metrics.clone(),
+            )),
             object_funds_checker_metrics,
             pending_post_processing: Arc::new(DashMap::new()),
             post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
@@ -3759,6 +3766,7 @@ impl AuthorityState {
 
     async fn init_object_funds_checker(&self) {
         let epoch_store = self.epoch_store.load();
+        // TODO: Once we enable object funds checking during execution, we will no longer need to initialize the object funds checker here.
         if self.node_role(&epoch_store).runs_consensus()
             && epoch_store.protocol_config().enable_object_funds_withdraw()
         {
@@ -3766,6 +3774,7 @@ impl AuthorityState {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
                     Arc::new(ObjectFundsChecker::new(
                         o.version(),
+                        self.unsettled_object_withdrawals.clone(),
                         self.object_funds_checker_metrics.clone(),
                     ))
                 });
@@ -6544,17 +6553,15 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 pub mod framework_injection {
     use move_binary_format::CompiledModule;
     use std::collections::BTreeMap;
-    use std::{cell::RefCell, collections::BTreeSet};
+    use std::collections::BTreeSet;
+    use std::sync::Mutex;
     use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
     use sui_types::is_system_package;
 
     type FrameworkOverrideConfig = BTreeMap<ObjectID, PackageOverrideConfig>;
 
-    // Thread local cache because all simtests run in a single unique thread.
-    thread_local! {
-        static OVERRIDE: RefCell<FrameworkOverrideConfig> = RefCell::new(FrameworkOverrideConfig::default());
-    }
+    static OVERRIDE: Mutex<FrameworkOverrideConfig> = Mutex::new(BTreeMap::new());
 
     type Framework = Vec<CompiledModule>;
 
@@ -6578,40 +6585,40 @@ pub mod framework_injection {
     }
 
     pub fn set_override(package_id: ObjectID, modules: Vec<CompiledModule>) {
-        OVERRIDE.with(|bs| {
-            bs.borrow_mut()
-                .insert(package_id, PackageOverrideConfig::Global(modules))
-        });
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .insert(package_id, PackageOverrideConfig::Global(modules));
     }
 
     pub fn set_override_cb(package_id: ObjectID, func: PackageUpgradeCallback) {
-        OVERRIDE.with(|bs| {
-            bs.borrow_mut()
-                .insert(package_id, PackageOverrideConfig::PerValidator(func))
-        });
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .insert(package_id, PackageOverrideConfig::PerValidator(func));
     }
 
     pub fn set_system_packages(packages: Vec<SystemPackage>) {
-        OVERRIDE.with(|bs| {
-            let mut new_packages_not_to_include: BTreeSet<_> =
-                BuiltInFramework::all_package_ids().into_iter().collect();
-            for pkg in &packages {
-                new_packages_not_to_include.remove(&pkg.id);
-            }
-            for pkg in packages {
-                bs.borrow_mut()
-                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
-            }
-            for empty_pkg in new_packages_not_to_include {
-                bs.borrow_mut()
-                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
-            }
-        });
+        let mut cfg = OVERRIDE.lock().unwrap();
+        let mut new_packages_not_to_include: BTreeSet<_> =
+            BuiltInFramework::all_package_ids().into_iter().collect();
+        for pkg in &packages {
+            new_packages_not_to_include.remove(&pkg.id);
+        }
+        for pkg in packages {
+            cfg.insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+        }
+        for empty_pkg in new_packages_not_to_include {
+            cfg.insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+        }
     }
 
     pub fn get_override_bytes(package_id: &ObjectID, name: AuthorityName) -> Option<Vec<Vec<u8>>> {
-        OVERRIDE.with(|cfg| {
-            cfg.borrow().get(package_id).and_then(|entry| match entry {
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .get(package_id)
+            .and_then(|entry| match entry {
                 PackageOverrideConfig::Global(framework) => {
                     Some(compiled_modules_to_bytes(framework))
                 }
@@ -6619,19 +6626,20 @@ pub mod framework_injection {
                     func(name).map(|fw| compiled_modules_to_bytes(&fw))
                 }
             })
-        })
     }
 
     pub fn get_override_modules(
         package_id: &ObjectID,
         name: AuthorityName,
     ) -> Option<Vec<CompiledModule>> {
-        OVERRIDE.with(|cfg| {
-            cfg.borrow().get(package_id).and_then(|entry| match entry {
+        OVERRIDE
+            .lock()
+            .unwrap()
+            .get(package_id)
+            .and_then(|entry| match entry {
                 PackageOverrideConfig::Global(framework) => Some(framework.clone()),
                 PackageOverrideConfig::PerValidator(func) => func(name),
             })
-        })
     }
 
     pub fn get_override_system_package(
@@ -6656,12 +6664,12 @@ pub mod framework_injection {
 
     pub fn get_extra_packages(name: AuthorityName) -> Vec<SystemPackage> {
         let built_in = BTreeSet::from_iter(BuiltInFramework::all_package_ids().into_iter());
-        let extra: Vec<ObjectID> = OVERRIDE.with(|cfg| {
-            cfg.borrow()
-                .keys()
-                .filter_map(|package| (!built_in.contains(package)).then_some(*package))
-                .collect()
-        });
+        let extra: Vec<ObjectID> = OVERRIDE
+            .lock()
+            .unwrap()
+            .keys()
+            .filter_map(|package| (!built_in.contains(package)).then_some(*package))
+            .collect();
 
         extra
             .into_iter()

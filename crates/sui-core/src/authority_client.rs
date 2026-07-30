@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use mysten_network::config::Config;
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetworkMetadata;
@@ -83,11 +86,28 @@ pub trait AuthorityAPI {
         &self,
         request: ValidatorHealthRequest,
     ) -> Result<ValidatorHealthResponse, SuiError>;
+
+    /// Force the underlying transport to drop any cached connection and establish a fresh one on
+    /// the next request. Used to recover from a connection that has silently gone dead (e.g. the
+    /// peer validator restarted) and is no longer detected as broken by the transport layer.
+    /// Implementations may rate-limit reconnections and ignore the request during the cooldown.
+    /// Default is a no-op for client implementations without a reconnectable transport.
+    fn reconnect(&self) {}
 }
+
+/// Builds a fresh lazy channel; used to re-establish a connection that has gone dead.
+type ChannelBuilder = Arc<dyn Fn() -> SuiResult<Channel> + Send + Sync>;
+
+const RECONNECT_COOLDOWN: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
-    client: SuiResult<ValidatorClient<Channel>>,
+    /// The current (lazy) gRPC client, swappable so a dead connection can be replaced in place.
+    client: Arc<ArcSwap<SuiResult<ValidatorClient<Channel>>>>,
+    /// When present, rebuilds a fresh channel on `reconnect()`. Absent for clients constructed
+    /// directly from a `Channel` (e.g. tests), where reconnection is not possible.
+    builder: Option<ChannelBuilder>,
+    last_reconnect: Arc<Mutex<Option<Instant>>>,
 }
 
 impl NetworkAuthorityClient {
@@ -107,31 +127,41 @@ impl NetworkAuthorityClient {
     }
 
     pub fn connect_lazy(address: &Multiaddr, tls_target: NetworkPublicKey) -> Self {
-        let tls_config = sui_tls::create_rustls_client_config(
-            tls_target,
-            sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-            None,
-        );
-        let client: SuiResult<_> = mysten_network::client::connect_lazy(address, tls_config)
-            .map(ValidatorClient::new)
-            .map_err(|err| err.to_string().into());
-        Self { client }
+        let address = address.clone();
+        Self::new_reconnectable(move || {
+            let tls_config = sui_tls::create_rustls_client_config(
+                tls_target.clone(),
+                sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+                None,
+            );
+            mysten_network::client::connect_lazy(&address, tls_config)
+                .map_err(|err| err.to_string().into())
+        })
     }
 
     pub fn new(channel: Channel) -> Self {
         Self {
-            client: Ok(ValidatorClient::new(channel)),
+            client: Arc::new(ArcSwap::from_pointee(Ok(ValidatorClient::new(channel)))),
+            builder: None,
+            last_reconnect: Arc::new(Mutex::new(None)),
         }
     }
 
-    fn new_lazy(client: SuiResult<Channel>) -> Self {
+    /// Construct a client whose connection can be re-established via `reconnect()`. The builder is
+    /// invoked once to create the initial lazy channel and again on each reconnect.
+    pub(crate) fn new_reconnectable(
+        builder: impl Fn() -> SuiResult<Channel> + Send + Sync + 'static,
+    ) -> Self {
+        let initial = builder().map(ValidatorClient::new);
         Self {
-            client: client.map(ValidatorClient::new),
+            client: Arc::new(ArcSwap::from_pointee(initial)),
+            builder: Some(Arc::new(builder)),
+            last_reconnect: Arc::new(Mutex::new(None)),
         }
     }
 
     pub(crate) fn client(&self) -> SuiResult<ValidatorClient<Channel>> {
-        self.client.clone()
+        (**self.client.load()).clone()
     }
 
     pub fn get_client_for_testing(&self) -> SuiResult<ValidatorClient<Channel>> {
@@ -246,6 +276,19 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::<SuiError>::into)?
             .try_into()
     }
+
+    fn reconnect(&self) {
+        let Some(builder) = &self.builder else {
+            return;
+        };
+        let mut last_reconnect = self.last_reconnect.lock();
+        if last_reconnect.is_some_and(|t| t.elapsed() < RECONNECT_COOLDOWN) {
+            return;
+        }
+        let fresh = builder().map(ValidatorClient::new);
+        self.client.store(Arc::new(fresh));
+        *last_reconnect = Some(Instant::now());
+    }
 }
 
 pub fn make_network_authority_clients_with_network_config(
@@ -259,32 +302,33 @@ pub fn make_network_authority_clients_with_network_config(
             .clone()
             .rewrite_udp_to_tcp()
             .rewrite_http_to_https();
-        let tls_config = network_metadata
-            .network_public_key
-            .as_ref()
-            .map(|key| {
-                sui_tls::create_rustls_client_config(
-                    key.clone(),
-                    sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-                    None,
-                )
-            })
-            .ok_or(SuiError::from("network public key is not available"));
-        let maybe_channel = tls_config
-            .and_then(|tls_config| {
-                network_config
-                    .connect_lazy(&address, tls_config)
-                    .map_err(|e| e.to_string().into())
-            })
-            .tap_err(|e| {
-                tracing::error!(
-                    address = %address,
-                    name = %name,
-                    "unable to create authority client: {e}"
-                )
-            });
-        let client = NetworkAuthorityClient::new_lazy(maybe_channel);
-        authority_clients.insert(*name, client);
+        let maybe_network_key = network_metadata.network_public_key.clone();
+        let network_config = network_config.clone();
+        let name = *name;
+        // Build a fresh lazy channel on demand so a dead connection (e.g. after the peer
+        // validator restarts) can be re-established via NetworkAuthorityClient::reconnect().
+        let builder = move || -> SuiResult<Channel> {
+            let key = maybe_network_key
+                .clone()
+                .ok_or_else(|| SuiError::from("network public key is not available"))?;
+            let tls_config = sui_tls::create_rustls_client_config(
+                key,
+                sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+                None,
+            );
+            network_config
+                .connect_lazy(&address, tls_config)
+                .map_err(|e| e.to_string().into())
+                .tap_err(|e| {
+                    tracing::error!(
+                        address = %address,
+                        name = %name,
+                        "unable to create authority client: {e}"
+                    )
+                })
+        };
+        let client = NetworkAuthorityClient::new_reconnectable(builder);
+        authority_clients.insert(name, client);
     }
     authority_clients
 }
@@ -316,5 +360,32 @@ fn insert_metadata<T>(request: &mut tonic::Request<T>, client_addr: Option<Socke
                     request.metadata_mut().insert_bin(key, value.clone());
                 }
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn test_reconnect_cooldown() {
+        let build_count = Arc::new(AtomicUsize::new(0));
+        let build_count_clone = build_count.clone();
+        let client = NetworkAuthorityClient::new_reconnectable(move || {
+            build_count_clone.fetch_add(1, Ordering::SeqCst);
+            Ok(tonic::transport::Endpoint::from_static("http://127.0.0.1:1").connect_lazy())
+        });
+        assert_eq!(build_count.load(Ordering::SeqCst), 1);
+
+        client.reconnect();
+        assert_eq!(build_count.load(Ordering::SeqCst), 2);
+
+        client.reconnect();
+        assert_eq!(build_count.load(Ordering::SeqCst), 2);
+
+        tokio::time::sleep(RECONNECT_COOLDOWN + Duration::from_millis(100)).await;
+        client.reconnect();
+        assert_eq!(build_count.load(Ordering::SeqCst), 3);
     }
 }

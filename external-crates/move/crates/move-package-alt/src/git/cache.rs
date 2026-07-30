@@ -419,17 +419,32 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
 
     // TODO(manos): Figure out if doing both lookups at once works fine (and add appropriate tests)
 
-    // Try to find a tag matching the `rev`:
-    // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
-    let tag = run_git_cmd_with_args(
-        &["ls-remote", "--", repo, &format!("refs/tags/{rev}")],
+    // Try to find a tag matching the `rev`, querying the peeled form (`^{}`) alongside it:
+    // git ls-remote https://github.com/user/repo.git refs/tags/<tag> refs/tags/<tag>^{}
+    //
+    // An annotated tag must resolve to the commit it points at, not to the tag object:
+    // the tag object is not reachable through branch history, and moving the tag orphans
+    // it, after which it can no longer be fetched by sha. Annotated tags yield two lines
+    // (`<tag-object> refs/tags/X` and `<commit> refs/tags/X^{}`), so prefer the `^{}` one;
+    // a lightweight tag has no `^{}` line and its single line is already the commit.
+    let tag_output = run_git_cmd_with_args(
+        &[
+            "ls-remote",
+            "--",
+            repo,
+            &format!("refs/tags/{rev}"),
+            &format!("refs/tags/{rev}^{{}}"),
+        ],
         None,
     )
-    .await?
-    .split_whitespace()
-    .next()
-    .map(|s| s.to_string())
-    .ok_or(GitError::no_sha(repo, rev));
+    .await?;
+    let tag = tag_output
+        .lines()
+        .find(|line| line.ends_with("^{}"))
+        .or_else(|| tag_output.lines().find(|line| !line.trim().is_empty()))
+        .and_then(|line| line.split_whitespace().next())
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev));
 
     // return early if `rev` maps to a valid tag.
     if let Ok(tag_sha) = tag {
@@ -981,6 +996,52 @@ mod tests {
 
         let result = git_tree.checkout_repo(false).await;
         assert!(result.is_ok());
+    }
+
+    /// An annotated tag must resolve to the commit it points at, not the tag object. The
+    /// tag object sha is not a history-reachable commit and is orphaned (then unfetchable)
+    /// when the tag moves, which breaks a checked-in `Move.lock` on a clean clone.
+    #[test(tokio::test)]
+    async fn test_annotated_tag_resolves_to_commit() {
+        let tag = "annotated/1";
+
+        let project = git::new().await;
+        let commit = project
+            .commit(|project| project.add_packages(["pkg_a"]))
+            .await;
+        commit.annotated_tag(tag).await;
+
+        // Confirm the fixture really is an annotated tag: `<tag>` names a tag object
+        // distinct from the commit. Without this the test would pass trivially.
+        let tag_object_sha = run_git_cmd_with_args(&["rev-parse", tag], Some(&project.repo_path()))
+            .await
+            .unwrap();
+        assert_ne!(tag_object_sha.trim(), commit.sha());
+
+        let resolved = find_branch_or_tag_sha(&project.repo_path_str(), tag)
+            .await
+            .unwrap();
+
+        assert_eq!(resolved.to_string(), commit.sha());
+    }
+
+    /// A lightweight tag already points directly at the commit, so it must keep resolving
+    /// to that commit after the annotated-tag peeling change.
+    #[test(tokio::test)]
+    async fn test_lightweight_tag_resolves_to_commit() {
+        let tag = "lightweight/1";
+
+        let project = git::new().await;
+        let commit = project
+            .commit(|project| project.add_packages(["pkg_a"]))
+            .await;
+        commit.tag(tag).await;
+
+        let resolved = find_branch_or_tag_sha(&project.repo_path_str(), tag)
+            .await
+            .unwrap();
+
+        assert_eq!(resolved.to_string(), commit.sha());
     }
 
     #[test(tokio::test)]

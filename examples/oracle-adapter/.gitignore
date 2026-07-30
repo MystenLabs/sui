@@ -1,0 +1,5 @@
+**/node_modules/
+**/build/
+ts/package-lock.json
+ts/run.mts
+ts/.adapter-package-id
