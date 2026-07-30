@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::sync::RwLock;
 
-use anyhow::anyhow;
+use anyhow::Context as _;
 use anyhow::bail;
 
 use sui_types::digests::TransactionDigest;
@@ -62,7 +62,8 @@ impl PendingCheckpointBuffer {
         let mut pending = self
             .checkpoint
             .write()
-            .map_err(|_| anyhow!("pending checkpoint lock poisoned"))?;
+            .ok()
+            .context("pending checkpoint lock poisoned")?;
         *pending = Some(checkpoint);
         Ok(())
     }
@@ -75,7 +76,8 @@ impl PendingCheckpointBuffer {
         let mut pending = self
             .transactions
             .write()
-            .map_err(|_| anyhow!("pending transaction lock poisoned"))?;
+            .ok()
+            .context("pending transaction lock poisoned")?;
         pending.entry(digest).or_default().transaction = Some(transaction);
         Ok(())
     }
@@ -85,7 +87,8 @@ impl PendingCheckpointBuffer {
         let mut pending = self
             .transactions
             .write()
-            .map_err(|_| anyhow!("pending transaction lock poisoned"))?;
+            .ok()
+            .context("pending transaction lock poisoned")?;
         pending.entry(digest).or_default().effects = Some(effects);
         Ok(())
     }
@@ -98,7 +101,8 @@ impl PendingCheckpointBuffer {
         let mut pending = self
             .transactions
             .write()
-            .map_err(|_| anyhow!("pending transaction lock poisoned"))?;
+            .ok()
+            .context("pending transaction lock poisoned")?;
         pending.entry(tx_digest).or_default().events = Some(events);
         Ok(())
     }
@@ -112,7 +116,8 @@ impl PendingCheckpointBuffer {
         let pending = self
             .checkpoint
             .read()
-            .map_err(|_| anyhow!("pending checkpoint lock poisoned"))?;
+            .ok()
+            .context("pending checkpoint lock poisoned")?;
         let Some(checkpoint) = pending.as_ref() else {
             bail!(
                 "checkpoint contents {} inserted without a pending checkpoint",
@@ -141,7 +146,8 @@ impl PendingCheckpointBuffer {
         let pending = self
             .transactions
             .read()
-            .map_err(|_| anyhow!("pending transaction lock poisoned"))?;
+            .ok()
+            .context("pending transaction lock poisoned")?;
         let mut staged = Vec::new();
         for execution in contents.iter() {
             let digest = execution.transaction;
@@ -151,14 +157,14 @@ impl PendingCheckpointBuffer {
                     checkpoint.data().sequence_number,
                 );
             };
-            let transaction = entry.transaction.clone().ok_or_else(|| {
-                anyhow!(
+            let transaction = entry.transaction.clone().with_context(|| {
+                format!(
                     "checkpoint {} references transaction {digest}, but transaction data is missing",
                     checkpoint.data().sequence_number,
                 )
             })?;
-            let effects = entry.effects.clone().ok_or_else(|| {
-                anyhow!(
+            let effects = entry.effects.clone().with_context(|| {
+                format!(
                     "checkpoint {} references transaction {digest}, but transaction effects are missing",
                     checkpoint.data().sequence_number,
                 )
@@ -183,7 +189,8 @@ impl PendingCheckpointBuffer {
         let mut pending = self
             .transactions
             .write()
-            .map_err(|_| anyhow!("pending transaction lock poisoned"))?;
+            .ok()
+            .context("pending transaction lock poisoned")?;
         for digest in digests {
             pending.remove(&digest);
         }
@@ -192,7 +199,8 @@ impl PendingCheckpointBuffer {
         let mut pending_checkpoint = self
             .checkpoint
             .write()
-            .map_err(|_| anyhow!("pending checkpoint lock poisoned"))?;
+            .ok()
+            .context("pending checkpoint lock poisoned")?;
         if pending_checkpoint
             .as_ref()
             .is_some_and(|pending| pending.digest() == checkpoint.digest())
