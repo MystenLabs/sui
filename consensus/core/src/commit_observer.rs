@@ -17,6 +17,7 @@ use crate::{
     error::ConsensusResult,
     linearizer::Linearizer,
     storage::Store,
+    task::spawn_blocking,
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -73,16 +74,17 @@ impl CommitObserver {
         // Recover blocks needed for future commits (and block proposals).
         // Some blocks might have been recovered as committed blocks in recover_and_send_commits().
         // They will just be ignored.
-        tokio::runtime::Handle::current()
-            .spawn_blocking({
-                let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
-                let gc_round = observer.dag_state.read().gc_round();
-                move || {
-                    transaction_vote_tracker.recover_blocks_after_round(gc_round);
-                }
-            })
-            .await
-            .expect("Spawn blocking should not fail");
+        if let Err(e) = spawn_blocking({
+            let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
+            let gc_round = observer.dag_state.read().gc_round();
+            move || {
+                transaction_vote_tracker.recover_blocks_after_round(gc_round);
+            }
+        })
+        .await
+        {
+            info!("Skipping block recovery for transaction voting: {e}");
+        }
 
         observer
     }
