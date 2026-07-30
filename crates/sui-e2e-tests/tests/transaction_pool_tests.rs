@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::num::NonZeroUsize;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use sui_config::node::ConsensusTransactionPoolConfig;
 use sui_core::authority_client::{
     AuthorityAPI, make_network_authority_clients_with_network_config,
 };
-use sui_macros::{clear_fail_point, register_fail_point_async, register_fail_point_if, sim_test};
+use sui_macros::sim_test;
 use sui_network::default_mysten_network_config;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -17,7 +13,6 @@ use sui_types::base_types::ObjectRef;
 use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResult};
 use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
-use tokio::sync::broadcast;
 
 async fn make_transfer_tx_with_gas(
     cluster: &test_cluster::TestCluster,
@@ -47,6 +42,8 @@ fn pool_config(capacity: usize) -> ConsensusTransactionPoolConfig {
     }
 }
 
+// Only used by the `#[cfg(msim)]` fail-point tests below.
+#[cfg(msim)]
 fn gauge_value(
     families: Vec<prometheus::proto::MetricFamily>,
     name: &str,
@@ -123,8 +120,16 @@ async fn test_transaction_pool_basic_flow_and_epoch_progress() {
     );
 }
 
+// Depends on per-simnode fail-point gating, so it only compiles under msim.
+#[cfg(msim)]
 #[sim_test]
 async fn test_transaction_pool_eviction_and_rejection() {
+    use std::num::NonZeroUsize;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+    use sui_macros::{clear_fail_point, register_fail_point_if};
+
     let take_disabled = Arc::new(AtomicBool::new(true));
     let network_config = ConfigBuilder::new_with_temp_dir()
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -227,8 +232,16 @@ async fn test_transaction_pool_eviction_and_rejection() {
     );
 }
 
+// Depends on per-simnode fail-point gating, so it only compiles under msim.
+#[cfg(msim)]
 #[sim_test]
 async fn test_transaction_pool_epoch_boundary_resolves_pending_submission() {
+    use std::num::NonZeroUsize;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+    use sui_macros::{clear_fail_point, register_fail_point_if};
+
     let take_disabled = Arc::new(AtomicBool::new(true));
     let network_config = ConfigBuilder::new_with_temp_dir()
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -293,8 +306,17 @@ async fn test_transaction_pool_epoch_boundary_resolves_pending_submission() {
     });
 }
 
+// Depends on per-simnode fail-point gating, so it only compiles under msim.
+#[cfg(msim)]
 #[sim_test]
 async fn test_transaction_pool_epoch_store_swap_waits_for_new_pool() {
+    use std::num::NonZeroUsize;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+    use sui_macros::{clear_fail_point, register_fail_point_async};
+    use tokio::sync::broadcast;
+
     let network_config = ConfigBuilder::new_with_temp_dir()
         .committee_size(NonZeroUsize::new(4).unwrap())
         .with_consensus_transaction_pool_config(pool_config(10))
