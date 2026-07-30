@@ -627,8 +627,6 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
             .map(move |block| {
-                // Exactly one of the two forms rides the wire: sending the full bytes
-                // alongside the minimal form would forfeit the bandwidth saving.
                 let has_minimal = block.minimal.is_some();
                 let response = SubscribeBlocksResponse {
                     block: if has_minimal {
@@ -639,9 +637,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                     excluded_ancestors: block.excluded_ancestors,
                     minimal_block: block.minimal,
                 };
-                // Encoded payload bytes per subscriber and form: comparing this counter
-                // between flag-off and flag-on runs measures the propagation saving
-                // (pre-compression; zstd applies below this layer).
+                // Pre-compression payload bytes by form; zstd applies below this layer.
                 context
                     .metrics
                     .node_metrics

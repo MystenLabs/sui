@@ -859,8 +859,8 @@ struct FeatureFlags {
     consensus_median_based_commit_timestamp: bool,
 
     // If true, validators emit minimal (ancestor-compressed) blocks on the consensus
-    // block subscription stream. Every validator on a version with this flag accepts
-    // both full and minimal forms; the flag gates emission only.
+    // block subscription stream. Receivers always accept both full and minimal forms,
+    // independent of this flag; it gates emission only.
     #[serde(skip_serializing_if = "is_false")]
     consensus_minimal_block_propagation: bool,
 

@@ -16,7 +16,7 @@ use consensus_types::block::{BlockDigest, Round};
 use parking_lot::RwLock;
 
 use crate::{
-    block::{GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock, genesis_blocks},
+    block::{BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock, genesis_blocks},
     context::Context,
     dag_state::DagState,
     minimal_block::{
@@ -97,13 +97,14 @@ impl BlockInflater {
         }
     }
 
-    /// Encodes a block for the wire, omitting ancestor digests the receiver can resolve.
-    /// Slots at or below `min_omittable_round` keep explicit digests (cache horizon).
-    pub(crate) fn serialize(
-        &self,
-        block: &VerifiedBlock,
-        min_omittable_round: Round,
-    ) -> Result<Bytes, MinimalBlockError> {
+    /// Encodes a block for the wire, omitting ancestor digests the receiver can
+    /// resolve. Ancestors older than the receivers' DAG-cache retention keep explicit
+    /// digests — a caught-up receiver cannot be assumed to resolve rounds it no longer
+    /// caches.
+    pub(crate) fn serialize(&self, block: &VerifiedBlock) -> Result<Bytes, MinimalBlockError> {
+        let min_omittable_round = block
+            .round()
+            .saturating_sub(self.context.parameters.dag_state_cached_rounds as Round);
         serialize_minimal(block, &DagStateResolver(self), min_omittable_round)
     }
 
@@ -136,10 +137,7 @@ mod tests {
     use consensus_types::block::BlockRef;
 
     use super::*;
-    use crate::{
-        block::{BlockAPI as _, TestBlock},
-        storage::mem_store::MemStore,
-    };
+    use crate::{block::TestBlock, storage::mem_store::MemStore};
 
     fn setup(
         committee_size: usize,
@@ -194,7 +192,7 @@ mod tests {
         ancestors.sort_by_key(|r| (r.author.value() != 0, r.author));
         let block =
             VerifiedBlock::new_for_test(TestBlock::new(2, 0).set_ancestors_raw(ancestors).build());
-        let minimal = inflater.serialize(&block, 0).unwrap();
+        let minimal = inflater.serialize(&block).unwrap();
 
         // The inflater must not keep a stopped authority's DagState alive
         // (authority_node fatally asserts zero owners at shutdown)...
@@ -218,7 +216,7 @@ mod tests {
         let block =
             VerifiedBlock::new_for_test(TestBlock::new(3, 0).set_ancestors_raw(ancestors).build());
 
-        let minimal = inflater.serialize(&block, 0).unwrap();
+        let minimal = inflater.serialize(&block).unwrap();
         let (_signed, serialized) = inflater.inflate(&minimal, block.author()).unwrap();
         assert_eq!(&serialized, block.serialized());
         assert!(minimal.len() < block.serialized().len());
@@ -233,7 +231,7 @@ mod tests {
         let block = VerifiedBlock::new_for_test(
             TestBlock::new(1, 0).set_ancestors_raw(genesis_refs).build(),
         );
-        let minimal = inflater.serialize(&block, 0).unwrap();
+        let minimal = inflater.serialize(&block).unwrap();
         let (_signed, serialized) = inflater.inflate(&minimal, block.author()).unwrap();
         assert_eq!(&serialized, block.serialized());
     }
@@ -258,7 +256,7 @@ mod tests {
 
         // Sender knows the late block (it links to it), receiver doesn't yet.
         dag_state.write().accept_block(late_block.clone());
-        let minimal = inflater.serialize(&block, 0).unwrap();
+        let minimal = inflater.serialize(&block).unwrap();
 
         let (receiver_context, _key_pairs) = Context::new_for_test(4);
         let receiver_context = Arc::new(receiver_context);
@@ -310,7 +308,7 @@ mod tests {
         ancestors.sort_by_key(|r| (r.author.value() != 0, r.author));
         let block =
             VerifiedBlock::new_for_test(TestBlock::new(2, 0).set_ancestors_raw(ancestors).build());
-        let minimal = inflater.serialize(&block, 0).unwrap();
+        let minimal = inflater.serialize(&block).unwrap();
         // The sender attaches an explicit digest for the equivocating slot, so its own
         // (ambiguous) view still inflates the exact referenced block.
         let (_signed, serialized) = inflater.inflate(&minimal, block.author()).unwrap();

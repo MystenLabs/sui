@@ -3,33 +3,21 @@
 
 //! Event-driven recovery for minimal blocks that cannot be inflated at receipt.
 //!
-//! Two cooperating pieces close the gap between minimal-block inflation and the
-//! baseline full-block pipeline:
+//! [`HintCache`] holds digests learned at receipt time, before verification or
+//! acceptance: a full block's digest is hashed from its bytes, a minimal block carries
+//! its claimed digest. Feeding these to the inflation resolver lets a child reconstruct
+//! the moment its ancestor's bytes exist locally. Hints are untrusted and bounded; the
+//! child's claimed-digest check remains the cryptographic gate.
 //!
-//! - [`HintCache`]: digests learned at *receipt time*, before verification or
-//!   acceptance. A full-form block's digest is a hash of the bytes that just arrived; a
-//!   minimal block carries its own claimed digest. Feeding these to the inflation
-//!   resolver lets a child reconstruct the moment its ancestor's bytes exist locally —
-//!   the same wall-clock point at which the baseline design could first make use of the
-//!   ancestor — and verify in parallel with the ancestor's own verification. Hints are
-//!   untrusted: the child's claimed-digest check remains the cryptographic gate, so a
-//!   wrong hint costs a bounded reconstruction attempt, never a wrong acceptance.
-//!
-//! - [`RecoveryManager`]: an actor that parks un-inflatable minimal blocks keyed by
-//!   their first missing slot and re-attempts inflation when that slot is heard from —
-//!   either a receipt-time hint (subscription streams) or Core's accepted-block
-//!   broadcast (blocks that arrive via sync/fetch and never cross our streams). A
-//!   deadline escalates stragglers to the digest-verified sender fetch, the liveness
-//!   floor that converts slot-level knowledge into an exact, fetchable ref. All parking
-//!   state is owned by the actor task, so hint-drain and park ordering cannot race: a
-//!   hint is published to the cache *before* its wake command is sent, and a park
-//!   re-attempts inflation *after* registering, on the same task that drains waiters.
-//!
-//! Measured motivation (private testnet, ~125 validators): ~48% of received minimal
-//! blocks race an in-flight ancestor; natural arrival lag is p50 ≈ 167 ms / p95 ≈ 473 ms.
-//! Timer-based recovery either fetches too much (bandwidth tax) or waits past arrival
-//! (round-rate tax); waking on the actual arrival events is the only schedule that
-//! matches the distribution.
+//! [`RecoveryManager`] is an actor that parks un-inflatable minimal blocks keyed by
+//! their first missing slot, re-attempts inflation when that slot is heard from (a
+//! receipt-time hint, or Core's accepted-block broadcast for blocks that arrive via
+//! sync), and escalates stragglers to a digest-verified sender fetch after a deadline.
+//! Wakes are event-driven because arrival lag is wide (measured p50 ≈ 167 ms /
+//! p95 ≈ 473 ms): a fixed schedule either fetches too much or waits too long. All
+//! parking state is owned by the actor task: a hint is published to the cache before
+//! its wake is sent, and a park re-checks its missing slot after registering, so a
+//! hint racing the park is always seen by one side or the other.
 
 use std::{
     collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
@@ -114,6 +102,7 @@ pub(crate) enum HintInsert {
     Inserted,
     Duplicate,
     BelowHorizon,
+    AboveHorizon,
     SlotFull,
     AuthorityFull,
     GlobalFull,
@@ -125,6 +114,7 @@ impl HintInsert {
             HintInsert::Inserted => "inserted",
             HintInsert::Duplicate => "duplicate",
             HintInsert::BelowHorizon => "below_horizon",
+            HintInsert::AboveHorizon => "above_horizon",
             HintInsert::SlotFull => "slot_full",
             HintInsert::AuthorityFull => "authority_full",
             HintInsert::GlobalFull => "global_full",
@@ -136,11 +126,9 @@ pub(crate) struct HintCache {
     inner: Mutex<HintCacheInner>,
     /// Slots older than `horizon - retained_rounds` are evicted.
     retained_rounds: Round,
-    /// Derived from retention x committee size so the cap can never be smaller than the
-    /// retention window's working set. A cap below that (an early build set a flat
-    /// 32,768, ~19 s of traffic at 125 validators) fills once and then permanently
-    /// rejects FRESH hints while retaining stale ones — measured live as a monotonic
-    /// decline in hint wakes and a rising deadline-fetch share.
+    /// Derived from retention x committee size so the cap can never be smaller than
+    /// the retention window's working set; a flat cap below that starves fresh hints
+    /// behind stale ones. Overflow evicts oldest-first for the same reason.
     capacity: usize,
 }
 
@@ -179,6 +167,14 @@ impl HintCache {
         // a full cache (e.g. a duplicate storm evicting the working set).
         if slot.round.saturating_add(self.retained_rounds) < inner.horizon {
             return HintInsert::BelowHorizon;
+        }
+        // Symmetric future bound: oldest-first eviction never reaches a far-future
+        // slot, so without this a peer could park its per-authority quota there
+        // permanently. The slack covers legitimate pipeline lag. The horizon==0
+        // exemption covers startup; the first advance_horizon prunes anything a
+        // bounded insert would have refused.
+        if inner.horizon > 0 && slot.round > inner.horizon.saturating_add(self.retained_rounds) {
+            return HintInsert::AboveHorizon;
         }
         if let Some(digests) = inner.hints.get(&slot) {
             if digests.contains(&digest) {
@@ -235,10 +231,27 @@ impl HintCache {
         if accepted_round <= inner.horizon {
             return;
         }
+        let first_horizon = inner.horizon == 0;
         inner.horizon = accepted_round;
         let cutoff = accepted_round.saturating_sub(self.retained_rounds);
         let retained = inner.hints.split_off(&Slot::new_for_test(cutoff, 0));
         let evicted = std::mem::replace(&mut inner.hints, retained);
+        Self::discount(&mut inner, evicted);
+        if first_horizon {
+            // Startup inserts had no horizon to bound them above; anything beyond the
+            // bound `insert` enforces from now on would otherwise never be evicted (it
+            // is never the oldest) and could pin quota forever.
+            if let Some(bound) = accepted_round
+                .saturating_add(self.retained_rounds)
+                .checked_add(1)
+            {
+                let above = inner.hints.split_off(&Slot::new_for_test(bound, 0));
+                Self::discount(&mut inner, above);
+            }
+        }
+    }
+
+    fn discount(inner: &mut HintCacheInner, evicted: BTreeMap<Slot, Vec<BlockDigest>>) {
         for (slot, digests) in evicted {
             inner.total = inner.total.saturating_sub(digests.len());
             if let Some(count) = inner.per_authority.get_mut(&slot.authority) {
@@ -260,7 +273,9 @@ pub(crate) struct ParkCommand {
     pub(crate) peer: AuthorityIndex,
     pub(crate) block_ref: BlockRef,
     pub(crate) minimal: Bytes,
-    pub(crate) missing: Slot,
+    /// The slot whose arrival could make the block inflatable, or `None` when waiting
+    /// cannot repair it (ambiguity, digest mismatch) and only the fetch can.
+    pub(crate) missing: Option<Slot>,
 }
 
 struct ParkedEntry {
@@ -418,12 +433,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                     let Some(park) = park else {
                         return;
                     };
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .minimal_block_recovery_queued
-                        .with_label_values(&["park_channel"])
-                        .set(parks.len() as i64);
                     let timer = busy.with_label_values(&["park"]).start_timer();
                     self.handle_park(park);
                     timer.observe_duration();
@@ -457,7 +466,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                             self.context
                                 .metrics
                                 .node_metrics
-                                .minimal_block_recovery_rescans
+                                .minimal_block_recovery_accepted_lag
                                 .inc();
                             accepted_blocks = accepted_blocks.resubscribe();
                         }
@@ -539,6 +548,15 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
             return;
         }
         self.in_recovery.insert(block_ref);
+        let Some(missing) = missing else {
+            // Nothing to wait for: only the digest-verified sender fetch can repair it.
+            self.start_fetch(FetchIntent {
+                block_ref,
+                peer,
+                parked_at: Instant::now(),
+            });
+            return;
+        };
         let over_capacity = self.parked_bytes + minimal.len() > MAX_PARKED_BYTES
             || self
                 .parked_entries_per_peer
@@ -786,7 +804,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 self.context
                     .metrics
                     .node_metrics
-                    .minimal_block_recovery_intents_dropped
+                    .minimal_block_recovery_work_dropped
                     .inc();
                 if let Some(shed) = self.pending_submissions.pop_front() {
                     self.in_recovery.remove(&shed.block_ref);
@@ -851,7 +869,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 self.context
                     .metrics
                     .node_metrics
-                    .minimal_block_recovery_intents_dropped
+                    .minimal_block_recovery_work_dropped
                     .inc();
                 if let Some(dropped) = self.fetch_intents.pop_front() {
                     self.in_recovery.remove(&dropped.block_ref);
@@ -957,18 +975,15 @@ mod tests {
     async fn hint_cache_horizon_advances_only_from_accepted_rounds() {
         let cache = HintCache::new(100, 4);
         assert_eq!(cache.insert(slot(10, 0), digest(1)), HintInsert::Inserted);
-        // A far-future hint (e.g. from a Byzantine block) is stored but must not evict
-        // the useful horizon — eviction advances only via advance_horizon (accepted).
-        assert_eq!(
-            cache.insert(slot(1_000_000, 0), digest(2)),
-            HintInsert::Inserted
-        );
+        // A received (unverified) future round must not move the horizon; only
+        // advance_horizon (accepted) evicts.
+        assert_eq!(cache.insert(slot(250, 0), digest(2)), HintInsert::Inserted);
         assert_eq!(cache.candidates(slot(10, 0)), vec![digest(1)]);
         // Accepted progress evicts slots below the retained window and frees their
-        // per-authority budget.
+        // per-authority budget; hints within the window survive.
         cache.advance_horizon(200);
         assert!(cache.candidates(slot(10, 0)).is_empty());
-        assert_eq!(cache.candidates(slot(1_000_000, 0)), vec![digest(2)]);
+        assert_eq!(cache.candidates(slot(250, 0)), vec![digest(2)]);
         // Hints below the accepted horizon window are refused outright.
         assert_eq!(
             cache.insert(slot(50, 0), digest(3)),
@@ -977,8 +992,41 @@ mod tests {
         assert_eq!(cache.insert(slot(150, 0), digest(3)), HintInsert::Inserted);
     }
 
-    /// The regression behind Run 5's decaying hint wakes: a full cache must admit FRESH
-    /// hints by evicting its oldest slots, never reject the new in favor of the stale.
+    /// A peer must not be able to park its per-authority hint quota in the far future,
+    /// where oldest-first eviction never reaches it: inserts beyond the horizon's
+    /// future bound are refused, and startup inserts (accepted while no horizon
+    /// exists) are pruned to the same bound when the first horizon is established.
+    #[tokio::test]
+    async fn hint_cache_rejects_far_future_hints() {
+        let cache = HintCache::new(100, 4);
+        // Startup: no horizon yet — fill the authority's ENTIRE quota far in the
+        // future, past what any horizon will reach.
+        for round in 0..MAX_HINTS_PER_AUTHORITY as Round {
+            assert_eq!(
+                cache.insert(slot(1_000_000 + round, 1), digest((round % 251) as u8)),
+                HintInsert::Inserted
+            );
+        }
+        assert_eq!(
+            cache.insert(slot(999_999, 1), digest(9)),
+            HintInsert::AuthorityFull
+        );
+        cache.advance_horizon(500);
+        // The first horizon prunes what insert would now refuse AND frees the quota;
+        // a leaked count would leave this authority pinned at AuthorityFull forever.
+        assert!(cache.candidates(slot(1_000_000, 1)).is_empty());
+        // Within horizon + retained slack: legitimate pipeline lag.
+        assert_eq!(cache.insert(slot(600, 1), digest(2)), HintInsert::Inserted);
+        // Beyond it: refused, and nothing already retained is disturbed.
+        assert_eq!(
+            cache.insert(slot(601, 1), digest(3)),
+            HintInsert::AboveHorizon
+        );
+        assert_eq!(cache.candidates(slot(600, 1)), vec![digest(2)]);
+    }
+
+    /// A full cache must admit FRESH hints by evicting its oldest slots, never reject
+    /// the new in favor of the stale (measured live as decaying hint wakes).
     #[tokio::test]
     async fn hint_cache_full_evicts_oldest_not_newest() {
         // retained_rounds x committee = 4 x 1 -> capacity clamps to the 1024 floor.

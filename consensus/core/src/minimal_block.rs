@@ -11,8 +11,9 @@
 //! so order is not derivable from authority indices.
 //!
 //! The sender's `claimed_block_digest` lets the receiver distinguish a failed local
-//! reconstruction (digest mismatch => drop the block and let the missing-ancestor sync
-//! recover it) from an invalid block (digest match + bad signature => reject the peer).
+//! reconstruction (digest mismatch => hand the block to the recovery manager, which
+//! fetches the digest-verified original) from an invalid block (digest match + bad
+//! signature => reject the peer).
 //!
 //! Minimal blocks are emitted only for live broadcasts on the validator `subscribe_blocks`
 //! stream, and only for V1/V2 blocks — V3 is sent full until it ships and gets codec
@@ -46,7 +47,7 @@ const MAX_SLOT_CANDIDATES: usize = 3;
 
 /// The `Minimal` arm of the block wire envelope.
 #[derive(Clone, prost::Message)]
-pub(crate) struct MinimalBlock {
+struct MinimalBlock {
     /// bcs(Block) built with ancestors = [].
     #[prost(bytes = "bytes", tag = "1")]
     block_sans_ancestors: Bytes,
@@ -64,7 +65,7 @@ pub(crate) struct MinimalBlock {
 }
 
 #[derive(Clone, prost::Message)]
-pub(crate) struct AncestorOverride {
+struct AncestorOverride {
     #[prost(uint32, tag = "1")]
     author: u32,
     /// Set only if the ancestor round is not `block.round - 1`.
@@ -929,8 +930,9 @@ mod tests {
         ));
     }
 
-    /// The first before/after number: post-zstd wire bytes of full vs minimal encoding
-    /// for a mainnet-shaped block (~100 ancestors, high-entropy digests and payload).
+    /// Post-zstd wire bytes of full vs minimal encoding for a mainnet-shaped block
+    /// (~100 ancestors, high-entropy digests and payload): the bandwidth saving is the
+    /// feature's purpose, so a codec change that erodes it below 2x must fail loudly.
     #[tokio::test]
     async fn wire_size_savings_mainnet_shape() {
         const COMMITTEE_SIZE: usize = 100;

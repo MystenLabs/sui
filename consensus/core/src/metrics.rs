@@ -188,13 +188,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_attempts: IntCounter,
     pub(crate) minimal_block_recovery_duplicates: IntCounter,
     pub(crate) minimal_block_recovery_overflow: IntCounter,
-    pub(crate) minimal_block_recovery_rescans: IntCounter,
-    pub(crate) minimal_block_recovery_intents_dropped: IntCounter,
+    pub(crate) minimal_block_recovery_accepted_lag: IntCounter,
+    pub(crate) minimal_block_recovery_work_dropped: IntCounter,
     pub(crate) minimal_block_recovery_queued: IntGaugeVec,
     pub(crate) minimal_block_recovery_actor_busy: HistogramVec,
     pub(crate) minimal_block_recovery_park_blocked: IntCounter,
     pub(crate) minimal_block_hint_inserts: IntCounterVec,
-    pub(crate) minimal_block_recovery_commands_dropped: IntCounterVec,
+    pub(crate) minimal_block_recovery_hint_wakes_shed: IntCounter,
     pub(crate) minimal_block_encode_cache: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
@@ -653,14 +653,14 @@ impl NodeMetrics {
                 "Park requests diverted to fetch because a parking-table cap was reached",
                 registry,
             ).unwrap(),
-            minimal_block_recovery_rescans: register_int_counter_with_registry!(
-                "minimal_block_recovery_rescans",
+            minimal_block_recovery_accepted_lag: register_int_counter_with_registry!(
+                "minimal_block_recovery_accepted_lag",
                 "Accepted-block broadcast lag events observed by the recovery actor; skipped wakes are covered by the parked-entry deadline",
                 registry,
             ).unwrap(),
             minimal_block_recovery_queued: register_int_gauge_vec_with_registry!(
                 "minimal_block_recovery_queued",
-                "Recovery work awaiting dispatch, by queue (fetch_intents|pending_submissions|park_channel)",
+                "Recovery work awaiting dispatch, by queue (fetch_intents|pending_submissions)",
                 &["queue"],
                 registry,
             ).unwrap(),
@@ -678,19 +678,18 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_hint_inserts: register_int_counter_vec_with_registry!(
                 "minimal_block_hint_inserts",
-                "Receipt-time hint insertion outcomes (inserted|duplicate|below_horizon|slot_full|authority_full|global_full) — the decisive signal for wake-coverage loss",
+                "Receipt-time hint insertion outcomes (inserted|duplicate|below_horizon|above_horizon|slot_full|authority_full|global_full) — the decisive signal for wake-coverage loss",
                 &["outcome"],
                 registry,
             ).unwrap(),
-            minimal_block_recovery_commands_dropped: register_int_counter_vec_with_registry!(
-                "minimal_block_recovery_commands_dropped",
-                "Lossy recovery wakes refused by the bounded actor channel, by kind (slot_heard); parks are lossless and backpressure instead",
-                &["kind"],
+            minimal_block_recovery_hint_wakes_shed: register_int_counter_with_registry!(
+                "minimal_block_recovery_hint_wakes_shed",
+                "Hint wakes refused by the bounded actor channel (lossy by design; the at-park recheck, accepted broadcast and deadline cover them). Parks are lossless and backpressure instead",
                 registry,
             ).unwrap(),
-            minimal_block_recovery_intents_dropped: register_int_counter_with_registry!(
-                "minimal_block_recovery_intents_dropped",
-                "Recovery work shed at a bound: dropped fetch intents or shed pending submissions (refused actor commands are counted separately by kind)",
+            minimal_block_recovery_work_dropped: register_int_counter_with_registry!(
+                "minimal_block_recovery_work_dropped",
+                "Recovery work shed at a bound: dropped fetch intents or shed pending submissions",
                 registry,
             ).unwrap(),
             minimal_block_recovery_latency: register_histogram_with_registry!(

@@ -32,8 +32,8 @@ pub struct ConsensusProtocolConfig {
     /// Number of commit indices that use the same Mysticeti v3 leader schedule.
     leader_schedule_update_interval: u32,
     /// Whether validators emit minimal (ancestor-compressed) blocks on the block
-    /// subscription stream. Receivers on this protocol version always accept both
-    /// full and minimal forms; this gates emission.
+    /// subscription stream. Receivers always accept both full and minimal forms,
+    /// independent of this flag; it gates emission only.
     minimal_block_propagation_enabled: bool,
 }
 

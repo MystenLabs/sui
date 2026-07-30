@@ -55,13 +55,9 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     minimal_cache: Arc<MinimalBlockCache>,
 }
 
-/// Shares one minimal encoding of each broadcast block across all subscriber streams.
-///
-/// Every subscriber runs its own stream over the same broadcast, so encoding inside the
-/// per-subscriber closure would re-encode each block once per peer — O(committee size)
-/// redundant work on the hot path. Subscribers observe the same block at nearly the same
-/// time, so a handful of recent entries is enough to collapse that to a single encode;
-/// `Bytes` clones are refcount bumps.
+/// Shares one minimal encoding of each broadcast block across all subscriber streams,
+/// which would otherwise each re-encode it — O(committee size) work per block. A few
+/// recent entries suffice since subscribers observe a block at nearly the same time.
 struct MinimalBlockCache {
     // Small enough that a linear scan under a short-lived lock beats a hash map.
     recent: parking_lot::Mutex<VecDeque<(BlockRef, Bytes)>>,
@@ -98,7 +94,7 @@ impl MinimalBlockCache {
         cache_result.with_label_values(&["miss"]).inc();
         // Encode outside the lock: a concurrent subscriber may duplicate this work for the
         // same block, which is harmless and far cheaper than serializing all subscribers.
-        let bytes = inflater.serialize(block, 0).ok()?;
+        let bytes = inflater.serialize(block).ok()?;
         let mut recent = self.recent.lock();
         if !recent.iter().any(|(r, _)| *r == block_ref) {
             if recent.len() == Self::CAPACITY {
@@ -818,7 +814,6 @@ mod tests {
     use crate::{
         authority_service::AuthorityService,
         block::{BlockAPI, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
-        block_inflater::BlockInflater,
         block_sync_service::BlockSyncService,
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
@@ -1511,7 +1506,21 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_emits_minimal_for_live_only() {
         // Emission is on via ConsensusProtocolConfig::for_testing() inside new_for_test.
-        let (context, _keys) = Context::new_for_test(4);
+        subscribe_blocks_emission(true).await;
+    }
+
+    /// The rollout-safety property of the protocol flag: with it off, live broadcasts
+    /// carry no minimal form.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_subscribe_blocks_flag_off_emits_full_only() {
+        subscribe_blocks_emission(false).await;
+    }
+
+    async fn subscribe_blocks_emission(emit_minimal: bool) {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_minimal_block_propagation_enabled_for_testing(emit_minimal);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1582,8 +1591,8 @@ mod tests {
         assert_eq!(replayed.block, *own_block.serialized());
         assert!(replayed.minimal.is_none());
 
-        // A live broadcast must carry the minimal form alongside the full serialization
-        // (the tonic layer sends only one of the two on the wire).
+        // A live broadcast carries the minimal form (the tonic layer sends only one of
+        // the two on the wire) exactly when the protocol flag allows emission.
         let live_block =
             VerifiedBlock::new_for_test(TestBlock::new(16, 0).set_ancestors_raw(ancestors).build());
         tx_block_broadcast
@@ -1594,17 +1603,14 @@ mod tests {
             .unwrap();
         let live = stream.next().await.unwrap();
         assert_eq!(live.block, *live_block.serialized());
-        let minimal = live
-            .minimal
-            .expect("live block should carry a minimal form");
-        assert!(minimal.len() < live.block.len());
-
-        // A receiver holding the same ancestors inflates the minimal form byte-identically.
-        let receiver_inflater = BlockInflater::new(context.clone(), dag_state.clone());
-        let (_signed, serialized) = receiver_inflater
-            .inflate(&minimal, context.committee.to_authority_index(0).unwrap())
-            .unwrap();
-        assert_eq!(&serialized, live_block.serialized());
+        if emit_minimal {
+            let minimal = live
+                .minimal
+                .expect("live block should carry a minimal form");
+            assert!(minimal.len() < live.block.len());
+        } else {
+            assert!(live.minimal.is_none());
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

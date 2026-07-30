@@ -42,11 +42,12 @@ enum InflateOutcome {
     /// A full-form block, or a minimal block successfully inflated to full form.
     Block(ExtendedSerializedBlock),
     /// A minimal block that local state cannot inflate right now. It is dropped from
-    /// the stream and parked with the recovery manager, keyed by the slot it is missing.
+    /// the stream and handed to the recovery manager: parked on its missing slot, or
+    /// fetched immediately when there is no slot whose arrival could repair it.
     Dropped {
         block_ref: BlockRef,
         minimal: Bytes,
-        missing: Slot,
+        missing: Option<Slot>,
     },
 }
 
@@ -212,12 +213,17 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     /// un-inflatable (each references blocks it lacks), nothing reaches `block_manager`,
     /// so no missing ancestor is ever registered and the node wedges permanently.
     ///
-    /// This path must never wait on the network. Blocks from a peer are processed
-    /// sequentially, so any await here delays every later block from that peer —
-    /// head-of-line blocking. An earlier version fetched the full block inline (up to a
-    /// 2 s timeout) and slept between inflate retries; on high-latency links that
-    /// compounded into a throughput collapse, because a slower stream falls further
-    /// behind on ancestors, which causes more stalls.
+    /// Cap on untrusted minimal bytes, enforced before ANY decoding: a legitimate
+    /// minimal block is bounded by the max transaction payload plus small per-ancestor
+    /// structure. The hint and inflation paths must agree on this bound.
+    fn max_minimal_size(context: &Context) -> usize {
+        (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2)
+    }
+
+    /// This path must never wait on the network: blocks from a peer are processed
+    /// sequentially, so any await here delays every later block from that peer, and on
+    /// high-latency links that compounds — a stream that falls behind on ancestors
+    /// stalls more, not less.
     fn inflate_received_block(
         context: &Context,
         block_inflater: &BlockInflater,
@@ -234,11 +240,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .with_label_values(&[peer_hostname])
             .inc();
 
-        // Cap the envelope before decoding: a legitimate minimal block is bounded by the
-        // max transaction payload plus small per-ancestor structure, so anything larger
-        // is a peer fault and must not cost a BCS parse of attacker-sized buffers.
-        let max_minimal_size =
-            (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2);
+        let max_minimal_size = Self::max_minimal_size(context);
         if minimal.len() > max_minimal_size {
             node_metrics
                 .minimal_block_inflate_drop
@@ -264,13 +266,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     .minimal_block_inflate_drop
                     .with_label_values(&[peer_hostname, reason.label()])
                     .inc();
-                // Ambiguity/mismatch park on their own slot: never woken, so the
-                // manager's immediate at-park re-attempt escalates them straight to the
-                // digest-verified fetch (waiting cannot repair them).
+                // Waiting cannot repair ambiguity or a digest mismatch; those go
+                // straight to the digest-verified sender fetch.
                 let missing = match reason {
-                    crate::minimal_block::FallbackReason::MissingAncestor(slot)
-                    | crate::minimal_block::FallbackReason::AmbiguousSlot(slot) => slot,
-                    crate::minimal_block::FallbackReason::DigestMismatch => Slot::from(block_ref),
+                    crate::minimal_block::FallbackReason::MissingAncestor(slot) => Some(slot),
+                    crate::minimal_block::FallbackReason::AmbiguousSlot(_)
+                    | crate::minimal_block::FallbackReason::DigestMismatch => None,
                 };
                 Ok(InflateOutcome::Dropped {
                     block_ref,
@@ -302,12 +303,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     ) {
         let identity = match &block.minimal {
             Some(minimal) => {
-                // Enforce the envelope cap before any decoding: hint extraction must not
-                // become a parse-DoS bypass around the inflation path's same check.
-                let max_minimal_size = (context.protocol_config.max_transactions_in_block_bytes()
-                    as usize)
-                    .saturating_mul(2);
-                if minimal.len() > max_minimal_size {
+                // Same pre-decode cap as inflation: hint extraction must not become a
+                // parse-DoS bypass around it.
+                if minimal.len() > Self::max_minimal_size(context) {
                     return;
                 }
                 minimal_block::peek_identity(minimal, &context.committee, peer)
@@ -343,8 +341,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             context
                 .metrics
                 .node_metrics
-                .minimal_block_recovery_commands_dropped
-                .with_label_values(&["slot_heard"])
+                .minimal_block_recovery_hint_wakes_shed
                 .inc();
         }
     }
@@ -740,8 +737,7 @@ mod test {
     /// The drop-and-recover path end-to-end at the stream level: an un-inflatable minimal
     /// block is dropped without stalling or resetting the stream (the peer's next block is
     /// still inflated and delivered), and the dropped block itself arrives through the
-    /// off-stream recovery fetch. On-stream stalls were the Run 1 incident; dropping
-    /// without recovery wedges any receiver that falls a round behind.
+    /// off-stream recovery fetch.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn un_inflatable_block_dropped_and_stream_continues() {
         let (context, _keys) = Context::new_for_test(4);
@@ -789,7 +785,7 @@ mod test {
         );
         let to_wire = |block: &VerifiedBlock| ExtendedSerializedBlock {
             block: block.serialized().clone(),
-            minimal: Some(sender_inflater.serialize(block, 0).unwrap()),
+            minimal: Some(sender_inflater.serialize(block).unwrap()),
             excluded_ancestors: vec![],
         };
 
@@ -856,11 +852,23 @@ mod test {
         );
     }
 
-    /// A parked block wakes when its missing ancestor is announced on Core's
-    /// accepted-block broadcast (the path for ancestors that arrive via sync rather
-    /// than our streams) and heals by re-inflation — no network fetch at all.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn parked_block_wakes_on_accepted_broadcast_without_fetch() {
+    /// Shared parking scenario: one minimal block (round 3, from `peer`) streams in
+    /// while the receiver lacks its round-2 ancestors, so it parks at receipt. Each
+    /// test drives a different wake path to heal it.
+    struct ParkScenario {
+        context: Arc<Context>,
+        peer: AuthorityIndex,
+        round2_blocks: Vec<VerifiedBlock>,
+        round2_refs: Vec<BlockRef>,
+        block_a: VerifiedBlock,
+        network_client: Arc<FixedStreamClient>,
+        authority_service: Arc<Mutex<TestService>>,
+        receiver_dag: Arc<RwLock<DagState>>,
+        accepted_tx: broadcast::Sender<VerifiedBlock>,
+        subscriber: Subscriber<FixedStreamClient, Mutex<TestService>>,
+    }
+
+    fn park_scenario(accepted_capacity: usize) -> ParkScenario {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -885,18 +893,18 @@ mod test {
             sender_dag.write().accept_block(block.clone());
             round2_blocks.push(block);
         }
+        // Own ancestor first, as the verifier requires.
         round2_refs.sort_by_key(|r| (r.author != peer, r.author));
         let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
-
         let block_a = VerifiedBlock::new_for_test(
             crate::block::TestBlock::new(3, peer.value() as u32)
-                .set_ancestors_raw(round2_refs)
+                .set_ancestors_raw(round2_refs.clone())
                 .build(),
         );
         let network_client = Arc::new(FixedStreamClient {
             blocks: vec![ExtendedSerializedBlock {
                 block: block_a.serialized().clone(),
-                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
+                minimal: Some(sender_inflater.serialize(&block_a).unwrap()),
                 excluded_ancestors: vec![],
             }],
             fetchable: vec![],
@@ -908,7 +916,7 @@ mod test {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let (accepted_tx, accepted_rx) = broadcast::channel(64);
+        let (accepted_tx, accepted_rx) = broadcast::channel(accepted_capacity);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
@@ -917,30 +925,49 @@ mod test {
             accepted_rx,
         );
         subscriber.subscribe(peer);
+        ParkScenario {
+            context,
+            peer,
+            round2_blocks,
+            round2_refs,
+            block_a,
+            network_client,
+            authority_service,
+            receiver_dag,
+            accepted_tx,
+            subscriber,
+        }
+    }
 
-        // Let the stream deliver and park A (its ancestors are unknown), then land the
-        // ancestors and announce them on the accepted-block broadcast — the wake path
-        // used by blocks that arrive via sync rather than our streams.
+    /// A parked block wakes when its missing ancestor is announced on Core's
+    /// accepted-block broadcast (the path for ancestors that arrive via sync rather
+    /// than our streams) and heals by re-inflation — no network fetch at all.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_block_wakes_on_accepted_broadcast_without_fetch() {
+        let s = park_scenario(64);
+
+        // Let the stream deliver and park A, then land the ancestors and announce them
+        // on the accepted-block broadcast.
         tokio::time::sleep(Duration::from_millis(2)).await;
-        for block in round2_blocks {
-            receiver_dag.write().accept_block(block.clone());
-            accepted_tx.send(block).unwrap();
+        for block in s.round2_blocks {
+            s.receiver_dag.write().accept_block(block.clone());
+            s.accepted_tx.send(block).unwrap();
         }
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            if !authority_service.lock().handle_send_block.is_empty() {
+            if !s.authority_service.lock().handle_send_block.is_empty() {
                 break;
             }
         }
 
-        let received = authority_service.lock().handle_send_block.clone();
+        let received = s.authority_service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
-        assert_eq!(&received[0].1.block, block_a.serialized());
+        assert_eq!(&received[0].1.block, s.block_a.serialized());
         // No fetch: the block healed by local re-inflation on the first retry.
-        assert!(network_client.fetch_calls.lock().is_empty());
-        let peer_hostname = &context.committee.authority(peer).hostname;
+        assert!(s.network_client.fetch_calls.lock().is_empty());
+        let peer_hostname = &s.context.committee.authority(s.peer).hostname;
         assert_eq!(
-            context
+            s.context
                 .metrics
                 .node_metrics
                 .minimal_block_recovery
@@ -955,160 +982,53 @@ mod test {
     /// heal parked blocks (wakes skipped by the jump are the deadline's job).
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn parked_block_recovers_after_accepted_broadcast_lag() {
-        let (context, _keys) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let peer = context.committee.to_authority_index(2).unwrap();
-
-        let sender_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
-            .iter()
-            .map(|b| b.reference())
-            .collect();
-        let mut round2_blocks = Vec::new();
-        let mut round2_refs = Vec::new();
-        for authority in 0..4u32 {
-            let block = VerifiedBlock::new_for_test(
-                crate::block::TestBlock::new(2, authority)
-                    .set_ancestors_raw(genesis_refs.clone())
-                    .build(),
-            );
-            round2_refs.push(block.reference());
-            sender_dag.write().accept_block(block.clone());
-            round2_blocks.push(block);
-        }
-        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
-        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
-
-        let block_a = VerifiedBlock::new_for_test(
-            crate::block::TestBlock::new(3, peer.value() as u32)
-                .set_ancestors_raw(round2_refs)
-                .build(),
-        );
-        let network_client = Arc::new(FixedStreamClient {
-            blocks: vec![ExtendedSerializedBlock {
-                block: block_a.serialized().clone(),
-                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
-                excluded_ancestors: vec![],
-            }],
-            fetchable: vec![],
-            subscribe_calls: Mutex::new(0),
-            fetch_calls: Mutex::new(Vec::new()),
-        });
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
         // Tiny broadcast so a burst of unrelated accepted blocks overflows it.
-        let (accepted_tx, accepted_rx) = broadcast::channel(2);
-        let subscriber = Subscriber::new(
-            context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag.clone(),
-            accepted_rx,
-        );
-        subscriber.subscribe(peer);
+        let s = park_scenario(2);
 
         // Park A, then overflow the broadcast while the actor is idle.
         tokio::time::sleep(Duration::from_millis(2)).await;
         for round in 0..6u32 {
             let unrelated =
                 VerifiedBlock::new_for_test(crate::block::TestBlock::new(1, round % 2).build());
-            accepted_tx.send(unrelated).unwrap();
+            s.accepted_tx.send(unrelated).unwrap();
         }
         // Let the actor observe the lag and resubscribe at the head.
         tokio::time::sleep(Duration::from_millis(2)).await;
         assert!(
-            context
+            s.context
                 .metrics
                 .node_metrics
-                .minimal_block_recovery_rescans
+                .minimal_block_recovery_accepted_lag
                 .get()
                 >= 1
         );
 
         // Wakes sent after the jump must still work: land the real ancestors, paced so
         // the tiny test channel cannot lag again between sends.
-        for block in round2_blocks {
-            receiver_dag.write().accept_block(block.clone());
-            accepted_tx.send(block).unwrap();
+        for block in s.round2_blocks {
+            s.receiver_dag.write().accept_block(block.clone());
+            s.accepted_tx.send(block).unwrap();
             tokio::time::sleep(Duration::from_millis(2)).await;
         }
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            if !authority_service.lock().handle_send_block.is_empty() {
+            if !s.authority_service.lock().handle_send_block.is_empty() {
                 break;
             }
         }
 
-        let received = authority_service.lock().handle_send_block.clone();
+        let received = s.authority_service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
-        assert_eq!(&received[0].1.block, block_a.serialized());
-        assert!(network_client.fetch_calls.lock().is_empty());
+        assert_eq!(&received[0].1.block, s.block_a.serialized());
+        assert!(s.network_client.fetch_calls.lock().is_empty());
     }
 
     /// The receipt-time hint path end-to-end: a parked block heals the moment digests
     /// for its missing slots are HEARD (bytes-arrival), with an empty DAG and zero
-    /// fetches — the property that recreates baseline's verify-during-arrival overlap.
+    /// fetches.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn parked_block_wakes_on_receipt_hint_without_dag_or_fetch() {
-        let (context, _keys) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let peer = context.committee.to_authority_index(2).unwrap();
-
-        let sender_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
-            .iter()
-            .map(|b| b.reference())
-            .collect();
-        let mut round2_refs = Vec::new();
-        for authority in 0..4u32 {
-            let block = VerifiedBlock::new_for_test(
-                crate::block::TestBlock::new(2, authority)
-                    .set_ancestors_raw(genesis_refs.clone())
-                    .build(),
-            );
-            round2_refs.push(block.reference());
-            sender_dag.write().accept_block(block);
-        }
-        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
-        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
-        let block_a = VerifiedBlock::new_for_test(
-            crate::block::TestBlock::new(3, peer.value() as u32)
-                .set_ancestors_raw(round2_refs.clone())
-                .build(),
-        );
-        let network_client = Arc::new(FixedStreamClient {
-            blocks: vec![ExtendedSerializedBlock {
-                block: block_a.serialized().clone(),
-                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
-                excluded_ancestors: vec![],
-            }],
-            fetchable: vec![],
-            subscribe_calls: Mutex::new(0),
-            fetch_calls: Mutex::new(Vec::new()),
-        });
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
-        let subscriber = Subscriber::new(
-            context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag,
-            accepted_rx,
-        );
-        subscriber.subscribe(peer);
+        let s = park_scenario(64);
 
         // A parks (round-2 ancestors unknown). Publish receipt-time hints carrying the
         // TRUE digests — as if the ancestors' bytes just landed on their own streams —
@@ -1117,35 +1037,35 @@ mod test {
         // The at-park re-attempt is gated on candidate presence: with nothing local to
         // resolve A's missing slot, parking must not have spent a decode.
         assert_eq!(
-            context
+            s.context
                 .metrics
                 .node_metrics
                 .minimal_block_recovery_attempts
                 .get(),
             0
         );
-        for ancestor in &round2_refs {
+        for ancestor in &s.round2_refs {
             let slot = Slot::from(*ancestor);
             assert_eq!(
-                subscriber.hint_cache.insert(slot, ancestor.digest),
+                s.subscriber.hint_cache.insert(slot, ancestor.digest),
                 crate::minimal_block_recovery::HintInsert::Inserted
             );
-            subscriber.hint_commands.try_send(slot).unwrap();
+            s.subscriber.hint_commands.try_send(slot).unwrap();
         }
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(20)).await;
-            if !authority_service.lock().handle_send_block.is_empty() {
+            if !s.authority_service.lock().handle_send_block.is_empty() {
                 break;
             }
         }
 
-        let received = authority_service.lock().handle_send_block.clone();
+        let received = s.authority_service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
-        assert_eq!(&received[0].1.block, block_a.serialized());
-        assert!(network_client.fetch_calls.lock().is_empty());
-        let peer_hostname = &context.committee.authority(peer).hostname;
+        assert_eq!(&received[0].1.block, s.block_a.serialized());
+        assert!(s.network_client.fetch_calls.lock().is_empty());
+        let peer_hostname = &s.context.committee.authority(s.peer).hostname;
         assert_eq!(
-            context
+            s.context
                 .metrics
                 .node_metrics
                 .minimal_block_recovery
@@ -1159,83 +1079,31 @@ mod test {
     /// healing with zero fetches once the last gap closes.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn parked_block_rekeys_across_missing_slots() {
-        let (context, _keys) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let peer = context.committee.to_authority_index(2).unwrap();
-
-        let sender_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
-            .iter()
-            .map(|b| b.reference())
-            .collect();
-        let mut round2_refs = Vec::new();
-        for authority in 0..4u32 {
-            let block = VerifiedBlock::new_for_test(
-                crate::block::TestBlock::new(2, authority)
-                    .set_ancestors_raw(genesis_refs.clone())
-                    .build(),
-            );
-            round2_refs.push(block.reference());
-            sender_dag.write().accept_block(block);
-        }
-        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
-        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
-        let block_a = VerifiedBlock::new_for_test(
-            crate::block::TestBlock::new(3, peer.value() as u32)
-                .set_ancestors_raw(round2_refs.clone())
-                .build(),
-        );
-        let network_client = Arc::new(FixedStreamClient {
-            blocks: vec![ExtendedSerializedBlock {
-                block: block_a.serialized().clone(),
-                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
-                excluded_ancestors: vec![],
-            }],
-            fetchable: vec![],
-            subscribe_calls: Mutex::new(0),
-            fetch_calls: Mutex::new(Vec::new()),
-        });
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
-        let subscriber = Subscriber::new(
-            context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag,
-            accepted_rx,
-        );
-        subscriber.subscribe(peer);
+        let s = park_scenario(64);
         tokio::time::sleep(Duration::from_millis(2)).await;
 
         // Feed the missing digests ONE slot at a time; each hint wakes the entry,
         // which re-parks on the next gap until the final hint completes it.
-        for ancestor in round2_refs.iter().filter(|r| r.author != peer) {
-            assert!(authority_service.lock().handle_send_block.is_empty());
+        for ancestor in s.round2_refs.iter().filter(|r| r.author != s.peer) {
+            assert!(s.authority_service.lock().handle_send_block.is_empty());
             let slot = Slot::from(*ancestor);
             assert_eq!(
-                subscriber.hint_cache.insert(slot, ancestor.digest),
+                s.subscriber.hint_cache.insert(slot, ancestor.digest),
                 crate::minimal_block_recovery::HintInsert::Inserted
             );
-            subscriber.hint_commands.try_send(slot).unwrap();
+            s.subscriber.hint_commands.try_send(slot).unwrap();
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(20)).await;
-            if !authority_service.lock().handle_send_block.is_empty() {
+            if !s.authority_service.lock().handle_send_block.is_empty() {
                 break;
             }
         }
-        let received = authority_service.lock().handle_send_block.clone();
+        let received = s.authority_service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
-        assert_eq!(&received[0].1.block, block_a.serialized());
-        assert!(network_client.fetch_calls.lock().is_empty());
+        assert_eq!(&received[0].1.block, s.block_a.serialized());
+        assert!(s.network_client.fetch_calls.lock().is_empty());
     }
 
     /// Beyond the per-peer parking cap, new drops divert to the digest-verified fetch
@@ -1279,7 +1147,7 @@ mod test {
             );
             wire.push(ExtendedSerializedBlock {
                 block: block.serialized().clone(),
-                minimal: Some(sender_inflater.serialize(&block, 0).unwrap()),
+                minimal: Some(sender_inflater.serialize(&block).unwrap()),
                 excluded_ancestors: vec![],
             });
             fetchable.push(block.serialized().clone());
@@ -1394,6 +1262,31 @@ mod test {
             vec![own.reference().digest]
         );
         assert!(command_rx.try_recv().is_ok());
+
+        // Right author, wrong epoch: publishes nothing.
+        let foreign_epoch = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(6, peer.value() as u32)
+                .set_epoch(context.committee.epoch() + 1)
+                .build(),
+        );
+        let envelope = ExtendedSerializedBlock {
+            block: foreign_epoch.serialized().clone(),
+            minimal: None,
+            excluded_ancestors: vec![],
+        };
+        Subscriber::<FixedStreamClient, Mutex<TestService>>::publish_hint(
+            &context,
+            &hint_cache,
+            &commands,
+            peer,
+            &envelope,
+        );
+        assert!(
+            hint_cache
+                .candidates(Slot::from(foreign_epoch.reference()))
+                .is_empty()
+        );
+        assert!(command_rx.try_recv().is_err());
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1441,9 +1334,9 @@ mod test {
         }
     }
 
-    // Regression test: `last_received` must be recomputed from DagState before each connection
-    // attempt. Previously it was captured once at subscribe() time and reused for every reconnect,
-    // causing already-accepted blocks to be re-streamed and re-verified.
+    // `last_received` must be recomputed from DagState before each connection attempt;
+    // a value captured once at subscribe() time re-streams already-accepted blocks on
+    // every reconnect.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn subscriber_recomputes_resume_round_on_reconnect() {
         use crate::block::TestBlock;
