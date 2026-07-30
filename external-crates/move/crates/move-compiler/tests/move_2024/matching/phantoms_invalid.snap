@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
   ┌─ tests/move_2024/matching/phantoms_invalid.move:9:11
   │
 7 │     public enum Q<phantom X> {
@@ -14,7 +14,7 @@ error[E02013]: invalid phantom type parameter usage
 9 │         B(X),
   │           ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:15:16
    │
 13 │     public enum R<phantom X> {
@@ -23,7 +23,7 @@ error[E02013]: invalid phantom type parameter usage
 15 │         B { x: X },
    │                ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:20:11
    │
 19 │     public enum S<phantom X> {
@@ -31,7 +31,7 @@ error[E02013]: invalid phantom type parameter usage
 20 │         A(X),
    │           ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:21:16
    │
 19 │     public enum S<phantom X> {
@@ -40,7 +40,7 @@ error[E02013]: invalid phantom type parameter usage
 21 │         B { x: X },
    │                ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:27:13
    │
 25 │     public enum T<phantom X> {
@@ -49,7 +49,7 @@ error[E02013]: invalid phantom type parameter usage
 27 │         B(Y<X>),
    │             ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:33:18
    │
 31 │     public enum U<phantom X> {
@@ -58,7 +58,7 @@ error[E02013]: invalid phantom type parameter usage
 33 │         B { x: Y<X> },
    │                  ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:38:11
    │
 37 │     public enum V<phantom X> {
@@ -66,7 +66,7 @@ error[E02013]: invalid phantom type parameter usage
 38 │         A(X, Y<X>),
    │           ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:38:16
    │
 37 │     public enum V<phantom X> {
@@ -74,7 +74,7 @@ error[E02013]: invalid phantom type parameter usage
 38 │         A(X, Y<X>),
    │                ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:39:16
    │
 37 │     public enum V<phantom X> {
@@ -83,7 +83,7 @@ error[E02013]: invalid phantom type parameter usage
 39 │         B { x: X, y: Y<X> },
    │                ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:39:24
    │
 37 │     public enum V<phantom X> {
@@ -92,7 +92,7 @@ error[E02013]: invalid phantom type parameter usage
 39 │         B { x: X, y: Y<X> },
    │                        ^ Phantom type parameter cannot be used as an argument to a non-phantom parameter
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:44:11
    │
 43 │     public enum W<phantom X> {
@@ -100,7 +100,7 @@ error[E02013]: invalid phantom type parameter usage
 44 │         A(X, V<X>),
    │           ^ Phantom type parameter cannot be used as a field type
 
-error[E02013]: invalid phantom type parameter usage
+error[EC02013]: invalid phantom type parameter usage
    ┌─ tests/move_2024/matching/phantoms_invalid.move:45:26
    │
 43 │     public enum W<phantom X> {

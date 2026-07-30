@@ -7,9 +7,10 @@ use crate::{
     cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
+        codes::{DiagnosticInfo, DiagnosticOrigin, DiagnosticsID, Severity, custom},
         filter::FilterName,
     },
+    shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
 
@@ -87,7 +88,7 @@ macro_rules! lints {
             const fn diag_info(&self) -> DiagnosticInfo {
                 let (category, code, msg) = self.category_code_and_message();
                 custom(
-                    LINT_WARNING_PREFIX,
+                    DiagnosticOrigin::Lint,
                     Severity::Warning,
                     category,
                     code,
@@ -185,13 +186,10 @@ lints!(
     ),
 );
 
-pub const ALLOW_ATTR_CATEGORY: &str = "lint";
-pub const LINT_WARNING_PREFIX: &str = "Lint ";
-
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
         Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-        vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
+        vec![DiagnosticsID::all(DiagnosticOrigin::Lint)],
     )];
     filters.extend(
         STYLE_WARNING_FILTERS
@@ -200,14 +198,14 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
                 (
                     Symbol::from(*filter_name),
                     vec![DiagnosticsID::exact(
-                        Some(LINT_WARNING_PREFIX),
+                        DiagnosticOrigin::Lint,
                         *category,
                         *code,
                     )],
                 )
             }),
     );
-    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
+    (Some(DiagnosticAttribute::LINT_SYMBOL), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_unknown.move:2:10
   │
 2 │ #[expect(who_am_i)]

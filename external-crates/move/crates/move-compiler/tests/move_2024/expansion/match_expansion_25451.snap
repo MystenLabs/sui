@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
   ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:16
   │
 4 │         match (e) { E::W(0) => 1 }
   │                ^ Pattern 'E::W(false)' not covered
 
-warning[W04039]: unable to determine literal's type
+warning[WC04039]: unable to determine literal's type
   ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:26
   │
 4 │         match (e) { E::W(0) => 1 }
@@ -20,7 +20,7 @@ warning[W04039]: unable to determine literal's type
   = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:26
   │
 2 │     public enum E has drop { W(bool) }

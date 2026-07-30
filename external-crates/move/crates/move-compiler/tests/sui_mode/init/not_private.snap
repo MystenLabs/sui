@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
   ┌─ tests/sui_mode/init/not_private.move:5:16
   │
 5 │     public fun init(_ctx: &mut tx_context::TxContext) {
@@ -13,7 +13,7 @@ error[Sui E02003]: invalid 'init' function
   │     │           
   │     'init' functions must be internal to their module
 
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
    ┌─ tests/sui_mode/init/not_private.move:13:15
    │
 13 │     entry fun init(_ctx: &mut tx_context::TxContext) {
@@ -21,7 +21,7 @@ error[Sui E02003]: invalid 'init' function
    │     │          
    │     'init' functions cannot be 'entry' functions
 
-error[Sui E02003]: invalid 'init' function
+error[ESC02003]: invalid 'init' function
    ┌─ tests/sui_mode/init/not_private.move:21:24
    │
 21 │     public(friend) fun init(_ctx: &mut tx_context::TxContext) {

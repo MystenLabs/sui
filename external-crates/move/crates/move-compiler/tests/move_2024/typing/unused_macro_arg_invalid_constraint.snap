@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:21
    │
 16 │         needs_copy!(X<None>(), None(), X<None>(), None());
@@ -13,7 +13,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:32
    │
 16 │         needs_copy!(X<None>(), None(), X<None>(), None());
@@ -21,7 +21,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:40
    │
 16 │         needs_copy!(X<None>(), None(), X<None>(), None());
@@ -29,7 +29,7 @@ warning[W09005]: dead or unreachable code
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:51
    │
 16 │         needs_copy!(X<None>(), None(), X<None>(), None());

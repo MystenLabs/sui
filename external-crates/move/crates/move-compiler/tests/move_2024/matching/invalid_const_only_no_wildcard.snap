@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_const_only_no_wildcard.move:11:12
    │
 11 │     match (x) {

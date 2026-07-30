@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/macro_definition_with_usage.move:2:12
   │
 2 │     public macro fun do($f: || ()) { $f() }
@@ -13,7 +13,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/macro_definition_with_usage.move:2:38
   │
 2 │     public macro fun do($f: || ()) { $f() }
@@ -21,7 +21,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/macro_definition_with_usage.move:4:24
   │
 4 │     public fun t() { do!(|| q() ) }

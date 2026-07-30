@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:18:7
    │
 18 │     #[test(_a=@0x1)]
@@ -14,7 +14,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:22:7
    │
 22 │     #[test(_a=@0x1, _b=@0x2)]
@@ -23,7 +23,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:26:7
    │
 26 │     #[test(_a=@0x1, _b=@0x2), expected_failure]
@@ -32,7 +32,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:30:7
    │
 30 │     #[test(_a=@0x1, _b=@0x2)]
@@ -41,7 +41,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:35:7
    │
 35 │     #[test(_a=@0x1, _b=@0x2)]
@@ -50,7 +50,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:40:7
    │
 40 │     #[test(_a=@0x1, _b=@0x2), expected_failure(abort_code=5, location=0x1::M)]

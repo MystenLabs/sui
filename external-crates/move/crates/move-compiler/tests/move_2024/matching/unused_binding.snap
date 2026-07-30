@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/matching/unused_binding.move:10:26
    │
 10 │             Option::Some(x) => 0, // x unused
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_2024/matching/unused_binding.move:17:26
    │
 17 │             Option::Some(x) => default, // x unused

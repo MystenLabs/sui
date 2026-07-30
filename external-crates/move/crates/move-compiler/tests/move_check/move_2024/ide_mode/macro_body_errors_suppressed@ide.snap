@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_check/move_2024/ide_mode/macro_body_errors_suppressed.move:6:1
    │  
  6 │ ╭ module a::m {

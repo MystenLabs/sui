@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_2024/expansion/disjoint_multi_modes.move:3:12
   │
 2 │     #[mode(a)]

@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/unused_macro_arg_affects_inference.move:14:9
    │
 14 │         X().foo!(None())
    │         ^^^ Could not infer this type. Try adding an annotation
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
    ┌─ tests/move_2024/typing/unused_macro_arg_affects_inference.move:14:18
    │
 14 │         X().foo!(None())

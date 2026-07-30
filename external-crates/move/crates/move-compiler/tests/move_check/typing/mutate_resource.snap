@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/mutate_resource.move:5:10
   │
 2 │     struct R {}
@@ -16,7 +16,7 @@ error[E05001]: ability constraint not satisfied
 5 │         *r = R {};
   │          ^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/mutate_resource.move:9:10
   │
 8 │     fun t1<T>(r: &mut T, x: T) {
@@ -26,7 +26,7 @@ error[E05001]: ability constraint not satisfied
 9 │         *r = x;
   │          ^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/mutate_resource.move:13:10
    │
 12 │     fun t2<T: key>(r: &mut T, x: T) {

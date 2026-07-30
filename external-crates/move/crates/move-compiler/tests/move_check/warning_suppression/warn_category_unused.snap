@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09008]: unused function
+warning[WC09008]: unused function
   ┌─ tests/move_check/warning_suppression/warn_category_unused.move:5:9
   │
 4 │     #[warn(unused)]
@@ -13,7 +13,7 @@ warning[W09008]: unused function
 5 │     fun foo() {
   │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.
 
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/warn_category_unused.move:6:13
   │
 4 │     #[warn(unused)]

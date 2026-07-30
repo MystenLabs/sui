@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid declaration name
+error[EC02010]: invalid declaration name
    ┌─ tests/move_2024/matching/invalid_mut_2.move:10:13
    │
 10 │             mut Maybe::Nothing => (),
@@ -13,7 +13,7 @@ error[E02010]: invalid declaration name
    │             │    
    │             'mut' can only be used with variable bindings in patterns
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/matching/invalid_mut_2.move:11:13
    │
 11 │             mut Maybe<u64>::Just(_) => (),

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/old_spec/spec_parsing_emits_fail.move:2:5
   │
 2 │     spec with_emits {

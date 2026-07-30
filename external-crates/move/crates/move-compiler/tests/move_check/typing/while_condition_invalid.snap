@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/while_condition_invalid.move:3:16
   │
 3 │         while (()) ();
@@ -15,7 +15,7 @@ error[E04007]: incompatible types
   │                Expected: 'bool'
   │                Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/while_condition_invalid.move:4:17
   │
 4 │         while ((())) ();
@@ -25,7 +25,7 @@ error[E04007]: incompatible types
   │                 Expected: 'bool'
   │                 Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/while_condition_invalid.move:5:16
   │
 5 │         while ({}) ()
@@ -35,7 +35,7 @@ error[E04007]: incompatible types
   │                Expected: 'bool'
   │                Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/while_condition_invalid.move:9:16
   │
 8 │     fun t1<T: drop>(x: T) {
@@ -46,7 +46,7 @@ error[E04007]: incompatible types
   │                Invalid while condition
   │                Expected: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:10:16
    │
 10 │         while (0u64) ();
@@ -56,7 +56,7 @@ error[E04007]: incompatible types
    │                Expected: 'bool'
    │                Given: 'u64'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:11:16
    │
 11 │         while (@0x0) ()
@@ -66,7 +66,7 @@ error[E04007]: incompatible types
    │                Expected: 'bool'
    │                Given: 'address'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:15:16
    │
 15 │         while ((false, true)) ();
@@ -76,7 +76,7 @@ error[E04007]: incompatible types
    │                Expected: 'bool'
    │                Given: '(bool, bool)'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:16:16
    │
 16 │         while ((0u64, false)) ()

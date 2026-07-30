@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -19,7 +19,7 @@ error[E07004]: invalid return of locally borrowed state
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 's1' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -33,7 +33,7 @@ error[E07004]: invalid return of locally borrowed state
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 's2' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -46,7 +46,7 @@ error[E07004]: invalid return of locally borrowed state
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 's3' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -59,7 +59,7 @@ error[E07004]: invalid return of locally borrowed state
    │ │         --------- It is still being borrowed by this reference
    │ ╰──────────────────^ Invalid return. Local variable 's4' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -72,7 +72,7 @@ error[E07004]: invalid return of locally borrowed state
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 'v1' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -85,7 +85,7 @@ error[E07004]: invalid return of locally borrowed state
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 'v2' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,
@@ -98,7 +98,7 @@ error[E07004]: invalid return of locally borrowed state
 26 │ │         id(&s4.f))
    │ ╰──────────────────^ Invalid return. Local variable 'v3' is still being borrowed.
 
-error[E07004]: invalid return of locally borrowed state
+error[EC07004]: invalid return of locally borrowed state
    ┌─ tests/move_check/borrows/return_borrowed_local_invalid.move:19:9
    │  
 19 │ ╭         (&mut v1,

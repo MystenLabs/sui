@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:4:23
    │
  4 │     macro fun foo($f: u64): u64 {
@@ -17,7 +17,7 @@ error[E04007]: incompatible types
 15 │         let x = vector<u64>[];
    │                 ------------- Given: 'vector<u64>'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:4:23
    │
  4 │     macro fun foo($f: u64): u64 {
@@ -29,7 +29,7 @@ error[E04007]: incompatible types
 19 │         let x = vector<u64>[];
    │                 ------------- Given: 'vector<u64>'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:9:23
    │
  9 │     macro fun bar($f: u64): u64 {
@@ -41,7 +41,7 @@ error[E04007]: incompatible types
 15 │         let x = vector<u64>[];
    │                 ------------- Given: 'vector<u64>'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:9:23
    │
  9 │     macro fun bar($f: u64): u64 {

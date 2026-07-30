@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/expansion/spec_block_uses_shadows_defines.move:10:5
    │  
 10 │ ╭     spec module {

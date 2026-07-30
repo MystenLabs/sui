@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04038]: invalid string after type inference
+error[EC04038]: invalid string after type inference
   ┌─ tests/move_2024/typing/string_literal_unicode_invalid.move:2:39
   │
 2 │     fun test0(): std::ascii::String { "asdf\x80" }
@@ -13,7 +13,7 @@ error[E04038]: invalid string after type inference
   │
   = String literals must be linked against the standard library to be constructed
 
-error[E04038]: invalid string after type inference
+error[EC04038]: invalid string after type inference
   ┌─ tests/move_2024/typing/string_literal_unicode_invalid.move:3:39
   │
 3 │     fun test1(): std::ascii::String { "\x80asdf" }
@@ -21,7 +21,7 @@ error[E04038]: invalid string after type inference
   │
   = String literals must be linked against the standard library to be constructed
 
-error[E04038]: invalid string after type inference
+error[EC04038]: invalid string after type inference
   ┌─ tests/move_2024/typing/string_literal_unicode_invalid.move:4:39
   │
 4 │     fun test2(): std::ascii::String { "asdf\x80asdf" }

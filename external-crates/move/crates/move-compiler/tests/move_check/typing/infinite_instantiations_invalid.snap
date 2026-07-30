@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04019]: cyclic type instantiation
+error[EC04019]: cyclic type instantiation
   ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:7:9
   │
 7 │         t<Box<T>>()
@@ -14,7 +14,7 @@ error[E04019]: cyclic type instantiation
   │         │ The type parameter 't::T' was instantiated with the type '0x42::X::Box<T>', which contains the type parameter 't::T'. This recursive call causes the instantiation to recurse infinitely
   │         Invalid call to '0x42::X::t'
 
-error[E04019]: cyclic type instantiation
+error[EC04019]: cyclic type instantiation
    ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:14:9
    │
 11 │         y<Box<T>>()
@@ -27,7 +27,7 @@ error[E04019]: cyclic type instantiation
    │         Invalid call to '0x42::X::x'
    │         'y<0x42::X::Box<x::T>>' calls 'x<0x42::X::Box<0x42::X::Box<x::T>>>'
 
-error[E04019]: cyclic type instantiation
+error[EC04019]: cyclic type instantiation
    ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:24:9
    │
 18 │         b<A>()
@@ -43,7 +43,7 @@ error[E04019]: cyclic type instantiation
    │         Invalid call to '0x42::X::a'
    │         'c<a::A>' calls 'a<0x42::X::Box<a::A>>'
 
-error[E04019]: cyclic type instantiation
+error[EC04019]: cyclic type instantiation
    ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:38:9
    │
 38 │         z<Box<T>>()
@@ -52,7 +52,7 @@ error[E04019]: cyclic type instantiation
    │         │ The type parameter 'z::T' was instantiated with the type '0x42::Y::Box<T>', which contains the type parameter 'z::T'. This recursive call causes the instantiation to recurse infinitely
    │         Invalid call to '0x42::Y::z'
 
-error[E04019]: cyclic type instantiation
+error[EC04019]: cyclic type instantiation
    ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:48:9
    │
 42 │         b<A>()
@@ -71,7 +71,7 @@ error[E04019]: cyclic type instantiation
 51 │         a<D>()
    │         ------ 'd<d::D>' calls 'a<d::D>'
 
-error[E04019]: cyclic type instantiation
+error[EC04019]: cyclic type instantiation
    ┌─ tests/move_check/typing/infinite_instantiations_invalid.move:62:9
    │
 59 │         tr<TL>()

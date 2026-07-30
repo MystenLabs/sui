@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/mixed_address_module_empty_invalid_0.move:2:12
   │
 1 │ address a {

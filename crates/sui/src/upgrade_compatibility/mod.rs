@@ -31,7 +31,7 @@ use move_binary_format::{
 };
 use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
-use move_compiler::diagnostics::codes::DiagnosticInfo;
+use move_compiler::diagnostics::codes::{DiagnosticInfo, DiagnosticOrigin};
 use move_compiler::{
     diagnostics::{
         Diagnostic, Diagnostics,
@@ -612,7 +612,7 @@ fn table_index(compiled_module: &CompiledModule) -> IdentifierTableLookup {
     }
 }
 
-const COMPATIBILITY_PREFIX: &str = "Compatibility ";
+const COMPATIBILITY_ORIGIN: DiagnosticOrigin = DiagnosticOrigin::UpgradeCompatibility;
 /// Generates an enum Category along with individual enum for each individual category
 /// and impls into diagnostic info for each category.
 macro_rules! upgrade_codes {
@@ -643,7 +643,7 @@ macro_rules! upgrade_codes {
                         Self::ZeroPlaceholder =>
                             panic!("do not use placeholder error code"),
                         $(Self::$code => custom(
-                            COMPATIBILITY_PREFIX,
+                            COMPATIBILITY_ORIGIN,
                             Severity::NonblockingError,
                             Category::$cat as u8,
                             self as u8,
@@ -658,7 +658,7 @@ macro_rules! upgrade_codes {
 
 // Used to generate diagnostics primary labels for upgrade compatibility errors.
 // WARNING: you should add new codes to the END of each category list to avoid breaking the existing codes.
-// adding into the middle of a list will change the error code numbers "error[Compatibility EXXXXX]"
+// adding into the middle of a list will change the error code numbers "error[EUCXXXXX]"
 // similarly new categories should be added to the end of the outer list.
 upgrade_codes!(
     Declarations: [

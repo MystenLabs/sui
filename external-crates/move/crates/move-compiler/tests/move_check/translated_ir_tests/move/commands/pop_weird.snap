@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/translated_ir_tests/move/commands/pop_weird.move:13:9
    │
 13 │         (_, _) = ();
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
    │         Invalid value for assignment
    │         Expected: '(_, _)'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/translated_ir_tests/move/commands/pop_weird.move:14:9
    │
 14 │         (_) = ();

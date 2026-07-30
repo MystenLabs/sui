@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
    ┌─ tests/move_check/typing/assign_nested.move:10:13
    │
 10 │         let x: u64;
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/typing/assign_nested.move:14:19
    │
 14 │         (_, x, _, s.f) = four();

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:6:15
   │
 6 │ public fun in<T: drop>(self: &Box<T>): &T { &self.value }
@@ -18,7 +18,7 @@ error[E04034]: 'syntax' method types differ
   │
   = Index operations on use the same abilities for their type parameters
 
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:9:19
   │
 6 │ public fun in<T: drop>(self: &Box<T>): &T { &self.value }
@@ -31,7 +31,7 @@ error[E04034]: 'syntax' method types differ
   │
   = Index operations on use the same abilities for their type parameters
 
-error[E04034]: 'syntax' method types differ
+error[EC04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/index_call_incompatible_constraints.move:14:16
    │
 14 │ public fun in2<T: drop + copy + store>(self: &Box2<T>): &T { &self.value }

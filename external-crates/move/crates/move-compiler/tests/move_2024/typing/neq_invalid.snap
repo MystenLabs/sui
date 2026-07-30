@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/typing/neq_invalid.move:9:17
   │
 9 │         (0: u8) != (1: u128);
@@ -14,7 +14,7 @@ error[E04007]: incompatible types
   │             │   Incompatible arguments to '!='
   │             Found: 'u8'. It is not compatible with the other type.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/neq_invalid.move:10:14
    │
 10 │         0u64 != false;
@@ -23,7 +23,7 @@ error[E04007]: incompatible types
    │         │    Incompatible arguments to '!='
    │         Found: 'u64'. It is not compatible with the other type.
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:18:9
    │
  3 │     public struct R { f: u64 }
@@ -34,7 +34,7 @@ error[E05001]: ability constraint not satisfied
 18 │         r != r;
    │         ^ '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:18:14
    │
  3 │     public struct R { f: u64 }
@@ -45,7 +45,7 @@ error[E05001]: ability constraint not satisfied
 18 │         r != r;
    │              ^ '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:22:9
    │
  4 │     public struct G0<phantom T> {}
@@ -57,13 +57,13 @@ error[E05001]: ability constraint not satisfied
    │         '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x8675309::M::G0<_>' does not have the ability 'drop'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/neq_invalid.move:22:9
    │
 22 │         G0{} != G0{};
    │         ^^^^ Could not infer this type. Try adding an annotation
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:22:17
    │
  4 │     public struct G0<phantom T> {}
@@ -75,13 +75,13 @@ error[E05001]: ability constraint not satisfied
    │                 '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                 The type '0x8675309::M::G0<_>' does not have the ability 'drop'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/neq_invalid.move:22:17
    │
 22 │         G0{} != G0{};
    │                 ^^^^ Could not infer this type. Try adding an annotation
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:23:9
    │
  5 │     public struct G1<phantom T: key> {}
@@ -93,13 +93,13 @@ error[E05001]: ability constraint not satisfied
    │         '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │         The type '0x8675309::M::G1<_>' does not have the ability 'drop'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/neq_invalid.move:23:9
    │
 23 │         G1{} != G1{};
    │         ^^^^ Could not infer this type. Try adding an annotation
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:23:17
    │
  5 │     public struct G1<phantom T: key> {}
@@ -111,25 +111,25 @@ error[E05001]: ability constraint not satisfied
    │                 '!=' requires the 'drop' ability as the value is consumed. Try borrowing the values with '&' first.'
    │                 The type '0x8675309::M::G1<_>' does not have the ability 'drop'
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/neq_invalid.move:23:17
    │
 23 │         G1{} != G1{};
    │                 ^^^^ Could not infer this type. Try adding an annotation
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/neq_invalid.move:24:9
    │
 24 │         G2{} != G2{};
    │         ^^^^ Could not infer this type. Try adding an annotation
 
-error[E04010]: cannot infer type
+error[EC04010]: cannot infer type
    ┌─ tests/move_2024/typing/neq_invalid.move:24:17
    │
 24 │         G2{} != G2{};
    │                 ^^^^ Could not infer this type. Try adding an annotation
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_2024/typing/neq_invalid.move:28:9
    │
 28 │         () != ();
@@ -138,7 +138,7 @@ error[E04005]: expected a single type
    │         │     Expected a single type, but found expression list type: '()'
    │         Incompatible arguments to '!='
 
-error[E04005]: expected a single type
+error[EC04005]: expected a single type
    ┌─ tests/move_2024/typing/neq_invalid.move:29:9
    │
 29 │         (0, 1) != (0u64, 1u64);
@@ -147,7 +147,7 @@ error[E04005]: expected a single type
    │         │         Expected a single type, but found expression list type: '(u64, u64)'
    │         Incompatible arguments to '!='
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/neq_invalid.move:30:28
    │
 30 │         (1u64, 2u64, 3u64) != (0u64, 1u64);
@@ -156,7 +156,7 @@ error[E04007]: incompatible types
    │         │                  Incompatible arguments to '!='
    │         Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/neq_invalid.move:31:22
    │
 31 │         (0u64, 1u64) != (1u64, 2u64, 3u64);

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_check/parser/struct_public.move:3:5
   │
 3 │     public struct Foo {}
@@ -13,7 +13,7 @@ error[E01003]: invalid modifier
   │
   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/struct_public.move:3:5
   │
 3 │     public struct Foo {}
@@ -21,7 +21,7 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_check/parser/struct_public.move:4:5
   │
 4 │     public(friend) struct Foo {}
@@ -29,7 +29,7 @@ error[E01003]: invalid modifier
   │
   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/struct_public.move:4:27
   │
 3 │     public struct Foo {}
@@ -37,7 +37,7 @@ error[E02001]: duplicate declaration, item, or annotation
 4 │     public(friend) struct Foo {}
   │                           ^^^ Duplicate module member 'Foo'. Top level names in a namespace must be unique
 
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_check/parser/struct_public.move:5:5
   │
 5 │     public(package) struct Foo {}
@@ -45,7 +45,7 @@ error[E01003]: invalid modifier
   │
   = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/struct_public.move:5:28
   │
 4 │     public(friend) struct Foo {}

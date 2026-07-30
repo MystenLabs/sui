@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:2:22
   │
 2 │     fun specs_in_fun(x: u64, n: u64) {
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:4:9
   │  
 4 │ ╭         spec {
@@ -21,13 +21,13 @@ warning[W00001]: DEPRECATED. will be removed
 6 │ │         };
   │ ╰─────────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:9:17
   │
 9 │         while ({spec {assert x < 42;}; n < 64}) {
   │                 ^^^^^^^^^^^^^^^^^^^^^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:10:13
    │  
 10 │ ╭             spec {
@@ -36,7 +36,7 @@ warning[W00001]: DEPRECATED. will be removed
 13 │ │             };
    │ ╰─────────────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:18:9
    │  
 18 │ ╭         spec {
@@ -44,7 +44,7 @@ warning[W00001]: DEPRECATED. will be removed
 20 │ │         };
    │ ╰─────────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:24:13
    │  
 24 │ ╭             spec {
@@ -53,13 +53,13 @@ warning[W00001]: DEPRECATED. will be removed
 27 │ │             };
    │ ╰─────────────^ Specification blocks are deprecated and are no longer used
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:9
    │
 32 │         spec {} + 1u64;
    │         ^^^^^^^ Specification blocks are deprecated and are no longer used
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:9
    │
 32 │         spec {} + 1u64;
@@ -68,7 +68,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '+'
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:17
    │
 32 │         spec {} + 1u64;
@@ -77,7 +77,7 @@ error[E04007]: incompatible types
    │         │       Incompatible arguments to '+'
    │         Found: '()'. It is not compatible with the other type.
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:19
    │
 32 │         spec {} + 1u64;
@@ -85,13 +85,13 @@ error[E04003]: built-in operation not supported
    │         │          
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:9
    │
 33 │         spec {} && spec {};
    │         ^^^^^^^ Specification blocks are deprecated and are no longer used
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:9
    │
 33 │         spec {} && spec {};
@@ -100,13 +100,13 @@ error[E04007]: incompatible types
    │         Invalid argument to '&&'
    │         Given: '()'
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:20
    │
 33 │         spec {} && spec {};
    │                    ^^^^^^^ Specification blocks are deprecated and are no longer used
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:20
    │
 33 │         spec {} && spec {};
@@ -116,7 +116,7 @@ error[E04007]: incompatible types
    │                 │  Given: '()'
    │                 Expected: 'bool'
 
-error[E04004]: expected a single non-reference type
+error[EC04004]: expected a single non-reference type
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:34:9
    │
 34 │         &mut spec {};
@@ -125,7 +125,7 @@ error[E04004]: expected a single non-reference type
    │         │    Expected a single non-reference type, but found: '()'
    │         Invalid borrow
 
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:34:14
    │
 34 │         &mut spec {};

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E13002]: feature is deprecated in specified edition
+error[EC13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_0.move:1:1
   │
 1 │ address a {
@@ -13,7 +13,7 @@ error[E13002]: feature is deprecated in specified edition
 2 │     module a::m;
   │               - Replace with 'a::m'
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_0.move:2:12
   │
 1 │ address a {
@@ -21,7 +21,7 @@ error[E02001]: duplicate declaration, item, or annotation
 2 │     module a::m;
   │            ^ Redundant address specification
 
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
   ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_0.move:2:15
   │
 2 │     module a::m;

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
   ┌─ tests/move_check/typing/binary_shl_invalid.move:8:9
   │
 8 │         false << true;
@@ -14,7 +14,7 @@ error[E04003]: built-in operation not supported
   │         Invalid argument to '<<'
   │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/binary_shl_invalid.move:8:18
   │
 8 │         false << true;
@@ -24,7 +24,7 @@ error[E04007]: incompatible types
   │                  Expected: 'u8'
   │                  Given: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_check/typing/binary_shl_invalid.move:9:17
   │
 9 │         1u64 << false;
@@ -34,7 +34,7 @@ error[E04007]: incompatible types
   │                 Expected: 'u8'
   │                 Given: 'bool'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:10:9
    │
 10 │         false << 1;
@@ -43,7 +43,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '<<'
    │         Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:11:9
    │
 11 │         @0x0 << @0x1;
@@ -52,7 +52,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '<<'
    │         Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:11:17
    │
 11 │         @0x0 << @0x1;
@@ -62,7 +62,7 @@ error[E04007]: incompatible types
    │                 Expected: 'u8'
    │                 Given: 'address'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:12:20
    │
 12 │         (0: u8) << (1: u128);
@@ -72,7 +72,7 @@ error[E04007]: incompatible types
    │                    Invalid argument to '<<'
    │                    Expected: 'u8'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:13:9
    │
  7 │     fun t0(r: R, s: S) {
@@ -81,7 +81,7 @@ error[E04003]: built-in operation not supported
 13 │         r << r;
    │         ^ Invalid argument to '<<'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/binary_shl_invalid.move:13:9
    │
  3 │     struct R {
@@ -93,7 +93,7 @@ error[E05001]: ability constraint not satisfied
 13 │         r << r;
    │         ^^^^^^ Cannot ignore values without the 'drop' ability. The value must be used
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:13:14
    │
  7 │     fun t0(r: R, s: S) {
@@ -105,7 +105,7 @@ error[E04007]: incompatible types
    │              Invalid argument to '<<'
    │              Expected: 'u8'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:14:9
    │
  7 │     fun t0(r: R, s: S) {
@@ -114,7 +114,7 @@ error[E04003]: built-in operation not supported
 14 │         s << s;
    │         ^ Invalid argument to '<<'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:14:14
    │
  7 │     fun t0(r: R, s: S) {
@@ -126,7 +126,7 @@ error[E04007]: incompatible types
    │              Invalid argument to '<<'
    │              Expected: 'u8'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:15:17
    │
 15 │         1u64 << false << @0x0 << 0;
@@ -136,7 +136,7 @@ error[E04007]: incompatible types
    │                 Expected: 'u8'
    │                 Given: 'bool'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:15:26
    │
 15 │         1u64 << false << @0x0 << 0;
@@ -146,7 +146,7 @@ error[E04007]: incompatible types
    │                          Expected: 'u8'
    │                          Given: 'address'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:16:9
    │
 16 │         () << ();
@@ -155,7 +155,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '<<'
    │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:16:15
    │
 16 │         () << ();
@@ -165,7 +165,7 @@ error[E04007]: incompatible types
    │               Expected: 'u8'
    │               Given: '()'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:17:17
    │
 17 │         1u64 << ();
@@ -175,7 +175,7 @@ error[E04007]: incompatible types
    │                 Expected: 'u8'
    │                 Given: '()'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:18:9
    │
 18 │         (0u64, 1u64) << (0u64, 1u64, 2u64);
@@ -184,7 +184,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '<<'
    │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:18:25
    │
 18 │         (0u64, 1u64) << (0u64, 1u64, 2u64);
@@ -194,7 +194,7 @@ error[E04007]: incompatible types
    │                         Expected: 'u8'
    │                         Given: '(u64, u64, u64)'
 
-error[E04003]: built-in operation not supported
+error[EC04003]: built-in operation not supported
    ┌─ tests/move_check/typing/binary_shl_invalid.move:19:9
    │
 19 │         (1u64, 2u64) << (0u64, 1u64);
@@ -203,7 +203,7 @@ error[E04003]: built-in operation not supported
    │         Invalid argument to '<<'
    │         Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_check/typing/binary_shl_invalid.move:19:25
    │
 19 │         (1u64, 2u64) << (0u64, 1u64);

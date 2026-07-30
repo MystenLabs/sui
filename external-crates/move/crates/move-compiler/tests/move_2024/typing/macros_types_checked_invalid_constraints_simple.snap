@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:7:26
    │
  2 │     public struct None()
@@ -19,7 +19,7 @@ error[E05001]: ability constraint not satisfied
 14 │         bar!<None>(NeedsCopy {});
    │              ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:9:26
    │
  2 │     public struct None()
@@ -33,7 +33,7 @@ error[E05001]: ability constraint not satisfied
 18 │         baz!<None>()
    │              ---- The type 'a::m::None' does not have the ability 'copy'
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:13:9
    │
  2 │     public struct None()
@@ -48,7 +48,7 @@ error[E05001]: ability constraint not satisfied
    │         │    The type 'a::m::None' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:18:9
    │
  9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }

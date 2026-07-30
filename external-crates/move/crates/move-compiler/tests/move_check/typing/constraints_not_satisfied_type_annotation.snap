@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_check/typing/constraints_not_satisfied_type_annotation.move:7:17
   │
 7 │         ignore((abort 0: CupC<R>));
@@ -13,7 +13,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/constraints_not_satisfied_type_annotation.move:7:26
   │
 2 │     struct CupC<T: copy> { f: T }

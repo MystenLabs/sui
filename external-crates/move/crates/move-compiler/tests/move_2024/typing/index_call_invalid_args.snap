@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
    ┌─ tests/move_2024/typing/index_call_invalid_args.move:13:5
    │
 10 │ public fun f(_self: &X, z: &Z): &Z { z }

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09014]: unused mutable reference '&mut' parameter
+warning[WC09014]: unused mutable reference '&mut' parameter
   ┌─ tests/move_check/borrows/unused_mut_ref_branches.move:3:51
   │
 3 │     public(friend) fun both_unused(cond: bool, x: &mut u64) {
@@ -15,7 +15,7 @@ warning[W09014]: unused mutable reference '&mut' parameter
   │
   = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09013]: unused mutable reference '&mut'
+warning[WC09013]: unused mutable reference '&mut'
   ┌─ tests/move_check/borrows/unused_mut_ref_branches.move:5:31
   │
 5 │         if (cond) copy x else &mut i;
@@ -23,7 +23,7 @@ warning[W09013]: unused mutable reference '&mut'
   │
   = This warning can be suppressed with '#[allow(unused_mut_ref)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09013]: unused mutable reference '&mut'
+warning[WC09013]: unused mutable reference '&mut'
    ┌─ tests/move_check/borrows/unused_mut_ref_branches.move:11:31
    │
 11 │         if (cond) copy x else &mut i;

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: true
 ---
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:30:21
    │
 30 │     let _value: T = *&((&s).value); 
@@ -13,7 +13,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:37:17
    │
 37 │     let _ref = &*(&*(&resource)); // Triple nested borrow-dereference, might be missed
@@ -21,7 +21,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:37:20
    │
 37 │     let _ref = &*(&*(&resource)); // Triple nested borrow-dereference, might be missed
@@ -29,7 +29,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:45:21
    │
 45 │     let _value: T = *&(copy s.value); // Complex field expression
@@ -37,7 +37,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:45:24
    │
 45 │     let _value: T = *&(copy s.value); // Complex field expression
@@ -45,7 +45,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:50:21
    │
 50 │     let _value: T = copy s.value; // Complex field expression -- bad copy
@@ -53,7 +53,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:54:21
    │
 54 │     let _value: T = copy s.value; // Complex field expression -- bad copy
@@ -61,7 +61,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:59:17
    │
 59 │     let _ref = &*(&resource.value); // Complex nested borrow on field
@@ -69,7 +69,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:66:17
    │
 66 │     let _ref = &*&resource.value; // Direct, redundant borrow-dereference on field
@@ -77,7 +77,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_fields.move:71:17
    │
 71 │     let _ref = &*&(&resource).value; // Nested redundant borrow-dereference on field

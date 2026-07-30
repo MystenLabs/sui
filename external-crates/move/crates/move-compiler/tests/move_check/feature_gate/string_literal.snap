@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/feature_gate/string_literal.move:3:9
   │
 3 │         "hello world"

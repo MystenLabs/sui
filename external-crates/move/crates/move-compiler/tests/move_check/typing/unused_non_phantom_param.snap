@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/typing/unused_non_phantom_param.move:2:18
   │
 2 │     struct S<T1, T2> {

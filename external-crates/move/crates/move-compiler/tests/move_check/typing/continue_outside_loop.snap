@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04014]: invalid loop control
+error[EC04014]: invalid loop control
   ┌─ tests/move_check/typing/continue_outside_loop.move:6:9
   │
 6 │         continue

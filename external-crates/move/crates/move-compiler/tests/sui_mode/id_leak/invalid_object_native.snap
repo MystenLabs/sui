@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04015]: invalid use of native item
+error[EC04015]: invalid use of native item
   ┌─ tests/sui_mode/id_leak/invalid_object_native.move:5:9
   │
 2 │     native struct S has key;

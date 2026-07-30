@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04015]: invalid use of native item
+error[EC04015]: invalid use of native item
    ┌─ tests/move_2024/matching/invalid_nested_native_struct.move:15:30
    │
  7 │     public native struct N has drop;

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/matching/invalid_guard_all_match_variants.move:14:12
    │
 14 │     match (e) {
