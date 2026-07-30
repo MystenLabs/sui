@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 4-32:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::transfer_mut_extension'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::transfer_mut_extension,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}
+
+task 1, lines 34-62:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::transfer_imm_parent'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::transfer_imm_parent,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}
+
+task 2, lines 64-94:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::release_returned_extension_then_write'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::release_returned_extension_then_write,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}

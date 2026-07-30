@@ -1,0 +1,64 @@
+// Field paths cannot grow without bound, but calls can: a result is a dot-star extension of its
+// arguments, so `r = f(r)` in a loop makes a reference a dot-star extension of itself.
+
+//# run
+mvir 0x2::self_extension_converges {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+entry fun t() {
+    let s: Self::S;
+    let r: &mut Self::S;
+    let n: u64;
+label b0:
+    s = S { f: 0 };
+    r = &mut s;
+    n = 3;
+label loop_header:
+    jump_if (copy(n) == 0) loop_exit;
+    n = move(n) - 1;
+    r = Self::id(move(r));
+    jump loop_header;
+label loop_exit:
+    *copy(r) = S { f: 1 };
+    assert(*(&move(r).S::f) == 1, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::self_extension_release_in_loop {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+// The extension is released before the back edge, so it is dead at the header.
+fun t(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+    let f: &mut u64;
+label b0:
+    r = move(s);
+label loop_header:
+    *copy(r) = S { f: 1 };
+    jump_if (copy(n) == 0) loop_exit;
+    n = move(n) - 1;
+    f = &mut copy(r).S::f;
+    *move(f) = 2;
+    r = Self::id(move(r));
+    jump loop_header;
+label loop_exit:
+    _ = move(r);
+    return;
+}
+
+}

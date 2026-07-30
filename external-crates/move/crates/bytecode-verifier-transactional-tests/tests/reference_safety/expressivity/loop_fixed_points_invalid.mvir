@@ -1,0 +1,33 @@
+// Loop fixed points rejected by regex reference safety.
+
+//# publish
+mvir 0x4::epsilon_or_dot_star_loop_invalid {
+
+public struct S has copy, drop { f: u64 }
+
+fun sub(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+fun t(s: &mut Self::S, cond: bool) {
+    let x: &mut Self::S;
+label b0:
+    x = copy(s);
+label loop_header:
+    jump_if (copy(cond)) loop_exit;
+label loop_body:
+    // The back edge contributes a dot-star path while the entry edge contributes epsilon.
+    _ = move(x);
+    x = Self::sub(copy(s));
+    cond = true;
+    jump loop_header;
+label loop_exit:
+    // x has no extension of its own and remains writable.
+    *copy(x) = S { f: 0 };
+    // x may be a non-epsilon extension of s, so this write is unsafe.
+    *copy(s) = S { f: 1 };
+    return;
+}
+
+}

@@ -1,0 +1,103 @@
+// Regex reference safety permits constructing an immutable parent with a mutable extension, then
+// rejects only the call or write that could invalidate the relationship.
+
+//# publish
+mvir 0x4::transfer_related_refs {
+
+public struct Inner has copy, drop { value: u64 }
+public struct Outer has copy, drop { field: Self::Inner }
+
+fun consume(inner: &mut Self::Inner, outer: &Self::Outer) {
+label b0:
+    _ = move(inner);
+    _ = move(outer);
+    return;
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+label b0:
+    a = Outer { field: Inner { value: 0 } };
+    x = &mut (&mut a).Outer::field;
+    // The old checker rejects here, before reaching the unsafe transfer.
+    y = &a;
+    // The regex checker rejects transferring the related parent and extension together.
+    Self::consume(copy(x), copy(y));
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::returned_extension_blocks_write {
+
+public struct Inner has copy, drop { value: u64 }
+public struct Outer has copy, drop { field: Self::Inner }
+
+fun borrow_value(inner: &mut Self::Inner): &mut u64 {
+label b0:
+    return &mut move(inner).Inner::value;
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+    let result: &mut u64;
+label b0:
+    a = Outer { field: Inner { value: 0 } };
+    x = &mut (&mut a).Outer::field;
+    // The old checker rejects here, before the call and write are analyzed.
+    y = &a;
+    // The returned reference is a possible non-epsilon extension of x.
+    result = Self::borrow_value(copy(x));
+    // The returned extension itself is writable and remains live through this copied alias.
+    *copy(result) = 1;
+    // Replacing x could now dangle result, so the regex checker must reject this write.
+    *copy(x) = Inner { value: 1 };
+    _ = move(result);
+    _ = move(y);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::track_imm_after_returned_mut {
+
+public struct Inner has copy, drop { value: u64 }
+public struct Outer has copy, drop { field: Self::Inner }
+
+fun inner_borrow_mut(inner: &mut Self::Inner): &mut u64 {
+label b0:
+    return &mut move(inner).Inner::value;
+}
+
+fun outer_borrow(outer: &Self::Outer): &u64 {
+label b0:
+    return &(& move(outer).Outer::field).Inner::value;
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+    let mut_result: &mut u64;
+    let imm_result: &u64;
+label b0:
+    a = Outer { field: Inner { value: 0 } };
+    x = &mut (&mut a).Outer::field;
+    // The old checker rejects here, before the call and write are analyzed.
+    y = &a;
+    // The returned reference is a possible non-epsilon extension of x.
+    mut_result = Self::inner_borrow_mut(copy(x));
+    imm_result = Self::outer_borrow(move(y));
+    // We conservatively assume writing to mut_result could dangle imm_result
+    *move(mut_result) = 1;
+    _ = move(imm_result);
+    return;
+}
+
+}

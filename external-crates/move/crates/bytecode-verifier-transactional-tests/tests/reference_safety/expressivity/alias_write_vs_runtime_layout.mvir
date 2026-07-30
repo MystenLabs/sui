@@ -1,0 +1,97 @@
+// Writes through an epsilon alias can change the layout the other aliases observe: an enum's active
+// variant, or a vector's length. Safe only because the runtime rechecks layout on every access.
+
+//# run
+mvir 0x2::aliased_unpack_of_two_variants {
+
+public enum X has drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+// One::a and Two::b get distinct labels, so a and b look disjoint despite naming the same storage.
+// Only the runtime tag check keeps that from being a type confusion.
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let a: &mut u64;
+    let b: &mut address;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    &mut X::One { a: a } = copy(r);
+    &mut X::Two { b: b } = copy(r);
+    *move(a) = 1;
+    *move(b) = 0x0;
+    _ = move(r);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::alias_write_changes_variant {
+
+public enum X has drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::X;
+    let r: &mut Self::X;
+    let alias: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    e = X::One { a: 0 };
+    r = &mut e;
+    alias = copy(r);
+    *copy(r) = X::Two { b: 0x0 };
+    // alias observes the new variant, so unpacking the old one aborts
+    &mut X::One { a: a } = move(alias);
+    *move(a) = 1;
+    _ = move(r);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::alias_write_shrinks_vector {
+
+entry fun t() {
+    let v: vector<u64>;
+    let r: &mut vector<u64>;
+    let alias: &mut vector<u64>;
+label b0:
+    v = vector<u64; 3>(1, 2, 3);
+    r = &mut v;
+    alias = copy(r);
+    *copy(r) = vector<u64; 0>();
+    // alias observes the shorter vector, so the borrow is out of bounds
+    _ = *vec_mut_borrow<u64>(move(alias), 0);
+    _ = move(r);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::alias_write_grows_vector {
+
+entry fun t() {
+    let v: vector<u64>;
+    let r: &mut vector<u64>;
+    let alias: &mut vector<u64>;
+label b0:
+    v = vector<u64; 0>();
+    r = &mut v;
+    alias = copy(r);
+    *copy(r) = vector<u64; 2>(7, 8);
+    // alias observes the longer vector, no runtime error
+    assert(*vec_imm_borrow<u64>(freeze(move(alias)), 1) == 8, 42);
+    _ = move(r);
+    return;
+}
+
+}

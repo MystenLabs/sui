@@ -1,0 +1,44 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-24:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::nested_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::nested_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 9)],
+}
+
+task 1, lines 26-50:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::field_after_call'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x3::field_after_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}
+
+task 2, lines 52-73:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::freeze_call_result'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x4::freeze_call_result,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 9)],
+}
+
+task 3, lines 75-98:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::release_one_call_result_alias'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x5::release_one_call_result_alias,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 10)],
+}

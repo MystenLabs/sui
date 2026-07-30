@@ -1,0 +1,89 @@
+// a mutable reference and its alias cannot be passed to the same call
+
+//# publish
+mvir 0x2::copy_alias {
+
+fun two(a: &mut u64, b: &mut u64) {
+label b0:
+    abort 0;
+}
+
+fun t() {
+    let a: u64;
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    y = copy(x);
+    Self::two(move(x), move(y));
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::direct_copy {
+
+fun two(a: &mut u64, b: &mut u64) {
+label b0:
+    abort 0;
+}
+
+fun t() {
+    let a: u64;
+    let x: &mut u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    Self::two(copy(x), move(x));
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::borrow_twice {
+
+fun two(a: &mut u64, b: &mut u64) {
+label b0:
+    abort 0;
+}
+
+fun t() {
+    let a: u64;
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    y = &mut a;
+    Self::two(move(x), move(y));
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::disjoint_fields_valid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun two(a: &mut u64, b: &mut u64) {
+label b0:
+    abort 0;
+}
+
+fun t() {
+    let s: Self::S;
+    let f: &mut u64;
+    let g: &mut u64;
+label b0:
+    s = S { f: 0, g: 0 };
+    f = &mut (&mut s).S::f;
+    g = &mut (&mut s).S::g;
+    Self::two(move(f), move(g));
+    return;
+}
+
+}
