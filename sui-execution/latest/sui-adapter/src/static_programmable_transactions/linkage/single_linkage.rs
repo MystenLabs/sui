@@ -55,6 +55,24 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
         analyze_command::<E>(command, &mut base_linkage, package_store, protocol_config)
             .map_err(|e| e.with_command_index(i))?;
     }
+
+    if protocol_config.enable_order_independent_upgrade_init_linkage() {
+        for (i, command) in txn.commands.iter().enumerate() {
+            let Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) = command
+            else {
+                continue;
+            };
+            analyze_upgrade_command::<E>(
+                payload,
+                current_package_id,
+                resolved_linkage,
+                &mut base_linkage,
+                package_store,
+                protocol_config,
+            )
+            .map_err(|e| e.with_command_index(i))?;
+        }
+    }
     let resolved_linkage =
         ExecutableLinkage::new(ResolvedLinkage::from_resolution_table(base_linkage));
 
@@ -107,6 +125,8 @@ fn analyze_command<E: ExecutionErrorTrait>(
                 }
             }
         }
+        Command::Upgrade(_, _, _, _, _)
+            if protocol_config.enable_order_independent_upgrade_init_linkage() => {}
         Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) => {
             analyze_upgrade_command::<E>(
                 payload,

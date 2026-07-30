@@ -372,6 +372,7 @@ const MAINNET_USDB: &str =
 //              Add the `object::record_new_uid_from_hash` native and its cost, tracking the
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
+//              Make upgrade-init linkage checks independent of PTB command order.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -971,6 +972,10 @@ struct FeatureFlags {
     // If true, run `init` for newly introduced modules during package upgrade.
     #[serde(skip_serializing_if = "is_false")]
     enable_init_on_upgrade: bool,
+
+    // If true, analyze upgrade-init linkage after all other PTB linkage constraints.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_order_independent_upgrade_init_linkage: bool,
 
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
@@ -4555,6 +4560,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.create_forwarding_address_registry = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
+                    cfg.feature_flags
+                        .enable_order_independent_upgrade_init_linkage = true;
                 }
                 // Use this template when making changes:
                 //
