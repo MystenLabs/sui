@@ -122,23 +122,6 @@ impl AlphaLedgerGrpcReader {
         drain_list_stream("ListCheckpoints", stream).await
     }
 
-    /// Point-read an epoch. Returns `None` when the epoch does not exist.
-    pub async fn get_epoch(
-        &self,
-        request: proto::GetEpochRequest,
-    ) -> anyhow::Result<Option<proto::Epoch>> {
-        let mut client = self.client.clone();
-        let response = match client.get_epoch(self.request(request)).await {
-            Ok(response) => response.into_inner(),
-            Err(status) if status.code() == tonic::Code::NotFound => return Ok(None),
-            Err(status) => {
-                return Err(status).context("GetEpoch failed");
-            }
-        };
-
-        Ok(response.epoch.filter(|e| *e != proto::Epoch::default()))
-    }
-
     /// Create a gRPC request, optionally with the grpc-timeout header if configured.
     fn request<T>(&self, input: T) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);

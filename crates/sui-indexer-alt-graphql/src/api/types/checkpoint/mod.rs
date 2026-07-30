@@ -12,10 +12,13 @@ use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
 use async_graphql::connection::PageInfo;
+use async_graphql::dataloader::DataLoader;
 use prost_types::FieldMask;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::epochs::EpochCheckpointsKey;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
@@ -438,9 +441,14 @@ impl Checkpoint {
         // resolve the epoch to its checkpoint range with a point-read and tighten the request's
         // bounds instead.
         let cp_bounds = if let Some(epoch) = filter.at_epoch {
-            match epoch_cps(reader, epoch.into()).await? {
-                Some(epoch_bounds) => {
-                    intersect_epoch_bounds(epoch_bounds.0, epoch_bounds.1, &cp_bounds)
+            let loader: &Arc<DataLoader<LedgerGrpcReader>> = ctx.data()?;
+            match loader
+                .load_one(EpochCheckpointsKey(epoch.into()))
+                .await
+                .context("Failed to get epoch")?
+            {
+                Some(e) => {
+                    intersect_epoch_bounds(e.first_checkpoint, e.last_checkpoint, &cp_bounds)
                         .context("Epoch's checkpoint range is disjoint from the requested bounds")?
                 }
                 None => return Ok(CheckpointConnection::empty()),
@@ -630,34 +638,6 @@ impl From<Connection<String, Checkpoint>> for CheckpointConnection {
             },
         }
     }
-}
-
-/// Helper to extract the first and last checkpoint of an epoch.
-async fn epoch_cps(
-    reader: &AlphaLedgerGrpcReader,
-    epoch: u64,
-) -> Result<Option<(u64, Option<u64>)>, RpcError> {
-    let mut request = v2::GetEpochRequest::default();
-    request.epoch = Some(epoch);
-    request.read_mask = Some(FieldMask::from_paths([
-        "epoch",
-        "first_checkpoint",
-        "last_checkpoint",
-    ]));
-
-    let Some(epoch) = reader
-        .get_epoch(request)
-        .await
-        .context("Failed to get epoch")?
-    else {
-        return Ok(None);
-    };
-
-    let first = epoch
-        .first_checkpoint
-        .context("GetEpoch response missing first checkpoint")?;
-
-    Ok(Some((first, epoch.last_checkpoint)))
 }
 
 /// Intersect an epoch's checkpoint range (`first`, and `last` if the epoch has ended) with

@@ -451,7 +451,9 @@ pub async fn start_rpc(
     }
 
     if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
-        rpc = rpc.data(ledger_grpc_reader);
+        rpc = rpc
+            .data(Arc::new(ledger_grpc_reader.as_data_loader()))
+            .data(ledger_grpc_reader);
     }
 
     let subscriptions_enabled = streaming_setup.is_some();
