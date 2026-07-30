@@ -13,7 +13,6 @@ use anyhow::Context as _;
 use anyhow::anyhow;
 use anyhow::bail;
 use itertools::Itertools as _;
-use tracing::info;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
