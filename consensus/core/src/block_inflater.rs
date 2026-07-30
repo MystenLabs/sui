@@ -107,6 +107,13 @@ impl BlockInflater {
         serialize_minimal(block, &DagStateResolver(self), min_omittable_round)
     }
 
+    /// Whether any digest candidate exists for `slot`, from the same sources inflation
+    /// itself consults — the precondition for an attempt blocked on that slot to make
+    /// progress.
+    pub(crate) fn can_resolve(&self, slot: Slot) -> bool {
+        !DagStateResolver(self).digests_at_slot(slot).is_empty()
+    }
+
     /// One inflation attempt against current DAG state. `author` is the peer the bytes
     /// arrived from; a block claiming any other author is rejected before DAG access.
     pub(crate) fn inflate(

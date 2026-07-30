@@ -26,7 +26,9 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     minimal_block::{self, InflateError},
-    minimal_block_recovery::{HintCache, RecoveryCommand, RecoveryManager},
+    minimal_block_recovery::{
+        HINT_CHANNEL_CAPACITY, HintCache, PARK_CHANNEL_CAPACITY, ParkCommand, RecoveryManager,
+    },
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
@@ -60,7 +62,8 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     dag_state: Arc<RwLock<DagState>>,
     block_inflater: Arc<BlockInflater>,
     hint_cache: Arc<HintCache>,
-    recovery_commands: mpsc::Sender<RecoveryCommand>,
+    park_commands: mpsc::Sender<ParkCommand>,
+    hint_commands: mpsc::Sender<Slot>,
     recovery_manager: Mutex<Option<JoinHandle<()>>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
@@ -89,11 +92,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state.clone(),
             Some(hint_cache.clone()),
         ));
-        // Bounded: a peer burst cannot accumulate unbounded minimal-block bytes in the
-        // command queue ahead of the actor's own caps. A full queue sheds work safely —
-        // a lost Park is recovered by sync once descendants reference the block, and a
-        // lost SlotHeard is covered by the at-park recheck and the accepted broadcast.
-        let (recovery_commands, command_receiver) = mpsc::channel(1024);
+        // Parks are lossless (full channel => the sending stream awaits); hint wakes
+        // are lossy (full channel => shed with a metric; the at-park recheck, the
+        // accepted broadcast, and the deadline all cover a lost wake).
+        let (park_commands, park_receiver) = mpsc::channel(PARK_CHANNEL_CAPACITY);
+        let (hint_commands, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
         let recovery_manager = RecoveryManager::new(
             context.clone(),
             block_inflater.clone(),
@@ -101,8 +104,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             network_client.clone(),
             Arc::downgrade(&authority_service),
         );
-        let recovery_task =
-            spawn_monitored_task!(recovery_manager.run(command_receiver, accepted_blocks,));
+        let recovery_task = spawn_monitored_task!(recovery_manager.run(
+            park_receiver,
+            hint_receiver,
+            accepted_blocks,
+        ));
         Self {
             context,
             network_client,
@@ -110,7 +116,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             hint_cache,
-            recovery_commands,
+            park_commands,
+            hint_commands,
             recovery_manager: Mutex::new(Some(recovery_task)),
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
@@ -130,7 +137,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let dag_state = Arc::downgrade(&self.dag_state);
         let block_inflater = self.block_inflater.clone();
         let hint_cache = self.hint_cache.clone();
-        let recovery_commands = self.recovery_commands.clone();
+        let park_commands = self.park_commands.clone();
+        let hint_commands = self.hint_commands.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -141,7 +149,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             hint_cache,
-            recovery_commands,
+            park_commands,
+            hint_commands,
             peer,
         )));
     }
@@ -287,7 +296,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     fn publish_hint(
         context: &Context,
         hint_cache: &HintCache,
-        recovery_commands: &mpsc::Sender<RecoveryCommand>,
+        hint_commands: &mpsc::Sender<Slot>,
         peer: AuthorityIndex,
         block: &ExtendedSerializedBlock,
     ) {
@@ -329,9 +338,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .with_label_values(&[outcome.label()])
             .inc();
         if outcome == crate::minimal_block_recovery::HintInsert::Inserted
-            && recovery_commands
-                .try_send(RecoveryCommand::SlotHeard(slot))
-                .is_err()
+            && hint_commands.try_send(slot).is_err()
         {
             context
                 .metrics
@@ -349,7 +356,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
         hint_cache: Arc<HintCache>,
-        recovery_commands: mpsc::Sender<RecoveryCommand>,
+        park_commands: mpsc::Sender<ParkCommand>,
+        hint_commands: mpsc::Sender<Slot>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -456,7 +464,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
-                        Self::publish_hint(&context, &hint_cache, &recovery_commands, peer, &block);
+                        Self::publish_hint(&context, &hint_cache, &hint_commands, peer, &block);
                         let block = match Self::inflate_received_block(
                             &context,
                             &block_inflater,
@@ -476,21 +484,25 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             }) => {
                                 retries = 0;
                                 backoff.reset();
-                                if recovery_commands
-                                    .try_send(RecoveryCommand::Park {
-                                        peer,
-                                        block_ref,
-                                        minimal,
-                                        missing,
-                                    })
-                                    .is_err()
+                                let park = ParkCommand {
+                                    peer,
+                                    block_ref,
+                                    minimal,
+                                    missing,
+                                };
+                                // Lossless: a full channel blocks this one peer's
+                                // stream rather than dropping — a lost park is a block
+                                // no recovery path owns, and its descendants wedge in
+                                // block_manager until sync refetches it.
+                                if let Err(mpsc::error::TrySendError::Full(park)) =
+                                    park_commands.try_send(park)
                                 {
                                     context
                                         .metrics
                                         .node_metrics
-                                        .minimal_block_recovery_commands_dropped
-                                        .with_label_values(&["park"])
+                                        .minimal_block_recovery_park_blocked
                                         .inc();
+                                    let _ = park_commands.send(park).await;
                                 }
                                 continue 'stream;
                             }
@@ -938,6 +950,107 @@ mod test {
         );
     }
 
+    /// Falling behind the accepted-block broadcast must not wedge the actor: the lag
+    /// is counted, the receiver jumps to the head, and wakes sent afterwards still
+    /// heal parked blocks (wakes skipped by the jump are the deadline's job).
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_block_recovers_after_accepted_broadcast_lag() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let genesis_refs: Vec<BlockRef> = crate::block::genesis_blocks(&context)
+            .iter()
+            .map(|b| b.reference())
+            .collect();
+        let mut round2_blocks = Vec::new();
+        let mut round2_refs = Vec::new();
+        for authority in 0..4u32 {
+            let block = VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(2, authority)
+                    .set_ancestors_raw(genesis_refs.clone())
+                    .build(),
+            );
+            round2_refs.push(block.reference());
+            sender_dag.write().accept_block(block.clone());
+            round2_blocks.push(block);
+        }
+        round2_refs.sort_by_key(|r| (r.author != peer, r.author));
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+
+        let block_a = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(3, peer.value() as u32)
+                .set_ancestors_raw(round2_refs)
+                .build(),
+        );
+        let network_client = Arc::new(FixedStreamClient {
+            blocks: vec![ExtendedSerializedBlock {
+                block: block_a.serialized().clone(),
+                minimal: Some(sender_inflater.serialize(&block_a, 0).unwrap()),
+                excluded_ancestors: vec![],
+            }],
+            fetchable: vec![],
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        // Tiny broadcast so a burst of unrelated accepted blocks overflows it.
+        let (accepted_tx, accepted_rx) = broadcast::channel(2);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+
+        // Park A, then overflow the broadcast while the actor is idle.
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        for round in 0..6u32 {
+            let unrelated =
+                VerifiedBlock::new_for_test(crate::block::TestBlock::new(1, round % 2).build());
+            accepted_tx.send(unrelated).unwrap();
+        }
+        // Let the actor observe the lag and resubscribe at the head.
+        tokio::time::sleep(Duration::from_millis(2)).await;
+        assert!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_rescans
+                .get()
+                >= 1
+        );
+
+        // Wakes sent after the jump must still work: land the real ancestors, paced so
+        // the tiny test channel cannot lag again between sends.
+        for block in round2_blocks {
+            receiver_dag.write().accept_block(block.clone());
+            accepted_tx.send(block).unwrap();
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if !authority_service.lock().handle_send_block.is_empty() {
+                break;
+            }
+        }
+
+        let received = authority_service.lock().handle_send_block.clone();
+        assert_eq!(received.len(), 1);
+        assert_eq!(&received[0].1.block, block_a.serialized());
+        assert!(network_client.fetch_calls.lock().is_empty());
+    }
+
     /// The receipt-time hint path end-to-end: a parked block heals the moment digests
     /// for its missing slots are HEARD (bytes-arrival), with an empty DAG and zero
     /// fetches — the property that recreates baseline's verify-during-arrival overlap.
@@ -1001,16 +1114,23 @@ mod test {
         // TRUE digests — as if the ancestors' bytes just landed on their own streams —
         // and announce the slots. The receiver DAG stays empty throughout.
         tokio::time::sleep(Duration::from_millis(2)).await;
+        // The at-park re-attempt is gated on candidate presence: with nothing local to
+        // resolve A's missing slot, parking must not have spent a decode.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_attempts
+                .get(),
+            0
+        );
         for ancestor in &round2_refs {
             let slot = Slot::from(*ancestor);
             assert_eq!(
                 subscriber.hint_cache.insert(slot, ancestor.digest),
                 crate::minimal_block_recovery::HintInsert::Inserted
             );
-            subscriber
-                .recovery_commands
-                .try_send(RecoveryCommand::SlotHeard(slot))
-                .unwrap();
+            subscriber.hint_commands.try_send(slot).unwrap();
         }
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -1103,10 +1223,7 @@ mod test {
                 subscriber.hint_cache.insert(slot, ancestor.digest),
                 crate::minimal_block_recovery::HintInsert::Inserted
             );
-            subscriber
-                .recovery_commands
-                .try_send(RecoveryCommand::SlotHeard(slot))
-                .unwrap();
+            subscriber.hint_commands.try_send(slot).unwrap();
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
         for _ in 0..10 {

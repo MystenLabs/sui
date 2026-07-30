@@ -88,6 +88,16 @@ const MAX_CONCURRENT_SUBMISSIONS: usize = 16;
 /// acceptable earlier — acceptance still waits on the same ancestors.
 const FETCH_DEADLINE: Duration = Duration::from_millis(1000);
 const FETCH_DEADLINE_JITTER_MS: u64 = 250;
+/// In-flight parks buffered ahead of the actor. Sized to absorb bursts (~0.5 s at the
+/// worst observed park rate) while bounding channel-held bytes; a full channel
+/// backpressures the sending stream rather than dropping.
+pub(crate) const PARK_CHANNEL_CAPACITY: usize = 1024;
+/// In-flight hint wakes; overflow is shed (counted) — wakes are covered elsewhere.
+pub(crate) const HINT_CHANNEL_CAPACITY: usize = 1024;
+/// Deferred fetch/submission dispatch is retried on every task completion (a completed
+/// task has provably released its permits); this tick is only the safety net between
+/// completions, so queued work can never wait long on a missed edge.
+const DRAIN_FALLBACK_TICK: Duration = Duration::from_millis(25);
 /// Timeout for one sender fetch (off-stream; nothing waits on it).
 pub(crate) const RECOVERY_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -239,22 +249,26 @@ impl HintCache {
 }
 
 /// Commands from subscription streams to the manager actor.
-pub(crate) enum RecoveryCommand {
-    /// A minimal block that failed inflation at receipt: park it.
-    Park {
-        peer: AuthorityIndex,
-        block_ref: BlockRef,
-        minimal: Bytes,
-        missing: Slot,
-    },
-    /// A hint for `slot` was just published to the cache: wake its waiters.
-    SlotHeard(Slot),
+/// A minimal block that failed inflation at receipt: park it.
+///
+/// Parks are lossless: the stream side blocks (backpressuring that one peer) rather
+/// than drop when the channel is full, because a lost park is a block no recovery path
+/// owns — its descendants wedge in `block_manager` until sync refetches it. Hint wakes
+/// travel on a separate lossy channel; they have three covers (at-park recheck, the
+/// accepted broadcast, the deadline) and may be shed freely.
+pub(crate) struct ParkCommand {
+    pub(crate) peer: AuthorityIndex,
+    pub(crate) block_ref: BlockRef,
+    pub(crate) minimal: Bytes,
+    pub(crate) missing: Slot,
 }
 
 struct ParkedEntry {
     peer: AuthorityIndex,
     minimal: Bytes,
     missing: Slot,
+    // Assigned once at park; identifies this entry's lifetime so a deadline left in
+    // the heap by a removed entry cannot expire a later re-park of the same ref.
     generation: u64,
     parked_at: Instant,
     deadline: Instant,
@@ -277,12 +291,28 @@ struct PendingSubmission {
     parked_at: Instant,
 }
 
+/// Outcome of a detached task, returned through the `JoinSet`. Results ride the join
+/// itself so a task's permits are provably released before its outcome is observed —
+/// which is what makes join-driven queue draining exact.
+enum TaskResult {
+    /// The fetch finished; `serialized` is the digest-verified block, or `None` on a
+    /// failed fetch or claimed-digest mismatch (both already counted by the task).
+    FetchDone {
+        block_ref: BlockRef,
+        peer: AuthorityIndex,
+        serialized: Option<Bytes>,
+        parked_at: Instant,
+    },
+    /// The submission finished; the ref's recovery-dedup slot can be released.
+    SubmitDone(BlockRef),
+}
+
 /// Why a parked entry is being re-attempted; becomes the metric label on success.
 #[derive(Clone, Copy)]
 enum WakeSource {
     /// At park time or on a receipt-time hint: resolution from bytes-arrival state.
     Hint,
-    /// Core's accepted-block broadcast or a lag-triggered rescan.
+    /// Core's accepted-block broadcast.
     Accepted,
 }
 
@@ -316,10 +346,7 @@ pub(crate) struct RecoveryManager<C: ValidatorNetworkClient, S: ValidatorNetwork
     in_recovery: std::collections::HashSet<BlockRef>,
     // Detached work (fetches, submissions) lives here so aborting the actor aborts it
     // all: nothing outlives `stop()`.
-    tasks: tokio::task::JoinSet<()>,
-    // Completions from detached tasks; bounded in practice by the permit counts.
-    completions_tx: mpsc::UnboundedSender<BlockRef>,
-    completions_rx: mpsc::UnboundedReceiver<BlockRef>,
+    tasks: tokio::task::JoinSet<TaskResult>,
     generation: u64,
     parked_bytes: usize,
     parked_bytes_per_peer: HashMap<AuthorityIndex, usize>,
@@ -337,7 +364,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         network_client: Arc<C>,
         authority_service: Weak<S>,
     ) -> Self {
-        let completions = mpsc::unbounded_channel();
         Self {
             context,
             block_inflater,
@@ -351,8 +377,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
             pending_submissions: VecDeque::new(),
             in_recovery: std::collections::HashSet::new(),
             tasks: tokio::task::JoinSet::new(),
-            completions_tx: completions.0,
-            completions_rx: completions.1,
             generation: 0,
             parked_bytes: 0,
             parked_bytes_per_peer: HashMap::new(),
@@ -363,103 +387,149 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         }
     }
 
-    /// Runs the actor until the command channel closes (subscriber stop) or the task is
+    /// Runs the actor until a command channel closes (subscriber stop) or the task is
     /// aborted.
     pub(crate) async fn run(
         mut self,
-        mut commands: mpsc::Receiver<RecoveryCommand>,
+        mut parks: mpsc::Receiver<ParkCommand>,
+        mut hints: mpsc::Receiver<Slot>,
         mut accepted_blocks: broadcast::Receiver<VerifiedBlock>,
     ) {
+        let mut drain_tick = tokio::time::interval(DRAIN_FALLBACK_TICK);
+        drain_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let busy = self
+            .context
+            .metrics
+            .node_metrics
+            .minimal_block_recovery_actor_busy
+            .clone();
         loop {
-            // Deadline heap drives fetch escalation; queued intents/submissions add a
-            // near-term fallback wake so freed permits are never waited on for long
-            // even if a completion message is missed.
-            let mut next_deadline = self
+            let next_deadline = self
                 .deadlines
                 .peek()
                 .map(|std::cmp::Reverse((at, _, _))| *at)
                 .unwrap_or_else(|| Instant::now() + Duration::from_secs(3600));
-            if !self.fetch_intents.is_empty() || !self.pending_submissions.is_empty() {
-                next_deadline = next_deadline.min(Instant::now() + Duration::from_millis(200));
-            }
             tokio::select! {
-                command = commands.recv() => {
-                    let Some(command) = command else {
+                // The gate is the backpressure point for lossless parks: while the
+                // table is full, parks wait in the channel (and ultimately on the
+                // sending streams) until wakes and deadlines free entries — within
+                // the deadline bound, so the arm always reopens.
+                park = parks.recv(), if self.entries.len() < MAX_PARKED_ENTRIES => {
+                    let Some(park) = park else {
                         return;
                     };
-                    match command {
-                        RecoveryCommand::Park { peer, block_ref, minimal, missing } => {
-                            self.handle_park(peer, block_ref, minimal, missing);
-                        }
-                        RecoveryCommand::SlotHeard(slot) => {
-                            self.wake_slot(slot, WakeSource::Hint);
-                        }
-                    }
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .minimal_block_recovery_queued
+                        .with_label_values(&["park_channel"])
+                        .set(parks.len() as i64);
+                    let timer = busy.with_label_values(&["park"]).start_timer();
+                    self.handle_park(park);
+                    timer.observe_duration();
+                }
+                slot = hints.recv() => {
+                    let Some(slot) = slot else {
+                        return;
+                    };
+                    let timer = busy.with_label_values(&["slot_heard"]).start_timer();
+                    self.wake_slot(slot, WakeSource::Hint);
+                    timer.observe_duration();
                 }
                 accepted = accepted_blocks.recv() => {
                     match accepted {
                         Ok(block) => {
+                            let timer = busy.with_label_values(&["accepted"]).start_timer();
                             self.hint_cache.advance_horizon(block.round());
                             self.wake_slot(
                                 Slot::new(block.round(), block.author()),
                                 WakeSource::Accepted,
                             );
+                            timer.observe_duration();
                         }
                         Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                            debug!(
-                                "Recovery manager lagged {skipped} accepted blocks; rescanning"
-                            );
+                            // Skipped wakes are covered by the parked-entry deadline.
+                            // Resubscribing jumps to the head: once lagged, a receiver
+                            // is pinned at the channel's retention edge and would
+                            // otherwise crawl through stale blocks, re-lagging on
+                            // every send.
+                            debug!("Recovery manager lagged {skipped} accepted blocks");
                             self.context
                                 .metrics
                                 .node_metrics
                                 .minimal_block_recovery_rescans
                                 .inc();
-                            let refs: Vec<BlockRef> = self.entries.keys().cloned().collect();
-                            for block_ref in refs {
-                                self.reattempt(block_ref, WakeSource::Accepted);
-                            }
+                            accepted_blocks = accepted_blocks.resubscribe();
                         }
                         Err(broadcast::error::RecvError::Closed) => {
                             return;
                         }
                     }
                 }
-                completed = self.completions_rx.recv() => {
-                    if let Some(block_ref) = completed {
-                        self.in_recovery.remove(&block_ref);
-                    }
-                }
-                // Reap finished detached tasks so the JoinSet stays bounded by the
-                // permit counts; a panic in one is a bug and is propagated, matching
-                // the crate's task conventions.
                 Some(result) = self.tasks.join_next(), if !self.tasks.is_empty() => {
-                    if let Err(e) = result
-                        && e.is_panic()
-                    {
-                        std::panic::resume_unwind(e.into_panic());
+                    let timer = busy.with_label_values(&["task"]).start_timer();
+                    match result {
+                        Ok(TaskResult::FetchDone { block_ref, peer, serialized, parked_at }) => {
+                            match serialized {
+                                Some(serialized) => self.dispatch_submission(PendingSubmission {
+                                    block_ref,
+                                    peer,
+                                    serialized,
+                                    result: "fetch_recovered",
+                                    attempt: "fetch",
+                                    parked_at,
+                                }),
+                                None => {
+                                    self.in_recovery.remove(&block_ref);
+                                }
+                            }
+                        }
+                        Ok(TaskResult::SubmitDone(block_ref)) => {
+                            self.in_recovery.remove(&block_ref);
+                        }
+                        // A panic in a detached task is a bug and is propagated,
+                        // matching the crate's task conventions. Cancellation only
+                        // happens when the JoinSet is dropped, i.e. at shutdown.
+                        Err(e) => {
+                            if e.is_panic() {
+                                std::panic::resume_unwind(e.into_panic());
+                            }
+                        }
                     }
+                    // The finished task has provably released its permits (results
+                    // ride the join), so this is the exact moment deferred dispatch
+                    // can succeed.
+                    self.drain_queues();
+                    timer.observe_duration();
+                }
+                _ = drain_tick.tick(), if !self.fetch_intents.is_empty()
+                    || !self.pending_submissions.is_empty() => {
+                    let timer = busy.with_label_values(&["tick"]).start_timer();
+                    self.drain_queues();
+                    timer.observe_duration();
                 }
                 _ = tokio::time::sleep_until(next_deadline) => {
+                    let timer = busy.with_label_values(&["deadline"]).start_timer();
                     self.expire_deadlines();
+                    timer.observe_duration();
                 }
             }
-            // Deferred work gets one dispatch attempt after EVERY event (a cheap no-op
-            // when the queues are empty), so sustained traffic cannot postpone it and
-            // completion messages need no special-cased draining.
-            self.drain_queues();
         }
     }
 
     /// Parks a new entry — registering first, then re-attempting inflation on this same
     /// task, so a hint published between the stream's failed inflation and this park
     /// cannot be lost — or resolves it immediately if local state already suffices.
-    fn handle_park(
-        &mut self,
-        peer: AuthorityIndex,
-        block_ref: BlockRef,
-        minimal: Bytes,
-        missing: Slot,
-    ) {
+    ///
+    /// The global entry cap is enforced by gating the park channel arm in `run`, so
+    /// only the byte and per-peer caps divert here.
+    fn handle_park(&mut self, park: ParkCommand) {
+        let ParkCommand {
+            peer,
+            block_ref,
+            minimal,
+            missing,
+        } = park;
         if self.in_recovery.contains(&block_ref) {
             self.context
                 .metrics
@@ -469,8 +539,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
             return;
         }
         self.in_recovery.insert(block_ref);
-        let over_capacity = self.entries.len() >= MAX_PARKED_ENTRIES
-            || self.parked_bytes + minimal.len() > MAX_PARKED_BYTES
+        let over_capacity = self.parked_bytes + minimal.len() > MAX_PARKED_BYTES
             || self
                 .parked_entries_per_peer
                 .get(&peer)
@@ -519,7 +588,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         self.entries.insert(block_ref, entry);
         self.publish_parked_gauge();
         // Same-task re-check: any hint published before this point is visible now.
-        self.reattempt(block_ref, WakeSource::Hint);
+        // Gated on candidate presence — without one, inflation is guaranteed to fail
+        // at the same slot, and an unconditional decode per park was a measured actor
+        // saturation source. A candidate that appears later wakes the entry normally.
+        if self.block_inflater.can_resolve(missing) {
+            self.reattempt(block_ref, WakeSource::Hint);
+        }
     }
 
     /// Wakes every entry parked on `slot`.
@@ -562,21 +636,14 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 reason: FallbackReason::MissingAncestor(next_missing),
                 ..
             }) => {
-                let generation = &mut self.generation;
-                let deadlines = &mut self.deadlines;
                 let entry = self.entries.get_mut(&block_ref).expect("present above");
                 if entry.missing != next_missing {
-                    // Re-key: retire the old-slot registration so rescans cannot
-                    // accumulate stale waiter references.
+                    // Re-key: retire the old-slot registration so it cannot
+                    // accumulate stale waiter references. The deadline (and hence
+                    // the entry's generation and heap entry) is unchanged — it
+                    // belongs to the parked block, not to the slot it waits on.
                     let old_slot = entry.missing;
                     entry.missing = next_missing;
-                    *generation += 1;
-                    entry.generation = *generation;
-                    deadlines.push(std::cmp::Reverse((
-                        entry.deadline,
-                        block_ref,
-                        entry.generation,
-                    )));
                     if let Some(waiting) = self.waiters.get_mut(&old_slot) {
                         waiting.retain(|r| *r != block_ref);
                         if waiting.is_empty() {
@@ -584,8 +651,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                         }
                     }
                 }
-                // Push-if-absent: the at-park reattempt and lag rescans revisit entries
-                // whose registration already exists.
+                // Push-if-absent: the at-park reattempt revisits an entry whose
+                // registration already exists.
                 let waiting = self.waiters.entry(next_missing).or_default();
                 if !waiting.contains(&block_ref) {
                     waiting.push(block_ref);
@@ -640,7 +707,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
 
     /// One pass over deferred work: each queued intent/submission gets exactly one
     /// dispatch attempt (failures re-queue onto the fresh queue), so a permit-starved
-    /// head can never spin the actor.
+    /// head can never spin the actor. Runs on task completions and the fallback tick
+    /// only — never per inbound event — so its cost scales with dispatch opportunities,
+    /// not with traffic.
     fn drain_queues(&mut self) {
         let intents = std::mem::take(&mut self.fetch_intents);
         for intent in intents {
@@ -650,6 +719,17 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         for submission in submissions {
             self.dispatch_submission(submission);
         }
+        let queued = &self
+            .context
+            .metrics
+            .node_metrics
+            .minimal_block_recovery_queued;
+        queued
+            .with_label_values(&["fetch_intents"])
+            .set(self.fetch_intents.len() as i64);
+        queued
+            .with_label_values(&["pending_submissions"])
+            .set(self.pending_submissions.len() as i64);
     }
 
     fn remove_entry(&mut self, block_ref: &BlockRef) -> Option<ParkedEntry> {
@@ -717,13 +797,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         };
         let context = self.context.clone();
         let authority_service = self.authority_service.clone();
-        let completions = self.completions_tx.clone();
         self.tasks.spawn(async move {
             let _permit = permit;
             let block_ref = submission.block_ref;
             let Some(authority_service) = authority_service.upgrade() else {
-                let _ = completions.send(block_ref);
-                return;
+                return TaskResult::SubmitDone(block_ref);
             };
             let peer_hostname = context
                 .committee
@@ -750,14 +828,15 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
             node_metrics
                 .minimal_block_recovery_latency
                 .observe(submission.parked_at.elapsed().as_secs_f64());
-            let _ = completions.send(block_ref);
+            TaskResult::SubmitDone(block_ref)
         });
     }
 
-    /// Fetches the full block from its author (digest-verified) and submits it; bounded
-    /// by global and per-peer permits, with a bounded byte-free intent queue when
-    /// permits are dry. Completion is reported back to the actor, which releases the
-    /// ref's recovery-dedup slot and drains deferred work.
+    /// Fetches the full block from its author and verifies it against the claimed
+    /// digest; bounded by global and per-peer permits, with a bounded byte-free intent
+    /// queue when permits are dry. The task ends at verification — its permits bound
+    /// network occupancy only — and the actor dispatches the result through the
+    /// separately bounded submission stage.
     fn start_fetch(&mut self, intent: FetchIntent) {
         let peer_permits = self
             .per_peer_fetch_permits
@@ -783,9 +862,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         };
         let context = self.context.clone();
         let network_client = self.network_client.clone();
-        let authority_service = self.authority_service.clone();
-        let submission_permits = self.submission_permits.clone();
-        let completions = self.completions_tx.clone();
         self.tasks.spawn(async move {
             let _global = global;
             let _per_peer = per_peer;
@@ -796,13 +872,23 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
             } = intent;
             let peer_hostname = context.committee.authority(peer).hostname.as_str();
             let recovery_metric = &context.metrics.node_metrics.minimal_block_recovery;
-            let result = network_client
+            let serialized = match network_client
                 .fetch_blocks(peer, vec![block_ref], vec![], false, RECOVERY_FETCH_TIMEOUT)
-                .await;
-            let serialized = match result {
-                Ok(blocks) => blocks
-                    .into_iter()
-                    .find(|bytes| VerifiedBlock::compute_digest(bytes) == block_ref.digest),
+                .await
+            {
+                Ok(blocks) => {
+                    let found = blocks
+                        .into_iter()
+                        .find(|bytes| VerifiedBlock::compute_digest(bytes) == block_ref.digest);
+                    if found.is_none() {
+                        // The author could not produce its own claimed block: a peer
+                        // fault.
+                        recovery_metric
+                            .with_label_values(&[peer_hostname, "digest_mismatch", "fetch"])
+                            .inc();
+                    }
+                    found
+                }
                 Err(e) => {
                     debug!(
                         "Recovery fetch of {} from peer {} failed: {}",
@@ -811,41 +897,15 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                     recovery_metric
                         .with_label_values(&[peer_hostname, "fetch_failed", "fetch"])
                         .inc();
-                    let _ = completions.send(block_ref);
-                    return;
+                    None
                 }
             };
-            let Some(serialized) = serialized else {
-                // The author could not produce its own claimed block: a peer fault.
-                recovery_metric
-                    .with_label_values(&[peer_hostname, "digest_mismatch", "fetch"])
-                    .inc();
-                let _ = completions.send(block_ref);
-                return;
-            };
-            let submission = submission_permits.acquire_owned().await;
-            if let (Ok(_permit), Some(authority_service)) =
-                (submission, authority_service.upgrade())
-            {
-                let block = ExtendedSerializedBlock {
-                    block: serialized,
-                    excluded_ancestors: vec![],
-                    minimal: None,
-                };
-                let outcome = match authority_service.handle_send_block(peer, block).await {
-                    Ok(()) => "fetch_recovered",
-                    Err(_) => "rejected",
-                };
-                let node_metrics = &context.metrics.node_metrics;
-                node_metrics
-                    .minimal_block_recovery
-                    .with_label_values(&[peer_hostname, outcome, "fetch"])
-                    .inc();
-                node_metrics
-                    .minimal_block_recovery_latency
-                    .observe(parked_at.elapsed().as_secs_f64());
+            TaskResult::FetchDone {
+                block_ref,
+                peer,
+                serialized,
+                parked_at,
             }
-            let _ = completions.send(block_ref);
         });
     }
 }

@@ -190,6 +190,9 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_overflow: IntCounter,
     pub(crate) minimal_block_recovery_rescans: IntCounter,
     pub(crate) minimal_block_recovery_intents_dropped: IntCounter,
+    pub(crate) minimal_block_recovery_queued: IntGaugeVec,
+    pub(crate) minimal_block_recovery_actor_busy: HistogramVec,
+    pub(crate) minimal_block_recovery_park_blocked: IntCounter,
     pub(crate) minimal_block_hint_inserts: IntCounterVec,
     pub(crate) minimal_block_recovery_commands_dropped: IntCounterVec,
     pub(crate) minimal_block_encode_cache: IntCounterVec,
@@ -652,7 +655,25 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_recovery_rescans: register_int_counter_with_registry!(
                 "minimal_block_recovery_rescans",
-                "Full parked-entry rescans after accepted-block broadcast lag",
+                "Accepted-block broadcast lag events observed by the recovery actor; skipped wakes are covered by the parked-entry deadline",
+                registry,
+            ).unwrap(),
+            minimal_block_recovery_queued: register_int_gauge_vec_with_registry!(
+                "minimal_block_recovery_queued",
+                "Recovery work awaiting dispatch, by queue (fetch_intents|pending_submissions|park_channel)",
+                &["queue"],
+                registry,
+            ).unwrap(),
+            minimal_block_recovery_actor_busy: register_histogram_vec_with_registry!(
+                "minimal_block_recovery_actor_busy",
+                "Seconds the recovery actor spent handling one event, by handler class",
+                &["handler"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            minimal_block_recovery_park_blocked: register_int_counter_with_registry!(
+                "minimal_block_recovery_park_blocked",
+                "Park sends that found the channel full and backpressured the subscription stream (parks are lossless; sustained growth means the actor cannot keep up)",
                 registry,
             ).unwrap(),
             minimal_block_hint_inserts: register_int_counter_vec_with_registry!(
@@ -663,7 +684,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_recovery_commands_dropped: register_int_counter_vec_with_registry!(
                 "minimal_block_recovery_commands_dropped",
-                "Recovery commands refused by the bounded actor channel, by kind (park|slot_heard)",
+                "Lossy recovery wakes refused by the bounded actor channel, by kind (slot_heard); parks are lossless and backpressure instead",
                 &["kind"],
                 registry,
             ).unwrap(),
