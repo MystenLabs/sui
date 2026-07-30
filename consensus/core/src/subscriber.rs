@@ -486,18 +486,20 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 backoff.reset();
                                 // Catch-up: the block itself is more than a full
                                 // DAG-cache window ahead of everything this node has
-                                // accepted. Recovery cannot help there — wakes are a
-                                // full catch-up away, per-block fetches cannot outrun
-                                // the tip, and a lagging node parking tip blocks
-                                // turns them all into deadline-fetch storms — so it
-                                // stands down and replay/sync own the node until it
-                                // re-enters the window. Keyed on the BLOCK's round
-                                // (not the missing ancestor's): a tip block with a
-                                // deep weak link must not slip into parking on a
-                                // lagging node. The accepted round is read from
-                                // DagState, not the hint cache's asynchronously
-                                // advanced horizon, so a healthy node can never
-                                // false-positive here.
+                                // accepted. Parking cannot help (no wake arrives
+                                // before the deadline; the storms throttle catch-up
+                                // itself), but the block must not vanish either: full
+                                // blocks are how a lagging node learns the quorum
+                                // commit has moved at all — skip them entirely and
+                                // commit sync sees no lag and the node freezes. So
+                                // divert to the bounded fetch: a sampled trickle of
+                                // full tip blocks keeps commit votes and the
+                                // missing-ancestor pool fresh, intent-queue overflow
+                                // sheds the rest, and batched sync does the bulk.
+                                // Keyed on the BLOCK's round (not the missing
+                                // ancestor's) and on DagState's accepted round (not
+                                // the async hint horizon), so a healthy node can
+                                // never false-positive here.
                                 if missing.is_some()
                                     && let Some(dag) = dag_state.upgrade()
                                     && block_ref.round
@@ -511,6 +513,24 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         .minimal_block_recovery_skipped_work
                                         .with_label_values(&["catchup"])
                                         .inc();
+                                    let fetch = ParkCommand {
+                                        peer,
+                                        block_ref,
+                                        // The bytes cannot inflate here and the fetch
+                                        // path never uses them.
+                                        minimal: Bytes::new(),
+                                        missing: None,
+                                    };
+                                    if let Err(TrySendError::Full(fetch)) =
+                                        park_commands.try_send(fetch)
+                                    {
+                                        context
+                                            .metrics
+                                            .node_metrics
+                                            .minimal_block_recovery_park_backpressure
+                                            .inc();
+                                        let _ = park_commands.send(fetch).await;
+                                    }
                                     continue 'stream;
                                 }
                                 let park = ParkCommand {
@@ -1054,10 +1074,11 @@ mod test {
         assert!(s.network_client.fetch_calls.lock().is_empty());
     }
 
-    /// In catch-up (the block is beyond the node's DAG-cache future window) recovery
-    /// stands down: no park, no fetch, the stream keeps flowing, and replay/sync own
-    /// the block. Parking would be futile — no wake arrives before the deadline — and
-    /// the resulting fetch storms and backpressure throttle the catch-up itself.
+    /// In catch-up (the block is beyond the node's DAG-cache future window) the block
+    /// is never parked — no wake arrives before the deadline — but it must not vanish
+    /// either: it diverts to the bounded fetch so full blocks keep feeding commit
+    /// votes and the missing-ancestor pool (skipping entirely blinds commit sync and
+    /// freezes the node). The stream keeps flowing throughout.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn deep_catchup_blocks_skip_recovery() {
         let (context, _keys) = Context::new_for_test(4);
@@ -1118,22 +1139,26 @@ mod test {
             .accept_block(VerifiedBlock::new_for_test(
                 crate::block::TestBlock::new(1499, 0).build(),
             ));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag,
-            broadcast::channel(64).1,
+            accepted_rx,
         );
         subscriber.subscribe(peer);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // The un-inflatable block was skipped without parking or fetching, and the
-        // stream carried on to deliver the next block.
+        // The un-inflatable block was not parked; it went to the bounded fetch, and
+        // the stream carried on to deliver the next block.
         let received = authority_service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
         assert_eq!(&received[0].1.block, block_b.serialized());
-        assert!(network_client.fetch_calls.lock().is_empty());
+        assert_eq!(
+            network_client.fetch_calls.lock().clone(),
+            vec![vec![block_a.reference()]]
+        );
         assert_eq!(
             context
                 .metrics
