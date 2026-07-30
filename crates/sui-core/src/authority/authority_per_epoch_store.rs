@@ -337,6 +337,18 @@ pub struct AuthorityPerEpochStore {
     /// lock entries.
     live_object_cache: LiveObjectCache,
 
+    /// True when this store was opened mid-epoch (prior consensus progress exists in
+    /// the epoch DB). The in-memory conflict-resolution layers are then rebuilt from
+    /// durable rows that may have been written by a different binary version - in
+    /// particular, rows from before displaced-deferral sentinel support cannot convey
+    /// the lock coverage of transactions displaced by a deferral-key collision. For
+    /// the remainder of such an epoch, owned-object conflict resolution keeps
+    /// consulting the lock table for every potential-clear at the claimed version, so
+    /// this node's verdicts equal the table's (and every other node's) in any mixed
+    /// binary history. Epochs processed live from their start have complete in-memory
+    /// coverage and skip the table entirely.
+    mid_epoch_recovery: std::sync::atomic::AtomicBool,
+
     protocol_config: ProtocolConfig,
 
     // needed for re-opening epoch db.
@@ -982,6 +994,10 @@ impl AuthorityPerEpochStore {
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
         let consensus_output_cache = ConsensusOutputCache::new(&tables, &*object_store);
+        // Prior consensus progress in the epoch DB means this store is being rebuilt
+        // mid-epoch from durable rows possibly written by a different binary version;
+        // conflict resolution stays lock-table-conservative for the rest of the epoch.
+        let mid_epoch_recovery = tables.get_last_consensus_stats()?.is_some();
 
         let execution_time_observations = tables
             .execution_time_observations
@@ -1033,6 +1049,7 @@ impl AuthorityPerEpochStore {
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
             consensus_output_cache,
             live_object_cache: LiveObjectCache::new(),
+            mid_epoch_recovery: std::sync::atomic::AtomicBool::new(mid_epoch_recovery),
             consensus_quarantine: RwLock::new(ConsensusOutputQuarantine::new(
                 highest_executed_checkpoint,
                 metrics.clone(),
@@ -1934,6 +1951,17 @@ impl AuthorityPerEpochStore {
 
     pub fn live_object_cache(&self) -> &LiveObjectCache {
         &self.live_object_cache
+    }
+
+    pub fn mid_epoch_recovery(&self) -> bool {
+        self.mid_epoch_recovery
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub fn set_mid_epoch_recovery_for_test(&self, value: bool) {
+        self.mid_epoch_recovery
+            .store(value, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Attempts to acquire owned object locks for a transaction post-consensus.

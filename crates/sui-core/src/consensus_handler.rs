@@ -164,6 +164,14 @@ pub(crate) fn resolve_owned_object_lock_states(
 ) -> (HashMap<ObjectRef, LockResolution>, LockResolutionStats) {
     let _scope = monitored_scope("ConsensusCommitHandler::resolve_owned_object_locks");
     let live_object_cache = epoch_store.live_object_cache();
+    // Mid-epoch recovery: the in-memory layers were rebuilt from durable rows that a
+    // different binary version may have written (an upgrade or rollback restart), so
+    // they can lack the lock coverage of transactions displaced by a deferral-key
+    // collision processed under the old binary. For the rest of the epoch this node
+    // trusts only lock-free cache states that are provably lock-free (consumed bounds)
+    // and routes every potential-clear at exactly the claimed version through the lock
+    // table, making its verdicts equal the table's in any mixed binary history.
+    let conservative = epoch_store.mid_epoch_recovery();
     let mut stats = LockResolutionStats::default();
     let mut resolutions = HashMap::new();
     let mut backstop_refs = Vec::new();
@@ -205,11 +213,21 @@ pub(crate) fn resolve_owned_object_lock_states(
         // owns the cache.
         match live_object_cache.get(&obj_ref.0) {
             Some(VersionLowerBound::Version { version, immutable }) => {
-                stats.cache += 1;
                 if version > claimed_version {
+                    // Sound in both modes: a lower bound above the claimed version
+                    // proves consumption regardless of any hidden lock state.
                     assert_reachable!("owned-object conflict decided by live-object cache bound");
+                    stats.cache += 1;
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
+                    continue;
+                }
+                if conservative {
+                    // A bound at or below the claimed version cannot clear here: it may
+                    // be stale (recorded before the object reached the claimed version)
+                    // while an uncovered displaced-holder lock exists at exactly the
+                    // claimed version. Fall through to the authoritative read.
                 } else if version == claimed_version {
+                    stats.cache += 1;
                     match immutable {
                         // Known mutable at the claimed version: any lock on this ref
                         // would have bumped past it by every path that removes locks
@@ -265,17 +283,24 @@ pub(crate) fn resolve_owned_object_lock_states(
                             }
                         }
                     }
+                    continue;
+                } else {
+                    // Live below the claimed version: unclaimed (a pipelined input whose
+                    // producer has not executed locally yet; the producer's finalization
+                    // precedes the claimant's votes, so any lock on this ref would still
+                    // be quarantined and caught above).
+                    stats.cache += 1;
+                    continue;
                 }
-                // Live at or below the claimed version and not immutable-at-claim:
-                // unclaimed (below ⇒ a pipelined input whose producer has not executed
-                // locally yet; the producer's finalization precedes the claimant's votes,
-                // so any lock on this ref would still be quarantined and caught above).
-                continue;
             }
             Some(VersionLowerBound::KnownAbsent) => {
-                assert_reachable!("pipelined owned input resolved as known-absent");
-                stats.cache += 1;
-                continue;
+                if !conservative {
+                    assert_reachable!("pipelined owned input resolved as known-absent");
+                    stats.cache += 1;
+                    continue;
+                }
+                // Conservative: the absence observation may be stale; the authoritative
+                // read below re-derives it (a truly absent object cannot carry a lock).
             }
             None => (),
         }
@@ -290,6 +315,15 @@ pub(crate) fn resolve_owned_object_lock_states(
                     live_object_cache.record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                     resolutions.insert(*obj_ref, LockResolution::ConsumedSinceClaim);
                 } else if latest_ref.1 == claimed_version {
+                    if conservative {
+                        // Any unexecuted holder's lock sits at exactly the claimed
+                        // version with the object still live there; only the table can
+                        // decide, and it decides identically on every node.
+                        assert_reachable!("equality claim routed to lock table in recovery mode");
+                        live_object_cache.record_latest_lookup(obj_ref.0, Some(latest_ref.1));
+                        backstop_refs.push(*obj_ref);
+                        continue;
+                    }
                     // Latest at exactly the claimed version: the backstop applies if the
                     // object is immutable at it, so inspect the object (also warming the
                     // cache with a known bit). A tombstone at the claimed version is not
@@ -4773,6 +4807,71 @@ mod tests {
             "accepted occurrence must lock its mutable input despite the rejected \
              duplicate claiming it immutable"
         );
+    }
+
+    // A node restarted mid-epoch may have rebuilt its deferred-locks map from durable
+    // rows written by an older binary that could not record displaced-deferral
+    // sentinels; its in-memory layers can then miss a finalized-but-unexecuted
+    // holder's lock that the durable lock table still carries. In mid-epoch-recovery
+    // mode the resolver must route the potential-clear through the lock table so this
+    // node's verdict matches every other node's.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_mid_epoch_recovery_resolves_uncovered_locks_from_table() {
+        telemetry_subscribers::init_for_testing();
+
+        let (sender, _keypair) = deterministic_random_account_key();
+        let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let state = TestAuthorityBuilder::new()
+            .with_starting_objects(&[owned_object.clone()])
+            .skip_genesis_owner_index()
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        let owned_ref = state
+            .get_object(&owned_object.id())
+            .unwrap()
+            .compute_object_reference();
+        let holder = TransactionDigest::random();
+
+        // Simulate the uncovered-restart state: lock row in the durable table, but no
+        // deferred-locks map entry (the seeding had no sentinel row to read).
+        epoch_store.insert_object_locks_for_test(&[(owned_ref, holder)]);
+        epoch_store
+            .consensus_output_cache
+            .deferred_transaction_locks
+            .lock()
+            .remove_tx(&holder);
+
+        let cache_reader = state.get_object_cache_reader().as_ref();
+
+        // Without recovery mode the memory layers see an unclaimed, live-at-claimed
+        // object - this is exactly the state that forked the split cluster.
+        let (resolutions, _) =
+            resolve_owned_object_lock_states(&epoch_store, cache_reader, &[owned_ref]);
+        assert_eq!(resolutions.get(&owned_ref), None);
+
+        // In mid-epoch-recovery mode the lock table decides.
+        epoch_store.set_mid_epoch_recovery_for_test(true);
+        let (resolutions, stats) =
+            resolve_owned_object_lock_states(&epoch_store, cache_reader, &[owned_ref]);
+        assert_eq!(
+            resolutions.get(&owned_ref),
+            Some(&LockResolution::LockedBy(holder))
+        );
+        assert_eq!(stats.backstop, 1);
+
+        // A consumed ref still resolves from the cache bound alone, even in recovery
+        // mode: a lower bound above the claimed version is proof regardless of any
+        // hidden lock state.
+        epoch_store.live_object_cache().record_consumed(&owned_ref);
+        let (resolutions, stats) =
+            resolve_owned_object_lock_states(&epoch_store, cache_reader, &[owned_ref]);
+        assert_eq!(
+            resolutions.get(&owned_ref),
+            Some(&LockResolution::ConsumedSinceClaim)
+        );
+        assert_eq!(stats.backstop, 0);
     }
 
     #[tokio::test(flavor = "current_thread")]
