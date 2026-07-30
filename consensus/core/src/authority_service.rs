@@ -38,6 +38,12 @@ use crate::{
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
+/// How long a full-form fallback subscription (serving a lagging subscriber) lives
+/// before the stream is ended so the subscriber reconnects with its current position —
+/// the connection is the only carrier of that position, so this bounds how long a
+/// caught-up subscriber keeps receiving full form.
+const FULL_FORM_FALLBACK_REFRESH: Duration = Duration::from_secs(120);
+
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
@@ -458,49 +464,71 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // serves rounds where the subscriber's cache state is unpredictable, so it always
         // sends full blocks. Emission is protocol-gated: every validator on a version
         // with the flag can decode both forms, so senders may emit minimal freely.
+        //
+        // Emission is also lag-gated per subscription: a subscriber resuming more than
+        // a DAG-cache window behind cannot resolve omitted digests (its DAG and hint
+        // window both trail the tip), so minimal blocks only cost it work — it is
+        // served full form, like the replay. The subscriber's position is only carried
+        // by the (re)connection, so fallback streams expire after a refresh interval,
+        // forcing a caught-up subscriber to renegotiate back to minimal.
+        let subscriber_lag = self
+            .dag_state
+            .read()
+            .highest_accepted_round()
+            .saturating_sub(last_received);
+        let lag_fallback =
+            subscriber_lag > self.context.parameters.dag_state_cached_rounds as Round;
         let emit_minimal = self
             .context
             .protocol_config
-            .minimal_block_propagation_enabled();
+            .minimal_block_propagation_enabled()
+            && !lag_fallback;
         let block_inflater = self.block_inflater.clone();
         let minimal_cache = self.minimal_cache.clone();
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
-        Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(move |items| {
-                debug_assert!(
-                    items.len() <= MAX_BLOCKS_PER_POLL,
-                    "Too many blocks received from broadcast"
-                );
-                let block_inflater = block_inflater.clone();
-                let context = context.clone();
-                let peer_hostname = peer_hostname.clone();
-                let minimal_cache = minimal_cache.clone();
-                stream::iter(items.into_iter().map(move |extended_block| {
-                    let minimal = emit_minimal
-                        .then(|| {
-                            minimal_cache.encode(&context, &block_inflater, &extended_block.block)
-                        })
-                        .flatten();
-                    let mut serialized = ExtendedSerializedBlock::from(extended_block);
-                    if let Some(minimal) = &minimal {
-                        let node_metrics = &context.metrics.node_metrics;
-                        node_metrics
-                            .minimal_blocks_sent
-                            .with_label_values(&[peer_hostname.as_str()])
-                            .inc();
-                        node_metrics
-                            .minimal_blocks_sent_bytes_saved
-                            .with_label_values(&[peer_hostname.as_str()])
-                            .inc_by(serialized.block.len().saturating_sub(minimal.len()) as u64);
-                    }
-                    serialized.minimal = minimal;
-                    serialized
-                }))
-            }),
-        )))
+        let stream = past_proposed_blocks.chain(broadcasted_blocks.flat_map(move |items| {
+            debug_assert!(
+                items.len() <= MAX_BLOCKS_PER_POLL,
+                "Too many blocks received from broadcast"
+            );
+            let block_inflater = block_inflater.clone();
+            let context = context.clone();
+            let peer_hostname = peer_hostname.clone();
+            let minimal_cache = minimal_cache.clone();
+            stream::iter(items.into_iter().map(move |extended_block| {
+                let minimal = emit_minimal
+                    .then(|| minimal_cache.encode(&context, &block_inflater, &extended_block.block))
+                    .flatten();
+                let mut serialized = ExtendedSerializedBlock::from(extended_block);
+                if let Some(minimal) = &minimal {
+                    let node_metrics = &context.metrics.node_metrics;
+                    node_metrics
+                        .minimal_blocks_sent
+                        .with_label_values(&[peer_hostname.as_str()])
+                        .inc();
+                    node_metrics
+                        .minimal_blocks_sent_bytes_saved
+                        .with_label_values(&[peer_hostname.as_str()])
+                        .inc_by(serialized.block.len().saturating_sub(minimal.len()) as u64);
+                }
+                serialized.minimal = minimal;
+                serialized
+            }))
+        }));
+        if lag_fallback {
+            info!(
+                "Serving full-form blocks to lagging subscriber {peer} \
+                 (resumed {subscriber_lag} rounds behind)"
+            );
+            Ok(Box::pin(stream.take_until(Box::pin(tokio::time::sleep(
+                FULL_FORM_FALLBACK_REFRESH,
+            )))))
+        } else {
+            Ok(Box::pin(stream))
+        }
     }
 
     // Handles 3 types of requests:
@@ -1506,21 +1534,29 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_emits_minimal_for_live_only() {
         // Emission is on via ConsensusProtocolConfig::for_testing() inside new_for_test.
-        subscribe_blocks_emission(true).await;
+        subscribe_blocks_emission(true, false).await;
     }
 
     /// The rollout-safety property of the protocol flag: with it off, live broadcasts
     /// carry no minimal form.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_flag_off_emits_full_only() {
-        subscribe_blocks_emission(false).await;
+        subscribe_blocks_emission(false, false).await;
     }
 
-    async fn subscribe_blocks_emission(emit_minimal: bool) {
+    /// A subscriber that resumes more than a DAG-cache window behind is served full
+    /// form even with emission enabled — minimal blocks are useless to it.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_subscribe_blocks_full_form_for_lagging_subscriber() {
+        subscribe_blocks_emission(true, true).await;
+    }
+
+    async fn subscribe_blocks_emission(emit_minimal_flag: bool, subscriber_lagging: bool) {
+        let emit_minimal = emit_minimal_flag && !subscriber_lagging;
         let (mut context, _keys) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_minimal_block_propagation_enabled_for_testing(emit_minimal);
+            .set_minimal_block_propagation_enabled_for_testing(emit_minimal_flag);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1565,6 +1601,13 @@ mod tests {
             let block = VerifiedBlock::new_for_test(TestBlock::new(15, authority).build());
             ancestors.push(block.reference());
             dag_state.write().accept_block(block);
+        }
+        if subscriber_lagging {
+            // Our accepted tip at round 700 puts the subscriber's resume round (10)
+            // more than a DAG-cache window (500) behind.
+            dag_state
+                .write()
+                .accept_block(VerifiedBlock::new_for_test(TestBlock::new(700, 1).build()));
         }
 
         let authority_service = Arc::new(AuthorityService::new(

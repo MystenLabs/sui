@@ -44,6 +44,12 @@ const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 /// catch-up (replay + sync) owns it.
 const PARKING_ROUND_MARGIN: Round = 32;
 
+/// Consecutive deep-catch-up diverts tolerated before the subscription resets to
+/// renegotiate full-form service from the sender. Large enough that only a sustained
+/// deficit (not a hiccup) triggers it; at typical receive rates this is well under a
+/// second of sustained deep lag.
+const FALLBACK_RENEGOTIATE_AFTER: u32 = 256;
+
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
     /// A full-form block, or a minimal block successfully inflated to full form.
@@ -459,6 +465,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .set(1);
 
             let mut malformed_blocks: u32 = 0;
+            let mut deep_catchup_streak: u32 = 0;
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
@@ -504,13 +511,13 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // Keyed on the BLOCK's round against DagState's
                                 // accepted round (not the async hint horizon), so a
                                 // healthy node can never false-positive here.
+                                let accepted = dag_state
+                                    .upgrade()
+                                    .map(|dag| dag.read().highest_accepted_round());
                                 if missing.is_some()
-                                    && let Some(dag) = dag_state.upgrade()
+                                    && let Some(accepted) = accepted
                                     && block_ref.round
-                                        > dag
-                                            .read()
-                                            .highest_accepted_round()
-                                            .saturating_add(PARKING_ROUND_MARGIN)
+                                        > accepted.saturating_add(PARKING_ROUND_MARGIN)
                                 {
                                     context
                                         .metrics
@@ -518,6 +525,31 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         .minimal_block_recovery_skipped_work
                                         .with_label_values(&["catchup"])
                                         .inc();
+                                    // Deeply behind (past the sender's full-form
+                                    // fallback threshold), only a reconnection can
+                                    // renegotiate the stream to full form — the
+                                    // subscription request is the sole carrier of our
+                                    // position. Reset after a sustained streak; a
+                                    // brief hiccup never crosses this bound.
+                                    if block_ref.round
+                                        > accepted.saturating_add(
+                                            context.parameters.dag_state_cached_rounds as Round,
+                                        )
+                                    {
+                                        deep_catchup_streak += 1;
+                                        if deep_catchup_streak >= FALLBACK_RENEGOTIATE_AFTER {
+                                            info!(
+                                                "Resubscribing to peer {} {} for full-form \
+                                                 catch-up ({} rounds behind)",
+                                                peer,
+                                                peer_hostname,
+                                                block_ref.round.saturating_sub(accepted)
+                                            );
+                                            continue 'subscription;
+                                        }
+                                    } else {
+                                        deep_catchup_streak = 0;
+                                    }
                                     let fetch = ParkCommand {
                                         peer,
                                         block_ref,
@@ -534,6 +566,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     let _ = park_commands.try_send(fetch);
                                     continue 'stream;
                                 }
+                                deep_catchup_streak = 0;
                                 let park = ParkCommand {
                                     peer,
                                     block_ref,
@@ -555,7 +588,10 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 }
                                 continue 'stream;
                             }
-                            Ok(InflateOutcome::Block(block)) => block,
+                            Ok(InflateOutcome::Block(block)) => {
+                                deep_catchup_streak = 0;
+                                block
+                            }
                             Err(e) => {
                                 info!(
                                     "Failed to inflate minimal block from peer {} {}: {}",
