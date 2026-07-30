@@ -105,6 +105,7 @@ mod tests {
     use crate::sync::execution_permit::set_execution_permit;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    #[cfg(not(msim))]
     use std::time::Duration;
 
     struct DropFlag(Arc<AtomicBool>);
@@ -121,6 +122,12 @@ mod tests {
         assert_eq!(rx.blocking_recv(), Ok(42));
     }
 
+    // These tests block a real OS thread and rely on it being unparked by another
+    // thread. Under msim, `blocking_recv` yields via `msim::task::yield_blocking`, which
+    // must run on a simulator blocking-pool thread rather than a raw `std::thread`, so
+    // they only run outside the simulator. The msim blocking path is exercised by the
+    // execution-layer simtests that use these primitives.
+    #[cfg(not(msim))]
     #[test]
     fn recv_blocks_until_send() {
         let (tx, rx) = channel();
@@ -130,6 +137,7 @@ mod tests {
         assert_eq!(handle.join().unwrap(), Ok(7));
     }
 
+    #[cfg(not(msim))]
     #[test]
     fn sender_drop_unblocks_recv() {
         let (tx, rx) = channel::<u64>();
@@ -169,6 +177,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(msim))]
     #[test]
     fn releases_permit_when_blocking() {
         let (tx, rx) = channel::<u8>();
