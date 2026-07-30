@@ -164,14 +164,37 @@ impl HintCache {
     /// outcome for the rejection counters.
     pub(crate) fn insert(&self, slot: Slot, digest: BlockDigest) -> HintInsert {
         let mut inner = self.inner.lock();
+        // Preflight every rejection with read-only lookups BEFORE any eviction: a hint
+        // that is going to be rejected must not be able to grind valid entries out of
+        // a full cache (e.g. a duplicate storm evicting the working set).
         if slot.round.saturating_add(self.retained_rounds) < inner.horizon {
             return HintInsert::BelowHorizon;
+        }
+        if let Some(digests) = inner.hints.get(&slot) {
+            if digests.contains(&digest) {
+                return HintInsert::Duplicate;
+            }
+            if digests.len() >= MAX_HINTS_PER_SLOT {
+                return HintInsert::SlotFull;
+            }
+        }
+        // Conservative pre-eviction check: eviction can only DECREASE this count, so a
+        // preflight pass here remains valid afterwards.
+        if inner
+            .per_authority
+            .get(&slot.authority)
+            .copied()
+            .unwrap_or(0)
+            >= MAX_HINTS_PER_AUTHORITY
+        {
+            return HintInsert::AuthorityFull;
         }
         while inner.total >= self.capacity {
             let Some((oldest, _)) = inner.hints.first_key_value() else {
                 break;
             };
-            // Never evict something newer than the incoming hint.
+            // Evict only strictly older slots; an incoming hint that cannot displace
+            // anything strictly older than itself is the one refused.
             if oldest.round >= slot.round {
                 return HintInsert::GlobalFull;
             }
@@ -181,28 +204,8 @@ impl HintCache {
                 *count = count.saturating_sub(evicted.len());
             }
         }
-        let count = inner.per_authority.entry(slot.authority).or_insert(0);
-        if *count >= MAX_HINTS_PER_AUTHORITY {
-            return HintInsert::AuthorityFull;
-        }
-        *count += 1;
-        let count_rollback = slot.authority;
-        let digests = inner.hints.entry(slot).or_default();
-        if digests.contains(&digest) {
-            *inner
-                .per_authority
-                .get_mut(&count_rollback)
-                .expect("just inserted") -= 1;
-            return HintInsert::Duplicate;
-        }
-        if digests.len() >= MAX_HINTS_PER_SLOT {
-            *inner
-                .per_authority
-                .get_mut(&count_rollback)
-                .expect("just inserted") -= 1;
-            return HintInsert::SlotFull;
-        }
-        digests.push(digest);
+        *inner.per_authority.entry(slot.authority).or_insert(0) += 1;
+        inner.hints.entry(slot).or_default().push(digest);
         inner.total += 1;
         HintInsert::Inserted
     }
@@ -919,10 +922,12 @@ mod tests {
     #[tokio::test]
     async fn hint_cache_full_evicts_oldest_not_newest() {
         // retained_rounds x committee = 4 x 1 -> capacity clamps to the 1024 floor.
+        // Fill across two authorities (512 each) so the per-authority cap stays clear
+        // and the GLOBAL eviction path is what this test exercises.
         let cache = HintCache::new(4, 1);
         for round in 0..1024u32 {
             assert_eq!(
-                cache.insert(slot(round, 0), digest((round % 251) as u8)),
+                cache.insert(slot(round, round % 2), digest((round % 251) as u8)),
                 HintInsert::Inserted,
                 "round {round}"
             );
@@ -933,5 +938,15 @@ mod tests {
         assert_eq!(cache.candidates(slot(5000, 0)), vec![digest(7)]);
         // An incoming hint OLDER than everything retained is the one refused.
         assert_eq!(cache.insert(slot(0, 0), digest(9)), HintInsert::GlobalFull);
+        // A rejected hint must not evict: a duplicate of a retained entry, sent while
+        // the cache is full, leaves the working set untouched (adversarial grind guard).
+        let surviving_oldest = slot(1, 1);
+        let retained = cache.candidates(surviving_oldest);
+        assert!(!retained.is_empty());
+        assert_eq!(
+            cache.insert(slot(5000, 0), digest(7)),
+            HintInsert::Duplicate
+        );
+        assert_eq!(cache.candidates(surviving_oldest), retained);
     }
 }

@@ -669,7 +669,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_recovery_intents_dropped: register_int_counter_with_registry!(
                 "minimal_block_recovery_intents_dropped",
-                "Recovery work shed at a bound: dropped fetch intents, shed submissions, or park commands refused by a full command queue",
+                "Recovery work shed at a bound: dropped fetch intents or shed pending submissions (refused actor commands are counted separately by kind)",
                 registry,
             ).unwrap(),
             minimal_block_recovery_latency: register_histogram_with_registry!(
