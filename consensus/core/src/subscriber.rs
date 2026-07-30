@@ -37,6 +37,13 @@ use crate::{
 /// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
 const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 
+/// A block this many rounds past the local accepted tip cannot be woken before the
+/// recovery deadline fires — parking it only manufactures deadline fetches. ~2 s at
+/// production round rate, comfortably past the arrival-race p99 (~726 ms), which is
+/// the only regime parking is for; anything further diverts to the sampled fetch and
+/// catch-up (replay + sync) owns it.
+const PARKING_ROUND_MARGIN: Round = 32;
+
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
     /// A full-form block, or a minimal block successfully inflated to full form.
@@ -484,28 +491,26 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             }) => {
                                 retries = 0;
                                 backoff.reset();
-                                // Catch-up: the block itself is more than a full
-                                // DAG-cache window ahead of everything this node has
-                                // accepted. Parking cannot help (no wake arrives
-                                // before the deadline; the storms throttle catch-up
-                                // itself), but the block must not vanish either: full
-                                // blocks are how a lagging node learns the quorum
-                                // commit has moved at all — skip them entirely and
-                                // commit sync sees no lag and the node freezes. So
-                                // divert to the bounded fetch: a sampled trickle of
-                                // full tip blocks keeps commit votes and the
-                                // missing-ancestor pool fresh, intent-queue overflow
-                                // sheds the rest, and batched sync does the bulk.
-                                // Keyed on the BLOCK's round (not the missing
-                                // ancestor's) and on DagState's accepted round (not
-                                // the async hint horizon), so a healthy node can
-                                // never false-positive here.
+                                // Beyond the parking margin, a wake cannot beat the
+                                // recovery deadline, so parking only manufactures
+                                // fetch storms — but the block must not vanish
+                                // either: full blocks are how a lagging node learns
+                                // the quorum commit has moved at all (skip them
+                                // entirely and commit sync sees no lag and the node
+                                // freezes). So divert to the bounded fetch: a sampled
+                                // trickle of full tip blocks keeps commit votes and
+                                // the missing-ancestor pool fresh, overflow sheds,
+                                // and catch-up (replay + batched sync) does the bulk.
+                                // Keyed on the BLOCK's round against DagState's
+                                // accepted round (not the async hint horizon), so a
+                                // healthy node can never false-positive here.
                                 if missing.is_some()
                                     && let Some(dag) = dag_state.upgrade()
                                     && block_ref.round
-                                        > dag.read().highest_accepted_round().saturating_add(
-                                            context.parameters.dag_state_cached_rounds as Round,
-                                        )
+                                        > dag
+                                            .read()
+                                            .highest_accepted_round()
+                                            .saturating_add(PARKING_ROUND_MARGIN)
                                 {
                                     context
                                         .metrics
@@ -1127,9 +1132,9 @@ mod test {
             Arc::new(MemStore::new()),
         )));
         // The receiver has accepted nothing past round 1499. The BLOCK (round 2000) is
-        // beyond 1499 + dag_state_cached_rounds (500) — catch-up — even though its
-        // missing ancestor (1999) is within the window: a tip block with older
-        // ancestors must not slip into parking on a lagging node.
+        // beyond 1499 + PARKING_ROUND_MARGIN — catch-up — even though its missing
+        // ancestor (1999) is nearer: a tip block with older ancestors must not slip
+        // into parking on a lagging node.
         receiver_dag
             .write()
             .accept_block(VerifiedBlock::new_for_test(
