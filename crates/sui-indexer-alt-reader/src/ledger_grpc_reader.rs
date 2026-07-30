@@ -138,14 +138,8 @@ impl LedgerGrpcArgs {
 }
 
 impl CheckpointedTransaction {
-    /// Read mask selecting everything needed to reconstruct a `CheckpointedTransaction`.
-    ///
-    /// Contents are selected as BCS (`*.bcs`) rather than the decomposed proto fields: the
-    /// decomposed rendering is a pure function of the BCS, so selecting it would ship the same
-    /// information twice and pay for server-side rendering — including the object-set lookups
-    /// behind `effects.*.object_type` — to produce fields that deserializing the BCS yields
-    /// anyway. Consumers that need the server-rendered protos (e.g. `effectsJson`) fetch them
-    /// separately, on demand.
+    /// Read mask selecting everything needed to construct a `CheckpointedTransaction` from the gRPC
+    /// `ExecutedTransaction` proto.
     pub fn read_mask() -> FieldMask {
         FieldMask::from_paths([
             "transaction.bcs",

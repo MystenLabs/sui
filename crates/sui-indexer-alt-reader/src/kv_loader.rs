@@ -630,7 +630,6 @@ impl TransactionContents {
     }
 
     /// The proto TransactionEffects cached from a gRPC execution or streaming response, if any.
-    /// Unlike `proto_effects`, does not fall back to converting native effects.
     pub fn cached_proto_effects(&self) -> Option<&grpc::TransactionEffects> {
         match self {
             Self::ExecutedTransaction(tx) => tx.proto_effects.as_ref(),

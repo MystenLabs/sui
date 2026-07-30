@@ -371,12 +371,10 @@ impl EffectsContents {
 
         Some(
             async {
-                // Prefer the proto cached from an execution or streaming response (rendered by
-                // the fullnode). Otherwise ask the ledger service to render the effects — the
-                // rendering carries fields that cannot be derived from the effects BCS locally
-                // (object type annotations, runtime-loaded objects). Fall back to local
-                // conversion when no rendering backend is configured, or the transaction is not
-                // indexed (yet).
+                // Prefer the proto cached from an execution or streaming response (rendered by the
+                // fullnode). Otherwise ask the ledger service to render the effects. The local
+                // effects BCS is a fall back, and will likely be missing information like object
+                // type annotations and runtime-loaded objects.
                 let mut proto_effects = if let Some(proto) = content.cached_proto_effects() {
                     proto.clone()
                 } else {

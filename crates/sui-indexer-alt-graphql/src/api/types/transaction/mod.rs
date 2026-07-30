@@ -484,9 +484,6 @@ impl Transaction {
         });
 
         let mut request = v2::ListTransactionsRequest::default();
-        // Full contents, as BCS — items hydrate directly into `CheckpointedTransaction`s,
-        // avoiding a follow-up KV point-get per node. See `CheckpointedTransaction::read_mask`
-        // for why BCS is selected over the rendered proto fields.
         request.read_mask = Some(CheckpointedTransaction::read_mask());
         request.start_checkpoint = match cp_bounds.start_bound() {
             Bound::Included(&s) => Some(s),

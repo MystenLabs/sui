@@ -33,8 +33,8 @@ pub struct TransactionKey(pub TransactionDigest);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionTimestampKey(pub TransactionDigest);
 
-/// Key for fetching a transaction's effects as rendered by the server, which carries fields
-/// that cannot be derived from the effects BCS client-side (object type annotations,
+/// Key for fetching a transaction's effects as rendered by the server, which carries additional
+/// information that cannot be derived from the effects BCS client-side (object type annotations,
 /// runtime-loaded objects).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderedEffectsKey(pub TransactionDigest);
