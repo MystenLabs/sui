@@ -28,9 +28,10 @@ use std::{
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round};
+use mysten_metrics::{monitored_future, monitored_mpsc, monitored_scope};
 use parking_lot::Mutex;
 use tokio::{
-    sync::{Semaphore, broadcast, mpsc},
+    sync::{Semaphore, broadcast},
     time::Instant,
 };
 use tracing::debug;
@@ -406,8 +407,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
     /// aborted.
     pub(crate) async fn run(
         mut self,
-        mut parks: mpsc::Receiver<ParkCommand>,
-        mut hints: mpsc::Receiver<Slot>,
+        mut parks: monitored_mpsc::Receiver<ParkCommand>,
+        mut hints: monitored_mpsc::Receiver<Slot>,
         mut accepted_blocks: broadcast::Receiver<VerifiedBlock>,
     ) {
         let mut drain_tick = tokio::time::interval(DRAIN_FALLBACK_TICK);
@@ -431,7 +432,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 // the deadline bound, so the arm always reopens.
                 park = parks.recv(), if self.entries.len() < MAX_PARKED_ENTRIES => {
                     let Some(park) = park else {
-                        return;
+                        break;
                     };
                     let timer = busy.with_label_values(&["park"]).start_timer();
                     self.handle_park(park);
@@ -439,7 +440,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 }
                 slot = hints.recv() => {
                     let Some(slot) = slot else {
-                        return;
+                        break;
                     };
                     let timer = busy.with_label_values(&["slot_heard"]).start_timer();
                     self.wake_slot(slot, WakeSource::Hint);
@@ -471,7 +472,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                             accepted_blocks = accepted_blocks.resubscribe();
                         }
                         Err(broadcast::error::RecvError::Closed) => {
-                            return;
+                            break;
                         }
                     }
                 }
@@ -524,6 +525,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 }
             }
         }
+        // Cooperative exit (a command channel closed): abort detached work and await
+        // it, so nothing keeps running past the actor and no panic goes unobserved.
+        crate::task::shutdown_join_set(&mut self.tasks).await;
     }
 
     /// Parks a new entry — registering first, then re-attempting inflation on this same
@@ -804,7 +808,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 self.context
                     .metrics
                     .node_metrics
-                    .minimal_block_recovery_work_dropped
+                    .minimal_block_recovery_skipped_work
+                    .with_label_values(&["pending_submission"])
                     .inc();
                 if let Some(shed) = self.pending_submissions.pop_front() {
                     self.in_recovery.remove(&shed.block_ref);
@@ -815,7 +820,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         };
         let context = self.context.clone();
         let authority_service = self.authority_service.clone();
-        self.tasks.spawn(async move {
+        self.tasks.spawn(monitored_future!(async move {
+            let _scope = monitored_scope("RecoveryManager::submit");
             let _permit = permit;
             let block_ref = submission.block_ref;
             let Some(authority_service) = authority_service.upgrade() else {
@@ -847,7 +853,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 .minimal_block_recovery_latency
                 .observe(submission.parked_at.elapsed().as_secs_f64());
             TaskResult::SubmitDone(block_ref)
-        });
+        }));
     }
 
     /// Fetches the full block from its author and verifies it against the claimed
@@ -869,7 +875,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 self.context
                     .metrics
                     .node_metrics
-                    .minimal_block_recovery_work_dropped
+                    .minimal_block_recovery_skipped_work
+                    .with_label_values(&["fetch_intent"])
                     .inc();
                 if let Some(dropped) = self.fetch_intents.pop_front() {
                     self.in_recovery.remove(&dropped.block_ref);
@@ -880,7 +887,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
         };
         let context = self.context.clone();
         let network_client = self.network_client.clone();
-        self.tasks.spawn(async move {
+        self.tasks.spawn(monitored_future!(async move {
+            let _scope = monitored_scope("RecoveryManager::fetch");
             let _global = global;
             let _per_peer = per_peer;
             let FetchIntent {
@@ -924,7 +932,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> RecoveryManager<C, S
                 serialized,
                 parked_at,
             }
-        });
+        }));
     }
 }
 

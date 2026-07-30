@@ -10,10 +10,10 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use futures::StreamExt;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::{Mutex, RwLock};
 use tokio::{
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc::error::TrySendError},
     task::JoinHandle,
     time::sleep,
 };
@@ -63,8 +63,8 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     dag_state: Arc<RwLock<DagState>>,
     block_inflater: Arc<BlockInflater>,
     hint_cache: Arc<HintCache>,
-    park_commands: mpsc::Sender<ParkCommand>,
-    hint_commands: mpsc::Sender<Slot>,
+    park_commands: monitored_mpsc::Sender<ParkCommand>,
+    hint_commands: monitored_mpsc::Sender<Slot>,
     recovery_manager: Mutex<Option<JoinHandle<()>>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
@@ -96,8 +96,10 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         // Parks are lossless (full channel => the sending stream awaits); hint wakes
         // are lossy (full channel => shed with a metric; the at-park recheck, the
         // accepted broadcast, and the deadline all cover a lost wake).
-        let (park_commands, park_receiver) = mpsc::channel(PARK_CHANNEL_CAPACITY);
-        let (hint_commands, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
+        let (park_commands, park_receiver) =
+            monitored_mpsc::channel("consensus_minimal_block_parks", PARK_CHANNEL_CAPACITY);
+        let (hint_commands, hint_receiver) =
+            monitored_mpsc::channel("consensus_minimal_block_hint_wakes", HINT_CHANNEL_CAPACITY);
         let recovery_manager = RecoveryManager::new(
             context.clone(),
             block_inflater.clone(),
@@ -297,7 +299,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     fn publish_hint(
         context: &Context,
         hint_cache: &HintCache,
-        hint_commands: &mpsc::Sender<Slot>,
+        hint_commands: &monitored_mpsc::Sender<Slot>,
         peer: AuthorityIndex,
         block: &ExtendedSerializedBlock,
     ) {
@@ -341,7 +343,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             context
                 .metrics
                 .node_metrics
-                .minimal_block_recovery_hint_wakes_shed
+                .minimal_block_recovery_skipped_hint_wakes
+                .with_label_values(&[context.committee.authority(peer).hostname.as_str()])
                 .inc();
         }
     }
@@ -353,8 +356,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
         hint_cache: Arc<HintCache>,
-        park_commands: mpsc::Sender<ParkCommand>,
-        hint_commands: mpsc::Sender<Slot>,
+        park_commands: monitored_mpsc::Sender<ParkCommand>,
+        hint_commands: monitored_mpsc::Sender<Slot>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -491,13 +494,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // stream rather than dropping — a lost park is a block
                                 // no recovery path owns, and its descendants wedge in
                                 // block_manager until sync refetches it.
-                                if let Err(mpsc::error::TrySendError::Full(park)) =
-                                    park_commands.try_send(park)
+                                if let Err(TrySendError::Full(park)) = park_commands.try_send(park)
                                 {
                                     context
                                         .metrics
                                         .node_metrics
-                                        .minimal_block_recovery_park_blocked
+                                        .minimal_block_recovery_park_backpressure
                                         .inc();
                                     let _ = park_commands.send(park).await;
                                 }
@@ -1218,7 +1220,7 @@ mod test {
         let (context, _keys) = Context::new_for_test(4);
         let peer = context.committee.to_authority_index(2).unwrap();
         let hint_cache = HintCache::new(512, 4);
-        let (commands, mut command_rx) = mpsc::channel(16);
+        let (commands, mut command_rx) = monitored_mpsc::channel("test_hint_wakes", 16);
 
         // Full-form block authored by authority 1, delivered over peer 2's stream.
         let foreign = VerifiedBlock::new_for_test(crate::block::TestBlock::new(5, 1).build());

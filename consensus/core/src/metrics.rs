@@ -189,12 +189,12 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_duplicates: IntCounter,
     pub(crate) minimal_block_recovery_overflow: IntCounter,
     pub(crate) minimal_block_recovery_accepted_lag: IntCounter,
-    pub(crate) minimal_block_recovery_work_dropped: IntCounter,
+    pub(crate) minimal_block_recovery_skipped_work: IntCounterVec,
     pub(crate) minimal_block_recovery_queued: IntGaugeVec,
     pub(crate) minimal_block_recovery_actor_busy: HistogramVec,
-    pub(crate) minimal_block_recovery_park_blocked: IntCounter,
+    pub(crate) minimal_block_recovery_park_backpressure: IntCounter,
     pub(crate) minimal_block_hint_inserts: IntCounterVec,
-    pub(crate) minimal_block_recovery_hint_wakes_shed: IntCounter,
+    pub(crate) minimal_block_recovery_skipped_hint_wakes: IntCounterVec,
     pub(crate) minimal_block_encode_cache: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
@@ -671,8 +671,8 @@ impl NodeMetrics {
                 FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
-            minimal_block_recovery_park_blocked: register_int_counter_with_registry!(
-                "minimal_block_recovery_park_blocked",
+            minimal_block_recovery_park_backpressure: register_int_counter_with_registry!(
+                "minimal_block_recovery_park_backpressure",
                 "Park sends that found the channel full and backpressured the subscription stream (parks are lossless; sustained growth means the actor cannot keep up)",
                 registry,
             ).unwrap(),
@@ -682,14 +682,16 @@ impl NodeMetrics {
                 &["outcome"],
                 registry,
             ).unwrap(),
-            minimal_block_recovery_hint_wakes_shed: register_int_counter_with_registry!(
-                "minimal_block_recovery_hint_wakes_shed",
-                "Hint wakes refused by the bounded actor channel (lossy by design; the at-park recheck, accepted broadcast and deadline cover them). Parks are lossless and backpressure instead",
+            minimal_block_recovery_skipped_hint_wakes: register_int_counter_vec_with_registry!(
+                "minimal_block_recovery_skipped_hint_wakes",
+                "Hint wakes refused by the bounded actor channel, per hinted authority (lossy by design; the at-park recheck, accepted broadcast and deadline cover them)",
+                &["authority"],
                 registry,
             ).unwrap(),
-            minimal_block_recovery_work_dropped: register_int_counter_with_registry!(
-                "minimal_block_recovery_work_dropped",
-                "Recovery work shed at a bound: dropped fetch intents or shed pending submissions",
+            minimal_block_recovery_skipped_work: register_int_counter_vec_with_registry!(
+                "minimal_block_recovery_skipped_work",
+                "Recovery work shed at a full queue, by reason (fetch_intent|pending_submission)",
+                &["reason"],
                 registry,
             ).unwrap(),
             minimal_block_recovery_latency: register_histogram_with_registry!(
