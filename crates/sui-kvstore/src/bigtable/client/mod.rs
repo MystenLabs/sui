@@ -83,16 +83,22 @@ const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 // TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
 const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Max transaction digest row keys to send in a single `ReadRowsRequest`
-/// (see [`BigTableClient::get_transactions_stream`]).
+/// Max row keys to send in a single `ReadRowsRequest`. Every batched read in
+/// this module funnels through [`BigTableClient::multi_get_internal`] or
+/// [`BigTableClient::multi_get_stream`], which split their input at this
+/// boundary so a caller can never build a `ReadRowsRequest` over an unbounded
+/// key list.
 ///
 /// BigTable rejects a serialized `ReadRowsRequest` above 512 KiB
-/// (524_288 bytes). Transaction-table row keys are 32-byte digests that encode
-/// to ~34 bytes each inside `RowSet.row_keys`; reserving ~1 KiB for the table
-/// name and filter leaves `(524_288 - 1_024) / 34 ≈ 15_390` keys, so 10_000
-/// keeps comfortable headroom. This is a backend-owned invariant, not a
-/// user-tunable knob.
-pub(crate) const MAX_TX_DIGESTS_PER_REQUEST: usize = 10_000;
+/// (524_288 bytes). The largest row key multi-gotten in this module is the
+/// 40-byte `ObjectKey` (32-byte `ObjectID` + 8-byte version), which encodes to
+/// ~42 bytes each inside `RowSet.row_keys`; reserving ~1 KiB for the table
+/// name and filter leaves `(524_288 - 1_024) / 42 ≈ 12_458` keys, so 10_000
+/// keeps comfortable headroom for every table (transaction digests,
+/// checkpoint sequence numbers, watermark pipeline names, etc. all encode to
+/// row keys no larger than an `ObjectKey`). This is a backend-owned
+/// invariant, not a user-tunable knob.
+pub(crate) const MAX_MULTI_GET_KEYS_PER_REQUEST: usize = 10_000;
 
 /// Error returned when a batch write has per-entry failures.
 /// Contains the keys and error details for each failed mutation.
@@ -977,8 +983,16 @@ impl BigTableClient {
         if keys.is_empty() {
             return Ok(vec![]);
         }
-        let request = self.build_multi_get_request(table_name, keys, filter);
-        self.read_rows(request, table_name).await
+        // Split into bounded sub-requests so a single call can never exceed
+        // BigTable's `ReadRowsRequest` size limit, regardless of how many
+        // keys the caller passes in. Results are order-insensitive (every
+        // caller re-keys by row key), so a simple concatenation is correct.
+        let mut rows = Vec::with_capacity(keys.len());
+        for chunk in chunk_keys(keys) {
+            let request = self.build_multi_get_request(table_name, chunk, filter.clone());
+            rows.extend(self.read_rows(request, table_name).await?);
+        }
+        Ok(rows)
     }
 
     /// Build a `RowFilter` restricting the read to the given column qualifiers.
@@ -990,6 +1004,15 @@ impl BigTableClient {
             filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
         }
     }
+}
+
+/// Split `keys` into chunks of at most `MAX_MULTI_GET_KEYS_PER_REQUEST` keys
+/// each, preserving order. `keys` may be empty, in which case no chunks are
+/// produced.
+fn chunk_keys(keys: Vec<Vec<u8>>) -> Vec<Vec<Vec<u8>>> {
+    keys.chunks(MAX_MULTI_GET_KEYS_PER_REQUEST)
+        .map(|chunk| chunk.to_vec())
+        .collect()
 }
 
 struct ActivePollWait {
@@ -1116,13 +1139,47 @@ impl BigTableClient {
             return Ok(futures::stream::empty().boxed());
         }
         let requested_key_count = keys.len();
-        let request = self.build_multi_get_request(table_name, keys, filter);
+
+        // Split into bounded sub-requests so a single call can never exceed
+        // BigTable's `ReadRowsRequest` size limit. The first chunk's request
+        // is opened eagerly, matching prior behavior of opening the stream
+        // before returning it; any remaining chunks are opened lazily as the
+        // combined stream is drained, so the poll-wait metrics below
+        // naturally attribute that time to waiting on the stream.
+        let mut chunks = chunk_keys(keys).into_iter();
+        let first_chunk = chunks.next().expect("keys is non-empty");
+        let remaining_chunks: Vec<Vec<Vec<u8>>> = chunks.collect();
+
+        let open_started_at = Instant::now();
+        let first_request = self.build_multi_get_request(table_name, first_chunk, filter.clone());
+        let first_stream = self.read_rows_stream(first_request, table_name).await?;
+        let open_wait = open_started_at.elapsed();
+
+        let stream: MultiGetRowStream = if remaining_chunks.is_empty() {
+            first_stream.boxed()
+        } else {
+            let mut client = self.clone();
+            let table = table_name.to_owned();
+            async_stream::try_stream! {
+                futures::pin_mut!(first_stream);
+                while let Some(row) = first_stream.next().await {
+                    yield row?;
+                }
+                for chunk in remaining_chunks {
+                    let request = client.build_multi_get_request(&table, chunk, filter.clone());
+                    let rows = client.read_rows_stream(request, &table).await?;
+                    futures::pin_mut!(rows);
+                    while let Some(row) = rows.next().await {
+                        yield row?;
+                    }
+                }
+            }
+            .boxed()
+        };
+
         if let Some(metrics) = self.metrics.clone() {
-            let open_started_at = Instant::now();
-            let stream = self.read_rows_stream(request, table_name).await?;
-            let open_wait = open_started_at.elapsed();
             return Ok(MultiGetStreamPollWait::new(
-                stream.boxed(),
+                stream,
                 open_wait,
                 metrics,
                 self.client_name.clone(),
@@ -1132,8 +1189,7 @@ impl BigTableClient {
             .boxed());
         }
 
-        let stream = self.read_rows_stream(request, table_name).await?;
-        Ok(stream.boxed())
+        Ok(stream)
     }
 
     /// Scan a range of rows with optional start/end keys, limit, and direction.
@@ -1444,41 +1500,34 @@ impl BigTableClient {
 
     /// Streaming variant of `get_transactions_filtered`. Yields
     /// `(TransactionDigest, TransactionData)` per row as it arrives.
-    /// Takes an owned `column_filter` so the returned stream does not borrow
-    /// from caller-scoped values (avoids lifetime capture in `impl Stream`).
     ///
-    /// Splits `digests` into sequential sub-requests of at most
-    /// `MAX_TX_DIGESTS_PER_REQUEST` keys so a single call can never
-    /// exceed BigTable's `ReadRowsRequest` size limit, regardless of how many
-    /// digests a caller passes. An empty `digests` yields an empty stream and
-    /// issues no read.
+    /// An empty `digests` yields an empty stream and issues no read.
+    /// Batch-size safety against BigTable's `ReadRowsRequest` limit is
+    /// handled by `multi_get_stream` (see `MAX_MULTI_GET_KEYS_PER_REQUEST`),
+    /// which this method delegates to directly.
     pub async fn get_transactions_stream(
         &mut self,
         digests: Vec<TransactionDigest>,
         column_filter: Option<RowFilter>,
     ) -> Result<impl futures::Stream<Item = Result<(TransactionDigest, TransactionData)>> + use<>>
     {
-        let mut client = self.clone();
+        let keys: Vec<Vec<u8>> = digests
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let rows = self
+            .multi_get_stream(tables::transactions::NAME, keys, column_filter)
+            .await?;
         Ok(async_stream::try_stream! {
-            for chunk in digests.chunks(MAX_TX_DIGESTS_PER_REQUEST) {
-                let keys: Vec<Vec<u8>> = chunk
-                    .iter()
-                    .map(tables::transactions::encode_key)
-                    .collect();
-                let filter = column_filter.clone();
-                let rows = client
-                    .multi_get_stream(tables::transactions::NAME, keys, filter)
-                    .await?;
-                futures::pin_mut!(rows);
-                while let Some(row) = rows.next().await {
-                    let (key, cells) = row?;
-                    let digest = TransactionDigest::from(
-                        <[u8; 32]>::try_from(key.as_ref())
-                            .context("invalid transaction digest key length")?,
-                    );
-                    let tx = tables::transactions::decode(digest, &cells)?;
-                    yield (digest, tx);
-                }
+            futures::pin_mut!(rows);
+            while let Some(row) = rows.next().await {
+                let (key, cells) = row?;
+                let digest = TransactionDigest::from(
+                    <[u8; 32]>::try_from(key.as_ref())
+                        .context("invalid transaction digest key length")?,
+                );
+                let tx = tables::transactions::decode(digest, &cells)?;
+                yield (digest, tx);
             }
         })
     }
@@ -2267,6 +2316,9 @@ mod tests {
     use crate::bigtable::proto::bigtable::v2::RateLimitInfo;
     use futures::{TryStreamExt, stream};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use sui_types::effects::TransactionEvents;
+    use sui_types::messages_checkpoint::CheckpointContents;
+    use sui_types::object::OBJECT_START_VERSION;
 
     use super::*;
 
@@ -2680,7 +2732,7 @@ mod tests {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let mut client = test_client(&mock).await;
 
-        let n = MAX_TX_DIGESTS_PER_REQUEST + 1;
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
         let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
         for d in &digests {
             insert_tx_row(&mock, d).await;
@@ -2701,7 +2753,7 @@ mod tests {
         let lens: Vec<usize> = calls.iter().map(|c| c.row_keys.len()).collect();
         assert_eq!(
             lens,
-            vec![MAX_TX_DIGESTS_PER_REQUEST, 1],
+            vec![MAX_MULTI_GET_KEYS_PER_REQUEST, 1],
             "digest batches split at the cap"
         );
     }
@@ -2721,5 +2773,287 @@ mod tests {
             tx_read_calls(&mock).await.is_empty(),
             "empty digest list must not issue a transactions ReadRows"
         );
+    }
+
+    /// Build a deterministic, unique 32-byte `ObjectID`: `i` big-endian in the low 8 bytes.
+    fn object_id(i: u64) -> ObjectID {
+        let mut bytes = [0u8; 32];
+        bytes[24..32].copy_from_slice(&i.to_be_bytes());
+        ObjectID::new(bytes)
+    }
+
+    /// Insert a minimal object row so `tables::objects::decode` succeeds for `object`.
+    async fn insert_object_row(mock: &MockBigtableServer, object: &Object) {
+        let key = tables::objects::encode_key(&ObjectKey(object.id(), object.version()));
+        let cells = tables::objects::encode(object).unwrap();
+        mock.insert_row(tables::objects::NAME, key, cells).await;
+    }
+
+    /// Insert a transaction row with a populated `events` column (`None`), needed by
+    /// `get_events_for_transactions` on top of the columns `insert_tx_row` already writes.
+    async fn insert_tx_row_with_events(mock: &MockBigtableServer, digest: &TransactionDigest) {
+        mock.insert_row(
+            tables::transactions::NAME,
+            tables::transactions::encode_key(digest),
+            [
+                (
+                    tables::transactions::col::EVENTS,
+                    Bytes::from(bcs::to_bytes(&Option::<TransactionEvents>::None).unwrap()),
+                ),
+                (
+                    tables::transactions::col::TIMESTAMP,
+                    Bytes::from(bcs::to_bytes(&0u64).unwrap()),
+                ),
+            ],
+        )
+        .await;
+    }
+
+    /// Every chunking test below requests `MAX_MULTI_GET_KEYS_PER_REQUEST + 1` keys but only
+    /// populates a couple of rows (one that lands in the first chunk, one in the second), so
+    /// the test stays fast while still proving: (1) the oversized request is split into
+    /// multiple capped `ReadRows` calls, and (2) results from every chunk are merged into the
+    /// final output rather than only the first chunk's.
+    fn assert_split_at_cap(
+        calls: &[crate::bigtable::mock_server::ReadRowsCall],
+        total_keys: usize,
+    ) {
+        let lens: Vec<usize> = calls.iter().map(|c| c.row_keys.len()).collect();
+        assert_eq!(
+            lens,
+            vec![
+                MAX_MULTI_GET_KEYS_PER_REQUEST,
+                total_keys - MAX_MULTI_GET_KEYS_PER_REQUEST
+            ],
+            "batches should split at the cap"
+        );
+    }
+
+    #[tokio::test]
+    async fn multi_get_splits_oversized_key_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let mut client = test_client(&mock).await;
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
+        let present = [digests[0], digests[n - 1]];
+        for d in &present {
+            insert_tx_row(&mock, d).await;
+        }
+
+        let keys: Vec<Vec<u8>> = digests
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let rows = client
+            .multi_get(tables::transactions::NAME, keys, None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            rows.len(),
+            present.len(),
+            "only the inserted rows are returned"
+        );
+        let got_keys: std::collections::HashSet<_> = rows.iter().map(|(k, _)| k.clone()).collect();
+        for d in &present {
+            assert!(
+                got_keys.contains(&Bytes::from(tables::transactions::encode_key(d))),
+                "missing row for digest {d}"
+            );
+        }
+
+        assert_split_at_cap(&tx_read_calls(&mock).await, n);
+    }
+
+    #[tokio::test]
+    async fn multi_get_stream_splits_oversized_key_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let registry = Registry::new();
+        let mut client = test_client(&mock).await;
+        client.metrics = Some(KvMetrics::new(&registry));
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
+        let present = [digests[0], digests[n - 1]];
+        for d in &present {
+            insert_tx_row(&mock, d).await;
+        }
+
+        let keys: Vec<Vec<u8>> = digests
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let rows: Vec<_> = client
+            .multi_get_stream(tables::transactions::NAME, keys, None)
+            .await
+            .unwrap()
+            .try_collect()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            rows.len(),
+            present.len(),
+            "only the inserted rows are returned"
+        );
+        let got_keys: std::collections::HashSet<_> = rows.iter().map(|(k, _)| k.clone()).collect();
+        for d in &present {
+            assert!(
+                got_keys.contains(&Bytes::from(tables::transactions::encode_key(d))),
+                "missing row for digest {d}"
+            );
+        }
+
+        assert_split_at_cap(&tx_read_calls(&mock).await, n);
+    }
+
+    #[tokio::test]
+    async fn get_objects_splits_oversized_key_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let mut client = test_client(&mock).await;
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let object_keys: Vec<ObjectKey> = (0..n as u64)
+            .map(|i| ObjectKey(object_id(i), OBJECT_START_VERSION))
+            .collect();
+        let present_ids = [object_keys[0].0, object_keys[n - 1].0];
+        for id in present_ids {
+            insert_object_row(&mock, &Object::immutable_with_id_for_testing(id)).await;
+        }
+
+        let got = client.get_objects(&object_keys).await.unwrap();
+        assert_eq!(
+            got.len(),
+            present_ids.len(),
+            "only the inserted objects are returned"
+        );
+        let got_ids: std::collections::HashSet<_> = got.iter().map(|o| o.id()).collect();
+        for id in present_ids {
+            assert!(got_ids.contains(&id), "missing object {id}");
+        }
+
+        let calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::objects::NAME)
+            .collect::<Vec<_>>();
+        assert_split_at_cap(&calls, n);
+    }
+
+    #[tokio::test]
+    async fn get_transactions_splits_oversized_digest_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let mut client = test_client(&mock).await;
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
+        let present = [digests[0], digests[n - 1]];
+        for d in &present {
+            insert_tx_row(&mock, d).await;
+        }
+
+        let got = client.get_transactions(&digests).await.unwrap();
+        assert_eq!(
+            got.len(),
+            present.len(),
+            "only the inserted transactions are returned"
+        );
+        let got_digests: std::collections::HashSet<_> = got.iter().map(|tx| tx.digest).collect();
+        for d in &present {
+            assert!(got_digests.contains(d), "missing transaction {d}");
+        }
+
+        assert_split_at_cap(&tx_read_calls(&mock).await, n);
+    }
+
+    #[tokio::test]
+    async fn get_checkpoints_splits_oversized_key_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let mut client = test_client(&mock).await;
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let sequence_numbers: Vec<u64> = (0..n as u64).collect();
+        let present = [sequence_numbers[0], sequence_numbers[n - 1]];
+        for seq in present {
+            let contents = CheckpointContents::new_with_digests_only_for_tests(std::iter::empty());
+            mock.insert_row(
+                tables::checkpoints::NAME,
+                tables::checkpoints::encode_key(seq),
+                [(
+                    tables::checkpoints::col::CONTENTS,
+                    Bytes::from(bcs::to_bytes(&contents).unwrap()),
+                )],
+            )
+            .await;
+        }
+
+        let got = client.get_checkpoints(&sequence_numbers).await.unwrap();
+        assert_eq!(
+            got.len(),
+            present.len(),
+            "only the inserted checkpoints are returned"
+        );
+
+        let calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::checkpoints::NAME)
+            .collect::<Vec<_>>();
+        assert_split_at_cap(&calls, n);
+    }
+
+    #[tokio::test]
+    async fn get_events_for_transactions_splits_oversized_digest_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let mut client = test_client(&mock).await;
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
+        let present = [digests[0], digests[n - 1]];
+        for d in &present {
+            insert_tx_row_with_events(&mock, d).await;
+        }
+
+        let got = client.get_events_for_transactions(&digests).await.unwrap();
+        assert_eq!(
+            got.len(),
+            present.len(),
+            "only the inserted rows are returned"
+        );
+        let got_digests: std::collections::HashSet<_> = got.iter().map(|(d, _)| *d).collect();
+        for d in &present {
+            assert!(got_digests.contains(d), "missing transaction {d}");
+        }
+
+        assert_split_at_cap(&tx_read_calls(&mock).await, n);
+    }
+
+    #[tokio::test]
+    async fn get_transaction_timestamps_splits_oversized_digest_batches_and_merges_results() {
+        let mock = MockBigtableServer::new();
+        let mut client = test_client(&mock).await;
+
+        let n = MAX_MULTI_GET_KEYS_PER_REQUEST + 1;
+        let digests: Vec<_> = (0..n as u64).map(tx_digest).collect();
+        let present = [digests[0], digests[n - 1]];
+        for d in &present {
+            insert_tx_row(&mock, d).await;
+        }
+
+        let got = client.get_transaction_timestamps(&digests).await.unwrap();
+        assert_eq!(
+            got.len(),
+            present.len(),
+            "only the inserted rows are returned"
+        );
+        let got_digests: std::collections::HashSet<_> = got.iter().map(|(d, _)| *d).collect();
+        for d in &present {
+            assert!(got_digests.contains(d), "missing transaction {d}");
+        }
+
+        assert_split_at_cap(&tx_read_calls(&mock).await, n);
     }
 }

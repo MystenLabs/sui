@@ -497,7 +497,7 @@ mod tests {
     /// Transactions-stage chunk size used by the resolver tests. Mirrors the
     /// production default (`DEFAULT_STAGE_CHUNK_SIZE`) and is the per-request
     /// batch size the pipeline hands to BigTable — deliberately far below the
-    /// backend `MAX_TX_DIGESTS_PER_REQUEST` clamp.
+    /// backend `MAX_MULTI_GET_KEYS_PER_REQUEST` clamp.
     const TX_CHUNK_SIZE: usize = 100;
 
     /// Deterministic, unique 32-byte digest: `i` big-endian in the low 8 bytes.
@@ -609,7 +609,7 @@ mod tests {
         // One checkpoint with more transactions than the stage `chunk_size`, so
         // the pipeline must split its digests across multiple capped BigTable
         // requests (the objects stage batches the same way). The backend
-        // `MAX_TX_DIGESTS_PER_REQUEST` clamp is a separate safety net covered by
+        // `MAX_MULTI_GET_KEYS_PER_REQUEST` clamp is a separate safety net covered by
         // the `sui-kvstore` `get_transactions_stream_*` tests.
         let n = TX_CHUNK_SIZE * 2 + 1;
         let digests: Vec<_> = (0..n as u64).map(digest).collect();
