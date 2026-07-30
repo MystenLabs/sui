@@ -108,53 +108,14 @@ fn analyze_command<E: ExecutionErrorTrait>(
             }
         }
         Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) => {
-            if !protocol_config.enable_init_on_upgrade() {
-                return Ok(());
-            }
-
-            let current_pkg = get_package(current_package_id, store)?;
-
-            assert_invariant!(
-                protocol_config.enable_unified_linkage(),
-                "Unified linkage must be enabled before init on upgrade is supported"
-            );
-
-            let new_modules = match payload {
-                PackagePayload::Serialized(_) => {
-                    invariant_violation!(
-                        "Unexpected serialized package payload in linkage analysis"
-                    )
-                }
-                PackagePayload::Deserialized(DeserializedPackage {
-                    deserialized_modules,
-                    ..
-                }) => deserialized_modules,
-            };
-
-            // Whether each module already present in the current package defines an `init`.
-            let current_module_inits = current_pkg
-                .modules()
-                .iter()
-                .map(|(module_id, module)| {
-                    (
-                        module_id.name().as_str(),
-                        module_has_init(module.compiled_module()),
-                    )
-                })
-                .collect::<BTreeMap<_, _>>();
-
-            // reject upgrades where an existing module adds an `init`.
-            reject_existing_module_added_init::<E>(&current_module_inits, new_modules)?;
-
-            // only newly-introduced modules with an `init` contribute to the linkage.
-            if has_new_module_init(&current_module_inits, new_modules) {
-                add_upgrade_init_linkage_to_table::<E>(
-                    resolution_table,
-                    current_package_id,
-                    resolved_linkage,
-                    store,
-                )?;
-            }
+            analyze_upgrade_command::<E>(
+                payload,
+                current_package_id,
+                resolved_linkage,
+                resolution_table,
+                store,
+                protocol_config,
+            )?;
         }
         Command::MakeMoveVec(Some(ty), _) => {
             add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
@@ -162,6 +123,64 @@ fn analyze_command<E: ExecutionErrorTrait>(
         Command::MakeMoveVec(None, _) => (),
         Command::TransferObjects(_, _) | Command::SplitCoins(_, _) | Command::MergeCoins(_, _) => {}
     };
+    Ok(())
+}
+
+/// Analyze the linkage contribution of an upgrade command.
+fn analyze_upgrade_command<E: ExecutionErrorTrait>(
+    payload: &PackagePayload,
+    current_package_id: &ObjectID,
+    resolved_linkage: &ResolvedLinkage,
+    resolution_table: &mut ResolutionTable,
+    store: &dyn PackageStore,
+    protocol_config: &ProtocolConfig,
+) -> Result<(), E> {
+    if !protocol_config.enable_init_on_upgrade() {
+        return Ok(());
+    }
+
+    let current_pkg = get_package(current_package_id, store)?;
+
+    assert_invariant!(
+        protocol_config.enable_unified_linkage(),
+        "Unified linkage must be enabled before init on upgrade is supported"
+    );
+
+    let new_modules = match payload {
+        PackagePayload::Serialized(_) => {
+            invariant_violation!("Unexpected serialized package payload in linkage analysis")
+        }
+        PackagePayload::Deserialized(DeserializedPackage {
+            deserialized_modules,
+            ..
+        }) => deserialized_modules,
+    };
+
+    // Whether each module already present in the current package defines an `init`.
+    let current_module_inits = current_pkg
+        .modules()
+        .iter()
+        .map(|(module_id, module)| {
+            (
+                module_id.name().as_str(),
+                module_has_init(module.compiled_module()),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    // reject upgrades where an existing module adds an `init`.
+    reject_existing_module_added_init::<E>(&current_module_inits, new_modules)?;
+
+    // only newly-introduced modules with an `init` contribute to the linkage.
+    if has_new_module_init(&current_module_inits, new_modules) {
+        add_upgrade_init_linkage_to_table::<E>(
+            resolution_table,
+            current_package_id,
+            resolved_linkage,
+            store,
+        )?;
+    }
+
     Ok(())
 }
 
