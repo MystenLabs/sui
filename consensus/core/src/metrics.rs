@@ -190,6 +190,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_overflow: IntCounter,
     pub(crate) minimal_block_recovery_rescans: IntCounter,
     pub(crate) minimal_block_recovery_intents_dropped: IntCounter,
+    pub(crate) minimal_block_hint_inserts: IntCounterVec,
+    pub(crate) minimal_block_recovery_commands_dropped: IntCounterVec,
     pub(crate) minimal_block_encode_cache: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
@@ -651,6 +653,18 @@ impl NodeMetrics {
             minimal_block_recovery_rescans: register_int_counter_with_registry!(
                 "minimal_block_recovery_rescans",
                 "Full parked-entry rescans after accepted-block broadcast lag",
+                registry,
+            ).unwrap(),
+            minimal_block_hint_inserts: register_int_counter_vec_with_registry!(
+                "minimal_block_hint_inserts",
+                "Receipt-time hint insertion outcomes (inserted|duplicate|below_horizon|slot_full|authority_full|global_full) — the decisive signal for wake-coverage loss",
+                &["outcome"],
+                registry,
+            ).unwrap(),
+            minimal_block_recovery_commands_dropped: register_int_counter_vec_with_registry!(
+                "minimal_block_recovery_commands_dropped",
+                "Recovery commands refused by the bounded actor channel, by kind (park|slot_heard)",
+                &["kind"],
                 registry,
             ).unwrap(),
             minimal_block_recovery_intents_dropped: register_int_counter_with_registry!(

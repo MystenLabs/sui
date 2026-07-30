@@ -82,6 +82,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         // DAG itself would remember cannot aid inflation anyway.
         let hint_cache = Arc::new(HintCache::new(
             context.parameters.dag_state_cached_rounds as Round,
+            context.committee.size(),
         ));
         let block_inflater = Arc::new(BlockInflater::with_hints(
             context.clone(),
@@ -320,8 +321,24 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             return;
         };
         let slot = Slot::from(identity);
-        if hint_cache.insert(slot, identity.digest) {
-            let _ = recovery_commands.try_send(RecoveryCommand::SlotHeard(slot));
+        let outcome = hint_cache.insert(slot, identity.digest);
+        context
+            .metrics
+            .node_metrics
+            .minimal_block_hint_inserts
+            .with_label_values(&[outcome.label()])
+            .inc();
+        if outcome == crate::minimal_block_recovery::HintInsert::Inserted
+            && recovery_commands
+                .try_send(RecoveryCommand::SlotHeard(slot))
+                .is_err()
+        {
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_commands_dropped
+                .with_label_values(&["slot_heard"])
+                .inc();
         }
     }
 
@@ -471,7 +488,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     context
                                         .metrics
                                         .node_metrics
-                                        .minimal_block_recovery_intents_dropped
+                                        .minimal_block_recovery_commands_dropped
+                                        .with_label_values(&["park"])
                                         .inc();
                                 }
                                 continue 'stream;
@@ -985,7 +1003,10 @@ mod test {
         tokio::time::sleep(Duration::from_millis(2)).await;
         for ancestor in &round2_refs {
             let slot = Slot::from(*ancestor);
-            assert!(subscriber.hint_cache.insert(slot, ancestor.digest));
+            assert_eq!(
+                subscriber.hint_cache.insert(slot, ancestor.digest),
+                crate::minimal_block_recovery::HintInsert::Inserted
+            );
             subscriber
                 .recovery_commands
                 .try_send(RecoveryCommand::SlotHeard(slot))
@@ -1078,7 +1099,10 @@ mod test {
         for ancestor in round2_refs.iter().filter(|r| r.author != peer) {
             assert!(authority_service.lock().handle_send_block.is_empty());
             let slot = Slot::from(*ancestor);
-            assert!(subscriber.hint_cache.insert(slot, ancestor.digest));
+            assert_eq!(
+                subscriber.hint_cache.insert(slot, ancestor.digest),
+                crate::minimal_block_recovery::HintInsert::Inserted
+            );
             subscriber
                 .recovery_commands
                 .try_send(RecoveryCommand::SlotHeard(slot))
@@ -1208,7 +1232,7 @@ mod test {
     async fn foreign_author_and_epoch_hints_are_rejected() {
         let (context, _keys) = Context::new_for_test(4);
         let peer = context.committee.to_authority_index(2).unwrap();
-        let hint_cache = HintCache::new(512);
+        let hint_cache = HintCache::new(512, 4);
         let (commands, mut command_rx) = mpsc::channel(16);
 
         // Full-form block authored by authority 1, delivered over peer 2's stream.

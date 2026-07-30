@@ -61,8 +61,9 @@ const MAX_HINTS_PER_SLOT: usize = 3;
 /// its own slots (identity is validated against the authenticated stream peer), so this
 /// bounds how much cache one misbehaving peer can occupy.
 const MAX_HINTS_PER_AUTHORITY: usize = 1024;
-/// Hard global bound on retained hints, independent of committee size.
-const MAX_HINTS_TOTAL: usize = 32_768;
+/// Ceiling on the derived global hint capacity (memory guard: digests are 32 B, so this
+/// is ~8 MiB at the ceiling).
+const MAX_HINTS_TOTAL_CEILING: usize = 262_144;
 /// Parked entries, globally and per sending peer.
 const MAX_PARKED_ENTRIES: usize = 4096;
 const MAX_PARKED_ENTRIES_PER_PEER: usize = 256;
@@ -97,10 +98,40 @@ pub(crate) const RECOVERY_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 /// hint its own slots. The cache never advances its eviction horizon from received
 /// (unverified) rounds — only from accepted rounds — so a Byzantine future-round block
 /// cannot flush it.
+/// Outcome of a hint insertion, labeling the rejection counters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HintInsert {
+    Inserted,
+    Duplicate,
+    BelowHorizon,
+    SlotFull,
+    AuthorityFull,
+    GlobalFull,
+}
+
+impl HintInsert {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            HintInsert::Inserted => "inserted",
+            HintInsert::Duplicate => "duplicate",
+            HintInsert::BelowHorizon => "below_horizon",
+            HintInsert::SlotFull => "slot_full",
+            HintInsert::AuthorityFull => "authority_full",
+            HintInsert::GlobalFull => "global_full",
+        }
+    }
+}
+
 pub(crate) struct HintCache {
     inner: Mutex<HintCacheInner>,
     /// Slots older than `horizon - retained_rounds` are evicted.
     retained_rounds: Round,
+    /// Derived from retention x committee size so the cap can never be smaller than the
+    /// retention window's working set. A cap below that (an early build set a flat
+    /// 32,768, ~19 s of traffic at 125 validators) fills once and then permanently
+    /// rejects FRESH hints while retaining stale ones — measured live as a monotonic
+    /// decline in hint wakes and a rising deadline-fetch share.
+    capacity: usize,
 }
 
 struct HintCacheInner {
@@ -111,7 +142,10 @@ struct HintCacheInner {
 }
 
 impl HintCache {
-    pub(crate) fn new(retained_rounds: Round) -> Self {
+    pub(crate) fn new(retained_rounds: Round, committee_size: usize) -> Self {
+        let capacity = (retained_rounds as usize)
+            .saturating_mul(committee_size.max(1))
+            .clamp(1024, MAX_HINTS_TOTAL_CEILING);
         Self {
             inner: Mutex::new(HintCacheInner {
                 hints: BTreeMap::new(),
@@ -120,34 +154,57 @@ impl HintCache {
                 horizon: 0,
             }),
             retained_rounds,
+            capacity,
         }
     }
 
-    /// Inserts a validated hint. Returns false when capacity or horizon rejected it.
-    pub(crate) fn insert(&self, slot: Slot, digest: BlockDigest) -> bool {
+    /// Inserts a validated hint, evicting the OLDEST slots when full: a fresh hint is
+    /// always worth more than the oldest retained one (children reference recent
+    /// rounds; old slots are in accepted DAG state anyway). Returns the insertion
+    /// outcome for the rejection counters.
+    pub(crate) fn insert(&self, slot: Slot, digest: BlockDigest) -> HintInsert {
         let mut inner = self.inner.lock();
-        if slot.round.saturating_add(self.retained_rounds) < inner.horizon
-            || inner.total >= MAX_HINTS_TOTAL
-        {
-            return false;
+        if slot.round.saturating_add(self.retained_rounds) < inner.horizon {
+            return HintInsert::BelowHorizon;
+        }
+        while inner.total >= self.capacity {
+            let Some((oldest, _)) = inner.hints.first_key_value() else {
+                break;
+            };
+            // Never evict something newer than the incoming hint.
+            if oldest.round >= slot.round {
+                return HintInsert::GlobalFull;
+            }
+            let (evicted_slot, evicted) = inner.hints.pop_first().expect("non-empty");
+            inner.total = inner.total.saturating_sub(evicted.len());
+            if let Some(count) = inner.per_authority.get_mut(&evicted_slot.authority) {
+                *count = count.saturating_sub(evicted.len());
+            }
         }
         let count = inner.per_authority.entry(slot.authority).or_insert(0);
         if *count >= MAX_HINTS_PER_AUTHORITY {
-            return false;
+            return HintInsert::AuthorityFull;
         }
         *count += 1;
         let count_rollback = slot.authority;
         let digests = inner.hints.entry(slot).or_default();
-        if digests.len() >= MAX_HINTS_PER_SLOT || digests.contains(&digest) {
+        if digests.contains(&digest) {
             *inner
                 .per_authority
                 .get_mut(&count_rollback)
                 .expect("just inserted") -= 1;
-            return false;
+            return HintInsert::Duplicate;
+        }
+        if digests.len() >= MAX_HINTS_PER_SLOT {
+            *inner
+                .per_authority
+                .get_mut(&count_rollback)
+                .expect("just inserted") -= 1;
+            return HintInsert::SlotFull;
         }
         digests.push(digest);
         inner.total += 1;
-        true
+        HintInsert::Inserted
     }
 
     pub(crate) fn candidates(&self, slot: Slot) -> Vec<BlockDigest> {
@@ -807,39 +864,42 @@ mod tests {
 
     #[tokio::test]
     async fn hint_cache_caps_per_slot_and_deduplicates() {
-        let cache = HintCache::new(512);
-        assert!(cache.insert(slot(5, 0), digest(1)));
-        assert!(!cache.insert(slot(5, 0), digest(1)), "duplicate rejected");
-        assert!(cache.insert(slot(5, 0), digest(2)));
-        assert!(cache.insert(slot(5, 0), digest(3)));
-        assert!(
-            !cache.insert(slot(5, 0), digest(4)),
-            "per-slot cap enforced"
-        );
+        let cache = HintCache::new(512, 4);
+        assert_eq!(cache.insert(slot(5, 0), digest(1)), HintInsert::Inserted);
+        assert_eq!(cache.insert(slot(5, 0), digest(1)), HintInsert::Duplicate);
+        assert_eq!(cache.insert(slot(5, 0), digest(2)), HintInsert::Inserted);
+        assert_eq!(cache.insert(slot(5, 0), digest(3)), HintInsert::Inserted);
+        assert_eq!(cache.insert(slot(5, 0), digest(4)), HintInsert::SlotFull);
         assert_eq!(cache.candidates(slot(5, 0)).len(), MAX_HINTS_PER_SLOT);
     }
 
     #[tokio::test]
     async fn hint_cache_caps_per_authority() {
-        let cache = HintCache::new(1 << 20);
+        let cache = HintCache::new(1 << 20, 4);
         for round in 0..MAX_HINTS_PER_AUTHORITY as Round {
-            assert!(cache.insert(slot(round, 1), digest((round % 251) as u8)));
+            assert_eq!(
+                cache.insert(slot(round, 1), digest((round % 251) as u8)),
+                HintInsert::Inserted
+            );
         }
-        assert!(
-            !cache.insert(slot(1 << 19, 1), digest(9)),
-            "per-authority cap enforced"
+        assert_eq!(
+            cache.insert(slot(1 << 19, 1), digest(9)),
+            HintInsert::AuthorityFull
         );
         // A different authority is unaffected.
-        assert!(cache.insert(slot(7, 2), digest(9)));
+        assert_eq!(cache.insert(slot(7, 2), digest(9)), HintInsert::Inserted);
     }
 
     #[tokio::test]
     async fn hint_cache_horizon_advances_only_from_accepted_rounds() {
-        let cache = HintCache::new(100);
-        assert!(cache.insert(slot(10, 0), digest(1)));
+        let cache = HintCache::new(100, 4);
+        assert_eq!(cache.insert(slot(10, 0), digest(1)), HintInsert::Inserted);
         // A far-future hint (e.g. from a Byzantine block) is stored but must not evict
         // the useful horizon — eviction advances only via advance_horizon (accepted).
-        assert!(cache.insert(slot(1_000_000, 0), digest(2)));
+        assert_eq!(
+            cache.insert(slot(1_000_000, 0), digest(2)),
+            HintInsert::Inserted
+        );
         assert_eq!(cache.candidates(slot(10, 0)), vec![digest(1)]);
         // Accepted progress evicts slots below the retained window and frees their
         // per-authority budget.
@@ -847,7 +907,31 @@ mod tests {
         assert!(cache.candidates(slot(10, 0)).is_empty());
         assert_eq!(cache.candidates(slot(1_000_000, 0)), vec![digest(2)]);
         // Hints below the accepted horizon window are refused outright.
-        assert!(!cache.insert(slot(50, 0), digest(3)));
-        assert!(cache.insert(slot(150, 0), digest(3)));
+        assert_eq!(
+            cache.insert(slot(50, 0), digest(3)),
+            HintInsert::BelowHorizon
+        );
+        assert_eq!(cache.insert(slot(150, 0), digest(3)), HintInsert::Inserted);
+    }
+
+    /// The regression behind Run 5's decaying hint wakes: a full cache must admit FRESH
+    /// hints by evicting its oldest slots, never reject the new in favor of the stale.
+    #[tokio::test]
+    async fn hint_cache_full_evicts_oldest_not_newest() {
+        // retained_rounds x committee = 4 x 1 -> capacity clamps to the 1024 floor.
+        let cache = HintCache::new(4, 1);
+        for round in 0..1024u32 {
+            assert_eq!(
+                cache.insert(slot(round, 0), digest((round % 251) as u8)),
+                HintInsert::Inserted,
+                "round {round}"
+            );
+        }
+        // Full. A FRESH hint evicts the oldest slot and lands.
+        assert_eq!(cache.insert(slot(5000, 0), digest(7)), HintInsert::Inserted);
+        assert!(cache.candidates(slot(0, 0)).is_empty(), "oldest evicted");
+        assert_eq!(cache.candidates(slot(5000, 0)), vec![digest(7)]);
+        // An incoming hint OLDER than everything retained is the one refused.
+        assert_eq!(cache.insert(slot(0, 0), digest(9)), HintInsert::GlobalFull);
     }
 }
