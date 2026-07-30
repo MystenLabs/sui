@@ -199,8 +199,7 @@ pub async fn initialize(
     let (checkpoint_sender, subscription_handle) =
         SubscriptionService::build(&registry, None, None, None, None);
 
-    let context =
-        Context::new_with_services(simulacrum, services, checkpoint_sender, &registry).await?;
+    let context = Context::new(simulacrum, services, checkpoint_sender, &registry).await?;
 
     Ok((context, subscription_handle))
 }

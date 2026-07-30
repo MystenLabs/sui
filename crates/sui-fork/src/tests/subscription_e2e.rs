@@ -47,7 +47,6 @@ struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
     // Held to keep the RPC store alive for the lifetime of the server.
-    _services: ServiceManager,
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
     // Held so remote object probes keep resolving to "not found".
@@ -103,7 +102,14 @@ impl ServerHarness {
         let (checkpoint_sender, subscription_handle) =
             SubscriptionService::build(&registry, None, None, None, None);
 
-        let context = Arc::new(Context::new(sim, checkpoint_sender));
+        // Service-backed on purpose: subscribers are published to by the
+        // indexer's broadcast pipeline, so a service-less context would
+        // exercise a publication path production never takes.
+        let context = Arc::new(
+            Context::new(sim, services, checkpoint_sender, &registry)
+                .await
+                .expect("service-backed context should initialize"),
+        );
 
         let reader: Arc<dyn RpcStateReader> = Arc::new(store);
         let mut service = RpcService::new(reader);
@@ -135,7 +141,6 @@ impl ServerHarness {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
-                    _services: services,
                     _temp: temp,
                     _gql_server: gql_server,
                 });
