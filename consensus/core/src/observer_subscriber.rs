@@ -27,9 +27,25 @@ use crate::{
     task::{join_and_propagate_panic, reap_finished_task, shutdown_join_set},
 };
 
+/// Number of commit-sync batches of lag below which a gated subscription is resumed.
+/// The subscription is gated at `COMMIT_LAG_MULTIPLIER` (5) batches of lag, where the
+/// observer service starts rejecting streamed blocks anyway; the band between the two
+/// thresholds is hysteresis preventing rapid gate flapping.
+const RESUBSCRIBE_LAG_BATCHES: u32 = 1;
+
+/// How often a gated subscription re-evaluates commit lag.
+const GATE_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
 /// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
+///
+/// While the local commit index lags the quorum commit index too much, streamed blocks
+/// would be rejected by the observer service and re-fetched later via commit sync, so the
+/// subscription drops its stream and holds off reconnecting until commit sync has nearly
+/// caught up, saving the bandwidth and verification on both ends. While gated, the
+/// quorum commit index keeps advancing from the commit votes observed on commit-synced
+/// blocks.
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
@@ -224,6 +240,12 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             }
             retries += 1;
 
+            // Hold off (re)connecting while commit-lagging: streamed blocks would be
+            // rejected by the observer service and later re-fetched via commit sync.
+            if !Self::wait_while_commit_lagging(&context, &commit_vote_monitor, &dag_state).await {
+                return;
+            }
+
             // Recompute highest rounds from DagState before each connection attempt
             // so reconnections resume from where we left off rather than re-fetching
             // already-seen blocks. Clamp to the GC round, since blocks below it would
@@ -280,8 +302,11 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                             .observer_subscribed_blocks_batch_size
                             .observe(item.blocks.len() as f64);
 
-                        // During catch-up (commit lagging behind quorum), drop silently --
-                        // those rounds will arrive via checkpoint sync, same as lagging validators.
+                        // During catch-up (commit lagging behind quorum), streamed blocks
+                        // would be rejected by the observer service and re-fetched via
+                        // commit sync, so drop the stream and hold off reconnecting until
+                        // nearly caught up, saving the bandwidth on both ends. The
+                        // disconnection is deliberate, so reconnect without backoff.
                         let is_commit_lagging = dag_state.upgrade().is_none_or(|dag_state| {
                             is_commit_lagging(
                                 &context,
@@ -289,9 +314,13 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                                 commit_vote_monitor.quorum_commit_index(),
                             )
                         });
-                        if let Some(handler) = &randomness_signature_handler
-                            && !is_commit_lagging
-                        {
+                        if is_commit_lagging {
+                            retries = 0;
+                            backoff.reset();
+                            break 'stream;
+                        }
+
+                        if let Some(handler) = &randomness_signature_handler {
                             for sig in item.auxiliary_data.randomness_signatures {
                                 handler.handle_randomness_signature(sig);
                             }
@@ -352,6 +381,62 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         }
     }
 
+    // While the local commit index lags the quorum commit index too much, waits for
+    // commit sync to bring it within `RESUBSCRIBE_LAG_BATCHES` batches before returning;
+    // the band between the gate and resume thresholds is hysteresis preventing rapid
+    // flapping. While waiting, the quorum commit index keeps advancing from the commit
+    // votes observed on commit-synced blocks. Returns false when the node is shutting
+    // down.
+    async fn wait_while_commit_lagging(
+        context: &Context,
+        commit_vote_monitor: &CommitVoteMonitor,
+        dag_state: &Weak<parking_lot::RwLock<DagState>>,
+    ) -> bool {
+        let mut gated = false;
+        loop {
+            let Some(dag_state) = dag_state.upgrade() else {
+                return false;
+            };
+            let local_commit_index = dag_state.read().last_commit_index();
+            drop(dag_state);
+            let quorum_commit_index = commit_vote_monitor.quorum_commit_index();
+
+            let caught_up = if gated {
+                quorum_commit_index.saturating_sub(local_commit_index)
+                    <= context.parameters.commit_sync_batch_size * RESUBSCRIBE_LAG_BATCHES
+            } else {
+                !is_commit_lagging(context, local_commit_index, quorum_commit_index)
+            };
+            if caught_up {
+                if gated {
+                    info!(
+                        "Resuming block stream subscription: local commit index {} caught up with quorum commit index {}",
+                        local_commit_index, quorum_commit_index,
+                    );
+                    context
+                        .metrics
+                        .node_metrics
+                        .observer_subscription_gated
+                        .set(0);
+                }
+                return true;
+            }
+            if !gated {
+                gated = true;
+                info!(
+                    "Gating block stream subscription: local commit index {} lags quorum commit index {}, blocks will arrive via commit sync",
+                    local_commit_index, quorum_commit_index,
+                );
+                context
+                    .metrics
+                    .node_metrics
+                    .observer_subscription_gated
+                    .set(1);
+            }
+            sleep(GATE_CHECK_INTERVAL).await;
+        }
+    }
+
     fn handle_task_result(result: Option<Result<(), JoinError>>) {
         if let Some(Err(error)) = result {
             if error.is_panic() {
@@ -386,11 +471,20 @@ mod tests {
         storage::mem_store::MemStore,
     };
 
-    struct ObserverSubscriberTestClient {}
+    struct ObserverSubscriberTestClient {
+        stream_blocks_calls: std::sync::atomic::AtomicU32,
+    }
 
     impl ObserverSubscriberTestClient {
         fn new() -> Self {
-            Self {}
+            Self {
+                stream_blocks_calls: std::sync::atomic::AtomicU32::new(0),
+            }
+        }
+
+        fn stream_blocks_calls(&self) -> u32 {
+            self.stream_blocks_calls
+                .load(std::sync::atomic::Ordering::Relaxed)
         }
     }
 
@@ -402,6 +496,8 @@ mod tests {
             _highest_round_per_authority: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<ObserverBlockStream> {
+            self.stream_blocks_calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             // Return different block content based on peer to distinguish them in tests
             let block_value = match peer {
                 PeerId::Validator(idx) => idx.value() as u8 + 1,
@@ -656,5 +752,110 @@ mod tests {
             .await
             .expect("Subscriber should stop after cancelling block handlers");
         assert_eq!(Arc::strong_count(&observer_service), 2);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_gate_subscription_on_commit_lag_and_resume() {
+        use consensus_config::Parameters;
+        use consensus_types::block::BlockDigest;
+
+        use crate::{
+            block::TestBlock,
+            commit::{CommitDigest, CommitRef},
+        };
+
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _keys) = Context::new_for_test(4);
+        // Gate threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
+        context.parameters = Parameters {
+            commit_sync_batch_size: 5,
+            ..context.parameters
+        };
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new());
+        let network_client = Arc::new(ObserverSubscriberTestClient::new());
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client.clone(),
+            observer_service.clone(),
+            commit_vote_monitor.clone(),
+            dag_state.clone(),
+            None,
+        );
+        let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        subscriber.subscribe(peer.clone());
+
+        // Blocks flow while not lagging.
+        for _ in 0..100 {
+            sleep(Duration::from_millis(100)).await;
+            if network_client.stream_blocks_calls() > 0
+                && !observer_service.handle_block_calls.lock().is_empty()
+            {
+                break;
+            }
+        }
+        assert!(network_client.stream_blocks_calls() > 0);
+
+        // A quorum votes for commit 100 while the local commit index is 0: lag exceeds
+        // the gate threshold, so the subscription is torn down.
+        for author in 0..3 {
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(10, author)
+                    .set_commit_votes(vec![CommitRef::new(100, CommitDigest::MIN)])
+                    .build(),
+            );
+            commit_vote_monitor.observe_block(&block);
+        }
+        // Wait for the gate to engage, then verify no new subscription attempts happen.
+        let gated_metric = &context.metrics.node_metrics.observer_subscription_gated;
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if gated_metric.get() == 1 {
+                break;
+            }
+        }
+        assert_eq!(gated_metric.get(), 1);
+        sleep(Duration::from_secs(2)).await;
+        let calls_while_gated = network_client.stream_blocks_calls();
+        sleep(Duration::from_secs(30)).await;
+        assert_eq!(
+            network_client.stream_blocks_calls(),
+            calls_while_gated,
+            "No subscription attempts should happen while gated"
+        );
+
+        // Commit sync catches up to within the resume threshold: lag 100 - 96 = 4 <= 5,
+        // so the subscription resumes to the recorded peer.
+        let leader_ref = BlockRef::new(
+            96,
+            context.committee.to_authority_index(0).unwrap(),
+            BlockDigest::MIN,
+        );
+        dag_state
+            .write()
+            .set_last_commit(TrustedCommit::new_for_test(
+                96,
+                CommitDigest::MIN,
+                0,
+                leader_ref,
+                vec![],
+            ));
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if network_client.stream_blocks_calls() > calls_while_gated {
+                break;
+            }
+        }
+        assert!(
+            network_client.stream_blocks_calls() > calls_while_gated,
+            "Subscription should resume after catching up"
+        );
+        assert_eq!(gated_metric.get(), 0);
+
+        subscriber.stop().await;
     }
 }
