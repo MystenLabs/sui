@@ -690,7 +690,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_recovery_skipped_work: register_int_counter_vec_with_registry!(
                 "minimal_block_recovery_skipped_work",
-                "Recovery work shed at a full queue, by reason (fetch_intent|pending_submission)",
+                "Recovery work not taken on, by reason: shed at a full queue (fetch_intent|pending_submission) or skipped in deep catch-up where sync owns the block (catchup)",
                 &["reason"],
                 registry,
             ).unwrap(),

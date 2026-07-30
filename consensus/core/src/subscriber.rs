@@ -484,6 +484,31 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             }) => {
                                 retries = 0;
                                 backoff.reset();
+                                // Deep catch-up: the missing ancestor is more than a
+                                // full DAG-cache window ahead of everything this node
+                                // has accepted. No wake can arrive (its hints are
+                                // rejected, its acceptance is a full catch-up away)
+                                // and per-block fetches cannot outrun the tip; commit
+                                // and periodic sync own this regime, so recovery
+                                // stands down rather than backpressure the stream.
+                                // The accepted round is read from DagState, not the
+                                // hint cache's asynchronously advanced horizon, so a
+                                // healthy node can never false-positive here.
+                                if let Some(missing) = missing
+                                    && let Some(dag) = dag_state.upgrade()
+                                    && missing.round
+                                        > dag.read().highest_accepted_round().saturating_add(
+                                            context.parameters.dag_state_cached_rounds as Round,
+                                        )
+                                {
+                                    context
+                                        .metrics
+                                        .node_metrics
+                                        .minimal_block_recovery_skipped_work
+                                        .with_label_values(&["catchup"])
+                                        .inc();
+                                    continue 'stream;
+                                }
                                 let park = ParkCommand {
                                     peer,
                                     block_ref,
@@ -1023,6 +1048,103 @@ mod test {
         assert_eq!(received.len(), 1);
         assert_eq!(&received[0].1.block, s.block_a.serialized());
         assert!(s.network_client.fetch_calls.lock().is_empty());
+    }
+
+    /// In deep catch-up (the missing ancestor is beyond the hint horizon's future
+    /// bound) recovery stands down: no park, no fetch, the stream keeps flowing, and
+    /// the synchronizer owns the block. Parking would be futile — no wake can arrive —
+    /// and its backpressure would throttle the catch-up intake itself.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn deep_catchup_blocks_skip_recovery() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let mut ancestor_refs = Vec::new();
+        for authority in 0..4u32 {
+            let block =
+                VerifiedBlock::new_for_test(crate::block::TestBlock::new(1999, authority).build());
+            ancestor_refs.push(block.reference());
+            sender_dag.write().accept_block(block);
+        }
+        ancestor_refs.sort_by_key(|r| (r.author != peer, r.author));
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        let block_a = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(2000, peer.value() as u32)
+                .set_ancestors_raw(ancestor_refs)
+                .build(),
+        );
+        // A later full-form block from the same stream: the skip must not stall or
+        // reset the subscription.
+        let block_b = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(2001, peer.value() as u32).build(),
+        );
+        let network_client = Arc::new(FixedStreamClient {
+            blocks: vec![
+                ExtendedSerializedBlock {
+                    block: block_a.serialized().clone(),
+                    minimal: Some(sender_inflater.serialize(&block_a).unwrap()),
+                    excluded_ancestors: vec![],
+                },
+                ExtendedSerializedBlock {
+                    block: block_b.serialized().clone(),
+                    minimal: None,
+                    excluded_ancestors: vec![],
+                },
+            ],
+            fetchable: vec![],
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        // The receiver has accepted nothing past round 1000: the incoming ancestors at
+        // 1999 are beyond 1000 + dag_state_cached_rounds (500) — deep catch-up.
+        receiver_dag
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(1000, 0).build(),
+            ));
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            broadcast::channel(64).1,
+        );
+        subscriber.subscribe(peer);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // The un-inflatable block was skipped without parking or fetching, and the
+        // stream carried on to deliver the next block.
+        let received = authority_service.lock().handle_send_block.clone();
+        assert_eq!(received.len(), 1);
+        assert_eq!(&received[0].1.block, block_b.serialized());
+        assert!(network_client.fetch_calls.lock().is_empty());
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get(),
+            0
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_skipped_work
+                .with_label_values(&["catchup"])
+                .get(),
+            1
+        );
     }
 
     /// The receipt-time hint path end-to-end: a parked block heals the moment digests
