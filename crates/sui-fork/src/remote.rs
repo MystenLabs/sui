@@ -31,6 +31,7 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::VersionQuery;
+use tracing::debug;
 
 /// Read access to the forked-from chain, pinned at the fork checkpoint.
 #[derive(Clone)]
@@ -111,7 +112,7 @@ impl RemoteSource {
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
         if sequence > self.forked_at_checkpoint {
-            info!(
+            debug!(
                 "Checkpoint requested for sequence {sequence} > forked_at_checkpoint {}, returning None",
                 self.forked_at_checkpoint
             );

@@ -341,6 +341,7 @@ impl ForkStore {
     /// Local-first lookup for the latest known version of an object. Falls back to a remote
     /// `AtCheckpoint(forked_at_checkpoint)` query and persists the result in the RPC store.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
+        info!("Fetching latest object from local store: {object_id}",);
         let local_store = self.local_store();
         match local_store.get_latest_object_status(*object_id)? {
             Some((_, Status::Live(object))) => return Ok(Some(object)),
@@ -348,6 +349,7 @@ impl ForkStore {
             None => {}
         }
 
+        info!("Not found in local store, so fetching latest object from remote: {object_id}");
         let object = self.inner.remote.latest_object(object_id)?;
         if let Some(ref object) = object {
             local_store.save_live_object_if_current(object)?;

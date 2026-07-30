@@ -45,6 +45,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
+use tracing::info;
 
 /// Synthetic pipeline key recording that the one-shot seed load committed.
 ///
@@ -341,6 +342,8 @@ impl LocalStore {
             Some((_, Status::Live(existing))) => existing.version() <= object.version(),
             Some((_, Status::Tombstone(_))) => false,
         };
+
+        info!("Saving object to DB: {} v{}", object.id(), object.version());
 
         let mut batch = self.db.batch();
         self.stage_object_version(&mut batch, object)?;
