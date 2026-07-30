@@ -28,29 +28,68 @@ use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use crate::gql::queries;
 
+/// Worker threads for [`gql_runtime`]. GraphQL calls are I/O-bound and issued one at a
+/// time from a blocking caller, so this only has to cover hyper's connection dispatch
+/// tasks running concurrently with the request being awaited.
+const GQL_RUNTIME_WORKER_THREADS: usize = 2;
+
+/// The runtime every GraphQL request runs on, for the life of the process.
+///
+/// The storage traits this crate implements are synchronous, so each GraphQL call has to
+/// block somewhere. Building a runtime per call — the obvious way to do that — silently
+/// corrupts connection reuse: hyper spawns a per-connection dispatch task onto whichever
+/// runtime is current when the connection opens, so dropping that runtime kills the task
+/// while the connection itself stays in the shared [`reqwest::Client`]'s idle pool. The
+/// next call to draw that connection fails with `dispatch task is gone: runtime dropped
+/// the dispatch task`, which surfaces during execution as a `STORAGE_ERROR` and an
+/// invariant violation. It is intermittent by construction, because it depends on the
+/// pool handing back a connection whose runtime has died.
+///
+/// A single process-lifetime runtime keeps those dispatch tasks alive as long as the
+/// connections they serve. It is parked on its own thread and deliberately never dropped:
+/// dropping a runtime from inside an async context panics, which is what would happen if
+/// the last handle were released on a worker thread.
+fn gql_runtime() -> &'static tokio::runtime::Handle {
+    static HANDLE: std::sync::OnceLock<tokio::runtime::Handle> = std::sync::OnceLock::new();
+    HANDLE.get_or_init(|| {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(GQL_RUNTIME_WORKER_THREADS)
+            .thread_name("sui-fork-gql")
+            .enable_all()
+            .build()
+            .expect("failed to build the GraphQL runtime");
+        let handle = runtime.handle().clone();
+        std::thread::Builder::new()
+            .name("sui-fork-gql-runtime".to_owned())
+            .spawn(move || {
+                let _runtime = runtime;
+                // `park` may wake spuriously; nothing ever unparks this thread.
+                loop {
+                    std::thread::park();
+                }
+            })
+            .expect("failed to spawn the GraphQL runtime thread");
+        handle
+    })
+}
+
 macro_rules! block_on {
     ($expr:expr) => {{
         #[allow(clippy::disallowed_methods, clippy::result_large_err)]
         {
+            let handle = gql_runtime();
+            // `Handle::block_on` panics inside an async context, so a caller that is
+            // already on a runtime waits on a scoped thread instead. Either way the
+            // future itself runs on the shared runtime, which is the point.
             if tokio::runtime::Handle::try_current().is_ok() {
                 std::thread::scope(|scope| {
                     scope
-                        .spawn(|| {
-                            let rt = tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .expect("failed to build Tokio runtime");
-                            rt.block_on($expr)
-                        })
+                        .spawn(|| handle.block_on($expr))
                         .join()
-                        .expect("failed to join scoped thread running nested runtime")
+                        .expect("GraphQL runtime bridge thread panicked")
                 })
             } else {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("failed to build Tokio runtime");
-                rt.block_on($expr)
+                handle.block_on($expr)
             }
         }
     }};

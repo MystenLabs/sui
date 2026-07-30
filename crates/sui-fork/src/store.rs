@@ -74,6 +74,7 @@ use crate::local_store::ObjectRemoval;
 use crate::metadata::MetadataStore;
 use crate::pending::PendingCheckpointBuffer;
 use crate::remote::RemoteSource;
+use tracing::info;
 
 /// The fork's state store: reads check `LocalStore` first and fall back to
 /// `RemoteSource` (pinned at the fork checkpoint), persisting fetched
