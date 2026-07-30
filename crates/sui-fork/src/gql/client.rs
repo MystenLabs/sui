@@ -274,6 +274,7 @@ impl CheckpointRead for GraphQLClient {
 mod tests {
     use cynic::QueryBuilder;
     use fastcrypto::encoding::Base64 as FastCryptoBase64;
+    use itertools::Itertools as _;
     use serde_json::json;
     use sui_types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointBuilder};
     use wiremock::matchers::{body_partial_json, header, method, path};
@@ -346,7 +347,7 @@ mod tests {
             "data": {
                 "checkpoint": {
                     "query": {
-                        "object": object.map(|object| {
+                        "multiGetObjects": [object.map(|object| {
                             json!({
                                 "address": object.id().to_string(),
                                 "version": object.version().value(),
@@ -355,7 +356,7 @@ mod tests {
                                 )
                                 .encoded(),
                             })
-                        })
+                        })]
                     }
                 }
             }
@@ -536,8 +537,10 @@ mod tests {
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 31,
-                    "address": object.id().to_string(),
-                    "version": object.version().value(),
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "version": object.version().value(),
+                    }],
                 }
             })))
             .respond_with(
@@ -574,9 +577,81 @@ mod tests {
             .get("query")
             .and_then(serde_json::Value::as_str)
             .expect("query string should be present");
-        assert!(query.contains("checkpoint"));
-        assert!(query.contains("object(address: $address, version: $version)"));
-        assert!(!query.contains("multiGetObjects"));
+        // The pin lives on the query scope, not on the keys: a key carrying both
+        // a version and an `atCheckpoint` is rejected as over-bounded, which is
+        // what forced these reads to go one-at-a-time before.
+        assert!(query.contains("checkpoint(sequenceNumber: $sequenceNumber)"));
+        assert!(query.contains("multiGetObjects(keys: $keys)"));
+        assert!(!query.contains("atCheckpoint"));
+    }
+
+    /// Seeding hydrates every manifest entry through this path, so a regression
+    /// to one request per object is the difference between two round trips and
+    /// seventy. Nothing about the returned values would reveal it — only the
+    /// request count does.
+    #[tokio::test]
+    async fn test_exact_versions_at_one_checkpoint_batch_into_a_single_request() {
+        let server = MockServer::start().await;
+        let objects: Vec<_> = (0..3)
+            .map(|_| Object::immutable_with_id_for_testing(ObjectID::random()))
+            .collect();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(
+                json!({ "variables": { "sequenceNumber": 31 } }),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": {
+                    "checkpoint": {
+                        "query": {
+                            "multiGetObjects": objects
+                                .iter()
+                                .map(|object| json!({
+                                    "address": object.id().to_string(),
+                                    "version": object.version().value(),
+                                    "objectBcs": FastCryptoBase64::from_bytes(
+                                        &bcs::to_bytes(object).expect("object should serialize"),
+                                    )
+                                    .encoded(),
+                                }))
+                                .collect::<Vec<_>>(),
+                        }
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let keys: Vec<_> = objects
+            .iter()
+            .map(|object| ObjectKey {
+                object_id: object.id(),
+                version_query: VersionQuery::VersionAtCheckpoint {
+                    version: object.version().value(),
+                    checkpoint: 31,
+                },
+            })
+            .collect();
+
+        let fetched = store
+            .get_objects(&keys)
+            .expect("batched versioned query should succeed");
+        assert_eq!(fetched.len(), 3);
+        for (object, result) in objects.iter().zip_eq(fetched) {
+            assert_eq!(result, Some((object.clone(), object.version().value())));
+        }
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        assert_eq!(
+            requests.len(),
+            1,
+            "three exact versions at one checkpoint must cost one request, not three",
+        );
     }
 
     #[tokio::test]
@@ -589,8 +664,10 @@ mod tests {
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 31,
-                    "address": object_id.to_string(),
-                    "version": 7,
+                    "keys": [{
+                        "address": object_id.to_string(),
+                        "version": 7,
+                    }],
                 }
             })))
             .respond_with(
