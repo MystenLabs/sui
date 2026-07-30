@@ -33,6 +33,7 @@ use futures::Stream;
 use mysten_network::{Multiaddr, multiaddr::Protocol};
 
 use crate::{
+    CommitIndex,
     block::{ExtendedBlock, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
@@ -260,6 +261,22 @@ pub(crate) struct ObserverStreamItem {
 pub(crate) type ObserverBlockStream =
     Pin<Box<dyn Stream<Item = ObserverStreamItem> + Send + 'static>>;
 
+/// A single item in the observer commit stream. Commits are consecutive by index, and
+/// `block_counts[i]` gives the number of entries in `blocks` belonging to `commits[i]`,
+/// each group in the commit's `blocks()` order. `certifier_blocks` is non-empty only on
+/// the final item of a verification window, carrying vote blocks certifying the window's
+/// last commit.
+pub(crate) struct CommitStreamItem {
+    pub(crate) commits: Vec<Bytes>,
+    pub(crate) block_counts: Vec<u32>,
+    pub(crate) blocks: Vec<Bytes>,
+    pub(crate) certifier_blocks: Vec<Bytes>,
+}
+
+/// Observer commit stream type.
+pub(crate) type ObserverCommitStream =
+    Pin<Box<dyn Stream<Item = CommitStreamItem> + Send + 'static>>;
+
 /// Observer network service for handling requests from observer nodes.
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
 /// to identify peers since observers are not part of the committee.
@@ -294,6 +311,15 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         peer: NodeId,
         commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
+
+    /// Handles the commit streaming request from an observer peer. Streams consecutive
+    /// certified commits and their referenced blocks starting at `start`, ending the
+    /// stream when the local certified commit tip is reached.
+    async fn handle_stream_commits(
+        &self,
+        peer: NodeId,
+        start: CommitIndex,
+    ) -> ConsensusResult<ObserverCommitStream>;
 }
 
 /// Observer network client for communicating with validators' observer ports or other observers.
@@ -330,6 +356,17 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
         commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
+
+    /// Initiates commit streaming with a peer, receiving consecutive certified commits
+    /// and their referenced blocks starting at `start`. The stream ends when the peer's
+    /// certified commit tip is reached. The timeout applies to establishing the stream,
+    /// not to the streaming itself.
+    async fn stream_commits(
+        &self,
+        peer: PeerId,
+        start: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<ObserverCommitStream>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

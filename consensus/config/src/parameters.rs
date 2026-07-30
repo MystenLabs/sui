@@ -345,6 +345,19 @@ impl Default for TonicParameters {
     }
 }
 
+/// How an observer node catches up when its local commit index falls behind the
+/// quorum commit index.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum ObserverCatchupMode {
+    /// Catch up via the pull-based CommitSyncer, while staying subscribed to the
+    /// block stream.
+    #[default]
+    Pull,
+    /// Catch up via the server-streamed `stream_commits` RPC, gating the block
+    /// stream subscription until caught up.
+    Stream,
+}
+
 /// Observer node configuration parameters.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ObserverParameters {
@@ -367,6 +380,13 @@ pub struct ObserverParameters {
     /// If unspecified, this will default to an empty Vec.
     #[serde(default = "ObserverParameters::default_peers")]
     pub peers: Vec<PeerRecord>,
+
+    /// Catch-up mode used when this node acts as an observer client and falls behind
+    /// its peer's commits.
+    ///
+    /// If unspecified, this will default to `Pull`.
+    #[serde(default)]
+    pub catchup_mode: ObserverCatchupMode,
 }
 
 impl ObserverParameters {
@@ -393,6 +413,7 @@ impl Default for ObserverParameters {
             server_port: ObserverParameters::default_server_port(),
             allowlist: ObserverParameters::default_allowlist(),
             peers: ObserverParameters::default_peers(),
+            catchup_mode: ObserverCatchupMode::default(),
         }
     }
 }

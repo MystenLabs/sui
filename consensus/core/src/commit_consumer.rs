@@ -94,6 +94,18 @@ impl CommitConsumerMonitor {
             .send_replace(highest_handled_commit);
     }
 
+    /// Waits until the consumer has handled commits at least up to `index`.
+    pub(crate) async fn wait_for_handled_commit(&self, index: CommitIndex) {
+        let mut rx = self.highest_handled_commit.subscribe();
+        loop {
+            let highest_handled = *rx.borrow_and_update();
+            if highest_handled >= index {
+                return;
+            }
+            rx.changed().await.unwrap();
+        }
+    }
+
     /// Waits for consensus to replay commits until the consumer last processed commit index.
     pub async fn replay_to_consumer_last_processed_commit_complete(&self) {
         let mut rx = self.highest_handled_commit.subscribe();

@@ -543,6 +543,222 @@ mod consensus_tests {
         }
     }
 
+    /// A/B comparison of observer catch-up modes: two observers start mid-run, one using
+    /// the pull-based CommitSyncer (Pull) and one using streamed catch-up (Stream), each
+    /// against a different validator. Measures the wall-clock (virtual) time for each to
+    /// reach the commit index the validators had when the observers started, and verifies
+    /// the streaming observer keeps up via the live block stream afterwards.
+    #[sim_test(config = "test_config()")]
+    async fn test_observer_commit_stream_catchup() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const NUM_TRANSACTIONS: u16 = 300;
+        // Validators must be at least this far ahead before the observers start, so both
+        // observers begin commit-lagging (threshold is commit_sync_batch_size(3) * 5).
+        const CATCHUP_START_COMMITS: u32 = 40;
+
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(5);
+
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::with_capacity(committee.size());
+
+        for (authority_index, _) in committee.authorities() {
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut parameters = default_parameters();
+            parameters.db_path = db_dir.path().to_path_buf();
+            parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
+
+            let config = Config {
+                authority_index,
+                db_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: 0,
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters,
+                observer_network_keypair: None,
+                observer_ip: None,
+            };
+            let node = AuthorityNode::new(config);
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            transaction_clients.push(node.transaction_client());
+            authorities.push(node);
+        }
+
+        // Submit transactions and wait until validators build up a commit history for
+        // the observers to catch up on.
+        tracing::info!("Submitting {} transactions", NUM_TRANSACTIONS);
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i as u8; 16];
+            transaction_clients[i as usize % transaction_clients.len()]
+                .submit(vec![txn], Priority::Normal)
+                .await
+                .unwrap();
+            if i % 50 == 0 {
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+        timeout(Duration::from_secs(120), async {
+            while authorities[0]
+                .commit_consumer_monitor()
+                .highest_handled_commit()
+                < CATCHUP_START_COMMITS
+            {
+                sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await
+        .expect("Validators should reach the catch-up start commit index");
+
+        // The catch-up target for both observers: what the validators have handled now.
+        let catchup_target = authorities[0]
+            .commit_consumer_monitor()
+            .highest_handled_commit();
+        tracing::info!("Starting observers, catch-up target is commit {catchup_target}");
+
+        // Late-start one observer per mode, against different validators for symmetry.
+        let start_observer = async |validator_index: usize,
+                                    catchup_mode: consensus_config::ObserverCatchupMode,
+                                    node_index: u32,
+                                    seed: u8| {
+            let observer_dir = Arc::new(TempDir::new().unwrap());
+            let observer_keypair =
+                NetworkKeyPair::generate(&mut rand::rngs::StdRng::from_seed([seed; 32]));
+            let observer_ip = local_ip_utils::get_new_ip();
+            let validator_info =
+                committee.authority(AuthorityIndex::new_for_test(validator_index as u32));
+            let validator_observer_address =
+                replace_port_in_multiaddr(&validator_info.address, 9600 + validator_index as u16)
+                    .expect("Failed to create observer address");
+
+            let mut observer_params = default_parameters();
+            observer_params.db_path = observer_dir.path().to_path_buf();
+            observer_params.observer = consensus_config::ObserverParameters {
+                peers: vec![consensus_config::PeerRecord {
+                    public_key: validator_info.network_key.clone(),
+                    address: validator_observer_address,
+                }],
+                catchup_mode,
+                ..Default::default()
+            };
+
+            let observer_config = Config {
+                authority_index: AuthorityIndex::new_for_test(node_index),
+                db_dir: observer_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: 0,
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters: observer_params,
+                observer_network_keypair: Some(observer_keypair),
+                observer_ip: Some(observer_ip),
+            };
+            let observer = AuthorityNode::new(observer_config);
+            observer.start().await.unwrap();
+            observer.spawn_committed_subdag_consumer().unwrap();
+            observer
+        };
+
+        let start_time = tokio::time::Instant::now();
+        let observer_stream =
+            start_observer(1, consensus_config::ObserverCatchupMode::Stream, 101, 99).await;
+        let observer_pull =
+            start_observer(0, consensus_config::ObserverCatchupMode::Pull, 100, 42).await;
+        let stream_monitor = observer_stream.commit_consumer_monitor();
+        let pull_monitor = observer_pull.commit_consumer_monitor();
+
+        // Measure the time each observer takes to reach the catch-up target.
+        let mut stream_elapsed = None;
+        let mut pull_elapsed = None;
+        timeout(Duration::from_secs(180), async {
+            loop {
+                if stream_elapsed.is_none()
+                    && stream_monitor.highest_handled_commit() >= catchup_target
+                {
+                    stream_elapsed = Some(start_time.elapsed());
+                }
+                if pull_elapsed.is_none()
+                    && pull_monitor.highest_handled_commit() >= catchup_target
+                {
+                    pull_elapsed = Some(start_time.elapsed());
+                }
+                if stream_elapsed.is_some() && pull_elapsed.is_some() {
+                    return;
+                }
+                sleep(Duration::from_millis(200)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Observers did not catch up to commit {} in time: stream={:?} at {}, pull={:?} at {}",
+                catchup_target,
+                stream_elapsed,
+                stream_monitor.highest_handled_commit(),
+                pull_elapsed,
+                pull_monitor.highest_handled_commit(),
+            )
+        });
+
+        let stream_elapsed = stream_elapsed.unwrap();
+        let pull_elapsed = pull_elapsed.unwrap();
+        tracing::info!(
+            "Catch-up to commit {}: stream mode took {:?}, pull mode took {:?}",
+            catchup_target,
+            stream_elapsed,
+            pull_elapsed,
+        );
+
+        // Streamed catch-up should not be slower than pull-based catch-up, modulo noise.
+        assert!(
+            stream_elapsed <= pull_elapsed + Duration::from_secs(5),
+            "Streamed catch-up ({stream_elapsed:?}) is significantly slower than pull ({pull_elapsed:?})"
+        );
+
+        // After catching up, the streaming observer must keep up via the re-subscribed
+        // live block stream.
+        tracing::info!("Submitting more transactions to verify the observer keeps up");
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i as u8; 16];
+            transaction_clients[i as usize % transaction_clients.len()]
+                .submit(vec![txn], Priority::Normal)
+                .await
+                .unwrap();
+            if i % 50 == 0 {
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+        sleep(Duration::from_secs(10)).await;
+        let validator_commits = authorities[0]
+            .commit_consumer_monitor()
+            .highest_handled_commit();
+        let stream_observer_commits = stream_monitor.highest_handled_commit();
+        const MAX_COMMIT_DIFFERENCE: u32 = 10;
+        assert!(
+            validator_commits.saturating_sub(stream_observer_commits) <= MAX_COMMIT_DIFFERENCE,
+            "Streaming observer should keep up with validators after catch-up: {} vs {}",
+            stream_observer_commits,
+            validator_commits,
+        );
+
+        // Clean up
+        observer_stream.stop();
+        observer_pull.stop();
+        for authority in authorities {
+            authority.stop();
+        }
+    }
+
     /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
     pub fn local_committee_and_keys(
         epoch: Epoch,

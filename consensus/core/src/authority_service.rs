@@ -881,6 +881,15 @@ mod tests {
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
+
+        async fn stream_commits(
+            &self,
+            _peer: crate::network::PeerId,
+            _start: crate::CommitIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverCommitStream> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

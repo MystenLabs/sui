@@ -14,6 +14,7 @@ mod commit;
 mod commit_consumer;
 mod commit_finalizer;
 mod commit_observer;
+mod commit_stream_syncer;
 mod commit_syncer;
 mod commit_vote_monitor;
 mod context;

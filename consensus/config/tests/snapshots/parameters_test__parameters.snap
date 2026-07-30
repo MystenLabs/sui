@@ -1,6 +1,5 @@
 ---
 source: consensus/config/tests/parameters_test.rs
-assertion_line: 8
 expression: parameters
 ---
 leader_timeout:
@@ -41,5 +40,6 @@ observer:
   server_port: ~
   allowlist: []
   peers: []
+  catchup_mode: Pull
 internal:
   skip_equivocation_validation: false

@@ -1621,6 +1621,15 @@ mod tests {
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Observer fetch_commits not implemented in mock")
         }
+
+        async fn stream_commits(
+            &self,
+            _peer: crate::network::PeerId,
+            _start: crate::CommitIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverCommitStream> {
+            unimplemented!("Observer stream_commits not implemented in mock")
+        }
     }
 
     #[test]

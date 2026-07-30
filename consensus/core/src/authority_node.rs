@@ -7,8 +7,8 @@ use std::{
 };
 
 use consensus_config::{
-    Committee, ConsensusProtocolConfig, NetworkKeyPair, NetworkPublicKey, Parameters,
-    ProtocolKeyPair,
+    Committee, ConsensusProtocolConfig, NetworkKeyPair, NetworkPublicKey, ObserverCatchupMode,
+    Parameters, ProtocolKeyPair,
 };
 use consensus_types::block::Round;
 use itertools::Itertools;
@@ -25,6 +25,7 @@ use crate::{
     block_sync_service::BlockSyncService,
     block_verifier::SignedBlockVerifier,
     commit_observer::CommitObserver,
+    commit_stream_syncer::{CommitStreamSyncer, ObserverSyncSupervisor},
     commit_syncer::{CommitSyncer, CommitSyncerHandle},
     commit_vote_monitor::CommitVoteMonitor,
     context::{Clock, Context},
@@ -150,6 +151,9 @@ pub enum NetworkType {
 enum SubscriberType<N: NetworkManager> {
     Validator(Subscriber<N::ValidatorClient, AuthorityService<ChannelCoreThreadDispatcher>>),
     Observer(ObserverSubscriber<N::ObserverClient, ObserverService>),
+    // Observer with streamed commit catch-up: the supervisor owns the block stream
+    // subscriber and gates it while catching up via the commit stream.
+    ObserverSupervised(ObserverSyncSupervisor<N::ObserverClient, ObserverService>),
 }
 
 impl<N: NetworkManager> SubscriberType<N> {
@@ -157,6 +161,7 @@ impl<N: NetworkManager> SubscriberType<N> {
         match self {
             SubscriberType::Validator(subscriber) => subscriber.stop().await,
             SubscriberType::Observer(subscriber) => subscriber.stop().await,
+            SubscriberType::ObserverSupervised(supervisor) => supervisor.stop().await,
         }
     }
 }
@@ -174,7 +179,9 @@ where
     // To avoid keeping the DagState alive at the end of shutdown, this is only a weak reference.
     dag_state: Weak<RwLock<DagState>>,
 
-    commit_syncer_handle: CommitSyncerHandle,
+    // None for observers using streamed catch-up, where the unstarted CommitSyncer is
+    // owned by the sync supervisor as a fallback.
+    commit_syncer_handle: Option<CommitSyncerHandle>,
     round_prober_handle: Option<RoundProberHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
@@ -416,7 +423,7 @@ where
             sync_last_known_own_block,
         );
 
-        let commit_syncer_handle = CommitSyncer::new(
+        let commit_syncer = CommitSyncer::new(
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
@@ -427,8 +434,17 @@ where
             commit_syncer_client.clone(),
             dag_state.clone(),
             peers_pool.clone(),
-        )
-        .start();
+        );
+        // Observers in streamed catch-up mode do not run the pull-based CommitSyncer:
+        // the unstarted syncer is handed to the sync supervisor as a fallback instead.
+        let stream_catchup_enabled = !context.is_validator()
+            && context.parameters.observer.catchup_mode == ObserverCatchupMode::Stream
+            && !context.parameters.observer.peers.is_empty();
+        let (commit_syncer_handle, fallback_commit_syncer) = if stream_catchup_enabled {
+            (None, Some(commit_syncer))
+        } else {
+            (Some(commit_syncer.start()), None)
+        };
 
         // Create BlockSyncService that will be shared by both AuthorityService and ObserverService
         let block_sync_service = Arc::new(BlockSyncService::new(
@@ -516,7 +532,7 @@ where
                 core_dispatcher.clone(),
                 dag_state.clone(),
                 signals_receivers.accepted_block_broadcast_receiver(),
-                block_verifier,
+                block_verifier.clone(),
                 commit_vote_monitor.clone(),
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
@@ -526,7 +542,7 @@ where
 
             let observer_subscriber = ObserverSubscriber::new(
                 context.clone(),
-                observer_client,
+                observer_client.clone(),
                 observer_service.clone(),
                 commit_vote_monitor.clone(),
                 dag_state.clone(),
@@ -537,29 +553,61 @@ where
                 .start_observer_server(observer_service.clone())
                 .await;
 
-            // Subscribe to peers specified in the configuration
-            // For now get the first peer from the list to connect to.
+            // Get the first peer from the list to connect to.
             // TODO: support multiple peers - as in choose/detect which one to connect to.
-            for peer_record in context.parameters.observer.peers.iter().take(1) {
-                let peer_id = if let Some((index, _)) = context
-                    .committee
-                    .authorities()
-                    .find(|(_, authority)| authority.network_key == peer_record.public_key)
-                {
-                    PeerId::Validator(index)
-                } else {
-                    PeerId::Observer(Box::new(peer_record.public_key.clone()))
-                };
+            let peer_id = context
+                .parameters
+                .observer
+                .peers
+                .first()
+                .map(|peer_record| {
+                    if let Some((index, _)) = context
+                        .committee
+                        .authorities()
+                        .find(|(_, authority)| authority.network_key == peer_record.public_key)
+                    {
+                        PeerId::Validator(index)
+                    } else {
+                        PeerId::Observer(Box::new(peer_record.public_key.clone()))
+                    }
+                });
 
-                info!("Observer subscribing to peer: {:?}", peer_id);
-                observer_subscriber.subscribe(peer_id);
-            }
+            let subscriber = if let Some(fallback_commit_syncer) = fallback_commit_syncer {
+                let peer_id = peer_id.expect("Streamed catch-up requires a configured peer");
+                info!(
+                    "Observer starting sync supervisor with streamed catch-up, peer: {:?}",
+                    peer_id
+                );
+                let commit_stream_syncer = CommitStreamSyncer::new(
+                    context.clone(),
+                    observer_client,
+                    core_dispatcher.clone(),
+                    commit_vote_monitor.clone(),
+                    commit_consumer_monitor.clone(),
+                    block_verifier.clone(),
+                    transaction_vote_tracker.clone(),
+                    round_tracker.clone(),
+                    Arc::downgrade(&dag_state),
+                );
+                let supervisor = ObserverSyncSupervisor::start(
+                    context.clone(),
+                    Arc::new(observer_subscriber),
+                    commit_stream_syncer,
+                    commit_vote_monitor.clone(),
+                    Arc::downgrade(&dag_state),
+                    Box::new(move || fallback_commit_syncer.start()),
+                    peer_id,
+                );
+                SubscriberType::ObserverSupervised(supervisor)
+            } else {
+                if let Some(peer_id) = peer_id {
+                    info!("Observer subscribing to peer: {:?}", peer_id);
+                    observer_subscriber.subscribe(peer_id);
+                }
+                SubscriberType::Observer(observer_subscriber)
+            };
 
-            (
-                SubscriberType::Observer(observer_subscriber),
-                None,
-                Some(observer_service),
-            )
+            (subscriber, None, Some(observer_service))
         };
 
         info!(
@@ -608,7 +656,9 @@ where
 
         // First shutdown components calling into Core.
         synchronizer.stop().await;
-        commit_syncer_handle.stop().await;
+        if let Some(commit_syncer_handle) = commit_syncer_handle {
+            commit_syncer_handle.stop().await;
+        }
         if let Some(round_prober_handle) = round_prober_handle {
             round_prober_handle.stop().await;
         }
@@ -696,6 +746,9 @@ where
                 SubscriberType::Observer(s) => {
                     // For observer, create a PeerId for the validator
                     s.subscribe(PeerId::Validator(peer));
+                }
+                SubscriberType::ObserverSupervised(supervisor) => {
+                    supervisor.resubscribe(PeerId::Validator(peer));
                 }
             }
         }

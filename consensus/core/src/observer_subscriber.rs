@@ -441,6 +441,15 @@ mod tests {
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
+
+        async fn stream_commits(
+            &self,
+            _peer: PeerId,
+            _start: crate::CommitIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverCommitStream> {
+            unimplemented!("Unimplemented")
+        }
     }
 
     struct ObserverSubscriberTestService {
@@ -501,6 +510,14 @@ mod tests {
             _peer: NodeId,
             _commit_range: CommitRange,
         ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn handle_stream_commits(
+            &self,
+            _peer: NodeId,
+            _start: crate::CommitIndex,
+        ) -> ConsensusResult<crate::network::ObserverCommitStream> {
             unimplemented!("Unimplemented")
         }
     }

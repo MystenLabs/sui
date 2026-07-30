@@ -101,6 +101,17 @@ pub enum ConsensusError {
     #[error("Peer not found for block synchronization: {0}")]
     PeerNotFound(String),
 
+    #[error("Committed block {0} not found in store")]
+    CommittedBlockNotFound(BlockRef),
+
+    #[error(
+        "Commit from {peer} does not chain to the previously verified commit digest: {commit:?}"
+    )]
+    UnexpectedCommitPreviousDigest { peer: PeerId, commit: Box<Commit> },
+
+    #[error("Invalid commit stream window from {peer}: {reason}")]
+    InvalidCommitStreamWindow { peer: PeerId, reason: String },
+
     #[error("Block {block_ref:?} rejected: {reason}")]
     BlockRejected { block_ref: BlockRef, reason: String },
 

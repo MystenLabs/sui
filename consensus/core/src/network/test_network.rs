@@ -176,4 +176,12 @@ impl ObserverNetworkService for Mutex<TestService> {
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
         unimplemented!("ObserverNetworkService fetch_commits not implemented for TestService")
     }
+
+    async fn handle_stream_commits(
+        &self,
+        _peer: NodeId,
+        _start: crate::CommitIndex,
+    ) -> ConsensusResult<crate::network::ObserverCommitStream> {
+        unimplemented!("ObserverNetworkService stream_commits not implemented for TestService")
+    }
 }

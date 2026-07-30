@@ -22,10 +22,10 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
 use tracing::{debug, info, trace, warn};
 
 use crate::{
-    CommitRange, Context,
+    CommitIndex, CommitRange, Context,
     error::{ConsensusError, ConsensusResult},
     network::{
-        ObserverBlockStream, ObserverNetworkClient, PeerId,
+        ObserverBlockStream, ObserverCommitStream, ObserverNetworkClient, PeerId,
         metrics_layer::MetricsCallbackMaker,
         to_host_port_str,
         tonic_network::{
@@ -97,6 +97,32 @@ pub(crate) struct FetchCommitsResponse {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub(crate) commits: Vec<Bytes>,
     #[prost(bytes = "bytes", repeated, tag = "2")]
+    pub(crate) certifier_blocks: Vec<Bytes>,
+}
+
+// Observer commit streaming messages
+#[derive(Clone, prost::Message)]
+pub(crate) struct CommitStreamRequest {
+    // First commit index (inclusive) to stream.
+    #[prost(uint32, tag = "1")]
+    pub(crate) start: u32,
+}
+
+#[derive(Clone, prost::Message)]
+pub(crate) struct CommitStreamResponse {
+    // Serialized commits, consecutive by index.
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) commits: Vec<Bytes>,
+    // block_counts[i] is the number of entries in `blocks` belonging to commits[i].
+    #[prost(uint32, repeated, tag = "2")]
+    pub(crate) block_counts: Vec<u32>,
+    // Serialized blocks referenced by the commits, flattened and grouped per commit,
+    // each group in the commit's `blocks()` order.
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    pub(crate) blocks: Vec<Bytes>,
+    // Vote blocks certifying the last commit of the current verification window.
+    // Non-empty only on the final response of a window, acting as the window delimiter.
+    #[prost(bytes = "bytes", repeated, tag = "4")]
     pub(crate) certifier_blocks: Vec<Bytes>,
 }
 
@@ -395,6 +421,43 @@ impl ObserverNetworkClient for TonicObserverClient {
         let response = response.into_inner();
         Ok((response.commits, response.certifier_blocks))
     }
+
+    async fn stream_commits(
+        &self,
+        peer: PeerId,
+        start: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<ObserverCommitStream> {
+        let mut client = self.get_client(peer.clone(), timeout).await?;
+
+        // No request timeout is set: this is a long-lived stream, like stream_blocks.
+        let request = Request::new(CommitStreamRequest { start });
+        let response = client
+            .stream_commits(request)
+            .await
+            .map_err(|e| ConsensusError::NetworkRequest(format!("stream_commits failed: {e:?}")))?;
+        let stream = response
+            .into_inner()
+            .take_while(|item| futures::future::ready(item.is_ok()))
+            .filter_map(move |item| {
+                let peer_cloned = peer.clone();
+                async move {
+                    match item {
+                        Ok(response) => Some(super::CommitStreamItem {
+                            commits: response.commits,
+                            block_counts: response.block_counts,
+                            blocks: response.blocks,
+                            certifier_blocks: response.certifier_blocks,
+                        }),
+                        Err(e) => {
+                            debug!("Network error received from {:?}: {e:?}", peer_cloned);
+                            None
+                        }
+                    }
+                }
+            });
+        Ok(Box::pin(stream))
+    }
 }
 
 /// Proxies Observer Tonic requests to ObserverNetworkService.
@@ -543,6 +606,43 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
             commits,
             certifier_blocks,
         }))
+    }
+
+    type StreamCommitsStream =
+        Pin<Box<dyn Stream<Item = Result<CommitStreamResponse, tonic::Status>> + Send>>;
+
+    async fn stream_commits(
+        &self,
+        request: Request<CommitStreamRequest>,
+    ) -> Result<Response<Self::StreamCommitsStream>, tonic::Status> {
+        let peer_id = request
+            .extensions()
+            .get::<ObserverPeerInfo>()
+            .map(|info| info.public_key.clone())
+            .ok_or_else(|| {
+                tonic::Status::unauthenticated(
+                    "Observer peer info not found in request. TLS authentication required.",
+                )
+            })?;
+
+        let start = request.into_inner().start;
+
+        let commit_stream = self
+            .service()?
+            .handle_stream_commits(peer_id, start)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
+
+        let response_stream = commit_stream.map(|item| {
+            Ok(CommitStreamResponse {
+                commits: item.commits,
+                block_counts: item.block_counts,
+                blocks: item.blocks,
+                certifier_blocks: item.certifier_blocks,
+            })
+        });
+
+        Ok(Response::new(Box::pin(response_stream)))
     }
 }
 

@@ -1,31 +1,38 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_types::block::{BlockRef, Round};
 use futures::{StreamExt as _, stream};
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
+use prometheus::{IntCounter, IntGauge};
 use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::sync::broadcast;
 
 use crate::{
-    BlockVerifier, RandomnessSignatureHandler, TransactionVoteTracker,
+    BlockVerifier, CommitIndex, RandomnessSignatureHandler, TransactionVoteTracker,
     authority_service::{BroadcastStream, SubscriptionCounter},
     block::{BlockAPI as _, SignedBlock, VerifiedBlock},
-    block_sync_service::BlockSyncService,
-    commit::{CommitRange, TrustedCommit},
+    block_sync_service::{BlockSyncService, CommitWindow},
+    commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem, PeerId,
-        observer::AuxiliaryData,
+        CommitStreamItem, NodeId, ObserverBlockStream, ObserverCommitStream,
+        ObserverNetworkService, ObserverStreamItem, PeerId, observer::AuxiliaryData,
+        tonic_network::MAX_FETCH_RESPONSE_BYTES,
     },
     synchronizer::SynchronizerHandle,
 };
@@ -324,6 +331,147 @@ impl ObserverNetworkService for ObserverService {
         // Delegate to BlockSyncService
         self.block_sync_service.fetch_commits(commit_range).await
     }
+
+    async fn handle_stream_commits(
+        &self,
+        peer: NodeId,
+        start: CommitIndex,
+    ) -> ConsensusResult<ObserverCommitStream> {
+        // The stream can outlive the observer service on the network's schedule during
+        // shutdown, so it must not hold the block sync service (and transitively DagState
+        // via ObserverService) strongly.
+        let block_sync_service = Arc::downgrade(&self.block_sync_service);
+        let node_metrics = &self.context.metrics.node_metrics;
+        node_metrics.commit_stream_active_streams.inc();
+
+        struct StreamState {
+            block_sync_service: Weak<BlockSyncService>,
+            peer: NodeId,
+            next_start: CommitIndex,
+            pending: VecDeque<CommitStreamItem>,
+            served_commits: IntCounter,
+            served_bytes: IntCounter,
+            // Decrements commit_stream_active_streams when the stream is dropped.
+            _active_guard: ActiveStreamGuard,
+        }
+
+        let state = StreamState {
+            block_sync_service,
+            peer,
+            next_start: start,
+            pending: VecDeque::new(),
+            served_commits: node_metrics.commit_stream_served_commits.clone(),
+            served_bytes: node_metrics.commit_stream_served_bytes.clone(),
+            _active_guard: ActiveStreamGuard {
+                gauge: node_metrics.commit_stream_active_streams.clone(),
+            },
+        };
+
+        let stream = stream::unfold(state, |mut state| async move {
+            loop {
+                if let Some(item) = state.pending.pop_front() {
+                    return Some((item, state));
+                }
+                let block_sync_service = state.block_sync_service.upgrade()?;
+                let window = match block_sync_service
+                    .serve_commit_window(state.next_start)
+                    .await
+                {
+                    Ok(Some(window)) => window,
+                    // The peer has caught up with the local certified commit tip.
+                    Ok(None) => return None,
+                    Err(e) => {
+                        tracing::debug!(
+                            "Ending commit stream to peer {:?} at index {}: {}",
+                            state.peer,
+                            state.next_start,
+                            e
+                        );
+                        return None;
+                    }
+                };
+                // Commits are only served with certifier blocks proving quorum on the
+                // window's last commit; without them the client cannot verify the window.
+                if window.certifier_blocks.is_empty() {
+                    return None;
+                }
+                state.next_start = window
+                    .commits
+                    .last()
+                    .expect("Commit window is never empty")
+                    .index()
+                    + 1;
+                state.served_commits.inc_by(window.commits.len() as u64);
+                state.pending = chunk_commit_window(window, MAX_FETCH_RESPONSE_BYTES);
+                let bytes: usize = state
+                    .pending
+                    .iter()
+                    .map(|item| {
+                        item.commits
+                            .iter()
+                            .chain(item.blocks.iter())
+                            .chain(item.certifier_blocks.iter())
+                            .map(|b| b.len())
+                            .sum::<usize>()
+                    })
+                    .sum();
+                state.served_bytes.inc_by(bytes as u64);
+            }
+        });
+
+        Ok(Box::pin(stream))
+    }
+}
+
+struct ActiveStreamGuard {
+    gauge: IntGauge,
+}
+
+impl Drop for ActiveStreamGuard {
+    fn drop(&mut self) {
+        self.gauge.dec();
+    }
+}
+
+/// Splits a commit window into stream items under a soft per-item byte budget, keeping
+/// each commit and its blocks in the same item. The certifier blocks are attached only
+/// to the last item, marking the end of the verification window for the client.
+fn chunk_commit_window(window: CommitWindow, max_bytes: usize) -> VecDeque<CommitStreamItem> {
+    let mut items = VecDeque::new();
+    let mut current = CommitStreamItem {
+        commits: vec![],
+        block_counts: vec![],
+        blocks: vec![],
+        certifier_blocks: vec![],
+    };
+    let mut current_bytes = 0usize;
+    for (commit, blocks) in window.commits.into_iter().zip_debug_eq(window.blocks) {
+        let entry_bytes =
+            commit.serialized().len() + blocks.iter().map(|b| b.serialized().len()).sum::<usize>();
+        if !current.commits.is_empty() && current_bytes + entry_bytes > max_bytes {
+            items.push_back(current);
+            current = CommitStreamItem {
+                commits: vec![],
+                block_counts: vec![],
+                blocks: vec![],
+                certifier_blocks: vec![],
+            };
+            current_bytes = 0;
+        }
+        current.commits.push(commit.serialized().clone());
+        current.block_counts.push(blocks.len() as u32);
+        current
+            .blocks
+            .extend(blocks.iter().map(|b| b.serialized().clone()));
+        current_bytes += entry_bytes;
+    }
+    current.certifier_blocks = window
+        .certifier_blocks
+        .iter()
+        .map(|b| b.serialized().clone())
+        .collect();
+    items.push_back(current);
+    items
 }
 
 #[cfg(test)]
@@ -476,5 +624,56 @@ mod tests {
             ),
             Ok(_) => panic!("Expected error, got Ok"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_chunk_commit_window() {
+        use crate::{
+            block::TestBlock,
+            commit::{CommitDigest, TrustedCommit},
+        };
+
+        // Build a window of 4 commits, each with 2 blocks.
+        let mut commits = vec![];
+        let mut blocks = vec![];
+        let mut previous_digest = CommitDigest::MIN;
+        for index in 1u32..=4 {
+            let commit_blocks = (0..2)
+                .map(|author| VerifiedBlock::new_for_test(TestBlock::new(index, author).build()))
+                .collect::<Vec<_>>();
+            let commit = TrustedCommit::new_for_test(
+                index,
+                previous_digest,
+                0,
+                commit_blocks[0].reference(),
+                commit_blocks.iter().map(|b| b.reference()).collect(),
+            );
+            previous_digest = commit.digest();
+            commits.push(commit);
+            blocks.push(commit_blocks);
+        }
+        let certifier_blocks = vec![VerifiedBlock::new_for_test(TestBlock::new(5, 0).build())];
+        let entry_bytes = commits[0].serialized().len()
+            + blocks[0]
+                .iter()
+                .map(|b| b.serialized().len())
+                .sum::<usize>();
+        let window = CommitWindow {
+            commits,
+            blocks,
+            certifier_blocks,
+        };
+
+        // Budget fits two commits per item: expect 2 items of 2 commits each.
+        let items = chunk_commit_window(window, entry_bytes * 2);
+        assert_eq!(items.len(), 2);
+        for item in &items {
+            assert_eq!(item.commits.len(), 2);
+            assert_eq!(item.block_counts, vec![2, 2]);
+            assert_eq!(item.blocks.len(), 4);
+        }
+        // Certifier blocks only on the last item.
+        assert!(items[0].certifier_blocks.is_empty());
+        assert_eq!(items[1].certifier_blocks.len(), 1);
     }
 }

@@ -10,6 +10,7 @@ use std::{
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use tracing::debug;
@@ -24,6 +25,15 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
 };
+
+/// A window of consecutive certified commits served to a commit-stream consumer, with
+/// the blocks referenced by each commit (in the commit's `blocks()` order) and the vote
+/// blocks certifying the last commit of the window.
+pub(crate) struct CommitWindow {
+    pub(crate) commits: Vec<TrustedCommit>,
+    pub(crate) blocks: Vec<Vec<VerifiedBlock>>,
+    pub(crate) certifier_blocks: Vec<VerifiedBlock>,
+}
 
 /// Provides shared block synchronization functionality for both AuthorityService and ObserverService.
 /// This service handles fetch requests from synchronizer and commit_syncer components,
@@ -260,6 +270,68 @@ impl BlockSyncService {
         Ok((commits, certifier_blocks))
     }
 
+    /// Returns the next window of certified commits starting at `start`, along with the
+    /// blocks referenced by each commit and the vote blocks certifying the window's last
+    /// commit. The window is capped at `commit_sync_batch_size` commits.
+    ///
+    /// Returns `Ok(None)` when no certified commit exists at or after `start`, i.e. the
+    /// caller has reached this node's certified commit tip.
+    pub async fn serve_commit_window(
+        &self,
+        start: CommitIndex,
+    ) -> ConsensusResult<Option<CommitWindow>> {
+        let (commits, certifier_blocks) = self
+            .fetch_commits((start..=CommitIndex::MAX).into())
+            .await?;
+        if commits.is_empty() {
+            return Ok(None);
+        }
+
+        // Read the blocks of all commits in the window with a single multi_get,
+        // sorted by ref for better read locality, then regroup per commit in
+        // each commit's `blocks()` order.
+        let mut block_refs: Vec<BlockRef> = commits
+            .iter()
+            .flat_map(|commit| commit.blocks())
+            .cloned()
+            .collect();
+        block_refs.sort();
+        let mut fetched_blocks = BTreeMap::new();
+        for (block_ref, block) in block_refs
+            .iter()
+            .zip_debug_eq(self.store.read_blocks(&block_refs)?)
+        {
+            // Committed blocks at or after `start` (which is at or above the requester's
+            // local commit tip) must exist in the store, since committed blocks are not
+            // pruned within an epoch.
+            let Some(block) = block else {
+                return Err(ConsensusError::CommittedBlockNotFound(*block_ref));
+            };
+            fetched_blocks.insert(*block_ref, block);
+        }
+        let blocks = commits
+            .iter()
+            .map(|commit| {
+                commit
+                    .blocks()
+                    .iter()
+                    .map(|block_ref| {
+                        fetched_blocks
+                            .get(block_ref)
+                            .expect("Block was just fetched")
+                            .clone()
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Ok(Some(CommitWindow {
+            commits,
+            blocks,
+            certifier_blocks,
+        }))
+    }
+
     /// Fetches the latest blocks for the specified authorities.
     pub async fn fetch_latest_blocks(
         &self,
@@ -303,5 +375,143 @@ impl BlockSyncService {
             .collect::<Vec<_>>();
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use consensus_config::Parameters;
+    use consensus_types::block::BlockDigest;
+
+    use super::*;
+    use crate::{
+        block::{TestBlock, VerifiedBlock},
+        commit::{CommitDigest, CommitRef},
+        storage::{WriteBatch, mem_store::MemStore},
+    };
+
+    // Builds a store with commits 1..=num_commits, each referencing a single block, where
+    // commits 1..=num_certified have a quorum of commit votes recorded.
+    fn setup_service(num_commits: u32, num_certified: u32) -> BlockSyncService {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context.parameters = Parameters {
+            commit_sync_batch_size: 5,
+            ..context.parameters
+        };
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+
+        let mut previous_digest = CommitDigest::MIN;
+        for index in 1..=num_commits {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(index, 0).build());
+            let commit = TrustedCommit::new_for_test(
+                index,
+                previous_digest,
+                block.timestamp_ms(),
+                block.reference(),
+                vec![block.reference()],
+            );
+            previous_digest = commit.digest();
+
+            // Blocks written after the commit carry votes on it, certifying it.
+            let mut vote_blocks = vec![];
+            if index <= num_certified {
+                for author in 0..3 {
+                    let vote_block = VerifiedBlock::new_for_test(
+                        TestBlock::new(index + 1, author)
+                            .set_commit_votes(vec![CommitRef::new(index, commit.digest())])
+                            .build(),
+                    );
+                    vote_blocks.push(vote_block);
+                }
+            }
+
+            let mut blocks = vec![block];
+            blocks.extend(vote_blocks);
+            store
+                .write(WriteBatch::default().blocks(blocks).commits(vec![commit]))
+                .unwrap();
+        }
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        BlockSyncService::new(context, dag_state, store)
+    }
+
+    #[tokio::test]
+    async fn test_serve_commit_window_basic() {
+        let service = setup_service(8, 6);
+
+        // First window is capped at the batch size (5), with one block per commit and
+        // certifier blocks for the last commit of the window.
+        let window = service.serve_commit_window(1).await.unwrap().unwrap();
+        assert_eq!(
+            window.commits.iter().map(|c| c.index()).collect::<Vec<_>>(),
+            vec![1, 2, 3, 4, 5]
+        );
+        assert_eq!(window.blocks.len(), 5);
+        for (commit, blocks) in window.commits.iter().zip_debug_eq(&window.blocks) {
+            assert_eq!(
+                blocks.iter().map(|b| b.reference()).collect::<Vec<_>>(),
+                commit.blocks().to_vec()
+            );
+        }
+        assert_eq!(window.certifier_blocks.len(), 3);
+
+        // The next window excludes the uncertified tail (commits 7 and 8).
+        let window = service.serve_commit_window(6).await.unwrap().unwrap();
+        assert_eq!(
+            window.commits.iter().map(|c| c.index()).collect::<Vec<_>>(),
+            vec![6]
+        );
+        assert_eq!(window.certifier_blocks.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_serve_commit_window_at_tip() {
+        let service = setup_service(8, 6);
+
+        // Only uncertified commits at/after the start index.
+        assert!(service.serve_commit_window(7).await.unwrap().is_none());
+        // Past the last commit entirely.
+        assert!(service.serve_commit_window(9).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_serve_commit_window_missing_block() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        // Construct DagState before writing the incomplete commit, since DagState recovery
+        // loads committed subdags from the store and expects their blocks to exist.
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        // A certified commit referencing a block that is not in the store.
+        let missing_ref = BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
+        let commit =
+            TrustedCommit::new_for_test(1, CommitDigest::MIN, 0, missing_ref, vec![missing_ref]);
+        let vote_blocks = (0..3)
+            .map(|author| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(2, author)
+                        .set_commit_votes(vec![CommitRef::new(1, commit.digest())])
+                        .build(),
+                )
+            })
+            .collect::<Vec<_>>();
+        store
+            .write(
+                WriteBatch::default()
+                    .blocks(vote_blocks)
+                    .commits(vec![commit]),
+            )
+            .unwrap();
+
+        let service = BlockSyncService::new(context, dag_state, store);
+
+        let result = service.serve_commit_window(1).await;
+        assert!(matches!(
+            result,
+            Err(ConsensusError::CommittedBlockNotFound(_))
+        ));
     }
 }

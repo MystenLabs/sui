@@ -121,6 +121,16 @@ fn build_tonic_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("stream_commits")
+                .route_name("StreamCommits")
+                .input_type("crate::network::observer::CommitStreamRequest")
+                .output_type("crate::network::observer::CommitStreamResponse")
+                .codec_path(codec_path)
+                .server_streaming()
+                .build(),
+        )
         .build();
 
     tonic_build::manual::Builder::new()

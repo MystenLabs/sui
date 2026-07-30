@@ -180,6 +180,7 @@ impl ValidatorConfigBuilder {
                         .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
                     allowlist: observer_config.allowlist,
                     peers: observer_config.peers,
+                    catchup_mode: observer_config.catchup_mode,
                 },
                 ..Default::default()
             });
@@ -539,6 +540,7 @@ impl FullnodeConfigBuilder {
                         .or_else(|| Some(local_ip_utils::get_available_port(&ip))),
                     allowlist: observer_config.allowlist,
                     peers: observer_config.peers,
+                    catchup_mode: observer_config.catchup_mode,
                 },
                 ..Default::default()
             }),

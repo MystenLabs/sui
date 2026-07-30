@@ -79,6 +79,18 @@ impl CommitSyncerHandle {
         // Do not abort schedule task, which waits for fetches to shut down.
         join_and_propagate_panic(self.schedule_task).await;
     }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test() -> Self {
+        let (tx_shutdown, rx_shutdown) = oneshot::channel();
+        let schedule_task = tokio::spawn(async move {
+            let _ = rx_shutdown.await;
+        });
+        Self {
+            schedule_task,
+            tx_shutdown,
+        }
+    }
 }
 
 pub(crate) struct CommitSyncer<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> {
@@ -816,10 +828,6 @@ struct Inner<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> {
 
 impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
     /// Verifies the commits and certifies them using the provided vote blocks for the last commit.
-    /// Returns, in order:
-    /// - the verified commit chain as trusted commits;
-    /// - the verified blocks that certify the last commit, paired with locally rejected
-    ///   transaction indices for transaction vote tracking.
     fn verify_commits(
         context: &Context,
         block_verifier: &dyn BlockVerifier,
@@ -831,80 +839,122 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
         Vec<TrustedCommit>,
         Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
     )> {
-        // Parse and verify commits.
-        let mut commits = Vec::new();
-        for serialized in &serialized_commits {
-            let commit: Commit =
-                bcs::from_bytes(serialized).map_err(ConsensusError::MalformedCommit)?;
-            let digest = TrustedCommit::compute_digest(serialized);
-            if commits.is_empty() {
-                // start is inclusive, so first commit must be at the start index.
-                if commit.index() != commit_range.start() {
-                    return Err(ConsensusError::UnexpectedStartCommit {
-                        peer,
-                        start: commit_range.start(),
-                        commit: Box::new(commit),
-                    });
-                }
-            } else {
-                // Verify next commit increments index and references the previous digest.
-                let (last_commit_digest, last_commit): &(CommitDigest, Commit) =
-                    commits.last().unwrap();
-                if commit.index() != last_commit.index() + 1
-                    || &commit.previous_digest() != last_commit_digest
-                {
-                    return Err(ConsensusError::UnexpectedCommitSequence {
-                        peer,
-                        prev_commit: Box::new(last_commit.clone()),
-                        curr_commit: Box::new(commit),
-                    });
-                }
-            }
-            // Do not process more commits past the end index.
-            if commit.index() > commit_range.end() {
-                break;
-            }
-            commits.push((digest, commit));
-        }
-        let Some((end_commit_digest, end_commit)) = commits.last() else {
-            return Err(ConsensusError::NoCommitReceived { peer });
-        };
-
-        // Parse and verify blocks. Then accumulate votes on the end commit.
-        let end_commit_ref = CommitRef::new(end_commit.index(), *end_commit_digest);
-        let mut stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
-        let mut commit_certifying_blocks = Vec::new();
-        for serialized in serialized_vote_blocks {
-            let block: SignedBlock =
-                bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
-            // Only block signatures need to be verified, to verify commit votes.
-            // But the blocks will be sent to Core, so they need to be fully verified.
-            let (block, reject_transaction_votes) =
-                block_verifier.verify_and_vote(block, serialized)?;
-            for vote in block.commit_votes() {
-                if *vote == end_commit_ref {
-                    stake_aggregator.add(block.author(), &context.committee);
-                }
-            }
-            commit_certifying_blocks.push((block, reject_transaction_votes));
-        }
-
-        // Check if the end commit has enough votes.
-        if !stake_aggregator.reached_threshold(&context.committee) {
-            return Err(ConsensusError::NotEnoughCommitVotes {
-                stake: stake_aggregator.stake(),
-                peer,
-                commit: Box::new(end_commit.clone()),
-            });
-        }
-
-        let trusted_commits = commits
-            .into_iter()
-            .zip_debug_eq(serialized_commits)
-            .map(|((_d, c), s)| TrustedCommit::new_trusted(c, s))
-            .collect();
-        Ok((trusted_commits, commit_certifying_blocks))
+        verify_commit_sequence(
+            context,
+            block_verifier,
+            peer,
+            commit_range,
+            None,
+            serialized_commits,
+            serialized_vote_blocks,
+        )
     }
+}
+
+/// Verifies a sequence of consecutive serialized commits and certifies them using the
+/// provided vote blocks for the last commit. The first commit must be at the start of
+/// `commit_range`, and commits past the end of the range are discarded. When
+/// `previous_digest` is provided, the first commit must also chain to it, which links
+/// this sequence to previously verified commits (used by streamed commit verification
+/// across windows).
+///
+/// Returns, in order:
+/// - the verified commit chain as trusted commits;
+/// - the verified blocks that certify the last commit, paired with locally rejected
+///   transaction indices for transaction vote tracking.
+pub(crate) fn verify_commit_sequence(
+    context: &Context,
+    block_verifier: &dyn BlockVerifier,
+    peer: PeerId,
+    commit_range: CommitRange,
+    previous_digest: Option<CommitDigest>,
+    serialized_commits: Vec<Bytes>,
+    serialized_vote_blocks: Vec<Bytes>,
+) -> ConsensusResult<(
+    Vec<TrustedCommit>,
+    Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
+)> {
+    // Parse and verify commits.
+    let mut commits = Vec::new();
+    for serialized in &serialized_commits {
+        let commit: Commit =
+            bcs::from_bytes(serialized).map_err(ConsensusError::MalformedCommit)?;
+        let digest = TrustedCommit::compute_digest(serialized);
+        if commits.is_empty() {
+            // start is inclusive, so first commit must be at the start index.
+            if commit.index() != commit_range.start() {
+                return Err(ConsensusError::UnexpectedStartCommit {
+                    peer,
+                    start: commit_range.start(),
+                    commit: Box::new(commit),
+                });
+            }
+            if let Some(previous_digest) = previous_digest
+                && commit.previous_digest() != previous_digest
+            {
+                return Err(ConsensusError::UnexpectedCommitPreviousDigest {
+                    peer,
+                    commit: Box::new(commit),
+                });
+            }
+        } else {
+            // Verify next commit increments index and references the previous digest.
+            let (last_commit_digest, last_commit): &(CommitDigest, Commit) =
+                commits.last().unwrap();
+            if commit.index() != last_commit.index() + 1
+                || &commit.previous_digest() != last_commit_digest
+            {
+                return Err(ConsensusError::UnexpectedCommitSequence {
+                    peer,
+                    prev_commit: Box::new(last_commit.clone()),
+                    curr_commit: Box::new(commit),
+                });
+            }
+        }
+        // Do not process more commits past the end index.
+        if commit.index() > commit_range.end() {
+            break;
+        }
+        commits.push((digest, commit));
+    }
+    let Some((end_commit_digest, end_commit)) = commits.last() else {
+        return Err(ConsensusError::NoCommitReceived { peer });
+    };
+
+    // Parse and verify blocks. Then accumulate votes on the end commit.
+    let end_commit_ref = CommitRef::new(end_commit.index(), *end_commit_digest);
+    let mut stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
+    let mut commit_certifying_blocks = Vec::new();
+    for serialized in serialized_vote_blocks {
+        let block: SignedBlock =
+            bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
+        // Only block signatures need to be verified, to verify commit votes.
+        // But the blocks will be sent to Core, so they need to be fully verified.
+        let (block, reject_transaction_votes) =
+            block_verifier.verify_and_vote(block, serialized)?;
+        for vote in block.commit_votes() {
+            if *vote == end_commit_ref {
+                stake_aggregator.add(block.author(), &context.committee);
+            }
+        }
+        commit_certifying_blocks.push((block, reject_transaction_votes));
+    }
+
+    // Check if the end commit has enough votes.
+    if !stake_aggregator.reached_threshold(&context.committee) {
+        return Err(ConsensusError::NotEnoughCommitVotes {
+            stake: stake_aggregator.stake(),
+            peer,
+            commit: Box::new(end_commit.clone()),
+        });
+    }
+
+    let trusted_commits = commits
+        .into_iter()
+        .zip_debug_eq(serialized_commits)
+        .map(|((_d, c), s)| TrustedCommit::new_trusted(c, s))
+        .collect();
+    Ok((trusted_commits, commit_certifying_blocks))
 }
 
 #[cfg(test)]
@@ -1025,6 +1075,15 @@ mod tests {
             _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn stream_commits(
+            &self,
+            _peer: crate::network::PeerId,
+            _start: crate::CommitIndex,
+            _timeout: Duration,
+        ) -> ConsensusResult<crate::network::ObserverCommitStream> {
             unimplemented!("Unimplemented")
         }
     }
@@ -1338,5 +1397,81 @@ mod tests {
             assert_eq!(range.start(), start);
             assert_eq!(range.end(), start + 4);
         }
+    }
+
+    #[tokio::test]
+    async fn test_verify_commit_sequence_previous_digest() {
+        use consensus_types::block::BlockDigest;
+
+        use crate::{
+            block::{TestBlock, VerifiedBlock},
+            commit::{Commit, CommitDigest, CommitRef, TrustedCommit},
+            commit_syncer::verify_commit_sequence,
+            error::ConsensusError,
+            network::PeerId,
+        };
+
+        let (context, _keys) = Context::new_for_test(4);
+        let block_verifier = NoopBlockVerifier {};
+        let peer = PeerId::Validator(AuthorityIndex::new_for_test(0));
+
+        // Build a chain of 2 commits starting at index 5, chained to a known digest.
+        let genesis_digest = CommitDigest::MIN;
+        let leader_ref = consensus_types::block::BlockRef::new(
+            5,
+            AuthorityIndex::new_for_test(0),
+            BlockDigest::MIN,
+        );
+        let commit5 = TrustedCommit::new_for_test(5, genesis_digest, 0, leader_ref, vec![]);
+        let commit6 = TrustedCommit::new_for_test(6, commit5.digest(), 0, leader_ref, vec![]);
+        let serialized_commits = vec![commit5.serialized().clone(), commit6.serialized().clone()];
+
+        // Vote blocks from 3 authorities certifying commit 6.
+        let vote_blocks = (0..3)
+            .map(|author| {
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(7, author)
+                        .set_commit_votes(vec![CommitRef::new(6, commit6.digest())])
+                        .build(),
+                );
+                block.serialized().clone()
+            })
+            .collect::<Vec<_>>();
+
+        // Verifies with the correct previous digest, and without one.
+        for previous_digest in [Some(genesis_digest), None] {
+            let (commits, certifiers) = verify_commit_sequence(
+                &context,
+                &block_verifier,
+                peer.clone(),
+                (5..=6).into(),
+                previous_digest,
+                serialized_commits.clone(),
+                vote_blocks.clone(),
+            )
+            .unwrap();
+            assert_eq!(commits.len(), 2);
+            assert_eq!(certifiers.len(), 3);
+        }
+
+        // Fails with a mismatched previous digest.
+        let wrong_digest = TrustedCommit::compute_digest(
+            &Commit::new(4, CommitDigest::MIN, 0, leader_ref, vec![])
+                .serialize()
+                .unwrap(),
+        );
+        let result = verify_commit_sequence(
+            &context,
+            &block_verifier,
+            peer.clone(),
+            (5..=6).into(),
+            Some(wrong_digest),
+            serialized_commits,
+            vote_blocks,
+        );
+        assert!(matches!(
+            result,
+            Err(ConsensusError::UnexpectedCommitPreviousDigest { .. })
+        ));
     }
 }
