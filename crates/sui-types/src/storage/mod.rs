@@ -829,7 +829,7 @@ impl SystemObjectVersions {
     /// Before execution, get the latest versions of the implicitly read system objects from the store,
     /// and use these versions as the exact version to read during execution.
     /// This is different from SystemObjectVersionRequirements::Latest in that the versions are pinned and won't change during execution.
-    /// This is used only in sequential execution mode such as simulacrum.
+    /// This is used only in environments where there is no consensus but also can only have sequential execution, e.g. simulacrum.
     pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
         let accumulator_version = store
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)

@@ -324,9 +324,13 @@ async fn test_load_implicitly_read_system_object() {
     );
     cache.write_object_entry_for_test(below_target);
 
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
+    let permit = semaphore.clone().try_acquire_owned().unwrap();
     let blocked = tokio::task::spawn_blocking({
         let cache = cache.clone();
         move || {
+            let _permit_guard =
+                mysten_common::sync::execution_permit::set_execution_permit(Box::new(permit));
             cache.as_ref().load_implicitly_read_system_object(
                 &object_id,
                 ConsensusObjectVersion {
@@ -338,6 +342,7 @@ async fn test_load_implicitly_read_system_object() {
     });
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(!blocked.is_finished());
+    assert_eq!(semaphore.available_permits(), 1);
 
     let at_target = Object::with_id_owner_version_for_testing(
         object_id,

@@ -513,14 +513,6 @@ impl WritebackCache {
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
             return object;
         }
-        if ObjectCacheRead::get_object(self, object_id)
-            .is_some_and(|latest| latest.version() >= version)
-        {
-            mysten_common::fatal!(
-                "system object {object_id} missing at version {version} that can no longer be \
-                 written"
-            );
-        }
         self.metrics
             .implicit_system_object_read_waits
             .with_label_values(&[object_id.to_string().as_str()])
