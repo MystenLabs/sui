@@ -160,19 +160,24 @@ fn make_gas_object(id: ObjectID, version: u64, owner: Owner) -> Object {
     .into()
 }
 
-fn object_at_checkpoint_response(object: &Object) -> serde_json::Value {
+/// Exact versions pinned at a checkpoint are fetched through a checkpoint-scoped
+/// `multiGetObjects`, so the response is a list even for a single object.
+fn object_at_checkpoint_response(objects: &[&Object]) -> serde_json::Value {
     serde_json::json!({
         "data": {
             "checkpoint": {
                 "query": {
-                    "object": {
-                        "address": object.id().to_string(),
-                        "version": object.version().value(),
-                        "objectBcs": FastCryptoBase64::from_bytes(
-                            &bcs::to_bytes(object).expect("object should serialize"),
-                        )
-                        .encoded(),
-                    }
+                    "multiGetObjects": objects
+                        .iter()
+                        .map(|object| serde_json::json!({
+                            "address": object.id().to_string(),
+                            "version": object.version().value(),
+                            "objectBcs": FastCryptoBase64::from_bytes(
+                                &bcs::to_bytes(object).expect("object should serialize"),
+                            )
+                            .encoded(),
+                        }))
+                        .collect::<Vec<_>>(),
                 }
             }
         }
@@ -207,12 +212,14 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .and(body_partial_json(serde_json::json!({
             "variables": {
                 "sequenceNumber": checkpoint,
-                "address": object.id().to_string(),
-                "version": object.version().value(),
+                "keys": [{
+                    "address": object.id().to_string(),
+                    "version": object.version().value(),
+                }],
             }
         })))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(object_at_checkpoint_response(object)),
+            ResponseTemplate::new(200).set_body_json(object_at_checkpoint_response(&[object])),
         )
         .mount(server)
         .await;

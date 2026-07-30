@@ -1347,6 +1347,8 @@ pub(crate) mod events_query {
 }
 
 pub(crate) mod object_query {
+    use std::collections::BTreeMap;
+
     use sui_types::object::Object;
 
     use super::*;
@@ -1360,7 +1362,7 @@ pub(crate) mod object_query {
     #[cynic(graphql_type = "Base64")]
     pub(crate) struct Base64(pub String);
 
-    #[derive(cynic::InputObject, Debug)]
+    #[derive(cynic::InputObject, Debug, Clone)]
     #[cynic(graphql_type = "ObjectKey")]
     pub(crate) struct ObjectKey {
         pub address: SuiAddress,
@@ -1393,8 +1395,7 @@ pub(crate) mod object_query {
     #[derive(cynic::QueryVariables)]
     pub(crate) struct VersionAtCheckpointVars {
         pub sequence_number: Option<u64>,
-        pub address: SuiAddress,
-        pub version: Option<u64>,
+        pub keys: Vec<ObjectKey>,
     }
 
     #[derive(cynic::QueryFragment)]
@@ -1424,8 +1425,8 @@ pub(crate) mod object_query {
         schema_module = "crate::gql::queries::schema"
     )]
     pub(crate) struct ScopedQuery {
-        #[arguments(address: $address, version: $version)]
-        pub object: Option<ObjectFragment>,
+        #[arguments(keys: $keys)]
+        pub multi_get_objects: Vec<Option<ObjectFragment>>,
     }
 
     // Maximum number of keys to query in a single request.
@@ -1442,6 +1443,10 @@ pub(crate) mod object_query {
         let mut results: Vec<Option<Option<(Object, u64)>>> = vec![None; keys.len()];
         let mut standard_indices: Vec<usize> = Vec::with_capacity(keys.len());
         let mut standard_keys: Vec<ObjectKey> = Vec::with_capacity(keys.len());
+        // Exact versions pinned at a checkpoint go through a checkpoint-scoped
+        // multi-get instead, so they batch too; grouped by checkpoint because
+        // the pin lives on the query rather than on each key.
+        let mut pinned: BTreeMap<u64, (Vec<usize>, Vec<ObjectKey>)> = BTreeMap::new();
 
         for (idx, key) in keys.iter().cloned().enumerate() {
             match key.version_query {
@@ -1449,15 +1454,26 @@ pub(crate) mod object_query {
                     version,
                     checkpoint,
                 } => {
-                    results[idx] = Some(
-                        query_version_at_checkpoint(key.object_id, version, checkpoint, data_store)
-                            .await?,
-                    );
+                    let (indices, keys) = pinned.entry(checkpoint).or_default();
+                    indices.push(idx);
+                    keys.push(ObjectKey {
+                        address: SuiAddress(key.object_id.to_string()),
+                        version: Some(version),
+                        root_version: None,
+                        at_checkpoint: None,
+                    });
                 }
                 _ => {
                     standard_indices.push(idx);
                     standard_keys.push(ObjectKey::from(key));
                 }
+            }
+        }
+
+        for (checkpoint, (indices, keys)) in pinned {
+            let objects = query_versions_at_checkpoint(keys, checkpoint, data_store).await?;
+            for (idx, object) in indices.into_iter().zip_eq(objects) {
+                results[idx] = Some(object);
             }
         }
 
@@ -1501,27 +1517,51 @@ pub(crate) mod object_query {
             .collect())
     }
 
-    async fn query_version_at_checkpoint(
-        object_id: sui_types::base_types::ObjectID,
-        version: u64,
+    /// Fetch exact object versions, each returned only if it already existed at
+    /// `checkpoint`.
+    ///
+    /// The checkpoint pins the *query scope* rather than each key, which is what
+    /// lets these batch: `multiGetObjects` rejects a key carrying more than one
+    /// bound, so a key with both a version and an `atCheckpoint` cannot be sent.
+    /// Scoping instead keeps the guard intact — a scoped exact-version read
+    /// resolves through `Object::at_version`, which drops any version created
+    /// after the checkpoint in scope, so post-fork state still cannot leak into
+    /// a diverged fork.
+    async fn query_versions_at_checkpoint(
+        keys: Vec<ObjectKey>,
         checkpoint: u64,
         data_store: &GraphQLClient,
-    ) -> Result<Option<(Object, u64)>, Error> {
-        let query = VersionAtCheckpointQuery::build(VersionAtCheckpointVars {
-            sequence_number: Some(checkpoint),
-            address: SuiAddress(object_id.to_string()),
-            version: Some(version),
-        });
-        let response = data_store.run_query(&query).await?;
-        let checkpoint = response
-            .data
-            .and_then(|data| data.checkpoint)
-            .ok_or_else(|| anyhow!("Missing checkpoint in object query response"))?;
-        let scoped_query = checkpoint
-            .query
-            .ok_or_else(|| anyhow!("Missing checkpoint-scoped query in object response"))?;
+    ) -> Result<Vec<Option<(Object, u64)>>, Error> {
+        let mut results = Vec::with_capacity(keys.len());
 
-        decode_object_fragment(scoped_query.object)
+        for chunk in keys.chunks(MAX_KEYS_SIZE) {
+            let expected = chunk.len();
+            let query = VersionAtCheckpointQuery::build(VersionAtCheckpointVars {
+                sequence_number: Some(checkpoint),
+                keys: chunk.to_vec(),
+            });
+            let response = data_store.run_query(&query).await?;
+            let checkpoint_data = response
+                .data
+                .and_then(|data| data.checkpoint)
+                .ok_or_else(|| anyhow!("Missing checkpoint in object query response"))?;
+            let scoped_query = checkpoint_data
+                .query
+                .ok_or_else(|| anyhow!("Missing checkpoint-scoped query in object response"))?;
+
+            let objects = scoped_query.multi_get_objects;
+            if objects.len() != expected {
+                return Err(anyhow!(
+                    "checkpoint-scoped object query returned {} results for {expected} keys",
+                    objects.len(),
+                ));
+            }
+            for object in objects {
+                results.push(decode_object_fragment(object)?);
+            }
+        }
+
+        Ok(results)
     }
 
     fn decode_object_fragment(
