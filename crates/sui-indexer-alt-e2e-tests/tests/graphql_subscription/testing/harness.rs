@@ -43,9 +43,6 @@ pub struct SubscriptionTestCluster {
     #[allow(unused)]
     pub db: TempDb,
     pub subscription_url: String,
-    /// Prometheus registry the GraphQL service records into; lets tests read backend call counters
-    /// (e.g. ledger gRPC `BatchGetTransactions`) to assert `KvLoader` coalescing.
-    registry: Registry,
     #[allow(unused)]
     service: Service,
     #[allow(unused)]
@@ -91,17 +88,6 @@ impl SubscriptionTestCluster {
     /// gap-recovery reads are untouched; only the live stream is severed.
     pub async fn new_with_disruption_proxy_and_ledger_history() -> (Self, ProxyController) {
         Self::new_inner(true, true, GraphQlConfig::default()).await
-    }
-
-    /// Like `new_with_ledger_history`, but overrides the subscription resolve concurrency (how many
-    /// payloads resolve at once). Used by benchmarks to compare serial (1) vs concurrent resolution.
-    pub async fn new_with_ledger_history_and_concurrency(
-        max_concurrent_resolutions: usize,
-    ) -> Self {
-        let mut config = GraphQlConfig::default();
-        config.subscription.max_concurrent_resolutions = max_concurrent_resolutions;
-        let (cluster, _controller) = Self::new_inner(false, true, config).await;
-        cluster
     }
 
     async fn new_inner(
@@ -213,35 +199,12 @@ impl SubscriptionTestCluster {
                     "http://{}/graphql/subscriptions",
                     graphql_listen_address
                 ),
-                registry,
                 service,
                 indexer,
                 ingestion_dir,
             },
             controller,
         )
-    }
-
-    /// Total ledger-gRPC calls whose method name contains `method_contains` (e.g.
-    /// "BatchGetTransactions"), read from the `requests_received` counter. Lets a test assert how the
-    /// `KvLoader` coalesces content reads under concurrent resolution.
-    pub fn ledger_grpc_call_count(&self, method_contains: &str) -> u64 {
-        let mut total = 0u64;
-        for mf in self.registry.gather() {
-            if !mf.name().ends_with("requests_received") {
-                continue;
-            }
-            for m in mf.get_metric() {
-                let matches = m
-                    .get_label()
-                    .iter()
-                    .any(|l| l.name() == "method" && l.value().contains(method_contains));
-                if matches {
-                    total += m.get_counter().value() as u64;
-                }
-            }
-        }
-        total
     }
 
     /// Latest checkpoint sequence number produced by the validator (the

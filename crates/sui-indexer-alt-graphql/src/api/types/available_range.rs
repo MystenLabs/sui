@@ -463,9 +463,7 @@ mod field_piplines_tests {
             }
         }
 
-        let schema = schema(&crate::config::SubscriptionConfig::default())
-            .extension(TestExtension { test_fn })
-            .finish();
+        let schema = schema().extension(TestExtension { test_fn }).finish();
         let response = schema.execute("{ __typename }").await;
         assert!(
             response.errors.is_empty(),
