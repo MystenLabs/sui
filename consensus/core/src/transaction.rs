@@ -221,9 +221,10 @@ impl TransactionConsumer {
         let mut acks = Vec::new();
         let mut total_bytes = 0;
         let mut limit_reached = LimitReached::AllTransactionsIncluded;
+        let hard_max_block_bytes = self.max_transactions_in_block_bytes;
         let max_block_bytes = adaptive_block_cap()
-            .map(|a| a.cap_bytes().min(self.max_transactions_in_block_bytes))
-            .unwrap_or(self.max_transactions_in_block_bytes);
+            .map(|a| a.cap_bytes().min(hard_max_block_bytes))
+            .unwrap_or(hard_max_block_bytes);
 
         // Handle one batch of incoming transactions from TransactionGuard.
         // The method will return `None` if all the transactions can be included in the block. Otherwise none of the transactions will be
@@ -241,8 +242,15 @@ impl TransactionConsumer {
             let transactions_bytes =
                 t.transactions.iter().map(|t| t.data().len()).sum::<usize>() as u64;
             if total_bytes + transactions_bytes > max_block_bytes {
-                limit_reached = LimitReached::MaxBytes;
-                return Some(t);
+                // The adaptive cap can sit below a single legal transaction (its floor is far under
+                // max_tx_size_bytes), and a batch that never fits is dropped on the next call. An
+                // empty block therefore always admits one batch, bounded only by the protocol limit.
+                let admit_into_empty_block =
+                    transactions.is_empty() && transactions_bytes <= hard_max_block_bytes;
+                if !admit_into_empty_block {
+                    limit_reached = LimitReached::MaxBytes;
+                    return Some(t);
+                }
             }
             if transactions.len() as u64 + transactions_num > self.max_num_transactions_in_block {
                 limit_reached = LimitReached::MaxNumOfTransactions;
