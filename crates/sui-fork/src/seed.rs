@@ -61,12 +61,9 @@ pub(crate) struct SeedEntry {
 pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
-    /// Addresses whose owned objects were enumerated *completely* at the fork
-    /// checkpoint to produce this manifest — the record of which owners the
-    /// fork can answer for. An address skipped because the enumeration could
-    /// not run must never appear here: a partial answer recorded as a complete
-    /// one is worse than no answer. Absent in manifests written before this
-    /// field existed (`serde(default)`).
+    /// Addresses that were fully enumerated to produce this manifest. Nothing
+    /// reads this; it is a record for whoever inspects the fork directory of
+    /// which addresses the seeding used.
     #[serde(default)]
     pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
@@ -359,8 +356,8 @@ async fn resolve_seeds(
     // Address seeds are ignored (not fatal) when the fork checkpoint is older
     // than the remote's ownership-enumeration window: the scan is impossible,
     // but explicit object seeds still work. The skipped addresses must NOT be
-    // recorded in the manifest — recording them would mark their owner
-    // inventories complete without a scan ever having run.
+    // recorded in the manifest: the address list claims a complete scan, and
+    // claiming one that never ran is worse than recording nothing.
     let addresses = if input.addresses.is_empty() {
         Vec::new()
     } else {
