@@ -5,8 +5,9 @@
 //! `SignedBlock`s using local DAG state, and produces minimal encodings on the send path.
 //!
 //! Inflation is synchronous and never waits: a block whose ancestors are not yet accepted
-//! locally is reported as un-inflatable so the caller can drop it, and the normal
-//! missing-ancestor sync recovers it off the critical path (see `subscriber.rs`).
+//! locally is reported as un-inflatable so the caller can drop it from the stream and
+//! hand it to a recovery task that waits on the missing slot off the critical path
+//! (see `minimal_block_receive.rs`).
 
 use std::sync::{Arc, Weak};
 

@@ -39,6 +39,15 @@ use crate::minimal_block_receive::RecoveryLimits;
 /// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
 const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 
+/// Floor delay before reconnecting after a reset this node initiated for cause
+/// (quota overflow, recovery horizon, malformed threshold). The regular backoff can
+/// be cleared by any admitted block, so a peer interleaving valid blocks with
+/// reset-triggering ones could otherwise force immediate reconnects in an unbounded
+/// loop; this floor caps that at one reset per second regardless of backoff state.
+/// An honest deep laggard pays it once per overflow, ahead of a replay that covers
+/// hundreds of rounds.
+const CAUSED_RESET_DELAY: Duration = Duration::from_secs(1);
+
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
     /// A full-form block, or a minimal block successfully inflated to full form.
@@ -375,16 +384,23 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
             let mut malformed_blocks: u32 = 0;
             'stream: loop {
-                // Reap completed recovery tasks so the JoinSet stays bounded, and
-                // propagate their panics like any other consensus task's.
-                while let Some(result) = recoveries.try_join_next() {
-                    if let Err(error) = result
-                        && error.is_panic()
-                    {
-                        std::panic::resume_unwind(error.into_panic());
+                // Reap completed recovery tasks even while the stream is idle — a
+                // parked task's panic must surface like any other consensus task's,
+                // not sit unobserved until the next block arrives. (The simulator's
+                // patched tokio has no try_join_next; select over join_next covers
+                // both needs.)
+                let next = tokio::select! {
+                    result = recoveries.join_next(), if !recoveries.is_empty() => {
+                        if let Some(Err(error)) = result
+                            && error.is_panic()
+                        {
+                            std::panic::resume_unwind(error.into_panic());
+                        }
+                        continue 'stream;
                     }
-                }
-                match blocks.next().await {
+                    next = blocks.next() => next,
+                };
+                match next {
                     Some(block) => {
                         context
                             .metrics
@@ -403,6 +419,41 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         ) {
                             // Dropped from the stream and owned by a recovery task.
                             Ok(InflateOutcome::Dropped { block_ref, minimal }) => {
+                                // Spawn-eligibility horizon: an admitted wait is
+                                // GC-bounded only if the claimed round is one the
+                                // local DAG can plausibly reach — a fabricated
+                                // far-future round would pin its quota until GC
+                                // crosses it, indefinitely. Beyond the horizon the
+                                // stream resets instead: for an honest sender this
+                                // means the receiver is deeply behind and full-form
+                                // replay is strictly the better path; for a Byzantine
+                                // sender it wastes only its own stream.
+                                let tip = {
+                                    let Some(dag_state) = dag_state.upgrade() else {
+                                        return;
+                                    };
+                                    let guard = dag_state.read();
+                                    guard.highest_accepted_round()
+                                };
+                                let horizon = tip.saturating_add(
+                                    context.parameters.dag_state_cached_rounds as Round,
+                                );
+                                if block_ref.round > horizon {
+                                    context
+                                        .metrics
+                                        .node_metrics
+                                        .minimal_block_quota_drops
+                                        .with_label_values(&["round_horizon"])
+                                        .inc();
+                                    info!(
+                                        "Minimal block {} from peer {} {} claims a round \
+                                         beyond the recovery horizon ({}); resetting \
+                                         subscription for full replay",
+                                        block_ref, peer, peer_hostname, horizon
+                                    );
+                                    sleep(CAUSED_RESET_DELAY).await;
+                                    continue 'subscription;
+                                }
                                 match recovery_quotas.try_acquire(peer, minimal.len()) {
                                     // The stream itself is healthy — it delivered a
                                     // well-formed block — so the reconnect backoff
@@ -449,6 +500,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             peer,
                                             peer_hostname
                                         );
+                                        sleep(CAUSED_RESET_DELAY).await;
                                         continue 'subscription;
                                     }
                                 }
@@ -468,6 +520,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             "Too many malformed minimal blocks from peer {} {}; resetting subscription",
                                             peer, peer_hostname
                                         );
+                                        sleep(CAUSED_RESET_DELAY).await;
                                         continue 'subscription;
                                     }
                                 }
@@ -1077,7 +1130,9 @@ mod test {
     /// carries it forward.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn laggard_recovers_via_full_replay_without_catchup_mode() {
-        let s = minimal_wire_scenario(2, 1999, 3);
+        // Lag ~100 rounds: within the recovery horizon, so the quota path (not the
+        // horizon reset) is what carries this laggard.
+        let s = minimal_wire_scenario(2, 1599, 3);
         let mut client = FixedStreamClient::new(s.wire.clone());
         client.blocks_after_reset = Some(
             s.blocks
@@ -1092,7 +1147,7 @@ mod test {
         let network_client = Arc::new(client);
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
-        // The receiver is ~500 rounds behind the tip.
+        // The receiver is ~100 rounds behind the tip.
         receiver_dag
             .write()
             .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1499, 0).build()));
@@ -1166,6 +1221,108 @@ mod test {
         }
         wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
         assert!(network_client.fetch_calls.lock().is_empty());
+    }
+
+    /// Malformed-minimal boundaries: an oversized payload counts as malformed, and
+    /// the fourth malformed envelope in a session resets the stream.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn malformed_minimal_threshold_resets_stream() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+        let oversize = (context.protocol_config.max_transactions_in_block_bytes() as usize) * 2 + 1;
+        let mut wire = Vec::new();
+        // Three garbage payloads + one oversized: all four count as malformed, and
+        // the fourth crosses the threshold.
+        for _ in 0..3 {
+            wire.push(ExtendedSerializedBlock {
+                block: Bytes::new(),
+                minimal: Some(Bytes::from_static(b"\xff\xfe\xfd garbage")),
+                excluded_ancestors: vec![],
+            });
+        }
+        wire.push(ExtendedSerializedBlock {
+            block: Bytes::new(),
+            minimal: Some(Bytes::from(vec![0u8; oversize])),
+            excluded_ancestors: vec![],
+        });
+        let mut client = FixedStreamClient::new(wire);
+        // Quiet stream after the reset, so the malformed count stays at one pass.
+        client.blocks_after_reset = Some(vec![]);
+        let network_client = Arc::new(client);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&context);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+        );
+        subscriber.subscribe(peer);
+
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        let node_metrics = &context.metrics.node_metrics;
+        let peer_hostname = context.committee.authority(peer).hostname.as_str();
+        assert_eq!(
+            node_metrics
+                .minimal_block_inflate_drop
+                .with_label_values(&[peer_hostname, "malformed"])
+                .get(),
+            4
+        );
+        // Nothing was parked and nothing reached the service.
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
+        assert!(authority_service.lock().handle_send_block.is_empty());
+    }
+
+    /// A minimal block claiming a round beyond the recovery horizon must not park —
+    /// its wait would not be GC-bounded — and resets the stream for full replay.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn far_future_claim_resets_instead_of_parking() {
+        // Claimed round 2001 vs receiver tip 1499: beyond 1499 + 500 cached rounds.
+        let s = minimal_wire_scenario(2, 2000, 1);
+        let mut client = FixedStreamClient::new(s.wire.clone());
+        client.blocks_after_reset = Some(vec![ExtendedSerializedBlock {
+            block: s.blocks[0].serialized().clone(),
+            minimal: None,
+            excluded_ancestors: vec![],
+        }]);
+        let network_client = Arc::new(client);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        receiver_dag
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1499, 0).build()));
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+        );
+        subscriber.subscribe(s.peer);
+
+        let context = s.context.clone();
+        wait_until(|| {
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_quota_drops
+                .with_label_values(&["round_horizon"])
+                .get()
+                >= 1
+        })
+        .await;
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        // Nothing parked; the block arrived full via the replayed stream instead.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get(),
+            0
+        );
+        wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -27,19 +27,18 @@ use prost::Message as _;
 use crate::block::{Block, BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock};
 
 /// Ordered digest candidates for a slot. Backed in production by accepted DAG state
-/// (authoritative, first) plus receipt-time hints (untrusted, after), and by simple maps
-/// in tests.
+/// only — inflation success therefore implies locally complete causal history — and by
+/// simple maps in tests.
 pub(crate) trait AncestorDigestResolver {
-    /// Ordered candidate digests at `slot`, including genesis blocks at round 0:
-    /// accepted-DAG candidates first, then hints. May return 0 (unknown slot), 1
-    /// (unique), or more (equivocation and/or hints). Callers bound how many
-    /// candidates they will try; an untrusted hint must never displace or precede an
-    /// accepted digest.
+    /// Ordered candidate digests at `slot`, including genesis blocks at round 0. May
+    /// return 0 (unknown slot), 1 (unique), or more (equivocation). Callers bound how
+    /// many candidates they will try.
     fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest>;
 }
 
-/// Total reconstruction attempts per block. Bounds the work an equivocating or
-/// hint-flooding peer can force; anything deeper falls back to fetching the full block.
+/// Total reconstruction attempts per block. Bounds the work an equivocating peer can
+/// force; anything deeper is reported ambiguous and escalates to an exact-reference
+/// fetch of the full block.
 const MAX_RECONSTRUCTION_ATTEMPTS: usize = 3;
 
 /// Candidates tolerated at one slot before reconstruction gives up as ambiguous.
@@ -109,8 +108,9 @@ pub(crate) enum InflateError {
     /// The encoding itself is invalid — a peer fault, not a local-state issue.
     #[error("malformed minimal block: {0}")]
     Malformed(String),
-    /// Local state cannot resolve the block right now. The caller drops it; the
-    /// missing-ancestor sync recovers it in the background once descendants reference it.
+    /// Local state cannot resolve the block right now. The caller drops it from the
+    /// stream; a recovery task waits on the missing slot and re-inflates
+    /// (see `minimal_block_receive.rs`).
     #[error("cannot inflate block {block_ref}: {reason:?}")]
     NeedFullBlock {
         block_ref: BlockRef,
@@ -137,11 +137,11 @@ pub(crate) fn serialize_minimal(
         let round = (ancestor.round != default_round).then_some(ancestor.round);
         // The author's own parent always carries an explicit digest. It costs 32 bytes and
         // breaks the same-author cascade: a receiver that missed one of this author's blocks
-        // could otherwise never inflate any later block from it (resolving the parent needs
-        // the very block it lacks), so it would never reach acceptance, never register a
-        // missing ancestor, and never fetch. With the parent digest present, inflation always
-        // succeeds along an author's own chain and the block reaches `block_manager`, which
-        // suspends it and lets the normal missing-ancestor sync recover the gap.
+        // would otherwise find every later block from it un-inflatable (resolving the parent
+        // needs the very block it lacks), serializing the whole chain through one recovery
+        // wait at a time. With the parent digest present, inflation succeeds along an
+        // author's own chain, the block reaches `block_manager`, and its suspension there
+        // drives the normal missing-ancestor sync for the gap.
         let is_own_parent = ancestor.author == block.author();
         let can_omit_digest = !is_own_parent
             && (ancestor.round == GENESIS_ROUND || ancestor.round > min_omittable_round);

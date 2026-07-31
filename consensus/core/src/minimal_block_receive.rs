@@ -333,7 +333,9 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     break 'recovery;
                 }
                 Err(InflateError::Malformed(error)) => {
-                    // Structurally malformed bytes cannot improve with later DAG state.
+                    // Defensive: receipt-time inflation already parsed these exact
+                    // bytes, so a structural failure here should be unreachable — and
+                    // cannot improve with later DAG state either way.
                     debug!(
                         "Dropping malformed minimal block {} from peer {}: {}",
                         claimed_ref, peer, error
@@ -1050,6 +1052,87 @@ mod tests {
         assert!(h.service.lock().handle_send_block.is_empty());
         assert!(client.fetch_calls.lock().is_empty());
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
+    }
+
+    /// Quota isolation across peers: one peer saturating its own lanes must not
+    /// impede another peer's admission, and a failed partial acquisition must roll
+    /// back the permits it already took.
+    #[tokio::test]
+    async fn quota_isolation_across_peers_and_rollback() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer_a = context.committee.to_authority_index(1).unwrap();
+        let peer_b = context.committee.to_authority_index(2).unwrap();
+        let quotas = RecoveryQuotas::with_limits(
+            context.clone(),
+            RecoveryLimits {
+                global_bytes: 1000,
+                peer_bytes: 600,
+                peer_count: 2,
+            },
+        );
+
+        // Saturate peer A's count lane.
+        let _a1 = quotas.try_acquire(peer_a, 100).unwrap();
+        let _a2 = quotas.try_acquire(peer_a, 100).unwrap();
+        assert_eq!(
+            quotas.try_acquire(peer_a, 100).err(),
+            Some(QuotaLimit::PeerCount)
+        );
+        // Peer B is unaffected by A's saturation.
+        let b1 = quotas.try_acquire(peer_b, 100).unwrap();
+
+        // Failed PEER-BYTES admission must roll back the global permit it took:
+        // peer B has 500 peer-bytes left but global has 700 left, so a 550-byte
+        // acquisition takes global then fails on peer bytes.
+        assert_eq!(
+            quotas.try_acquire(peer_b, 550).err(),
+            Some(QuotaLimit::PeerBytes)
+        );
+        // If the global permit leaked, only 150 global bytes would remain and this
+        // 500-byte admission would fail on GlobalBytes.
+        let b2 = quotas.try_acquire(peer_b, 500).unwrap();
+        drop(b1);
+        drop(b2);
+        // Releases return capacity fully: the whole peer-B byte quota is reusable.
+        let b3 = quotas.try_acquire(peer_b, 600).unwrap();
+        drop(b3);
+    }
+
+    /// An empty repair response is a missing-block failure, not a submission.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn exact_repair_empty_response_is_missing() {
+        let h = harness(None);
+        let client = Arc::new(RepairOnlyClient::new(vec![]));
+        let mut join_set = tokio::task::JoinSet::new();
+        h.spawn(&mut join_set, client.clone());
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        // Wrong siblings force the digest-mismatch path into repair.
+        let siblings: Vec<_> = h
+            .ancestors
+            .iter()
+            .map(|b| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(10, b.author().value() as u32)
+                        .set_timestamp_ms(999_999)
+                        .build(),
+                )
+            })
+            .collect();
+        h.receiver_dag.write().accept_blocks(siblings);
+
+        wait_until(|| {
+            h.context
+                .metrics
+                .node_metrics
+                .minimal_block_repairs
+                .with_label_values(&["missing"])
+                .get()
+                == 1
+        })
+        .await;
+        assert!(h.service.lock().handle_send_block.is_empty());
     }
 
     /// A repair response whose computed reference differs from the claimed one is a

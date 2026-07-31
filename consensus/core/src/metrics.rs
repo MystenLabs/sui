@@ -616,7 +616,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_inflate_drop: register_int_counter_vec_with_registry!(
                 "minimal_block_inflate_drop",
-                "Minimal blocks that failed inflation at receipt, per peer and reason; recoverable reasons park with the recovery manager (hint/accepted wake, deadline fetch), malformed is rejected outright",
+                "Minimal blocks that failed inflation at receipt, per peer and reason; recoverable reasons are handed to a slot-waiting recovery task, malformed is rejected outright",
                 &["authority", "reason"],
                 registry,
             ).unwrap(),
@@ -632,7 +632,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_recoveries: register_int_counter_vec_with_registry!(
                 "minimal_block_recoveries",
-                "Terminal recovery-task outcomes (inflated|repaired|malformed|obsolete|already_accepted|repair_failed|submit_rejected)",
+                "Terminal recovery-task outcomes (inflated|repaired|obsolete|already_accepted|repair_failed|submit_rejected; malformed is defensive — receipt-time parsing already rejects malformed bytes before a task spawns)",
                 &["result"],
                 registry,
             ).unwrap(),
@@ -644,7 +644,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_quota_drops: register_int_counter_vec_with_registry!(
                 "minimal_block_quota_drops",
-                "Un-inflatable minimal blocks dropped at a recovery quota bound (global_bytes|peer_bytes|peer_count); each drop resets the stream so full replay redelivers the range",
+                "Un-inflatable minimal blocks not admitted to recovery, by cause: a quota bound (global_bytes|peer_bytes|peer_count) or a claimed round beyond the recovery horizon (round_horizon); each drop resets the stream so full replay redelivers the range",
                 &["limit"],
                 registry,
             ).unwrap(),
