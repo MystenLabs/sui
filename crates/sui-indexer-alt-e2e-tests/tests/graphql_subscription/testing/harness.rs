@@ -228,14 +228,14 @@ impl SubscriptionTestCluster {
     pub fn ledger_grpc_call_count(&self, method_contains: &str) -> u64 {
         let mut total = 0u64;
         for mf in self.registry.gather() {
-            if !mf.get_name().ends_with("requests_received") {
+            if !mf.name().ends_with("requests_received") {
                 continue;
             }
             for m in mf.get_metric() {
                 let matches = m
                     .get_label()
                     .iter()
-                    .any(|l| l.get_name() == "method" && l.get_value().contains(method_contains));
+                    .any(|l| l.name() == "method" && l.value().contains(method_contains));
                 if matches {
                     total += m.get_counter().value() as u64;
                 }

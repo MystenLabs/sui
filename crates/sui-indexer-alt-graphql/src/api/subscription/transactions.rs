@@ -1,72 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Transaction subscription.
+//! Transaction subscription: stream the transactions matching a filter, in checkpoint order,
+//! resuming from a cursor or checkpoint. Two phases meet with no gap and no duplicate:
 //!
-//! Streams the transactions matching a filter, in checkpoint order, resuming from a cursor or a
-//! checkpoint. Assembled in two phases that meet at a pinned `handoff` with no gap and no duplicate
-//! ([`transactions_stream`]):
+//! 1. Backfill ([`backfill_transactions`]): scan the index forward from the resume point, chasing
+//!    the indexer tip. Pages are digest-only, so each transaction's fields hydrate lazily and a
+//!    page's reads coalesce through the `KvLoader`.
+//! 2. Live ([`live_transactions`]): follow the shared checkpoint broadcast, matching in memory.
 //!
-//! 1. Backfill ([`backfill_transactions`]): scan the matches in `(resume, handoff]` from the index
-//!    ([`scan_grpc_page`]). Pages are digest-only; each
-//!    transaction's fields hydrate lazily from the index, so a page's reads coalesce through the
-//!    `KvLoader`.
-//! 2. Live ([`live_transactions`]): follow the shared checkpoint broadcast, matching each
-//!    checkpoint's transactions in memory.
+//! # The seam
 //!
-//! # Handoff, by example
+//! Once the scan reaches within `handoff_threshold` of the live tip, the subscription subscribes to
+//! the broadcast and pins the `handoff` to the tip. Subscribing *before* pinning is what closes the
+//! seam: the live feed's first checkpoint is then `handoff + 1`, never past it (any overlap is
+//! dropped), so nothing is missed or delivered twice. Pinning mid-scan rather than up front lets even
+//! a deep backfill catch up within one connection, the receiver only ever buffers the last
+//! `handoff_threshold` checkpoints, so it never lags into a disconnect.
 //!
-//! A client resumes after checkpoint 5, and the live tip is currently at 10:
+//! # Coverage and freshness
 //!
-//! - Phase 1 subscribes to the live broadcast (which will deliver checkpoint 11 next) and pins
-//!   `handoff = 10`, then backfills the filter's matches in checkpoints 6..=10.
-//! - Phase 1 stops once it has covered checkpoint 10.
-//! - Phase 2 takes over from the live broadcast: checkpoint 11, 12, 13, ...
+//! The scan reports a coverage marker at each page's end even when the page matched nothing, so a
+//! sparse filter still advances the handoff through empty stretches. Each page is held until both
+//! indexing pipelines have reached that end; otherwise a transaction near the tip could hydrate
+//! against a not-yet-indexed store and resolve to null permanently, since the stream never revisits.
 //!
-//! The seam at 10 -> 11 has no gap and no duplicate. Subscribing *before* reading the tip is what
-//! guarantees it: the live feed's first checkpoint is always `handoff + 1` or earlier (any overlap
-//! is dropped), never past it. See [`live_transactions`] for the overlap skip and the gap check.
+//! # Cursors and anomalies
 //!
-//! Pinning the handoff up front is what makes the seam reachable: the live receiver is already
-//! subscribed and buffering everything past `handoff`, so backfill only has to paginate the fixed
-//! range up to `handoff` while the live buffer holds the rest. That buffer is bounded (256
-//! checkpoints, about 60s at 4 cp/s), which is the window backfill has to reach `handoff` before the
-//! live subscriber lags and disconnects; comfortably enough for a bounded range.
-//!
-//! # Catch-up gate
-//!
-//! Backfill delivers finalized transactions whose fields resolve lazily from the index, so before
-//! delivering anything it waits for the indexing pipelines to reach `handoff`. Otherwise a
-//! transaction near the tip could hydrate against a store that has not indexed it yet and resolve to
-//! null, permanently, since the stream never revisits. The wait is bounded by how far the indexer
-//! lags the live tip, not by how far back the resume point is.
-//!
-//! # Coverage
-//!
-//! Pagination ends its stream both when it drains the requested range (reached `handoff`) and when
-//! it hits the indexer's current tip below it, and `has_next_page` cannot tell the two apart. So
-//! backfill derives the covered checkpoint from each page's cursor (a `Boundary` cursor is a scan
-//! frontier; an `Item` cursor's checkpoint may still hold later matches) and terminates only once
-//! coverage reaches `handoff`. This also carries a sparse filter through stretches that match
-//! nothing, since a boundary cursor advances coverage even on a page with no matches.
-//!
-//! # Cursors
-//!
-//! Both phases mint the same opaque `CursorToken` (as a `CTransaction`), so a client can resume from
-//! any delivered cursor: the backfill carries pagination's cursor through, and live mints an
-//! equivalent token from the checkpoint and transaction sequence numbers.
-//!
-//! # Anomalies
-//!
-//! A gap between backfill and live, or a subscriber that lags the broadcast buffer, disconnects with
-//! `reconnect_error`; the client reconnects and resumes from its last cursor.
+//! Both phases mint the same opaque cursor, so a client resumes from any delivered one. A gap between
+//! the phases, or a subscriber that falls behind the broadcast buffer, disconnects with
+//! `reconnect_error`, and the client reconnects and resumes from its last cursor.
 
-use std::ops::RangeBounds;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_graphql::connection::Connection;
+use anyhow::Context as _;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
@@ -75,19 +44,20 @@ use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
 use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_rpc::proto::sui::rpc::v2;
 use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tracing::warn;
 
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
-use crate::api::types::transaction::TransactionConnection;
 use crate::api::types::transaction::TransactionToken;
 use crate::api::types::transaction::build_grpc_connection;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -116,12 +86,16 @@ pub(super) enum ResumeFrom {
     Checkpoint(u64),
 }
 
-/// Subscribe to transactions matching `filter`, backfilling from `resume` then following live.
-///
-/// Phase 1 pins `handoff` to the current tip and backfills the matches in `(resume, handoff]`
-/// through the indexed pagination path. Phase 2 follows the pinned receiver from `handoff + 1`. The
-/// receiver is subscribed *before* the tip is sampled, so the live feed's first checkpoint is
-/// `<= handoff + 1`: the seam has no gap and no duplicate.
+/// One backfill item: a matching `edge`, or a coverage marker (`edge: None`) whose `checkpoint` is
+/// the fully-scanned frontier.
+struct Scanned {
+    checkpoint: u64,
+    edge: Option<Edge<String, Transaction, EmptyFields>>,
+}
+
+/// Subscribe to transactions matching `filter`: backfill from `resume` toward the tip, then follow
+/// live. The handoff is pinned mid-scan, once the scan frontier comes within `handoff_threshold` of
+/// the tip, so even a deep backfill catches up within one connection instead of lagging the receiver.
 pub(super) fn transactions_stream(
     reader: AlphaLedgerGrpcReader,
     broadcast: Arc<SubscriptionBroadcast>,
@@ -131,31 +105,59 @@ pub(super) fn transactions_stream(
     filter: TransactionFilter,
     resume: Option<ResumeFrom>,
     scan_page_size: usize,
+    handoff_threshold: u64,
 ) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
     stream! {
-        let mut last_checkpoint: Option<u64> = None;
         let mut pending_receiver = None;
+        let mut handoff: Option<u64> = None;
+        let mut last_checkpoint: Option<u64> = None;
 
-        // Phase 1: backfill `(resume, handoff]`, if resuming.
+        // Phase 1: scan toward the tip, pinning the live receiver near it.
         if let Some(resume) = resume {
-            // Subscribe first, then pin the tip, so live buffers everything past the handoff while
-            // the backfill runs.
-            let receiver = broadcast.broadcaster().resubscribe();
-            let handoff = broadcast.network_tip();
-            for await edge in backfill_transactions(
+            let scan = backfill_transactions(
                 reader,
                 package_store.clone(),
                 resolver_limits.clone(),
                 watermarks_rx,
                 filter.clone(),
                 resume,
-                handoff,
                 scan_page_size,
-            ) {
-                yield edge;
+            );
+            for await scanned in scan {
+                let Scanned { checkpoint, edge } = match scanned {
+                    Ok(scanned) => scanned,
+                    Err(e) => {
+                        yield Err(e);
+                        return;
+                    }
+                };
+
+                // Resubscribe-first and pin once the scan frontier is within threshold of the tip.
+                if pending_receiver.is_none()
+                    && broadcast.network_tip().saturating_sub(checkpoint) <= handoff_threshold
+                {
+                    pending_receiver = Some(broadcast.broadcaster().resubscribe());
+                    handoff = Some(broadcast.network_tip());
+                }
+
+                match edge {
+                    // A match: deliver it, unless it is past the handoff (then it is live's).
+                    Some(edge) => {
+                        if handoff.is_some_and(|h| checkpoint > h) {
+                            break;
+                        }
+                        yield Ok(edge);
+                    }
+                    // A coverage marker (`checkpoint` is the fully-scanned frontier): stop once it
+                    // has covered the handoff.
+                    None => {
+                        if handoff.is_some_and(|h| checkpoint >= h) {
+                            break;
+                        }
+                    }
+                }
             }
-            last_checkpoint = Some(handoff);
-            pending_receiver = Some(receiver);
+            last_checkpoint = handoff;
         }
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
@@ -166,17 +168,8 @@ pub(super) fn transactions_stream(
     }
 }
 
-/// Backfill the matches in `(resume, handoff]` by scanning the index ([`scan_grpc_page`]):
-/// digest-only pages whose fields hydrate lazily from the index.
-///
-/// Before delivering anything, wait for the indexing pipelines to reach `handoff` so those lazy
-/// reads resolve against present data rather than returning null. The wait is bounded by how far the
-/// indexer lags the live tip (normally small), not by how far back `resume` is.
-///
-/// Termination keys off coverage, not `has_next_page`: pagination ends the stream both when it
-/// drains the requested range (reached `handoff`) and when it hits the indexer's current tip below
-/// it, and `has_next_page` cannot tell the two apart. So each page's covered checkpoint is derived
-/// from its cursor, and the backfill ends only once coverage reaches `handoff`.
+/// Scan matches from `resume` toward the tip, yielding each match and a per-page coverage marker.
+/// Open-ended: the caller stops it once the handoff is covered.
 fn backfill_transactions(
     reader: AlphaLedgerGrpcReader,
     package_store: Arc<StreamingPackageStore>,
@@ -184,15 +177,9 @@ fn backfill_transactions(
     mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     mut filter: TransactionFilter,
     resume: ResumeFrom,
-    handoff: u64,
     scan_page_size: usize,
-) -> impl Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>> {
+) -> impl Stream<Item = Result<Scanned, RpcError>> {
     stream! {
-        if let Err(e) = wait_for_pipelines_catching_up_at(handoff, &mut watermarks_rx).await {
-            yield Err(RpcError::from(e));
-            return;
-        }
-
         // Finalized, indexed data: fields resolve lazily through the index. cvat is None (uniform
         // with live), so the scan range is supplied explicitly rather than derived from the scope.
         let scope = Scope::for_backfilled_transactions(package_store, resolver_limits);
@@ -209,75 +196,48 @@ fn backfill_transactions(
             ResumeFrom::Checkpoint(cp) => filter.after_checkpoint = Some(UInt53::from(cp)),
         }
 
-        // Scan the filter's matches within its checkpoint predicates, capped above by the handoff
-        // where live takes over. An empty range means the filter excludes everything at or below the
-        // handoff, so there is nothing to backfill.
+        // Open-ended above (the caller stops at the handoff). An empty range means the filter
+        // excludes everything, so there is nothing to backfill.
         let Some(cp_bounds) = checkpoint_bounds(
             filter.after_checkpoint().map(u64::from),
             filter.at_checkpoint().map(u64::from),
             filter.before_checkpoint().map(u64::from),
             0,
-            handoff,
+            u64::MAX,
         ) else {
             return;
         };
 
         loop {
-            let conn = match scan_with_retry(&reader, &scope, &limits, cp_bounds.clone(), after.as_ref(), &filter).await {
-                Ok(conn) => conn,
+            let (items, next_after) = match scan_page(
+                &reader,
+                &scope,
+                &limits,
+                cp_bounds.clone(),
+                after.as_ref(),
+                &filter,
+                &mut watermarks_rx,
+            )
+            .await
+            {
+                Ok(page) => page,
                 Err(e) => {
                     yield Err(e);
                     return;
                 }
             };
-
-            let has_next = conn.page_info.has_next_page;
-            let end_cursor = conn.page_info.end_cursor.clone();
-            for edge in conn.edges {
-                yield Ok(edge);
+            for item in items {
+                yield Ok(item);
             }
-
-            // Advance to the scan frontier and stop once it has covered through the handoff.
-            if let Some(encoded) = end_cursor {
-                let cursor = match CTransaction::decode_cursor(&encoded) {
-                    Ok(cursor) => cursor,
-                    Err(_) => {
-                        yield Err(RpcError::from(anyhow::anyhow!(
-                            "Invalid page cursor from pagination"
-                        )));
-                        return;
-                    }
-                };
-                let covered = covered_checkpoint(&cursor);
-                after = Some(cursor);
-                if covered >= handoff {
-                    break;
-                }
-            } else if !has_next {
-                // Nothing scanned and nothing more to page: the available range is drained below the
-                // handoff. With the up-front wait this should not happen; break rather than spin.
-                break;
-            }
-
-            // Reached the indexer's current tip below the handoff; wait for it to advance before
-            // re-requesting from the frontier. Reachable only if the bitmap index lags the pipeline
-            // the wait gated on.
-            if !has_next {
-                tokio::time::sleep(BACKFILL_POLL_INTERVAL).await;
-            }
+            after = Some(next_after);
         }
     }
 }
 
-/// The highest checkpoint a backfill page has fully scanned, from its end cursor. A `Boundary`
-/// cursor is a scan frontier, so everything through its checkpoint is covered; an `Item` cursor is a
-/// returned match whose checkpoint may still hold later matches, so coverage is vouched only through
-/// the previous checkpoint.
-fn covered_checkpoint(cursor: &CTransaction) -> u64 {
-    let token = CursorToken::from(&**cursor);
-    let Position::Transactions { checkpoint, .. } = token.position else {
-        return 0;
-    };
+/// The highest checkpoint fully scanned as of `token`: its own checkpoint for a `Boundary`, one less
+/// for an `Item` (whose checkpoint may still hold later matches).
+fn covered_checkpoint(token: &CursorToken) -> u64 {
+    let checkpoint = token.position.checkpoint();
     match token.kind {
         CursorKind::Boundary => checkpoint,
         CursorKind::Item => checkpoint.saturating_sub(1),
@@ -364,9 +324,8 @@ fn matching_edges(
     Ok(edges)
 }
 
-/// The backfill scan's retry policy: jittered exponential backoff up to a bounded budget. 60s is the
-/// top of the window where a failure is still plausibly a transient blip/deploy; beyond it we give
-/// up rather than retry indefinitely (per industry retry-budget guidance).
+/// Retry policy for the backfill scan: jittered exponential backoff, giving up after 60s (past which
+/// a failure is unlikely to be a transient blip).
 fn scan_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
         initial_interval: Duration::from_millis(100),
@@ -376,19 +335,76 @@ fn scan_backoff() -> ExponentialBackoff {
     }
 }
 
-/// Scan one page of the indexed transactions over `cp_bounds` ([`scan_grpc_page`]), retrying
-/// transient failures under a bounded budget. The page is rebuilt per attempt because [`Page`] is
-/// not `Clone`. A rolling indexer deploy (the common transient outage) is absorbed invisibly;
-/// anything still failing once the budget is exhausted propagates, ending the subscription so the
-/// client reconnects and resumes from its cursor.
-async fn scan_with_retry(
+/// Scan the next page of matches, waiting at the indexer tip if nothing is ready yet. Returns the
+/// matches, a trailing coverage marker, and the cursor to resume from.
+async fn scan_page(
     reader: &AlphaLedgerGrpcReader,
     scope: &Scope,
     limits: &PageLimits,
     cp_bounds: RangeInclusive<u64>,
     after: Option<&CTransaction>,
     filter: &TransactionFilter,
-) -> Result<TransactionConnection, RpcError> {
+    watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
+) -> Result<(Vec<Scanned>, CTransaction), RpcError> {
+    loop {
+        let (page, result) =
+            scan_with_retry(reader, limits, cp_bounds.clone(), after, filter).await?;
+
+        // No end cursor means nothing past the indexer tip is indexed yet; wait, then re-request. A
+        // range that was scanned but matched nothing still returns a boundary cursor, not `None`.
+        let Some(end_cursor) = result.last_cursor() else {
+            tokio::time::sleep(BACKFILL_POLL_INTERVAL).await;
+            continue;
+        };
+        let end_cursor = CursorToken::decode(end_cursor).context("Failed to decode scan cursor")?;
+
+        // Hold the page until both pipelines have indexed through its end.
+        wait_for_pipelines_catching_up_at(end_cursor.position.checkpoint(), watermarks_rx).await?;
+
+        // Each match's checkpoint, read from the raw item cursors before the page is converted.
+        let mut checkpoints = Vec::with_capacity(result.items.len());
+        for item in &result.items {
+            let token =
+                CursorToken::decode(&item.cursor).context("Failed to decode scan item cursor")?;
+            checkpoints.push(token.position.checkpoint());
+        }
+
+        // Reuse the shared page-to-connection conversion for the edges themselves. A forward page
+        // keeps `items` order, so its edges pair positionally with `checkpoints`.
+        let edges = build_grpc_connection(scope.clone(), &page, result)?.edges;
+        assert_eq!(edges.len(), checkpoints.len(), "one edge per scanned item");
+
+        let mut items = Vec::with_capacity(edges.len() + 1);
+        for (i, edge) in edges.into_iter().enumerate() {
+            items.push(Scanned {
+                checkpoint: checkpoints[i],
+                edge: Some(edge),
+            });
+        }
+        // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
+        items.push(Scanned {
+            checkpoint: covered_checkpoint(&end_cursor),
+            edge: None,
+        });
+
+        let next_after = OpaqueCursor::new(
+            end_cursor
+                .try_into()
+                .context("Unexpected end cursor position")?,
+        );
+        return Ok((items, next_after));
+    }
+}
+
+/// Scan one page over `cp_bounds`, retrying transient failures under a bounded budget. Returns the
+/// page with its result so the caller can convert it.
+async fn scan_with_retry(
+    reader: &AlphaLedgerGrpcReader,
+    limits: &PageLimits,
+    cp_bounds: RangeInclusive<u64>,
+    after: Option<&CTransaction>,
+    filter: &TransactionFilter,
+) -> Result<(Page<CTransaction>, StreamPage<v2::ExecutedTransaction>), RpcError> {
     let mut backoff = scan_backoff();
     loop {
         let page = Page::from_params(
@@ -399,34 +415,15 @@ async fn scan_with_retry(
             None,
         )
         .map_err(anyhow::Error::from)?;
-        match scan_grpc_page(reader, scope.clone(), cp_bounds.clone(), page, filter).await {
-            Ok(conn) => return Ok(conn),
+        match Transaction::scan_grpc(reader, cp_bounds.clone(), &page, filter).await {
+            Ok(result) => return Ok((page, result)),
             Err(e) => match backoff.next_backoff() {
                 Some(delay) => {
-                    warn!(error = ?e, "scan_grpc_page failed, retrying");
+                    warn!(error = ?e, "scan_grpc failed, retrying");
                     tokio::time::sleep(delay).await;
                 }
                 None => return Err(e),
             },
         }
     }
-}
-
-/// Scan one page of indexed transactions over `cp_bounds` and build a connection. Composes the
-/// shared [`Transaction::scan_grpc`] + [`build_grpc_connection`] rather than going through
-/// `Transaction::paginate_grpc`, because the backfill supplies the checkpoint range directly and its
-/// scope has no `checkpoint_viewed_at` (it does not resolve as of a single consistent checkpoint).
-async fn scan_grpc_page(
-    reader: &AlphaLedgerGrpcReader,
-    scope: Scope,
-    cp_bounds: impl RangeBounds<u64>,
-    page: Page<CTransaction>,
-    filter: &TransactionFilter,
-) -> Result<TransactionConnection, RpcError> {
-    if page.limit() == 0 {
-        return Ok(Connection::new(false, false).into());
-    }
-
-    let result = Transaction::scan_grpc(reader, cp_bounds, &page, filter).await?;
-    build_grpc_connection(scope, &page, result)
 }

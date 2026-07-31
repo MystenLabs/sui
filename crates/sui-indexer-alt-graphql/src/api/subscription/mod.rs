@@ -153,6 +153,10 @@ impl Subscription {
         // one scan per resolution window.
         let scan_page_size = config.max_concurrent_resolutions;
 
+        // Pin the handoff once the scan comes within half the live buffer of the tip, leaving room
+        // for checkpoints that arrive during the handoff so the receiver does not lag.
+        let handoff_threshold = config.broadcast_buffer as u64 / 2;
+
         // A subscription streams forward from its resume point, so filter-level checkpoint bounds
         // have no meaning; reject them rather than silently dropping them.
         if filter.after_checkpoint.is_some()
@@ -181,6 +185,7 @@ impl Subscription {
             filter,
             resume,
             scan_page_size,
+            handoff_threshold,
         ))
     }
 

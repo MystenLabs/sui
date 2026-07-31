@@ -6,6 +6,7 @@
 //! `TestClusterBuilder` validator, neither of which works inside the simulator's
 //! deterministic runtime.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use async_graphql::connection::CursorType;
@@ -15,6 +16,7 @@ use sui_indexer_alt_graphql::CTransaction;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::SuiAddress;
+use test_cluster::TestCluster;
 use tokio_stream::StreamExt;
 
 use super::testing::SubscriptionTestCluster;
@@ -27,6 +29,11 @@ use super::testing::object_wrapping_harness::wrap_item;
 use super::testing::transaction_digest;
 use super::testing::transfer_coins;
 use super::testing::wait_for_matching_item;
+
+/// How long backfill tests let the validator advance after executing their pre-subscription
+/// transactions, so a later subscription's live receiver pins past them and they can only be
+/// delivered through the backfill scan (never the live path).
+const BACKFILL_SETTLE: Duration = Duration::from_secs(5);
 
 /// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
 fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
@@ -45,15 +52,15 @@ fn sender_var(sender: SuiAddress) -> Option<Value> {
     Some(json!({ "sender": sender.to_string() }))
 }
 
-/// The rich transaction-subscription query: live by default, or resuming from a checkpoint
-/// (backfill) when `after_checkpoint` is set.
-fn tx_query(after_checkpoint: Option<u64>) -> String {
+/// The rich transaction-subscription query under a given `filter` predicate: live by default, or
+/// resuming from a checkpoint (backfill) when `after_checkpoint` is set.
+fn tx_query(filter: &str, after_checkpoint: Option<u64>) -> String {
     let resume = after_checkpoint
         .map(|c| format!("afterCheckpoint: {c},"))
         .unwrap_or_default();
     format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions({resume} filter: {{ sentAddress: $sender }}) {{
+            transactions({resume} filter: {{ {filter} }}) {{
                 node {{
                     digest
                     kind {{
@@ -120,6 +127,63 @@ async fn collect_nodes(
         }
     }
     expected.iter().map(|d| by_digest[d].clone()).collect()
+}
+
+/// Execute `bundles` soft bundles of four matching transfers and return all their digests.
+async fn transfer_many(validator: &mut TestCluster, bundles: usize) -> BTreeSet<String> {
+    let mut digests = BTreeSet::new();
+    for _ in 0..bundles {
+        digests.extend(transfer_coins(validator, &[100, 200, 300, 400]).await);
+    }
+    digests
+}
+
+/// Take the next `n` payloads and return their transaction digests in arrival order.
+async fn take_digests(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    n: usize,
+) -> Vec<String> {
+    stream
+        .take(n)
+        .map(|item| {
+            item["data"]["transactions"]["node"]["digest"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect()
+        .await
+}
+
+/// Consume `stream` until every digest in `expected` has arrived, asserting matches arrive in
+/// strictly increasing cursor order. That single invariant rules out both re-ordering and
+/// re-delivery: a repeat or an out-of-order edge carries a cursor that is not greater than the
+/// previous one. Non-expected transactions from the same sender (e.g. wallet gas management) are
+/// skipped. Returns the matched `node` objects in arrival order, so callers can assert their
+/// content.
+async fn collect_matches(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    expected: &BTreeSet<String>,
+) -> Vec<Value> {
+    let mut seen = BTreeSet::new();
+    let mut nodes = Vec::new();
+    let mut prev: Option<(u64, u64)> = None;
+    while !expected.is_subset(&seen) {
+        let item = stream.next().await.unwrap();
+        let edge = &item["data"]["transactions"];
+        let cursor = decode_tx_cursor(edge);
+        assert!(
+            prev.is_none_or(|p| cursor > p),
+            "matches not delivered in strictly increasing cursor order: {prev:?} then {cursor:?}",
+        );
+        prev = Some(cursor);
+        let digest = edge["node"]["digest"].as_str().unwrap().to_string();
+        if expected.contains(&digest) {
+            seen.insert(digest);
+            nodes.push(edge["node"].clone());
+        }
+    }
+    nodes
 }
 
 #[tokio::test]
@@ -209,9 +273,7 @@ async fn test_transaction_subscription_object_changes() {
     });
 }
 
-/// Field coverage: publishes a Move package, calls into it, and probes a broad set of transaction,
-/// effects, and Move-object fields at once. The snapshot documents which fields resolve in streaming
-/// mode (and surfaces any that error).
+/// Snapshots a broad field set to surface any field that fails to resolve in streaming mode.
 #[tokio::test]
 async fn test_transaction_subscription_field_coverage() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -279,9 +341,6 @@ async fn test_transaction_subscription_field_coverage() {
     });
 }
 
-/// Live path: transactions stream in tx_sequence order, each carrying a strictly increasing
-/// `CTransaction` (tx_sequence_number) cursor. A single soft bundle yields several transactions
-/// with consecutive sequence numbers.
 #[tokio::test]
 async fn test_transaction_subscription_ordering() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -299,43 +358,15 @@ async fn test_transaction_subscription_ordering() {
         )
         .await;
 
-    let expected: std::collections::BTreeSet<String> =
-        transfer_coins(&mut cluster.validator, &[100, 200, 300])
-            .await
-            .into_iter()
-            .collect();
+    let expected: BTreeSet<String> = transfer_coins(&mut cluster.validator, &[100, 200, 300])
+        .await
+        .into_iter()
+        .collect();
 
-    // Consume edges in arrival order (one per payload); each must carry a strictly larger cursor
-    // than the last.
-    let mut seen = std::collections::BTreeSet::new();
-    let mut prev_cursor: Option<(u64, u64)> = None;
-    while seen.len() < expected.len() {
-        let item = stream.next().await.expect("stream ended before all txs");
-        let edge = &item["data"]["transactions"];
-        let digest = edge["node"]["digest"]
-            .as_str()
-            .expect("edge missing digest")
-            .to_string();
-        if !expected.contains(&digest) {
-            continue;
-        }
-        let cursor = decode_tx_cursor(edge);
-        if let Some(prev) = prev_cursor {
-            assert!(
-                cursor > prev,
-                "cursors not strictly increasing: {prev:?} then {cursor:?}",
-            );
-        }
-        prev_cursor = Some(cursor);
-        seen.insert(digest);
-    }
-
-    assert_eq!(seen, expected, "did not observe exactly the executed txs");
+    // Each edge carries a strictly larger cursor than the last, and every match arrives.
+    collect_matches(&mut stream, &expected).await;
 }
 
-/// Resume path: a transaction executed before the subscription starts is delivered through the
-/// backfill scan (`afterCheckpoint`), then the stream transitions to live delivery of a
-/// transaction executed after subscribing.
 #[tokio::test]
 async fn test_transaction_subscription_resume_backfill_then_live() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -347,7 +378,7 @@ async fn test_transaction_subscription_resume_backfill_then_live() {
 
     // Advance the validator so a fresh subscription's live receiver pins past the tx: it can only
     // be delivered through the backfill scan.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(BACKFILL_SETTLE).await;
 
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
@@ -368,10 +399,6 @@ async fn test_transaction_subscription_resume_backfill_then_live() {
     wait_for_matching_item(&mut stream, &live, transaction_digest).await;
 }
 
-/// Sparse backfill: when the resumed range contains no matches, Phase 1 has only coverage markers to
-/// advance on, so the handoff must be pinned by a coverage marker rather than a match. A tx sent only
-/// after the handoff must then arrive via the live path, which proves pinning doesn't depend on the
-/// scan producing a match (otherwise a sparse subscription would never hand off).
 #[tokio::test]
 async fn test_transaction_subscription_empty_backfill_hands_off_to_live() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -392,7 +419,7 @@ async fn test_transaction_subscription_empty_backfill_hands_off_to_live() {
 
     // Let the validator advance through empty checkpoints so the backfill scans a match-less range,
     // pins the handoff via a coverage marker, and transitions to live before any match exists.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(BACKFILL_SETTLE).await;
 
     // The only match is sent after the handoff, so it can only be delivered by the live path. If
     // pinning required a scanned match, the backfill would never hand off and this would time out.
@@ -400,9 +427,6 @@ async fn test_transaction_subscription_empty_backfill_hands_off_to_live() {
     wait_for_matching_item(&mut stream, &live, transaction_digest).await;
 }
 
-/// No gap and no duplicate across the backfill->live seam: matches produced both before and after the
-/// handoff must each be delivered exactly once, whatever checkpoint the handoff happens to pin at.
-/// This is the observable invariant the handoff's boundary rules exist to protect.
 #[tokio::test]
 async fn test_transaction_subscription_exactly_once_across_handoff() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -413,6 +437,7 @@ async fn test_transaction_subscription_exactly_once_across_handoff() {
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
             transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                cursor
                 node {{ digest }}
             }}
         }}"#,
@@ -423,36 +448,16 @@ async fn test_transaction_subscription_exactly_once_across_handoff() {
 
     // Straddle the handoff: the first bundle lands while the backfill is scanning, the second after
     // it has pinned and moved to live. Exactly-once must hold across the seam wherever it pins.
-    let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut expected: BTreeSet<String> = BTreeSet::new();
     expected.extend(transfer_coins(&mut cluster.validator, &[100, 200]).await);
     tokio::time::sleep(Duration::from_secs(3)).await;
     expected.extend(transfer_coins(&mut cluster.validator, &[300, 400]).await);
 
-    // Every match must arrive (no gap), and none twice (no duplicate). A gap hangs to timeout; a
-    // duplicate trips the insert assertion.
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    while seen.len() < expected.len() {
-        let item = stream
-            .next()
-            .await
-            .expect("stream ended before all matches");
-        for digest in transaction_digest(&item) {
-            if expected.contains(digest) {
-                assert!(
-                    seen.insert(digest.to_string()),
-                    "transaction {digest} delivered more than once across the handoff",
-                );
-            }
-        }
-    }
-    assert_eq!(
-        seen, expected,
-        "did not observe exactly the produced matches"
-    );
+    // Every match arrives exactly once across the seam: a gap stalls the subset (timeout), a
+    // duplicate at the seam breaks the strictly increasing cursor order.
+    collect_matches(&mut stream, &expected).await;
 }
 
-/// Resume-by-cursor: the opaque cursor a backfilled edge carries can seed a new subscription via
-/// `after`, which resumes strictly past that transaction (no re-delivery of the already-seen tx).
 #[tokio::test]
 async fn test_transaction_subscription_resume_with_after_cursor() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -468,7 +473,7 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
             .collect();
 
     // Both txs must be delivered by the backfill scan, not the live path.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(BACKFILL_SETTLE).await;
 
     // Subscription 1: backfill from `afterCheckpoint`. The first edge yielded has the lowest
     // sequence number; capture its cursor and digest.
@@ -518,9 +523,6 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
     );
 }
 
-/// Live/backfill parity: the same transactions must resolve identically whether delivered live
-/// (`matching_edges`) or through the backfill scan (`build_scanned_edge`), across a variety of
-/// object-change shapes (created, mutated, wrapped, deleted).
 #[tokio::test]
 async fn test_transaction_subscription_live_backfill_parity() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -529,7 +531,7 @@ async fn test_transaction_subscription_live_backfill_parity() {
 
     // 1. Start live.
     let mut live = cluster
-        .subscribe_with_variables(&tx_query(None), sender_var(sender))
+        .subscribe_with_variables(&tx_query("sentAddress: $sender", None), sender_var(sender))
         .await;
 
     // 2. Execute a lifecycle of varied object-change shapes (created, mutated, wrapped, deleted).
@@ -545,9 +547,12 @@ async fn test_transaction_subscription_live_backfill_parity() {
     drop(live);
 
     // 4. Resume from before the lifecycle so the same txs arrive via backfill.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(BACKFILL_SETTLE).await;
     let mut backfill = cluster
-        .subscribe_with_variables(&tx_query(Some(resume_from)), sender_var(sender))
+        .subscribe_with_variables(
+            &tx_query("sentAddress: $sender", Some(resume_from)),
+            sender_var(sender),
+        )
         .await;
     let backfill_nodes = collect_nodes(&mut backfill, &expected).await;
 
@@ -560,9 +565,6 @@ async fn test_transaction_subscription_live_backfill_parity() {
     );
 }
 
-/// Live gap recovery: force an upstream blackout mid-stream, execute several matching transactions
-/// during the gap, then restore the connection and assert every one is delivered exactly once, in
-/// strictly increasing cursor order. Mirrors the checkpoint/event recovery tests for transactions.
 #[tokio::test]
 async fn test_transaction_subscription_recovers_from_upstream_disconnect() {
     let (mut cluster, proxy) =
@@ -592,72 +594,40 @@ async fn test_transaction_subscription_recovers_from_upstream_disconnect() {
         "stream yielded during blackout: {silence:?}"
     );
 
-    // Execute matches across several checkpoints the server can't see live.
-    let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for _ in 0..3 {
-        expected.extend(transfer_coins(&mut cluster.validator, &[100, 200]).await);
+    // Execute matches during the blackout, one per checkpoint (a sleep between) so their delivery
+    // order is deterministic and can be asserted directly.
+    let mut expected: Vec<String> = Vec::new();
+    for amount in [100u64, 200, 300] {
+        expected.extend(transfer_coins(&mut cluster.validator, &[amount]).await);
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 
-    // Resume: recovery delivers every missed match, exactly once, in cursor order.
+    // Resume: recovery delivers exactly the missed matches, in order.
     proxy.allow_connections();
-
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let mut prev: Option<(u64, u64)> = None;
-    while !expected.is_subset(&seen) {
-        let item = stream
-            .next()
-            .await
-            .expect("stream ended before recovery completed");
-        let edge = &item["data"]["transactions"];
-        let Some(digest) = edge["node"]["digest"].as_str().map(str::to_string) else {
-            continue;
-        };
-        let cursor = decode_tx_cursor(edge);
-        if let Some(p) = prev {
-            assert!(
-                cursor > p,
-                "cursors not strictly increasing across recovery"
-            );
-        }
-        prev = Some(cursor);
-        if expected.contains(&digest) {
-            assert!(
-                seen.insert(digest.clone()),
-                "duplicate delivery of {digest}"
-            );
-        }
-    }
-    assert!(
-        expected.is_subset(&seen),
-        "did not recover exactly the missed transactions",
+    let received = take_digests(&mut stream, expected.len()).await;
+    assert_eq!(
+        received, expected,
+        "recovery did not deliver the missed transactions in order"
     );
 }
 
-/// Concurrency stress: backfill a batch of matches larger than one scan page / resolution window and
-/// assert every one is delivered exactly once, in strictly increasing cursor order, with its content
-/// resolved correctly. Exercises the ordered `buffered` resolution and `KvLoader` coalescing under
-/// real volume (concurrent per-payload content reads must not cross-contaminate or drop matches).
 #[tokio::test]
-async fn test_transaction_subscription_high_volume_concurrent_backfill() {
-    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+async fn test_transaction_subscription_backfill_spans_scan_pages() {
+    // The one knob sets both the resolution window and the scan page; this test cares only that the
+    // scan page is 2, so the eight matches below cannot fit in a single page and the scan must chain.
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history_and_concurrency(2).await;
     let sender = cluster.validator.wallet.active_address().unwrap();
 
     let resume_from = cluster.validator_checkpoint_tip();
-    // 26 * 4 = 104 matches: exceeds the default resolve concurrency (100) and one scan page, so the
-    // backfill spans multiple scans and resolution windows.
-    let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for _ in 0..26 {
-        expected.extend(transfer_coins(&mut cluster.validator, &[100, 200, 300, 400]).await);
-    }
-    // Advance so they are delivered by the backfill scan, not live.
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    let expected = transfer_many(&mut cluster.validator, 2).await;
+    // Advance so the matches are delivered by the backfill scan, not live.
+    tokio::time::sleep(BACKFILL_SETTLE).await;
 
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
             transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
                 cursor
-                node {{ digest sender {{ address }} effects {{ status }} }}
+                node {{ digest }}
             }}
         }}"#,
     );
@@ -665,109 +635,58 @@ async fn test_transaction_subscription_high_volume_concurrent_backfill() {
         .subscribe_with_variables(&query, sender_var(sender))
         .await;
 
-    let sender_addr = sender.to_string();
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let mut prev: Option<(u64, u64)> = None;
-    while !expected.is_subset(&seen) {
-        let item = stream
-            .next()
-            .await
-            .expect("stream ended before all matches delivered");
-        let edge = &item["data"]["transactions"];
-        let digest = edge["node"]["digest"]
-            .as_str()
-            .expect("missing digest")
-            .to_string();
-        // Each concurrently-resolved payload must carry its own correct content.
-        assert_eq!(
-            edge["node"]["effects"]["status"].as_str(),
-            Some("SUCCESS"),
-            "content (effects) not resolved for {digest}",
-        );
-        assert_eq!(
-            edge["node"]["sender"]["address"].as_str(),
-            Some(sender_addr.as_str()),
-            "wrong sender resolved for {digest} (concurrent cross-contamination?)",
-        );
-        let cursor = decode_tx_cursor(edge);
-        if let Some(p) = prev {
-            assert!(
-                cursor > p,
-                "cursors not strictly increasing: {p:?} then {cursor:?}",
-            );
-        }
-        prev = Some(cursor);
-        if expected.contains(&digest) {
-            assert!(
-                seen.insert(digest.clone()),
-                "duplicate delivery of {digest}"
-            );
-        }
-    }
-    assert!(
-        expected.is_subset(&seen),
-        "did not deliver exactly the executed matches",
-    );
+    // All eight arrive exactly once, in cursor order across the page seams.
+    collect_matches(&mut stream, &expected).await;
 }
 
-/// KvLoader coalescing: a backfill of many matches resolved concurrently issues far fewer ledger
-/// `BatchGetTransactions` round trips than there are transactions, because the DataLoader batches
-/// the concurrent window's content reads. Serial resolution would issue one read per transaction.
 #[tokio::test]
-async fn test_transaction_subscription_kvloader_coalesces_reads() {
-    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
-    let sender = cluster.validator.wallet.active_address().unwrap();
+async fn test_transaction_subscription_concurrency_coalesces_content_reads() {
+    // Deliver the same backfill at a given resolution window; return its content `BatchGetTransactions`
+    // round trips and how many matches were delivered. Serial (window 1) is the no-coalescing baseline.
+    async fn content_reads_with_concurrency(concurrency: usize) -> (u64, u64) {
+        let mut cluster =
+            SubscriptionTestCluster::new_with_ledger_history_and_concurrency(concurrency).await;
+        let sender = cluster.validator.wallet.active_address().unwrap();
+        let resume_from = cluster.validator_checkpoint_tip();
+        let expected = transfer_many(&mut cluster.validator, 10).await;
+        tokio::time::sleep(BACKFILL_SETTLE).await;
 
-    let resume_from = cluster.validator_checkpoint_tip();
-    let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for _ in 0..12 {
-        expected.extend(transfer_coins(&mut cluster.validator, &[100, 200, 300, 400]).await);
-    }
-    let total = expected.len();
-    // Advance so the matches are delivered by the backfill scan, not live.
-    tokio::time::sleep(Duration::from_secs(5)).await;
-
-    let before = cluster.ledger_grpc_call_count("BatchGetTransactions");
-
-    // Querying a content field (effects) makes each payload trigger a KvLoader content read.
-    let query = format!(
-        r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
-                node {{ digest effects {{ status }} }}
-            }}
-        }}"#,
-    );
-    let mut stream = cluster
-        .subscribe_with_variables(&query, sender_var(sender))
-        .await;
-
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    while !expected.is_subset(&seen) {
-        let item = stream
-            .next()
-            .await
-            .expect("stream ended before all matches delivered");
-        if let Some(d) = item["data"]["transactions"]["node"]["digest"].as_str()
-            && expected.contains(d)
-        {
-            seen.insert(d.to_string());
-        }
+        // Querying a content field (effects) makes each payload resolve through the KvLoader.
+        let query = format!(
+            r#"subscription($sender: SuiAddress!) {{
+                transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                    cursor
+                    node {{ digest effects {{ status }} }}
+                }}
+            }}"#,
+        );
+        let before = cluster.ledger_grpc_call_count("BatchGetTransactions");
+        let mut stream = cluster
+            .subscribe_with_variables(&query, sender_var(sender))
+            .await;
+        collect_matches(&mut stream, &expected).await;
+        let reads = cluster.ledger_grpc_call_count("BatchGetTransactions") - before;
+        (reads, expected.len() as u64)
     }
 
-    let reads = cluster.ledger_grpc_call_count("BatchGetTransactions") - before;
+    let (serial, total) = content_reads_with_concurrency(1).await;
+    // 100 is the production default window, well above the batch, so every payload resolves in one
+    // pass and its reads coalesce.
+    let (concurrent, _) = content_reads_with_concurrency(10).await;
+
+    // Serial (window 1) does one read per delivered payload: the no-coalescing baseline.
     assert!(
-        reads > 0,
-        "expected some BatchGetTransactions content reads; the metric may not be wired",
+        serial >= total,
+        "serial baseline should be one read per transaction: {serial} reads for {total} txs"
     );
+    // Concurrency coalesces reads, so it falls below that baseline. Only the direction is asserted;
+    // the exact count is timing-dependent and has no deterministic formula here.
     assert!(
-        reads < total as u64,
-        "expected coalesced content reads (< {total}) but got {reads} for {total} transactions; \
-         the DataLoader is not batching under concurrent resolution",
+        concurrent < serial,
+        "concurrency did not coalesce content reads: concurrent={concurrent} serial={serial}"
     );
 }
 
-/// A malformed resume cursor is surfaced as a GraphQL error to the client, not a hang or a silent
-/// empty stream. Exercises the resolver's input-validation failure path over SSE.
 #[tokio::test]
 async fn test_transaction_subscription_invalid_cursor_errors() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -784,181 +703,89 @@ async fn test_transaction_subscription_invalid_cursor_errors() {
         )
         .await;
 
-    let item = stream
-        .next()
-        .await
-        .expect("expected an error payload, got end of stream");
+    let item = stream.next().await.unwrap();
     assert!(
         item.get("errors").is_some(),
         "invalid cursor should surface a GraphQL error, got: {item}",
     );
 }
 
-/// Backfill round-trip / throughput benchmark. Seeds a large matching history, then for serial
-/// (concurrency 1) vs concurrent resolution measures wall-clock delivery time and counts backend
-/// round trips: scan `ListTransactions` and content `BatchGetTransactions`. The content reads should
-/// collapse dramatically under concurrency (DataLoader coalescing). Ignored by default; run with:
-///
-/// ```text
-/// cargo nextest run -p sui-indexer-alt-e2e-tests --features staging \
-///     bench_transaction_subscription_backfill --run-ignored all --no-capture
-/// ```
+/// Passing both `after` and `afterCheckpoint` is rejected: they are distinct resume modes.
 #[tokio::test]
-#[ignore = "benchmark; run explicitly with --run-ignored"]
-async fn bench_transaction_subscription_backfill() {
-    for concurrency in [1usize, 100] {
-        let mut cluster =
-            SubscriptionTestCluster::new_with_ledger_history_and_concurrency(concurrency).await;
-        let sender = cluster.validator.wallet.active_address().unwrap();
-        let resume_from = cluster.validator_checkpoint_tip();
-
-        // ~200 matches across ~50 checkpoints, so the backfill pages several times.
-        let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for _ in 0..50 {
-            expected.extend(transfer_coins(&mut cluster.validator, &[100, 200, 300, 400]).await);
-        }
-        let total = expected.len();
-        tokio::time::sleep(Duration::from_secs(5)).await;
-
-        let scan_before = cluster.ledger_grpc_call_count("ListTransactions");
-        let content_before = cluster.ledger_grpc_call_count("BatchGetTransactions");
-
-        let query = format!(
-            r#"subscription($sender: SuiAddress!) {{
-                transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
-                    node {{ digest effects {{ status }} }}
-                }}
-            }}"#,
-        );
-        let mut stream = cluster
-            .subscribe_with_variables(&query, sender_var(sender))
-            .await;
-
-        let start = std::time::Instant::now();
-        let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        while !expected.is_subset(&seen) {
-            let item = stream
-                .next()
-                .await
-                .expect("stream ended before all matches delivered");
-            if let Some(d) = item["data"]["transactions"]["node"]["digest"].as_str()
-                && expected.contains(d)
-            {
-                seen.insert(d.to_string());
-            }
-        }
-        let elapsed = start.elapsed();
-
-        let scan = cluster.ledger_grpc_call_count("ListTransactions") - scan_before;
-        let content = cluster.ledger_grpc_call_count("BatchGetTransactions") - content_before;
-        eprintln!(
-            "[bench] concurrency={concurrency:>3} txs={total} elapsed={elapsed:?} \
-             scan_rts={scan} content_rts={content} total_rts={}",
-            scan + content,
-        );
-    }
-}
-
-/// Stand up the real streaming GraphQL server and keep it alive for manual queries. Seeds matching
-/// history, prints the subscription endpoint plus a ready-to-run curl, then sleeps. Ignored by
-/// default; run with `SUB_SERVER_SECS=900 ... serve_transaction_subscription --run-ignored all --no-capture`.
-#[tokio::test]
-#[ignore = "manual server; run explicitly with --run-ignored"]
-async fn serve_transaction_subscription() {
+async fn test_transaction_subscription_mutually_exclusive_resume_errors() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
-    let resume_from = cluster.validator_checkpoint_tip();
 
-    for _ in 0..50 {
-        transfer_coins(&mut cluster.validator, &[1_000_000; 4]).await;
-    }
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    let tip = cluster.validator_checkpoint_tip();
-
-    let example = format!(
-        "subscription {{\n  transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: \"{sender}\" }}) {{\n    cursor\n    node {{ digest effects {{ status }} }}\n  }}\n}}"
-    );
-    let body = serde_json::json!({ "query": example }).to_string();
-    eprintln!("\n===================== streaming graphql server =====================");
-    eprintln!("subscription endpoint : {}", cluster.subscription_url);
-    eprintln!("sender                : {sender}");
-    eprintln!("resume checkpoint     : {resume_from}   (tip now ~{tip})");
-    eprintln!(
-        "\ncurl (SSE):\n  curl -N -X POST {} -H 'Accept: text/event-stream' -H 'Content-Type: application/json' -d '{}'",
-        cluster.subscription_url, body,
-    );
-    eprintln!("====================================================================\n");
-
-    let secs = std::env::var("SUB_SERVER_SECS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(600);
-    eprintln!("server alive for {secs}s (set SUB_SERVER_SECS to change)...");
-    tokio::time::sleep(Duration::from_secs(secs)).await;
-}
-
-/// Object-read coalescing: backfilling many matches while querying `objectChanges` (which hydrate
-/// output objects) issues far fewer ledger `BatchGetObjects` round trips than there are matches,
-/// because concurrent resolution coalesces the object reads the same way it coalesces content reads.
-#[tokio::test]
-async fn test_transaction_subscription_object_reads_coalesce() {
-    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
-    let sender = cluster.validator.wallet.active_address().unwrap();
-    let resume_from = cluster.validator_checkpoint_tip();
-
-    let mut expected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for _ in 0..12 {
-        expected.extend(transfer_coins(&mut cluster.validator, &[100, 200, 300, 400]).await);
-    }
-    let total = expected.len();
-    tokio::time::sleep(Duration::from_secs(5)).await;
-
-    let before = cluster.ledger_grpc_call_count("BatchGetObjects");
-
-    let query = format!(
-        r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
-                node {{
-                    digest
-                    effects {{
-                        objectChanges {{
-                            nodes {{ outputState {{ asMoveObject {{ contents {{ type {{ repr }} }} }} }} }}
-                        }}
-                    }}
-                }}
-            }}
-        }}"#,
-    );
     let mut stream = cluster
-        .subscribe_with_variables(&query, sender_var(sender))
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                transactions(after: "c", afterCheckpoint: 1, filter: { sentAddress: $sender }) {
+                    node { digest }
+                }
+            }"#,
+            sender_var(sender),
+        )
         .await;
 
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    while !expected.is_subset(&seen) {
-        let item = stream
-            .next()
-            .await
-            .expect("stream ended before all matches delivered");
-        let node = &item["data"]["transactions"]["node"];
-        if let Some(d) = node["digest"].as_str()
-            && expected.contains(d)
-        {
-            // Object changes hydrated (a transfer has at least the transferred + gas coin).
-            let resolved = node["effects"]["objectChanges"]["nodes"]
-                .as_array()
-                .is_some_and(|n| !n.is_empty());
-            assert!(resolved, "objectChanges not resolved for {d}");
-            seen.insert(d.to_string());
-        }
-    }
-
-    let reads = cluster.ledger_grpc_call_count("BatchGetObjects") - before;
+    let item = stream.next().await.unwrap();
     assert!(
-        reads > 0,
-        "expected some BatchGetObjects reads; the metric may not be wired",
+        item.get("errors").is_some(),
+        "both after and afterCheckpoint should be rejected, got: {item}",
     );
+}
+
+/// A checkpoint predicate inside the filter is rejected: a subscription streams forward, so
+/// filter-level checkpoint bounds have no meaning.
+#[tokio::test]
+async fn test_transaction_subscription_checkpoint_filter_errors() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($sender: SuiAddress!) {
+                transactions(filter: { sentAddress: $sender, atCheckpoint: 1 }) {
+                    node { digest }
+                }
+            }"#,
+            sender_var(sender),
+        )
+        .await;
+
+    let item = stream.next().await.unwrap();
     assert!(
-        reads < total as u64,
-        "expected coalesced object reads (< {total}) but got {reads} for {total} transactions",
+        item.get("errors").is_some(),
+        "a checkpoint filter should be rejected, got: {item}",
+    );
+}
+
+/// Backfill/live parity for the `affectedAddress` predicate: the same transactions must resolve
+/// identically whether matched by the gRPC filter (backfill) or in memory (live). Guards against the
+/// two filter translations diverging, which would gap or duplicate at the seam.
+#[tokio::test]
+async fn test_transaction_subscription_affected_address_parity() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let filter = "affectedAddress: $sender";
+
+    let mut live = cluster
+        .subscribe_with_variables(&tx_query(filter, None), sender_var(sender))
+        .await;
+
+    let resume_from = cluster.validator_checkpoint_tip();
+    let expected = transfer_coins(&mut cluster.validator, &[100, 200, 300]).await;
+
+    let live_nodes = collect_nodes(&mut live, &expected).await;
+    drop(live);
+
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+    let mut backfill = cluster
+        .subscribe_with_variables(&tx_query(filter, Some(resume_from)), sender_var(sender))
+        .await;
+    let backfill_nodes = collect_nodes(&mut backfill, &expected).await;
+
+    assert_eq!(
+        live_nodes, backfill_nodes,
+        "affectedAddress: live and backfill resolved the same transactions differently",
     );
 }
