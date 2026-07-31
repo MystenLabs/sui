@@ -69,9 +69,14 @@ impl LedgerService for RpcService {
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
     ) -> Result<tonic::Response<BatchGetObjectsResponse>, tonic::Status> {
-        get_object::batch_get_objects(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            get_object::batch_get_objects(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("batch_get_objects task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_transaction(
@@ -87,9 +92,14 @@ impl LedgerService for RpcService {
         &self,
         request: tonic::Request<BatchGetTransactionsRequest>,
     ) -> Result<tonic::Response<BatchGetTransactionsResponse>, tonic::Status> {
-        get_transaction::batch_get_transactions(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            get_transaction::batch_get_transactions(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("batch_get_transactions task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_checkpoint(
