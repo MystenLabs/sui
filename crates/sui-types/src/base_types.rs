@@ -227,6 +227,33 @@ impl FullObjectRef {
 /// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsensusObjectVersion {
+    pub initial_shared_version: SequenceNumber,
+    pub version: SequenceNumber,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SystemObjectVersions {
+    accumulator_version: Option<ConsensusObjectVersion>,
+}
+
+impl SystemObjectVersions {
+    pub fn new(accumulator_version: Option<ConsensusObjectVersion>) -> Self {
+        Self {
+            accumulator_version,
+        }
+    }
+
+    pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
+        if *object_id == crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+            self.accumulator_version
+        } else {
+            panic!("{object_id} is not an implicitly read system object")
+        }
+    }
+}
+
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of

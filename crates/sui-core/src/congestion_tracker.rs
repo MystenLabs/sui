@@ -94,7 +94,7 @@ impl CongestionTracker {
                 cleared_events.push((
                     gas_price,
                     effect
-                        .input_consensus_objects()
+                        .accessed_consensus_objects()
                         .into_iter()
                         .filter_map(|object| match object {
                             InputConsensusObject::Mutate((id, _, _)) => Some(id),
