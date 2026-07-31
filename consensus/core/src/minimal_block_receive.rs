@@ -22,7 +22,7 @@ use std::sync::{Arc, Weak};
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
-use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::{debug_fatal, sync::notify_read::NotifyRead};
 use parking_lot::RwLock;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
 use tracing::debug;
@@ -214,7 +214,6 @@ impl RepairLimits {
 enum RecoveryOutcome {
     Inflated,
     Repaired,
-    Malformed,
     Obsolete,
     AlreadyAccepted,
     RepairFailed,
@@ -226,7 +225,6 @@ impl RecoveryOutcome {
         match self {
             RecoveryOutcome::Inflated => "inflated",
             RecoveryOutcome::Repaired => "repaired",
-            RecoveryOutcome::Malformed => "malformed",
             RecoveryOutcome::Obsolete => "obsolete",
             RecoveryOutcome::AlreadyAccepted => "already_accepted",
             RecoveryOutcome::RepairFailed => "repair_failed",
@@ -277,6 +275,7 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
     block_inflater: Arc<BlockInflater>,
     dag_state: Weak<RwLock<DagState>>,
     accepted_slots: Arc<NotifyRead<Slot, ()>>,
+    accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
     mut gc_round: watch::Receiver<Round>,
     network_client: Arc<C>,
     authority_service: Weak<S>,
@@ -333,15 +332,17 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     break 'recovery;
                 }
                 Err(InflateError::Malformed(error)) => {
-                    // Defensive: receipt-time inflation already parsed these exact
-                    // bytes, so a structural failure here should be unreachable — and
-                    // cannot improve with later DAG state either way.
-                    debug!(
-                        "Dropping malformed minimal block {} from peer {}: {}",
-                        claimed_ref, peer, error
+                    // Receipt-time inflation already parsed these exact bytes, so a
+                    // structural failure here is an invariant violation, not a peer
+                    // fault — and it cannot improve with later DAG state either way.
+                    debug_fatal!(
+                        "malformed minimal block {} from peer {} in recovery after \
+                         passing receipt-time parse: {}",
+                        claimed_ref,
+                        peer,
+                        error
                     );
-                    outcome = RecoveryOutcome::Malformed;
-                    break 'recovery;
+                    return;
                 }
             };
 
@@ -361,13 +362,15 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
 
             // Register BEFORE re-checking the DAG: acceptance between the check and the
             // await has then already fired the registration, so no wake can be missed.
-            // A second registration on the claimed block's own slot lets the task
-            // terminate promptly when full-form replay (after a reconnect) delivers the
-            // block through the normal path — the quota permit must not stay parked on
-            // a wait the block no longer needs.
+            // A second registration on the claimed block's exact reference lets the
+            // task terminate promptly when full-form replay (after a reconnect)
+            // delivers the block through the normal path — the quota permit must not
+            // stay parked on a wait the block no longer needs. Keyed by BlockRef, not
+            // slot: equivocating siblings accepted into the claimed slot must not
+            // wake every parked task for it.
             loop {
                 let mut registration = accepted_slots.register_one(&missing);
-                let mut own_registration = accepted_slots.register_one(&Slot::from(claimed_ref));
+                let mut own_registration = accepted_refs.register_one(&claimed_ref);
                 let check = {
                     let Some(dag_state) = dag_state.upgrade() else {
                         return;
@@ -412,8 +415,8 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                 }
                 tokio::select! {
                     _ = &mut registration => break,
-                    // A wake on the own slot may be an equivocating sibling: loop and
-                    // re-check rather than assuming the claimed block landed.
+                    // The exact claimed block was accepted; loop into the re-check,
+                    // which concludes AlreadyAccepted.
                     _ = &mut own_registration => continue,
                     changed = gc_round.changed() => {
                         if changed.is_err() {
@@ -729,10 +732,11 @@ mod tests {
                 .quotas
                 .try_acquire(self.peer, self.minimal.len())
                 .unwrap();
-            let (accepted_slots, gc_round) = {
+            let (accepted_slots, accepted_refs, gc_round) = {
                 let dag_state = self.receiver_dag.read();
                 (
                     dag_state.accepted_slot_notifier(),
+                    dag_state.accepted_ref_notifier(),
                     dag_state.gc_round_receiver(),
                 )
             };
@@ -741,6 +745,7 @@ mod tests {
                 self.inflater.clone(),
                 Arc::downgrade(&self.receiver_dag),
                 accepted_slots,
+                accepted_refs,
                 gc_round,
                 client,
                 Arc::downgrade(&self.service),
@@ -997,17 +1002,20 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(5)).await;
 
         let node_metrics = &h.context.metrics.node_metrics;
-        let notifier = h.receiver_dag.read().accepted_slot_notifier();
+        let slot_notifier = h.receiver_dag.read().accepted_slot_notifier();
+        let ref_notifier = h.receiver_dag.read().accepted_ref_notifier();
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
-        // Two registrations per waiter: the missing slot and the claimed block's own
-        // slot (the replay-termination wake).
-        assert_eq!(notifier.num_pending(), 2);
+        // One registration per notifier per waiter: the missing slot, and the claimed
+        // block's exact reference (the replay-termination wake).
+        assert_eq!(slot_notifier.num_pending(), 1);
+        assert_eq!(ref_notifier.num_pending(), 1);
 
         // shutdown() aborts and awaits every task: cleanup is deterministic.
         join_set.shutdown().await;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
-        assert_eq!(notifier.num_pending(), 0);
+        assert_eq!(slot_notifier.num_pending(), 0);
+        assert_eq!(ref_notifier.num_pending(), 0);
         // The permit is immediately reusable.
         let permit = h.quotas.try_acquire(h.peer, h.minimal.len()).unwrap();
         drop(permit);
@@ -1027,8 +1035,10 @@ mod tests {
         let node_metrics = &h.context.metrics.node_metrics;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
 
-        // A sibling in the claimed block's own slot wakes the task but must not
-        // terminate it: the claimed block itself is still unaccepted.
+        // A sibling in the claimed block's own slot must not even wake the task:
+        // the termination registration is keyed by exact reference, and the claimed
+        // block itself is still unaccepted.
+        let ref_notifier = h.receiver_dag.read().accepted_ref_notifier();
         let sibling = VerifiedBlock::new_for_test(
             TestBlock::new(11, h.peer.value() as u32)
                 .set_timestamp_ms(777_777)
@@ -1037,6 +1047,7 @@ mod tests {
         h.receiver_dag.write().accept_block(sibling);
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
+        assert_eq!(ref_notifier.num_pending(), 1);
 
         // The claimed block arrives (as replay would deliver it): the task ends,
         // submits nothing, fetches nothing, and frees its permit.

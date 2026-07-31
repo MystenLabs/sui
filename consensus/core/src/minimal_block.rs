@@ -11,9 +11,9 @@
 //! so order is not derivable from authority indices.
 //!
 //! The sender's `claimed_block_digest` lets the receiver distinguish a failed local
-//! reconstruction (digest mismatch => hand the block to the recovery manager, which
-//! fetches the digest-verified original) from an invalid block (digest match + bad
-//! signature => reject the peer).
+//! reconstruction (digest mismatch => the recovery task fetches the digest-verified
+//! original from the author) from an invalid block (digest match + bad signature =>
+//! reject the peer).
 //!
 //! Minimal blocks are emitted only for live broadcasts on the validator `subscribe_blocks`
 //! stream, for every block version — `Block::with_ancestors` reconstructs V1/V2/V3
@@ -287,8 +287,8 @@ pub(crate) fn deserialize_minimal(
     let block_ref = BlockRef::new(skeleton.round(), skeleton.author(), claimed_digest);
     let default_round = skeleton.round().saturating_sub(1);
     // Collect ordered digest candidates per ancestor. Slots the sender resolved explicitly
-    // have exactly one candidate; omitted slots take the resolver's ordered candidates
-    // (accepted-DAG digests first, then receipt-time hints — see AncestorDigestResolver).
+    // have exactly one candidate; omitted slots take the resolver's ordered accepted-DAG
+    // candidates (see AncestorDigestResolver).
     let mut candidates: Vec<(Round, AuthorityIndex, Vec<BlockDigest>)> =
         Vec::with_capacity(authors.len());
     for &author in authors {
@@ -313,8 +313,8 @@ pub(crate) fn deserialize_minimal(
                     });
                 }
                 if resolved.len() > MAX_SLOT_CANDIDATES {
-                    // Heavy equivocation (or hint flooding): reconstruction search space
-                    // is not worth exploring; the full block resolves it.
+                    // Heavy equivocation: the reconstruction search space is not worth
+                    // exploring; the exact-reference fetch of the full block resolves it.
                     return Err(InflateError::NeedFullBlock {
                         block_ref,
                         reason: FallbackReason::AmbiguousSlot(slot),

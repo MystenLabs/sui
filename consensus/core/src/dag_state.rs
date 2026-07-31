@@ -117,6 +117,11 @@ pub struct DagState {
     // without missing an acceptance.
     accepted_slots: Arc<NotifyRead<Slot, ()>>,
 
+    // Wakes waiters registered on an exact block reference on its first acceptance.
+    // Separate from the slot notifier so a waiter for one specific block is not
+    // woken by every equivocating sibling accepted into the same slot.
+    accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
+
     // Publishes GC round advancement, as a terminal wake for slot waiters whose
     // slot can no longer be filled.
     gc_round_sender: watch::Sender<Round>,
@@ -199,6 +204,7 @@ impl DagState {
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
             accepted_slots: Arc::new(NotifyRead::new()),
+            accepted_refs: Arc::new(NotifyRead::new()),
             gc_round_sender: watch::channel(0).0,
         };
         state.publish_gc_round();
@@ -364,6 +370,7 @@ impl DagState {
 
         // Must stay last: waiters that observed an empty slot before this point are
         // woken only here, and the duplicate early-return above must not re-notify.
+        self.accepted_refs.notify(&block_ref, &());
         self.accepted_slots.notify(&Slot::from(block_ref), &());
     }
 
@@ -1226,6 +1233,13 @@ impl DagState {
     /// Used by minimal-block recovery to wait for missing ancestor slots.
     pub(crate) fn accepted_slot_notifier(&self) -> Arc<NotifyRead<Slot, ()>> {
         self.accepted_slots.clone()
+    }
+
+    /// Notifier waking registrants of one exact block reference on its acceptance.
+    /// Used by minimal-block recovery to detect that the very block it is trying to
+    /// reconstruct arrived through another path (typically full-form replay).
+    pub(crate) fn accepted_ref_notifier(&self) -> Arc<NotifyRead<BlockRef, ()>> {
+        self.accepted_refs.clone()
     }
 
     /// Watches GC round advancement; slot waiters use this as a terminal wake.

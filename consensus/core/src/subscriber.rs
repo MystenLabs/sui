@@ -72,6 +72,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     recovery_quotas: Arc<RecoveryQuotas>,
     repair_limits: Arc<RepairLimits>,
     accepted_slots: Arc<NotifyRead<Slot, ()>>,
+    accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
     gc_round: watch::Receiver<Round>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
@@ -94,10 +95,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         // Neither the slot notifier nor the GC watch keep DagState alive: subscription
         // and recovery tasks may hold them across shutdown (authority_node fatally
         // asserts zero remaining DagState owners).
-        let (accepted_slots, gc_round) = {
+        let (accepted_slots, accepted_refs, gc_round) = {
             let dag_state = dag_state.read();
             (
                 dag_state.accepted_slot_notifier(),
+                dag_state.accepted_ref_notifier(),
                 dag_state.gc_round_receiver(),
             )
         };
@@ -110,6 +112,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             recovery_quotas,
             repair_limits,
             accepted_slots,
+            accepted_refs,
             gc_round,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
@@ -139,6 +142,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let recovery_quotas = self.recovery_quotas.clone();
         let repair_limits = self.repair_limits.clone();
         let accepted_slots = self.accepted_slots.clone();
+        let accepted_refs = self.accepted_refs.clone();
         let gc_round = self.gc_round.clone();
 
         let mut subscriptions = self.subscriptions.lock();
@@ -152,6 +156,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             recovery_quotas,
             repair_limits,
             accepted_slots,
+            accepted_refs,
             gc_round,
             peer,
         )));
@@ -283,6 +288,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         recovery_quotas: Arc<RecoveryQuotas>,
         repair_limits: Arc<RepairLimits>,
         accepted_slots: Arc<NotifyRead<Slot, ()>>,
+        accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
         gc_round: watch::Receiver<Round>,
         peer: AuthorityIndex,
     ) {
@@ -469,6 +475,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             block_inflater.clone(),
                                             dag_state.clone(),
                                             accepted_slots.clone(),
+                                            accepted_refs.clone(),
                                             gc_round.clone(),
                                             network_client.clone(),
                                             authority_service.clone(),
