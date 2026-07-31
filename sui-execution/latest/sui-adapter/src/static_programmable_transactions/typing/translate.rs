@@ -113,14 +113,14 @@ impl Context {
                     let L::FundsWithdrawalArg {
                         from_compatibility_object: _,
                         ty,
-                        owner,
+                        source,
                         amount,
                     } = withdrawal;
                     debug_assert!(ty == input_ty);
                     let withdrawal = T::WithdrawalInput {
                         original_input_index: idx,
                         ty,
-                        owner,
+                        source,
                         amount,
                     };
                     context.withdrawals.insert(idx, withdrawal);
@@ -936,7 +936,7 @@ fn determine_withdrawal_compatibility_inputs<Mode: ExecutionMode>(
             if let L::InputArg::FundsWithdrawal(withdrawal) = input_arg
                 && withdrawal.from_compatibility_object
             {
-                Some((i, withdrawal.owner))
+                Some((i, withdrawal.source.owner()))
             } else {
                 None
             }

@@ -39,6 +39,7 @@ use std::{cell::OnceCell, marker::PhantomData, rc::Rc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    allowance::RESOLVED_ALLOWANCE_WITHDRAWAL_STRUCT,
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
     coin::RESOLVED_COIN_STRUCT,
@@ -363,6 +364,33 @@ where
             name: n.to_owned(),
             type_arguments: vec![inner_type],
         })))
+    }
+
+    pub fn allowance_withdrawal_type(&self, inner_type: Type) -> Result<Type, Mode::Error> {
+        // Has drop like `Withdrawal`: dropping it is fine, funds only move on
+        // redemption. Only `sui::allowance` can unpack it.
+        const ALLOWANCE_WITHDRAWAL_ABILITIES: AbilitySet = AbilitySet::singleton(Ability::Drop);
+        let (a, m, n) = RESOLVED_ALLOWANCE_WITHDRAWAL_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities: ALLOWANCE_WITHDRAWAL_ABILITIES,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
+    /// The loaded type of a withdrawal input: the plain `Withdrawal<T>` for a direct
+    /// source, or `AllowanceWithdrawal<T>` for an allowance source.
+    pub fn withdrawal_type_for_source(
+        &self,
+        source: &L::WithdrawalSource,
+        funds_type: Type,
+    ) -> Result<Type, Mode::Error> {
+        match source {
+            L::WithdrawalSource::Direct { .. } => self.withdrawal_type(funds_type),
+            L::WithdrawalSource::Allowance { .. } => self.allowance_withdrawal_type(funds_type),
+        }
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, Mode::Error> {
