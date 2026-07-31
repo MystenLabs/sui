@@ -90,6 +90,9 @@ pub(crate) struct ServiceManager {
     indexer_service: Option<tokio::sync::Mutex<Service>>,
 }
 
+/// What fork a data directory belongs to, written once and thereafter compared
+/// on every open. Equality is the whole check, so every field is part of the
+/// fork's identity.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct Metadata {
     format_version: u32,
@@ -99,6 +102,14 @@ struct Metadata {
 }
 
 impl ServiceManager {
+    /// Open the fork's durable state under `root`, creating it if this is a new
+    /// fork directory.
+    ///
+    /// Everything a reader depends on is established here, before any reader
+    /// exists: metadata is written or matched against what is already on disk,
+    /// the rpc-store is opened, its pruning watermarks are refreshed, and the
+    /// chain identifier is recorded. Reusing a directory that describes a
+    /// different network or checkpoint fails rather than reinterpreting it.
     pub(crate) fn open(
         root: &Path,
         network: String,
@@ -141,6 +152,13 @@ impl ServiceManager {
         })
     }
 
+    /// The checkpoint an existing fork directory was forked at, or `None` if
+    /// `root` holds no fork yet.
+    ///
+    /// Reads the metadata sidecar without opening the store, so startup can
+    /// decide whether it is resuming a fork or creating one before committing
+    /// to either. A directory that belongs to a different network, or to a
+    /// different checkpoint than the one requested, is an error.
     pub(crate) fn existing_forked_checkpoint(
         root: &Path,
         network: &str,
@@ -172,6 +190,13 @@ impl ServiceManager {
         Ok(Some(stored.forked_at_checkpoint))
     }
 
+    /// Start the embedded rpc-store indexer over locally produced checkpoints.
+    ///
+    /// Ingestion reads checkpoints back out of `simulacrum`, starting at the
+    /// checkpoint after the fork point — everything at or below it is pre-fork
+    /// state the seed load already placed. Registers the pipelines in
+    /// [`Self::pipeline_layer`] plus the broadcast pipeline that feeds RPC
+    /// subscriptions, and errors if an indexer is already running.
     pub(crate) async fn start_indexer(
         &mut self,
         simulacrum: Arc<RwLock<ForkedSimulacrum>>,
@@ -278,6 +303,8 @@ impl ServiceManager {
         RpcStoreReader::new(self.db.clone(), self.schema.clone())
     }
 
+    /// A [`LocalStore`] handle over the same rpc-store, pinned at the fork
+    /// checkpoint. Cheap to call: the underlying db and schema are shared.
     pub(crate) fn local_store(&self) -> LocalStore {
         LocalStore::new(
             self.db.clone(),
@@ -297,6 +324,13 @@ impl ServiceManager {
         service.lock().await.join().await
     }
 
+    /// Wait until the indexer has committed `checkpoint` on every pipeline it
+    /// owns, so a caller that just produced a checkpoint can rely on the
+    /// derived indexes reflecting it.
+    ///
+    /// Polls rather than subscribing, and gives up after
+    /// [`INDEXED_CHECKPOINT_TIMEOUT`] so a stalled pipeline surfaces as an
+    /// error instead of hanging the caller forever.
     pub(crate) async fn wait_for_indexed_checkpoint(
         &self,
         checkpoint: CheckpointSequenceNumber,
@@ -318,6 +352,12 @@ impl ServiceManager {
         }
     }
 
+    /// The highest checkpoint *every* indexer pipeline has committed — the
+    /// lowest of their watermarks, since a checkpoint is only fully indexed
+    /// once the slowest pipeline has it.
+    ///
+    /// `None` while the answer is not yet meaningful: no indexer running, or a
+    /// pipeline that has not written a watermark at all.
     fn highest_indexed_checkpoint(&self) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
         if self.indexer_pipelines.is_empty() {
             return Ok(None);
@@ -342,18 +382,24 @@ impl ServiceManager {
         Ok(indexed)
     }
 
+    /// The forked-from chain's identifier, as recorded in fork metadata.
     fn chain_identifier(&self) -> ChainIdentifier {
         CheckpointDigest::new(self.metadata.chain_identifier).into()
     }
 
+    /// Where the rpc-store's RocksDB lives inside a fork data directory.
     fn rpc_store_path(root: &Path) -> PathBuf {
         root.join(RPC_STORE_DIR)
     }
 
+    /// Where the fork metadata sidecar lives inside a fork data directory.
     fn metadata_path(root: &Path) -> PathBuf {
         root.join(FORK_METADATA_FILE)
     }
 
+    /// Establish that `root` belongs to the fork described by `expected`,
+    /// writing the metadata if the directory is new and rejecting it if what is
+    /// already there disagrees.
     fn load_or_write_metadata(root: &Path, expected: &Metadata) -> anyhow::Result<()> {
         let path = Self::metadata_path(root);
         if path.exists() {
@@ -376,6 +422,13 @@ impl ServiceManager {
         crate::metadata::write_json_exclusive(&path, expected, "fork metadata")
     }
 
+    /// Record the forked-from chain identifier in the rpc-store, under the
+    /// fork's own pipeline key.
+    ///
+    /// The store pins each pipeline to the chain it first ingested and refuses
+    /// checkpoints from another one, so every identifier already present must
+    /// equal `expected` — one that disagrees means this directory holds a
+    /// different chain's data, whatever the metadata sidecar says.
     fn seed_chain_identifier(db: &Db, expected: [u8; 32]) -> anyhow::Result<()> {
         let expected = ChainId(expected);
         let framework = FrameworkSchema::new(db.clone());
