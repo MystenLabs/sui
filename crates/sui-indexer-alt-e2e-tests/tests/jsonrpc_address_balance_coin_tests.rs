@@ -310,6 +310,64 @@ async fn test_multi_get_objects_resolves_address_balance_coins() {
     assert!(responses[2].data.is_some(), "Expected data for gas object");
 }
 
+/// getObject and multiGetObjects must return the same (version, digest) for an AB coin as
+/// getCoins: the encoded withdrawal ref, which is the coin's only spendable identity. A digest
+/// hashed from the synthesized object corresponds to no spendable reference.
+#[tokio::test]
+async fn test_get_object_ab_coin_ref_agrees_with_get_coins() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let gas_type = GAS::type_().to_canonical_string(true);
+    let sender = cluster.test_env.get_sender(0);
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let (_, gas) = cluster.test_env.get_sender_and_gas(0);
+    let tx = cluster
+        .test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(42, recipient)])
+        .build();
+
+    let (digest, fx) = cluster.test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(fx.status().is_ok(), "send_funds transaction failed");
+    cluster
+        .test_env
+        .cluster
+        .wait_for_tx_settlement(&[digest])
+        .await;
+    cluster.sync().await;
+
+    let CoinsResponse {
+        result: Page { data: coins, .. },
+    } = cluster.get_coins(recipient, &gas_type, None, 10).await;
+    assert_eq!(coins.len(), 1, "Expected one coin for recipient");
+    let ab_coin = &coins[0];
+    let ab_coin_id = ab_coin.coin_object_id.to_string();
+
+    let ObjectResponse {
+        result: obj_response,
+    } = cluster.get_object(&ab_coin_id).await;
+    let data = obj_response
+        .data
+        .as_ref()
+        .expect("Expected object data in getObject response");
+
+    assert_eq!(data.object_id, ab_coin.coin_object_id);
+    assert_eq!(data.version, ab_coin.version);
+    assert_eq!(
+        data.digest, ab_coin.digest,
+        "getObject must return the encoded withdrawal digest, not a hash of the synthesized object"
+    );
+
+    let MultiObjectResponse { result: responses } = cluster.multi_get_objects(&[&ab_coin_id]).await;
+    assert_eq!(responses.len(), 1);
+    let data = responses[0]
+        .data
+        .as_ref()
+        .expect("Expected object data in multiGetObjects response");
+    assert_eq!(data.version, ab_coin.version);
+    assert_eq!(data.digest, ab_coin.digest);
+}
+
 /// Fund an address balance and verify that masked AB coin IDs remain unresolved when coin
 /// reservations are disabled, even though address balances are enabled.
 #[tokio::test]
