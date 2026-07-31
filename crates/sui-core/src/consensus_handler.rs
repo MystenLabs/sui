@@ -293,16 +293,14 @@ pub(crate) fn resolve_owned_object_lock_states(
                     continue;
                 }
             }
-            Some(VersionLowerBound::KnownAbsent) => {
-                if !conservative {
-                    assert_reachable!("pipelined owned input resolved as known-absent");
-                    stats.cache += 1;
-                    continue;
-                }
-                // Conservative: the absence observation may be stale; the authoritative
-                // read below re-derives it (a truly absent object cannot carry a lock).
+            Some(VersionLowerBound::KnownAbsent) if !conservative => {
+                assert_reachable!("pipelined owned input resolved as known-absent");
+                stats.cache += 1;
+                continue;
             }
-            None => (),
+            // Conservative: the absence observation may be stale; the authoritative
+            // read below re-derives it (a truly absent object cannot carry a lock).
+            Some(VersionLowerBound::KnownAbsent) | None => (),
         }
         // Authoritative, tombstone-aware latest read (in-memory object cache first).
         stats.objects_db += 1;
@@ -4811,7 +4809,7 @@ mod tests {
         let (sender, _keypair) = deterministic_random_account_key();
         let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
         let state = TestAuthorityBuilder::new()
-            .with_starting_objects(&[owned_object.clone()])
+            .with_starting_objects(std::slice::from_ref(&owned_object))
             .skip_genesis_owner_index()
             .build()
             .await;
