@@ -94,6 +94,7 @@ mod checked {
             &input_objects,
             &[],
         )?;
+        transaction.check_allowance_inputs(&input_objects)?;
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
@@ -126,6 +127,7 @@ mod checked {
             &input_objects,
             &[gas_object_ref],
         )?;
+        transaction.check_allowance_inputs(&input_objects)?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
@@ -159,6 +161,8 @@ mod checked {
         )?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         // NB: move verifier is only checked at signing time, not at execution.
+        // NB: allowance withdrawal declarations are only validated at signing; at execution
+        // the allowance's own Move checks enforce policy on consensus-sequenced state.
 
         Ok((gas_status, input_objects.into_checked()))
     }
