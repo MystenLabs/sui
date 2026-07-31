@@ -39,6 +39,11 @@ use crate::{
 /// Byte and count bounds on retained minimal payloads across all recovery tasks.
 /// The global bytes cap bounds aggregate memory; the per-peer count cap prevents one
 /// peer from consuming unbounded task overhead with tiny encodings.
+///
+/// The per-peer byte cap must stay above the subscriber's pre-decode size cap
+/// (2 x consensus_max_transactions_in_block_bytes, currently 1 MiB): a legitimate
+/// minimal block larger than this quota could never be admitted, and every arrival
+/// would divert to a stream reset (safe — replay is full-form — but wasteful).
 const MAX_PARKED_BYTES: usize = 16 << 20;
 const MAX_PARKED_BYTES_PER_PEER: usize = 2 << 20;
 const MAX_PARKED_BLOCKS_PER_PEER: usize = 256;
@@ -478,10 +483,14 @@ async fn repair<C: ValidatorNetworkClient, S: ValidatorNetworkService>(
 ) -> RecoveryOutcome {
     let node_metrics = &context.metrics.node_metrics;
     // Bounded waits: tasks queued here hold RecoveryPermits, so the queue is bounded
-    // by the parked-block quotas. acquire fails only on semaphore closure.
-    let (Ok(_global), Ok(_per_peer)) = (
-        repair_limits.global.clone().acquire_owned().await,
+    // by the parked-block quotas; acquire fails only on semaphore closure. The
+    // per-peer permit is taken FIRST so one peer with a saturated repair lane can
+    // occupy at most MAX_REPAIR_FETCHES_PER_PEER global slots — global-first would
+    // let it park quota-bounded task counts on the global semaphore and starve every
+    // other peer's repairs.
+    let (Ok(_per_peer), Ok(_global)) = (
         repair_limits.per_peer[peer].clone().acquire_owned().await,
+        repair_limits.global.clone().acquire_owned().await,
     ) else {
         return RecoveryOutcome::RepairFailed;
     };
