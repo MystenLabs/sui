@@ -285,7 +285,7 @@ impl ForkStore {
     ) -> anyhow::Result<Option<Object>> {
         let local_store = self.local_store();
         let sequence = SequenceNumber::from_u64(version);
-        match local_store.get_object_at_version(*object_id, sequence)? {
+        match local_store.get_object_status_at_version(*object_id, sequence)? {
             Some(Status::Live(object)) => return Ok(Some(object)),
             Some(Status::Tombstone(_)) => return Ok(None),
             None => {}

@@ -6,6 +6,8 @@ use std::ops::Bound;
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use tracing::info;
+
 use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
@@ -45,7 +47,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
-use tracing::info;
 
 /// Synthetic pipeline key recording that the one-shot seed load committed.
 ///
@@ -70,8 +71,7 @@ pub(crate) struct LocalStore {
     /// The checkpoint this fork diverged at.
     ///
     /// Pre-fork objects are materialized lazily from a remote query pinned here,
-    /// so each one learned this way is live *as of this checkpoint* — the same
-    /// claim a live-set restore makes at its anchor. It is also the floor for the
+    /// so each one is live *as of this checkpoint*. It is also the floor for the
     /// checkpoint numbering of locally executed checkpoints.
     forked_at_checkpoint: CheckpointSequenceNumber,
 }
@@ -131,7 +131,7 @@ impl LocalStore {
     }
 
     /// Returns the local object status at one exact version.
-    pub(crate) fn get_object_at_version(
+    pub(crate) fn get_object_status_at_version(
         &self,
         id: ObjectID,
         version: SequenceNumber,
@@ -654,7 +654,7 @@ mod tests {
 
         assert_eq!(
             store
-                .get_object_at_version(id, SequenceNumber::from_u64(7))
+                .get_object_status_at_version(id, SequenceNumber::from_u64(7))
                 .unwrap(),
             Some(Status::Live(object.clone())),
         );
@@ -693,7 +693,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .get_object_at_version(id, SequenceNumber::from_u64(5))
+                .get_object_status_at_version(id, SequenceNumber::from_u64(5))
                 .unwrap(),
             Some(Status::Live(historical)),
             "the historical row is still readable by version",
@@ -794,7 +794,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .get_object_at_version(id, SequenceNumber::from_u64(1))
+                .get_object_status_at_version(id, SequenceNumber::from_u64(1))
                 .unwrap(),
             Some(Status::Live(base)),
         );
@@ -924,7 +924,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .get_object_at_version(id, SequenceNumber::from_u64(3))
+                .get_object_status_at_version(id, SequenceNumber::from_u64(3))
                 .unwrap(),
             Some(Status::Live(object)),
         );
