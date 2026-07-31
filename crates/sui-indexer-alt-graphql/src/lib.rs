@@ -457,6 +457,11 @@ pub async fn start_rpc(
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
+    // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
+    // needs a live view of them. Captured before the watermark task is consumed by `run()`.
+    #[cfg(feature = "staging")]
+    let subscription_watermarks_rx = watermark_task.watermarks_rx();
+
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
 
@@ -483,7 +488,9 @@ pub async fn start_rpc(
                     _broadcaster,
                     first_live_checkpoint,
                 ));
-                rpc = rpc.data(subscription_broadcast);
+                rpc = rpc
+                    .data(subscription_broadcast)
+                    .data(subscription_watermarks_rx);
             }
             Some((s_stream, s_eviction))
         } else {

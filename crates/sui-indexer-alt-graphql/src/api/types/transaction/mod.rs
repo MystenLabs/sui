@@ -412,6 +412,10 @@ impl Transaction {
 
     /// Serve transaction pagination by streaming gRPC. Returns pages that may
     /// be partially filled, with valid cursors if there are more pages to paginate through.
+    ///
+    /// Exposed to the subscription backfill, which pages the bitmap index directly (digest-only,
+    /// with fields hydrated lazily through the index) rather than through the `ctx`-driven
+    /// [`Self::paginate`] wrapper.
     async fn paginate_grpc(
         reader: &AlphaLedgerGrpcReader,
         scope: Scope,
@@ -529,10 +533,6 @@ impl TransactionContents {
             });
         }
 
-        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
-            return Ok(self.clone());
-        };
-
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
@@ -542,12 +542,15 @@ impl TransactionContents {
             return Ok(self.clone());
         };
 
-        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
-        let cp_num = transaction
-            .cp_sequence_number()
-            .context("Any transaction fetched from the DB should have a checkpoint set")?;
-        if cp_num > checkpoint_viewed_at {
-            return Ok(self.clone());
+        // Enforce the consistency cutoff only when viewing as of a specific checkpoint. A
+        // subscription backfill has no `checkpoint_viewed_at` and takes the indexed contents as-is.
+        if let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() {
+            let cp_num = transaction
+                .cp_sequence_number()
+                .context("Any transaction fetched from the DB should have a checkpoint set")?;
+            if cp_num > checkpoint_viewed_at {
+                return Ok(self.clone());
+            }
         }
 
         Ok(Self {
@@ -665,7 +668,7 @@ impl From<Connection<String, Transaction>> for TransactionConnection {
 /// Build a `TransactionConnection` from draining a bitmap-scan page.
 ///
 /// Edges are returned in ascending order.
-fn build_grpc_connection(
+pub(crate) fn build_grpc_connection(
     scope: Scope,
     page: &Page<CTransaction>,
     result: StreamPage<v2::ExecutedTransaction>,
