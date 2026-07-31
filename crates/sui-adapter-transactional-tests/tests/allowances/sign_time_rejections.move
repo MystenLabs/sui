@@ -35,9 +35,10 @@ fun init(otw: FOO, ctx: &mut TxContext) {
 
 //# create-checkpoint
 
-//# programmable --sender A --inputs b"txn_test" @B vector[1000u256] vector[] vector[99999999999999] vector[] vector[]
+//# programmable --sender A --inputs b"txn_test" @B vector[1000u256] vector[] vector[99999999999999]
 // A issues a Balance<SUI> allowance to B: 1000 lifetime cap.
-//> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 
 //# view-object 5,0
 

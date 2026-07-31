@@ -29,29 +29,30 @@ task 3, line 21:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 23-25:
-//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[99999999999999] vector[] vector[]
+task 4, lines 23-26:
+//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[99999999999999]
 // A issues an allowance to B: 10000 lifetime cap.
-//> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(4,0), object(4,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6422000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 27-30:
+task 5, lines 28-31:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@C,object(4,0)) mutshared(4,0) immshared(6)
 // Correct funder first, wrong funder second: rejected at signing.
 //> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(2), Input(0), Input(3));
 //> 1: sui::allowance::spend_balance<sui::sui::SUI>(Input(2), Input(1), Input(3));
 Error: Error checking transaction input objects: Invalid withdraw reservation: Declared funder @C does not match the funder of allowance object(4,0)
 
-task 6, lines 32-35:
+task 6, lines 33-36:
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@C,object(4,0)) allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) mutshared(4,0) immshared(6)
 // Same pair, wrong funder first: also rejected.
 //> 0: sui::allowance::spend_balance<sui::sui::SUI>(Input(2), Input(0), Input(3));
 //> 1: sui::allowance::spend_balance<sui::sui::SUI>(Input(2), Input(1), Input(3));
 Error: Error checking transaction input objects: Invalid withdraw reservation: Declared funder @C does not match the funder of allowance object(4,0)
 
-task 7, lines 37-38:
+task 7, lines 38-39:
 //# view-object 4,0
 Owner: Shared( 3 )
 Version: 3

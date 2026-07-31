@@ -20,9 +20,10 @@
 
 //# create-checkpoint
 
-//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[99999999999999] vector[] vector[]
+//# programmable --sender A --inputs b"dup" @B vector[10000u256] vector[] vector[99999999999999]
 // A issues an allowance to B: 10000 lifetime cap.
-//> 0: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6));
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 
 //# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@C,object(4,0)) mutshared(4,0) immshared(6)
 // Correct funder first, wrong funder second: rejected at signing.
