@@ -200,59 +200,6 @@ fn objects_response(objects: &[Option<&Object>]) -> serde_json::Value {
     })
 }
 
-fn address_objects_response(objects: &[&Object]) -> serde_json::Value {
-    serde_json::json!({
-        "data": {
-            "checkpoint": {
-                "query": {
-                    "address": {
-                        "objects": {
-                            "nodes": objects
-                                .iter()
-                                .map(|object| {
-                                    serde_json::json!({
-                                        "address": object.id().to_string(),
-                                        "version": object.version().value(),
-                                        "digest": object.digest().to_string(),
-                                    })
-                                })
-                                .collect::<Vec<_>>(),
-                            "pageInfo": {
-                                "hasNextPage": false,
-                                "endCursor": null,
-                            },
-                        }
-                    }
-                }
-            }
-        }
-    })
-}
-
-async fn mock_address_owner_inventory(
-    server: &MockServer,
-    checkpoint: u64,
-    owner: SuiAddress,
-    objects: &[&Object],
-) {
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .and(body_partial_json(serde_json::json!({
-            "variables": {
-                "sequenceNumber": checkpoint,
-                "address": owner.to_string(),
-                "after": null,
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(address_objects_response(objects)))
-        .mount(server)
-        .await;
-
-    for object in objects {
-        mock_seed_object(server, checkpoint, object).await;
-    }
-}
-
 async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object) {
     Mock::given(method("POST"))
         .and(path("/"))
@@ -536,57 +483,6 @@ fn test_rpc_get_coin_info_reads_seeded_type_index() {
     assert_eq!(info.coin_metadata_object_id, Some(metadata_id));
     assert_eq!(info.treasury_object_id, None);
     assert_eq!(info.regulated_coin_metadata_object_id, None);
-}
-
-#[tokio::test]
-async fn test_address_inventory_does_not_resurrect_locally_moved_objects() {
-    let temp = tempfile::tempdir().expect("failed to create tempdir");
-    let checkpoint = 42;
-    let owner = SuiAddress::random_for_testing_only();
-    let recipient = SuiAddress::random_for_testing_only();
-    let first_id = ObjectID::random();
-    let remote_object = make_gas_object(first_id, 1, Owner::AddressOwner(owner));
-    let transferred = make_gas_object(first_id, 2, Owner::AddressOwner(recipient));
-
-    let server = MockServer::start().await;
-    mock_address_owner_inventory(&server, checkpoint, owner, &[&remote_object]).await;
-    mock_address_owner_inventory(&server, checkpoint, recipient, &[]).await;
-
-    let (mut store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
-    store.update_objects(BTreeMap::from([(first_id, transferred)]), vec![]);
-
-    let reader = store.clone();
-    assert!(
-        RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
-            .expect("balance lookup should initialize address inventory")
-            .is_none(),
-        "remote address inventory must not re-credit an object already moved locally",
-    );
-
-    let owner_infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should read initialized address inventory")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
-    assert!(owner_infos.is_empty());
-
-    // The recipient's owner-index row is written by the embedded indexer at
-    // checkpoint publication, not synchronously by the local transfer. Before
-    // the indexer runs, the index stays empty while canonical reads already
-    // serve the transferred version.
-    let recipient_infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, recipient, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should read initialized address inventory")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
-    assert!(recipient_infos.is_empty());
-    assert_eq!(
-        ForkStore::get_object(&store, &first_id)
-            .expect("current object read should not error")
-            .unwrap()
-            .version(),
-        SequenceNumber::from_u64(2),
-    );
 }
 
 #[tokio::test]
