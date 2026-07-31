@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 136;
+const MAX_PROTOCOL_VERSION: u64 = 137;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -385,6 +385,7 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
+// Version 137: Enable allowances on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1238,6 +1239,12 @@ struct FeatureFlags {
     // If true enable unified linkage
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
+
+    // Enable allowance-sourced funds withdrawals (`WithdrawFrom::Allowance`).
+    // Requires `enable_accumulators`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    enable_allowances: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2281,6 +2288,10 @@ impl ProtocolConfig {
 
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
+    }
+
+    pub fn enable_allowances(&self) -> bool {
+        self.feature_flags.enable_allowances && self.enable_accumulators()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4644,6 +4655,11 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;
+                    }
+                }
+                137 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_allowances = true;
                     }
                 }
                 // Use this template when making changes:
