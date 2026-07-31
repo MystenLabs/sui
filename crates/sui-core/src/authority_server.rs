@@ -934,6 +934,15 @@ impl ValidatorService {
                 .get_executed_effects(&tx_digest)
             {
                 let effects_digest = effects.digest();
+                if let Err(error) = state.check_effects_against_previously_signed(
+                    &epoch_store,
+                    &tx_digest,
+                    &effects_digest,
+                    "submit_transaction",
+                ) {
+                    results[idx] = Some(SubmitTxResult::Rejected { error });
+                    continue;
+                }
                 if let Ok(executed_data) = self.complete_executed_data(effects).await {
                     let executed_result = SubmitTxResult::Executed {
                         effects_digest,
@@ -1030,6 +1039,15 @@ impl ValidatorService {
                         .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
+                        if let Err(error) = state.check_effects_against_previously_signed(
+                            &epoch_store,
+                            &tx_digest,
+                            &effects_digest,
+                            "submit_transaction",
+                        ) {
+                            results[idx] = Some(SubmitTxResult::Rejected { error });
+                            continue;
+                        }
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
                             results[idx] = Some(SubmitTxResult::Executed {
                                 effects_digest,
@@ -1133,6 +1151,15 @@ impl ValidatorService {
                         .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
+                        if let Err(error) = state.check_effects_against_previously_signed(
+                            &epoch_store,
+                            &tx_digest,
+                            &effects_digest,
+                            "submit_transaction",
+                        ) {
+                            results[idx] = Some(SubmitTxResult::Rejected { error });
+                            continue;
+                        }
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
                             let executed_result = SubmitTxResult::Executed {
                                 effects_digest,
@@ -1733,6 +1760,12 @@ impl ValidatorService {
                 ) => {
                 let effects = effects_result?.pop().unwrap();
                 let effects_digest = effects.digest();
+                self.state.check_effects_against_previously_signed(
+                    epoch_store,
+                    &tx_digest,
+                    &effects_digest,
+                    "wait_for_effects",
+                )?;
                 let details = if request.include_details {
                     Some(self.complete_executed_data(effects).await?)
                 } else {

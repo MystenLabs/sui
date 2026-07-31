@@ -350,8 +350,8 @@ pub struct AuthorityPerEpochStore {
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
     /// In-memory cache of signed effects digests. Populated from disk at startup, updated on
-    /// insert, and pruned on checkpoint finalization. Avoids disk reads on the hot execution path
-    /// where the vast majority of lookups return None.
+    /// insert, and pruned on checkpoint finalization. Consulted when reporting effects over
+    /// RPC to refuse reporting effects that differ from previously signed effects.
     signed_effects_digests_cache: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Cancellation token used to signal epoch termination to all in-flight tasks.
@@ -441,10 +441,10 @@ pub struct AuthorityEpochTables {
     effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
 
     /// When we sign a TransactionEffects, we must record the digest of the effects in order
-    /// to detect and prevent equivocation when re-executing a transaction that may not have been
-    /// committed to disk.
+    /// to refuse to sign different effects for the same transaction later, e.g. after a
+    /// re-execution of an uncommitted transaction produced divergent results.
     /// Entries are removed from this table after the transaction in question has been committed
-    /// to disk.
+    /// to a checkpoint.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Next available shared object versions for each shared object.
@@ -1719,6 +1719,26 @@ impl AuthorityPerEpochStore {
         effects_digest: &TransactionEffectsDigest,
         effects_signature: &AuthoritySignInfo,
     ) -> SuiResult {
+        // The entry guard serializes concurrent signers of the same transaction, so at most one
+        // effects digest can ever be recorded per transaction within an epoch.
+        match self.signed_effects_digests_cache.entry(*tx_digest) {
+            dashmap::mapref::entry::Entry::Occupied(entry) => {
+                if entry.get() != effects_digest {
+                    return Err(SuiErrorKind::GenericAuthorityError {
+                        error: format!(
+                            "Refusing to report effects for transaction {tx_digest}: effects \
+                             digest {effects_digest} differs from previously signed effects \
+                             digest {}",
+                            entry.get()
+                        ),
+                    }
+                    .into());
+                }
+            }
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                entry.insert(*effects_digest);
+            }
+        }
         let tables = self.tables()?;
         let mut batch = tables.effects_signatures.batch();
         batch.insert_batch(&tables.effects_signatures, [(tx_digest, effects_signature)])?;
@@ -1727,8 +1747,6 @@ impl AuthorityPerEpochStore {
             [(tx_digest, effects_digest)],
         )?;
         batch.write()?;
-        self.signed_effects_digests_cache
-            .insert(*tx_digest, *effects_digest);
         Ok(())
     }
 
