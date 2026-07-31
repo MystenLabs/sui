@@ -397,12 +397,8 @@ impl KvLoader {
         }
     }
 
-    /// Load a transaction's effects as rendered by the ledger service. The rendered proto
-    /// carries fields that cannot be derived from the effects BCS client-side (object type
-    /// annotations joined from the transaction's object set, and runtime-loaded objects, which
-    /// are stored outside the effects). Returns `None` for the Bigtable and Postgres backends,
-    /// which have no rendering server — callers are expected to fall back to converting native
-    /// effects locally.
+    /// Load a transaction's effects as rendered by the ledger service, otherwise `None`, as these
+    /// backends do not render additional data.
     pub async fn load_one_rendered_effects(
         &self,
         digest: TransactionDigest,
