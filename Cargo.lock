@@ -15695,6 +15695,7 @@ dependencies = [
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tonic 0.14.6",
  "tower 0.5.3",
  "tracing",
