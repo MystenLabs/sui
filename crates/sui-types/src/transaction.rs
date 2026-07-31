@@ -204,6 +204,11 @@ pub enum WithdrawFrom {
     Sender,
     /// Withdraw from the sponsor of the transaction (gas owner).
     Sponsor,
+    /// Withdraw from `funder`'s balance under an `Allowance` granted to the sender.
+    SenderAllowance {
+        funder: SuiAddress,
+        allowance: ObjectID,
+    },
     // TODO(address-balances): Add more options here, such as multi-party withdraws.
 }
 
@@ -226,10 +231,27 @@ impl FundsWithdrawalArg {
         }
     }
 
+    /// Withdraws from `Balance<balance_type>` in `funder`'s address, gated by the
+    /// allowance object.
+    pub fn balance_from_allowance(
+        amount: u64,
+        balance_type: TypeTag,
+        funder: SuiAddress,
+        allowance: ObjectID,
+    ) -> Self {
+        Self {
+            reservation: Reservation::MaxAmountU64(amount),
+            type_arg: WithdrawalTypeArg::Balance(balance_type),
+            withdraw_from: WithdrawFrom::SenderAllowance { funder, allowance },
+        }
+    }
+
+    /// The account debited by this withdrawal
     pub fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
-        match self.withdraw_from {
+        match &self.withdraw_from {
             WithdrawFrom::Sender => tx.sender(),
             WithdrawFrom::Sponsor => tx.gas_owner(),
+            WithdrawFrom::SenderAllowance { funder, .. } => *funder,
         }
     }
 }
@@ -3445,6 +3467,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     WithdrawFrom::Sponsor => {
                         return Err(UserInputError::InvalidWithdrawReservation {
                             error: "Explicit sponsor withdrawals are not yet supported".to_string(),
+                        }
+                        .into());
+                    }
+                    WithdrawFrom::SenderAllowance { .. } => {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Allowance withdrawals are not yet supported".to_string(),
                         }
                         .into());
                     }
