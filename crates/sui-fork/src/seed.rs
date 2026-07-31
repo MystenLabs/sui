@@ -23,11 +23,11 @@ use anyhow::Context as _;
 use anyhow::Error;
 use anyhow::bail;
 use itertools::Itertools as _;
-use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::warn;
 
+use move_core_types::language_storage::TypeTag;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
@@ -41,13 +41,17 @@ use crate::gql::GraphQLClient;
 use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 
+/// Objects hydrated per remote round-trip. The load commits as one batch
+/// regardless; this only bounds the size of an individual GraphQL query.
+const HYDRATE_CHUNK: usize = 50;
+
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
 pub struct SeedInput {
     /// Addresses whose owned objects should be recorded in the seed manifest.
-    pub addresses: Vec<SuiAddress>,
+    pub addresses: BTreeSet<SuiAddress>,
     /// Object IDs to fetch and seed when they are owned by an address.
-    pub object_ids: Vec<ObjectID>,
+    pub object_ids: BTreeSet<ObjectID>,
 }
 
 /// Object reference recorded in the manifest and hydrated by the seed load.
@@ -160,22 +164,15 @@ pub(crate) async fn prepare_seed_manifest(
     Ok(manifest)
 }
 
-/// Objects hydrated per remote round-trip. The load commits as one batch
-/// regardless; this only bounds the size of an individual GraphQL query.
-const HYDRATE_CHUNK: usize = 50;
-
 /// Load every manifest entry into the rpc-store with its full derived-index
 /// surface, once, before the fork executes anything.
 ///
-/// The manifest holds object references, not objects: establishing *which*
-/// objects an address held is the part that has to be complete and has to
-/// happen while the question is still answerable, and it is already done by
-/// the time this runs. What is left is to fetch what each of those objects
-/// contains — an exact version, and so an immutable key — and hand it to the
-/// stock `Restore` pipelines.
+/// The manifest holds object references, not objects. This function will fetch each object by its
+/// version and id, and then pass them to be restored into the local store (RocksDB) to reconstruct
+/// the owned object indexes and other various derived indexes.
 ///
 /// Runs at most once per fork directory. `Balance` accumulates through a merge
-/// operator, so a second pass would double-count every seeded coin; the load
+/// operator, so a second pass would double-count every seeded coin. The load
 /// commits its own completion marker atomically with the rows to make that
 /// unrepeatable rather than merely unlikely.
 pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> Result<(), Error> {
@@ -197,31 +194,12 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
     store.local_store().restore_seed_objects(&objects)
 }
 
-fn dedupe_addresses(addresses: &[SuiAddress]) -> Vec<SuiAddress> {
-    addresses
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
-}
-
-fn dedupe_object_ids(object_ids: &[ObjectID]) -> Vec<ObjectID> {
-    object_ids
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
-}
-
 /// Returns the lowest checkpoint at which the remote can still enumerate
 /// object ownership.
 ///
-/// The remote only retains ownership enumeration for a recent window of
-/// checkpoints (`serviceConfig.availableRange` for objects — roughly the last
-/// hour on the hosted GraphQL endpoints). Fork checkpoints below this bound
-/// cannot be address-seeded; genuine query failures surface as errors.
+/// The remote only retains ownership enumeration for a recent window of checkpoints
+/// (`serviceConfig.availableRange` for owned object data it's roughly the last hour on the hosted
+/// GraphQL endpoints). Fork checkpoints below this bound cannot be address-seeded.
 fn lowest_enumerable_checkpoint(gql: &GraphQLClient) -> Result<CheckpointSequenceNumber, Error> {
     gql.get_lowest_available_checkpoint_objects()
 }
@@ -243,12 +221,11 @@ async fn resolve_address_seed(
 
 /// Resolve the accumulator balance fields belonging to `address`.
 ///
-/// An address balance is not an object the address owns — it is a dynamic field
-/// under the accumulator root — so the owned-object enumeration above never
+/// An address balance is not an object the address owns but a dynamic field
+/// under the accumulator root, so the owned-object enumeration above never
 /// surfaces it, and seeding an address without this would establish its coins
-/// while silently leaving its balance at zero. Worse than merely missing: local
-/// execution *does* maintain address balances, so a withdrawal would then apply
-/// a delta to a baseline that was never seeded.
+/// while silently leaving its balance at zero. Local execution does maintain address balances, so a
+/// withdrawal would then apply a delta to a baseline that was never seeded.
 ///
 /// The field's id is derivable from `(address, coin type)`, so the only thing
 /// that has to come from the remote is which coin types to derive for, which is
@@ -312,6 +289,7 @@ fn accumulator_field_id(address: SuiAddress, coin_type: &str) -> Result<ObjectID
     Ok(*AccumulatorValue::get_field_id(address, &Balance::type_tag(inner))?.inner())
 }
 
+/// Resolve the requested object ids against the remote source at the fork checkpoint.
 async fn resolve_object_seeds(
     gql: &GraphQLClient,
     checkpoint: CheckpointSequenceNumber,
@@ -345,6 +323,7 @@ async fn resolve_object_seeds(
     Ok(entries)
 }
 
+/// Resolve the requested addresses and object ids against the remote source at the fork checkpoint.
 async fn resolve_seeds(
     input: &SeedInput,
     network: String,
@@ -353,12 +332,11 @@ async fn resolve_seeds(
     let checkpoint = store.forked_at_checkpoint();
     let mut entries = BTreeMap::new();
 
-    // Address seeds are ignored (not fatal) when the fork checkpoint is older
-    // than the remote's ownership-enumeration window: the scan is impossible,
-    // but explicit object seeds still work. The skipped addresses must NOT be
-    // recorded in the manifest: the address list claims a complete scan, and
+    // Address seeds are ignored when the fork checkpoint is older
+    // than the remote's ownership-enumeration window. The skipped addresses must NOT be
+    // recorded in the manifest. The address list claims a complete scan, and
     // claiming one that never ran is worse than recording nothing.
-    let addresses = if input.addresses.is_empty() {
+    let addresses: Vec<SuiAddress> = if input.addresses.is_empty() {
         Vec::new()
     } else {
         let lowest_available = lowest_enumerable_checkpoint(store.gql())?;
@@ -374,7 +352,7 @@ async fn resolve_seeds(
             );
             Vec::new()
         } else {
-            dedupe_addresses(&input.addresses)
+            input.addresses.iter().copied().collect()
         }
     };
     for address in addresses.iter().copied() {
@@ -387,8 +365,10 @@ async fn resolve_seeds(
         }
     }
 
-    let remaining_object_ids: Vec<_> = dedupe_object_ids(&input.object_ids)
-        .into_iter()
+    let remaining_object_ids: Vec<_> = input
+        .object_ids
+        .iter()
+        .copied()
         .filter(|object_id| !entries.contains_key(object_id))
         .collect();
     for entry in resolve_object_seeds(store.gql(), checkpoint, &remaining_object_ids).await? {
@@ -503,16 +483,6 @@ mod tests {
         })
     }
 
-    #[test]
-    fn dedupe_object_ids_sorts_and_removes_duplicates() {
-        let first = ObjectID::random();
-        let second = ObjectID::random();
-        let deduped = dedupe_object_ids(&[second, first, second]);
-
-        assert_eq!(deduped.len(), 2);
-        assert!(deduped[0] < deduped[1]);
-    }
-
     #[tokio::test]
     async fn prepare_seed_manifest_writes_empty_manifest_without_seed_input() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -550,8 +520,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![],
-                object_ids: vec![ObjectID::random()],
+                addresses: BTreeSet::new(),
+                object_ids: BTreeSet::from([ObjectID::random()]),
             },
         )
         .await
@@ -601,8 +571,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![],
-                object_ids: vec![object.id()],
+                addresses: BTreeSet::new(),
+                object_ids: BTreeSet::from([object.id()]),
             },
         )
         .await
@@ -666,8 +636,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![],
-                object_ids: vec![object.id()],
+                addresses: BTreeSet::new(),
+                object_ids: BTreeSet::from([object.id()]),
             },
         )
         .await
@@ -726,8 +696,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![skipped_address],
-                object_ids: vec![object.id()],
+                addresses: BTreeSet::from([skipped_address]),
+                object_ids: BTreeSet::from([object.id()]),
             },
         )
         .await
@@ -889,8 +859,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![owner, empty_owner],
-                object_ids: vec![],
+                addresses: BTreeSet::from([owner, empty_owner]),
+                object_ids: BTreeSet::new(),
             },
         )
         .await
@@ -966,8 +936,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![owner],
-                object_ids: vec![],
+                addresses: BTreeSet::from([owner]),
+                object_ids: BTreeSet::new(),
             },
         )
         .await
@@ -1003,8 +973,8 @@ mod tests {
             &store,
             "custom".to_owned(),
             &SeedInput {
-                addresses: vec![owner],
-                object_ids: vec![],
+                addresses: BTreeSet::from([owner]),
+                object_ids: BTreeSet::new(),
             },
         )
         .await

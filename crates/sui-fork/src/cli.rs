@@ -152,8 +152,8 @@ impl Cli {
                     checkpoint,
                     data_dir,
                     SeedInput {
-                        addresses,
-                        object_ids,
+                        addresses: addresses.into_iter().collect(),
+                        object_ids: object_ids.into_iter().collect(),
                     },
                     rpc_addr,
                     self.json_output,
