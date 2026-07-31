@@ -81,6 +81,8 @@ pub struct AdvanceEpochConfig {
     pub create_authenticator_state_expire: bool,
     /// Controls whether to create deny list state.
     pub create_deny_list_state: bool,
+    /// Controls whether to create package config.
+    pub create_package_config: bool,
     /// Controls whether to create bridge state.
     pub create_bridge_state: bool,
     /// Controls whether to create bridge committee.
@@ -440,6 +442,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
         if config.create_deny_list_state {
             kinds.push(EndOfEpochTransactionKind::new_deny_list_state_create());
+        }
+
+        if config.create_package_config {
+            kinds.push(EndOfEpochTransactionKind::new_package_config_create());
         }
 
         if config.create_bridge_state {

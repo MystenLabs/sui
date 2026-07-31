@@ -17,6 +17,7 @@ mod checked {
     use sui_types::gas::SuiGasStatusAPI;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
+    use sui_types::storage::BackingStore;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
@@ -25,7 +26,8 @@ mod checked {
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
         SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-        SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_PACKAGE_CONFIG_OBJECT_ID,
+        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, package_config,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -86,6 +88,7 @@ mod checked {
         receiving_objects: &ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
         verifier_signing_config: &VerifierSigningConfig,
+        backing_store: &dyn BackingStore,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_status = check_transaction_input_inner(
             protocol_config,
@@ -94,7 +97,11 @@ mod checked {
             &input_objects,
             &[],
         )?;
+
         check_receiving_objects(&input_objects, receiving_objects)?;
+
+        check_package_version_forbid_list(transaction, protocol_config, backing_store)?;
+
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
             transaction,
@@ -115,6 +122,7 @@ mod checked {
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
         verifier_signing_config: &VerifierSigningConfig,
+        backing_store: &dyn BackingStore,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_object_ref = gas_object.compute_object_reference();
         input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
@@ -127,6 +135,9 @@ mod checked {
             &[gas_object_ref],
         )?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
+
+        check_package_version_forbid_list(transaction, protocol_config, backing_store)?;
+
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
             transaction,
@@ -637,6 +648,7 @@ mod checked {
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)
                         | (SUI_DISPLAY_REGISTRY_OBJECT_ID, _)
                         | (SUI_DENY_LIST_OBJECT_ID, _)
+                        | (SUI_PACKAGE_CONFIG_OBJECT_ID, _)
                         | (SUI_BRIDGE_OBJECT_ID, _)
 
                         // System objects that can only be taken immutably
@@ -780,7 +792,7 @@ mod checked {
 
     /// Check package verification timeout
     #[instrument(level = "trace", skip_all)]
-    pub fn check_non_system_packages_to_be_published(
+    fn check_non_system_packages_to_be_published(
         transaction: &TransactionData,
         protocol_config: &ProtocolConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
@@ -826,6 +838,51 @@ mod checked {
                 return Err(err);
             }
         };
+
+        Ok(())
+    }
+
+    fn check_package_version_forbid_list(
+        transaction: &TransactionData,
+        protocol_config: &ProtocolConfig,
+        backing_store: &dyn BackingStore,
+    ) -> SuiResult {
+        if !protocol_config.enable_package_version_forbid_list() {
+            return Ok(());
+        }
+
+        let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() else {
+            return Ok(());
+        };
+
+        // Reject a collected forbidden version, but let collection errors reach execution as invalid
+        // linkage errors instead of denying signing.
+        let Ok((execution_original_ids, resolved_packages)) =
+            sui_execution::collect_unification_information_for_signing(
+                protocol_config,
+                pt,
+                backing_store,
+            )
+        else {
+            return Ok(());
+        };
+
+        for original_id in execution_original_ids {
+            let Some((_, version)) = resolved_packages.get(&original_id) else {
+                continue;
+            };
+            if package_config::is_version_forbidden(
+                original_id.into(),
+                *version,
+                backing_store,
+                None,
+            ) {
+                return Err(UserInputError::TransactionDenied {
+                    error: format!("Package {original_id} version {version} is forbidden"),
+                }
+                .into());
+            }
+        }
 
         Ok(())
     }

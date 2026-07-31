@@ -1379,6 +1379,7 @@
                 "enable_non_exclusive_writes": false,
                 "enable_object_funds_withdraw": false,
                 "enable_order_independent_upgrade_init_linkage": false,
+                "enable_package_version_forbid_list": false,
                 "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
@@ -2277,6 +2278,7 @@
                 "enable_non_exclusive_writes": false,
                 "enable_object_funds_withdraw": false,
                 "enable_order_independent_upgrade_init_linkage": false,
+                "enable_package_version_forbid_list": false,
                 "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
@@ -9521,7 +9523,8 @@
               "DisplayRegistryCreate",
               "AddressAliasStateCreate",
               "WriteAccumulatorStorageCost",
-              "ForwardingAddressRegistryCreate"
+              "ForwardingAddressRegistryCreate",
+              "PackageConfigCreate"
             ]
           },
           {
