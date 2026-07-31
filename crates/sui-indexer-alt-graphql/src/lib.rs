@@ -459,6 +459,7 @@ pub async fn start_rpc(
 
     // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
     // needs a live view of them. Captured before the watermark task is consumed by `run()`.
+    #[cfg(feature = "staging")]
     let subscription_watermarks_rx = watermark_task.watermarks_rx();
 
     let s_system_package_task = system_package_task.run();

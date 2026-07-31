@@ -623,7 +623,7 @@ fn process_transaction(
 /// native transaction contents, tagging it with the checkpoint `timestamp_ms` and `cp_sequence_number`
 /// the proto belongs to (the proto carries these on `timestamp`/`checkpoint` for scanned txs, and the
 /// caller supplies them from the checkpoint summary for streamed txs).
-pub(crate) fn hydrate_executed_transaction(
+fn hydrate_executed_transaction(
     proto: &ProtoExecutedTransaction,
     timestamp_ms: u64,
     cp_sequence_number: u64,
