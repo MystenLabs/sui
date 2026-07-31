@@ -23,7 +23,9 @@ use sui_types::effects::TransactionEvents;
 
 use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
+use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use crate::pg_reader::PgReader;
 
 /// Key for fetching transaction events contents (Events, TimestampMs) by digest.
@@ -102,18 +104,18 @@ impl Loader<TransactionEventsKey> for BigtableReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<TransactionEventsKey> for LedgerGrpcReader {
+impl ChunkedLoader<TransactionEventsKey> for LedgerGrpcReader {
     type Value = TransactionEventsData;
     type Error = Error;
 
-    async fn load(
+    fn chunk_size(&self) -> usize {
+        MAX_BATCH_GET_TRANSACTIONS
+    }
+
+    async fn load_chunk(
         &self,
         keys: &[TransactionEventsKey],
-    ) -> Result<HashMap<TransactionEventsKey, Self::Value>, Self::Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
+    ) -> Result<HashMap<TransactionEventsKey, TransactionEventsData>, Error> {
         let digests = keys.iter().map(|key| key.0.to_string()).collect();
 
         let mut request = proto::BatchGetTransactionsRequest::default();
@@ -169,5 +171,30 @@ impl Loader<TransactionEventsKey> for LedgerGrpcReader {
             })
             .collect::<anyhow::Result<_>>()
             .map_err(Error::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ledger_grpc_reader::test_support::assert_chunked;
+    use crate::ledger_grpc_reader::test_support::mock_reader;
+
+    #[tokio::test]
+    async fn load_chunks_oversized_batches() {
+        let (reader, mock, server) = mock_reader().await;
+        let limit = MAX_BATCH_GET_TRANSACTIONS;
+
+        let keys: Vec<TransactionEventsKey> = (0..limit + 50)
+            .map(|_| TransactionEventsKey(TransactionDigest::random()))
+            .collect();
+
+        let result = reader.load(&keys).await.expect("load should succeed");
+        assert!(result.is_empty());
+
+        let expected: Vec<String> = keys.iter().map(|key| key.0.to_string()).collect();
+        assert_chunked(mock.transaction_batches(), limit, &expected);
+
+        server.abort();
     }
 }

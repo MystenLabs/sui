@@ -20,7 +20,9 @@ use sui_types::digests::TransactionDigest;
 use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
+use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use crate::pg_reader::PgReader;
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
@@ -92,18 +94,18 @@ impl Loader<TransactionKey> for BigtableReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<TransactionKey> for LedgerGrpcReader {
+impl ChunkedLoader<TransactionKey> for LedgerGrpcReader {
     type Value = CheckpointedTransaction;
     type Error = Error;
 
-    async fn load(
+    fn chunk_size(&self) -> usize {
+        MAX_BATCH_GET_TRANSACTIONS
+    }
+
+    async fn load_chunk(
         &self,
         keys: &[TransactionKey],
-    ) -> Result<HashMap<TransactionKey, Self::Value>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
+    ) -> Result<HashMap<TransactionKey, CheckpointedTransaction>, Error> {
         let digests = keys.iter().map(|key| key.0.to_string()).collect();
 
         let mut request = proto::BatchGetTransactionsRequest::default();
@@ -216,18 +218,18 @@ impl Loader<TransactionTimestampKey> for BigtableReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<TransactionTimestampKey> for LedgerGrpcReader {
+impl ChunkedLoader<TransactionTimestampKey> for LedgerGrpcReader {
     type Value = u64;
     type Error = Error;
 
-    async fn load(
+    fn chunk_size(&self) -> usize {
+        MAX_BATCH_GET_TRANSACTIONS
+    }
+
+    async fn load_chunk(
         &self,
         keys: &[TransactionTimestampKey],
-    ) -> Result<HashMap<TransactionTimestampKey, Self::Value>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
+    ) -> Result<HashMap<TransactionTimestampKey, u64>, Error> {
         let digests = keys.iter().map(|key| key.0.to_string()).collect();
 
         let mut request = proto::BatchGetTransactionsRequest::default();
@@ -262,5 +264,48 @@ impl Loader<TransactionTimestampKey> for LedgerGrpcReader {
             results.insert(TransactionTimestampKey(digest), timestamp_ms);
         }
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ledger_grpc_reader::test_support::assert_chunked;
+    use crate::ledger_grpc_reader::test_support::mock_reader;
+
+    #[tokio::test]
+    async fn transaction_load_chunks_oversized_batches() {
+        let (reader, mock, server) = mock_reader().await;
+        let limit = MAX_BATCH_GET_TRANSACTIONS;
+
+        let keys: Vec<TransactionKey> = (0..limit + 50)
+            .map(|_| TransactionKey(TransactionDigest::random()))
+            .collect();
+
+        let result = reader.load(&keys).await.expect("load should succeed");
+        assert!(result.is_empty());
+
+        let expected: Vec<String> = keys.iter().map(|key| key.0.to_string()).collect();
+        assert_chunked(mock.transaction_batches(), limit, &expected);
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn transaction_timestamp_load_chunks_oversized_batches() {
+        let (reader, mock, server) = mock_reader().await;
+        let limit = MAX_BATCH_GET_TRANSACTIONS;
+
+        let keys: Vec<TransactionTimestampKey> = (0..limit + 50)
+            .map(|_| TransactionTimestampKey(TransactionDigest::random()))
+            .collect();
+
+        let result = reader.load(&keys).await.expect("load should succeed");
+        assert!(result.is_empty());
+
+        let expected: Vec<String> = keys.iter().map(|key| key.0.to_string()).collect();
+        assert_chunked(mock.transaction_batches(), limit, &expected);
+
+        server.abort();
     }
 }
