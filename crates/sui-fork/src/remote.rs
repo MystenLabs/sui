@@ -53,7 +53,7 @@ impl RemoteSource {
         &self.gql
     }
 
-    /// Latest version of an object as of the fork checkpoint.
+    /// Fetch an object at its latest version at the fork checkpoint.
     pub(crate) fn latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         self.object_query(
             object_id,
@@ -61,7 +61,7 @@ impl RemoteSource {
         )
     }
 
-    /// Exact object version, only if it existed by the fork checkpoint.
+    /// Fetch an object by version, only if it existed by the fork checkpoint.
     pub(crate) fn object_at_version(
         &self,
         object_id: &ObjectID,
@@ -76,7 +76,7 @@ impl RemoteSource {
         )
     }
 
-    /// Highest object version at or below `version_bound` (bounded child reads).
+    /// Fetch the highest object version at or below `version_bound` (bounded child reads).
     pub(crate) fn object_at_or_before(
         &self,
         object_id: &ObjectID,
@@ -85,6 +85,7 @@ impl RemoteSource {
         self.object_query(object_id, VersionQuery::RootVersion(version_bound))
     }
 
+    /// Fetch an object by ID and version query, only if it existed by the fork checkpoint.
     fn object_query(
         &self,
         object_id: &ObjectID,
@@ -101,11 +102,9 @@ impl RemoteSource {
             .map(|(object, _)| object))
     }
 
-    /// Checkpoint summary and contents by sequence number.
+    /// Fetch checkpoint summary and contents by sequence number.
     ///
-    /// Post-fork sequences return `None` without a remote round-trip: the fork
-    /// has diverged, so upstream checkpoints after the fork point are not part
-    /// of this chain.
+    /// Requests for data post fork checkpoint return `None`.
     pub(crate) fn checkpoint(
         &self,
         sequence: CheckpointSequenceNumber,
@@ -120,12 +119,9 @@ impl RemoteSource {
         self.gql.get_checkpoint(Some(sequence))
     }
 
-    /// Transaction, effects, and finalizing checkpoint by digest.
+    /// Fetch transaction, effects, and finalizing checkpoint by digest.
     ///
-    /// Transaction digests are not ordered, so post-fork requests cannot be
-    /// rejected up front the way sequence-keyed checkpoint reads are. Instead
-    /// the finalizing checkpoint on the remote response is checked, and
-    /// anything executed strictly after the fork point is dropped.
+    /// If the transaction is finalized after the fork checkpoint, `None` is returned.
     pub(crate) fn transaction(
         &self,
         digest: &TransactionDigest,
@@ -142,7 +138,10 @@ impl RemoteSource {
         Ok(Some(info))
     }
 
-    /// Events for a transaction that is known to have emitted some.
+    /// Fetch events for a transaction.
+    ///
+    /// This is only called by [`fetch_and_save_transaction`] and its bounded by the fork checkpoint
+    /// in that call.
     pub(crate) fn transaction_events(
         &self,
         digest: &TransactionDigest,
