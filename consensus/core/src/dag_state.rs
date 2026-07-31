@@ -14,8 +14,8 @@ use std::{
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use itertools::Itertools as _;
-use mysten_common::ZipDebugEqIteratorExt;
-use tokio::time::Instant;
+use mysten_common::{ZipDebugEqIteratorExt, sync::notify_read::NotifyRead};
+use tokio::{sync::watch, time::Instant};
 use tracing::{debug, error, info, trace};
 
 use crate::{
@@ -110,6 +110,16 @@ pub struct DagState {
 
     // The number of cached rounds
     cached_rounds: Round,
+
+    // Wakes waiters registered on a slot when a block is first accepted into it.
+    // Notified under the DagState write lock, after the slot is readable via
+    // `get_uncommitted_blocks_at_slot`, so waiters can register-then-recheck
+    // without missing an acceptance.
+    accepted_slots: Arc<NotifyRead<Slot, ()>>,
+
+    // Publishes GC round advancement, as a terminal wake for slot waiters whose
+    // slot can no longer be filled.
+    gc_round_sender: watch::Sender<Round>,
 }
 
 impl DagState {
@@ -188,7 +198,10 @@ impl DagState {
             store: store.clone(),
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
+            accepted_slots: Arc::new(NotifyRead::new()),
+            gc_round_sender: watch::channel(0).0,
         };
+        state.publish_gc_round();
 
         let mut recovered_blocks = Vec::new();
         for (authority_index, _) in context.committee.authorities() {
@@ -348,6 +361,10 @@ impl DagState {
             .accepted_blocks
             .with_label_values(&[source])
             .inc();
+
+        // Must stay last: waiters that observed an empty slot before this point are
+        // woken only here, and the duplicate early-return above must not re-notify.
+        self.accepted_slots.notify(&Slot::from(block_ref), &());
     }
 
     /// Updates internal metadata for a block.
@@ -1087,6 +1104,10 @@ impl DagState {
 
         self.pending_commit_votes.push_back(commit.reference());
         self.commits_to_write.push(commit);
+
+        // After `last_commit` is set, the advanced GC round is observable by readers,
+        // so it is safe to wake slot waiters that need to give up on GC'ed slots.
+        self.publish_gc_round();
     }
 
     /// Recovers commits to write from storage, at startup.
@@ -1199,6 +1220,24 @@ impl DagState {
     /// from the last committed leader round.
     pub(crate) fn calculate_gc_round(&self, commit_round: Round) -> Round {
         commit_round.saturating_sub(self.context.protocol_config.gc_depth())
+    }
+
+    /// Notifier waking registrants of a slot when a block is first accepted into it.
+    /// Used by minimal-block recovery to wait for missing ancestor slots.
+    pub(crate) fn accepted_slot_notifier(&self) -> Arc<NotifyRead<Slot, ()>> {
+        self.accepted_slots.clone()
+    }
+
+    /// Watches GC round advancement; slot waiters use this as a terminal wake.
+    pub(crate) fn gc_round_receiver(&self) -> watch::Receiver<Round> {
+        self.gc_round_sender.subscribe()
+    }
+
+    fn publish_gc_round(&self) {
+        let gc_round = self.gc_round();
+        if *self.gc_round_sender.borrow() != gc_round {
+            self.gc_round_sender.send_replace(gc_round);
+        }
     }
 
     /// Flushes unpersisted blocks, commits and commit info to storage.
@@ -1392,6 +1431,8 @@ impl DagState {
     #[cfg(test)]
     pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
         self.last_commit = Some(commit);
+        // Keep the GC watch consistent with production `add_commit` behavior.
+        self.publish_gc_round();
     }
 }
 
@@ -3386,5 +3427,82 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(stored_rejected_transactions, rejected_transactions);
+    }
+
+    #[tokio::test]
+    async fn accepted_slot_notify_fires_after_slot_is_readable() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let slot = Slot::from(block.reference());
+        let notifier = dag_state.read().accepted_slot_notifier();
+
+        let mut registration = notifier.register_one(&slot);
+        // Not accepted yet: the registration must stay pending.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), &mut registration)
+                .await
+                .is_err()
+        );
+
+        dag_state.write().accept_block(block.clone());
+
+        tokio::time::timeout(Duration::from_secs(5), registration)
+            .await
+            .expect("registration should be woken by acceptance");
+        // The wake implies the slot is already readable.
+        assert_eq!(
+            dag_state.read().get_uncommitted_blocks_at_slot(slot),
+            vec![block]
+        );
+    }
+
+    #[tokio::test]
+    async fn duplicate_accept_does_not_emit_a_second_slot_wake() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let slot = Slot::from(block.reference());
+        let notifier = dag_state.read().accepted_slot_notifier();
+
+        dag_state.write().accept_block(block.clone());
+
+        // Register after the first acceptance; a duplicate accept must not wake it.
+        let mut registration = notifier.register_one(&slot);
+        dag_state.write().accept_block(block.clone());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), &mut registration)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn gc_round_watch_advances_after_commit_is_visible() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_gc_depth_for_testing(3);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let mut receiver = dag_state.read().gc_round_receiver();
+        assert_eq!(*receiver.borrow(), 0);
+
+        let leader = BlockRef::new(8, AuthorityIndex::new_for_test(1), BlockDigest::MIN);
+        let commit = TrustedCommit::new_for_test(1, CommitDigest::MIN, 100, leader, vec![leader]);
+        dag_state.write().add_commit(commit);
+
+        tokio::time::timeout(Duration::from_secs(5), receiver.changed())
+            .await
+            .expect("GC watch should observe the advancement")
+            .unwrap();
+        assert_eq!(*receiver.borrow(), dag_state.read().gc_round());
+        assert_eq!(dag_state.read().gc_round(), 5);
     }
 }
