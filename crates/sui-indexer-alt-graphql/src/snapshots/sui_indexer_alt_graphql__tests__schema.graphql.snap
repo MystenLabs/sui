@@ -401,6 +401,14 @@ Input for withdrawing funds from an accumulator.
 """
 type BalanceWithdraw {
 	"""
+	The allowance authorizing the withdrawal, if `withdrawFrom` is `ALLOWANCE`.
+	"""
+	allowance: Object
+	"""
+	The account whose funds are withdrawn, if `withdrawFrom` is `ALLOWANCE`.
+	"""
+	funder: Address
+	"""
 	How much to withdraw from the accumulator.
 	"""
 	reservation: WithdrawalReservation
@@ -4675,6 +4683,10 @@ enum WithdrawFrom {
 	The funds are withdrawn from the sponsor's account.
 	"""
 	SPONSOR
+	"""
+	The funds are withdrawn from the account of an allowance's funder, with the transaction sender as its spender. See `BalanceWithdraw.funder` and `BalanceWithdraw.allowance`.
+	"""
+	ALLOWANCE
 }
 
 type WithdrawMaxAmountU64 {

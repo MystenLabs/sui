@@ -2894,10 +2894,16 @@ impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
         };
         let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = value.type_arg;
         message.coin_type = Some(coin_type.to_canonical_string(true));
-        message.set_source(match value.withdraw_from {
+        let source = match value.withdraw_from {
             crate::transaction::WithdrawFrom::Sender => Source::Sender,
             crate::transaction::WithdrawFrom::Sponsor => Source::Sponsor,
-        });
+            crate::transaction::WithdrawFrom::Allowance { funder, allowance } => {
+                message.funder = Some(funder.to_string());
+                message.allowance = Some(allowance.to_string());
+                Source::Allowance
+            }
+        };
+        message.set_source(source);
 
         message
     }

@@ -137,6 +137,12 @@ BalanceWithdraw.type
 BalanceWithdraw.withdrawFrom
   => {}
 
+BalanceWithdraw.funder
+  => {}
+
+BalanceWithdraw.allowance
+  => {}
+
 BridgeCommitteeInitTransaction.bridgeObjectVersion
   => {}
 

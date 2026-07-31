@@ -128,6 +128,12 @@ BalanceChange.coinType
 BalanceChange.amount
   => {}
 
+BalanceWithdraw.allowance
+  => {}
+
+BalanceWithdraw.funder
+  => {}
+
 BalanceWithdraw.reservation
   => {}
 
