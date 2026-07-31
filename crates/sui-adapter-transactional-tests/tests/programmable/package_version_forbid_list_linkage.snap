@@ -1,0 +1,134 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
+---
+processed 18 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-23:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7531600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 25-33:
+//# publish --dependencies DepV1 --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4658800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 35-38:
+//# publish --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3427600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 40:
+//# run DepV1::d::make --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 42-60:
+//# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 7873600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, line 61:
+//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 1 --sender A
+created: object(6,0), object(6,1), object(6,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 11392400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, lines 63-65:
+//# programmable --sender A --inputs object(4,0)
+// Root's executable dependency resolves to forbidden Dep v1, so signing rejects this.
+//> Root::r::public_go(Input(0));
+Error: Error checking transaction input objects: Transaction is denied: Package object(1,0) version 1 is forbidden
+
+task 8, lines 67-70:
+//# programmable --sender A --inputs object(4,0)
+// DepV2 pins Dep exact(2), lifting Root's at_least(1) dependency to allowed v2.
+//> 0: Root::r::public_go(Input(0));
+//> 1: DepV2::d::ping();
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 9, lines 72-74:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 8
+Contents: DepV1::d::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 2u64,
+}
+
+task 10, lines 75-92:
+//# upgrade --package DepV2 --upgrade-capability 1,1 --sender A
+created: object(10,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 7873600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 11, lines 93-95:
+//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+created: object(11,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6460000,  storage_rebate: 3980196, non_refundable_storage_fee: 40204
+
+task 12, line 96:
+//# run Generic::g::use_type --type-args DepV2::d::B --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, lines 98-101:
+//# programmable --sender A --inputs object(4,0)
+// The same defining-ID type argument lifts Root's executable dependency to forbidden v2.
+//> 0: Root::r::public_go(Input(0));
+//> 1: Generic::g::use_type<DepV2::d::B>();
+Error: Error checking transaction input objects: Transaction is denied: Package object(1,0) version 2 is forbidden
+
+task 14, lines 103-107:
+//# programmable --sender A --inputs object(4,0)
+// Referring to B through v3 still uses its v2 defining ID, so it has the same forbidden v2
+// executable dependency.
+//> 0: Root::r::public_go(Input(0));
+//> 1: Generic::g::use_type<DepV3::d::B>();
+Error: Error checking transaction input objects: Transaction is denied: Package object(1,0) version 2 is forbidden
+
+task 15, lines 109-113:
+//# programmable --sender A --inputs object(4,0)
+// The direct v3 call raises Root's v1 and B's defining-ID v2 constraints to allowed v3.
+//> 0: Root::r::public_go(Input(0));
+//> 1: Generic::g::use_type<DepV3::d::B>();
+//> 2: DepV3::d::ping();
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 16, line 115:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 12
+Contents: DepV1::d::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 3u64,
+}
+
+task 17, lines 117-121:
+//# programmable --sender A --inputs object(4,0)
+// Linkage collection fails on the exact/exact conflict, so signing fails open and execution
+// reports InvalidLinkage instead of TransactionDenied.
+//> 0: Root::r::entry_go(Input(0));
+//> 1: DepV2::d::ping();
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Debug of error: InvalidLinkage at command Some(1)

@@ -21,7 +21,8 @@ use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
-    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_PACKAGE_CONFIG_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 
 /// Well-known shared system objects whose initial shared version is recorded in
@@ -32,6 +33,7 @@ const SYSTEM_SHARED_OBJECT_IDS: &[ObjectID] = &[
     SUI_AUTHENTICATOR_STATE_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
+    SUI_PACKAGE_CONFIG_OBJECT_ID,
     SUI_BRIDGE_OBJECT_ID,
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     SUI_COIN_REGISTRY_OBJECT_ID,
@@ -269,6 +271,10 @@ impl EpochStartConfiguration {
 
     pub fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         self.system_object_initial_shared_version(SUI_DENY_LIST_OBJECT_ID)
+    }
+
+    pub fn package_config_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.system_object_initial_shared_version(SUI_PACKAGE_CONFIG_OBJECT_ID)
     }
 
     pub fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber> {

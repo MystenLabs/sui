@@ -594,6 +594,11 @@ mod checked {
                                 "EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1"
                             );
                         }
+                        EndOfEpochTransactionKind::PackageConfigCreate => {
+                            panic!(
+                                "EndOfEpochTransactionKind::PackageConfigCreate should not exist in v1"
+                            );
+                        }
                         EndOfEpochTransactionKind::BridgeStateCreate(_) => {
                             panic!(
                                 "EndOfEpochTransactionKind::BridgeStateCreate should not exist in v1"
