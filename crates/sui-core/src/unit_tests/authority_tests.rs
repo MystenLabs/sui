@@ -80,11 +80,12 @@ use crate::{
     authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap,
     consensus_test_utils::CapturedTransactions,
 };
+use sui_types::transaction::CancelledVersion;
 
 use super::*;
 
 pub use crate::authority::authority_test_utils::*;
-use crate::authority::shared_object_version_manager::AssignedVersions;
+use crate::authority::shared_object_version_manager::{AssignedVersion, AssignedVersions};
 use std::collections::HashMap;
 use sui_types::transaction::TransactionKey;
 
@@ -4684,7 +4685,10 @@ async fn test_shared_object_transaction_ok() {
             }
         })
         .expect("Shared object must be assigned a version");
-    assert_eq!(shared_object_version, OBJECT_START_VERSION);
+    assert_eq!(
+        shared_object_version,
+        AssignedVersion::Assigned(OBJECT_START_VERSION)
+    );
 
     // Finally (Re-)execute the contract should succeed.
     authority
@@ -4802,7 +4806,7 @@ async fn test_consensus_commit_prologue_generation() {
                 if id == &SUI_CLOCK_OBJECT_ID
                     && initial_shared_version == &SUI_CLOCK_OBJECT_SHARED_VERSION
                 {
-                    Some(*seq)
+                    Some(seq.sequence_number())
                 } else {
                     None
                 }
@@ -6309,14 +6313,14 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
                     shared_objects[0].id(),
                     shared_objects[0].owner().start_version().unwrap()
                 ),
-                SequenceNumber::CONGESTED
+                AssignedVersion::Cancelled(CancelledVersion::Congested)
             ),
             (
                 (
                     shared_objects[1].id(),
                     shared_objects[1].owner().start_version().unwrap()
                 ),
-                SequenceNumber::CANCELLED_READ
+                AssignedVersion::Cancelled(CancelledVersion::CancelledRead)
             )
         ],
         shared_object_version.shared_object_versions
@@ -6355,7 +6359,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Test get_cancelled_objects.
     let (cancelled_objects, cancellation_reason) = input_objects.get_cancelled_objects().unwrap();
     assert_eq!(cancelled_objects, vec![shared_objects[0].id()]);
-    assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
+    assert_eq!(cancellation_reason, CancelledVersion::Congested);
 
     // Find the consensus commit prologue from the round where the cancelled transaction was processed.
     // This prologue should contain the cancelled transaction's shared object version assignment.

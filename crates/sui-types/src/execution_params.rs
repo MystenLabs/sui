@@ -9,7 +9,8 @@ use once_cell::sync::Lazy;
 
 use crate::{
     base_types::SequenceNumber, digests::TransactionDigest, execution_status::CongestedObjects,
-    execution_status::ExecutionErrorKind, transaction::CheckedInputObjects,
+    execution_status::ExecutionErrorKind, transaction::CancelledVersion,
+    transaction::CheckedInputObjects,
 };
 
 /// Execution inputs computed before running a transaction: whether to fail it early (and with
@@ -101,17 +102,19 @@ pub fn get_early_execution_error(
     let cancelled_objects = input_objects.inner().get_cancelled_objects();
     if let Some((cancelled_objects, reason)) = cancelled_objects {
         match reason {
-            SequenceNumber::CONGESTED => {
+            CancelledVersion::Congested => {
                 errors.push(
                     ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
                         congested_objects: CongestedObjects(cancelled_objects),
                     },
                 );
             }
-            SequenceNumber::RANDOMNESS_UNAVAILABLE => {
+            CancelledVersion::RandomnessUnavailable => {
                 errors.push(ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable);
             }
-            _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
+            CancelledVersion::CancelledRead => {
+                panic!("invalid cancellation reason: {reason:?}")
+            }
         }
     }
 
@@ -168,7 +171,7 @@ mod tests {
     use crate::{
         base_types::ObjectID,
         transaction::{
-            CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
+            CancelledVersion, CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
             ObjectReadResultKind, SharedObjectMutability,
         },
     };
@@ -263,7 +266,7 @@ mod tests {
                 mutability: SharedObjectMutability::Immutable,
             },
             object: ObjectReadResultKind::CancelledTransactionSharedObject(
-                SequenceNumber::CONGESTED,
+                CancelledVersion::Congested,
             ),
         }]);
         let result = get_early_execution_error(

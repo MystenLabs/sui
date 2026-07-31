@@ -1899,7 +1899,7 @@ impl AuthorityPerEpochStore {
                         };
                         InputKey::VersionedObject {
                             id: FullObjectID::new(*id, Some(*initial_shared_version)),
-                            version: *version,
+                            version: version.sequence_number(),
                         }
                     }
                     InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
