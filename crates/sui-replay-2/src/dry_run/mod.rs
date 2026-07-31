@@ -7,6 +7,7 @@
 //! replay consumes trusted on-chain transaction data, while a dry-run must first
 //! validate transaction data and its inputs.
 
+mod artifacts;
 mod input_loader;
 mod preparation;
 mod runtime_store;
@@ -32,6 +33,7 @@ use sui_types::{
     transaction::TransactionData,
 };
 
+pub use artifacts::save_local_dry_run_artifacts;
 pub use input_loader::{
     PreparedLocalDryRun, prepare_checked_local_dry_run, protocol_config_for_snapshot,
 };

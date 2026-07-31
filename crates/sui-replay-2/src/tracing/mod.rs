@@ -4,10 +4,7 @@
 //! Tracing utilities.
 //! Mostly deals with directory/file saving and what gets saved in the trace output.
 
-use crate::{
-    artifacts::{Artifact, ArtifactManager},
-    execution::TxnContextAndEffects,
-};
+use crate::artifacts::{Artifact, ArtifactManager};
 use anyhow::{Context, Error};
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::serialize_to_json_string;
@@ -15,8 +12,10 @@ use move_command_line_common::files::MOVE_BYTECODE_EXTENSION;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use move_trace_format::format::MoveTraceBuilder;
-use std::fs;
-use sui_types::object::Data;
+use std::{collections::BTreeMap, fs};
+use sui_types::{
+    base_types::ObjectID, inner_temporary_store::InnerTemporaryStore, object::Data, object::Object,
+};
 
 const BCODE_DIR: &str = "bytecode";
 const SOURCE_DIR: &str = "source";
@@ -26,7 +25,8 @@ const SOURCE_DIR: &str = "source";
 pub fn save_trace_output(
     artifact_manager: &ArtifactManager<'_>,
     trace_builder: MoveTraceBuilder,
-    context_and_effects: &TxnContextAndEffects,
+    object_cache: &BTreeMap<ObjectID, BTreeMap<u64, Object>>,
+    inner_store: &InnerTemporaryStore,
 ) -> Result<(), Error> {
     let trace = trace_builder.into_trace();
     let trace_member = artifact_manager.member(Artifact::Trace);
@@ -34,17 +34,6 @@ pub fn save_trace_output(
         .serialize_move_trace(trace)
         .transpose()?
         .unwrap();
-
-    let TxnContextAndEffects {
-        txn_data: _,
-        execution_effects: _,
-        expected_effects: _,
-        gas_status: _,
-        object_cache,
-        inner_store: tmp_store,
-        checkpoint: _,
-        protocol_version: _,
-    } = context_and_effects;
 
     // grab all packages from the transaction and save them locally for debug
     let mut pkgs = object_cache
@@ -58,7 +47,7 @@ pub fn save_trace_output(
             }
         })
         .collect::<Vec<_>>();
-    for obj in tmp_store.written.values() {
+    for obj in inner_store.written.values() {
         if let Data::Package(pkg) = &obj.data {
             pkgs.push(pkg);
         }
