@@ -46,6 +46,7 @@ use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_rpc_store::CommitterLayer;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::PipelineLayer;
 #[cfg(test)]
@@ -214,7 +215,7 @@ impl ServiceManager {
 
         let committer_config = CommitterConfig::default();
         indexer
-            .add_pipelines(PipelineLayer::all(), committer_config.clone())
+            .add_pipelines(Self::pipeline_layer(), committer_config.clone())
             .await
             .context("failed to register fork rpc-store pipelines")?;
         indexer
@@ -230,6 +231,44 @@ impl ServiceManager {
                 .context("failed to start fork rpc-store indexer")?,
         ));
         Ok(())
+    }
+
+    /// The pipelines the embedded indexer owns.
+    ///
+    /// Only those whose column families the fork does *not* write itself. The
+    /// fork is in the same position as a fullnode running this indexer beside a
+    /// perpetual store: it already holds the raw chain data and serves it
+    /// directly, so re-deriving it here would write every one of those rows
+    /// twice per checkpoint. It has to be the indexer that stands down rather
+    /// than `LocalStore`, because the indexer's own ingestion source is the
+    /// fork's store — [`crate::ingestion::SimulacrumIngestion`] reads each
+    /// checkpoint back out of it — so those rows must already be there before
+    /// ingestion can run at all.
+    ///
+    /// Two of the enabled pipelines are load-bearing in ways that are easy to
+    /// miss. `package_versions` is the *only* writer for a package published
+    /// after the fork point: `apply_local_object_diff` never stages a
+    /// package-version row, so disabling it would silently lose them. `balance`
+    /// accumulates through a merge operator, so it must stay disjoint — the
+    /// fork writes pre-fork balances during the seed load, the indexer writes
+    /// post-fork ones, and any overlap doubles rather than being idempotent.
+    fn pipeline_layer() -> PipelineLayer {
+        PipelineLayer {
+            object_by_owner: Some(CommitterLayer::default()),
+            object_by_type: Some(CommitterLayer::default()),
+            balance: Some(CommitterLayer::default()),
+            package_versions: Some(CommitterLayer::default()),
+            transaction_bitmap: Some(CommitterLayer::default()),
+            event_bitmap: Some(CommitterLayer::default()),
+            epochs: Some(CommitterLayer::default()),
+            // Left off deliberately: `checkpoint_summary`,
+            // `checkpoint_contents`, `checkpoint_seq_by_digest`,
+            // `transactions`, `effects`, `events`, `tx_seq_by_digest`,
+            // `tx_metadata_by_seq`, `objects`, and
+            // `object_version_by_checkpoint` are all written synchronously by
+            // `LocalStore`.
+            ..PipelineLayer::default()
+        }
     }
 
     /// Bare stock reader over the fork's rpc-store, used by tests to assert on
@@ -371,6 +410,60 @@ mod tests {
     use sui_types::digests::get_mainnet_chain_identifier;
 
     use super::*;
+
+    /// The indexer must own exactly the column families `LocalStore` does not
+    /// write, and no others.
+    ///
+    /// Both directions bite silently. Enabling one the fork already writes
+    /// duplicates every row of it per checkpoint — and for `balance`, which
+    /// accumulates through a merge operator, duplication would double the
+    /// value rather than being idempotent. Disabling one the fork does *not*
+    /// write loses those rows outright: `package_versions` is the only writer
+    /// for a package published after the fork point, since
+    /// `apply_local_object_diff` never stages a package-version row.
+    ///
+    /// Neither failure shows up as a test error elsewhere, so the split is
+    /// pinned here.
+    #[test]
+    fn indexer_owns_only_the_pipelines_the_fork_does_not_write() {
+        let layer = ServiceManager::pipeline_layer();
+
+        for (name, enabled) in [
+            ("object_by_owner", layer.object_by_owner.is_some()),
+            ("object_by_type", layer.object_by_type.is_some()),
+            ("balance", layer.balance.is_some()),
+            ("package_versions", layer.package_versions.is_some()),
+            ("transaction_bitmap", layer.transaction_bitmap.is_some()),
+            ("event_bitmap", layer.event_bitmap.is_some()),
+            ("epochs", layer.epochs.is_some()),
+        ] {
+            assert!(enabled, "{name} has no other writer and must stay enabled");
+        }
+
+        for (name, enabled) in [
+            ("checkpoint_summary", layer.checkpoint_summary.is_some()),
+            ("checkpoint_contents", layer.checkpoint_contents.is_some()),
+            (
+                "checkpoint_seq_by_digest",
+                layer.checkpoint_seq_by_digest.is_some(),
+            ),
+            ("transactions", layer.transactions.is_some()),
+            ("effects", layer.effects.is_some()),
+            ("events", layer.events.is_some()),
+            ("tx_seq_by_digest", layer.tx_seq_by_digest.is_some()),
+            ("tx_metadata_by_seq", layer.tx_metadata_by_seq.is_some()),
+            ("objects", layer.objects.is_some()),
+            (
+                "object_version_by_checkpoint",
+                layer.object_version_by_checkpoint.is_some(),
+            ),
+        ] {
+            assert!(
+                !enabled,
+                "{name} is written by LocalStore; enabling it here double-writes every row"
+            );
+        }
+    }
 
     #[test]
     fn open_writes_metadata_and_seeds_chain_identifier() {
