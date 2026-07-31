@@ -551,7 +551,7 @@ impl ForkStore {
     ) -> anyhow::Result<Vec<Object>> {
         self.inner
             .remote
-            .objects_at_fork(object_refs, "seed objects")
+            .fetch_objects_by_obj_refs(object_refs, "seed objects")
     }
 
     /// Seal the staged checkpoint matching `contents` into the rpc-store:

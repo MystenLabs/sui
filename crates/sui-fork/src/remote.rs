@@ -154,7 +154,7 @@ impl RemoteSource {
 
     /// Fetch exact `(id, version)` objects at the fork checkpoint, validating
     /// that every response matches the requested reference.
-    pub(crate) fn objects_at_fork(
+    pub(crate) fn fetch_objects_by_obj_refs(
         &self,
         object_refs: &[ObjectRef],
         description: &str,
