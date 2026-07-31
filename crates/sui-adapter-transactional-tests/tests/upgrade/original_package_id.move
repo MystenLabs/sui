@@ -59,3 +59,20 @@ module solo::m {
 // Mid-upgrade: reading the original package ID with a pending (uncommitted)
 // upgrade aborts with `EUpgradeInProgress` (5).
 //# run helper::h::abort_mid_upgrade --args object(1,1) --sender A
+
+// The native rejects
+//# programmable --sender A --inputs @0xf 1 --dev-inspect
+// ..  unknown package IDs
+//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+
+//# programmable --sender A --inputs @test_v3 4 --dev-inspect
+//.. and known package IDs at nonexistent versions
+//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+
+//# programmable --sender A --inputs @test_v3 2 --dev-inspect
+//.. and known package IDs at incorrect versions
+//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+
+//# programmable --sender A --inputs @test_v3 3 --dev-inspect
+// double check that it works if we pass it the right version
+//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
