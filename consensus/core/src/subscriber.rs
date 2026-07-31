@@ -42,13 +42,65 @@ const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 /// production round rate, comfortably past the arrival-race p99 (~726 ms), which is
 /// the only regime parking is for; anything further diverts to the sampled fetch and
 /// catch-up (replay + sync) owns it.
-const PARKING_ROUND_MARGIN: Round = 32;
+pub(crate) const PARKING_ROUND_MARGIN: Round = 32;
 
-/// Consecutive deep-catch-up diverts tolerated before the subscription resets to
-/// renegotiate full-form service from the sender. Large enough that only a sustained
-/// deficit (not a hiccup) triggers it; at typical receive rates this is well under a
-/// second of sustained deep lag.
-const FALLBACK_RENEGOTIATE_AFTER: u32 = 256;
+/// Node-level catch-up mode with hysteresis: entered at CATCHUP_ENTER_MARGIN behind,
+/// exited within CATCHUP_EXIT_MARGIN of the highest round seen. The wide gap (and a
+/// sender full-form grant bar aligned with the parking margin, far below both)
+/// prevents oscillation at either boundary:
+/// while catching up, acceptance advances in bursts that repeatedly dip the
+/// instantaneous lag, and a mode keyed to one instantaneous threshold flips itself off
+/// mid-recovery. Entry sits well below the hint-retention edge (dag_state_cached_rounds,
+/// 500): a node hovering there can serve most of its stream through hints but pays a
+/// heavy recovery-churn tax for the share it cannot — measured live as a stable
+/// attractor at ~500-570 lag costing ~20% proposal rate; full form is strictly better
+/// anywhere past this margin.
+const CATCHUP_ENTER_MARGIN: Round = 256;
+const CATCHUP_EXIT_MARGIN: Round = 64;
+
+/// Shared across all subscription tasks: catch-up must be a NODE-level mode. A quorum
+/// of chains is needed to accept anything, so renegotiating a few subscriptions to
+/// full form unlocks nothing — all streams must flip together.
+// Production hardening before mainnet (tracked for the PR review): (1) catch-up
+// evidence should be stake-corroborated — `max_received` and the entry trigger accept
+// unverified rounds, so a Byzantine peer can pin the flag or force reconnect churn on
+// an honest node; track per-authority maxima and use the (f+1)-th highest. (2) The
+// enter/exit pair over two Relaxed atomics is not linearizable; a stale exit can drop
+// the flag mid-catch-up (self-heals on the next deep divert, ~one round). A
+// generation counter with compare-exchange closes it.
+struct CatchupMode {
+    /// Highest round observed on any stream (both forms) — the node's tip estimate.
+    max_received: std::sync::atomic::AtomicU32,
+    active: std::sync::atomic::AtomicBool,
+}
+
+impl CatchupMode {
+    fn new() -> Self {
+        Self {
+            max_received: std::sync::atomic::AtomicU32::new(0),
+            active: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    fn observe(&self, round: Round) {
+        self.max_received
+            .fetch_max(round, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn is_active(&self) -> bool {
+        self.active.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn set(&self, active: bool) -> bool {
+        self.active
+            .swap(active, std::sync::atomic::Ordering::Relaxed)
+            != active
+    }
+
+    fn tip_estimate(&self) -> Round {
+        self.max_received.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
 
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
@@ -78,6 +130,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     hint_cache: Arc<HintCache>,
     park_commands: monitored_mpsc::Sender<ParkCommand>,
     hint_commands: monitored_mpsc::Sender<Slot>,
+    catchup: Arc<CatchupMode>,
     recovery_manager: Mutex<Option<JoinHandle<()>>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
@@ -134,6 +187,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             hint_cache,
             park_commands,
             hint_commands,
+            catchup: Arc::new(CatchupMode::new()),
             recovery_manager: Mutex::new(Some(recovery_task)),
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
@@ -155,6 +209,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let hint_cache = self.hint_cache.clone();
         let park_commands = self.park_commands.clone();
         let hint_commands = self.hint_commands.clone();
+        let catchup = self.catchup.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -167,6 +222,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             hint_cache,
             park_commands,
             hint_commands,
+            catchup,
             peer,
         )));
     }
@@ -308,29 +364,29 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
     /// a full block's digest is a hash of its bytes; a minimal block carries its claimed
     /// digest. Identity is validated (author == authenticated peer, current epoch)
     /// before insertion so a peer can only hint its own slots. Newly inserted hints wake
-    /// any blocks parked on that slot.
+    /// any blocks parked on that slot. Returns the validated identity.
     fn publish_hint(
         context: &Context,
         hint_cache: &HintCache,
         hint_commands: &monitored_mpsc::Sender<Slot>,
         peer: AuthorityIndex,
         block: &ExtendedSerializedBlock,
-    ) {
+    ) -> Option<BlockRef> {
         let identity = match &block.minimal {
             Some(minimal) => {
                 // Same pre-decode cap as inflation: hint extraction must not become a
                 // parse-DoS bypass around it.
                 if minimal.len() > Self::max_minimal_size(context) {
-                    return;
+                    return None;
                 }
                 minimal_block::peek_identity(minimal, &context.committee, peer)
             }
             None => {
                 let Ok(signed) = bcs::from_bytes::<SignedBlock>(&block.block) else {
-                    return;
+                    return None;
                 };
                 if signed.author() != peer || signed.epoch() != context.committee.epoch() {
-                    return;
+                    return None;
                 }
                 Some(BlockRef::new(
                     signed.round(),
@@ -339,9 +395,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 ))
             }
         };
-        let Some(identity) = identity else {
-            return;
-        };
+        let identity = identity?;
         let slot = Slot::from(identity);
         let outcome = hint_cache.insert(slot, identity.digest);
         context
@@ -360,6 +414,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .with_label_values(&[context.committee.authority(peer).hostname.as_str()])
                 .inc();
         }
+        Some(identity)
     }
 
     async fn subscription_loop(
@@ -371,6 +426,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         hint_cache: Arc<HintCache>,
         park_commands: monitored_mpsc::Sender<ParkCommand>,
         hint_commands: monitored_mpsc::Sender<Slot>,
+        catchup: Arc<CatchupMode>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -465,7 +521,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .set(1);
 
             let mut malformed_blocks: u32 = 0;
-            let mut deep_catchup_streak: u32 = 0;
             'stream: loop {
                 match blocks.next().await {
                     Some(block) => {
@@ -478,7 +533,25 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
-                        Self::publish_hint(&context, &hint_cache, &hint_commands, peer, &block);
+                        if let Some(identity) =
+                            Self::publish_hint(&context, &hint_cache, &hint_commands, peer, &block)
+                        {
+                            catchup.observe(identity.round);
+                            // Exit evaluation runs only while active (laggards pay one
+                            // DAG read per block; the healthy path pays two atomics).
+                            if catchup.is_active()
+                                && let Some(dag) = dag_state.upgrade()
+                                && catchup
+                                    .tip_estimate()
+                                    .saturating_sub(dag.read().highest_accepted_round())
+                                    < CATCHUP_EXIT_MARGIN
+                                && catchup.set(false)
+                            {
+                                info!(
+                                    "Catch-up complete; streams renegotiate to minimal on lease expiry"
+                                );
+                            }
+                        }
                         let block = match Self::inflate_received_block(
                             &context,
                             &block_inflater,
@@ -525,30 +598,33 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         .minimal_block_recovery_skipped_work
                                         .with_label_values(&["catchup"])
                                         .inc();
-                                    // Deeply behind (past the sender's full-form
-                                    // fallback threshold), only a reconnection can
-                                    // renegotiate the stream to full form — the
+                                    // A block a full DAG-cache window past our tip
+                                    // means the NODE is in catch-up; the mode is
+                                    // shared because a quorum of chains must flip to
+                                    // full form before acceptance can advance. Only a
+                                    // reconnection renegotiates a stream — the
                                     // subscription request is the sole carrier of our
-                                    // position. Reset after a sustained streak; a
-                                    // brief hiccup never crosses this bound.
+                                    // position — so while the mode is active, any
+                                    // subscription still delivering minimal blocks it
+                                    // cannot use resets itself.
                                     if block_ref.round
-                                        > accepted.saturating_add(
-                                            context.parameters.dag_state_cached_rounds as Round,
-                                        )
+                                        > accepted.saturating_add(CATCHUP_ENTER_MARGIN)
+                                        && catchup.set(true)
                                     {
-                                        deep_catchup_streak += 1;
-                                        if deep_catchup_streak >= FALLBACK_RENEGOTIATE_AFTER {
-                                            info!(
-                                                "Resubscribing to peer {} {} for full-form \
-                                                 catch-up ({} rounds behind)",
-                                                peer,
-                                                peer_hostname,
-                                                block_ref.round.saturating_sub(accepted)
-                                            );
-                                            continue 'subscription;
-                                        }
-                                    } else {
-                                        deep_catchup_streak = 0;
+                                        info!(
+                                            "Entering catch-up mode ({} rounds behind)",
+                                            block_ref.round.saturating_sub(accepted)
+                                        );
+                                    }
+                                    if catchup.is_active() {
+                                        info!(
+                                            "Resubscribing to peer {} {} for full-form \
+                                             catch-up ({} rounds behind)",
+                                            peer,
+                                            peer_hostname,
+                                            block_ref.round.saturating_sub(accepted)
+                                        );
+                                        continue 'subscription;
                                     }
                                     let fetch = ParkCommand {
                                         peer,
@@ -566,7 +642,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     let _ = park_commands.try_send(fetch);
                                     continue 'stream;
                                 }
-                                deep_catchup_streak = 0;
                                 let park = ParkCommand {
                                     peer,
                                     block_ref,
@@ -588,10 +663,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 }
                                 continue 'stream;
                             }
-                            Ok(InflateOutcome::Block(block)) => {
-                                deep_catchup_streak = 0;
-                                block
-                            }
+                            Ok(InflateOutcome::Block(block)) => block,
                             Err(e) => {
                                 info!(
                                     "Failed to inflate minimal block from peer {} {}: {}",
@@ -755,6 +827,9 @@ mod test {
     /// blocks the peer can serve to recovery fetches, like the author's store would.
     struct FixedStreamClient {
         blocks: Vec<ExtendedSerializedBlock>,
+        // Served on re-subscriptions instead of `blocks` when set — models a sender
+        // that switches form after a renegotiating handshake.
+        blocks_after_reset: Option<Vec<ExtendedSerializedBlock>>,
         fetchable: Vec<Bytes>,
         subscribe_calls: Mutex<usize>,
         fetch_calls: Mutex<Vec<Vec<BlockRef>>>,
@@ -777,10 +852,13 @@ mod test {
             _last_received: Round,
             _timeout: Duration,
         ) -> ConsensusResult<BlockStream> {
-            *self.subscribe_calls.lock() += 1;
-            Ok(Box::pin(
-                stream::iter(self.blocks.clone()).chain(stream::pending()),
-            ))
+            let mut calls = self.subscribe_calls.lock();
+            *calls += 1;
+            let blocks = match (&self.blocks_after_reset, *calls > 1) {
+                (Some(after), true) => after.clone(),
+                _ => self.blocks.clone(),
+            };
+            Ok(Box::pin(stream::iter(blocks).chain(stream::pending())))
         }
 
         async fn fetch_blocks(
@@ -878,6 +956,7 @@ mod test {
         };
 
         let network_client = Arc::new(FixedStreamClient {
+            blocks_after_reset: None,
             blocks: vec![to_wire(&block_a), to_wire(&block_b)],
             fetchable: vec![block_a.serialized().clone()],
             subscribe_calls: Mutex::new(0),
@@ -990,6 +1069,7 @@ mod test {
                 .build(),
         );
         let network_client = Arc::new(FixedStreamClient {
+            blocks_after_reset: None,
             blocks: vec![ExtendedSerializedBlock {
                 block: block_a.serialized().clone(),
                 minimal: Some(sender_inflater.serialize(&block_a).unwrap()),
@@ -1111,11 +1191,11 @@ mod test {
         assert!(s.network_client.fetch_calls.lock().is_empty());
     }
 
-    /// In catch-up (the block is beyond the node's DAG-cache future window) the block
-    /// is never parked — no wake arrives before the deadline — but it must not vanish
-    /// either: it diverts to the bounded fetch so full blocks keep feeding commit
-    /// votes and the missing-ancestor pool (skipping entirely blinds commit sync and
-    /// freezes the node). The stream keeps flowing throughout.
+    /// A block past the catch-up entry margin flips the node into catch-up mode and
+    /// resets the subscription: the next handshake advertises the lagged position, the
+    /// sender switches to full form, and the very block that triggered the mode
+    /// arrives full on the renegotiated stream — no parking, and no sender fetch
+    /// spent (the reset supersedes the sample).
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn deep_catchup_blocks_skip_recovery() {
         let (context, _keys) = Context::new_for_test(4);
@@ -1140,21 +1220,35 @@ mod test {
                 .set_ancestors_raw(ancestor_refs)
                 .build(),
         );
-        // A later full-form block from the same stream: the skip must not stall or
-        // reset the subscription.
+        // A full-form block served BEFORE the un-inflatable one: full blocks flow
+        // regardless of catch-up handling.
         let block_b = VerifiedBlock::new_for_test(
             crate::block::TestBlock::new(2001, peer.value() as u32).build(),
         );
         let network_client = Arc::new(FixedStreamClient {
-            blocks: vec![
-                ExtendedSerializedBlock {
-                    block: block_a.serialized().clone(),
-                    minimal: Some(sender_inflater.serialize(&block_a).unwrap()),
-                    excluded_ancestors: vec![],
-                },
+            // After the renegotiating reset, the sender serves full form — including
+            // the previously un-inflatable block.
+            blocks_after_reset: Some(vec![
                 ExtendedSerializedBlock {
                     block: block_b.serialized().clone(),
                     minimal: None,
+                    excluded_ancestors: vec![],
+                },
+                ExtendedSerializedBlock {
+                    block: block_a.serialized().clone(),
+                    minimal: None,
+                    excluded_ancestors: vec![],
+                },
+            ]),
+            blocks: vec![
+                ExtendedSerializedBlock {
+                    block: block_b.serialized().clone(),
+                    minimal: None,
+                    excluded_ancestors: vec![],
+                },
+                ExtendedSerializedBlock {
+                    block: block_a.serialized().clone(),
+                    minimal: Some(sender_inflater.serialize(&block_a).unwrap()),
                     excluded_ancestors: vec![],
                 },
             ],
@@ -1187,15 +1281,24 @@ mod test {
         subscriber.subscribe(peer);
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // The un-inflatable block was not parked; it went to the bounded fetch, and
-        // the stream carried on to deliver the next block.
+        // The un-inflatable block was not parked; it went to the bounded fetch (once —
+        // deduplicated across renegotiations), full blocks kept flowing, and the
+        // subscription reset to renegotiate full-form service.
         let received = authority_service.lock().handle_send_block.clone();
-        assert_eq!(received.len(), 1);
-        assert_eq!(&received[0].1.block, block_b.serialized());
-        assert_eq!(
-            network_client.fetch_calls.lock().clone(),
-            vec![vec![block_a.reference()]]
+        assert!(
+            received
+                .iter()
+                .any(|(_, b)| &b.block == block_b.serialized())
         );
+        // The un-inflatable block ultimately arrived FULL via the renegotiated stream —
+        // and no sender fetch was spent on it: the reset supersedes the sample, since
+        // the renegotiated stream re-serves everything past the resume round.
+        assert!(
+            received
+                .iter()
+                .any(|(_, b)| &b.block == block_a.serialized())
+        );
+        assert!(network_client.fetch_calls.lock().is_empty());
         assert_eq!(
             context
                 .metrics
@@ -1204,15 +1307,123 @@ mod test {
                 .get(),
             0
         );
-        assert_eq!(
+        assert!(
             context
                 .metrics
                 .node_metrics
                 .minimal_block_recovery_skipped_work
                 .with_label_values(&["catchup"])
+                .get()
+                >= 1
+        );
+        assert!(*network_client.subscribe_calls.lock() >= 2);
+    }
+
+    /// The mid-lag band (past the parking margin, short of catch-up entry) must be
+    /// coherent: blocks divert to the bounded fetch WITHOUT entering catch-up mode or
+    /// resetting the subscription, and a block exactly AT the margin still parks.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn mid_lag_band_diverts_without_mode_entry() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let peer = context.committee.to_authority_index(2).unwrap();
+
+        let sender_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let mut anc32 = Vec::new();
+        let mut anc100 = Vec::new();
+        for authority in 0..4u32 {
+            let b =
+                VerifiedBlock::new_for_test(crate::block::TestBlock::new(1530, authority).build());
+            anc32.push(b.reference());
+            sender_dag.write().accept_block(b);
+            let b =
+                VerifiedBlock::new_for_test(crate::block::TestBlock::new(1599, authority).build());
+            anc100.push(b.reference());
+            sender_dag.write().accept_block(b);
+        }
+        anc32.sort_by_key(|r| (r.author != peer, r.author));
+        anc100.sort_by_key(|r| (r.author != peer, r.author));
+        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        // Exactly at accepted (1499) + PARKING_ROUND_MARGIN (32): parks.
+        let at_margin = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(1531, peer.value() as u32)
+                .set_ancestors_raw(anc32)
+                .build(),
+        );
+        // In the band (lag ~101): diverts, no mode entry.
+        let in_band = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(1600, peer.value() as u32)
+                .set_ancestors_raw(anc100)
+                .build(),
+        );
+        let full_tail = VerifiedBlock::new_for_test(
+            crate::block::TestBlock::new(1601, peer.value() as u32).build(),
+        );
+        let network_client = Arc::new(FixedStreamClient {
+            blocks_after_reset: None,
+            blocks: vec![
+                ExtendedSerializedBlock {
+                    block: at_margin.serialized().clone(),
+                    minimal: Some(sender_inflater.serialize(&at_margin).unwrap()),
+                    excluded_ancestors: vec![],
+                },
+                ExtendedSerializedBlock {
+                    block: in_band.serialized().clone(),
+                    minimal: Some(sender_inflater.serialize(&in_band).unwrap()),
+                    excluded_ancestors: vec![],
+                },
+                ExtendedSerializedBlock {
+                    block: full_tail.serialized().clone(),
+                    minimal: None,
+                    excluded_ancestors: vec![],
+                },
+            ],
+            fetchable: vec![],
+            subscribe_calls: Mutex::new(0),
+            fetch_calls: Mutex::new(Vec::new()),
+        });
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        receiver_dag
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(
+                crate::block::TestBlock::new(1499, 0).build(),
+            ));
+        let (_accepted_tx, accepted_rx) = broadcast::channel(64);
+        let subscriber = Subscriber::new(
+            context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            accepted_rx,
+        );
+        subscriber.subscribe(peer);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // At-margin block parked (deadline has not fired in paused 100 ms); in-band
+        // block went to fetch; NO subscription reset; the full block flowed through.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
                 .get(),
             1
         );
+        assert_eq!(
+            network_client.fetch_calls.lock().first(),
+            Some(&vec![in_band.reference()])
+        );
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
+        let received = authority_service.lock().handle_send_block.clone();
+        assert_eq!(received.len(), 1);
+        assert_eq!(&received[0].1.block, full_tail.serialized());
     }
 
     /// The receipt-time hint path end-to-end: a parked block heals the moment digests
@@ -1345,6 +1556,7 @@ mod test {
             fetchable.push(block.serialized().clone());
         }
         let network_client = Arc::new(FixedStreamClient {
+            blocks_after_reset: None,
             blocks: wire,
             fetchable,
             subscribe_calls: Mutex::new(0),

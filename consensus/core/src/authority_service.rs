@@ -41,8 +41,10 @@ use crate::{
 /// How long a full-form fallback subscription (serving a lagging subscriber) lives
 /// before the stream is ended so the subscriber reconnects with its current position —
 /// the connection is the only carrier of that position, so this bounds how long a
-/// caught-up subscriber keeps receiving full form.
-const FULL_FORM_FALLBACK_REFRESH: Duration = Duration::from_secs(120);
+/// caught-up subscriber keeps receiving full form. Jittered per subscriber so a region
+/// that entered fallback together does not renegotiate in synchronized waves.
+const FULL_FORM_FALLBACK_REFRESH: Duration = Duration::from_secs(90);
+const FULL_FORM_FALLBACK_REFRESH_JITTER_SECS: u64 = 61;
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
@@ -476,8 +478,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .read()
             .highest_accepted_round()
             .saturating_sub(last_received);
-        let lag_fallback =
-            subscriber_lag > self.context.parameters.dag_state_cached_rounds as Round;
+        // Grant full form to any subscriber beyond the parking margin: past it, a
+        // minimal block that fails inflation cannot be parked (no wake beats the
+        // deadline), so full form is strictly better. Aligning the grant bar with the
+        // margin — rather than any higher threshold — also guarantees a node in
+        // active catch-up can never be renewed back onto minimal mid-recovery,
+        // whatever its instantaneous lag reads.
+        let lag_fallback = subscriber_lag > crate::subscriber::PARKING_ROUND_MARGIN;
         let emit_minimal = self
             .context
             .protocol_config
@@ -523,9 +530,16 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 "Serving full-form blocks to lagging subscriber {peer} \
                  (resumed {subscriber_lag} rounds behind)"
             );
-            Ok(Box::pin(stream.take_until(Box::pin(tokio::time::sleep(
-                FULL_FORM_FALLBACK_REFRESH,
-            )))))
+            // Jitter must differ across THIS subscriber's many senders (not just
+            // across subscribers), or all its leases expire in one synchronized wave.
+            let lease = FULL_FORM_FALLBACK_REFRESH
+                + Duration::from_secs(
+                    (self.context.own_index.value() as u64 * 31 + peer.value() as u64)
+                        % FULL_FORM_FALLBACK_REFRESH_JITTER_SECS,
+                );
+            Ok(Box::pin(
+                stream.take_until(Box::pin(tokio::time::sleep(lease))),
+            ))
         } else {
             Ok(Box::pin(stream))
         }
