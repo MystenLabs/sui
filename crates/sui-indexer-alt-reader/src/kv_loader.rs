@@ -43,7 +43,7 @@ use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
-use crate::transactions::RenderedEffectsKey;
+use crate::transactions::ProtoEffectsKey;
 use crate::transactions::TransactionKey;
 use crate::transactions::TransactionTimestampKey;
 
@@ -404,7 +404,7 @@ impl KvLoader {
         digest: TransactionDigest,
     ) -> Result<Option<grpc::TransactionEffects>, Error> {
         match self {
-            Self::LedgerGrpc(loader) => loader.load_one(RenderedEffectsKey(digest)).await,
+            Self::LedgerGrpc(loader) => loader.load_one(ProtoEffectsKey(digest)).await,
             Self::Bigtable(_) | Self::Pg(_) => Ok(None),
         }
     }

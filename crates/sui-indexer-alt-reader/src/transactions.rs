@@ -37,7 +37,7 @@ pub struct TransactionTimestampKey(pub TransactionDigest);
 /// information that cannot be derived from the effects BCS client-side (object type annotations,
 /// runtime-loaded objects).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RenderedEffectsKey(pub TransactionDigest);
+pub struct ProtoEffectsKey(pub TransactionDigest);
 
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for PgReader {
@@ -248,7 +248,7 @@ impl ChunkedLoader<TransactionTimestampKey> for LedgerGrpcReader {
 }
 
 #[async_trait::async_trait]
-impl ChunkedLoader<RenderedEffectsKey> for LedgerGrpcReader {
+impl ChunkedLoader<ProtoEffectsKey> for LedgerGrpcReader {
     type Value = proto::TransactionEffects;
     type Error = Error;
 
@@ -258,8 +258,8 @@ impl ChunkedLoader<RenderedEffectsKey> for LedgerGrpcReader {
 
     async fn load_chunk(
         &self,
-        keys: &[RenderedEffectsKey],
-    ) -> Result<HashMap<RenderedEffectsKey, Self::Value>, Error> {
+        keys: &[ProtoEffectsKey],
+    ) -> Result<HashMap<ProtoEffectsKey, Self::Value>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
@@ -291,7 +291,7 @@ impl ChunkedLoader<RenderedEffectsKey> for LedgerGrpcReader {
                 continue;
             };
 
-            results.insert(RenderedEffectsKey(digest), effects);
+            results.insert(ProtoEffectsKey(digest), effects);
         }
         Ok(results)
     }
