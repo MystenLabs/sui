@@ -221,12 +221,6 @@ fn input<Mode: ExecutionMode>(
                     }
                 }
             };
-            // Compat inputs are rewritten coin reservations, which always resolve
-            // to sender withdrawals; an allowance here would be a rewriter bug.
-            debug_assert!(
-                !is_withdrawal_compatibility_input
-                    || matches!(source, L::WithdrawalSource::Direct { .. })
-            );
             let ty = env.withdrawal_type_for_source(&source, funds_ty)?;
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {

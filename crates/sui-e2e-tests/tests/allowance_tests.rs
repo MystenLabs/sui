@@ -8,7 +8,8 @@ use move_core_types::{identifier::Identifier, u256::U256};
 use sui_macros::*;
 use sui_simulator::has_mainnet_protocol_config_override;
 use sui_types::{
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID,
     effects::TransactionEffectsAPI,
     execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
     gas_coin::GAS,
@@ -23,6 +24,10 @@ const SPEND: u64 = 1_000_000;
 
 fn balance_sui_type() -> sui_types::TypeTag {
     "0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap()
+}
+
+fn rate_limit_type() -> sui_types::TypeTag {
+    "0x2::allowance::RateLimit".parse().unwrap()
 }
 
 #[sim_test]
@@ -46,14 +51,20 @@ async fn test_allowance_issue_and_spend() {
     // Funder issues an allowance to the spender, capped at SPEND.
     let (_, funder_gas) = test_env.get_sender_and_gas(0);
     let mut builder = ProgrammableTransactionBuilder::new();
+    let no_rate_limit = builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        Identifier::new("option").unwrap(),
+        Identifier::new("none").unwrap(),
+        vec![rate_limit_type()],
+        vec![],
+    );
     let args = vec![
         builder.pure("".to_string()).unwrap(), // name
         builder.pure(spender).unwrap(),
         builder.pure(Some(U256::from(SPEND))).unwrap(), // lifetime_cap
         builder.pure(None::<u64>).unwrap(),             // start_timestamp_ms
         builder.pure(Some(u64::MAX)).unwrap(),          // expiration_timestamp_ms
-        builder.pure(None::<u64>).unwrap(),             // rate_period_ms
-        builder.pure(None::<U256>).unwrap(),            // rate_amount
+        no_rate_limit,
     ];
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
@@ -174,14 +185,20 @@ async fn test_allowance_revoked_mid_flight() {
     // Issue an allowance to the spender, capped at SPEND.
     let (_, funder_gas) = test_env.get_sender_and_gas(0);
     let mut builder = ProgrammableTransactionBuilder::new();
+    let no_rate_limit = builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        Identifier::new("option").unwrap(),
+        Identifier::new("none").unwrap(),
+        vec![rate_limit_type()],
+        vec![],
+    );
     let args = vec![
         builder.pure("mid-flight".to_string()).unwrap(),
         builder.pure(spender).unwrap(),
         builder.pure(Some(U256::from(SPEND))).unwrap(),
         builder.pure(None::<u64>).unwrap(),
         builder.pure(Some(u64::MAX)).unwrap(),
-        builder.pure(None::<u64>).unwrap(),
-        builder.pure(None::<U256>).unwrap(),
+        no_rate_limit,
     ];
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,

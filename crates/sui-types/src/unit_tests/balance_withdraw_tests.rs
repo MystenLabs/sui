@@ -6,7 +6,7 @@ use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     accumulator_root::AccumulatorValue,
-    allowance::{Allowance, RateLimit},
+    allowance::Allowance,
     base_types::{ObjectID, SequenceNumber, SuiAddress, random_object_ref},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     digests::{ChainIdentifier, CheckpointDigest, TransactionDigest},
@@ -449,33 +449,13 @@ fn test_validity_check_counts_coin_reservations_in_num_reservations() {
 
 /// A loaded-input set containing a real shared `Allowance<funds_type>` object,
 /// as `read_objects_for_signing` would produce for a declared shared input.
-/// The lifetime cap is ample; tests exercising limits set their own.
+/// Signing does not read the limit fields; they just give the object a
+/// plausible shape.
 fn allowance_input_objects(
     allowance: ObjectID,
     funder: SuiAddress,
     spender: SuiAddress,
     funds_type: TypeTag,
-) -> InputObjects {
-    capped_allowance_input_objects(
-        allowance,
-        funder,
-        spender,
-        funds_type,
-        Some(U256::from(u64::MAX)),
-        U256::zero(),
-        None,
-    )
-}
-
-/// Like `allowance_input_objects`, with the spend-limiting fields set.
-fn capped_allowance_input_objects(
-    allowance: ObjectID,
-    funder: SuiAddress,
-    spender: SuiAddress,
-    funds_type: TypeTag,
-    lifetime_cap: Option<U256>,
-    current_spend: U256,
-    rate_limit: Option<RateLimit>,
 ) -> InputObjects {
     let contents = Allowance {
         id: UID::new(allowance),
@@ -483,11 +463,11 @@ fn capped_allowance_input_objects(
         funder,
         spender: Some(spender),
         app: None,
-        lifetime_cap,
-        current_spend,
+        lifetime_cap: Some(U256::from(u64::MAX)),
+        current_spend: U256::zero(),
         start_timestamp_ms: None,
         expiration_timestamp_ms: None,
-        rate_limit,
+        rate_limit: None,
     };
     // SAFETY: `Allowance` is key-only, so it has no public transfer.
     let move_object = unsafe {
@@ -632,97 +612,6 @@ fn test_validate_allowance_withdrawals() {
         .validate_allowance_withdrawals(&not_an_allowance)
         .unwrap_err();
     assert!(err.to_string().contains("not a sui::allowance"), "{err}");
-}
-
-#[test]
-fn test_allowance_spend_limit() {
-    let sender = SuiAddress::random_for_testing_only();
-    let funder = SuiAddress::random_for_testing_only();
-    let allowance = ObjectID::random();
-    let tx = |amounts: &[u64]| allowance_tx_with_amounts(sender, funder, allowance, amounts);
-
-    // Lifetime cap 100 with 60 already spent: 40 fits, 41 does not.
-    let lifetime = capped_allowance_input_objects(
-        allowance,
-        funder,
-        sender,
-        balance_gas_type_tag(),
-        Some(U256::from(100u64)),
-        U256::from(60u64),
-        None,
-    );
-    tx(&[40]).validate_allowance_withdrawals(&lifetime).unwrap();
-    let err = tx(&[41])
-        .validate_allowance_withdrawals(&lifetime)
-        .unwrap_err();
-    assert!(err.to_string().contains("spend limit"), "{err}");
-
-    // The limit caps the tx's total, not each withdrawal.
-    tx(&[20, 20])
-        .validate_allowance_withdrawals(&lifetime)
-        .unwrap();
-    let err = tx(&[20, 21])
-        .validate_allowance_withdrawals(&lifetime)
-        .unwrap_err();
-    assert!(err.to_string().contains("spend limit"), "{err}");
-
-    // Rate limit: the full window amount applies; the window's current usage
-    // does not, since the window may reset before execution.
-    let rate = capped_allowance_input_objects(
-        allowance,
-        funder,
-        sender,
-        balance_gas_type_tag(),
-        None,
-        U256::zero(),
-        Some(RateLimit::FixedWindow {
-            period_ms: 1000,
-            limit: U256::from(50u64),
-            spent: U256::from(49u64),
-            window_start_ms: 0,
-        }),
-    );
-    tx(&[50]).validate_allowance_withdrawals(&rate).unwrap();
-    let err = tx(&[51]).validate_allowance_withdrawals(&rate).unwrap_err();
-    assert!(err.to_string().contains("spend limit"), "{err}");
-
-    // Both set: the smaller wins (lifetime remaining 30 vs rate limit 50).
-    let both = capped_allowance_input_objects(
-        allowance,
-        funder,
-        sender,
-        balance_gas_type_tag(),
-        Some(U256::from(100u64)),
-        U256::from(70u64),
-        Some(RateLimit::FixedWindow {
-            period_ms: 1000,
-            limit: U256::from(50u64),
-            spent: U256::zero(),
-            window_start_ms: 0,
-        }),
-    );
-    tx(&[30]).validate_allowance_withdrawals(&both).unwrap();
-    let err = tx(&[31]).validate_allowance_withdrawals(&both).unwrap_err();
-    assert!(err.to_string().contains("spend limit"), "{err}");
-
-    // No limit at all violates the module's issuance invariant; such an
-    // object can only mean a bug, so resolution fails closed.
-    let no_limit = capped_allowance_input_objects(
-        allowance,
-        funder,
-        sender,
-        balance_gas_type_tag(),
-        None,
-        U256::zero(),
-        None,
-    );
-    let err = tx(&[1])
-        .validate_allowance_withdrawals(&no_limit)
-        .unwrap_err();
-    assert!(
-        err.to_string().contains("no lifetime cap or rate limit"),
-        "{err}"
-    );
 }
 
 #[test]

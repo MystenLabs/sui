@@ -8,7 +8,7 @@
 module sui::allowance_tests;
 
 use std::string::String;
-use sui::allowance::{Self, Allowance, AllowanceCap};
+use sui::allowance::{Self, Allowance, AllowanceCap, RateLimit};
 use sui::balance::Balance;
 use sui::clock::{Self, Clock};
 use sui::test_scenario::{Self as ts, Scenario};
@@ -25,6 +25,8 @@ public struct APP2 {}
 const FUNDER: address = @0xF;
 const SPENDER: address = @0x5;
 const SPENDER2: address = @0x52;
+
+const MS_PER_DAY: u64 = 86_400_000;
 
 // Assertions are behavioral: a check holds iff the spend succeeds or aborts
 // as expected. The test `Clock` starts at 0.
@@ -52,8 +54,7 @@ public struct AllowanceBuilder has drop {
     cap: Option<u256>,
     start_ms: Option<u64>,
     expiry_ms: Option<u64>,
-    rate_period_ms: Option<u64>,
-    rate_amount: Option<u256>,
+    rate_limit: Option<RateLimit>,
 }
 
 fun new_allowance(): AllowanceBuilder {
@@ -63,8 +64,7 @@ fun new_allowance(): AllowanceBuilder {
         cap: option::none(),
         start_ms: option::none(),
         expiry_ms: option::some(std::u64::max_value!()),
-        rate_period_ms: option::none(),
-        rate_amount: option::none(),
+        rate_limit: option::none(),
     }
 }
 
@@ -88,42 +88,36 @@ fun expires_at_ms(mut self: AllowanceBuilder, ms: u64): AllowanceBuilder {
     self
 }
 
-/// Period and amount together; the module rejects one without the other.
-fun rate_limit(mut self: AllowanceBuilder, period_ms: u64, amount: u256): AllowanceBuilder {
-    self.rate_period_ms = option::some(period_ms);
-    self.rate_amount = option::some(amount);
+fun rate_limit(mut self: AllowanceBuilder, rate_limit: RateLimit): AllowanceBuilder {
+    self.rate_limit = option::some(rate_limit);
     self
 }
 
 /// Issue an `Allowance<T>` through the real `new` entry function (shares the
 /// allowance, sends the cap to the tx sender).
 fun create<T>(self: AllowanceBuilder, ctx: &mut TxContext) {
-    let AllowanceBuilder { name, spender, cap, start_ms, expiry_ms, rate_period_ms, rate_amount } =
-        self;
+    let AllowanceBuilder { name, spender, cap, start_ms, expiry_ms, rate_limit } = self;
     allowance::new<T>(
         name,
         spender,
         cap,
         start_ms,
         expiry_ms,
-        rate_period_ms,
-        rate_amount,
+        rate_limit,
         ctx,
     );
 }
 
 /// Same, app-bound to `A` through `new_for_app`.
 fun create_for_app<T, A>(self: AllowanceBuilder, ctx: &mut TxContext) {
-    let AllowanceBuilder { name, spender, cap, start_ms, expiry_ms, rate_period_ms, rate_amount } =
-        self;
+    let AllowanceBuilder { name, spender, cap, start_ms, expiry_ms, rate_limit } = self;
     allowance::new_for_app<T, A>(
         name,
         spender,
         cap,
         start_ms,
         expiry_ms,
-        rate_period_ms,
-        rate_amount,
+        rate_limit,
         ctx,
     );
 }
@@ -148,11 +142,18 @@ fun spend(
 }
 
 /// Same, through the real `spend_balance_as_app`.
-fun spend_as_app(alw: &mut Allowance<Balance<TEST>>, id: ID, amount: u256, clock: &Clock) {
+fun spend_as_app(
+    alw: &mut Allowance<Balance<TEST>>,
+    id: ID,
+    amount: u256,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
     let b = alw.spend_balance_as_app(
         allowance::permit(internal::permit<APP>()),
         allowance::new_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, amount),
         clock,
+        ctx,
     );
     b.destroy_for_testing();
 }
@@ -271,7 +272,9 @@ fun test_spend_after_expiry_rejected() {
 #[test]
 fun test_rate_limit_window_resets() {
     test_tx!(FUNDER, |scenario, clock| {
-        new_allowance().rate_limit(100, 500).create<Balance<TEST>>(scenario.ctx());
+        new_allowance()
+            .rate_limit(allowance::fixed_window(100, 500))
+            .create<Balance<TEST>>(scenario.ctx());
 
         scenario.next_tx(SPENDER);
         let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
@@ -290,7 +293,9 @@ fun test_rate_limit_window_resets() {
 #[expected_failure(abort_code = sui::allowance::EExceedsRateLimit)]
 fun test_rate_limit_exceeded_in_window() {
     test_tx!(FUNDER, |scenario, clock| {
-        new_allowance().rate_limit(100, 500).create<Balance<TEST>>(scenario.ctx());
+        new_allowance()
+            .rate_limit(allowance::fixed_window(100, 500))
+            .create<Balance<TEST>>(scenario.ctx());
 
         scenario.next_tx(SPENDER);
         let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
@@ -304,20 +309,313 @@ fun test_rate_limit_exceeded_in_window() {
 }
 
 #[test]
+fun test_fixed_window_grid_stays_anchored() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance()
+            .rate_limit(allowance::fixed_window(100, 500))
+            .create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // Windows are [100, 200) and [200, 300): a mid-window first spend at
+        // t=150 must not move the boundary at 200, so t=210 gets a fresh window.
+        clock.set_for_testing(150);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(210);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EExceedsRateLimit)]
+fun test_fixed_window_idle_gap_resets_once() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance()
+            .rate_limit(allowance::fixed_window(100, 500))
+            .create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        // Ten idle windows grant one fresh window's worth, not ten.
+        clock.set_for_testing(1000);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(1001);
+        spend(&mut alw, id, FUNDER, 1, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+// Calendar dates below in days from the Unix epoch: 2026-01-01 is day 20454.
+// Calendar windows anchor at the first charge and renew on its day-of-month.
+
+#[test]
+fun test_calendar_window_monthly_renews_on_anniversary_day() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::monthly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // First charge 2026-01-15 anchors the cycle; 2026-02-15 renews it.
+        clock.set_for_testing(20468 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20499 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+fun test_calendar_window_grid_stays_anchored() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::monthly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // Anchored Jan 15; a late Feb 20 charge lands mid-window without
+        // re-anchoring, so Mar 15 still opens a fresh window.
+        clock.set_for_testing(20468 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20504 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20527 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EExceedsRateLimit)]
+fun test_calendar_window_holds_until_anniversary_day() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::monthly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // 2026-02-14 crosses a month boundary but not the Jan 15 anniversary:
+        // same window, 400 + 200 -> aborts.
+        clock.set_for_testing(20468 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 400, clock, scenario.ctx());
+        clock.set_for_testing(20498 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 200, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EExceedsRateLimit)]
+fun test_calendar_window_month_boundary_alone_does_not_renew() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::monthly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // A 2026-01-31 charge must not admit another on 2026-02-01; the
+        // window holds until the (clamped) anniversary.
+        clock.set_for_testing(20484 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20485 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 1, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+fun test_calendar_window_clamps_to_month_end() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::monthly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // Jan 31 anchor: February renews on the clamped 28th, March back on
+        // the 31st.
+        clock.set_for_testing(20484 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20512 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20543 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EExceedsRateLimit)]
+fun test_calendar_window_yearly_holds_across_new_year() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::yearly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // A 2026-12-15 charge runs to its anniversary, not the calendar year:
+        // 2027-01-01 is still the same window.
+        clock.set_for_testing(20802 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20819 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 1, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+fun test_calendar_window_yearly_renews_on_anniversary() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::yearly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // 2026-12-15 -> fresh window on 2027-12-15.
+        clock.set_for_testing(20802 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(21167 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+fun test_calendar_window_leap_day_anchor_clamps() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::yearly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // Anchored on 2028-02-29: the 2029 anniversary clamps to Feb 28.
+        clock.set_for_testing(21243 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(21608 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+fun test_calendar_window_quarterly_clamps_across_quarter() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().rate_limit(allowance::quarterly(500)).create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // Anchored 2026-11-30: three months later lands on 2027-02-28 (clamped).
+        clock.set_for_testing(20787 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20877 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EExceedsRateLimit)]
+fun test_calendar_window_two_year_window_holds_at_one_year() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance()
+            .rate_limit(allowance::calendar_window(24, 500))
+            .create<Balance<TEST>>(scenario.ctx());
+
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+
+        // `months` is open-ended: a 24-month window has not rolled at one year.
+        clock.set_for_testing(20468 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 500, clock, scenario.ctx());
+        clock.set_for_testing(20833 * MS_PER_DAY);
+        spend(&mut alw, id, FUNDER, 1, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+// The date helpers mix bases (Hinnant's internals are 0-based, civil output is
+// 1-based, window ordinals are 0-based), so pin the conventions directly.
+
+fun assert_civil(timestamp_ms: u64, year: u64, month: u64, day: u64) {
+    let (y, m, d) = allowance::civil_from_ms(timestamp_ms);
+    assert!(y == year && m == month && d == day);
+}
+
+#[test]
+fun test_civil_from_ms_conventions() {
+    // Month and day are 1-based: timestamp 0 is 1970-01-01, not (0, 0).
+    assert_civil(0, 1970, 1, 1);
+    // Days change at 00:00 UTC.
+    assert_civil(MS_PER_DAY - 1, 1970, 1, 1);
+    assert_civil(MS_PER_DAY, 1970, 1, 2);
+    // January / February sit in the mp - 9, year + 1 branch.
+    assert_civil(20454 * MS_PER_DAY, 2026, 1, 1);
+    assert_civil(21243 * MS_PER_DAY, 2028, 2, 29);
+    // March sits in the mp + 3 branch; mid-month checks the day formula.
+    assert_civil(20532 * MS_PER_DAY, 2026, 3, 20);
+    assert_civil(20453 * MS_PER_DAY, 2025, 12, 31);
+}
+
+#[test]
+fun test_days_in_month_leap_rules() {
+    assert!(allowance::days_in_month(2027, 2) == 28);
+    assert!(allowance::days_in_month(2028, 2) == 29);
+    // Century years are not leap unless divisible by 400.
+    assert!(allowance::days_in_month(2100, 2) == 28);
+    assert!(allowance::days_in_month(2000, 2) == 29);
+    assert!(allowance::days_in_month(2026, 4) == 30);
+    assert!(allowance::days_in_month(2026, 12) == 31);
+}
+
+#[test]
 fun test_app_spend_and_rotate() {
     test_tx!(FUNDER, |scenario, clock| {
         new_allowance().lifetime_cap(1000).create_for_app<Balance<TEST>, APP>(scenario.ctx());
 
-        // App spends on the allowance's behalf; the sender is irrelevant on
-        // this path.
+        // The app permit authorizes the spend, but the tx must still come
+        // from the spender.
+        scenario.next_tx(SPENDER);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        let id = object::id(&alw);
+        spend_as_app(&mut alw, id, 100, clock, scenario.ctx());
+        alw.rotate_spender(allowance::permit(internal::permit<APP>()), SPENDER2);
+        ts::return_shared(alw);
+
+        // Rotation redirects the gate to the new spender.
+        scenario.next_tx(SPENDER2);
+        let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
+        spend_as_app(&mut alw, id, 50, clock, scenario.ctx());
+        ts::return_shared(alw);
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::ENotSpender)]
+fun test_app_spend_wrong_sender_rejected() {
+    test_tx!(FUNDER, |scenario, clock| {
+        new_allowance().lifetime_cap(1000).create_for_app<Balance<TEST>, APP>(scenario.ctx());
+
+        // Even with the app's permit, a non-spender sender cannot spend.
         scenario.next_tx(@0xBEEF);
         let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
         let id = object::id(&alw);
-        spend_as_app(&mut alw, id, 100, clock);
-
-        // App rotates the sign-time gate key; the app path keeps spending.
-        alw.rotate_spender(allowance::permit(internal::permit<APP>()), SPENDER2);
-        spend_as_app(&mut alw, id, 50, clock);
+        spend_as_app(&mut alw, id, 100, clock, scenario.ctx());
         ts::return_shared(alw);
     });
 }
@@ -384,10 +682,7 @@ fun test_name_too_long_rejected() {
             .named(name.substring(0, 128))
             .lifetime_cap(1000)
             .create<Balance<TEST>>(scenario.ctx());
-        new_allowance()
-            .named(name)
-            .lifetime_cap(1000)
-            .create<Balance<TEST>>(scenario.ctx());
+        new_allowance().named(name).lifetime_cap(1000).create<Balance<TEST>>(scenario.ctx());
     });
 }
 
@@ -410,7 +705,6 @@ fun test_cap_only_without_expiration_rejected() {
             option::none(),
             option::none(),
             option::none(),
-            option::none(),
             scenario.ctx(),
         );
     });
@@ -425,26 +719,7 @@ fun test_rate_only_without_expiration_ok() {
             option::none(),
             option::none(),
             option::none(),
-            option::some(100),
-            option::some(500),
-            scenario.ctx(),
-        );
-    });
-}
-
-#[test]
-#[expected_failure(abort_code = sui::allowance::EBadRateLimit)]
-fun test_one_sided_rate_limit_rejected() {
-    test_tx!(FUNDER, |scenario, _clock| {
-        // A period without an amount; the builder cannot express this shape.
-        allowance::new<Balance<TEST>>(
-            b"test allowance".to_string(),
-            SPENDER,
-            option::none(),
-            option::none(),
-            option::none(),
-            option::some(100),
-            option::none(),
+            option::some(allowance::fixed_window(100, 500)),
             scenario.ctx(),
         );
     });
@@ -454,7 +729,29 @@ fun test_one_sided_rate_limit_rejected() {
 #[expected_failure(abort_code = sui::allowance::EBadRateLimit)]
 fun test_zero_rate_period_rejected() {
     test_tx!(FUNDER, |scenario, _clock| {
-        new_allowance().rate_limit(0, 500).create<Balance<TEST>>(scenario.ctx());
+        new_allowance()
+            .rate_limit(allowance::fixed_window(0, 500))
+            .create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EBadRateLimit)]
+fun test_zero_rate_amount_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        new_allowance()
+            .rate_limit(allowance::calendar_window(1, 0))
+            .create<Balance<TEST>>(scenario.ctx());
+    });
+}
+
+#[test]
+#[expected_failure(abort_code = sui::allowance::EBadRateLimit)]
+fun test_zero_calendar_months_rejected() {
+    test_tx!(FUNDER, |scenario, _clock| {
+        new_allowance()
+            .rate_limit(allowance::calendar_window(0, 500))
+            .create<Balance<TEST>>(scenario.ctx());
     });
 }
 
@@ -492,6 +789,7 @@ fun test_wrong_app_permit_rejected() {
             allowance::permit(internal::permit<APP2>()),
             allowance::new_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, 100),
             clock,
+            scenario.ctx(),
         );
         b.destroy_for_testing();
         ts::return_shared(alw);
@@ -507,7 +805,7 @@ fun test_app_spend_on_plain_allowance_rejected() {
         scenario.next_tx(SPENDER);
         let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
         let id = object::id(&alw);
-        spend_as_app(&mut alw, id, 100, clock);
+        spend_as_app(&mut alw, id, 100, clock, scenario.ctx());
         ts::return_shared(alw);
     });
 }

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// SAMPLE / API SKETCH: native allowances. Delegated, bounded, revocable
-/// spending from an address's live balance (no escrow).
+/// Native allowances: delegated, bounded, revocable spending from an
+/// address's live balance (no escrow).
 ///
 /// The core verifies a tx's declared (funder, allowance) source at signing and
 /// hands the PTB an `AllowanceWithdrawal`; the spend paths enforce policy and
@@ -32,12 +32,11 @@ const ENoLimit: vector<u8> = b"Allowance must have a lifetime cap or a rate limi
 #[error(code = 8)]
 const EWrongAllowance: vector<u8> = b"Withdrawal was issued for a different allowance";
 #[error(code = 9)]
-const EBadRateLimit: vector<u8> =
-    b"Rate limit needs a positive period and amount, both set or neither";
+const EBadRateLimit: vector<u8> = b"Rate limit needs a positive period and limit";
 #[error(code = 10)]
 const ENotStarted: vector<u8> = b"Allowance is not active yet; it has a future start timestamp";
 #[error(code = 11)]
-const EHasApp: vector<u8> = b"App-controlled allowance: spending must go through `spend_as_app`";
+const EHasApp: vector<u8> = b"App-bound allowance: spend through `spend_balance_as_app`";
 #[error(code = 12)]
 const EWrongFunder: vector<u8> =
     b"Withdrawal debits a different address than this allowance's funder";
@@ -51,8 +50,11 @@ const EZeroLifetimeCap: vector<u8> = b"Lifetime cap must be greater than zero";
 const EBadTimeWindow: vector<u8> = b"Expiration must be after the start time";
 #[error(code = 17)]
 const ENoExpiration: vector<u8> = b"Allowance must have an expiration or a rate limit";
+#[error(code = 18)]
+const ENotEnabled: vector<u8> = b"Allowances are not enabled";
 
 const MAX_NAME_LENGTH: u64 = 128;
+const MS_PER_DAY: u64 = 86_400_000;
 
 /// Created by the core for a declared allowance source. Only the bound
 /// allowance's spend paths can unpack it. Dropping it is fine: funds only
@@ -70,20 +72,19 @@ public struct Allowance<phantom T> has key {
     /// Always `Some` in the first release.
     /// `Option` so app-bound allowances can later go keyless.
     spender: Option<address>,
-    /// When set, only the app's module can spend and rotate; the signer path
-    /// is disabled and `spender` is just the sign-time gate.
+    /// When set, spends need the app's `Permit` on top of the spender's
+    /// signature, and only the app's module can rotate the spender.
     app: Option<TypeName>,
     /// `None` = no lifetime total; at least one of cap / rate limit must be
     /// set. Amounts are `u256` (matching `Withdrawal.limit`); times are ms.
     lifetime_cap: Option<u256>,
-    /// The total spend, to date, of this allowance. Gets bumped on every spend.
+    /// Cumulative spend, compared against `lifetime_cap`.
     current_spend: u256,
     /// Inclusive activation time; `None` = active on issue.
     start_timestamp_ms: Option<u64>,
     expiration_timestamp_ms: Option<u64>,
     rate_limit: Option<RateLimit>,
-    /// custom label, at most 128 bytes; only present for off-chain consumption
-    /// (adding a short desc or label for an allowance, not consulted by any check)
+    /// Off-chain label, at most 128 bytes; not consulted by any check.
     name: String,
 }
 
@@ -94,14 +95,25 @@ public struct AllowanceCap<phantom T> has key {
     allowance: ID,
 }
 
-/// A tumbling cap: at most `limit` per `period_ms`, the window restarting at
-/// the first spend after it elapses. An enum to leave room for future kinds.
+/// At most `limit` per window. Windows only roll forward, so boundaries never
+/// drift: `FixedWindow` periods tile absolute time from the Unix epoch, while
+/// `CalendarWindow` windows follow the anniversary of the first charge.
 public enum RateLimit has copy, drop, store {
     FixedWindow {
         period_ms: u64,
         limit: u256,
         spent: u256,
         window_start_ms: u64,
+    },
+    CalendarWindow {
+        months: u8,
+        limit: u256,
+        spent: u256,
+        /// Anniversary anchor; stamped by the first successful charge (0 until then).
+        first_charge_ms: u64,
+        /// Windows are numbered from the anchor (0 = first). This is the one
+        /// `spent` accumulated in; a spend landing in a later one resets it.
+        window: u64,
     },
 }
 
@@ -114,6 +126,31 @@ public fun permit<A>(_: internal::Permit<A>): Permit<A> {
     Permit()
 }
 
+/// At most `limit` per `period_ms`, windows aligned to whole periods from the
+/// Unix epoch (a 24h period resets at midnight UTC).
+public fun fixed_window(period_ms: u64, limit: u256): RateLimit {
+    // A zero period resets the window on every spend; a zero limit spends nothing.
+    assert!(period_ms > 0 && limit > 0, EBadRateLimit);
+    RateLimit::FixedWindow { period_ms, limit, spent: 0, window_start_ms: 0 }
+}
+
+/// At most `limit` per `months` civil (UTC) months, anchored at the first
+/// successful charge: windows renew on its day-of-month at 00:00 UTC, clamped
+/// to shorter months (a Jan 31 anchor renews Feb 28, then Mar 31).
+public fun calendar_window(months: u8, limit: u256): RateLimit {
+    assert!(months > 0 && limit > 0, EBadRateLimit);
+    RateLimit::CalendarWindow { months, limit, spent: 0, first_charge_ms: 0, window: 0 }
+}
+
+/// At most `limit` per month, from the first charge.
+public fun monthly(limit: u256): RateLimit { calendar_window(1, limit) }
+
+/// At most `limit` per quarter, from the first charge.
+public fun quarterly(limit: u256): RateLimit { calendar_window(3, limit) }
+
+/// At most `limit` per year, from the first charge.
+public fun yearly(limit: u256): RateLimit { calendar_window(12, limit) }
+
 // `entry`, not `public`: issuance must be an explicit PTB command, so a contract
 // cannot create an allowance funded by the caller inside some other call.
 
@@ -123,8 +160,7 @@ entry fun new<T>(
     lifetime_cap: Option<u256>,
     start_timestamp_ms: Option<u64>,
     expiration_timestamp_ms: Option<u64>,
-    rate_period_ms: Option<u64>,
-    rate_amount: Option<u256>,
+    rate_limit: Option<RateLimit>,
     ctx: &mut TxContext,
 ) {
     share_new<T>(
@@ -134,7 +170,7 @@ entry fun new<T>(
         lifetime_cap,
         start_timestamp_ms,
         expiration_timestamp_ms,
-        build_rate_limit(rate_period_ms, rate_amount),
+        rate_limit,
         ctx,
     );
 }
@@ -146,8 +182,7 @@ entry fun new_for_app<T, A>(
     lifetime_cap: Option<u256>,
     start_timestamp_ms: Option<u64>,
     expiration_timestamp_ms: Option<u64>,
-    rate_period_ms: Option<u64>,
-    rate_amount: Option<u256>,
+    rate_limit: Option<RateLimit>,
     ctx: &mut TxContext,
 ) {
     share_new<T>(
@@ -157,7 +192,7 @@ entry fun new_for_app<T, A>(
         lifetime_cap,
         start_timestamp_ms,
         expiration_timestamp_ms,
-        build_rate_limit(rate_period_ms, rate_amount),
+        rate_limit,
         ctx,
     );
 }
@@ -175,20 +210,21 @@ public fun spend_balance<C>(
     clock: &Clock,
     ctx: &TxContext,
 ): Balance<C> {
-    self.assert_signer(ctx);
-    balance::redeem_funds(self.consume(w, clock))
+    assert!(self.app.is_none(), EHasApp);
+    balance::redeem_funds(self.consume(w, clock, ctx))
 }
 
-/// App path: authorized by `Permit<A>` (matching the allowance's `app`), no
-/// signer required.
+/// App path: authorized by `Permit<A>` (matching the allowance's `app`); the
+/// tx must still come from the spender.
 public fun spend_balance_as_app<C, A>(
     self: &mut Allowance<Balance<C>>,
     _: Permit<A>,
     w: AllowanceWithdrawal<Balance<C>>,
     clock: &Clock,
+    ctx: &TxContext,
 ): Balance<C> {
     self.assert_app<Balance<C>, A>();
-    balance::redeem_funds(self.consume(w, clock))
+    balance::redeem_funds(self.consume(w, clock, ctx))
 }
 
 /// Possession of the matching cap is what authorizes revocation; no signer check.
@@ -209,30 +245,25 @@ public fun rotate_spender<T, A>(self: &mut Allowance<T>, _: Permit<A>, new_spend
     self.spender = option::some(new_spender);
 }
 
-// TODO: Add update endpoints to be able to alter limits, expirations etc.
+// TODO: update endpoints for altering limits, expiration, etc.
 
-/// Signer path: no controlling app, and the tx sender is the spender.
-fun assert_signer<T>(self: &Allowance<T>, ctx: &TxContext) {
-    assert!(self.app.is_none(), EHasApp);
-    assert!(self.spender.contains(&ctx.sender()), ENotSpender);
-}
-
-/// App-path authorization: `A` matches the allowance's controlling app.
 fun assert_app<T, A>(self: &Allowance<T>) {
     assert!(self.app.is_some(), ENoApp);
     assert!(*self.app.borrow() == type_name::with_defining_ids<A>(), EWrongApp);
 }
 
-/// Policy checks + accounting shared by all spend paths; authorization is the
-/// callers' responsibility.
+/// Policy checks + accounting shared by all spend paths. The spender gate
+/// lives here; the app / no-app split stays with the callers.
 fun consume<T: store>(
     self: &mut Allowance<T>,
     w: AllowanceWithdrawal<T>,
     clock: &Clock,
+    ctx: &TxContext,
 ): Withdrawal<T> {
     let AllowanceWithdrawal { allowance, inner } = w;
     assert!(allowance == self.id.to_inner(), EWrongAllowance);
-    // This can only happen if we have a bug in the core, so this is just for in-depth defense.
+    assert!(self.spender.contains(&ctx.sender()), ENotSpender);
+    // Signing already verified the funder; defense in depth against a core bug.
     assert!(inner.owner() == self.funder, EWrongFunder);
     let amount = inner.limit();
     let now = clock.timestamp_ms();
@@ -251,36 +282,81 @@ fun consume<T: store>(
 
     self.current_spend = self.current_spend + amount;
 
-    self.rate_limit.do_mut!(|rl| match (rl) {
-        RateLimit::FixedWindow { period_ms, limit, spent, window_start_ms } => {
-            // Tumbling window: reset once the period has elapsed.
-            if (now >= *window_start_ms + *period_ms) {
-                *window_start_ms = now;
-                *spent = 0;
-            };
-            assert!(*spent + amount <= *limit, EExceedsRateLimit);
-            *spent = *spent + amount;
-        },
-    });
+    self
+        .rate_limit
+        .do_mut!(
+            |rl| match (rl) {
+                RateLimit::FixedWindow { period_ms, limit, spent, window_start_ms } => {
+                    // Roll forward by whole periods only, keeping the epoch grid.
+                    if (now - *window_start_ms >= *period_ms) {
+                        let elapsed_periods = (now - *window_start_ms) / *period_ms;
+                        *window_start_ms = *window_start_ms + elapsed_periods * *period_ms;
+                        *spent = 0;
+                    };
+                    assert!(*spent + amount <= *limit, EExceedsRateLimit);
+                    *spent = *spent + amount;
+                },
+                RateLimit::CalendarWindow { months, limit, spent, first_charge_ms, window } => {
+                    if (*first_charge_ms == 0) {
+                        // The first successful charge anchors the windows; an
+                        // aborted spend unwinds the stamp.
+                        *first_charge_ms = now;
+                    } else {
+                        let k = elapsed_windows(*first_charge_ms, now, *months);
+                        if (k > *window) {
+                            *window = k;
+                            *spent = 0;
+                        };
+                    };
+                    assert!(*spent + amount <= *limit, EExceedsRateLimit);
+                    *spent = *spent + amount;
+                },
+            },
+        );
 
     inner
 }
 
-/// Both `Some` (a limit) or both `None` (no limit); a mismatch aborts.
-fun build_rate_limit(period_ms: Option<u64>, amount: Option<u256>): Option<RateLimit> {
-    assert!(period_ms.is_some() == amount.is_some(), EBadRateLimit);
-    if (period_ms.is_none()) return option::none();
+/// How many whole `months`-month windows have elapsed since `anchor_ms` —
+/// equivalently, the number of the window `now_ms` falls in (0 = first).
+fun elapsed_windows(anchor_ms: u64, now_ms: u64, months: u8): u64 {
+    let (anchor_year, anchor_month, anchor_day) = civil_from_ms(anchor_ms);
+    let (year, month, day) = civil_from_ms(now_ms);
+    let mut elapsed = (year * 12 + month) - (anchor_year * 12 + anchor_month);
+    // A month only fully elapses once the anniversary day arrives, clamped to
+    // month ends (a Jan 31 anchor renews Feb 28). Same-month spends have
+    // day >= anchor_day already; the elapsed > 0 guard is underflow safety.
+    if (elapsed > 0 && day < anchor_day.min(days_in_month(year, month))) {
+        elapsed = elapsed - 1;
+    };
+    elapsed / (months as u64)
+}
 
-    let period_ms = *period_ms.borrow();
-    let limit = *amount.borrow();
-    // A zero period resets the window on every spend; a zero amount spends nothing.
-    assert!(period_ms > 0 && limit > 0, EBadRateLimit);
-    option::some(RateLimit::FixedWindow {
-        period_ms,
-        limit,
-        spent: 0,
-        window_start_ms: 0,
-    })
+/// Civil (year, month, day) in UTC — month and day 1-based, so the epoch is
+/// `(1970, 1, 1)` — via Hinnant's `civil_from_days`; unsigned-only works
+/// because chain timestamps are never pre-epoch.
+public(package) fun civil_from_ms(timestamp_ms: u64): (u64, u64, u64) {
+    let z = timestamp_ms / MS_PER_DAY + 719468;
+    let era = z / 146097;
+    let doe = z % 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let (year, month) = if (mp < 10) (era * 400 + yoe, mp + 3) else (era * 400 + yoe + 1, mp - 9);
+    (year, month, day)
+}
+
+public(package) fun days_in_month(year: u64, month: u64): u64 {
+    if (month == 2) {
+        if (is_leap_year(year)) 29 else 28
+    } else if (month == 4 || month == 6 || month == 9 || month == 11) 30
+    else 31
+}
+
+/// Gregorian rule: every 4th year, except centuries not divisible by 400.
+fun is_leap_year(year: u64): bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 fun share_new<T>(
@@ -293,6 +369,7 @@ fun share_new<T>(
     rate_limit: Option<RateLimit>,
     ctx: &mut TxContext,
 ) {
+    assert!(sui::protocol_config::is_feature_enabled(b"enable_allowances"), ENotEnabled);
     // we do not allow unlimited allowances (TODO: Do we?)
     assert!(lifetime_cap.is_some() || rate_limit.is_some(), ENoLimit);
     assert!(expiration_timestamp_ms.is_some() || rate_limit.is_some(), ENoExpiration);

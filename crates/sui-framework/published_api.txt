@@ -1966,6 +1966,21 @@ RateLimit
 permit
 	public fun
 	0x2::allowance
+fixed_window
+	public fun
+	0x2::allowance
+calendar_window
+	public fun
+	0x2::allowance
+monthly
+	public fun
+	0x2::allowance
+quarterly
+	public fun
+	0x2::allowance
+yearly
+	public fun
+	0x2::allowance
 new
 	entry fun
 	0x2::allowance
@@ -1984,16 +1999,22 @@ revoke
 rotate_spender
 	public fun
 	0x2::allowance
-assert_signer
-	fun
-	0x2::allowance
 assert_app
 	fun
 	0x2::allowance
 consume
 	fun
 	0x2::allowance
-build_rate_limit
+elapsed_windows
+	fun
+	0x2::allowance
+civil_from_ms
+	public(package) fun
+	0x2::allowance
+days_in_month
+	public(package) fun
+	0x2::allowance
+is_leap_year
 	fun
 	0x2::allowance
 share_new
