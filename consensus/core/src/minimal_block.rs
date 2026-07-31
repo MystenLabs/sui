@@ -178,31 +178,6 @@ pub(crate) fn serialize_minimal(
     Ok(minimal.encode_to_vec().into())
 }
 
-/// Cheaply decodes a minimal block's claimed identity — (round, author, claimed digest)
-/// — validating that the author matches the authenticated stream peer and the epoch is
-/// current. Used to publish receipt-time hints; returns None on any irregularity (the
-/// inflation path is where faults are counted and penalized).
-pub(crate) fn peek_identity(
-    serialized: &[u8],
-    committee: &Committee,
-    expected_author: AuthorityIndex,
-) -> Option<BlockRef> {
-    let minimal = MinimalBlock::decode(serialized).ok()?;
-    let claimed_digest: [u8; 32] = minimal.claimed_block_digest.as_ref().try_into().ok()?;
-    let skeleton: Block = bcs::from_bytes(&minimal.block_sans_ancestors).ok()?;
-    if matches!(skeleton, Block::V3(_))
-        || skeleton.author() != expected_author
-        || skeleton.epoch() != committee.epoch()
-    {
-        return None;
-    }
-    Some(BlockRef::new(
-        skeleton.round(),
-        skeleton.author(),
-        BlockDigest(claimed_digest),
-    ))
-}
-
 /// Decodes and inflates a minimal block back into an unverified `SignedBlock` and its
 /// canonical serialized bytes, ready for the normal `verify_and_vote` path.
 ///
