@@ -27,7 +27,7 @@ use crate::data::load_live;
 /// accumulator object's version, and the digest field repurposed as a carrier for (epoch, amount).
 pub(crate) struct AddressBalanceCoin {
     /// Fabricated `Coin` object to render the balance as if it were a coin.
-    pub(crate) contents: Object,    
+    pub(crate) contents: Object,
     pub(crate) object_ref: ObjectRef,
 }
 
