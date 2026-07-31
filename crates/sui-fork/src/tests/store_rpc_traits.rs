@@ -98,7 +98,12 @@ fn ledger_indexes_delegate_to_rpc_store() {
         )
         .expect("transaction should persist");
 
-    let row = RpcIndexes::ledger_tx_seq_digest(&store, tx_sequence_number)
+    // Reached the way the RPC layer reaches them, so this also pins that
+    // `indexes()` hands out something backed by the fork's own rpc store.
+    let indexes = RpcStateReader::indexes(&store).expect("fork should expose rpc indexes");
+
+    let row = indexes
+        .ledger_tx_seq_digest(tx_sequence_number)
         .expect("ledger lookup should read rpc store")
         .expect("ledger row should exist");
     assert_eq!(row.tx_sequence_number, tx_sequence_number);
@@ -106,29 +111,27 @@ fn ledger_indexes_delegate_to_rpc_store() {
     assert_eq!(row.tx_offset, tx_offset);
     assert_eq!(row.checkpoint_number, checkpoint.data().sequence_number);
 
-    let multi = RpcIndexes::ledger_tx_seq_digest_multi_get(&store, &[tx_sequence_number])
+    let multi = indexes
+        .ledger_tx_seq_digest_multi_get(&[tx_sequence_number])
         .expect("multi-get should use ledger lookup");
     assert_eq!(multi, vec![Some(row)]);
 
-    let rows = RpcIndexes::ledger_tx_seq_digest_iter(
-        &store,
-        tx_sequence_number,
-        tx_sequence_number + 1,
-        false,
-    )
-    .expect("ledger iterator should read rpc store")
-    .collect::<Result<Vec<_>, _>>()
-    .expect("ledger iterator should decode rows");
+    let rows = indexes
+        .ledger_tx_seq_digest_iter(tx_sequence_number, tx_sequence_number + 1, false)
+        .expect("ledger iterator should read rpc store")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("ledger iterator should decode rows");
     assert_eq!(rows, vec![row]);
 
-    let transaction_bitmap_rows =
-        RpcIndexes::transaction_bitmap_bucket_iter(&store, vec![1], 0, 1, false)
-            .expect("transaction bitmap iterator should read rpc store")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("transaction bitmap iterator should decode rows");
+    let transaction_bitmap_rows = indexes
+        .transaction_bitmap_bucket_iter(vec![1], 0, 1, false)
+        .expect("transaction bitmap iterator should read rpc store")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("transaction bitmap iterator should decode rows");
     assert!(transaction_bitmap_rows.is_empty());
 
-    let event_bitmap_rows = RpcIndexes::event_bitmap_bucket_iter(&store, vec![1], 0, 1, false)
+    let event_bitmap_rows = indexes
+        .event_bitmap_bucket_iter(vec![1], 0, 1, false)
         .expect("event bitmap iterator should read rpc store")
         .collect::<Result<Vec<_>, _>>()
         .expect("event bitmap iterator should decode rows");
