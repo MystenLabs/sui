@@ -48,7 +48,7 @@ impl TestCaseImpl for SharedCounterTest {
 
         response
             .effects
-            .input_consensus_objects()
+            .accessed_consensus_objects()
             .iter()
             .find(|o| o.id_and_version().0 == counter_id)
             .expect("Expect obj {counter_id} in shared_objects");

@@ -5,6 +5,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::execution_cache::ObjectCacheRead;
 use either::Either;
 use std::collections::BTreeMap;
@@ -14,7 +15,9 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
+use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SystemObjectVersions;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
@@ -26,7 +29,10 @@ use sui_types::storage::{
 };
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
-use sui_types::{SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber, error::SuiResult};
+use sui_types::{
+    IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber,
+    error::SuiResult,
+};
 use tracing::trace;
 
 pub struct SharedObjVerManager {}
@@ -44,13 +50,13 @@ pub struct AssignedVersions {
     /// commit this transaction belongs to). The accumulator root qualifies because it is written at
     /// the end of every commit, so there is always a well-defined prior version to read from. More
     /// system objects will be added over time.
-    pub system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+    pub system_object_versions: SystemObjectVersions,
 }
 
 impl AssignedVersions {
     pub fn new(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
     ) -> Self {
         Self {
             shared_object_versions,
@@ -68,10 +74,10 @@ impl AssignedVersions {
     ) -> Self {
         Self::new(
             shared_object_versions,
-            accumulator_version
-                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-                .into_iter()
-                .collect(),
+            SystemObjectVersions::new(accumulator_version.map(|v| ConsensusObjectVersion {
+                initial_shared_version: sui_types::object::OBJECT_START_VERSION,
+                version: v,
+            })),
         )
     }
 
@@ -79,7 +85,7 @@ impl AssignedVersions {
     pub fn accumulator_version(&self) -> Option<SequenceNumber> {
         self.system_object_versions
             .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .copied()
+            .map(|v| v.version)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
@@ -362,27 +368,62 @@ impl SharedObjVerManager {
                 .into_iter()
                 .map(|input| input.into_id_and_version())
                 .collect();
-            let cert_assigned_versions: Vec<_> = effects
-                .input_consensus_objects()
+            // When we add more implicitly read system objects, retrieve their accessed versions
+            // from this map and pass them to `SystemObjectVersions`.
+            let accessed_versions: BTreeMap<ObjectID, SequenceNumber> = effects
+                .accessed_consensus_objects()
                 .into_iter()
-                .map(|iso| {
-                    let (id, version) = iso.id_and_version();
-                    let initial_version = initial_version_map
-                        .get(&id)
-                        .expect("transaction must have all inputs from effects");
-                    ((id, *initial_version), version)
+                .map(|iso| iso.id_and_version())
+                .collect();
+            debug_assert!(
+                accessed_versions
+                    .keys()
+                    .all(|id| initial_version_map.contains_key(id)
+                        || IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id)),
+                "accessed consensus object is neither a declared input nor a known implicitly read system object: \
+                 accessed={accessed_versions:?} declared={initial_version_map:?}"
+            );
+            let cert_assigned_versions: Vec<_> = accessed_versions
+                .iter()
+                .filter_map(|(id, version)| {
+                    initial_version_map
+                        .get(id)
+                        .map(|initial_version| ((*id, *initial_version), *version))
                 })
                 .collect();
+            if let (Some(effects_version), Some(sequenced_version)) = (
+                accessed_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID),
+                accumulator_version,
+            ) {
+                assert!(
+                    effects_version.is_cancelled() || effects_version == sequenced_version,
+                    "accumulator root version from effects {:?} disagrees \
+                     with the reconstructed accumulator version {:?} for tx {:?}",
+                    effects_version,
+                    sequenced_version,
+                    cert.digest()
+                );
+            }
+            let system_object_versions =
+                SystemObjectVersions::new(accumulator_version.map(|version| {
+                    let initial_shared_version = epoch_store
+                        .epoch_start_config()
+                        .system_object_initial_shared_version(SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                        .expect(
+                            "initial shared version must be known for an implicitly read system object",
+                        );
+                    ConsensusObjectVersion {
+                        initial_shared_version,
+                        version,
+                    }
+                }));
             let tx_key = cert.key();
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
+                ?system_object_versions,
                 "assigned consensus object versions from effects"
             );
-            let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = (*accumulator_version)
-                .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-                .into_iter()
-                .collect();
             assigned_versions.push((
                 tx_key,
                 AssignedVersions::new(cert_assigned_versions, system_object_versions),
@@ -409,15 +450,14 @@ impl SharedObjVerManager {
                 .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version))
                 .expect("accumulator object must be in shared_input_next_versions when withdraws are enabled");
 
-            Some(accumulator_version)
+            Some(ConsensusObjectVersion {
+                initial_shared_version: accumulator_initial_version,
+                version: accumulator_version,
+            })
         } else {
             None
         };
-        // The accumulator root is the only system object read implicitly during execution today.
-        let system_object_versions: BTreeMap<ObjectID, SequenceNumber> = accumulator_version
-            .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
-            .into_iter()
-            .collect();
+        let system_object_versions = SystemObjectVersions::new(accumulator_version);
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.

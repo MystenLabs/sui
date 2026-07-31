@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::ObjectKey;
-use crate::base_types::{ObjectID, ObjectRef, VersionNumber};
+use crate::base_types::{ConsensusObjectVersion, ObjectID, ObjectRef, VersionNumber};
 use crate::object::Object;
 use crate::storage::WriteKind;
 use std::collections::BTreeMap;
@@ -12,6 +12,25 @@ pub trait ObjectStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object>;
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object>;
+
+    /// Load an implicitly read system object at the given version.
+    /// The version will be exact in normal execution, but in other cases the store can fall back
+    /// to the latest version to ensure a result is always available.
+    /// Below is the default implementation that works for all the store except the main store,
+    /// which is implemented in the writeback cache.
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+        version: ConsensusObjectVersion,
+    ) -> Object {
+        self.get_object_by_key(object_id, version.version)
+            .unwrap_or_else(|| {
+                panic!(
+                    "system object {object_id} not found at required version {}",
+                    version.version
+                )
+            })
+    }
 
     fn multi_get_objects(&self, object_ids: &[ObjectID]) -> Vec<Option<Object>> {
         object_ids
@@ -33,6 +52,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for &T {
         (*self).get_object(object_id)
     }
 
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+        version: ConsensusObjectVersion,
+    ) -> Object {
+        (*self).load_implicitly_read_system_object(object_id, version)
+    }
+
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         (*self).get_object_by_key(object_id, version)
     }
@@ -51,6 +78,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
         (**self).get_object(object_id)
     }
 
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+        version: ConsensusObjectVersion,
+    ) -> Object {
+        (**self).load_implicitly_read_system_object(object_id, version)
+    }
+
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         (**self).get_object_by_key(object_id, version)
     }
@@ -67,6 +102,14 @@ impl<T: ObjectStore + ?Sized> ObjectStore for Box<T> {
 impl<T: ObjectStore + ?Sized> ObjectStore for Arc<T> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         (**self).get_object(object_id)
+    }
+
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+        version: ConsensusObjectVersion,
+    ) -> Object {
+        (**self).load_implicitly_read_system_object(object_id, version)
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {

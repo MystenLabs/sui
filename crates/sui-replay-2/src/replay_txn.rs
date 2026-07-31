@@ -667,7 +667,7 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<ObjectKey>, Erro
 // Get the input shared objects and unchanged consensus objects from the transaction effects
 fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, Error> {
     let mut object_keys = effects
-        .input_consensus_objects()
+        .accessed_consensus_objects()
         .iter()
         .map(|input_consensus_object| match input_consensus_object {
             InputConsensusObject::MutateConsensusStreamEnded(object_id, version)

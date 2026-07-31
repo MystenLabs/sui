@@ -39,7 +39,10 @@ pub(crate) mod checked {
 
     use crate::static_programmable_transactions as SPT;
     use crate::sui_types::gas::SuiGasStatusAPI;
-    use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
+    use crate::{
+        gas_charger::GasCharger,
+        temporary_store::{SystemObjectVersionRequirements, TemporaryStore},
+    };
     use move_core_types::ident_str;
     use move_core_types::language_storage::TypeTag;
     use sui_move_natives::all_natives;
@@ -220,7 +223,7 @@ pub(crate) mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersionRequirements,
         mut gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,

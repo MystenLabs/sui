@@ -175,7 +175,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         unimplemented!("Only supposed by v2 and above");
     }
 
-    fn input_consensus_objects(&self) -> Vec<InputConsensusObject> {
+    fn accessed_consensus_objects(&self) -> Vec<InputConsensusObject> {
         let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
         self.shared_objects
             .iter()
@@ -330,7 +330,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn unchanged_consensus_objects(&self) -> Vec<(ObjectID, UnchangedConsensusKind)> {
-        self.input_consensus_objects()
+        self.accessed_consensus_objects()
             .iter()
             .filter_map(|o| match o {
                 // In effects v1, the only unchanged consensus objects are read-only shared objects.
