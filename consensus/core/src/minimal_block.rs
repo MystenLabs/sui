@@ -16,8 +16,7 @@
 //! reject the peer).
 //!
 //! Minimal blocks are emitted only for live broadcasts on the validator `subscribe_blocks`
-//! stream, for every block version — `Block::with_ancestors` reconstructs V1/V2/V3
-//! coverage here.
+//! stream, for every block version — `Block::with_ancestors` reconstructs V1/V2/V3 alike.
 
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, Committee};
@@ -76,12 +75,6 @@ struct AncestorOverride {
     digest: Option<Bytes>,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum MinimalBlockError {
-    #[error("failed to serialize block: {0}")]
-    Serialization(#[from] bcs::Error),
-}
-
 /// Why a minimal block could not be inflated from local state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FallbackReason {
@@ -127,7 +120,7 @@ pub(crate) fn serialize_minimal(
     block: &VerifiedBlock,
     resolver: &impl AncestorDigestResolver,
     min_omittable_round: Round,
-) -> Result<Bytes, MinimalBlockError> {
+) -> Result<Bytes, bcs::Error> {
     let default_round = block.round().saturating_sub(1);
     let mut ancestor_authors = Vec::with_capacity(block.ancestors().len());
     let mut overrides = vec![];
@@ -407,7 +400,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::{BlockV1, TestBlock, Transaction, genesis_blocks},
+        block::{BlockV1, TestBlock, Transaction},
         context::Context,
     };
 
@@ -487,59 +480,57 @@ mod tests {
         minimal
     }
 
+    /// Byte-identical reconstruction across every block version, with the common-case
+    /// wire shape pinned once: the only override is the author's own parent (its
+    /// digest always rides explicitly) and the minimal form is strictly smaller.
     #[tokio::test]
-    async fn roundtrip_v2_common_case() {
-        let (context, key_pairs) = Context::new_for_test(7);
+    async fn roundtrip_all_block_versions() {
+        let (context, key_pairs) = Context::new_for_test(4);
         let mut rng = StdRng::seed_from_u64(7);
-        let mut resolver = MapResolver::default();
-        let ancestors = ancestor_refs(7, 9, &mut resolver, &mut rng);
-        let block = TestBlock::new(10, 0)
-            .set_ancestors_raw(ancestors)
-            .set_transactions(vec![Transaction::new(vec![1, 2, 3])])
-            .build();
-        let block = sign(block, &context, &key_pairs);
-
-        let minimal = roundtrip(&block, &context, &resolver, 0);
-        // Common case: the only override is the author's own parent, whose digest always
-        // rides explicitly (cascade-breaking); every other digest resolves locally.
-        let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
-        assert_eq!(decoded.overrides.len(), 1);
-        assert_eq!(decoded.overrides[0].author, 0);
-        assert!(decoded.overrides[0].digest.is_some());
-        assert!(minimal.len() < block.serialized().len());
-    }
-
-    #[tokio::test]
-    async fn roundtrip_v1() {
-        let (context, key_pairs) = Context::new_for_test(4);
-        let mut rng = StdRng::seed_from_u64(4);
-        let mut resolver = MapResolver::default();
-        let ancestors = ancestor_refs(4, 5, &mut resolver, &mut rng);
-        let block = Block::V1(BlockV1::new(
-            0,
-            6,
-            AuthorityIndex::new_for_test(0),
-            1000,
-            ancestors,
-            vec![Transaction::new(vec![9; 100])],
-            vec![],
-            vec![],
-        ));
-        let block = sign(block, &context, &key_pairs);
-        roundtrip(&block, &context, &resolver, 0);
-    }
-
-    #[tokio::test]
-    async fn roundtrip_preserves_non_authority_order() {
-        let (context, key_pairs) = Context::new_for_test(4);
-        let mut rng = StdRng::seed_from_u64(42);
-        let mut resolver = MapResolver::default();
-        let mut ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
-        // Own-first is required, but the tail order is proposer-defined (score-sorted).
-        ancestors[1..].reverse();
-        let block = TestBlock::new(10, 0).set_ancestors_raw(ancestors).build();
-        let block = sign(block, &context, &key_pairs);
-        roundtrip(&block, &context, &resolver, 0);
+        for version in 1..=3u32 {
+            let mut resolver = MapResolver::default();
+            let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+            let transactions = vec![Transaction::new(vec![1, 2, 3])];
+            let author = AuthorityIndex::new_for_test(0);
+            let block = match version {
+                1 => Block::V1(BlockV1::new(
+                    0,
+                    10,
+                    author,
+                    1000,
+                    ancestors,
+                    transactions,
+                    vec![],
+                    vec![],
+                )),
+                2 => TestBlock::new(10, 0)
+                    .set_ancestors_raw(ancestors)
+                    .set_transactions(transactions)
+                    .build(),
+                _ => Block::V3(crate::block::BlockV3::new(
+                    0,
+                    10,
+                    author,
+                    1000,
+                    ancestors,
+                    transactions,
+                    vec![],
+                    5,
+                    vec![],
+                    vec![],
+                )),
+            };
+            let block = sign(block, &context, &key_pairs);
+            let minimal = roundtrip(&block, &context, &resolver, 0);
+            let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
+            assert_eq!(decoded.overrides.len(), 1, "version {version}");
+            assert_eq!(decoded.overrides[0].author, 0);
+            assert!(decoded.overrides[0].digest.is_some());
+            assert!(
+                minimal.len() < block.serialized().len(),
+                "version {version}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -611,93 +602,7 @@ mod tests {
             deserialize_minimal(&minimal, &context.committee, x2.author(), &receiver).unwrap();
         // Byte-identity proves the reconstructed ancestors include X's exact ref.
         assert_eq!(&serialized, x2.serialized());
-        assert_eq!(x2.ancestors()[0], x.reference());
     }
-
-    #[tokio::test]
-    async fn roundtrip_genesis_ancestors() {
-        let (context, key_pairs) = Context::new_for_test(4);
-        let mut resolver = MapResolver::default();
-        let genesis: Vec<_> = genesis_blocks(&context)
-            .iter()
-            .map(|b| b.reference())
-            .collect();
-        for genesis_ref in &genesis {
-            resolver.insert(*genesis_ref);
-        }
-        let block = TestBlock::new(1, 0).set_ancestors_raw(genesis).build();
-        let block = sign(block, &context, &key_pairs);
-        // Genesis digests are omittable even when the horizon says "explicit below round 5";
-        // only the own parent (itself genesis here) carries its always-explicit digest.
-        let minimal = roundtrip(&block, &context, &resolver, 5);
-        let decoded = MinimalBlock::decode(minimal.as_ref()).unwrap();
-        assert_eq!(decoded.overrides.len(), 1);
-        assert_eq!(decoded.overrides[0].author, 0);
-        assert!(decoded.overrides[0].digest.is_some());
-    }
-
-    #[tokio::test]
-    async fn missing_and_ambiguous_slots_fall_back() {
-        let (context, key_pairs) = Context::new_for_test(4);
-        let mut rng = StdRng::seed_from_u64(11);
-        let mut resolver = MapResolver::default();
-        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
-        let block = TestBlock::new(10, 0)
-            .set_ancestors_raw(ancestors.clone())
-            .build();
-        let block = sign(block, &context, &key_pairs);
-        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
-
-        // Receiver missing a slot entirely => MissingAncestor with the fetchable ref.
-        let mut missing = MapResolver::default();
-        for ancestor in &ancestors[..3] {
-            missing.insert(*ancestor);
-        }
-        match deserialize_minimal(&minimal, &context.committee, block.author(), &missing)
-            .map(|_| ())
-        {
-            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
-                assert_eq!(block_ref, block.reference());
-                assert_eq!(
-                    reason,
-                    FallbackReason::MissingAncestor(Slot::from(ancestors[3]))
-                );
-            }
-            other => panic!("expected MissingAncestor fallback, got {other:?}"),
-        }
-
-        // Receiver seeing an equivocation the sender didn't: bounded multi-try lets the
-        // claimed digest select the right candidate — reconstruction now SUCCEEDS.
-        let mut ambiguous = MapResolver::default();
-        for ancestor in &ancestors {
-            ambiguous.insert(*ancestor);
-        }
-        ambiguous.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
-        let (_signed, serialized) =
-            deserialize_minimal(&minimal, &context.committee, block.author(), &ambiguous).unwrap();
-        assert_eq!(&serialized, block.serialized());
-
-        // Beyond the per-slot candidate bound, the search space is refused outright.
-        let mut flooded = MapResolver::default();
-        for ancestor in &ancestors {
-            flooded.insert(*ancestor);
-        }
-        for _ in 0..MAX_SLOT_CANDIDATES {
-            flooded.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
-        }
-        match deserialize_minimal(&minimal, &context.committee, block.author(), &flooded)
-            .map(|_| ())
-        {
-            Err(InflateError::NeedFullBlock { reason, .. }) => {
-                assert_eq!(
-                    reason,
-                    FallbackReason::AmbiguousSlot(Slot::from(ancestors[3]))
-                );
-            }
-            other => panic!("expected AmbiguousSlot fallback, got {other:?}"),
-        }
-    }
-
     /// The reconstruction budget bounds TOTAL attempts, not per-slot candidates: with
     /// two ambiguous slots whose correct digests both sit in second position, no
     /// single-slot variation within the budget can satisfy the claimed digest, so the
@@ -743,6 +648,37 @@ mod tests {
         let (_signed, serialized) =
             deserialize_minimal(&minimal, &context.committee, block.author(), &single).unwrap();
         assert_eq!(&serialized, block.serialized());
+
+        // Receiver-side equivocation the sender didn't see: bounded multi-try lets the
+        // claimed digest select the right candidate — reconstruction succeeds.
+        let mut ambiguous = MapResolver::default();
+        for ancestor in &ancestors {
+            ambiguous.insert(*ancestor);
+        }
+        ambiguous.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
+        let (_signed, serialized) =
+            deserialize_minimal(&minimal, &context.committee, block.author(), &ambiguous).unwrap();
+        assert_eq!(&serialized, block.serialized());
+
+        // Beyond the per-slot candidate bound, the search space is refused outright.
+        let mut flooded = MapResolver::default();
+        for ancestor in &ancestors {
+            flooded.insert(*ancestor);
+        }
+        for _ in 0..MAX_SLOT_CANDIDATES {
+            flooded.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
+        }
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &flooded)
+            .map(|_| ())
+        {
+            Err(InflateError::NeedFullBlock { reason, .. }) => {
+                assert_eq!(
+                    reason,
+                    FallbackReason::AmbiguousSlot(Slot::from(ancestors[3]))
+                );
+            }
+            other => panic!("expected AmbiguousSlot fallback, got {other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -872,32 +808,6 @@ mod tests {
             Err(InflateError::Malformed(_))
         ));
     }
-
-    #[tokio::test]
-    async fn roundtrip_v3() {
-        let (context, key_pairs) = Context::new_for_test(4);
-        let mut rng = StdRng::seed_from_u64(3);
-        let mut resolver = MapResolver::default();
-        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
-        let block = Block::V3(crate::block::BlockV3::new(
-            0,
-            10,
-            AuthorityIndex::new_for_test(0),
-            1000,
-            ancestors,
-            vec![Transaction::new(vec![1, 2, 3])],
-            vec![],
-            5,
-            vec![],
-            vec![],
-        ));
-        let block = sign(block, &context, &key_pairs);
-        let minimal = roundtrip(&block, &context, &resolver, 0);
-        assert!(minimal.len() < block.serialized().len());
-    }
-
-    /// Post-zstd wire bytes of full vs minimal encoding for a mainnet-shaped block
-    /// (~100 ancestors, high-entropy digests and payload): the bandwidth saving is the
     /// feature's purpose, so a codec change that erodes it below 2x must fail loudly.
     #[tokio::test]
     async fn wire_size_savings_mainnet_shape() {

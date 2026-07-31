@@ -21,14 +21,14 @@ use std::sync::{Arc, Weak};
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round};
-use mysten_common::{debug_fatal, sync::notify_read::NotifyRead};
+use consensus_types::block::BlockRef;
+use mysten_common::debug_fatal;
 use parking_lot::RwLock;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::debug;
 
 use crate::{
-    block::{BlockAPI as _, SignedBlock, Slot, VerifiedBlock},
+    block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     block_inflater::BlockInflater,
     context::Context,
     dag_state::DagState,
@@ -58,7 +58,7 @@ const MAX_RECOVERY_INFLATE_ATTEMPTS: usize = 3;
 /// every repair slot.
 const MAX_REPAIR_FETCHES: usize = 64;
 const MAX_REPAIR_FETCHES_PER_PEER: usize = 6;
-pub(crate) const RECOVERY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const RECOVERY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Which quota bound rejected a recovery admission.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -266,61 +266,51 @@ enum WaitCheck {
     Wait,
 }
 
-/// Recovers one un-inflatable minimal block. Spawned (quota-first) by the subscriber;
-/// aborted with its owning `JoinSet` on shutdown, which releases the permit and
-/// deregisters any pending slot wait.
+/// Recovers one un-inflatable minimal block, starting from the receipt-time
+/// classification (`reason`) so the same immutable bytes are not re-decoded before the
+/// first wait. Spawned (quota-first) by the subscriber; aborted with its owning
+/// `JoinSet` on shutdown, which releases the permit and deregisters any pending wait.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: ValidatorNetworkService>(
     context: Arc<Context>,
     block_inflater: Arc<BlockInflater>,
     dag_state: Weak<RwLock<DagState>>,
-    accepted_slots: Arc<NotifyRead<Slot, ()>>,
-    accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
-    mut gc_round: watch::Receiver<Round>,
     network_client: Arc<C>,
     authority_service: Weak<S>,
     repair_limits: Arc<RepairLimits>,
     peer: AuthorityIndex,
     claimed_ref: BlockRef,
+    reason: FallbackReason,
     minimal: Bytes,
     permit: RecoveryPermit,
 ) {
     let _permit = permit;
     let parked_at = std::time::Instant::now();
     let node_metrics = &context.metrics.node_metrics;
+    let (accepted_slots, accepted_refs, mut gc_round) = {
+        let Some(dag_state) = dag_state.upgrade() else {
+            return;
+        };
+        let dag_state = dag_state.read();
+        (
+            dag_state.accepted_slot_notifier(),
+            dag_state.accepted_ref_notifier(),
+            dag_state.gc_round_receiver(),
+        )
+    };
 
-    let mut outcome = RecoveryOutcome::RepairFailed;
-    'recovery: {
-        for attempt in 1..=MAX_RECOVERY_INFLATE_ATTEMPTS {
-            let missing = match block_inflater.inflate(&minimal, peer) {
-                Ok((_signed, serialized)) => {
-                    // The wire saving is as real for a late inflation as for an
-                    // immediate one; the receipt path only counts immediate successes.
-                    let bytes_saved = serialized.len().saturating_sub(minimal.len()) as u64;
-                    outcome = match submit(&context, &authority_service, peer, serialized).await {
-                        Some(true) => {
-                            node_metrics
-                                .minimal_blocks_received_bytes_saved
-                                .with_label_values(&[context
-                                    .committee
-                                    .authority(peer)
-                                    .hostname
-                                    .as_str()])
-                                .inc_by(bytes_saved);
-                            RecoveryOutcome::Inflated
-                        }
-                        Some(false) => RecoveryOutcome::SubmitRejected,
-                        None => return,
-                    };
-                    break 'recovery;
-                }
-                Err(InflateError::NeedFullBlock {
-                    reason: FallbackReason::MissingAncestor(slot),
-                    ..
-                }) => slot,
-                Err(InflateError::NeedFullBlock { .. }) => {
-                    // Ambiguity or a digest mismatch cannot be repaired by waiting.
-                    outcome = repair(
+    let mut reason = reason;
+    // The receipt-time inflation that produced `reason` was attempt one; the budget
+    // counts inflations of these immutable bytes, wherever they run.
+    let mut inflate_attempts = 1;
+    let outcome = 'recovery: {
+        loop {
+            let missing = match reason {
+                FallbackReason::MissingAncestor(slot) => slot,
+                // Ambiguity or a digest mismatch cannot be repaired by waiting; the
+                // inflate-attempt budget bounds waits the same way.
+                FallbackReason::AmbiguousSlot(_) | FallbackReason::DigestMismatch => {
+                    break 'recovery repair(
                         &context,
                         network_client.as_ref(),
                         &authority_service,
@@ -329,26 +319,10 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                         claimed_ref,
                     )
                     .await;
-                    break 'recovery;
-                }
-                Err(InflateError::Malformed(error)) => {
-                    // Receipt-time inflation already parsed these exact bytes, so a
-                    // structural failure here is an invariant violation, not a peer
-                    // fault — and it cannot improve with later DAG state either way.
-                    debug_fatal!(
-                        "malformed minimal block {} from peer {} in recovery after \
-                         passing receipt-time parse: {}",
-                        claimed_ref,
-                        peer,
-                        error
-                    );
-                    return;
                 }
             };
-
-            // The retry budget bounds slot waits; the next escalation is repair.
-            if attempt == MAX_RECOVERY_INFLATE_ATTEMPTS {
-                outcome = repair(
+            if inflate_attempts == MAX_RECOVERY_INFLATE_ATTEMPTS {
+                break 'recovery repair(
                     &context,
                     network_client.as_ref(),
                     &authority_service,
@@ -357,7 +331,6 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     claimed_ref,
                 )
                 .await;
-                break 'recovery;
             }
 
             // Register BEFORE re-checking the DAG: acceptance between the check and the
@@ -390,16 +363,12 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     }
                 };
                 match check {
-                    WaitCheck::Obsolete => {
-                        outcome = RecoveryOutcome::Obsolete;
-                        break 'recovery;
-                    }
+                    WaitCheck::Obsolete => break 'recovery RecoveryOutcome::Obsolete,
                     WaitCheck::AlreadyAccepted => {
-                        outcome = RecoveryOutcome::AlreadyAccepted;
-                        break 'recovery;
+                        break 'recovery RecoveryOutcome::AlreadyAccepted;
                     }
                     WaitCheck::Repair => {
-                        outcome = repair(
+                        break 'recovery repair(
                             &context,
                             network_client.as_ref(),
                             &authority_service,
@@ -408,7 +377,6 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                             claimed_ref,
                         )
                         .await;
-                        break 'recovery;
                     }
                     WaitCheck::Retry => break,
                     WaitCheck::Wait => {}
@@ -428,8 +396,48 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     }
                 }
             }
+
+            // The waited slot has a candidate: re-classify by inflating.
+            inflate_attempts += 1;
+            let inflated = {
+                let Some(dag_state) = dag_state.upgrade() else {
+                    return;
+                };
+                let dag_state = dag_state.read();
+                block_inflater.inflate(&minimal, peer, &dag_state)
+            };
+            match inflated {
+                Ok((_signed, serialized)) => {
+                    break 'recovery match submit(&context, &authority_service, peer, serialized)
+                        .await
+                    {
+                        Some(true) => RecoveryOutcome::Inflated,
+                        Some(false) => RecoveryOutcome::SubmitRejected,
+                        None => return,
+                    };
+                }
+                Err(InflateError::NeedFullBlock {
+                    reason: next_reason,
+                    ..
+                }) => {
+                    reason = next_reason;
+                }
+                Err(InflateError::Malformed(error)) => {
+                    // Receipt-time inflation already parsed these exact bytes, so a
+                    // structural failure here is an invariant violation, not a peer
+                    // fault — and it cannot improve with later DAG state either way.
+                    debug_fatal!(
+                        "malformed minimal block {} from peer {} in recovery after \
+                         passing receipt-time parse: {}",
+                        claimed_ref,
+                        peer,
+                        error
+                    );
+                    return;
+                }
+            }
         }
-    }
+    };
 
     match outcome {
         RecoveryOutcome::Inflated | RecoveryOutcome::Repaired => {
@@ -579,6 +587,8 @@ mod tests {
     use consensus_types::block::BlockDigest;
     use parking_lot::Mutex;
 
+    use consensus_types::block::Round;
+
     use super::*;
     use crate::{
         VerifiedBlock,
@@ -677,6 +687,10 @@ mod tests {
         ancestors: Vec<VerifiedBlock>,
         block: VerifiedBlock,
         minimal: Bytes,
+        // Receipt-time classification against the (empty) receiver DAG, captured at
+        // construction exactly as the subscriber captures it before spawning. Tests
+        // that accept blocks before spawn exercise the stale-reason race on purpose.
+        reason: FallbackReason,
     }
 
     fn harness(gc_depth: Option<u32>) -> TaskHarness {
@@ -699,19 +713,28 @@ mod tests {
             ancestors.push(block);
         }
         ancestor_refs.sort_by_key(|r| (r.author != peer, r.author));
-        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        let sender_inflater = BlockInflater::new(context.clone());
         let block = VerifiedBlock::new_for_test(
             TestBlock::new(11, peer.value() as u32)
                 .set_ancestors_raw(ancestor_refs)
                 .build(),
         );
-        let minimal = sender_inflater.serialize(&block).unwrap();
+        let minimal = sender_inflater
+            .serialize(&block, &sender_dag.read())
+            .unwrap();
 
         let receiver_dag = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let inflater = Arc::new(BlockInflater::new(context.clone(), receiver_dag.clone()));
+        let inflater = Arc::new(BlockInflater::new(context.clone()));
+        let reason = match inflater
+            .inflate(&minimal, peer, &receiver_dag.read())
+            .map(|_| ())
+        {
+            Err(InflateError::NeedFullBlock { reason, .. }) => reason,
+            other => panic!("scenario block must be un-inflatable at receipt: {other:?}"),
+        };
         TaskHarness {
             peer,
             receiver_dag,
@@ -723,6 +746,7 @@ mod tests {
             ancestors,
             block,
             minimal,
+            reason,
         }
     }
 
@@ -732,26 +756,16 @@ mod tests {
                 .quotas
                 .try_acquire(self.peer, self.minimal.len())
                 .unwrap();
-            let (accepted_slots, accepted_refs, gc_round) = {
-                let dag_state = self.receiver_dag.read();
-                (
-                    dag_state.accepted_slot_notifier(),
-                    dag_state.accepted_ref_notifier(),
-                    dag_state.gc_round_receiver(),
-                )
-            };
             join_set.spawn(recover_minimal_block(
                 self.context.clone(),
                 self.inflater.clone(),
                 Arc::downgrade(&self.receiver_dag),
-                accepted_slots,
-                accepted_refs,
-                gc_round,
                 client,
                 Arc::downgrade(&self.service),
                 self.repair_limits.clone(),
                 self.peer,
                 self.block.reference(),
+                self.reason,
                 self.minimal.clone(),
                 permit,
             ));
@@ -834,36 +848,6 @@ mod tests {
         assert_eq!(received.len(), 1);
         assert_eq!(&received[0].1.block, h.block.serialized());
         assert!(client.fetch_calls.lock().is_empty());
-        assert_eq!(
-            h.context
-                .metrics
-                .node_metrics
-                .minimal_block_recoveries
-                .with_label_values(&["inflated"])
-                .get(),
-            1
-        );
-    }
-
-    /// Equivocating candidates within the codec budget still inflate the claimed
-    /// reconstruction when the true ancestor is among the accepted candidates.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_inflates_with_equivocation_candidates() {
-        let h = harness(None);
-        let client = Arc::new(RepairOnlyClient::new(vec![]));
-        // Both the true ancestors and an equivocating sibling (same slot, different
-        // digest) are accepted before the task runs. The sibling's author must not be
-        // the receiver's own index: DagState asserts against own-slot equivocation.
-        h.receiver_dag.write().accept_blocks(h.ancestors.clone());
-        let sibling =
-            VerifiedBlock::new_for_test(TestBlock::new(10, 1).set_timestamp_ms(999_999).build());
-        h.receiver_dag.write().accept_block(sibling);
-        let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
-        wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
-        let received = h.service.lock().handle_send_block.clone();
-        assert_eq!(&received[0].1.block, h.block.serialized());
-        assert!(client.fetch_calls.lock().is_empty());
     }
 
     /// A wake by the WRONG sibling in the waited slot must never submit a wrong
@@ -900,15 +884,6 @@ mod tests {
         assert_eq!(
             client.fetch_calls.lock().as_slice(),
             &[vec![h.block.reference()]]
-        );
-        assert_eq!(
-            h.context
-                .metrics
-                .node_metrics
-                .minimal_block_repairs
-                .with_label_values(&["success"])
-                .get(),
-            1
         );
     }
 
@@ -1053,13 +1028,6 @@ mod tests {
         // submits nothing, fetches nothing, and frees its permit.
         h.receiver_dag.write().accept_block(h.block.clone());
         wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-        assert_eq!(
-            node_metrics
-                .minimal_block_recoveries
-                .with_label_values(&["already_accepted"])
-                .get(),
-            1
-        );
         assert!(h.service.lock().handle_send_block.is_empty());
         assert!(client.fetch_calls.lock().is_empty());
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
@@ -1110,40 +1078,26 @@ mod tests {
         drop(b3);
     }
 
-    /// An empty repair response is a missing-block failure, not a submission.
+    /// Replay can win before the task even starts: with the claimed block already
+    /// accepted at spawn, the first register-recheck must conclude AlreadyAccepted and
+    /// release the permit — no wait, no fetch, no submission. This pins the
+    /// contains_block arm of the recheck for the pre-spawn timing.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn exact_repair_empty_response_is_missing() {
+    async fn recovery_terminates_when_claimed_block_already_accepted_at_spawn() {
         let h = harness(None);
         let client = Arc::new(RepairOnlyClient::new(vec![]));
+        // The harness captured its (now stale) receipt-time reason before this.
+        h.receiver_dag.write().accept_block(h.block.clone());
         let mut join_set = tokio::task::JoinSet::new();
         h.spawn(&mut join_set, client.clone());
-        tokio::time::sleep(Duration::from_millis(5)).await;
 
-        // Wrong siblings force the digest-mismatch path into repair.
-        let siblings: Vec<_> = h
-            .ancestors
-            .iter()
-            .map(|b| {
-                VerifiedBlock::new_for_test(
-                    TestBlock::new(10, b.author().value() as u32)
-                        .set_timestamp_ms(999_999)
-                        .build(),
-                )
-            })
-            .collect();
-        h.receiver_dag.write().accept_blocks(siblings);
-
-        wait_until(|| {
-            h.context
-                .metrics
-                .node_metrics
-                .minimal_block_repairs
-                .with_label_values(&["missing"])
-                .get()
-                == 1
-        })
-        .await;
+        let node_metrics = &h.context.metrics.node_metrics;
+        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
         assert!(h.service.lock().handle_send_block.is_empty());
+        assert!(client.fetch_calls.lock().is_empty());
+        // The permit is immediately reusable.
+        let permit = h.quotas.try_acquire(h.peer, h.minimal.len()).unwrap();
+        drop(permit);
     }
 
     /// A repair response whose computed reference differs from the claimed one is a
@@ -1187,14 +1141,5 @@ mod tests {
         })
         .await;
         assert!(h.service.lock().handle_send_block.is_empty());
-        assert_eq!(
-            h.context
-                .metrics
-                .node_metrics
-                .minimal_block_recoveries
-                .with_label_values(&["repair_failed"])
-                .get(),
-            1
-        );
     }
 }

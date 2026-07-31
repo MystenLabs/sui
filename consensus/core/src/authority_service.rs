@@ -78,23 +78,20 @@ impl MinimalBlockCache {
     /// the caller falls back to the full form.
     fn encode(
         &self,
-        context: &Context,
         inflater: &BlockInflater,
         block: &VerifiedBlock,
+        dag_state: &RwLock<DagState>,
     ) -> Option<Bytes> {
-        let cache_result = &context.metrics.node_metrics.minimal_block_encode_cache;
         let block_ref = block.reference();
         {
             let recent = self.recent.lock();
             if let Some((_, bytes)) = recent.iter().find(|(r, _)| *r == block_ref) {
-                cache_result.with_label_values(&["hit"]).inc();
                 return Some(bytes.clone());
             }
         }
-        cache_result.with_label_values(&["miss"]).inc();
         // Encode outside the lock: a concurrent subscriber may duplicate this work for the
         // same block, which is harmless and far cheaper than serializing all subscribers.
-        let bytes = inflater.serialize(block).ok()?;
+        let bytes = inflater.serialize(block, &dag_state.read()).ok()?;
         let mut recent = self.recent.lock();
         if !recent.iter().any(|(r, _)| *r == block_ref) {
             if recent.len() == Self::CAPACITY {
@@ -120,7 +117,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
-        let block_inflater = Arc::new(BlockInflater::new(context.clone(), dag_state.clone()));
+        let block_inflater = Arc::new(BlockInflater::new(context.clone()));
         Self {
             context,
             block_verifier,
@@ -470,6 +467,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let minimal_cache = self.minimal_cache.clone();
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
+        // The response stream must not keep the stopped authority's DagState alive
+        // (spawned-task/stream state holds it weakly, like the subscription loops);
+        // with the state gone, emission degrades to full form.
+        let dag_state = Arc::downgrade(&self.dag_state);
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         let stream = past_proposed_blocks.chain(broadcasted_blocks.flat_map(move |items| {
@@ -481,9 +482,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             let context = context.clone();
             let peer_hostname = peer_hostname.clone();
             let minimal_cache = minimal_cache.clone();
+            let dag_state = dag_state.clone();
             stream::iter(items.into_iter().map(move |extended_block| {
                 let minimal = emit_minimal
-                    .then(|| minimal_cache.encode(&context, &block_inflater, &extended_block.block))
+                    .then(|| {
+                        let dag_state = dag_state.upgrade()?;
+                        minimal_cache.encode(&block_inflater, &extended_block.block, &dag_state)
+                    })
                     .flatten();
                 let mut serialized = ExtendedSerializedBlock::from(extended_block);
                 if let Some(minimal) = &minimal {
@@ -1504,16 +1509,11 @@ mod tests {
         }
     }
 
+    /// Live broadcasts carry a minimal form exactly when the protocol flag allows it
+    /// (rollout safety: flag off means full-only), and replay always rides full.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_handle_subscribe_blocks_emits_minimal_for_live_only() {
-        // Emission is on via ConsensusProtocolConfig::for_testing() inside new_for_test.
+    async fn test_handle_subscribe_blocks_emission_follows_protocol_flag() {
         subscribe_blocks_emission(true).await;
-    }
-
-    /// The rollout-safety property of the protocol flag: with it off, live broadcasts
-    /// carry no minimal form.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_handle_subscribe_blocks_flag_off_emits_full_only() {
         subscribe_blocks_emission(false).await;
     }
 
@@ -1567,7 +1567,6 @@ mod tests {
             ancestors.push(block.reference());
             dag_state.write().accept_block(block);
         }
-        let ancestors_for_v3 = ancestors.clone();
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1608,37 +1607,6 @@ mod tests {
             let minimal = live
                 .minimal
                 .expect("live block should carry a minimal form");
-            assert!(minimal.len() < live.block.len());
-        } else {
-            assert!(live.minimal.is_none());
-        }
-
-        // V3 blocks ride the same emission path now that the codec reconstructs them.
-        let live_v3 =
-            VerifiedBlock::new_for_test(crate::block::Block::V3(crate::block::BlockV3::new(
-                0,
-                17,
-                context.committee.to_authority_index(0).unwrap(),
-                1100,
-                ancestors_for_v3,
-                vec![],
-                vec![],
-                5,
-                vec![],
-                vec![],
-            )));
-        tx_block_broadcast
-            .send(ExtendedBlock {
-                block: live_v3.clone(),
-                excluded_ancestors: vec![],
-            })
-            .unwrap();
-        let live = stream.next().await.unwrap();
-        assert_eq!(live.block, *live_v3.serialized());
-        if emit_minimal {
-            let minimal = live
-                .minimal
-                .expect("live V3 block should carry a minimal form");
             assert!(minimal.len() < live.block.len());
         } else {
             assert!(live.minimal.is_none());

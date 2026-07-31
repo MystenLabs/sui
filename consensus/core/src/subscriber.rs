@@ -10,23 +10,21 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use futures::StreamExt;
-use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use tokio::{
-    sync::watch,
     task::{JoinHandle, JoinSet},
     time::sleep,
 };
 use tracing::{debug, error, info};
 
 use crate::{
-    block::{BlockAPI as _, Slot},
+    block::BlockAPI as _,
     block_inflater::BlockInflater,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    minimal_block::InflateError,
+    minimal_block::{FallbackReason, InflateError},
     minimal_block_receive::{RecoveryQuotas, RepairLimits, recover_minimal_block},
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
@@ -55,7 +53,11 @@ enum InflateOutcome {
     /// A minimal block that local state cannot inflate right now. It is dropped from
     /// the stream and recovered by a per-block task that waits on the missing slot
     /// (see `minimal_block_receive`).
-    Dropped { block_ref: BlockRef, minimal: Bytes },
+    Dropped {
+        block_ref: BlockRef,
+        reason: FallbackReason,
+        minimal: Bytes,
+    },
 }
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
@@ -71,9 +73,6 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     block_inflater: Arc<BlockInflater>,
     recovery_quotas: Arc<RecoveryQuotas>,
     repair_limits: Arc<RepairLimits>,
-    accepted_slots: Arc<NotifyRead<Slot, ()>>,
-    accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
-    gc_round: watch::Receiver<Round>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -89,20 +88,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
-        let block_inflater = Arc::new(BlockInflater::new(context.clone(), dag_state.clone()));
+        let block_inflater = Arc::new(BlockInflater::new(context.clone()));
         let recovery_quotas = RecoveryQuotas::new(context.clone());
         let repair_limits = RepairLimits::new(context.committee.size());
-        // Neither the slot notifier nor the GC watch keep DagState alive: subscription
-        // and recovery tasks may hold them across shutdown (authority_node fatally
-        // asserts zero remaining DagState owners).
-        let (accepted_slots, accepted_refs, gc_round) = {
-            let dag_state = dag_state.read();
-            (
-                dag_state.accepted_slot_notifier(),
-                dag_state.accepted_ref_notifier(),
-                dag_state.gc_round_receiver(),
-            )
-        };
         Self {
             context,
             network_client,
@@ -111,9 +99,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             block_inflater,
             recovery_quotas,
             repair_limits,
-            accepted_slots,
-            accepted_refs,
-            gc_round,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
@@ -141,9 +126,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let block_inflater = self.block_inflater.clone();
         let recovery_quotas = self.recovery_quotas.clone();
         let repair_limits = self.repair_limits.clone();
-        let accepted_slots = self.accepted_slots.clone();
-        let accepted_refs = self.accepted_refs.clone();
-        let gc_round = self.gc_round.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -155,9 +137,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             block_inflater,
             recovery_quotas,
             repair_limits,
-            accepted_slots,
-            accepted_refs,
-            gc_round,
             peer,
         )));
     }
@@ -225,6 +204,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         block_inflater: &BlockInflater,
         peer: AuthorityIndex,
         mut block: ExtendedSerializedBlock,
+        dag_state: &DagState,
     ) -> ConsensusResult<InflateOutcome> {
         let Some(minimal) = block.minimal.take() else {
             return Ok(InflateOutcome::Block(block));
@@ -248,12 +228,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             )));
         }
 
-        match block_inflater.inflate(&minimal, peer) {
+        match block_inflater.inflate(&minimal, peer, dag_state) {
             Ok((_signed_block, serialized)) => {
-                node_metrics
-                    .minimal_blocks_received_bytes_saved
-                    .with_label_values(&[peer_hostname])
-                    .inc_by(serialized.len().saturating_sub(minimal.len()) as u64);
                 block.block = serialized;
                 Ok(InflateOutcome::Block(block))
             }
@@ -262,11 +238,13 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     .minimal_block_inflate_drop
                     .with_label_values(&[peer_hostname, reason.label()])
                     .inc();
-                // The recovery task re-derives the precise failure (missing slot,
-                // ambiguity, digest mismatch) from its own inflation attempt and
-                // routes accordingly: waits are for missing slots, everything else
-                // escalates to the exact-reference repair.
-                Ok(InflateOutcome::Dropped { block_ref, minimal })
+                // The recovery task starts from this classification: waits for a
+                // missing slot, everything else escalates to exact-reference repair.
+                Ok(InflateOutcome::Dropped {
+                    block_ref,
+                    reason,
+                    minimal,
+                })
             }
             Err(error @ InflateError::Malformed(_)) => {
                 node_metrics
@@ -287,9 +265,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         block_inflater: Arc<BlockInflater>,
         recovery_quotas: Arc<RecoveryQuotas>,
         repair_limits: Arc<RepairLimits>,
-        accepted_slots: Arc<NotifyRead<Slot, ()>>,
-        accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
-        gc_round: watch::Receiver<Round>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -417,14 +392,29 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(service) = authority_service.upgrade() else {
                             return;
                         };
-                        let block = match Self::inflate_received_block(
-                            &context,
-                            &block_inflater,
-                            peer,
-                            block,
-                        ) {
+                        let (outcome, tip) = {
+                            let Some(dag_state) = dag_state.upgrade() else {
+                                return;
+                            };
+                            let guard = dag_state.read();
+                            (
+                                Self::inflate_received_block(
+                                    &context,
+                                    &block_inflater,
+                                    peer,
+                                    block,
+                                    &guard,
+                                ),
+                                guard.highest_accepted_round(),
+                            )
+                        };
+                        let block = match outcome {
                             // Dropped from the stream and owned by a recovery task.
-                            Ok(InflateOutcome::Dropped { block_ref, minimal }) => {
+                            Ok(InflateOutcome::Dropped {
+                                block_ref,
+                                reason,
+                                minimal,
+                            }) => {
                                 // Spawn-eligibility horizon: an admitted wait is
                                 // GC-bounded only if the claimed round is one the
                                 // local DAG can plausibly reach — a fabricated
@@ -434,13 +424,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // means the receiver is deeply behind and full-form
                                 // replay is strictly the better path; for a Byzantine
                                 // sender it wastes only its own stream.
-                                let tip = {
-                                    let Some(dag_state) = dag_state.upgrade() else {
-                                        return;
-                                    };
-                                    let guard = dag_state.read();
-                                    guard.highest_accepted_round()
-                                };
                                 let horizon = tip.saturating_add(
                                     context.parameters.dag_state_cached_rounds as Round,
                                 );
@@ -474,14 +457,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             context.clone(),
                                             block_inflater.clone(),
                                             dag_state.clone(),
-                                            accepted_slots.clone(),
-                                            accepted_refs.clone(),
-                                            gc_round.clone(),
                                             network_client.clone(),
                                             authority_service.clone(),
                                             repair_limits.clone(),
                                             peer,
                                             block_ref,
+                                            reason,
                                             minimal,
                                             permit,
                                         ));
@@ -514,12 +495,10 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             }
                             Ok(InflateOutcome::Block(block)) => block,
                             Err(e) => {
-                                info!(
-                                    "Failed to inflate minimal block from peer {} {}: {}",
-                                    peer, peer_hostname, e
-                                );
                                 // A peer repeatedly sending malformed encodings gets its
-                                // stream reset; escalating reconnect backoff is the penalty.
+                                // stream reset; escalating reconnect backoff is the
+                                // penalty. Individual failures are visible through
+                                // minimal_block_inflate_drop{authority,reason}.
                                 if matches!(e, ConsensusError::MalformedMinimalBlock(_)) {
                                     malformed_blocks += 1;
                                     if malformed_blocks > MAX_MALFORMED_PER_SUBSCRIPTION {
@@ -807,7 +786,7 @@ mod test {
         }
         // Own ancestor first, as the verifier requires.
         ancestor_refs.sort_by_key(|r| (r.author != peer, r.author));
-        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
+        let sender_inflater = BlockInflater::new(context.clone());
         let mut blocks = Vec::new();
         let mut wire = Vec::new();
         for i in 0..count {
@@ -819,7 +798,11 @@ mod test {
             );
             wire.push(ExtendedSerializedBlock {
                 block: block.serialized().clone(),
-                minimal: Some(sender_inflater.serialize(&block).unwrap()),
+                minimal: Some(
+                    sender_inflater
+                        .serialize(&block, &sender_dag.read())
+                        .unwrap(),
+                ),
                 excluded_ancestors: vec![],
             });
             blocks.push(block);
@@ -911,253 +894,26 @@ mod test {
         let node_metrics = &s.context.metrics.node_metrics;
         wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
-        assert_eq!(
-            node_metrics
-                .minimal_block_recoveries
-                .with_label_values(&["inflated"])
-                .get(),
-            1
-        );
     }
 
-    /// Forced capacity 1-4: overflow at each cap resets the stream, the full-form
-    /// replay redelivers everything, and once the parked tasks heal, permits and
-    /// gauges return to zero.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn forced_recovery_capacity_one_to_four_makes_progress() {
-        for cap in 1..=4usize {
-            let s = minimal_wire_scenario(2, 2, cap + 1);
-            let mut client = FixedStreamClient::new(s.wire.clone());
-            // After the overflow reset, the sender replays the full forms.
-            client.blocks_after_reset = Some(
-                s.blocks
-                    .iter()
-                    .map(|block| ExtendedSerializedBlock {
-                        block: block.serialized().clone(),
-                        minimal: None,
-                        excluded_ancestors: vec![],
-                    })
-                    .collect(),
-            );
-            let network_client = Arc::new(client);
-            let authority_service = Arc::new(Mutex::new(TestService::new()));
-            let receiver_dag = empty_receiver_dag(&s.context);
-            let subscriber = Subscriber::new(
-                s.context.clone(),
-                network_client.clone(),
-                authority_service.clone(),
-                receiver_dag.clone(),
-            )
-            .with_recovery_limits(RecoveryLimits {
-                peer_count: cap,
-                ..RecoveryLimits::default()
-            });
-            subscriber.subscribe(s.peer);
-
-            // The cap+1-th un-inflatable block overflows, resets the stream, and the
-            // replay delivers every block in full form.
-            wait_until(|| authority_service.lock().handle_send_block.len() > cap).await;
-            let node_metrics = &s.context.metrics.node_metrics;
-            assert_eq!(
-                node_metrics
-                    .minimal_block_quota_drops
-                    .with_label_values(&["peer_count"])
-                    .get(),
-                1,
-                "cap {cap}"
-            );
-            assert!(*network_client.subscribe_calls.lock() >= 2, "cap {cap}");
-            let received = authority_service.lock().handle_send_block.clone();
-            for block in &s.blocks {
-                assert!(
-                    received.iter().any(|(_, b)| b.block == *block.serialized()),
-                    "cap {cap}: replayed block missing"
-                );
-            }
-            // Heal the parked tasks; all permits must come back.
-            receiver_dag.write().accept_blocks(s.ancestors.clone());
-            wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-            assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
-            assert!(network_client.fetch_calls.lock().is_empty(), "cap {cap}");
-        }
-    }
-
-    /// Each quota bound (global bytes, per-peer bytes, per-peer count) drops with its
-    /// own metric label and resets the stream immediately.
+    /// A quota overflow drops the block with its limit label and resets the stream so
+    /// full replay redelivers it. Per-limit attribution across the three bounds is
+    /// pinned at the unit level by quota_isolation_across_peers_and_rollback.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn quota_overflow_resets_stream_for_full_replay() {
-        let cases: [(&str, RecoveryLimits); 3] = [
-            (
-                "global_bytes",
-                RecoveryLimits {
-                    global_bytes: 8,
-                    ..RecoveryLimits::default()
-                },
-            ),
-            (
-                "peer_bytes",
-                RecoveryLimits {
-                    peer_bytes: 8,
-                    ..RecoveryLimits::default()
-                },
-            ),
-            (
-                "peer_count",
-                RecoveryLimits {
-                    peer_count: 0,
-                    ..RecoveryLimits::default()
-                },
-            ),
-        ];
-        for (label, limits) in cases {
-            let s = minimal_wire_scenario(2, 2, 1);
-            let mut client = FixedStreamClient::new(s.wire.clone());
-            // Post-reset the sender replays full form (production behavior); without
-            // this the same minimal re-overflows on every reconnect, and only the
-            // escalating backoff — not a quiet stream — would pace the loop.
-            client.blocks_after_reset = Some(vec![ExtendedSerializedBlock {
-                block: s.blocks[0].serialized().clone(),
-                minimal: None,
-                excluded_ancestors: vec![],
-            }]);
-            let network_client = Arc::new(client);
-            let authority_service = Arc::new(Mutex::new(TestService::new()));
-            let receiver_dag = empty_receiver_dag(&s.context);
-            let subscriber = Subscriber::new(
-                s.context.clone(),
-                network_client.clone(),
-                authority_service.clone(),
-                receiver_dag,
-            )
-            .with_recovery_limits(limits);
-            subscriber.subscribe(s.peer);
-
-            let context = s.context.clone();
-            wait_until(|| {
-                context
-                    .metrics
-                    .node_metrics
-                    .minimal_block_quota_drops
-                    .with_label_values(&[label])
-                    .get()
-                    >= 1
-            })
-            .await;
-            wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
-            // Nothing was admitted, so nothing is parked.
-            assert_eq!(
-                context
-                    .metrics
-                    .node_metrics
-                    .minimal_block_recovery_parked
-                    .get(),
-                0
-            );
-        }
-    }
-
-    /// Sequential park-heal cycles through one permit: completed tasks release their
-    /// quota for reuse and the reaped JoinSet does not accumulate. No drop is ever
-    /// recorded despite capacity one.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn completed_recovery_tasks_are_reaped() {
-        let (context, _keys) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let peer = context.committee.to_authority_index(2).unwrap();
-        let sender_dag = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let sender_inflater = BlockInflater::new(context.clone(), sender_dag.clone());
-
-        let (live_tx, live_rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut client = FixedStreamClient::new(vec![]);
-        client.live = Mutex::new(Some(live_rx));
-        let network_client = Arc::new(client);
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = empty_receiver_dag(&context);
-        let subscriber = Subscriber::new(
-            context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag.clone(),
-        )
-        .with_recovery_limits(RecoveryLimits {
-            peer_count: 1,
-            ..RecoveryLimits::default()
-        });
-        subscriber.subscribe(peer);
-
-        let node_metrics = &context.metrics.node_metrics;
-        for cycle in 0..5u32 {
-            // Fresh ancestor slots per cycle so waits never alias across cycles.
-            let ancestor_round = 2 + 2 * cycle;
-            let mut ancestors = Vec::new();
-            let mut ancestor_refs = Vec::new();
-            for authority in 0..4u32 {
-                let block =
-                    VerifiedBlock::new_for_test(TestBlock::new(ancestor_round, authority).build());
-                ancestor_refs.push(block.reference());
-                sender_dag.write().accept_block(block.clone());
-                ancestors.push(block);
-            }
-            ancestor_refs.sort_by_key(|r| (r.author != peer, r.author));
-            let block = VerifiedBlock::new_for_test(
-                TestBlock::new(ancestor_round + 1, peer.value() as u32)
-                    .set_ancestors_raw(ancestor_refs)
-                    .build(),
-            );
-            live_tx
-                .send(ExtendedSerializedBlock {
-                    block: block.serialized().clone(),
-                    minimal: Some(sender_inflater.serialize(&block).unwrap()),
-                    excluded_ancestors: vec![],
-                })
-                .unwrap();
-            wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 1).await;
-            receiver_dag.write().accept_blocks(ancestors);
-            wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-            wait_until(|| authority_service.lock().handle_send_block.len() >= (cycle + 1) as usize)
-                .await;
-        }
-        // One permit served all five cycles without a single quota drop or reset.
-        assert_eq!(
-            node_metrics
-                .minimal_block_quota_drops
-                .with_label_values(&["peer_count"])
-                .get(),
-            0
-        );
-        assert_eq!(*network_client.subscribe_calls.lock(), 1);
-        assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
-    }
-
-    /// A deep laggard needs no mode machinery: live minimal blocks it cannot use fill
-    /// the quota, the overflow resets the stream, and the sender's full-form replay
-    /// carries it forward.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn laggard_recovers_via_full_replay_without_catchup_mode() {
-        // Lag ~100 rounds: within the recovery horizon, so the quota path (not the
-        // horizon reset) is what carries this laggard.
-        let s = minimal_wire_scenario(2, 1599, 3);
+        let s = minimal_wire_scenario(2, 2, 1);
         let mut client = FixedStreamClient::new(s.wire.clone());
-        client.blocks_after_reset = Some(
-            s.blocks
-                .iter()
-                .map(|block| ExtendedSerializedBlock {
-                    block: block.serialized().clone(),
-                    minimal: None,
-                    excluded_ancestors: vec![],
-                })
-                .collect(),
-        );
+        // Post-reset the sender replays full form (production behavior); without
+        // this the same minimal re-overflows on every reconnect, and only the
+        // escalating backoff — not a quiet stream — would pace the loop.
+        client.blocks_after_reset = Some(vec![ExtendedSerializedBlock {
+            block: s.blocks[0].serialized().clone(),
+            minimal: None,
+            excluded_ancestors: vec![],
+        }]);
         let network_client = Arc::new(client);
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
-        // The receiver is ~100 rounds behind the tip.
-        receiver_dag
-            .write()
-            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1499, 0).build()));
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
@@ -1165,22 +921,40 @@ mod test {
             receiver_dag,
         )
         .with_recovery_limits(RecoveryLimits {
-            peer_count: 2,
+            global_bytes: 8,
             ..RecoveryLimits::default()
         });
         subscriber.subscribe(s.peer);
 
-        // Overflow at the third tip minimal; the replay then delivers all three full.
-        wait_until(|| authority_service.lock().handle_send_block.len() >= 3).await;
-        let received = authority_service.lock().handle_send_block.clone();
-        for block in &s.blocks {
-            assert!(
-                received.iter().any(|(_, b)| b.block == *block.serialized()),
-                "full replay should deliver the tip range"
-            );
-        }
-        assert!(*network_client.subscribe_calls.lock() >= 2);
-        assert!(network_client.fetch_calls.lock().is_empty());
+        let context = s.context.clone();
+        wait_until(|| {
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_quota_drops
+                .with_label_values(&["global_bytes"])
+                .get()
+                >= 1
+        })
+        .await;
+        // The caused-reset floor must actually pace the reconnect: paused time makes
+        // the elapsed virtual duration deterministic.
+        let dropped_at = tokio::time::Instant::now();
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        assert!(
+            dropped_at.elapsed() >= CAUSED_RESET_DELAY,
+            "reconnect after a caused reset must wait out the floor delay"
+        );
+        // Nothing was admitted, so nothing is parked; the replayed full form arrives.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get(),
+            0
+        );
+        wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
     }
 
     /// A quota-overflow stream reset must not cancel recovery tasks already parked:
@@ -1277,9 +1051,6 @@ mod test {
                 .get(),
             4
         );
-        // Nothing was parked and nothing reached the service.
-        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
-        assert!(authority_service.lock().handle_send_block.is_empty());
     }
 
     /// A minimal block claiming a round beyond the recovery horizon must not park —

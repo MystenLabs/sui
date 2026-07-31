@@ -180,7 +180,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_blocks_sent: IntCounterVec,
     pub(crate) minimal_blocks_sent_bytes_saved: IntCounterVec,
     pub(crate) minimal_blocks_received: IntCounterVec,
-    pub(crate) minimal_blocks_received_bytes_saved: IntCounterVec,
     pub(crate) minimal_block_inflate_drop: IntCounterVec,
     pub(crate) minimal_block_recovery_latency: Histogram,
     pub(crate) minimal_block_recovery_parked: IntGauge,
@@ -188,7 +187,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recoveries: IntCounterVec,
     pub(crate) minimal_block_repairs: IntCounterVec,
     pub(crate) minimal_block_quota_drops: IntCounterVec,
-    pub(crate) minimal_block_encode_cache: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
@@ -608,12 +606,6 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            minimal_blocks_received_bytes_saved: register_int_counter_vec_with_registry!(
-                "minimal_blocks_received_bytes_saved",
-                "Pre-compression payload bytes saved on successfully inflated minimal blocks, per peer",
-                &["authority"],
-                registry,
-            ).unwrap(),
             minimal_block_inflate_drop: register_int_counter_vec_with_registry!(
                 "minimal_block_inflate_drop",
                 "Minimal blocks that failed inflation at receipt, per peer and reason; recoverable reasons are handed to a slot-waiting recovery task, malformed is rejected outright",
@@ -652,12 +644,6 @@ impl NodeMetrics {
                 "minimal_block_recovery_latency",
                 "Seconds from parking a minimal block to its recovered form completing handle_send_block",
                 FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            ).unwrap(),
-            minimal_block_encode_cache: register_int_counter_vec_with_registry!(
-                "minimal_block_encode_cache",
-                "Send-path minimal-encoding cache lookups, by result (hit|miss)",
-                &["result"],
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
