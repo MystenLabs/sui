@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cfg::CFG;
+use super::{ast::SyntaxCommand, cfg::CFG};
 use crate::{diagnostics::Diagnostics, hlir::ast::*};
 use move_abstract_interpreter::absint;
 use std::{collections::BTreeMap, rc::Rc};
@@ -41,7 +41,7 @@ pub trait TransferFunctions {
         pre: &mut Self::State,
         lbl: Label,
         idx: usize,
-        command: &Command,
+        command: &SyntaxCommand,
     ) -> Diagnostics;
 }
 
@@ -121,7 +121,7 @@ impl<TF: TransferFunctions> absint::AbstractInterpreter for AbstractInterpreter<
     type State = (<TF as TransferFunctions>::State, Option<Rc<Diagnostics>>);
 
     type InstructionIndex = usize;
-    type Instruction = Command;
+    type Instruction = SyntaxCommand;
 
     fn start(&mut self) -> Result<(), Self::Error> {
         Ok(())
@@ -193,7 +193,7 @@ struct CFGWrapper<'a, T: CFG>(&'a T);
 impl<T: CFG> move_abstract_interpreter::control_flow_graph::ControlFlowGraph for CFGWrapper<'_, T> {
     type BlockId = Label;
     type InstructionIndex = usize;
-    type Instruction = Command;
+    type Instruction = SyntaxCommand;
     type Instructions = ();
 
     fn block_start(&self, label: Self::BlockId) -> Self::InstructionIndex {

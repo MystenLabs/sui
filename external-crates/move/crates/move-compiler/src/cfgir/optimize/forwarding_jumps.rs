@@ -30,12 +30,12 @@ use move_proc_macros::growing_stack;
 
 use crate::{
     cfgir::{
-        ast::{BasicBlocks, remap_labels},
+        ast::{BasicBlocks, SyntaxCommand, remap_labels, ssp},
         cfg::{CFG, MutForwardCFG},
     },
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
-    hlir::ast::{Command, Command_, FunctionSignature, Label, SingleType, Value, Var},
+    hlir::ast::{Command_, FunctionSignature, Label, SingleType, Value, Var},
     parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
@@ -69,7 +69,7 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
     use Command_ as C;
     let mut forwarding_jumps = BTreeMap::new();
     for (label, block) in blocks.iter().filter(|(_, block)| block.len() == 1) {
-        if let Some(sp!(_, C::Jump { target, .. })) = block.iter().last() {
+        if let Some(ssp!(_, C::Jump { target, .. })) = block.iter().last() {
             forwarding_jumps.insert(*label, *target);
         }
     }
@@ -128,7 +128,7 @@ fn optimize_forwarding_jumps(
 }
 
 #[growing_stack]
-fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
+fn optimize_cmd(ssp!(_, cmd_): &mut SyntaxCommand, final_jumps: &BTreeMap<Label, Label>) -> bool {
     use Command_ as C;
     match cmd_ {
         C::Jump {

@@ -10,7 +10,12 @@ use crate::{
         self as N, BlockLabel, Color, MatchArm_, TParamID, Type, TypeInner, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
-    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
+    shared::{
+        ide::IDEAnnotation,
+        macro_expansion::{MacroExpansionInfo, MacroExpansionKind},
+        program_info::FunctionInfo,
+        unique_map::UniqueMap,
+    },
     typing::{
         ast as T,
         core::{self, TParamSubst},
@@ -20,7 +25,9 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-type LambdaMap = BTreeMap<Var_, (N::Lambda, Loc, Vec<Type>, Type)>;
+/// Maps a lambda parameter to the lambda, its expression location, its
+/// function-type location, its parameter types, and its result type.
+type LambdaMap = BTreeMap<Var_, (N::Lambda, Loc, Loc, Vec<Type>, Type)>;
 type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 struct ParamInfo {
     argument: Option<EvalStrategy<Loc, Loc>>,
@@ -75,6 +82,7 @@ pub(crate) fn call(
     // If none, there is no body to expand, likely because of an error in the macro definition
     let macro_body = context.macro_body(&m, &f)?;
     let macro_info = context.function_info(&m, &f);
+    let macro_def_loc = macro_info.full_loc;
 
     let (macro_type_params, macro_params, mut macro_body, return_label, max_color) =
         match recolor_macro(
@@ -202,7 +210,22 @@ pub(crate) fn call(
         };
         wrapped_body = Box::new(sp(call_loc, N::Exp_::Block(block)));
     }
-    let body = Box::new(sp(call_loc, N::Exp_::Annotate(wrapped_body, return_type)));
+    // Demarcate the expanded body for debugger support. By-value arguments
+    // are not part of the node: they are bound at the call site, in the
+    // enclosing scope, before the body runs.
+    let expansion_info = MacroExpansionInfo {
+        kind: MacroExpansionKind::MacroBody {
+            module: m,
+            function: f,
+        },
+        invocation_location: call_loc,
+        expansion_location: macro_def_loc,
+    };
+    let expanded_body = Box::new(sp(
+        call_loc,
+        N::Exp_::MacroExpansion(expansion_info, wrapped_body),
+    ));
+    let body = Box::new(sp(call_loc, N::Exp_::Annotate(expanded_body, return_type)));
     Some(ExpandedMacro {
         by_value_args,
         body,
@@ -289,8 +312,21 @@ fn bind_lambda(
     result_ty: Type,
 ) -> Option<()> {
     match arg.value {
-        N::Exp_::Lambda(lambda) => {
-            lambdas.insert(param, (lambda, tfunloc, param_ty, result_ty));
+        N::Exp_::Lambda(mut lambda) => {
+            // Consider:
+            //   macro fun apply($f: |u64| -> u64): u64 { $f(1) }
+            //   macro fun forward($g: |u64| -> u64): u64 { apply!($g) }
+            //   forward!(|x| x + p)
+            // On the first binding, `macro_expansion_loc` is `None`, so
+            // `lambda_loc` is initialized from `arg.loc`, the location of
+            // `|x| x + p`. Storing it on the lambda lets its clone carry the
+            // location through `$g`. On the nested binding, `lambda_loc` is
+            // taken from the stored value instead of that binding's `arg.loc`
+            // (the location of `$g`). Neither binding changes `arg.loc`, which
+            // remains the diagnostic span for that occurrence.
+            let lambda_loc = lambda.macro_expansion_loc.unwrap_or(arg.loc);
+            lambda.macro_expansion_loc = Some(lambda_loc);
+            lambdas.insert(param, (lambda, lambda_loc, tfunloc, param_ty, result_ty));
             Some(())
         }
         _ => {
@@ -554,6 +590,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
+        | N::Exp_::MacroExpansion(_, e)
         | N::Exp_::Annotate(e, _) => recolor_exp(ctx, e),
         N::Exp_::Assign(lvalues, e) => {
             recolor_lvalues(ctx, lvalues);
@@ -671,6 +708,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             return_label,
             use_fun_color,
             body,
+            macro_expansion_loc: _,
             extra_annotations: _,
         }) => {
             ctx.add_block_label(*return_label);
@@ -830,6 +868,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         | N::Exp_::Abort(e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
+        | N::Exp_::MacroExpansion(_, e)
         | N::Exp_::Loop(_, e) => exp(context, e),
         N::Exp_::Cast(e, ty) | N::Exp_::Annotate(e, ty) => {
             exp(context, e);
@@ -976,7 +1015,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         ///////
         N::Exp_::Var(sp!(_, v_)) if context.lambdas.contains_key(v_) => {
             context.mark_used(v_);
-            let (lambda, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
+            let (lambda, _, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
             let mut lambda = lambda.clone();
             lambda
                 .extra_annotations
@@ -994,8 +1033,10 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     return_label,
                     use_fun_color,
                     body: mut lambda_body,
+                    macro_expansion_loc: _,
                     extra_annotations,
                 },
+                lambda_loc,
                 tfunloc,
                 param_tys,
                 result_ty,
@@ -1084,7 +1125,20 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 seq: (N::UseFuns::new(use_fun_color), labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
-            let annot_body = all_result_ty.into_iter().fold(labeled_body, |body, ty| {
+            // Demarcate the lambda body (and only the body) for debugger
+            // support: the parameter bindings and the evaluation of the
+            // lambda's arguments below happen in the enclosing expansion's
+            // scope, before the lambda itself is entered.
+            let expansion_info = MacroExpansionInfo {
+                kind: MacroExpansionKind::Lambda,
+                invocation_location: *eloc,
+                expansion_location: lambda_loc,
+            };
+            let expanded_body = Box::new(sp(
+                body_loc,
+                N::Exp_::MacroExpansion(expansion_info, labeled_body),
+            ));
+            let annot_body = all_result_ty.into_iter().fold(expanded_body, |body, ty| {
                 Box::new(sp(body_loc, N::Exp_::Annotate(body, ty)))
             });
             // pad args with errors
@@ -1149,7 +1203,20 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 _ => unreachable!("ICE all macro args should have been made blocks in naming"),
             };
 
-            *e_ = N::Exp_::Annotate(Box::new(arg), expected_ty);
+            // Demarcate the substituted argument for debugger support: it
+            // was written at the call site but evaluates here, at its use
+            // inside the macro body.
+            let expansion_info = MacroExpansionInfo {
+                kind: MacroExpansionKind::Argument,
+                invocation_location: *eloc,
+                expansion_location: arg.loc,
+            };
+            let arg_loc = arg.loc;
+            let expanded_arg = Box::new(sp(
+                arg_loc,
+                N::Exp_::MacroExpansion(expansion_info, Box::new(arg)),
+            ));
+            *e_ = N::Exp_::Annotate(expanded_arg, expected_ty);
         }
         N::Exp_::VarCall(sp!(_, v_), _) if context.by_name_args.contains_key(v_) => {
             context.mark_used(v_);

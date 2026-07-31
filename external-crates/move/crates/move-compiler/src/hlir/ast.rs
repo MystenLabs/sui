@@ -13,7 +13,10 @@ use crate::{
         FunctionName, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
+        Name, NumericalAddress, TName,
+        ast_debug::*,
+        program_info::TypingProgramInfo,
+        syntax_info::{SyntaxInfo, SyntaxSpanned},
         unique_map::UniqueMap,
     },
 };
@@ -234,7 +237,15 @@ pub enum Statement_ {
         name: BlockLabel,
         block: Block,
     },
+    /// Groups statements produced within one expansion. `info` is the complete
+    /// expansion context shared with expressions lowered from `body`. CFG
+    /// lowering attaches `info` to the commands generated from this region.
+    MacroExpansion {
+        info: Arc<SyntaxInfo>,
+        body: Block,
+    },
 }
+
 pub type Statement = Spanned<Statement_>;
 
 pub type Block = VecDeque<Statement>;
@@ -418,7 +429,11 @@ pub enum UnannotatedExp_ {
 
     UnresolvedError,
 }
-pub type UnannotatedExp = Spanned<UnannotatedExp_>;
+/// HLIR expressions carry a [`SyntaxLoc`] so instructions emitted directly
+/// from an expression can retain both its source location and expansion
+/// context, even when the expression is moved into a command created under a
+/// different context.
+pub type UnannotatedExp = SyntaxSpanned<UnannotatedExp_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Exp {
     pub ty: Type,
@@ -1377,6 +1392,10 @@ impl AstDebug for Statement_ {
                 name.ast_debug(w);
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))
+            }
+            S::MacroExpansion { info, body } => {
+                w.write(format!("macro-expansion {}: ", info.debug_chain()));
+                w.block(|w| body.ast_debug(w))
             }
         }
     }

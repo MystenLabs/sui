@@ -6,7 +6,7 @@ mod state;
 
 use super::{
     absint::*,
-    ast::BasicBlock,
+    ast::{BasicBlock, SyntaxCommand, SyntaxLoc, SyntaxSpanned, ssp},
     cfg::{CFG, MutForwardCFG, MutReverseCFG, ReverseCFG},
     locals,
 };
@@ -16,7 +16,6 @@ use crate::{
     hlir::ast::{self as H, *},
     shared::unique_map::UniqueMap,
 };
-use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use state::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -54,7 +53,7 @@ impl TransferFunctions for Liveness {
         state: &mut Self::State,
         label: Label,
         idx: usize,
-        cmd: &Command,
+        cmd: &SyntaxCommand,
     ) -> Diagnostics {
         command(state, cmd);
         // set current [label][command_idx] data with the new liveness data
@@ -81,7 +80,7 @@ fn analyze(
 }
 
 #[growing_stack]
-fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
+fn command(state: &mut LivenessState, ssp!(_, cmd_): &SyntaxCommand) {
     use Command_ as C;
     match cmd_ {
         C::Assign(_, ls, e) => {
@@ -185,7 +184,11 @@ mod last_usage {
     use move_proc_macros::growing_stack;
 
     use crate::{
-        cfgir::{CFGContext, ast::BasicBlock, liveness::state::LivenessState},
+        cfgir::{
+            CFGContext,
+            ast::{BasicBlock, SyntaxCommand, ssp},
+            liveness::state::LivenessState,
+        },
         diag,
         hlir::{
             ast::*,
@@ -243,7 +246,7 @@ mod last_usage {
     }
 
     #[growing_stack]
-    fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
+    fn command(context: &mut Context, ssp!(_, cmd_): &mut SyntaxCommand) {
         use Command_ as C;
         match cmd_ {
             C::Assign(_, ls, e) => {
@@ -446,7 +449,9 @@ fn release_dead_refs_block(
         return;
     }
 
-    let cmd_loc = block.front().unwrap().loc;
+    // Injected pops take the block's first command's location and syntactic
+    // (e.g., macro expansion) context, since they execute in its stead.
+    let cmd_sloc = block.front().unwrap().sloc.clone();
     let cur_state = {
         let mut s = liveness_pre_state.clone();
         for cmd in block.iter().rev() {
@@ -462,7 +467,7 @@ fn release_dead_refs_block(
         .map(|var| (var, locals.get(var).unwrap()))
         .filter(is_ref);
     for (dead_ref, (_, ty)) in dead_refs {
-        block.push_front(pop_ref(cmd_loc, *dead_ref, ty.clone()));
+        block.push_front(pop_ref(cmd_sloc.clone(), *dead_ref, ty.clone()));
     }
 }
 
@@ -473,17 +478,20 @@ fn is_ref((_local, (_, sp!(_, local_ty_))): &(&Var, &(Mutability, SingleType))) 
     }
 }
 
-fn pop_ref(loc: Loc, var: Var, ty: SingleType) -> Command {
+fn pop_ref(sloc: SyntaxLoc, var: Var, ty: SingleType) -> SyntaxCommand {
     use Command_ as C;
     use UnannotatedExp_ as E;
     let move_e_ = E::Move {
         annotation: MoveOpAnnotation::InferredLastUsage,
         var,
     };
-    let move_e = H::exp(Type_::single(ty), sp(loc, move_e_));
+    let move_e = H::exp(
+        Type_::single(ty),
+        ssp(sloc.loc, sloc.syntax_info.clone(), move_e_),
+    );
     let pop_ = C::IgnoreAndPop {
         pop_num: 1,
         exp: move_e,
     };
-    sp(loc, pop_)
+    SyntaxSpanned::new(sloc, pop_)
 }

@@ -97,7 +97,9 @@ fn is_simple_deref_ref_exp(exp: &Exp) -> bool {
         TE::Vector(_, _, _, _) => true,
         TE::Copy { .. } => true,
 
-        TE::Cast(inner, _) | TE::Annotate(inner, _) => is_simple_deref_ref_exp(inner),
+        TE::Cast(inner, _) | TE::Annotate(inner, _) | TE::MacroExpansion(_, inner) => {
+            is_simple_deref_ref_exp(inner)
+        }
 
         TE::Move { .. } => false, // Copy case
         TE::Use(_) => todo!(),

@@ -17,7 +17,8 @@ use crate::{
         MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        Name, NamedAddressMap, ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap,
+        Name, NamedAddressMap, ast_debug::*, macro_expansion::MacroExpansionInfo,
+        program_info::TypingProgramInfo, unique_map::UniqueMap,
     },
 };
 use move_core_types::parsing::address::NumericalAddress;
@@ -212,6 +213,9 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
+    /// Typed form of `N::Exp_::MacroExpansion`, consumed during HLIR lowering
+    /// to construct syntax contexts for generated statements and expressions.
+    MacroExpansion(MacroExpansionInfo, Box<Exp>),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -773,6 +777,10 @@ impl AstDebug for UnannotatedExp_ {
                 seq.ast_debug(w)
             }
             E::Block(seq) => seq.ast_debug(w),
+            E::MacroExpansion(info, e) => {
+                w.write(format!("macro-expansion {}: ", info.kind.debug_name()));
+                e.ast_debug(w)
+            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

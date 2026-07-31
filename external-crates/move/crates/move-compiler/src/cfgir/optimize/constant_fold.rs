@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{
+        ast::{SyntaxCommand, ssp},
+        cfg::MutForwardCFG,
+    },
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
-        BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value, Value_, Var,
+        BaseType, BaseType_, Command_, Exp, FunctionSignature, SingleType, TypeName, TypeName_,
+        UnannotatedExp_, Value, Value_, Var,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
     parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
@@ -63,7 +66,7 @@ struct Context<'a> {
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
+fn optimize_cmd(context: &Context, ssp!(_, cmd_): &mut SyntaxCommand) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
         C::Assign(_, _ls, e) => optimize_exp(context, e),
@@ -143,7 +146,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 Some(v) => v,
                 None => return changed,
             };
-            *e_ = fold_unary_op(e.exp.loc, op, v);
+            *e_ = fold_unary_op(e.exp.sloc.loc, op, v);
             true
         }
 
@@ -159,7 +162,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let v2_opt = foldable_exp(e2);
             // TODO warn on operations that always fail
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
-                if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
+                if let Some(folded) = fold_binary_op(e.exp.sloc.loc, op, v1, v2) {
                     *e_ = folded;
                     true
                 } else {
@@ -181,7 +184,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 Some(v) => v,
                 None => return changed,
             };
-            match fold_cast(e.exp.loc, bt, v) {
+            match fold_cast(e.exp.loc(), bt, v) {
                 Some(folded) => {
                     *e_ = folded;
                     true
@@ -201,7 +204,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             }
             let mut vs = vec![];
             for earg in eargs {
-                let eloc = earg.exp.loc;
+                let eloc = earg.exp.loc();
                 if let Some(v) = foldable_exp(earg) {
                     vs.push(sp(eloc, v));
                 } else {
@@ -209,7 +212,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 }
             }
             debug_assert!(n == vs.len());
-            *e_ = evalue_(e.exp.loc, Value_::Vector(ty.clone(), vs));
+            *e_ = evalue_(e.exp.sloc.loc, Value_::Vector(ty.clone(), vs));
             true
         }
     }
