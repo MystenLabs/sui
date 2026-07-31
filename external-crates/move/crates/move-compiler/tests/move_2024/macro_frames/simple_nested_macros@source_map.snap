@@ -1,0 +1,58 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+source 0x..bff6c:
+   1 | // Tests the frame gap: inner's MacroBody must have outer's MacroBody as its parent.
+   2 | module A::m {
+   3 |     macro fun inner($x: u64): u64 {
+   4 |         $x + 1
+   5 |     }
+   6 | 
+   7 |     macro fun outer($x: u64): u64 {
+   8 |         inner!($x)
+   9 |     }
+  10 | 
+  11 |     public fun test(v: u64): u64 {
+  12 |         outer!(v)
+  13 |     }
+  14 | }
+
+module 41::m
+
+function test:
+  location: 11:5-13:6 `public fun test(v: u64): u64 { ...`
+  definition: 11:16-11:20 `test`
+  parameters:
+    0 v#0#0: 11:21-11:22 `v`
+  returns:
+    0: 11:30-11:33 `u64`
+  code_map:
+    0: 12:16-12:17 `v`
+    1: 4:14-4:15 `1`
+    2: 4:12-4:13 `+`
+    3: 12:9-12:18 `outer!(v)`
+  macro_frame_info:
+    [0] MacroBody(41::m::outer)
+        parent: -
+        source: 7:5-9:6 `macro fun outer($x: u64): u64 { ...`
+        call: 12:9-12:18 `outer!(v)`
+    [1] MacroBody(41::m::inner)
+        parent: 0
+        source: 3:5-5:6 `macro fun inner($x: u64): u64 { ...`
+        call: 8:9-8:19 `inner!($x)`
+    [2] Argument
+        parent: 1
+        source: 8:16-8:18 `$x`
+        call: 4:9-4:11 `$x`
+    [3] Argument
+        parent: 2
+        source: 12:16-12:17 `v`
+        call: 8:16-8:18 `$x`
+  macro_frame_map:
+    0 -> 3
+    1 -> 1
+    3 -> -

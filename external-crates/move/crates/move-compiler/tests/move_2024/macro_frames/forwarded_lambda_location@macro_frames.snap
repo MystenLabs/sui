@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/forwarded_lambda_location.move:13:9
+   │
+ 5 │         $f(1)
+   │         ----- [2] Lambda
+   ·
+ 9 │         apply!($g)
+   │         ---------- [1] MacroBody(0x41::m::apply)
+   ·
+13 │         forward!(|x| x + p)
+   │         ^^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::forward)
+   │
+   = Frame transitions (test):
+       5: `$f(1)`
+           [] -> [0:MacroBody(forward), 1:MacroBody(apply)]
+       13: `forward!(|x| x + p)`
+           [0:MacroBody(forward), 1:MacroBody(apply)] -> [0:MacroBody(forward), 1:MacroBody(apply), 2:Lambda]
+       13: `forward!(|x| x + p)`
+           [0:MacroBody(forward), 1:MacroBody(apply), 2:Lambda] -> []

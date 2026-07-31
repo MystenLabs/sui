@@ -2,7 +2,7 @@ Command `build`:
 BUILDING Test
 Command `disassemble --package Test --name m --bytecode-map`:
 {
-  "version": 2,
+  "version": 3,
   "from_file_path": null,
   "definition_location": {
     "file_hash": "a3e27676cbc6a7d65269d2e7374f089b04bfe0d38f86dcc63227a4e912b5adb1",
@@ -360,7 +360,9 @@ Command `disassemble --package Test --name m --bytecode-map`:
           "end": 1656
         }
       },
-      "is_native": false
+      "is_native": false,
+      "macro_frame_info": [],
+      "macro_frame_map": []
     },
     "1": {
       "location": {
@@ -380,7 +382,9 @@ Command `disassemble --package Test --name m --bytecode-map`:
       "nops": {},
       "labels": {},
       "code_map": {},
-      "is_native": true
+      "is_native": true,
+      "macro_frame_info": [],
+      "macro_frame_map": []
     }
   },
   "constant_map": {

@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/match_in_macro.move:19:9
+   │
+12 │         match ($e) {
+   │                -- [1] Argument
+13 │             E::V(x) => x,
+14 │             E::Empty => $default,
+   │                         -------- [2] Argument
+   ·
+19 │         unwrap_or!(e, 42)
+   │         ^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::unwrap_or)
+   │
+   = Frame transitions (test):
+       19: `unwrap_or!(e, 42)`
+           [] -> [0:MacroBody(unwrap_or), 1:Argument]
+       12: `match ($e) {`
+           [0:MacroBody(unwrap_or), 1:Argument] -> [0:MacroBody(unwrap_or)]
+       19: `unwrap_or!(e, 42)`
+           [0:MacroBody(unwrap_or)] -> [0:MacroBody(unwrap_or), 2:Argument]
+       12: `match ($e) {`
+           [0:MacroBody(unwrap_or), 2:Argument] -> [0:MacroBody(unwrap_or)]
+       19: `unwrap_or!(e, 42)`
+           [0:MacroBody(unwrap_or)] -> []
