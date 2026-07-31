@@ -51,7 +51,7 @@ task 9, lines 76-82:
 //> 2: Dep_V2::d::ping();
 //> sui::package::commit_upgrade(Input(0), Result(1))
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly Dep_V1 (version 1) and Dep_V2 (version 2) to be used in the same transaction"), command: Some(2) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly Dep_V2 (version 2) and Dep_V1 (version 1) to be used in the same transaction"), command: Some(1) } }
 
 task 10, lines 84-91:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep2)
