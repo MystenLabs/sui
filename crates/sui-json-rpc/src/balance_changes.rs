@@ -4,11 +4,12 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use async_trait::async_trait;
-use sui_types::balance_change::derive_balance_changes;
+use sui_types::balance_change::address_balance_changes_from_accumulator_events;
 use tokio::sync::RwLock;
 
 use sui_json_rpc_types::BalanceChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::coin::Coin;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::{Object, Owner};
@@ -63,16 +64,52 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         .collect::<Vec<_>>();
     let input_coins = fetch_coins(object_provider, &modified_at_version).await?;
     let mutated_coins = fetch_coins(object_provider, &all_mutated).await?;
-    Ok(
-        derive_balance_changes(effects, &input_coins, &mutated_coins)
-            .into_iter()
-            .map(|change| BalanceChange {
-                owner: Owner::AddressOwner(change.address),
-                coin_type: change.coin_type,
-                amount: change.amount,
+    Ok(derive_rpc_balance_changes(
+        effects,
+        &input_coins,
+        &mutated_coins,
+    ))
+}
+
+fn derive_rpc_balance_changes(
+    effects: &TransactionEffects,
+    input_objects: &[Object],
+    output_objects: &[Object],
+) -> Vec<BalanceChange> {
+    let mut balances = BTreeMap::new();
+
+    for (address, coin_type, amount) in address_balance_changes_from_accumulator_events(effects) {
+        *balances
+            .entry((Owner::AddressOwner(address), coin_type))
+            .or_insert(0i128) += amount;
+    }
+
+    for object in input_objects {
+        if let Ok(Some((coin_type, balance))) = Coin::extract_balance_if_coin(object) {
+            *balances
+                .entry((object.owner().clone(), coin_type))
+                .or_insert(0i128) -= balance as i128;
+        }
+    }
+
+    for object in output_objects {
+        if let Ok(Some((coin_type, balance))) = Coin::extract_balance_if_coin(object) {
+            *balances
+                .entry((object.owner().clone(), coin_type))
+                .or_insert(0i128) += balance as i128;
+        }
+    }
+
+    balances
+        .into_iter()
+        .filter_map(|((owner, coin_type), amount)| {
+            (amount != 0).then_some(BalanceChange {
+                owner,
+                coin_type,
+                amount,
             })
-            .collect(),
-    )
+        })
+        .collect()
 }
 
 #[instrument(skip_all)]
@@ -361,9 +398,10 @@ mod tests {
         Balance::type_tag("0x2::sui::SUI".parse().unwrap())
     }
 
-    fn create_accumulator_write(
+    fn create_accumulator_write_with_operation(
         address: SuiAddress,
         amount: u64,
+        operation: AccumulatorOperation,
     ) -> (ObjectID, EffectsObjectChange) {
         let balance_type = sui_balance_type();
         let obj_id = *AccumulatorValueRoot::get_field_id(address, &balance_type)
@@ -371,13 +409,20 @@ mod tests {
             .inner();
         let write = AccumulatorWriteV1 {
             address: AccumulatorAddress::new(address, balance_type),
-            operation: AccumulatorOperation::Split,
+            operation,
             value: AccumulatorValue::Integer(amount),
         };
         (
             obj_id,
             EffectsObjectChange::new_from_accumulator_write(write),
         )
+    }
+
+    fn create_accumulator_write(
+        address: SuiAddress,
+        amount: u64,
+    ) -> (ObjectID, EffectsObjectChange) {
+        create_accumulator_write_with_operation(address, amount, AccumulatorOperation::Split)
     }
 
     fn create_failed_effects_with_accumulator(
@@ -457,6 +502,118 @@ mod tests {
             lamport_version,
             changed_objects,
             Some(gas_id),
+            None,
+            vec![],
+        );
+
+        let mut provider = MockObjectProvider::new();
+        provider.insert(input_obj);
+        provider.insert(output_obj);
+
+        (effects, provider)
+    }
+
+    fn create_effects_with_coin_balance_change(
+        owner: Owner,
+        initial_value: u64,
+        final_value: u64,
+    ) -> (TransactionEffects, MockObjectProvider) {
+        let gas_id = ObjectID::random();
+        let old_version = SequenceNumber::from_u64(1);
+        let lamport_version = SequenceNumber::from_u64(2);
+
+        let input_obj = Object::new_move(
+            MoveObject::new_gas_coin(old_version, gas_id, initial_value),
+            owner.clone(),
+            TransactionDigest::random(),
+        );
+        let output_obj = Object::new_move(
+            MoveObject::new_gas_coin(lamport_version, gas_id, final_value),
+            owner.clone(),
+            TransactionDigest::random(),
+        );
+
+        let mut changed_objects = BTreeMap::new();
+        changed_objects.insert(
+            gas_id,
+            EffectsObjectChange::new(
+                Some(((old_version, input_obj.digest()), owner)),
+                Some(&output_obj),
+                false,
+                false,
+            ),
+        );
+
+        let effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            0,
+            GasCostSummary::default(),
+            vec![],
+            std::collections::BTreeSet::new(),
+            TransactionDigest::random(),
+            lamport_version,
+            changed_objects,
+            None,
+            None,
+            vec![],
+        );
+
+        let mut provider = MockObjectProvider::new();
+        provider.insert(input_obj);
+        provider.insert(output_obj);
+
+        (effects, provider)
+    }
+
+    fn create_effects_with_consensus_coin_and_accumulator(
+        owner: Owner,
+        coin_deduction: u64,
+        acc_address: SuiAddress,
+        acc_amount: u64,
+    ) -> (TransactionEffects, MockObjectProvider) {
+        let gas_id = ObjectID::random();
+        let old_version = SequenceNumber::from_u64(1);
+        let lamport_version = SequenceNumber::from_u64(2);
+
+        let input_obj = Object::new_move(
+            MoveObject::new_gas_coin(old_version, gas_id, 1_000 + coin_deduction),
+            owner.clone(),
+            TransactionDigest::random(),
+        );
+        let output_obj = Object::new_move(
+            MoveObject::new_gas_coin(lamport_version, gas_id, 1_000),
+            owner.clone(),
+            TransactionDigest::random(),
+        );
+
+        let mut changed_objects = BTreeMap::new();
+        changed_objects.insert(
+            gas_id,
+            EffectsObjectChange::new(
+                Some(((old_version, input_obj.digest()), owner)),
+                Some(&output_obj),
+                false,
+                false,
+            ),
+        );
+
+        let (acc_obj_id, acc_change) = create_accumulator_write_with_operation(
+            acc_address,
+            acc_amount,
+            AccumulatorOperation::Merge,
+        );
+        changed_objects.insert(acc_obj_id, acc_change);
+
+        let effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            0,
+            GasCostSummary::default(),
+            vec![],
+            std::collections::BTreeSet::new(),
+            TransactionDigest::random(),
+            lamport_version,
+            changed_objects,
+            None,
             None,
             vec![],
         );
@@ -589,5 +746,71 @@ mod tests {
         assert_eq!(result[0].owner, Owner::AddressOwner(address));
         assert_eq!(result[0].coin_type, GAS::type_tag());
         assert_eq!(result[0].amount, -1200);
+    }
+
+    #[tokio::test]
+    async fn test_object_owned_coin_balance_change_preserves_owner_kind() {
+        let parent = ObjectID::random();
+        let owner = Owner::ObjectOwner(parent.into());
+        let (effects, provider) =
+            create_effects_with_coin_balance_change(owner.clone(), 1_000, 600);
+
+        let result = get_balance_changes_from_effect(&provider, &effects, vec![], None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].owner, owner);
+        assert_eq!(result[0].coin_type, GAS::type_tag());
+        assert_eq!(result[0].amount, -400);
+    }
+
+    #[tokio::test]
+    async fn test_consensus_owned_coin_balance_change_preserves_owner_kind() {
+        let address = SuiAddress::random_for_testing_only();
+        let start_version = SequenceNumber::from_u64(7);
+        let owner = Owner::ConsensusAddressOwner {
+            start_version,
+            owner: address,
+        };
+        let (effects, provider) =
+            create_effects_with_coin_balance_change(owner.clone(), 1_000, 850);
+
+        let result = get_balance_changes_from_effect(&provider, &effects, vec![], None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].owner, owner);
+        assert_eq!(result[0].coin_type, GAS::type_tag());
+        assert_eq!(result[0].amount, -150);
+    }
+
+    #[tokio::test]
+    async fn test_consensus_owned_coin_and_address_balance_changes_do_not_net_out() {
+        let address = SuiAddress::random_for_testing_only();
+        let owner = Owner::ConsensusAddressOwner {
+            start_version: SequenceNumber::from_u64(9),
+            owner: address,
+        };
+        let (effects, provider) =
+            create_effects_with_consensus_coin_and_accumulator(owner.clone(), 100, address, 100);
+
+        let result = get_balance_changes_from_effect(&provider, &effects, vec![], None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 2);
+
+        let coin_change = result.iter().find(|change| change.owner == owner).unwrap();
+        assert_eq!(coin_change.coin_type, GAS::type_tag());
+        assert_eq!(coin_change.amount, -100);
+
+        let acc_change = result
+            .iter()
+            .find(|change| change.owner == Owner::AddressOwner(address))
+            .unwrap();
+        assert_eq!(acc_change.coin_type, GAS::type_tag());
+        assert_eq!(acc_change.amount, 100);
     }
 }
