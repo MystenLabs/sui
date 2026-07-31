@@ -16769,6 +16769,7 @@ dependencies = [
  "sui-config",
  "sui-data-store",
  "sui-execution",
+ "sui-framework",
  "sui-json-rpc-types",
  "sui-move-build",
  "sui-package-alt",

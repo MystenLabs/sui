@@ -25,7 +25,7 @@ pub struct PreparedLocalSimulationTransaction {
     pub transaction: TransactionData,
     /// Input descriptors from the transaction before synthetic gas was added.
     pub input_object_kinds: Vec<InputObjectKind>,
-    /// Receiving references, which are loaded separately from ordinary inputs.
+    /// Receiving references captured separately; checkpoint dry-run rejects them before loading.
     pub receiving_object_refs: Vec<ObjectRef>,
     /// Synthetic gas object to add directly to loaded inputs, if one was needed.
     pub mock_gas_object: Option<Object>,

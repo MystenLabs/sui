@@ -45,6 +45,7 @@ zstd.workspace = true
 indicatif.workspace = true
 
 [dev-dependencies]
+sui-framework.workspace = true
 sui-protocol-config.workspace = true
 
 [features]
