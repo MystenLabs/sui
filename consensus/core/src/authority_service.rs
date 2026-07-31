@@ -1614,8 +1614,8 @@ mod tests {
         }
 
         // V3 blocks ride the same emission path now that the codec reconstructs them.
-        let live_v3 = VerifiedBlock::new_for_test(crate::block::Block::V3(
-            crate::block::BlockV3::new(
+        let live_v3 =
+            VerifiedBlock::new_for_test(crate::block::Block::V3(crate::block::BlockV3::new(
                 0,
                 17,
                 context.committee.to_authority_index(0).unwrap(),
@@ -1626,8 +1626,7 @@ mod tests {
                 5,
                 vec![],
                 vec![],
-            ),
-        ));
+            )));
         tx_block_broadcast
             .send(ExtendedBlock {
                 block: live_v3.clone(),

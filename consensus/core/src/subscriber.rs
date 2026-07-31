@@ -723,7 +723,11 @@ mod test {
         wire: Vec<ExtendedSerializedBlock>,
     }
 
-    fn minimal_wire_scenario(peer_index: usize, ancestor_round: Round, count: usize) -> MinimalWireScenario {
+    fn minimal_wire_scenario(
+        peer_index: usize,
+        ancestor_round: Round,
+        count: usize,
+    ) -> MinimalWireScenario {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let peer = context.committee.to_authority_index(peer_index).unwrap();
@@ -735,9 +739,8 @@ mod test {
         let mut ancestors = Vec::new();
         let mut ancestor_refs = Vec::new();
         for authority in 0..4u32 {
-            let block = VerifiedBlock::new_for_test(
-                TestBlock::new(ancestor_round, authority).build(),
-            );
+            let block =
+                VerifiedBlock::new_for_test(TestBlock::new(ancestor_round, authority).build());
             ancestor_refs.push(block.reference());
             sender_dag.write().accept_block(block.clone());
             ancestors.push(block);
@@ -893,7 +896,7 @@ mod test {
 
             // The cap+1-th un-inflatable block overflows, resets the stream, and the
             // replay delivers every block in full form.
-            wait_until(|| authority_service.lock().handle_send_block.len() >= cap + 1).await;
+            wait_until(|| authority_service.lock().handle_send_block.len() > cap).await;
             let node_metrics = &s.context.metrics.node_metrics;
             assert_eq!(
                 node_metrics
@@ -907,7 +910,7 @@ mod test {
             let received = authority_service.lock().handle_send_block.clone();
             for block in &s.blocks {
                 assert!(
-                    received.iter().any(|(_, b)| &b.block == block.serialized()),
+                    received.iter().any(|(_, b)| b.block == *block.serialized()),
                     "cap {cap}: replayed block missing"
                 );
             }
@@ -983,7 +986,11 @@ mod test {
             wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
             // Nothing was admitted, so nothing is parked.
             assert_eq!(
-                context.metrics.node_metrics.minimal_block_recovery_parked.get(),
+                context
+                    .metrics
+                    .node_metrics
+                    .minimal_block_recovery_parked
+                    .get(),
                 0
             );
         }
@@ -1028,9 +1035,8 @@ mod test {
             let mut ancestors = Vec::new();
             let mut ancestor_refs = Vec::new();
             for authority in 0..4u32 {
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(ancestor_round, authority).build(),
-                );
+                let block =
+                    VerifiedBlock::new_for_test(TestBlock::new(ancestor_round, authority).build());
                 ancestor_refs.push(block.reference());
                 sender_dag.write().accept_block(block.clone());
                 ancestors.push(block);
@@ -1051,10 +1057,8 @@ mod test {
             wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 1).await;
             receiver_dag.write().accept_blocks(ancestors);
             wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-            wait_until(|| {
-                authority_service.lock().handle_send_block.len() >= (cycle + 1) as usize
-            })
-            .await;
+            wait_until(|| authority_service.lock().handle_send_block.len() >= (cycle + 1) as usize)
+                .await;
         }
         // One permit served all five cycles without a single quota drop or reset.
         assert_eq!(
@@ -1109,7 +1113,7 @@ mod test {
         let received = authority_service.lock().handle_send_block.clone();
         for block in &s.blocks {
             assert!(
-                received.iter().any(|(_, b)| &b.block == block.serialized()),
+                received.iter().any(|(_, b)| b.block == *block.serialized()),
                 "full replay should deliver the tip range"
             );
         }
@@ -1156,7 +1160,7 @@ mod test {
         let received = authority_service.lock().handle_send_block.clone();
         for block in &s.blocks {
             assert!(
-                received.iter().any(|(_, b)| &b.block == block.serialized()),
+                received.iter().any(|(_, b)| b.block == *block.serialized()),
                 "parked task should survive the reconnect"
             );
         }

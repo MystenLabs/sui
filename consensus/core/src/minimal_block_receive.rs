@@ -267,10 +267,7 @@ enum WaitCheck {
 /// aborted with its owning `JoinSet` on shutdown, which releases the permit and
 /// deregisters any pending slot wait.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn recover_minimal_block<
-    C: ValidatorNetworkClient,
-    S: ValidatorNetworkService,
->(
+pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: ValidatorNetworkService>(
     context: Arc<Context>,
     block_inflater: Arc<BlockInflater>,
     dag_state: Weak<RwLock<DagState>>,
@@ -363,8 +360,7 @@ pub(crate) async fn recover_minimal_block<
             // a wait the block no longer needs.
             loop {
                 let mut registration = accepted_slots.register_one(&missing);
-                let mut own_registration =
-                    accepted_slots.register_one(&Slot::from(claimed_ref));
+                let mut own_registration = accepted_slots.register_one(&Slot::from(claimed_ref));
                 let check = {
                     let Some(dag_state) = dag_state.upgrade() else {
                         return;
@@ -448,9 +444,7 @@ async fn submit<S: ValidatorNetworkService>(
     peer: AuthorityIndex,
     serialized: Bytes,
 ) -> Option<bool> {
-    let Some(authority_service) = authority_service.upgrade() else {
-        return None;
-    };
+    let authority_service = authority_service.upgrade()?;
     let block = ExtendedSerializedBlock {
         block: serialized,
         minimal: None,
@@ -719,11 +713,7 @@ mod tests {
     }
 
     impl TaskHarness {
-        fn spawn(
-            &self,
-            join_set: &mut tokio::task::JoinSet<()>,
-            client: Arc<RepairOnlyClient>,
-        ) {
+        fn spawn(&self, join_set: &mut tokio::task::JoinSet<()>, client: Arc<RepairOnlyClient>) {
             let permit = self
                 .quotas
                 .try_acquire(self.peer, self.minimal.len())
@@ -849,9 +839,8 @@ mod tests {
         // digest) are accepted before the task runs. The sibling's author must not be
         // the receiver's own index: DagState asserts against own-slot equivocation.
         h.receiver_dag.write().accept_blocks(h.ancestors.clone());
-        let sibling = VerifiedBlock::new_for_test(
-            TestBlock::new(10, 1).set_timestamp_ms(999_999).build(),
-        );
+        let sibling =
+            VerifiedBlock::new_for_test(TestBlock::new(10, 1).set_timestamp_ms(999_999).build());
         h.receiver_dag.write().accept_block(sibling);
         let mut join_set = tokio::task::JoinSet::new();
         h.spawn(&mut join_set, client.clone());
