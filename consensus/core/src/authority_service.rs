@@ -38,14 +38,6 @@ use crate::{
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
-/// How long a full-form fallback subscription (serving a lagging subscriber) lives
-/// before the stream is ended so the subscriber reconnects with its current position —
-/// the connection is the only carrier of that position, so this bounds how long a
-/// caught-up subscriber keeps receiving full form. Jittered per subscriber so a region
-/// that entered fallback together does not renegotiate in synchronized waves.
-const FULL_FORM_FALLBACK_REFRESH: Duration = Duration::from_secs(90);
-const FULL_FORM_FALLBACK_REFRESH_JITTER_SECS: u64 = 61;
-
 /// Authority's network service implementation, agnostic to the actual networking stack used.
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
@@ -464,32 +456,16 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // Minimal blocks are emitted for live broadcasts only: the catch-up replay above
         // serves rounds where the subscriber's cache state is unpredictable, so it always
-        // sends full blocks. Emission is protocol-gated: every validator on a version
-        // with the flag can decode both forms, so senders may emit minimal freely.
-        //
-        // Emission is also lag-gated per subscription: a subscriber resuming more than
-        // a DAG-cache window behind cannot resolve omitted digests (its DAG and hint
-        // window both trail the tip), so minimal blocks only cost it work — it is
-        // served full form, like the replay. The subscriber's position is only carried
-        // by the (re)connection, so fallback streams expire after a refresh interval,
-        // forcing a caught-up subscriber to renegotiate back to minimal.
-        let subscriber_lag = self
-            .dag_state
-            .read()
-            .highest_accepted_round()
-            .saturating_sub(last_received);
-        // Grant full form to any subscriber beyond the parking margin: past it, a
-        // minimal block that fails inflation cannot be parked (no wake beats the
-        // deadline), so full form is strictly better. Aligning the grant bar with the
-        // margin — rather than any higher threshold — also guarantees a node in
-        // active catch-up can never be renewed back onto minimal mid-recovery,
-        // whatever its instantaneous lag reads.
-        let lag_fallback = subscriber_lag > crate::subscriber::PARKING_ROUND_MARGIN;
+        // sends full blocks — which is also what makes the receive-side quota-overflow
+        // reset sound (the replayed range bypasses recovery entirely) and gives deep
+        // laggards a deterministic catch-up path. Emission is protocol-gated: every
+        // validator on a version with the flag can decode both forms. No lag gate is
+        // needed: a receiver that cannot inflate a live minimal block parks it in a
+        // bounded slot-wait and inflates it as its DAG advances, at any lag.
         let emit_minimal = self
             .context
             .protocol_config
-            .minimal_block_propagation_enabled()
-            && !lag_fallback;
+            .minimal_block_propagation_enabled();
         let block_inflater = self.block_inflater.clone();
         let minimal_cache = self.minimal_cache.clone();
         let context = self.context.clone();
@@ -525,24 +501,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 serialized
             }))
         }));
-        if lag_fallback {
-            info!(
-                "Serving full-form blocks to lagging subscriber {peer} \
-                 (resumed {subscriber_lag} rounds behind)"
-            );
-            // Jitter must differ across THIS subscriber's many senders (not just
-            // across subscribers), or all its leases expire in one synchronized wave.
-            let lease = FULL_FORM_FALLBACK_REFRESH
-                + Duration::from_secs(
-                    (self.context.own_index.value() as u64 * 31 + peer.value() as u64)
-                        % FULL_FORM_FALLBACK_REFRESH_JITTER_SECS,
-                );
-            Ok(Box::pin(
-                stream.take_until(Box::pin(tokio::time::sleep(lease))),
-            ))
-        } else {
-            Ok(Box::pin(stream))
-        }
+        Ok(Box::pin(stream))
     }
 
     // Handles 3 types of requests:
@@ -1548,29 +1507,21 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_emits_minimal_for_live_only() {
         // Emission is on via ConsensusProtocolConfig::for_testing() inside new_for_test.
-        subscribe_blocks_emission(true, false).await;
+        subscribe_blocks_emission(true).await;
     }
 
     /// The rollout-safety property of the protocol flag: with it off, live broadcasts
     /// carry no minimal form.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_flag_off_emits_full_only() {
-        subscribe_blocks_emission(false, false).await;
+        subscribe_blocks_emission(false).await;
     }
 
-    /// A subscriber that resumes more than a DAG-cache window behind is served full
-    /// form even with emission enabled — minimal blocks are useless to it.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_handle_subscribe_blocks_full_form_for_lagging_subscriber() {
-        subscribe_blocks_emission(true, true).await;
-    }
-
-    async fn subscribe_blocks_emission(emit_minimal_flag: bool, subscriber_lagging: bool) {
-        let emit_minimal = emit_minimal_flag && !subscriber_lagging;
+    async fn subscribe_blocks_emission(emit_minimal: bool) {
         let (mut context, _keys) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_minimal_block_propagation_enabled_for_testing(emit_minimal_flag);
+            .set_minimal_block_propagation_enabled_for_testing(emit_minimal);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1607,7 +1558,7 @@ mod tests {
         ));
 
         // Proposed block for the catch-up replay, and one block per authority at round 15
-        // to serve as resolvable ancestors of the live block.
+        // to serve as resolvable ancestors of the live blocks.
         let own_block = VerifiedBlock::new_for_test(TestBlock::new(15, 0).build());
         dag_state.write().accept_block(own_block.clone());
         let mut ancestors = vec![own_block.reference()];
@@ -1616,14 +1567,7 @@ mod tests {
             ancestors.push(block.reference());
             dag_state.write().accept_block(block);
         }
-        if subscriber_lagging {
-            // Our accepted tip at round 700 puts the subscriber's resume round (10)
-            // more than a DAG-cache window (500) behind.
-            dag_state
-                .write()
-                .accept_block(VerifiedBlock::new_for_test(TestBlock::new(700, 1).build()));
-        }
-
+        let ancestors_for_v3 = ancestors.clone();
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
@@ -1664,6 +1608,38 @@ mod tests {
             let minimal = live
                 .minimal
                 .expect("live block should carry a minimal form");
+            assert!(minimal.len() < live.block.len());
+        } else {
+            assert!(live.minimal.is_none());
+        }
+
+        // V3 blocks ride the same emission path now that the codec reconstructs them.
+        let live_v3 = VerifiedBlock::new_for_test(crate::block::Block::V3(
+            crate::block::BlockV3::new(
+                0,
+                17,
+                context.committee.to_authority_index(0).unwrap(),
+                1100,
+                ancestors_for_v3,
+                vec![],
+                vec![],
+                5,
+                vec![],
+                vec![],
+            ),
+        ));
+        tx_block_broadcast
+            .send(ExtendedBlock {
+                block: live_v3.clone(),
+                excluded_ancestors: vec![],
+            })
+            .unwrap();
+        let live = stream.next().await.unwrap();
+        assert_eq!(live.block, *live_v3.serialized());
+        if emit_minimal {
+            let minimal = live
+                .minimal
+                .expect("live V3 block should carry a minimal form");
             assert!(minimal.len() < live.block.len());
         } else {
             assert!(live.minimal.is_none());

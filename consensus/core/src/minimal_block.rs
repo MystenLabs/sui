@@ -16,7 +16,7 @@
 //! signature => reject the peer).
 //!
 //! Minimal blocks are emitted only for live broadcasts on the validator `subscribe_blocks`
-//! stream, and only for V1/V2 blocks — V3 is sent full until it ships and gets codec
+//! stream, for every block version — `Block::with_ancestors` reconstructs V1/V2/V3
 //! coverage here.
 
 use bytes::Bytes;
@@ -79,8 +79,6 @@ struct AncestorOverride {
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum MinimalBlockError {
-    #[error("V3 blocks are not supported by the minimal-block codec")]
-    UnsupportedVariant,
     #[error("failed to serialize block: {0}")]
     Serialization(#[from] bcs::Error),
 }
@@ -130,10 +128,6 @@ pub(crate) fn serialize_minimal(
     resolver: &impl AncestorDigestResolver,
     min_omittable_round: Round,
 ) -> Result<Bytes, MinimalBlockError> {
-    if matches!(**block, Block::V3(_)) {
-        return Err(MinimalBlockError::UnsupportedVariant);
-    }
-
     let default_round = block.round().saturating_sub(1);
     let mut ancestor_authors = Vec::with_capacity(block.ancestors().len());
     let mut overrides = vec![];
@@ -203,11 +197,6 @@ pub(crate) fn deserialize_minimal(
 
     let skeleton: Block = bcs::from_bytes(&minimal.block_sans_ancestors)
         .map_err(|e| InflateError::Malformed(format!("bcs decode: {e}")))?;
-    if matches!(skeleton, Block::V3(_)) {
-        return Err(InflateError::Malformed(
-            "V3 blocks must be sent in full form".into(),
-        ));
-    }
     if !skeleton.ancestors().is_empty() {
         return Err(InflateError::Malformed(
             "block_sans_ancestors must have empty ancestors".into(),
@@ -885,24 +874,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v3_is_rejected_by_encoder() {
-        let v3 = Block::V3(crate::block::BlockV3::new(
+    async fn roundtrip_v3() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let mut rng = StdRng::seed_from_u64(3);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(4, 9, &mut resolver, &mut rng);
+        let block = Block::V3(crate::block::BlockV3::new(
             0,
             10,
             AuthorityIndex::new_for_test(0),
             1000,
-            vec![],
-            vec![],
+            ancestors,
+            vec![Transaction::new(vec![1, 2, 3])],
             vec![],
             5,
             vec![],
             vec![],
         ));
-        let block = VerifiedBlock::new_for_test(v3);
-        assert!(matches!(
-            serialize_minimal(&block, &MapResolver::default(), 0),
-            Err(MinimalBlockError::UnsupportedVariant)
-        ));
+        let block = sign(block, &context, &key_pairs);
+        let minimal = roundtrip(&block, &context, &resolver, 0);
+        assert!(minimal.len() < block.serialized().len());
     }
 
     /// Post-zstd wire bytes of full vs minimal encoding for a mainnet-shaped block

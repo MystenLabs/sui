@@ -39,12 +39,6 @@ use crate::minimal_block_receive::RecoveryLimits;
 /// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
 const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 
-/// Sender-side full-form grant bar: a subscriber resuming more than this many rounds
-/// behind is served full form (see `authority_service`). Receive-side recovery no
-/// longer keys off this margin — slot waits terminate through acceptance or GC at any
-/// lag — but granting full form to deep laggards remains cheaper for both sides.
-pub(crate) const PARKING_ROUND_MARGIN: Round = 32;
-
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
     /// A full-form block, or a minimal block successfully inflated to full form.
