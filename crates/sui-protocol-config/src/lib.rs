@@ -29,7 +29,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 132;
+const MAX_PROTOCOL_VERSION: u64 = 133;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -373,6 +373,7 @@ const MAINNET_USDB: &str =
 //              root version of hash-derived UIDs (`new_uid_from_hash`).
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
+// Version 133: Add `package::original_package_id` and its native costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1677,6 +1678,9 @@ pub struct ProtocolConfig {
     config_read_setting_impl_cost_base: Option<u64>,
     config_read_setting_impl_cost_per_byte: Option<u64>,
 
+    package_original_package_id_impl_cost_base: Option<u64>,
+    package_original_package_id_impl_cost_per_byte: Option<u64>,
+
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
     dynamic_field_hash_type_and_key_cost_base: Option<u64>,
@@ -2587,6 +2591,9 @@ impl ProtocolConfig {
             // Cost params for the Move native function `read_setting_impl``
             config_read_setting_impl_cost_base: None,
             config_read_setting_impl_cost_per_byte: None,
+
+            package_original_package_id_impl_cost_base: None,
+            package_original_package_id_impl_cost_per_byte: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4555,6 +4562,12 @@ impl ProtocolConfig {
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                     cfg.feature_flags
                         .enable_order_independent_upgrade_init_linkage = true;
+                }
+                133 => {
+                    cfg.package_original_package_id_impl_cost_base = Some(52);
+                    let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
+                    cfg.package_original_package_id_impl_cost_per_byte =
+                        Some(package_read_cost_per_byte);
                 }
                 // Use this template when making changes:
                 //
