@@ -78,11 +78,35 @@ pub struct ObjectArg {
 pub struct FundsWithdrawalArg {
     // if true, it was from a compatibility object input, not a intentional withdrawal argument
     pub from_compatibility_object: bool,
-    /// The full type `sui::funds_accumulator::Withdrawal<T>`
+    /// The full type.
+    /// Either `sui::funds_accumulator::Withdrawal<T>` for a direct source, or
+    /// `sui::allowance::AllowanceWithdrawal<T>` for an allowance source
     pub ty: Type,
-    pub owner: AccountAddress,
+    pub source: WithdrawalSource,
     /// This amount is verified to be <= the max for the type described by the `T` in `ty`
     pub amount: U256,
+}
+
+#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
+pub enum WithdrawalSource {
+    /// A `sui::funds_accumulator::Withdrawal` from the sender/sponsor
+    Direct { owner: AccountAddress },
+    /// An `sui::allowance::AllowanceWithdrawal` permissioned by the `Allowance` object `id`
+    Allowance {
+        funder: AccountAddress,
+        id: ObjectID,
+    },
+}
+
+impl WithdrawalSource {
+    /// The account the withdrawal debits.
+    pub fn source_account(&self) -> AccountAddress {
+        match self {
+            Self::Direct { owner } => *owner,
+            Self::Allowance { funder, .. } => *funder,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
