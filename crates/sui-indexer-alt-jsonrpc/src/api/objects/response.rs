@@ -55,11 +55,17 @@ pub(super) async fn live_object(
         .context("Failed to load latest object")?
     {
         object
-    } else if let Some(object) = try_resolve_address_balance_object(ctx, object_id)
+    } else if let Some(coin) = try_resolve_address_balance_object(ctx, object_id)
         .await
         .context("Failed to resolve address balance object")?
     {
-        object
+        // The fabricated object only renders the coin's contents; (version, digest) must come
+        // from the encoded withdrawal ref so `getObject` agrees with `suix_getCoins` and returns
+        // a spendable reference.
+        let mut data = object_data_with_options(ctx, coin.contents, options).await?;
+        data.version = coin.object_ref.1;
+        data.digest = coin.object_ref.2;
+        return Ok(SuiObjectResponse::new_with_data(data));
     } else {
         return Ok(SuiObjectResponse::new_with_error(
             SuiObjectResponseError::NotExists { object_id },

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
+use anyhow::ensure;
 use move_core_types::language_storage::TypeTag;
 use sui_json_rpc_types::Coin;
 use sui_types::accumulator_root::AccumulatorKey;
@@ -18,6 +19,17 @@ use sui_types::object::Owner;
 
 use crate::context::Context;
 use crate::data::load_live;
+
+/// Struct to support a view of an address balance as a coin.
+///
+/// An address balance is an entry folded into a balance accumulator. However, consumers of of
+/// jsonrpc-alt expect `ObjectRef`s, so the implementation spoofs one using a masked ID, the
+/// accumulator object's version, and the digest field repurposed as a carrier for (epoch, amount).
+pub(crate) struct AddressBalanceCoin {
+    /// Fabricated `Coin` object to render the balance as if it were a coin.
+    pub(crate) contents: Object,    
+    pub(crate) object_ref: ObjectRef,
+}
 
 /// Synthesize an address balance coin for the given owner and coin type.
 ///
@@ -75,11 +87,12 @@ pub(crate) async fn load_address_balance_coin(
 ///
 /// When `getObject` is called with an ID that doesn't exist, this function unmaskes the ID
 /// (XOR with chain identifier) and checks if it points to a balance accumulator object.
-/// If so, it synthesizes a Coin object to return to the client.
+/// If so, it synthesizes a Coin object to return to the client, along with its encoded
+/// withdrawal ref (see [`AddressBalanceCoin`]).
 pub(crate) async fn try_resolve_address_balance_object(
     ctx: &Context,
     object_id: ObjectID,
-) -> Result<Option<Object>, anyhow::Error> {
+) -> Result<Option<AddressBalanceCoin>, anyhow::Error> {
     if !super::latest_feature_flag(ctx, "enable_coin_reservation_obj_refs").await? {
         return Ok(None);
     }
@@ -112,11 +125,25 @@ pub(crate) async fn try_resolve_address_balance_object(
         return Ok(None);
     }
 
+    let epoch = super::latest_epoch(ctx).await?;
+    let object_ref = ParsedObjectRefWithdrawal::new(unmasked_id, epoch, balance)
+        .encode(accumulator_version, chain_identifier);
+
+    // `encode` re-derives the masked ID; masking is a XOR involution, so it must round-trip back
+    // to the ID the caller asked about.
+    ensure!(
+        object_ref.0 == object_id,
+        "Masked address balance coin ID did not round-trip",
+    );
+
     let coin_object = Object::new_move(
         MoveObject::new_coin(currency_type, accumulator_version, object_id, balance),
         Owner::AddressOwner(owner),
         accumulator_obj.previous_transaction,
     );
 
-    Ok(Some(coin_object))
+    Ok(Some(AddressBalanceCoin {
+        contents: coin_object,
+        object_ref,
+    }))
 }
