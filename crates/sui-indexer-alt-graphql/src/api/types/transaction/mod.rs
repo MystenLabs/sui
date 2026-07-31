@@ -238,9 +238,9 @@ impl TransactionContents {
                 return Ok(None);
             };
 
-            // Unlike `effectsJson`, no server fetch: the rendered transaction proto is a pure
-            // function of the transaction BCS (no server-side joins), so local conversion is
-            // complete.
+            // `merge_transaction_data` (`sui-types/src/rpc_proto_conversions.rs`) derives every
+            // `Transaction` proto field from the decoded `TransactionData` alone, so local
+            // conversion is equivalent to the json produced from the proto transaction.
             let mut proto_transaction = content.proto_transaction()?;
             // Clear the bcs field as transactionJson is intended to provide a full structured output
             proto_transaction.bcs = None;
