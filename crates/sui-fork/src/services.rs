@@ -46,6 +46,7 @@ use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_rpc_store::CommitterLayer;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::PipelineLayer;
@@ -54,6 +55,13 @@ use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::Store;
 use sui_rpc_store::default_rocksdb_config;
+use sui_rpc_store::indexer::balance::Balance;
+use sui_rpc_store::indexer::epochs::Epochs;
+use sui_rpc_store::indexer::event_bitmap::EventBitmap;
+use sui_rpc_store::indexer::object_by_owner::ObjectByOwner;
+use sui_rpc_store::indexer::object_by_type::ObjectByType;
+use sui_rpc_store::indexer::package_versions::PackageVersions;
+use sui_rpc_store::indexer::transaction_bitmap::TransactionBitmap;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -72,6 +80,26 @@ const INDEXED_CHECKPOINT_POLL_INTERVAL: Duration = Duration::from_millis(20);
 const INDEXED_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
 
 type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
+
+/// The pipelines the embedded indexer owns, by name — the same set
+/// [`ServiceManager::pipeline_layer`] enables, which the test at the bottom of
+/// this file pins.
+///
+/// These are the only pipelines whose watermarks anything writes, so they are
+/// also the only ones that can bound the fork's indexed tip. The column
+/// families `LocalStore` writes are committed in the same batch as their data
+/// and never lag, so including them would peg the bound at `None` forever.
+/// Two callers need the names rather than the layer: the reader's pipeline set
+/// in [`LocalStore::new`], and the watermarks the seed load writes.
+pub(crate) const FORK_INDEXER_PIPELINES: &[&str] = &[
+    ObjectByOwner::NAME,
+    ObjectByType::NAME,
+    Balance::NAME,
+    PackageVersions::NAME,
+    TransactionBitmap::NAME,
+    EventBitmap::NAME,
+    Epochs::NAME,
+];
 
 /// Opened fork services backed by `sui-rpc-store`.
 ///
@@ -491,7 +519,19 @@ mod tests {
             ("epochs", layer.epochs.is_some()),
         ] {
             assert!(enabled, "{name} has no other writer and must stay enabled");
+            assert!(
+                FORK_INDEXER_PIPELINES.contains(&name),
+                "{name} is registered but missing from FORK_INDEXER_PIPELINES, so nothing \
+                 seeds its watermark and the reported indexed tip stays None",
+            );
         }
+
+        assert_eq!(
+            FORK_INDEXER_PIPELINES.len(),
+            7,
+            "FORK_INDEXER_PIPELINES lists a pipeline the layer does not register; its \
+             watermark would never advance and would pin the reported tip",
+        );
 
         for (name, enabled) in [
             ("checkpoint_summary", layer.checkpoint_summary.is_some()),

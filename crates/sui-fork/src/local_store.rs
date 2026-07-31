@@ -13,6 +13,7 @@ use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
 use sui_consistent_store::Restore as _;
 use sui_consistent_store::RestoreState;
+use sui_consistent_store::Watermark;
 use sui_consistent_store::restore_state;
 use sui_rpc_store::RpcStoreReader;
 use sui_rpc_store::RpcStoreSchema;
@@ -47,6 +48,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
+
+use crate::services::FORK_INDEXER_PIPELINES;
 
 /// Synthetic pipeline key recording that the one-shot seed load committed.
 ///
@@ -93,7 +96,13 @@ impl LocalStore {
         forked_at_checkpoint: CheckpointSequenceNumber,
     ) -> Self {
         Self {
-            reader: RpcStoreReader::new(db.clone(), schema.clone()),
+            // The stock default bounds the indexed tip by every pipeline, but
+            // the fork runs only [`FORK_INDEXER_PIPELINES`] — the rest of the
+            // column families it writes itself, in the same batch as their
+            // data, so they have no watermark and never will. Left at the
+            // default, the reported tip would be `None` forever.
+            reader: RpcStoreReader::new(db.clone(), schema.clone())
+                .with_pipelines(FORK_INDEXER_PIPELINES.iter().copied()),
             db,
             schema,
             forked_at_checkpoint,
@@ -396,6 +405,7 @@ impl LocalStore {
                 .with_context(|| format!("failed to stage seed object {}", object.id()))?;
         }
 
+        let framework = FrameworkSchema::new(self.db.clone());
         let complete = RestoreState {
             state: Some(restore_state::State::Complete(restore_state::Complete {
                 restored_at: self.forked_at_checkpoint,
@@ -403,11 +413,27 @@ impl LocalStore {
         };
         batch
             .put(
-                &FrameworkSchema::new(self.db.clone()).restore,
+                &framework.restore,
                 &PipelineTaskKey::new(SEED_RESTORE_PIPELINE),
                 &complete,
             )
             .context("failed to stage seed completion marker")?;
+
+        // A restore is only half done without watermarks: the rows say what the
+        // indexes hold, the watermarks say through which checkpoint, and every
+        // reader asks the second question. The stock restore driver writes them
+        // for the same reason, and the embedded indexer picks up from
+        // `forked_at_checkpoint + 1`, so the two meet without a gap.
+        let watermark = Watermark::for_checkpoint(self.forked_at_checkpoint);
+        for pipeline in FORK_INDEXER_PIPELINES {
+            batch
+                .put(
+                    &framework.watermarks,
+                    &PipelineTaskKey::new(*pipeline),
+                    &watermark,
+                )
+                .with_context(|| format!("failed to stage {pipeline} seed watermark"))?;
+        }
 
         batch.commit().context("failed to load seed objects")?;
         Ok(())
@@ -896,6 +922,36 @@ mod tests {
         drop(store);
 
         assert!(reopen_store(&dir).seed_load_complete().unwrap());
+    }
+
+    /// The seed load is a restore, and a restore without watermarks leaves
+    /// every reader unable to say through which checkpoint the indexes hold.
+    ///
+    /// `min_committed` reports `None` if any pipeline in the reader's set lacks
+    /// a watermark, and the RPC layer turns that into "rpc index is empty" for
+    /// every ledger read. So a fork must answer with its own checkpoint from
+    /// the moment the seed commits, before the embedded indexer has run at all.
+    #[test]
+    fn seed_load_reports_the_fork_checkpoint_as_the_indexed_tip() {
+        let (_dir, store) = fresh_store();
+
+        assert_eq!(
+            RpcIndexes::get_highest_indexed_checkpoint_seq_number(store.reader()).unwrap(),
+            None,
+            "an unseeded fork has nothing indexed",
+        );
+
+        store.restore_seed_objects(&[]).unwrap();
+
+        assert_eq!(
+            RpcIndexes::get_highest_indexed_checkpoint_seq_number(store.reader()).unwrap(),
+            Some(TEST_FORK_CHECKPOINT),
+        );
+        assert_eq!(
+            RpcIndexes::get_highest_live_indexed_checkpoint_seq_number(store.reader()).unwrap(),
+            Some(TEST_FORK_CHECKPOINT),
+            "the live cohort bounds the health check and must be seeded too",
+        );
     }
 
     #[test]

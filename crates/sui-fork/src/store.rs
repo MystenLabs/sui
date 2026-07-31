@@ -41,15 +41,6 @@ use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::BackingStore;
-use sui_types::storage::BalanceInfo;
-use sui_types::storage::BalanceIterator;
-use sui_types::storage::CoinInfo;
-use sui_types::storage::DynamicFieldIteratorItem;
-use sui_types::storage::DynamicFieldKey;
-use sui_types::storage::EpochInfo;
-use sui_types::storage::LedgerBitmapBucketIterator;
-use sui_types::storage::LedgerTxSeqDigest;
-use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
@@ -65,7 +56,6 @@ use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
-use typed_store_error::TypedStoreError;
 
 use crate::GraphQLClient;
 use crate::TransactionInfo;
@@ -225,13 +215,6 @@ impl ForkStore {
             Err(err) if err.kind() == StorageErrorKind::Missing => Ok(None),
             Err(err) => Err(err.into()),
         }
-    }
-
-    /// Get the highest checkpoint sequence number available in the RPC store.
-    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.local_store()
-            .highest_checkpoint_sequence()?
-            .ok_or_else(|| anyhow!("no checkpoint persisted yet"))
     }
 
     /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
@@ -598,6 +581,15 @@ impl ForkStore {
 impl ForkStore {
     /// The stock reader over the fork's local `sui-rpc-store`, for reads the
     /// fork has no policy for.
+    ///
+    /// This is also what [`RpcStateReader::indexes`] hands out, which makes
+    /// every index read *seed-bounded*: owner, dynamic-field, type, and balance
+    /// lookups answer from the local index alone, which holds the seed set
+    /// loaded at fork creation plus whatever local execution has produced
+    /// since. An owner, parent, or type outside the seed set reads as empty
+    /// rather than being resolved against the forked-from chain — the
+    /// checkpoint-pinned enumeration that would answer it belongs to fork
+    /// creation and is not re-runnable at read time.
     fn stock_reader(&self) -> &RpcStoreReader {
         self.local_store().reader()
     }
@@ -1054,9 +1046,10 @@ impl RpcStateReader for ForkStore {
         })
     }
 
-    /// Exposes the store as the RPC index provider.
+    /// Index reads go straight to the stock reader — the fork adds no policy on
+    /// top of them, only the bound described on [`Self::stock_reader`].
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
-        Some(self)
+        Some(self.stock_reader())
     }
 
     /// Reads a struct layout from `sui-rpc-store`.
@@ -1067,138 +1060,6 @@ impl RpcStateReader for ForkStore {
     ) -> StorageResult<Option<MoveTypeLayout>> {
         self.stock_reader()
             .get_struct_layout_with_overlay(struct_tag, overlay)
-    }
-}
-
-impl RpcIndexes for ForkStore {
-    /// Reads epoch index metadata from `sui-rpc-store`.
-    fn get_epoch_info(&self, epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
-        RpcIndexes::get_epoch_info(self.stock_reader(), epoch)
-    }
-
-    /// Iterate address-owned objects from the RPC-store owner index.
-    ///
-    /// This and the four reads below are *seed-bounded*: they answer from the
-    /// local index alone, which holds the seed set loaded at fork creation plus
-    /// whatever local execution has produced since. An owner, parent, or type
-    /// outside the seed set reads as empty rather than being resolved against
-    /// the forked-from chain — the checkpoint-pinned enumeration that would
-    /// answer it belongs to fork creation and is not re-runnable here.
-    fn owned_objects_iter(
-        &self,
-        owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
-    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
-    {
-        RpcIndexes::owned_objects_iter(self.stock_reader(), owner, object_type, cursor)
-    }
-
-    /// Iterate the object-owned children of `parent` from the RPC-store owner
-    /// index. Seed-bounded; see [`Self::owned_objects_iter`].
-    fn dynamic_field_iter(
-        &self,
-        parent: ObjectID,
-        cursor: Option<DynamicFieldKey>,
-    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        RpcIndexes::dynamic_field_iter(self.stock_reader(), parent, cursor)
-    }
-
-    /// Assemble RPC coin metadata from the RPC-store type index. Seed-bounded;
-    /// see [`Self::owned_objects_iter`].
-    fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
-        RpcIndexes::get_coin_info(self.stock_reader(), coin_type)
-    }
-
-    /// Read an address balance from the RPC-store balance index. Seed-bounded;
-    /// see [`Self::owned_objects_iter`].
-    fn get_balance(
-        &self,
-        owner: &SuiAddress,
-        coin_type: &StructTag,
-    ) -> StorageResult<Option<BalanceInfo>> {
-        RpcIndexes::get_balance(self.stock_reader(), owner, coin_type)
-    }
-
-    /// Iterate address balances from the RPC-store balance index. Seed-bounded;
-    /// see [`Self::owned_objects_iter`].
-    fn balance_iter(
-        &self,
-        owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
-    ) -> StorageResult<BalanceIterator<'_>> {
-        RpcIndexes::balance_iter(self.stock_reader(), owner, cursor)
-    }
-
-    /// Iterates package versions from committed `sui-rpc-store` indexes.
-    fn package_versions_iter(
-        &self,
-        original_id: ObjectID,
-        cursor: Option<u64>,
-    ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
-    {
-        RpcIndexes::package_versions_iter(self.stock_reader(), original_id, cursor)
-    }
-
-    /// Genuinely hybrid: the stock read serves the indexer watermark, while
-    /// the fallback reports the highest persisted checkpoint before the
-    /// indexer has written its first watermark.
-    fn get_highest_indexed_checkpoint_seq_number(
-        &self,
-    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
-        match RpcIndexes::get_highest_indexed_checkpoint_seq_number(self.stock_reader())? {
-            Some(sequence) => Ok(Some(sequence)),
-            None => Ok(self.get_highest_checkpoint().ok()),
-        }
-    }
-
-    /// Reads the transaction sequence-to-digest index from `sui-rpc-store`.
-    fn ledger_tx_seq_digest(&self, tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
-        RpcIndexes::ledger_tx_seq_digest(self.stock_reader(), tx_seq)
-    }
-
-    /// Iterates transaction sequence-to-digest rows from `sui-rpc-store`.
-    fn ledger_tx_seq_digest_iter(
-        &self,
-        start: u64,
-        end_exclusive: u64,
-        descending: bool,
-    ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
-        RpcIndexes::ledger_tx_seq_digest_iter(self.stock_reader(), start, end_exclusive, descending)
-    }
-
-    /// Iterates transaction bitmap buckets from `sui-rpc-store`.
-    fn transaction_bitmap_bucket_iter(
-        &self,
-        dimension_key: Vec<u8>,
-        start_bucket: u64,
-        end_bucket_exclusive: u64,
-        descending: bool,
-    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
-        RpcIndexes::transaction_bitmap_bucket_iter(
-            self.stock_reader(),
-            dimension_key,
-            start_bucket,
-            end_bucket_exclusive,
-            descending,
-        )
-    }
-
-    /// Iterates event bitmap buckets from `sui-rpc-store`.
-    fn event_bitmap_bucket_iter(
-        &self,
-        dimension_key: Vec<u8>,
-        start_bucket: u64,
-        end_bucket_exclusive: u64,
-        descending: bool,
-    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
-        RpcIndexes::event_bitmap_bucket_iter(
-            self.stock_reader(),
-            dimension_key,
-            start_bucket,
-            end_bucket_exclusive,
-            descending,
-        )
     }
 }
 

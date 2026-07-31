@@ -305,7 +305,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     let checkpoint = 42;
     let (store, _services) =
         test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
-    let reader = store.clone();
+    let reader = store.local_store().reader().clone();
 
     let seeded_owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -389,7 +389,7 @@ async fn test_seed_load_survives_restart_without_remote() {
         let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
         load_seed_objects(&store, &manifest).expect("seed load should hydrate from the remote");
 
-        let reader = store.clone();
+        let reader = store.local_store().reader().clone();
         let infos: Vec<_> =
             RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
                 .expect("owned-object iterator should read the seeded index")
@@ -411,7 +411,7 @@ async fn test_seed_load_survives_restart_without_remote() {
         test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
     load_seed_objects(&store, &manifest).expect("a resumed seed load must not touch the remote");
 
-    let reader = store.clone();
+    let reader = store.local_store().reader().clone();
     let infos: Vec<_> =
         RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
             .expect("owned-object iterator should read the reopened seed index")
@@ -440,7 +440,7 @@ fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
 
     store.local_store().restore_seed_objects(&[child]).unwrap();
 
-    let reader = store.clone();
+    let reader = store.local_store().reader().clone();
     let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None)
         .expect("dynamic-field iterator should read the seeded object-owner index")
         .map(|result| result.expect("dynamic-field row should decode"))
@@ -476,7 +476,7 @@ fn test_rpc_get_coin_info_reads_seeded_type_index() {
         .restore_seed_objects(&[metadata_object])
         .unwrap();
 
-    let reader = store.clone();
+    let reader = store.local_store().reader().clone();
     let info = RpcIndexes::get_coin_info(&reader, &coin_type)
         .expect("coin-info lookup should read the seeded type index")
         .expect("coin info should be assembled from indexed wrapper objects");
