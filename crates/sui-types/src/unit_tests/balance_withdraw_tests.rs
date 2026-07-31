@@ -1,19 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{language_storage::TypeTag, u256::U256};
 use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     accumulator_root::AccumulatorValue,
+    allowance::{Allowance, Settings},
     base_types::{ObjectID, SequenceNumber, SuiAddress, random_object_ref},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
-    digests::{ChainIdentifier, CheckpointDigest},
+    digests::{ChainIdentifier, CheckpointDigest, TransactionDigest},
     error::UserInputResult,
     gas_coin::GAS,
+    id::UID,
+    object::{MoveObject, OBJECT_START_VERSION, Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        CallArg, FundsWithdrawalArg, GasData, ObjectArg, ProgrammableTransaction, TransactionData,
+        CallArg, FundsWithdrawalArg, GasData, InputObjectKind, InputObjects, ObjectArg,
+        ObjectReadResult, ProgrammableTransaction, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
         TxValidityCheckContext, WithdrawalTypeArg,
     },
@@ -440,5 +444,194 @@ fn test_validity_check_counts_coin_reservations_in_num_reservations() {
         result.is_err(),
         "Expected validation to fail because 11 coin reservations exceeds max_withdraws (10). Got: {:?}",
         result
+    );
+}
+
+/// A loaded-input set containing a real shared `Allowance<funds_type>` object,
+/// as `read_objects_for_signing` would produce for a declared shared input.
+/// Signing does not read the limit fields; they just give the object a
+/// plausible shape.
+fn allowance_input_objects(
+    allowance: ObjectID,
+    funder: SuiAddress,
+    spender: SuiAddress,
+    funds_type: TypeTag,
+) -> InputObjects {
+    let contents = Allowance {
+        id: UID::new(allowance),
+        settings: Settings {
+            name: "".to_string(),
+            funder,
+            spender: Some(spender),
+            app: None,
+            lifetime_cap: Some(U256::from(u64::MAX)),
+            start_timestamp_ms: None,
+            expiration_timestamp_ms: None,
+            rate_limit: None,
+        },
+        current_spend: U256::zero(),
+    };
+    // SAFETY: `Allowance` is key-only, so it has no public transfer.
+    let move_object = unsafe {
+        MoveObject::new_from_execution_with_limit(
+            Allowance::type_(funds_type).into(),
+            false,
+            OBJECT_START_VERSION,
+            bcs::to_bytes(&contents).unwrap(),
+            u64::MAX,
+        )
+        .unwrap()
+    };
+    let object = Object::new_move(
+        move_object,
+        Owner::Shared {
+            initial_shared_version: OBJECT_START_VERSION,
+        },
+        TransactionDigest::genesis_marker(),
+    );
+    InputObjects::new(vec![ObjectReadResult::new(
+        InputObjectKind::SharedMoveObject {
+            id: allowance,
+            initial_shared_version: OBJECT_START_VERSION,
+            mutability: SharedObjectMutability::Mutable,
+        },
+        object.into(),
+    )])
+}
+
+fn balance_gas_type_tag() -> TypeTag {
+    WithdrawalTypeArg::Balance(GAS::type_tag()).to_type_tag()
+}
+
+/// A tx from `sender` withdrawing 100 GAS under `allowance`, declaring `funder`.
+/// The allowance is included as a declared shared-object input, as `spend` requires.
+fn allowance_tx(sender: SuiAddress, funder: SuiAddress, allowance: ObjectID) -> TransactionData {
+    allowance_tx_with_amounts(sender, funder, allowance, &[100])
+}
+
+/// Like `allowance_tx`, with one withdrawal per amount.
+fn allowance_tx_with_amounts(
+    sender: SuiAddress,
+    funder: SuiAddress,
+    allowance: ObjectID,
+    amounts: &[u64],
+) -> TransactionData {
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    ptb.input(CallArg::Object(ObjectArg::SharedObject {
+        id: allowance,
+        initial_shared_version: SequenceNumber::new(),
+        mutability: SharedObjectMutability::Mutable,
+    }))
+    .unwrap();
+    for amount in amounts {
+        ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
+            *amount,
+            GAS::type_tag(),
+            funder,
+            allowance,
+        ))
+        .unwrap();
+    }
+    TransactionData::new_programmable(
+        sender,
+        vec![random_object_ref()],
+        ptb.finish(),
+        1_000_000,
+        1000,
+    )
+}
+
+#[test]
+fn test_allowance_withdraw_reserves_against_funder() {
+    let sender = SuiAddress::random_for_testing_only();
+    let funder = SuiAddress::random_for_testing_only();
+    let tx = allowance_tx(sender, funder, ObjectID::random());
+
+    // The reservation is keyed by the declared funder's account, not the sender's.
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
+    let funder_account = AccumulatorValue::get_field_id(funder, &balance_gas_type_tag()).unwrap();
+    assert_eq!(withdraws.len(), 1);
+    assert_eq!(withdraws.get(&funder_account).unwrap().0, 100);
+}
+
+#[test]
+fn test_validate_allowance_withdrawals() {
+    let sender = SuiAddress::random_for_testing_only();
+    let funder = SuiAddress::random_for_testing_only();
+    let allowance = ObjectID::random();
+    let tx = allowance_tx(sender, funder, allowance);
+
+    let ok = allowance_input_objects(allowance, funder, sender, balance_gas_type_tag());
+    tx.validate_allowance_withdrawals(&ok).unwrap();
+
+    let wrong_funder = allowance_input_objects(
+        allowance,
+        SuiAddress::random_for_testing_only(),
+        sender,
+        balance_gas_type_tag(),
+    );
+    let err = tx
+        .validate_allowance_withdrawals(&wrong_funder)
+        .unwrap_err();
+    assert!(err.to_string().contains("funder"), "{err}");
+
+    let wrong_spender = allowance_input_objects(
+        allowance,
+        funder,
+        SuiAddress::random_for_testing_only(),
+        balance_gas_type_tag(),
+    );
+    let err = tx
+        .validate_allowance_withdrawals(&wrong_spender)
+        .unwrap_err();
+    assert!(err.to_string().contains("spender"), "{err}");
+
+    let wrong_type = allowance_input_objects(
+        allowance,
+        funder,
+        sender,
+        WithdrawalTypeArg::Balance(TypeTag::Bool).to_type_tag(),
+    );
+    let err = tx.validate_allowance_withdrawals(&wrong_type).unwrap_err();
+    assert!(err.to_string().contains("is for"), "{err}");
+
+    // The allowance is missing from the loaded inputs (e.g. revoked).
+    let err = tx
+        .validate_allowance_withdrawals(&InputObjects::new(vec![]))
+        .unwrap_err();
+    assert!(err.to_string().contains("not found"), "{err}");
+
+    // The input with the declared id is not an `Allowance`.
+    let coin = Object::with_id_owner_for_testing(allowance, sender);
+    let coin_ref = coin.compute_object_reference();
+    let not_an_allowance = InputObjects::new(vec![ObjectReadResult::new(
+        InputObjectKind::ImmOrOwnedMoveObject(coin_ref),
+        coin.into(),
+    )]);
+    let err = tx
+        .validate_allowance_withdrawals(&not_an_allowance)
+        .unwrap_err();
+    assert!(err.to_string().contains("not a sui::allowance"), "{err}");
+}
+
+#[test]
+fn test_allowance_requires_feature_flag() {
+    // Accumulators on, allowances off (mainnet's config): the variant must be
+    // rejected at validity.
+    let mut cfg = protocol_config();
+    cfg.set_enable_allowances_for_testing(false);
+    let sender = SuiAddress::random_for_testing_only();
+    let funder = SuiAddress::random_for_testing_only();
+    let tx = allowance_tx(sender, funder, ObjectID::random());
+
+    let err = tx
+        .validity_check(&TxValidityCheckContext::from_cfg_for_testing(&cfg))
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Allowance withdrawals are not enabled"),
+        "{err}"
     );
 }
