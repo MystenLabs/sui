@@ -1184,6 +1184,28 @@ pub fn url_layout() -> A::MoveStructLayout {
     }
 }
 
+/// Mirror of `std::type_name::TypeName`.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveTypeName {
+    pub name: String,
+}
+
+/// `std::option::Option<T>`, which is a struct wrapping a `vector<T>`.
+pub fn option_layout(param: TypeTag, inner: A::MoveTypeLayout) -> A::MoveTypeLayout {
+    A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_OPTION_MODULE_NAME.to_owned(),
+            name: STD_OPTION_STRUCT_NAME.to_owned(),
+            type_params: vec![param],
+        },
+        fields: vec![A::MoveFieldLayout::new(
+            ident_str!("vec").into(),
+            A::MoveTypeLayout::Vector(Box::new(inner)),
+        )],
+    }))
+}
+
 pub fn type_name_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {
         type_: StructTag {

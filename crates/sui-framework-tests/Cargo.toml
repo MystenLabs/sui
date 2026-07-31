@@ -18,6 +18,8 @@ harness = false
 datatest-stable.workspace = true
 prometheus.workspace = true
 
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
 sui-framework.workspace = true
 sui-move.workspace = true
 sui-move-build.workspace = true
