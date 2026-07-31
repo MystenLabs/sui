@@ -1200,6 +1200,9 @@ fn compute_input_reservations(
         let owner = match arg.withdraw_from {
             WithdrawFrom::Sender => transaction_signer,
             WithdrawFrom::Sponsor => gas_data.owner,
+            // The funder will differ from the signer/sponsor, but permission
+            // is verified at signing
+            WithdrawFrom::SenderAllowance { funder, .. } => funder,
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
         let entry = reservations
