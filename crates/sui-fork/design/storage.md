@@ -236,10 +236,11 @@ enumerates the coin types a fork might be asked about, so there is no scan to ta
 advance. Each of the three should resolve on demand, as a targeted type-keyed lookup that
 caches like any other object read and claims completeness over nothing.
 
-That is not what happens today. The three lookups read the local type index, which only the
-seed populates, and the seed cannot reach them: `CoinMetadata` and `RegulatedCoinMetadata`
-are frozen after creation, and the seed admits only address-owned objects. So coin metadata
-resolves to nothing in practice. See "Known gaps".
+That is not what happens today. The three lookups read the local type index, which nothing
+populates on demand, so the answer is bounded by what the seed and local execution happened
+to write. Coin types published inside the fork resolve; pre-fork ones largely do not, because
+`CoinMetadata` and `RegulatedCoinMetadata` are frozen after creation and the seed admits only
+address-owned objects. See "Known gaps".
 
 Events are the same principle seen from the other side. They need no policy of their own
 precisely because the transaction read that produces them has one: whatever pulled the
@@ -327,22 +328,35 @@ JSON depends on this. The same shortcut also picks packages by scanning stored v
 which is safe for ordinary packages, immutable at one version per id, but not for system
 packages, which carry every version they have ever had under one id.
 
-Coin metadata never resolves. `get_coin_info` composes three type-keyed lookups, but it
-takes them from the local type index rather than resolving each on demand, and the seed is
-the only thing that writes that index. The seed cannot supply them: `CoinMetadata` and
-`RegulatedCoinMetadata` are frozen after creation, and seed resolution admits only
-address-owned objects, so the two frozen wrappers cannot enter the seed set at all. Only
-`TreasuryCap` can arrive, and only if its holder was seeded as an address. The result is a
-method that returns nothing rather than one that returns less than it used to. Closing it
-means what "Derived reads compose over policy" already prescribes: resolve each wrapper as a
-targeted type-keyed lookup against the forked-from chain when something asks, and cache the
-resulting object like any other. This is not a limit of forking — unlike the ledger range
-below — just work not done.
+Coin metadata does not resolve for pre-fork coin types. `get_coin_info` composes three
+type-keyed lookups, but it takes them from the local type index rather than resolving each on
+demand. That index has two writers — the seed load and the indexer — so the method answers
+for any coin type published inside the fork, and for a pre-fork `TreasuryCap` whose holder was
+seeded as an address, since that is an ordinary address-owned object. What it cannot answer
+for is the frozen pair: `CoinMetadata` and `RegulatedCoinMetadata` are immutable after
+creation, seed resolution admits only address-owned objects, and no read-time path fetches
+them. The gap is therefore a coin type's *history*, not the method. Closing it means what
+"Derived reads compose over policy" already prescribes: resolve each wrapper as a targeted
+type-keyed lookup against the forked-from chain when something asks, and cache the resulting
+object like any other. This is not a limit of forking — unlike the ledger range below — just
+work not done.
 
 `simulate_transaction` is stubbed; there is no Simulacrum entrypoint for it yet. It is
 planned as a follow-up.
 
-Bounded child reads can serve stale history. `get_object_lt_or_eq_version` trusts the
+The remote leg of a bounded read is not pinned at the fork point. Where the latest and
+exact-version object queries carry the fork checkpoint explicitly, the bounded query carries
+only its version bound, so it resolves against the forked-from chain's *current* state.
+Post-fork history on the other chain can therefore answer a read inside this fork, which is
+the one thing every other remote path is built to prevent. It reaches `read_child_object` on
+both the RPC and executor paths, so it can skew execution rather than only reads.
+
+That gap and the one below compound rather than merely coexisting, which is worth noticing
+before either is fixed: the fix proposed below is to merge the remote `RootVersion(bound)`
+result with the local candidate, and merging in an unpinned answer would make the remote leg
+authoritative precisely where it is least trustworthy. Pinning has to land first.
+
+Bounded child reads can also serve stale history. `get_object_lt_or_eq_version` trusts the
 highest *local* row at or below the bound, so a sparse cache polluted by an
 exact-historical-version read, an RPC client fetching an old dynamic-field version say, can
 hold a row lower than the true highest-≤-bound, which then wins without the remote ever
