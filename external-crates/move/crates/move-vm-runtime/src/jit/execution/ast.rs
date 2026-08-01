@@ -11,9 +11,8 @@ use crate::{
         values::ConstantValue,
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
+    shared::type_size_formulae::ArenaTypeSizeFormula,
     shared::{
-        TypeSize,
-        safe_ops::SafeArithmetic as _,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
     },
@@ -24,7 +23,7 @@ use move_binary_format::{
     errors::PartialVMResult,
     file_format::{
         AbilitySet, CodeOffset, DatatypeTyParameter, FunctionDefinitionIndex, LocalIndex,
-        SignatureToken, VariantTag, Visibility,
+        VariantTag, Visibility,
     },
     file_format_common::Opcodes,
     partial_vm_error,
@@ -305,6 +304,11 @@ pub(crate) struct DatatypeDescriptor {
     pub defining_id: ModuleIdKey,
     pub original_id: ModuleIdKey,
     pub datatype_info: ArenaBox<Datatype>,
+    /// The datatype's size formula over its own type parameters, built in arena form while the
+    /// package is JIT'd. All purely local field structure is already folded into its constants;
+    /// type parameters and cross-package datatype applications remain symbolic, resolved by the
+    /// dispatch tables under a transaction's linkage view (`substitute`).
+    size_formula: ArenaTypeSizeFormula,
 }
 
 #[derive(Debug)]
@@ -981,40 +985,45 @@ impl VariantInstantiation {
 }
 
 impl ArenaType {
-    /// Convert to a runtime type by performing a deep copy
+    /// Convert to a runtime type by performing a deep copy. The copy is equivalent to
+    /// substituting each `TyParam` for itself. Size checking is the dispatch tables' concern
+    /// (the interpreter over types), so this is a straight structural conversion.
     pub fn to_type(&self) -> PartialVMResult<Type> {
-        self.to_type_impl(&mut TypeSize::for_type_traversal())
+        Ok(self.to_type_unchecked())
     }
 
-    fn to_type_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type> {
-        type_size.enter_type(|type_size| {
-            Ok(match self {
-                ArenaType::TyParam(idx) => Type::TyParam(*idx),
-                ArenaType::Bool => Type::Bool,
-                ArenaType::U8 => Type::U8,
-                ArenaType::U16 => Type::U16,
-                ArenaType::U32 => Type::U32,
-                ArenaType::U64 => Type::U64,
-                ArenaType::U128 => Type::U128,
-                ArenaType::U256 => Type::U256,
-                ArenaType::Address => Type::Address,
-                ArenaType::Signer => Type::Signer,
-                ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_impl(type_size)?)),
-                ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type_impl(type_size)?)),
-                ArenaType::MutableReference(ty) => {
-                    Type::MutableReference(Box::new(ty.to_type_impl(type_size)?))
-                }
-                ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-                ArenaType::DatatypeInstantiation(def_inst) => {
-                    let (def_idx, instantiation) = &**def_inst;
-                    let inst = instantiation
-                        .iter()
-                        .map(|ty| ty.to_type_impl(type_size))
-                        .collect::<PartialVMResult<Vec<_>>>()?;
-                    Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-                }
-            })
-        })
+    /// Deep-copy into a runtime type without checking limits. The traversal (and recursion
+    /// depth) is bounded by the size of `self`, which was already bounded when the arena type
+    /// was built at translation time. Crate-private by design: the checked routes
+    /// ([`ArenaType::to_type`], the dispatch tables' `subst_type`) verify the term's sizes
+    /// against the limits first.
+    pub(crate) fn to_type_unchecked(&self) -> Type {
+        match self {
+            ArenaType::TyParam(idx) => Type::TyParam(*idx),
+            ArenaType::Bool => Type::Bool,
+            ArenaType::U8 => Type::U8,
+            ArenaType::U16 => Type::U16,
+            ArenaType::U32 => Type::U32,
+            ArenaType::U64 => Type::U64,
+            ArenaType::U128 => Type::U128,
+            ArenaType::U256 => Type::U256,
+            ArenaType::Address => Type::Address,
+            ArenaType::Signer => Type::Signer,
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_unchecked())),
+            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type_unchecked())),
+            ArenaType::MutableReference(ty) => {
+                Type::MutableReference(Box::new(ty.to_type_unchecked()))
+            }
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::DatatypeInstantiation(def_inst) => {
+                let (def_idx, instantiation) = &**def_inst;
+                let inst = instantiation
+                    .iter()
+                    .map(|ty| ty.to_type_unchecked())
+                    .collect::<Vec<_>>();
+                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+            }
+        }
     }
 }
 
@@ -1044,13 +1053,21 @@ impl DatatypeDescriptor {
         defining_id: ModuleIdKey,
         original_id: ModuleIdKey,
         datatype_info: ArenaBox<Datatype>,
+        size_formula: ArenaTypeSizeFormula,
     ) -> Self {
         Self {
             name,
             defining_id,
             original_id,
             datatype_info,
+            size_formula,
         }
+    }
+
+    /// The datatype's arena-form size formula over its own type parameters (see
+    /// [`ArenaTypeSizeFormula`]).
+    pub(crate) fn size_formula(&self) -> &ArenaTypeSizeFormula {
+        &self.size_formula
     }
 
     pub fn type_parameters(&self) -> &[DatatypeTyParameter] {
@@ -1084,84 +1101,11 @@ impl DatatypeDescriptor {
 }
 
 impl Type {
-    const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
-
-    /// Returns the abstract memory size the data structure occupies.
-    ///
-    /// This kept only for legacy reasons.
-    /// New applications should not use this.
+    /// The abstract memory size of this type — one unit per syntactic node. Kept only for
+    /// legacy gas metering; new applications should not use this. (Fallible for call-site
+    /// compatibility; the syntactic size saturates and never errors.)
     pub fn size(&self) -> PartialVMResult<AbstractMemorySize> {
-        self.size_impl(&mut TypeSize::for_type_traversal())
-    }
-
-    /// SAFETY: Addition over `AbstractMemorySize` is saturating and so this is safe against
-    /// overflow. See the implementation of [`Add`] for [`AbstractMemorySize`] in the
-    /// [`move_core_types::gas_algebra`] module for more details on this and why this is safe.
-    #[allow(clippy::arithmetic_side_effects)]
-    fn size_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<AbstractMemorySize> {
-        use Type::*;
-
-        type_size.enter_type(|type_size| {
-            Ok(match self {
-                TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
-                    Self::LEGACY_BASE_MEMORY_SIZE
-                }
-                Vector(ty) | Reference(ty) | MutableReference(ty) => {
-                    Self::LEGACY_BASE_MEMORY_SIZE + ty.size_impl(type_size)?
-                }
-                Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
-                DatatypeInstantiation(inst) => {
-                    let (_, tys) = &**inst;
-                    let mut acc = Self::LEGACY_BASE_MEMORY_SIZE;
-                    for ty in tys {
-                        acc += ty.size_impl(type_size)?;
-                    }
-                    acc
-                }
-            })
-        })
-    }
-
-    pub fn from_const_signature(constant_signature: &SignatureToken) -> PartialVMResult<Self> {
-        Self::from_const_signature_impl(constant_signature, &mut TypeSize::for_type_traversal())
-    }
-
-    fn from_const_signature_impl(
-        constant_signature: &SignatureToken,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<Self> {
-        use SignatureToken as S;
-        use Type as L;
-
-        type_size.enter_type(|type_size| {
-            Ok(match constant_signature {
-                S::Bool => L::Bool,
-                S::U8 => L::U8,
-                S::U16 => L::U16,
-                S::U32 => L::U32,
-                S::U64 => L::U64,
-                S::U128 => L::U128,
-                S::U256 => L::U256,
-                S::Address => L::Address,
-                S::Vector(inner) => {
-                    L::Vector(Box::new(Self::from_const_signature_impl(inner, type_size)?))
-                }
-                // Not yet supported
-                S::Datatype(_) | S::DatatypeInstantiation(_) => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Unable to load const type signature"
-                    ));
-                }
-                // Not allowed/Not meaningful
-                S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Unable to load const type signature"
-                    ));
-                }
-            })
-        })
+        Ok(AbstractMemorySize::new(self.syntactic_sizes().0))
     }
 
     pub fn check_vec_ref(&self, inner_ty: &Type, is_mut: bool) -> PartialVMResult<Type> {
@@ -1237,133 +1181,90 @@ impl DatatypeDescriptor {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Type Substitution
+// Syntactic Sizes and Substitution
 // -------------------------------------------------------------------------------------------------
 
-pub trait TypeSubst {
-    fn clone_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type>;
-    fn apply_subst<F>(&self, subst: F, type_size: &mut TypeSize) -> PartialVMResult<Type>
-    where
-        F: Fn(u16, &mut TypeSize) -> PartialVMResult<Type> + Copy;
-    fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
-}
-
-// Macro that generates the implementations.
-macro_rules! impl_deep_subst {
-    ($ty:ident) => {
-        impl TypeSubst for $ty {
-            fn clone_impl(
-                &self,
-                type_size: &mut $crate::shared::TypeSize,
-            ) -> PartialVMResult<Type> {
-                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), type_size)
+impl Type {
+    /// The syntactic `(type_size, type_depth)` of this term, counting every node (datatype
+    /// heads are single nodes; fields are not traversed). Kept only for legacy gas metering via
+    /// [`Type::size`]; new size and limit decisions flow through the dispatch tables
+    /// (`VMDispatchTables::type_size_of`).
+    pub(crate) fn syntactic_sizes(&self) -> (u64, u64) {
+        match self {
+            Type::Vector(ty) | Type::Reference(ty) | Type::MutableReference(ty) => {
+                let (size, depth) = ty.syntactic_sizes();
+                (size.saturating_add(1), depth.saturating_add(1))
             }
-
-            fn apply_subst<F>(
-                &self,
-                subst: F,
-                type_size: &mut $crate::shared::TypeSize,
-            ) -> PartialVMResult<Type>
-            where
-                F: Fn(u16, &mut $crate::shared::TypeSize) -> PartialVMResult<Type> + Copy,
-            {
-                type_size.enter_type(|type_size| {
-                    let res = match self {
-                        $ty::TyParam(idx) => subst(*idx, type_size)?,
-                        $ty::Bool => Type::Bool,
-                        $ty::U8 => Type::U8,
-                        $ty::U16 => Type::U16,
-                        $ty::U32 => Type::U32,
-                        $ty::U64 => Type::U64,
-                        $ty::U128 => Type::U128,
-                        $ty::U256 => Type::U256,
-                        $ty::Address => Type::Address,
-                        $ty::Signer => Type::Signer,
-                        $ty::Vector(ty) => {
-                            Type::Vector(Box::new(ty.apply_subst(subst, type_size)?))
-                        }
-                        $ty::Reference(ty) => {
-                            Type::Reference(Box::new(ty.apply_subst(subst, type_size)?))
-                        }
-                        $ty::MutableReference(ty) => {
-                            Type::MutableReference(Box::new(ty.apply_subst(subst, type_size)?))
-                        }
-                        $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-                        $ty::DatatypeInstantiation(def_inst) => {
-                            let (def_idx, instantiation) = &**def_inst;
-                            let inst = instantiation
-                                .iter()
-                                .map(|ty| ty.apply_subst(subst, type_size))
-                                .collect::<PartialVMResult<Vec<_>>>()?;
-                            Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-                        }
-                    };
-                    Ok(res)
-                })
-            }
-
-            fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-                self.apply_subst(
-                    |idx, type_size| match ty_args.get(idx as usize) {
-                        Some(ty) => ty.clone_impl(type_size),
-                        None => Err(move_binary_format::partial_vm_error!(
-                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            "type substitution failed: index out of bounds -- len {} got {}",
-                            ty_args.len(),
-                            idx
-                        )),
-                    },
-                    &mut $crate::shared::TypeSize::for_type_traversal(),
-                )
-            }
-        }
-    };
-}
-
-// Generated implementations.
-impl_deep_subst!(Type);
-impl_deep_subst!(ArenaType);
-
-// -------------------------------------------------------------------------------------------------
-// Type Node Count
-// -------------------------------------------------------------------------------------------------
-
-// Macro that generates the implementations.
-macro_rules! impl_count_type_nodes {
-    ($ty:ident) => {
-        impl TypeNodeCount for $ty {
-            fn count_type_nodes(&self) -> PartialVMResult<u64> {
-                let mut todo = vec![self];
-                let mut result = 0u64;
-                while let Some(ty) = todo.pop() {
-                    match ty {
-                        $ty::Vector(ty) | $ty::Reference(ty) | $ty::MutableReference(ty) => {
-                            result = result.safe_add(1)?;
-                            todo.push(ty);
-                        }
-                        $ty::DatatypeInstantiation(struct_inst) => {
-                            let (_, ty_args) = &**struct_inst;
-                            result = result.safe_add(1)?;
-                            todo.extend(ty_args.iter());
-                        }
-                        _ => {
-                            result = result.safe_add(1)?;
-                        }
-                    }
+            Type::DatatypeInstantiation(inst) => {
+                let (_, ty_args) = &**inst;
+                let mut size = 1u64;
+                let mut depth = 1u64;
+                for ty in ty_args.iter() {
+                    let (arg_size, arg_depth) = ty.syntactic_sizes();
+                    size = size.saturating_add(arg_size);
+                    depth = depth.max(arg_depth.saturating_add(1));
                 }
-                Ok(result)
+                (size, depth)
             }
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer
+            | Type::Datatype(_)
+            | Type::TyParam(_) => (1, 1),
         }
-    };
+    }
 }
 
-pub trait TypeNodeCount {
-    fn count_type_nodes(&self) -> PartialVMResult<u64>;
+impl ArenaType {
+    /// Substitute `ty_args` into this term WITHOUT enforcing size or depth limits.
+    /// Crate-private by design: every route to a substituted type (the dispatch tables'
+    /// `subst_type` and `instantiate_generic_function`) checks a predicted size against the
+    /// limits before calling this.
+    pub(crate) fn subst_unchecked(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
+        Ok(match self {
+            ArenaType::TyParam(idx) => match ty_args.get(*idx as usize) {
+                Some(ty) => ty.clone(),
+                None => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "type substitution failed: index out of bounds -- len {} got {}",
+                        ty_args.len(),
+                        idx
+                    ));
+                }
+            },
+            ArenaType::Bool => Type::Bool,
+            ArenaType::U8 => Type::U8,
+            ArenaType::U16 => Type::U16,
+            ArenaType::U32 => Type::U32,
+            ArenaType::U64 => Type::U64,
+            ArenaType::U128 => Type::U128,
+            ArenaType::U256 => Type::U256,
+            ArenaType::Address => Type::Address,
+            ArenaType::Signer => Type::Signer,
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.subst_unchecked(ty_args)?)),
+            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.subst_unchecked(ty_args)?)),
+            ArenaType::MutableReference(ty) => {
+                Type::MutableReference(Box::new(ty.subst_unchecked(ty_args)?))
+            }
+            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+            ArenaType::DatatypeInstantiation(def_inst) => {
+                let (def_idx, instantiation) = &**def_inst;
+                let inst = instantiation
+                    .iter()
+                    .map(|ty| ty.subst_unchecked(ty_args))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+            }
+        })
+    }
 }
-
-// Generated implementations.
-impl_count_type_nodes!(Type);
-impl_count_type_nodes!(ArenaType);
 
 // -------------------------------------------------------------------------------------------------
 // Into

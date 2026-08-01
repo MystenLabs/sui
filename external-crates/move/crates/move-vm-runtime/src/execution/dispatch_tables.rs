@@ -9,23 +9,27 @@
 
 use crate::{
     cache::identifier_interner::{IdentifierInterner, IdentifierKey},
-    execution::vm::DatatypeInfo,
+    execution::{interpreter::state::TypeArguments, vm::DatatypeInfo},
     jit::execution::ast::{
-        ArenaType, Datatype, DatatypeDescriptor, Function, Package, Type, TypeSubst,
+        ArenaType, Datatype, DatatypeDescriptor, Function, FunctionInstantiation, Package,
+        StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
-        TypeSize,
-        constants::TYPE_DEPTH_LRU_SIZE,
+        TypeTraversalBudget,
+        constants::{
+            HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
+            VALUE_DEPTH_MAX,
+        },
         linkage_context::LinkageContext,
+        type_size_formulae::{PartialTypeSizeFormula, TypeSize, Visiting, check_syntactic_limits},
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
 };
 
 use move_binary_format::{
-    checked_as,
     errors::{Location, PartialVMResult, VMResult},
-    file_format::{AbilitySet, TypeParameterIndex},
+    file_format::AbilitySet,
     partial_vm_error,
 };
 use move_core_types::{
@@ -37,32 +41,58 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 
 use quick_cache::unsync::Cache as QCache;
+
 use tracing::instrument;
 
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap},
+    ops::Deref,
     sync::Arc,
 };
+
+/// A per-execution cache of datatypes' resolved size formulae, keyed by datatype under the
+/// enclosing resolver's linkage view.
+///
+/// This is deliberately an *unsynchronized* cache. It lives only on a [`VMDispatchTables`]
+/// resolver, which is constructed per transaction and never shared across threads (only the
+/// `Sync` [`DispatchTables`] it wraps is cached and shared). The interpreter and the natives are
+/// therefore free to fill it in place through `&self`.
+pub(crate) struct TypeCache(RefCell<QCache<VirtualTableKey, PartialTypeSizeFormula>>);
+
+impl std::fmt::Debug for TypeCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TypeCache({} entries)", self.0.borrow().len())
+    }
+}
+
+impl TypeCache {
+    fn new() -> Self {
+        Self(RefCell::new(QCache::new(TYPE_DEPTH_LRU_SIZE)))
+    }
+
+    fn get(&self, key: &VirtualTableKey) -> Option<PartialTypeSizeFormula> {
+        self.0.borrow().get(key).cloned()
+    }
+
+    fn insert(&self, key: VirtualTableKey, formula: PartialTypeSizeFormula) {
+        self.0.borrow_mut().insert(key, formula);
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 
-/// The data structure that the VM uses to resolve all packages. Packages are loaded into this at
-/// before the beginning of execution, and based on the static call graph of the package that
-/// contains the root package id.
+/// The shared, `Sync` resolution tables: everything the VM needs to resolve packages, functions,
+/// and datatypes under a fixed linkage. Built once per linkage and cached (and cloned) across
+/// transactions — the fields are all `Arc`s, so cloning is cheap.
 ///
-/// This is a transient (transaction-scoped) data structure that is created at the beginning of the
-/// transaction, is immutable for the execution of the transaction, and is dropped at the end of
-/// the transaction.
-///
-/// This structure may be cached and reused across transactions with identical linkages, so we add
-/// an Arc<> around the inner data structures to facilitate more-efficient sharing.
-///
-/// FUTURE(vm-rewrite): The representation can be optimized to use a more efficient data structure
-/// for vtable/cross-package function resolution but we will keep it simple for now.
+/// This holds no per-execution state, which is what keeps it `Sync` and safe to share across the
+/// worker threads that read the package cache. Per-execution state (the size-formula cache) lives
+/// on the [`VMDispatchTables`] resolver that wraps this.
 #[derive(Debug, Clone)]
-pub struct VMDispatchTables {
+pub(crate) struct DispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) interner: Arc<IdentifierInterner>,
     pub(crate) loaded_packages: Arc<BTreeMap<OriginalId, Arc<Package>>>,
@@ -70,16 +100,27 @@ pub struct VMDispatchTables {
     /// [SAFETY] Ordering is not guaranteed
     pub(crate) defining_id_origins: Arc<BTreeMap<DefiningTypeId, OriginalId>>,
     pub(crate) link_context: Arc<LinkageContext>,
-    /// Representation of runtime type depths. This is separate from the underlying packages to
-    /// avoid grabbing write-locks and toward the possibility these may change based on linkage
-    /// (e.g., type ugrades or similar).
-    /// [SAFETY] Ordering of inner maps is not guaranteed
-    /// NB: This cache is mutated during execution, so we make a new one for each VM instantiation.
-    /// This also means VMDispatchTables cannot be fully immutable, so we must make a copy of the
-    /// entire dispatch table for each usage.
-    ///
-    /// However, the contents of the cache do not affect execution correctness, only performance.
-    pub(crate) type_depths: QCache<VirtualTableKey, DepthFormula>,
+}
+
+/// The per-execution dispatch resolver: the shared [`DispatchTables`] plus a transaction-local
+/// [`TypeCache`] of resolved size formulae.
+///
+/// This is a transient (transaction-scoped) value: it is created at the beginning of a transaction
+/// from the (cached) `Sync` tables and dropped at the end. Because it is never shared across
+/// threads, its size cache can be unsynchronized. It derefs to [`DispatchTables`], so all the
+/// resolution methods read the shared tables directly.
+#[derive(Debug)]
+pub(crate) struct VMDispatchTables {
+    pub(crate) tables: DispatchTables,
+    pub(crate) size_formulas: TypeCache,
+}
+
+impl Deref for VMDispatchTables {
+    type Target = DispatchTables;
+
+    fn deref(&self) -> &DispatchTables {
+        &self.tables
+    }
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -126,29 +167,12 @@ pub enum DatatypeTagType {
     Defining,
 }
 
-/// A formula for the maximum depth of the value for a type
-/// max(Ti + Ci, ..., CBase)
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-pub struct DepthFormula {
-    /// The terms for each type parameter, if present.
-    /// Ti + Ci
-    pub terms: Vec<(TypeParameterIndex, u64)>,
-    /// The minimal depth of the value of this type regardless of type parameters.
-    /// CBase
-    pub constant: u64,
-}
-
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-// ------------------------------------------------------------------------
-// The VM API that it will use to resolve packages and functions during execution of the
-// transaction.
-// ------------------------------------------------------------------------
-
-impl VMDispatchTables {
-    /// Create a new RuntimeVTables instance.
+impl DispatchTables {
+    /// Create the shared resolution tables for a linkage.
     /// NOTE: This assumes linkage has already occured.
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn new(
@@ -177,18 +201,28 @@ impl VMDispatchTables {
             defining_id_map
         };
 
-        let loaded_packages = Arc::new(loaded_packages);
-        let defining_id_origins = Arc::new(defining_id_origins);
-        let link_context = Arc::new(link_context);
-
         Ok(Self {
             vm_config,
             interner,
-            loaded_packages,
-            defining_id_origins,
-            link_context,
-            type_depths: QCache::new(TYPE_DEPTH_LRU_SIZE),
+            loaded_packages: Arc::new(loaded_packages),
+            defining_id_origins: Arc::new(defining_id_origins),
+            link_context: Arc::new(link_context),
         })
+    }
+}
+
+// ------------------------------------------------------------------------
+// The VM API that it will use to resolve packages and functions during execution of the
+// transaction.
+// ------------------------------------------------------------------------
+
+impl VMDispatchTables {
+    /// Wrap shared resolution tables in a fresh per-execution resolver (with an empty size cache).
+    pub(crate) fn new(tables: DispatchTables) -> Self {
+        Self {
+            tables,
+            size_formulas: TypeCache::new(),
+        }
     }
 
     pub fn get_package(&self, id: &OriginalId) -> PartialVMResult<Arc<Package>> {
@@ -324,16 +358,16 @@ impl VMDispatchTables {
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
     pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
-        self.load_type_impl(type_tag, &mut TypeSize::for_type_traversal())
+        self.load_type_impl(type_tag, &mut TypeTraversalBudget::for_type_traversal())
             .map_err(|e| e.finish(Location::Undefined))
     }
 
     fn load_type_impl(
         &self,
         type_tag: &TypeTag,
-        type_size: &mut TypeSize,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<Type> {
-        type_size.enter_type(|type_size| {
+        type_size_budget.enter_type(|type_size_budget| {
             Ok(match type_tag {
                 TypeTag::Bool => Type::Bool,
                 TypeTag::U8 => Type::U8,
@@ -345,7 +379,7 @@ impl VMDispatchTables {
                 TypeTag::Address => Type::Address,
                 TypeTag::Signer => Type::Signer,
                 TypeTag::Vector(tt) => {
-                    Type::Vector(Box::new(self.load_type_impl(tt, type_size)?))
+                    Type::Vector(Box::new(self.load_type_impl(tt, type_size_budget)?))
                 }
                 // NB: Note that this tag is slightly misnamed and used for all Datatypes.
                 TypeTag::Struct(struct_tag) => {
@@ -393,7 +427,7 @@ impl VMDispatchTables {
                     } else {
                         let mut type_params = vec![];
                         for ty_param in &struct_tag.type_params {
-                            type_params.push(self.load_type_impl(ty_param, type_size)?);
+                            type_params.push(self.load_type_impl(ty_param, type_size_budget)?);
                         }
                         self.verify_ty_args(datatype.type_param_constraints(), &type_params)?;
                         Type::DatatypeInstantiation(Box::new((key, type_params)))
@@ -423,11 +457,15 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
-        self.abilities_impl(ty, &mut TypeSize::for_type_traversal())
+        self.abilities_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
     }
 
-    fn abilities_impl(&self, ty: &Type, type_size: &mut TypeSize) -> PartialVMResult<AbilitySet> {
-        type_size.enter_type(|type_size| {
+    fn abilities_impl(
+        &self,
+        ty: &Type,
+        type_size_budget: &mut TypeTraversalBudget,
+    ) -> PartialVMResult<AbilitySet> {
+        type_size_budget.enter_type(|type_size_budget| {
             match ty {
                 Type::Bool
                 | Type::U8
@@ -450,7 +488,7 @@ impl VMDispatchTables {
                 Type::Vector(ty) => AbilitySet::polymorphic_abilities(
                     AbilitySet::VECTOR,
                     vec![false],
-                    vec![self.abilities_impl(ty, type_size)?],
+                    vec![self.abilities_impl(ty, type_size_budget)?],
                 ),
                 Type::Datatype(idx) => Ok(*self.resolve_type(idx)?.to_ref().abilities()),
                 Type::DatatypeInstantiation(inst) => {
@@ -462,7 +500,7 @@ impl VMDispatchTables {
                         .map(|param| param.is_phantom);
                     let type_argument_abilities = type_args
                         .iter()
-                        .map(|arg| self.abilities_impl(arg, type_size))
+                        .map(|arg| self.abilities_impl(arg, type_size_budget))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     AbilitySet::polymorphic_abilities(
                         *datatype_type.abilities(),
@@ -512,112 +550,189 @@ impl VMDispatchTables {
     }
 
     // -------------------------------------------
-    // Type Depth Computations
+    // Type sizing
     // -------------------------------------------
-    // These functions compute the depth of the specified type, plus cache the depth formula of any
-    // uncached subtypes they find along the way.
+    // Type sizing is a partial evaluation: the vtable is the environment. A datatype's JIT-built
+    // `ArenaTypeSizeFormula` is resolved against this linkage into a flat `PartialTypeSizeFormula`,
+    // memoized per key in `size_formulas`. Resolution recurs back through the cache at every
+    // datatype boundary. `type_size_of` then solves a concrete runtime type to a `TypeSize`.
 
-    fn cached_type_depth(&mut self, datatype: &VirtualTableKey) -> Option<&DepthFormula> {
-        self.type_depths.get(datatype)
+    /// The resolved formula of a datatype under this linkage.
+    pub(crate) fn virtual_key_size_formula(
+        &self,
+        key: &VirtualTableKey,
+    ) -> PartialVMResult<PartialTypeSizeFormula> {
+        self.virtual_key_size_formula_impl(key, &mut Visiting::new())
     }
 
-    pub fn calculate_depth_of_type(
-        &mut self,
-        datatype_name: &VirtualTableKey,
-    ) -> PartialVMResult<DepthFormula> {
-        self.calculate_depth_of_datatype_and_cache(
-            datatype_name,
-            &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )
-    }
-
-    fn calculate_depth_of_datatype_and_cache(
-        &mut self,
-        datatype_name: &VirtualTableKey,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<DepthFormula> {
-        type_size.check()?;
-        // If we've already computed this datatypes depth, no more work remains to be done.
-        if let Some(form) = self.cached_type_depth(datatype_name) {
-            return Ok(form.clone());
+    /// `visiting` turns a cyclic datatype graph into an invariant violation.
+    fn virtual_key_size_formula_impl(
+        &self,
+        key: &VirtualTableKey,
+        visiting: &mut Visiting,
+    ) -> PartialVMResult<PartialTypeSizeFormula> {
+        if let Some(hit) = self.size_formulas.get(key) {
+            return Ok(hit);
         }
-
-        let datatype = self.resolve_type(datatype_name)?.to_ref();
-        let formulas = match datatype.datatype_info.inner_ref() {
-            // The depth of enum is calculated as the maximum depth of any of its variants.
-            Datatype::Enum(enum_type) => enum_type
-                .variants
-                .iter()
-                .flat_map(|variant_type| variant_type.fields.iter())
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, type_size))
-                .collect::<PartialVMResult<Vec<_>>>()?,
-            Datatype::Struct(struct_type) => struct_type
-                .fields
-                .iter()
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, type_size))
-                .collect::<PartialVMResult<Vec<_>>>()?,
-        };
-        let mut formula = DepthFormula::normalize(formulas);
-        // add 1 for the struct/variant itself
-        formula.add(1);
-        // Insert without checking if it was already present; this is a pure optmization, so
-        // we do not care about overwriting.
-        self.type_depths
-            .insert(datatype_name.clone(), formula.clone());
-        type_size.check()?;
+        if !visiting.insert(key.clone()) {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "cyclic datatype definition encountered while resolving size formula for {}",
+                key.to_string(&self.interner)
+            ));
+        }
+        let descriptor = self.resolve_type(key)?;
+        // `size_formula()` is arena-resident (VMPointer), so it does not borrow `self`.
+        let formula = descriptor.to_ref().size_formula().resolve(self, visiting)?;
+        visiting.remove(key);
+        self.size_formulas.insert(key.clone(), formula.clone());
         Ok(formula)
     }
 
-    fn calculate_depth_of_type_and_cache(
-        &mut self,
+    /// The size of an arena type, realized against the sizes of the virtual-table keys included in
+    /// the linkage. This partially applies the key sizes to produce a closed-form formula for this
+    /// type's size.
+    pub(crate) fn arena_type_size_formula(
+        &self,
         ty: &ArenaType,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<DepthFormula> {
-        type_size.enter_type(|type_size| {
-            Ok(match ty {
-                ArenaType::Bool
-                | ArenaType::U8
-                | ArenaType::U64
-                | ArenaType::U128
-                | ArenaType::Address
-                | ArenaType::Signer
-                | ArenaType::U16
-                | ArenaType::U32
-                | ArenaType::U256 => DepthFormula::constant(1),
-                // we should not see the reference here, we could instead give an invariant
-                // violation
-                ArenaType::Vector(ty)
-                | ArenaType::Reference(ty)
-                | ArenaType::MutableReference(ty) => {
-                    let mut inner = self.calculate_depth_of_type_and_cache(ty, type_size)?;
-                    // add 1 for the vector itself
-                    inner.add(1);
-                    inner
-                }
-                ArenaType::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
-                ArenaType::Datatype(datatype_key) => {
-                    let datatype_formula =
-                        self.calculate_depth_of_datatype_and_cache(datatype_key, type_size)?;
-                    debug_assert!(datatype_formula.terms.is_empty());
-                    datatype_formula
-                }
-                ArenaType::DatatypeInstantiation(inst) => {
-                    let (cache_idx, ty_args) = &**inst;
-                    let ty_arg_map = ty_args
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, ty)| {
-                            let var = checked_as!(idx, TypeParameterIndex)?;
-                            Ok((var, self.calculate_depth_of_type_and_cache(ty, type_size)?))
-                        })
-                        .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                    let datatype_formula =
-                        self.calculate_depth_of_datatype_and_cache(cache_idx, type_size)?;
+    ) -> PartialVMResult<PartialTypeSizeFormula> {
+        self.arena_type_size_formula_impl(ty, &mut Visiting::new())
+    }
 
-                    datatype_formula.subst(ty_arg_map)?
-                }
-            })
+    pub(crate) fn arena_type_size_formula_impl(
+        &self,
+        ty: &ArenaType,
+        visiting: &mut Visiting,
+    ) -> PartialVMResult<PartialTypeSizeFormula> {
+        Ok(match ty {
+            ArenaType::TyParam(idx) => PartialTypeSizeFormula::parameter(*idx),
+            ArenaType::Vector(inner)
+            | ArenaType::Reference(inner)
+            | ArenaType::MutableReference(inner) => {
+                self.arena_type_size_formula_impl(inner, visiting)?.wrap()
+            }
+            ArenaType::Datatype(key) => self.virtual_key_size_formula_impl(key, visiting)?,
+            ArenaType::DatatypeInstantiation(inst) => {
+                let (key, args) = &**inst;
+                let arg_forms = args
+                    .iter()
+                    .map(|arg| self.arena_type_size_formula_impl(arg, visiting))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                self.virtual_key_size_formula_impl(key, visiting)?
+                    .substitute(&arg_forms)?
+            }
+            ArenaType::Bool
+            | ArenaType::U8
+            | ArenaType::U16
+            | ArenaType::U32
+            | ArenaType::U64
+            | ArenaType::U128
+            | ArenaType::U256
+            | ArenaType::Address
+            | ArenaType::Signer => PartialTypeSizeFormula::primitive(),
         })
+    }
+
+    /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
+    /// resolve through the cache.
+    ///
+    /// Note: `ty` is depth-bound by construction here.
+    pub(crate) fn type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
+        Ok(match ty {
+            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                TypeSize::wrap(self.type_size_of(inner)?)
+            }
+            Type::Datatype(key) => self.virtual_key_size_formula(key)?.solved()?,
+            Type::DatatypeInstantiation(inst) => {
+                let (key, args) = &**inst;
+                let arg_sizes = args
+                    .iter()
+                    .map(|arg| self.type_size_of(arg))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                self.virtual_key_size_formula(key)?.solve(&arg_sizes)?
+            }
+            Type::TyParam(_) => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Type parameter should be fully resolved"
+                ));
+            }
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer => TypeSize::PRIMITIVE,
+        })
+    }
+
+    /// The `value_depth` of a concrete type — the single measure `Pack`/`PackVariant` need,
+    /// computed without the other three. `ty` is depth-bound by construction.
+    pub(crate) fn value_depth_of(&self, ty: &Type) -> PartialVMResult<u64> {
+        Ok(match ty {
+            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.value_depth_of(inner)?.saturating_add(1)
+            }
+            Type::Datatype(key) => self.virtual_key_size_formula(key)?.value_depth.solve(&[])?,
+            Type::DatatypeInstantiation(inst) => {
+                let (key, args) = &**inst;
+                let arg_depths = args
+                    .iter()
+                    .map(|arg| self.value_depth_of(arg))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                self.virtual_key_size_formula(key)?
+                    .value_depth
+                    .solve(&arg_depths)?
+            }
+            Type::TyParam(_) => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Type parameter should be fully resolved"
+                ));
+            }
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer => 1,
+        })
+    }
+
+    /// Check a computed value's `value_depth` against the configured limit (if any).
+    fn check_value_depth(&self, value_depth: u64) -> PartialVMResult<()> {
+        if let Some(max) = self.vm_config.runtime_limits_config.max_value_nest_depth
+            && value_depth > max
+        {
+            return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
+        }
+        Ok(())
+    }
+
+    /// Check the limits of a `vector<elem>` value about to be created at `VecPack`, without
+    /// building the type. As at any creation site, the element type's syntactic size and depth
+    /// are checked (this is the only place the interpreter validates a vector's element type;
+    /// the other vector ops operate on already-validated vectors), along with the created value's
+    /// nesting depth — the `+ 1` accounts for the vector wrapping the element value. All three
+    /// come from the one formula solve.
+    pub(crate) fn check_vector_element(
+        &self,
+        elem: &ArenaType,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
+        let formula = self.arena_type_size_formula(elem)?;
+        let sizes = ty_args.sizes();
+        check_syntactic_limits(
+            formula.solve_type_size(sizes)?,
+            formula.solve_type_depth(sizes)?,
+        )?;
+        self.check_value_depth(formula.solve_value_depth(sizes)?.saturating_add(1))
     }
 
     // -------------------------------------------
@@ -629,12 +744,12 @@ impl VMDispatchTables {
         datatype_name: &VirtualTableKey,
         ty_args: &[Type],
         tag_type: DatatypeTagType,
-        type_size: &mut TypeSize,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<StructTag> {
-        type_size.check()?;
+        type_size_budget.check()?;
         let type_params = ty_args
             .iter()
-            .map(|ty| self.type_to_type_tag_impl(ty, tag_type, type_size))
+            .map(|ty| self.type_to_type_tag_impl(ty, tag_type, type_size_budget))
             .collect::<PartialVMResult<Vec<_>>>()?;
         let datatype = self.resolve_type(datatype_name)?.to_ref();
 
@@ -657,7 +772,7 @@ impl VMDispatchTables {
             name,
             type_params,
         };
-        type_size.check()?;
+        type_size_budget.check()?;
         Ok(tag)
     }
 
@@ -665,9 +780,9 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
         tag_type: DatatypeTagType,
-        type_size: &mut TypeSize,
+        type_size_budget: &mut TypeTraversalBudget,
     ) -> PartialVMResult<TypeTag> {
-        type_size.enter_type(|type_size| {
+        type_size_budget.enter_type(|type_size_budget| {
             Ok(match ty {
                 Type::Bool => TypeTag::Bool,
                 Type::U8 => TypeTag::U8,
@@ -678,20 +793,25 @@ impl VMDispatchTables {
                 Type::U256 => TypeTag::U256,
                 Type::Address => TypeTag::Address,
                 Type::Signer => TypeTag::Signer,
-                Type::Vector(ty) => TypeTag::Vector(Box::new(
-                    self.type_to_type_tag_impl(ty, tag_type, type_size)?,
-                )),
+                Type::Vector(ty) => TypeTag::Vector(Box::new(self.type_to_type_tag_impl(
+                    ty,
+                    tag_type,
+                    type_size_budget,
+                )?)),
                 Type::Datatype(gidx) => TypeTag::Struct(Box::new(self.datatype_to_type_tag_impl(
                     gidx,
                     &[],
                     tag_type,
-                    type_size,
+                    type_size_budget,
                 )?)),
                 Type::DatatypeInstantiation(struct_inst) => {
                     let (gidx, ty_args) = &**struct_inst;
-                    TypeTag::Struct(Box::new(
-                        self.datatype_to_type_tag_impl(gidx, ty_args, tag_type, type_size)?,
-                    ))
+                    TypeTag::Struct(Box::new(self.datatype_to_type_tag_impl(
+                        gidx,
+                        ty_args,
+                        tag_type,
+                        type_size_budget,
+                    )?))
                 }
                 Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                     return Err(partial_vm_error!(
@@ -704,60 +824,102 @@ impl VMDispatchTables {
         })
     }
 
-    fn datatype_to_type_layout(
+    pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+        self.type_to_type_tag_impl(
+            ty,
+            DatatypeTagType::Defining,
+            &mut TypeTraversalBudget::for_type_traversal(),
+        )
+    }
+
+    pub(crate) fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
+        self.type_to_type_tag_impl(
+            ty,
+            DatatypeTagType::Runtime,
+            &mut TypeTraversalBudget::for_type_traversal(),
+        )
+    }
+
+    /// Check a type's predicted `value_depth` and `layout_size` against the configured limits
+    /// before any layout generation — pure arithmetic over the descriptor formulas; nothing of
+    /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
+    fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
+        let size = self.type_size_of(ty)?;
+        if size.value_depth
+            > self
+                .vm_config
+                .runtime_limits_config
+                .max_value_nest_depth
+                .unwrap_or(VALUE_DEPTH_MAX)
+        {
+            return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+        }
+        if size.layout_size
+            > self
+                .vm_config
+                .max_type_to_layout_nodes
+                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES)
+        {
+            return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn type_to_type_layout(
         &self,
-        datatype_name: &VirtualTableKey,
-        ty_args: &[Type],
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
-        type_size.check()?;
-        let ty = self.resolve_type(datatype_name)?.to_ref();
-        let type_layout = match ty.datatype_info.inner_ref() {
-            Datatype::Enum(einfo) => {
-                let mut variant_layouts = vec![];
-                for variant in einfo.variants.iter() {
-                    type_size.incr_node_count()?;
-                    let field_tys = variant
+        ty: &Type,
+    ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
+        // The layout builders do not enforce limits themselves: `check_layout_limits` below
+        // bounds their recursion. They are local to this function so the check can never be
+        // bypassed.
+        fn datatype_to_type_layout(
+            tables: &VMDispatchTables,
+            datatype_name: &VirtualTableKey,
+            ty_args: &[Type],
+        ) -> PartialVMResult<runtime_value::MoveDatatypeLayout> {
+            let ty = tables.resolve_type(datatype_name)?.to_ref();
+            let type_layout = match ty.datatype_info.inner_ref() {
+                Datatype::Enum(einfo) => {
+                    let mut variant_layouts = vec![];
+                    for variant in einfo.variants.iter() {
+                        let field_tys = variant
+                            .fields
+                            .iter()
+                            .map(|ty| ty.subst_unchecked(ty_args))
+                            .collect::<PartialVMResult<Vec<_>>>()?;
+                        let field_layouts = field_tys
+                            .iter()
+                            .map(|ty| type_to_type_layout_unchecked(tables, ty))
+                            .collect::<PartialVMResult<Vec<_>>>()?;
+                        variant_layouts.push(field_layouts);
+                    }
+                    runtime_value::MoveDatatypeLayout::Enum(Box::new(
+                        runtime_value::MoveEnumLayout(Box::new(variant_layouts)),
+                    ))
+                }
+                Datatype::Struct(sinfo) => {
+                    let field_tys = sinfo
                         .fields
                         .iter()
-                        .map(|ty| ty.subst(ty_args))
+                        .map(|ty| ty.subst_unchecked(ty_args))
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     let field_layouts = field_tys
                         .iter()
-                        .map(|ty| self.type_to_type_layout_impl(ty, type_size))
+                        .map(|ty| type_to_type_layout_unchecked(tables, ty))
                         .collect::<PartialVMResult<Vec<_>>>()?;
-                    variant_layouts.push(field_layouts);
+
+                    runtime_value::MoveDatatypeLayout::Struct(Box::new(
+                        runtime_value::MoveStructLayout::new(field_layouts),
+                    ))
                 }
-                runtime_value::MoveDatatypeLayout::Enum(Box::new(runtime_value::MoveEnumLayout(
-                    Box::new(variant_layouts),
-                )))
-            }
-            Datatype::Struct(sinfo) => {
-                let field_tys = sinfo
-                    .fields
-                    .iter()
-                    .map(|ty| ty.subst(ty_args))
-                    .collect::<PartialVMResult<Vec<_>>>()?;
-                let field_layouts = field_tys
-                    .iter()
-                    .map(|ty| self.type_to_type_layout_impl(ty, type_size))
-                    .collect::<PartialVMResult<Vec<_>>>()?;
+            };
+            Ok(type_layout)
+        }
 
-                runtime_value::MoveDatatypeLayout::Struct(Box::new(
-                    runtime_value::MoveStructLayout::new(field_layouts),
-                ))
-            }
-        };
-        type_size.check()?;
-        Ok(type_layout)
-    }
-
-    fn type_to_type_layout_impl(
-        &self,
-        ty: &Type,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
-        type_size.enter_type(|type_size| {
+        fn type_to_type_layout_unchecked(
+            tables: &VMDispatchTables,
+            ty: &Type,
+        ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
             let result = match ty {
                 Type::Bool => runtime_value::MoveTypeLayout::Bool,
                 Type::U8 => runtime_value::MoveTypeLayout::U8,
@@ -769,15 +931,12 @@ impl VMDispatchTables {
                 Type::Address => runtime_value::MoveTypeLayout::Address,
                 Type::Signer => runtime_value::MoveTypeLayout::Signer,
                 Type::Vector(ty) => runtime_value::MoveTypeLayout::Vector(Box::new(
-                    self.type_to_type_layout_impl(ty, type_size)?,
+                    type_to_type_layout_unchecked(tables, ty)?,
                 )),
-                Type::Datatype(gidx) => self
-                    .datatype_to_type_layout(gidx, &[], type_size)?
-                    .into_layout(),
+                Type::Datatype(gidx) => datatype_to_type_layout(tables, gidx, &[])?.into_layout(),
                 Type::DatatypeInstantiation(inst) => {
                     let (gidx, ty_args) = &**inst;
-                    self.datatype_to_type_layout(gidx, ty_args, type_size)?
-                        .into_layout()
+                    datatype_to_type_layout(tables, gidx, ty_args)?.into_layout()
                 }
                 Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                     return Err(partial_vm_error!(
@@ -788,152 +947,10 @@ impl VMDispatchTables {
                 }
             };
             Ok(result)
-        })
-    }
+        }
 
-    fn datatype_to_fully_annotated_layout_impl(
-        &self,
-        datatype_name: &VirtualTableKey,
-        ty_args: &[Type],
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
-        type_size.check()?;
-        let ty = self.resolve_type(datatype_name)?.to_ref();
-        let struct_tag = self.datatype_to_type_tag_impl(
-            datatype_name,
-            ty_args,
-            DatatypeTagType::Defining,
-            &mut TypeSize::for_type_traversal(),
-        )?;
-
-        let type_layout = match ty.datatype_info.inner_ref() {
-            Datatype::Enum(enum_type) => {
-                let mut variant_layouts = BTreeMap::new();
-                for variant in enum_type.variants.iter() {
-                    type_size.incr_node_count()?;
-                    if variant.fields.len() != variant.field_names.len() {
-                        return Err(partial_vm_error!(
-                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            "Field types did not match the length of field names in loaded enum variant"
-                        ));
-                    }
-                    let field_layouts = variant
-                        .field_names
-                        .iter()
-                        .zip(variant.fields.iter())
-                        .map(|(n, ty)| {
-                            let n = self.interner.resolve_ident(n, "field name");
-                            let ty = ty.subst(ty_args)?;
-                            let l = self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
-                            Ok(annotated_value::MoveFieldLayout::new(n, l))
-                        })
-                        .collect::<PartialVMResult<Vec<_>>>()?;
-                    variant_layouts.insert(
-                        (
-                            self.interner
-                                .resolve_ident(&variant.variant_name, "variant name"),
-                            variant.variant_tag,
-                        ),
-                        field_layouts,
-                    );
-                }
-                annotated_value::MoveDatatypeLayout::Enum(Box::new(
-                    annotated_value::MoveEnumLayout {
-                        type_: struct_tag.clone(),
-                        variants: variant_layouts,
-                    },
-                ))
-            }
-            Datatype::Struct(struct_type) => {
-                if struct_type.fields.len() != struct_type.field_names.len() {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Field types did not match the length of field names in loaded struct"
-                    ));
-                }
-                let field_layouts = struct_type
-                    .field_names
-                    .iter()
-                    .zip(struct_type.fields.iter())
-                    .map(|(n, ty)| {
-                        let n = self.interner.resolve_ident(n, "field name");
-                        let ty = ty.subst(ty_args)?;
-                        let l = self.type_to_fully_annotated_layout_impl(&ty, type_size)?;
-                        Ok(annotated_value::MoveFieldLayout::new(n, l))
-                    })
-                    .collect::<PartialVMResult<Vec<_>>>()?;
-                annotated_value::MoveDatatypeLayout::Struct(Box::new(
-                    annotated_value::MoveStructLayout::new(struct_tag, field_layouts),
-                ))
-            }
-        };
-        type_size.check()?;
-        Ok(type_layout)
-    }
-
-    fn type_to_fully_annotated_layout_impl(
-        &self,
-        ty: &Type,
-        type_size: &mut TypeSize,
-    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        type_size.enter_type(|type_size| {
-            let result = match ty {
-                Type::Bool => annotated_value::MoveTypeLayout::Bool,
-                Type::U8 => annotated_value::MoveTypeLayout::U8,
-                Type::U16 => annotated_value::MoveTypeLayout::U16,
-                Type::U32 => annotated_value::MoveTypeLayout::U32,
-                Type::U64 => annotated_value::MoveTypeLayout::U64,
-                Type::U128 => annotated_value::MoveTypeLayout::U128,
-                Type::U256 => annotated_value::MoveTypeLayout::U256,
-                Type::Address => annotated_value::MoveTypeLayout::Address,
-                Type::Signer => annotated_value::MoveTypeLayout::Signer,
-                Type::Vector(ty) => annotated_value::MoveTypeLayout::Vector(Box::new(
-                    self.type_to_fully_annotated_layout_impl(ty, type_size)?,
-                )),
-                Type::Datatype(gidx) => self
-                    .datatype_to_fully_annotated_layout_impl(gidx, &[], type_size)?
-                    .into_layout(),
-                Type::DatatypeInstantiation(inst) => {
-                    let (gidx, ty_args) = &**inst;
-                    self.datatype_to_fully_annotated_layout_impl(gidx, ty_args, type_size)?
-                        .into_layout()
-                }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "no type layout for {:?}",
-                        ty
-                    ));
-                }
-            };
-            Ok(result)
-        })
-    }
-
-    pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(
-            ty,
-            DatatypeTagType::Defining,
-            &mut TypeSize::for_type_traversal(),
-        )
-    }
-
-    pub(crate) fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(
-            ty,
-            DatatypeTagType::Runtime,
-            &mut TypeSize::for_type_traversal(),
-        )
-    }
-
-    pub(crate) fn type_to_type_layout(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
-        self.type_to_type_layout_impl(
-            ty,
-            &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )
+        self.check_layout_limits(ty)?;
+        type_to_type_layout_unchecked(self, ty)
     }
 
     pub(crate) fn arena_type_to_fully_annotated_layout(
@@ -947,10 +964,123 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        self.type_to_fully_annotated_layout_impl(
-            ty,
-            &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )
+        // The layout builders do not enforce limits themselves: `check_layout_limits` below
+        // bounds their recursion. They are local to this function so the check can never be
+        // bypassed.
+        fn datatype_to_fully_annotated_layout(
+            tables: &VMDispatchTables,
+            datatype_name: &VirtualTableKey,
+            ty_args: &[Type],
+        ) -> PartialVMResult<annotated_value::MoveDatatypeLayout> {
+            let ty = tables.resolve_type(datatype_name)?.to_ref();
+            let struct_tag = tables.datatype_to_type_tag_impl(
+                datatype_name,
+                ty_args,
+                DatatypeTagType::Defining,
+                &mut TypeTraversalBudget::for_type_traversal(),
+            )?;
+
+            let type_layout = match ty.datatype_info.inner_ref() {
+                Datatype::Enum(enum_type) => {
+                    let mut variant_layouts = BTreeMap::new();
+                    for variant in enum_type.variants.iter() {
+                        if variant.fields.len() != variant.field_names.len() {
+                            return Err(partial_vm_error!(
+                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                                "Field types did not match the length of field names in loaded enum variant"
+                            ));
+                        }
+                        let field_layouts = variant
+                            .field_names
+                            .iter()
+                            .zip(variant.fields.iter())
+                            .map(|(n, ty)| {
+                                let n = tables.interner.resolve_ident(n, "field name");
+                                let ty = ty.subst_unchecked(ty_args)?;
+                                let l = type_to_fully_annotated_layout_unchecked(tables, &ty)?;
+                                Ok(annotated_value::MoveFieldLayout::new(n, l))
+                            })
+                            .collect::<PartialVMResult<Vec<_>>>()?;
+                        variant_layouts.insert(
+                            (
+                                tables
+                                    .interner
+                                    .resolve_ident(&variant.variant_name, "variant name"),
+                                variant.variant_tag,
+                            ),
+                            field_layouts,
+                        );
+                    }
+                    annotated_value::MoveDatatypeLayout::Enum(Box::new(
+                        annotated_value::MoveEnumLayout {
+                            type_: struct_tag.clone(),
+                            variants: variant_layouts,
+                        },
+                    ))
+                }
+                Datatype::Struct(struct_type) => {
+                    if struct_type.fields.len() != struct_type.field_names.len() {
+                        return Err(partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Field types did not match the length of field names in loaded struct"
+                        ));
+                    }
+                    let field_layouts = struct_type
+                        .field_names
+                        .iter()
+                        .zip(struct_type.fields.iter())
+                        .map(|(n, ty)| {
+                            let n = tables.interner.resolve_ident(n, "field name");
+                            let ty = ty.subst_unchecked(ty_args)?;
+                            let l = type_to_fully_annotated_layout_unchecked(tables, &ty)?;
+                            Ok(annotated_value::MoveFieldLayout::new(n, l))
+                        })
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    annotated_value::MoveDatatypeLayout::Struct(Box::new(
+                        annotated_value::MoveStructLayout::new(struct_tag, field_layouts),
+                    ))
+                }
+            };
+            Ok(type_layout)
+        }
+
+        fn type_to_fully_annotated_layout_unchecked(
+            tables: &VMDispatchTables,
+            ty: &Type,
+        ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
+            let result = match ty {
+                Type::Bool => annotated_value::MoveTypeLayout::Bool,
+                Type::U8 => annotated_value::MoveTypeLayout::U8,
+                Type::U16 => annotated_value::MoveTypeLayout::U16,
+                Type::U32 => annotated_value::MoveTypeLayout::U32,
+                Type::U64 => annotated_value::MoveTypeLayout::U64,
+                Type::U128 => annotated_value::MoveTypeLayout::U128,
+                Type::U256 => annotated_value::MoveTypeLayout::U256,
+                Type::Address => annotated_value::MoveTypeLayout::Address,
+                Type::Signer => annotated_value::MoveTypeLayout::Signer,
+                Type::Vector(ty) => annotated_value::MoveTypeLayout::Vector(Box::new(
+                    type_to_fully_annotated_layout_unchecked(tables, ty)?,
+                )),
+                Type::Datatype(gidx) => {
+                    datatype_to_fully_annotated_layout(tables, gidx, &[])?.into_layout()
+                }
+                Type::DatatypeInstantiation(inst) => {
+                    let (gidx, ty_args) = &**inst;
+                    datatype_to_fully_annotated_layout(tables, gidx, ty_args)?.into_layout()
+                }
+                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "no type layout for {:?}",
+                        ty
+                    ));
+                }
+            };
+            Ok(result)
+        }
+
+        self.check_layout_limits(ty)?;
+        type_to_fully_annotated_layout_unchecked(self, ty)
     }
 
     // -------------------------------------------
@@ -974,95 +1104,176 @@ impl VMDispatchTables {
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
-}
 
-impl DepthFormula {
-    /// A value with no type parameters
-    pub fn constant(constant: u64) -> Self {
-        Self {
-            terms: vec![],
-            constant,
-        }
-    }
-
-    /// A stand alone type parameter value
-    pub fn type_parameter(tparam: TypeParameterIndex) -> Self {
-        Self {
-            terms: vec![(tparam, 0)],
-            constant: 0,
-        }
-    }
-
-    /// We `max` over a list of formulas, and we normalize it to deal with duplicate terms, e.g.
-    /// `max(max(t1 + 1, t2 + 2, 2), max(t1 + 3, t2 + 1, 4))` becomes
-    /// `max(t1 + 3, t2 + 2, 4)`
-    pub fn normalize(formulas: Vec<Self>) -> Self {
-        let mut var_map = BTreeMap::new();
-        let mut constant_acc = 0;
-        for formula in formulas {
-            let Self { terms, constant } = formula;
-            for (var, cur_factor) in terms {
-                var_map
-                    .entry(var)
-                    .and_modify(|prev_factor| {
-                        *prev_factor = std::cmp::max(cur_factor, *prev_factor)
-                    })
-                    .or_insert(cur_factor);
-            }
-            constant_acc = std::cmp::max(constant_acc, constant);
-        }
-        Self {
-            terms: var_map.into_iter().collect(),
-            constant: constant_acc,
-        }
-    }
-
-    /// Substitute in formulas for each type parameter and normalize the final formula
-    pub fn subst(
+    /// The one checked substitution primitive: realize `term` against `ty_args` and return both
+    /// the built type and its size, having first checked the size against the syntactic limits.
+    /// Every route to a substituted type goes through here. The type and size slices are read
+    /// straight off `ty_args` — no per-call allocation.
+    fn realize_type(
         &self,
-        mut map: BTreeMap<TypeParameterIndex, DepthFormula>,
-    ) -> PartialVMResult<DepthFormula> {
-        let Self { terms, constant } = self;
-        let mut formulas = vec![DepthFormula::constant(*constant)];
-        for (t_i, c_i) in terms {
-            let Some(mut u_form) = map.remove(t_i) else {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "{t_i:?} missing mapping"
-                ));
-            };
-            u_form.add(*c_i);
-            formulas.push(u_form)
-        }
-        Ok(DepthFormula::normalize(formulas))
+        term: &ArenaType,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<(Type, u64)> {
+        let formula = self.arena_type_size_formula(term)?;
+        let sizes = ty_args.sizes();
+        // Only the syntactic measures are needed here: the limit check, and `type_size` for the
+        // caller's node budget. The frame's canonical sizes are (re)computed by `TypeArguments`.
+        let type_size = formula.solve_type_size(sizes)?;
+        check_syntactic_limits(type_size, formula.solve_type_depth(sizes)?)?;
+        Ok((term.subst_unchecked(ty_args.types())?, type_size))
     }
 
-    /// Given depths for each type parameter, solve the formula giving the max depth for the type
-    pub fn solve(&self, tparam_depths: &[u64]) -> PartialVMResult<u64> {
-        let Self { terms, constant } = self;
-        let mut depth = *constant;
-        for (t_i, c_i) in terms {
-            match tparam_depths.get(*t_i as usize) {
-                None => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "{t_i:?} missing mapping"
-                    ));
-                }
-                Some(ty_depth) => depth = std::cmp::max(depth, ty_depth.saturating_add(*c_i)),
+    /// The [`TypeArguments`] for the callee's frame. Also performs sizing checks.
+    pub(crate) fn instantiate_generic_function(
+        &self,
+        fun_inst: &FunctionInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<TypeArguments> {
+        // The whole instantiation — caller arguments plus the callee arguments realized below —
+        // must fit within the instantiation-node budget. Pure arithmetic over the sizes.
+        let mut sum_nodes = 1u64;
+        let mut charge_nodes = |type_size: u64| {
+            sum_nodes = sum_nodes.saturating_add(type_size);
+            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
+                return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
             }
+            Ok(())
+        };
+        for size in ty_args.sizes() {
+            charge_nodes(size.type_size)?;
         }
-        Ok(depth)
+        let types = fun_inst
+            .instantiation
+            .to_ref()
+            .iter()
+            .map(|term| {
+                let (ty, type_size) = self.realize_type(term, ty_args)?;
+                charge_nodes(type_size)?;
+                Ok(ty)
+            })
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        TypeArguments::new(self, types)
     }
 
-    // `max(t_0 + c_0, ..., t_n + c_n, c_base) + c`. But our representation forces us to distribute
-    // the addition, so it becomes `max(t_0 + c_0 + c, ..., t_n + c_n + c, c_base + c)`
-    pub fn add(&mut self, c: u64) {
-        let Self { terms, constant } = self;
-        for (_t_i, c_i) in terms {
-            *c_i = (*c_i).saturating_add(c);
+    /// Realize a single term with `ty_args`, checking its predicted syntactic sizes against the
+    /// limits first — the type is built only if it fits.
+    pub(crate) fn subst_type(
+        &self,
+        term: &ArenaType,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<Type> {
+        Ok(self.realize_type(term, ty_args)?.0)
+    }
+
+    /// Check a struct instantiation (the `Pack` family of instructions) against the limits
+    /// without building anything — see [`VMDispatchTables::check_instantiation`].
+    pub(crate) fn check_struct_instantiation(
+        &self,
+        struct_inst: &StructInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
+        self.check_instantiation(
+            &struct_inst.def_vtable_key,
+            struct_inst.type_params.to_ref(),
+            ty_args,
+        )
+    }
+
+    /// Check an enum variant instantiation (the `PackVariant` family of instructions) against
+    /// the limits without building anything — see [`VMDispatchTables::check_instantiation`].
+    pub(crate) fn check_variant_instantiation(
+        &self,
+        variant_inst: &VariantInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
+        let enum_inst = variant_inst.enum_inst.to_ref();
+        self.check_instantiation(
+            &enum_inst.def_vtable_key,
+            enum_inst.type_params.to_ref(),
+            ty_args,
+        )
+    }
+
+    /// Realize a struct instantiation's runtime type, checking the instantiation as a value of it
+    /// is about to exist. Observational (the tracer).
+    pub(crate) fn instantiate_struct_type(
+        &self,
+        struct_inst: &StructInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<Type> {
+        self.check_struct_instantiation(struct_inst, ty_args)?;
+        self.instantiate_datatype_type(
+            &struct_inst.def_vtable_key,
+            struct_inst.type_params.to_ref(),
+            ty_args,
+        )
+    }
+
+    /// Realize an enum instantiation's runtime type, checking the instantiation as a value of it
+    /// is about to exist. Observational (the tracer).
+    pub(crate) fn instantiate_enum_type(
+        &self,
+        variant_inst: &VariantInstantiation,
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<Type> {
+        self.check_variant_instantiation(variant_inst, ty_args)?;
+        let enum_inst = variant_inst.enum_inst.to_ref();
+        self.instantiate_datatype_type(
+            &enum_inst.def_vtable_key,
+            enum_inst.type_params.to_ref(),
+            ty_args,
+        )
+    }
+
+    fn instantiate_datatype_type(
+        &self,
+        datatype_key: &VirtualTableKey,
+        type_params: &[ArenaType],
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<Type> {
+        let instantiation = type_params
+            .iter()
+            .map(|term| self.subst_type(term, ty_args))
+            .collect::<PartialVMResult<Vec<_>>>()?;
+        Ok(Type::DatatypeInstantiation(Box::new((
+            datatype_key.clone(),
+            instantiation,
+        ))))
+    }
+
+    /// Check a datatype instantiation against the limits without realizing anything: the
+    /// type-node counts and the result value's `value_depth` are all solved from precomputed
+    /// formulas. This path serves the `Pack` family of instructions — the instantiated type
+    /// itself is never needed, so no part of it is ever built.
+    fn check_instantiation(
+        &self,
+        datatype_key: &VirtualTableKey,
+        type_params: &[ArenaType],
+        ty_args: &TypeArguments,
+    ) -> PartialVMResult<()> {
+        // Realize each type-parameter term's size against the frame's argument sizes, checking
+        // each against the syntactic limits as it is computed. Nothing is built.
+        let mut param_sizes = Vec::with_capacity(type_params.len());
+        for term in type_params.iter() {
+            let size = self.arena_type_size_formula(term)?.solve(ty_args.sizes())?;
+            check_syntactic_limits(size.type_size, size.type_depth)?;
+            param_sizes.push(size);
         }
-        *constant = (*constant).saturating_add(c);
+
+        // A value of this datatype is about to be created. Solve the datatype's resolved formula
+        // against the realized parameter sizes for the result's *true* node/depth counts, and
+        // check them: bounding the constructed type's node count is what stops types growing
+        // without bound through repeated instantiation. Its `value_depth` is checked too, since a
+        // value is created. Note this is the exact size of the built type — the running-argument
+        // sum a naive guard would use over-counts an argument once per parameter that references
+        // it (the `S<T×32>` blow-up: 128 arguments-plus-parameters, but 3041 realized nodes).
+        let result = self.virtual_key_size_formula(datatype_key)?;
+        check_syntactic_limits(
+            result.solve_type_size(&param_sizes)?,
+            result.solve_type_depth(&param_sizes)?,
+        )?;
+        self.check_value_depth(result.solve_value_depth(&param_sizes)?)?;
+        Ok(())
     }
 }
 

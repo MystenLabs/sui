@@ -5,9 +5,10 @@ use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
     execution::{
-        dispatch_tables::VMDispatchTables, interpreter, tracing::tracer::VMTracer, values::Value,
+        dispatch_tables::VMDispatchTables, interpreter, interpreter::state::TypeArguments,
+        tracing::tracer::VMTracer, values::Value,
     },
-    jit::execution::ast::{Function, Type},
+    jit::execution::ast::{ArenaType, Function, Type},
     natives::extensions::NativeExtensions,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
@@ -61,6 +62,7 @@ pub struct MoveVM<'extensions> {
     pub(crate) telemetry: Arc<TelemetryContext>,
 }
 
+/// `parameters` and `return_type` are already substituted with the queried type arguments.
 pub(crate) struct MoveVMFunction {
     function: VMPointer<Function>,
     pub(crate) parameters: Vec<Type>,
@@ -68,6 +70,7 @@ pub(crate) struct MoveVMFunction {
 }
 
 /// Externally visibile information about a function that can be asked and the VM will answer.
+/// `parameters` and `return_` are already substituted with the queried type arguments.
 pub struct LoadedFunctionInformation {
     pub is_entry: bool,
     pub is_native: bool,
@@ -418,23 +421,29 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
+        self.virtual_tables
+            .verify_ty_args(fun_ref.type_parameters(), ty_args)
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+
+        // Pair the type arguments with their sizes so substitution goes through the checked
+        // dispatch-table path, which bounds each realized type against the traversal limits
+        // before building it.
+        let ty_args = TypeArguments::new(&self.virtual_tables, ty_args.to_vec())
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
+        let instantiate = |ty: &ArenaType| self.virtual_tables.subst_type(ty, &ty_args);
+
         let parameters = fun_ref
             .parameters
             .iter()
-            .map(|ty| ty.to_type())
+            .map(instantiate)
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let return_ = fun_ref
             .return_
             .iter()
-            .map(|ty| ty.to_type())
+            .map(instantiate)
             .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
-
-        // verify type arguments
-        self.virtual_tables
-            .verify_ty_args(fun_ref.type_parameters(), ty_args)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         let function = MoveVMFunction {

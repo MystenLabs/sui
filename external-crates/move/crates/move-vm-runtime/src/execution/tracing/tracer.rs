@@ -13,14 +13,10 @@
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     execution::{
-        dispatch_tables::VMDispatchTables,
-        interpreter::{
-            helpers::{instantiate_enum_type, instantiate_single_type, instantiate_struct_type},
-            state::MachineState,
-        },
+        dispatch_tables::VMDispatchTables, interpreter::state::MachineState,
         values::Value as RuntimeValue,
     },
-    jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
+    jit::execution::ast::{ArenaType, Function, Type},
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
@@ -1392,11 +1388,12 @@ impl VMTracer<'_> {
             }
             B::PackGeneric(struct_inst_ptr) => {
                 let field_count = struct_inst_ptr.field_count as usize;
-                let struct_type = instantiate_struct_type(
-                    struct_inst_ptr,
-                    &machine.call_stack.current_frame.ty_args,
-                )
-                .ok()?;
+                let struct_type = vtables
+                    .instantiate_struct_type(
+                        struct_inst_ptr,
+                        &machine.call_stack.current_frame.ty_args,
+                    )
+                    .ok()?;
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
@@ -1587,7 +1584,8 @@ impl VMTracer<'_> {
                     .instruction(instruction, ty_args, effects, *remaining_gas, pc);
             }
             B::VecPack(ty_ptr, n) => {
-                let ty = instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
+                let ty = vtables
+                    .subst_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
                 let ty = vtables.type_to_fully_annotated_layout(&ty).ok()?;
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
@@ -1745,11 +1743,12 @@ impl VMTracer<'_> {
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables
                     .type_to_fully_annotated_layout(
-                        &instantiate_enum_type(
-                            variant_inst_ptr,
-                            &machine.call_stack.current_frame.ty_args,
-                        )
-                        .ok()?,
+                        &vtables
+                            .instantiate_enum_type(
+                                variant_inst_ptr,
+                                &machine.call_stack.current_frame.ty_args,
+                            )
+                            .ok()?,
                     )
                     .ok()?;
                 self.type_stack.push(StackType {
@@ -1986,7 +1985,9 @@ impl FunctionTypeInfo {
         }
 
         let subst_and_layout_type = |ty: &ArenaType| -> Option<TagWithLayoutInfoOpt> {
-            let subst_ty = ty.subst(ty_args).ok()?;
+            // Unchecked substitution is fine here: the tracer is observational and never runs on
+            // a network execution path, so it needn't re-check the traversal limits.
+            let subst_ty = ty.subst_unchecked(ty_args).ok()?;
             let (ty, ref_type) = deref_ty(subst_ty)?;
             let tag = vtables.type_to_type_tag(&ty).ok()?;
             // NB: This may fail if the type represents a value greater than the max
