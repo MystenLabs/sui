@@ -76,11 +76,13 @@ struct AncestorOverride {
 }
 
 /// Why a minimal block could not be inflated from local state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FallbackReason {
-    /// No block known at the ancestor slot.
-    MissingAncestor(Slot),
-    /// Multiple blocks (equivocation) at the slot and no explicit digest hint.
+    /// The complete frontier of ancestor slots with no accepted block, in canonical
+    /// ancestor order. Collected in ONE pass so a recovery wait can register on all
+    /// of them and wake once, instead of rediscovering them one wake at a time.
+    MissingAncestors(Vec<Slot>),
+    /// More equivocating candidates at the slot than reconstruction will search.
     AmbiguousSlot(Slot),
     /// Reconstructed bytes do not hash to the claimed digest.
     DigestMismatch,
@@ -89,7 +91,7 @@ pub(crate) enum FallbackReason {
 impl FallbackReason {
     pub(crate) fn label(&self) -> &'static str {
         match self {
-            FallbackReason::MissingAncestor(_) => "missing_ancestor",
+            FallbackReason::MissingAncestors(_) => "missing_ancestor",
             FallbackReason::AmbiguousSlot(_) => "ambiguous_slot",
             FallbackReason::DigestMismatch => "digest_mismatch",
         }
@@ -284,6 +286,7 @@ pub(crate) fn deserialize_minimal(
     // candidates (see AncestorDigestResolver).
     let mut candidates: Vec<(Round, AuthorityIndex, Vec<BlockDigest>)> =
         Vec::with_capacity(authors.len());
+    let mut missing: Vec<Slot> = Vec::new();
     for &author in authors {
         let authority = committee
             .to_authority_index(author as usize)
@@ -299,24 +302,28 @@ pub(crate) fn deserialize_minimal(
             }
             None => {
                 let resolved = resolver.digests_at_slot(slot);
-                if resolved.is_empty() {
-                    return Err(InflateError::NeedFullBlock {
-                        block_ref,
-                        reason: FallbackReason::MissingAncestor(slot),
-                    });
-                }
                 if resolved.len() > MAX_SLOT_CANDIDATES {
                     // Heavy equivocation: the reconstruction search space is not worth
-                    // exploring; the exact-reference fetch of the full block resolves it.
+                    // exploring, and waiting cannot cure it — it wins over any missing
+                    // slots. The exact-reference fetch of the full block resolves it.
                     return Err(InflateError::NeedFullBlock {
                         block_ref,
                         reason: FallbackReason::AmbiguousSlot(slot),
                     });
                 }
+                if resolved.is_empty() {
+                    missing.push(slot);
+                }
                 resolved
             }
         };
         candidates.push((round, authority, slot_candidates));
+    }
+    if !missing.is_empty() {
+        return Err(InflateError::NeedFullBlock {
+            block_ref,
+            reason: FallbackReason::MissingAncestors(missing),
+        });
     }
 
     // Bounded reconstruction search: the baseline attempt takes every slot's first
@@ -676,6 +683,59 @@ mod tests {
                     reason,
                     FallbackReason::AmbiguousSlot(Slot::from(ancestors[3]))
                 );
+            }
+            other => panic!("expected AmbiguousSlot fallback, got {other:?}"),
+        }
+    }
+
+    /// One decode pass reports the COMPLETE missing frontier in canonical ancestor
+    /// order — recovery registers on all of it and waits once, so first-missing-only
+    /// reporting would reintroduce the wake-per-slot churn measured in v3.
+    #[tokio::test]
+    async fn missing_frontier_is_complete_and_ordered() {
+        let (context, key_pairs) = Context::new_for_test(6);
+        let mut rng = StdRng::seed_from_u64(17);
+        let mut resolver = MapResolver::default();
+        let ancestors = ancestor_refs(6, 9, &mut resolver, &mut rng);
+        let block = TestBlock::new(10, 0)
+            .set_ancestors_raw(ancestors.clone())
+            .build();
+        let block = sign(block, &context, &key_pairs);
+        let minimal = serialize_minimal(&block, &resolver, 0).unwrap();
+
+        // Receiver holds only ancestors 1 and 4: the frontier must name 2, 3, and 5
+        // (the own parent at index 0 rides an explicit digest), in ancestor order.
+        let mut receiver = MapResolver::default();
+        receiver.insert(ancestors[1]);
+        receiver.insert(ancestors[4]);
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &receiver)
+            .map(|_| ())
+        {
+            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+                assert_eq!(block_ref, block.reference());
+                assert_eq!(
+                    reason,
+                    FallbackReason::MissingAncestors(vec![
+                        Slot::from(ancestors[2]),
+                        Slot::from(ancestors[3]),
+                        Slot::from(ancestors[5]),
+                    ])
+                );
+            }
+            other => panic!("expected MissingAncestors fallback, got {other:?}"),
+        }
+
+        // Heavy ambiguity at any slot wins over missing slots: waiting cures neither.
+        let mut flooded = MapResolver::default();
+        flooded.insert(ancestors[1]);
+        for _ in 0..=MAX_SLOT_CANDIDATES {
+            flooded.insert(BlockRef::new(9, ancestors[4].author, test_digest(&mut rng)));
+        }
+        match deserialize_minimal(&minimal, &context.committee, block.author(), &flooded)
+            .map(|_| ())
+        {
+            Err(InflateError::NeedFullBlock { reason, .. }) => {
+                assert!(matches!(reason, FallbackReason::AmbiguousSlot(_)));
             }
             other => panic!("expected AmbiguousSlot fallback, got {other:?}"),
         }

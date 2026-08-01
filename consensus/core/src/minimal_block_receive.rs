@@ -4,31 +4,35 @@
 //! Receive-side recovery for minimal blocks that cannot be inflated at receipt.
 //!
 //! Each un-inflatable minimal block becomes one bounded task that waits directly on
-//! authoritative DAG state: when inflation reports a missing ancestor slot, the task
-//! registers on `DagState`'s accepted-slot notifier, re-checks, and sleeps until the
-//! slot fills or GC passes it. Inflation success against accepted-DAG candidates
-//! implies the block's causal history is locally complete, so the inflated block is
-//! submitted through the normal `handle_send_block` path immediately — each block
-//! waits exactly once.
+//! authoritative DAG state: inflation reports the COMPLETE frontier of missing
+//! ancestor slots, the task registers on all of them via `DagState`'s accepted-slot
+//! notifier, re-checks, and sleeps until the whole frontier fills — one wake, one
+//! re-inflation. Inflation success against accepted-DAG candidates implies the
+//! block's causal history is locally complete, so the inflated block is submitted
+//! through the normal `handle_send_block` path immediately.
 //!
 //! Termination is guaranteed without deadlines: every waited slot either fills (the
 //! network keeps moving, and a quorum of streams feeds acceptance) or falls below the
-//! GC round (commits keep advancing), both of which wake the task. Ambiguity, digest
-//! mismatch, or an exhausted retry budget escalate to a single digest-verified fetch
-//! of the exact claimed block from its author.
+//! GC round (commits keep advancing), both of which wake the task. Ambiguity, a
+//! digest mismatch, or a required slot crossing GC under a live child escalate to a
+//! single digest-verified fetch of the exact claimed block from its author; an
+//! exhausted re-inflation budget (exceptional once the frontier is complete) DROPS
+//! the block — descendants that do inflate drive normal missing-ancestor sync, which
+//! is the backstop. Ordinary tip racing must never produce fetches.
 
 use std::sync::{Arc, Weak};
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::BlockRef;
+use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use parking_lot::RwLock;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::{
-    block::{BlockAPI as _, SignedBlock, VerifiedBlock},
+    block::{BlockAPI as _, SignedBlock, Slot, VerifiedBlock},
     block_inflater::BlockInflater,
     context::Context,
     dag_state::DagState,
@@ -216,6 +220,7 @@ enum RecoveryOutcome {
     Repaired,
     Obsolete,
     AlreadyAccepted,
+    RetryExhausted,
     RepairFailed,
     SubmitRejected,
 }
@@ -227,6 +232,7 @@ impl RecoveryOutcome {
             RecoveryOutcome::Repaired => "repaired",
             RecoveryOutcome::Obsolete => "obsolete",
             RecoveryOutcome::AlreadyAccepted => "already_accepted",
+            RecoveryOutcome::RetryExhausted => "retry_exhausted",
             RecoveryOutcome::RepairFailed => "repair_failed",
             RecoveryOutcome::SubmitRejected => "submit_rejected",
         }
@@ -252,18 +258,19 @@ impl RepairError {
 }
 
 /// What the register-recheck under one DagState read guard concluded.
-enum WaitCheck {
+enum WaitCheck<'a> {
     /// The claimed block itself fell below GC: nothing to recover.
     Obsolete,
     /// The claimed block was accepted through another path (typically full-form
     /// replay after a reconnect): recovery is redundant, release the quota now.
     AlreadyAccepted,
-    /// The waited slot fell below GC and can never fill: escalate to repair.
+    /// A required slot fell below GC while the child is live: without its omitted
+    /// digest the minimal can never inflate — only the exact full block resolves it.
     Repair,
-    /// A candidate is already accepted in the slot: retry inflation now.
+    /// Every slot in the frontier has an accepted candidate: retry inflation now.
     Retry,
-    /// Slot still empty and above GC: await the registration.
-    Wait,
+    /// Await the registrations of the still-empty slots as one barrier.
+    Wait(Vec<mysten_common::sync::notify_read::Registration<'a, Slot, ()>>),
 }
 
 /// Recovers one un-inflatable minimal block, starting from the receipt-time
@@ -301,14 +308,16 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
 
     let mut reason = reason;
     // The receipt-time inflation that produced `reason` was attempt one; the budget
-    // counts inflations of these immutable bytes, wherever they run.
+    // counts inflations of these immutable bytes, wherever they run. With the codec
+    // reporting the COMPLETE missing frontier, the second attempt normally succeeds;
+    // exhaustion is exceptional and terminates as a drop, never a fetch — normal
+    // missing-ancestor sync (driven by descendants that do inflate) is the backstop.
     let mut inflate_attempts = 1;
     let outcome = 'recovery: {
         loop {
             let missing = match reason {
-                FallbackReason::MissingAncestor(slot) => slot,
-                // Ambiguity or a digest mismatch cannot be repaired by waiting; the
-                // inflate-attempt budget bounds waits the same way.
+                FallbackReason::MissingAncestors(slots) => slots,
+                // Ambiguity or a digest mismatch cannot be repaired by waiting.
                 FallbackReason::AmbiguousSlot(_) | FallbackReason::DigestMismatch => {
                     break 'recovery repair(
                         &context,
@@ -321,28 +330,20 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     .await;
                 }
             };
-            if inflate_attempts == MAX_RECOVERY_INFLATE_ATTEMPTS {
-                break 'recovery repair(
-                    &context,
-                    network_client.as_ref(),
-                    &authority_service,
-                    &repair_limits,
-                    peer,
-                    claimed_ref,
-                )
-                .await;
-            }
+            node_metrics
+                .minimal_block_park_missing_slots
+                .observe(missing.len() as f64);
 
-            // Register BEFORE re-checking the DAG: acceptance between the check and the
-            // await has then already fired the registration, so no wake can be missed.
-            // A second registration on the claimed block's exact reference lets the
-            // task terminate promptly when full-form replay (after a reconnect)
-            // delivers the block through the normal path — the quota permit must not
-            // stay parked on a wait the block no longer needs. Keyed by BlockRef, not
-            // slot: equivocating siblings accepted into the claimed slot must not
-            // wake every parked task for it.
-            loop {
-                let mut registration = accepted_slots.register_one(&missing);
+            // Register on EVERY missing slot before re-checking the DAG, so an
+            // acceptance between the check and the await has already fired its
+            // registration — then wait for the whole frontier as one barrier and
+            // re-inflate once, instead of rediscovering the frontier one wake at a
+            // time. A registration on the claimed block's exact reference lets the
+            // task terminate promptly when full-form replay delivers the block
+            // through the normal path (keyed by BlockRef, not slot: equivocating
+            // siblings must not wake every parked task for the slot).
+            'wait: loop {
+                let registrations = accepted_slots.register_all(&missing);
                 let mut own_registration = accepted_refs.register_one(&claimed_ref);
                 let check = {
                     let Some(dag_state) = dag_state.upgrade() else {
@@ -354,12 +355,28 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                         WaitCheck::Obsolete
                     } else if dag_state.contains_block(&claimed_ref) {
                         WaitCheck::AlreadyAccepted
-                    } else if missing.round <= gc_round {
-                        WaitCheck::Repair
-                    } else if !dag_state.get_uncommitted_blocks_at_slot(missing).is_empty() {
-                        WaitCheck::Retry
                     } else {
-                        WaitCheck::Wait
+                        let mut remaining = Vec::new();
+                        let mut crossed_gc = false;
+                        for (slot, registration) in missing.iter().zip_eq(registrations) {
+                            if !dag_state.get_uncommitted_blocks_at_slot(*slot).is_empty() {
+                                // Already filled: dropping deregisters it.
+                            } else if slot.round <= gc_round {
+                                // This slot can never fill, and without its omitted
+                                // digest the minimal can never inflate: only the
+                                // exact full block can resolve the live child.
+                                crossed_gc = true;
+                            } else {
+                                remaining.push(registration);
+                            }
+                        }
+                        if crossed_gc {
+                            WaitCheck::Repair
+                        } else if remaining.is_empty() {
+                            WaitCheck::Retry
+                        } else {
+                            WaitCheck::Wait(remaining)
+                        }
                     }
                 };
                 match check {
@@ -378,26 +395,38 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                         )
                         .await;
                     }
-                    WaitCheck::Retry => break,
-                    WaitCheck::Wait => {}
-                }
-                tokio::select! {
-                    _ = &mut registration => break,
-                    // The exact claimed block was accepted; loop into the re-check,
-                    // which concludes AlreadyAccepted.
-                    _ = &mut own_registration => continue,
-                    changed = gc_round.changed() => {
-                        if changed.is_err() {
-                            // DagState (and its watch sender) is gone: shutdown.
-                            return;
+                    WaitCheck::Retry => break 'wait,
+                    WaitCheck::Wait(remaining) => {
+                        let frontier = futures::future::join_all(remaining);
+                        tokio::pin!(frontier);
+                        tokio::select! {
+                            _ = &mut frontier => break 'wait,
+                            // The exact claimed block was accepted; loop into the
+                            // re-check, which concludes AlreadyAccepted.
+                            _ = &mut own_registration => continue 'wait,
+                            changed = gc_round.changed() => {
+                                if changed.is_err() {
+                                    // DagState (and its watch sender) is gone.
+                                    return;
+                                }
+                                // Re-register and re-evaluate every slot against
+                                // the advanced GC round.
+                                continue 'wait;
+                            }
                         }
-                        // Re-evaluate the slot against the advanced GC round.
-                        continue;
                     }
                 }
             }
 
-            // The waited slot has a candidate: re-classify by inflating.
+            // The whole frontier has candidates: re-classify by inflating.
+            if inflate_attempts == MAX_RECOVERY_INFLATE_ATTEMPTS {
+                warn!(
+                    "Recovery of minimal block {} from peer {} exhausted {} inflation \
+                     attempts; dropping (sync recovers via descendants)",
+                    claimed_ref, peer, inflate_attempts
+                );
+                break 'recovery RecoveryOutcome::RetryExhausted;
+            }
             inflate_attempts += 1;
             let inflated = {
                 let Some(dag_state) = dag_state.upgrade() else {
@@ -765,7 +794,7 @@ mod tests {
                 self.repair_limits.clone(),
                 self.peer,
                 self.block.reference(),
-                self.reason,
+                self.reason.clone(),
                 self.minimal.clone(),
                 permit,
             ));
@@ -812,10 +841,11 @@ mod tests {
         }
     }
 
-    /// A block missing several ancestors re-keys from slot to slot as each lands,
-    /// finally submitting once — with zero fetches.
+    /// The task waits on the whole missing frontier as one barrier: partial arrivals
+    /// neither re-inflate nor submit, and the final arrival produces exactly one
+    /// submission — with zero fetches.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_rekeys_across_missing_slots() {
+    async fn recovery_waits_for_full_frontier_then_inflates_once() {
         let h = harness(None);
         let client = Arc::new(RepairOnlyClient::new(vec![]));
         let mut join_set = tokio::task::JoinSet::new();
@@ -823,26 +853,21 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert!(h.service.lock().handle_send_block.is_empty());
 
-        // Ancestor order in the minimal encoding is own-author-first: land the first
-        // missing slot alone, then the rest in one batch. The task re-keys from the
-        // first slot to the next and completes within its attempt budget.
-        let own_first = h
-            .ancestors
-            .iter()
-            .find(|b| b.author() == h.peer)
-            .unwrap()
-            .clone();
-        h.receiver_dag.write().accept_block(own_first.clone());
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        assert!(h.service.lock().handle_send_block.is_empty());
-
-        let rest: Vec<_> = h
+        // Fill the frontier one slot at a time (the own parent rides an explicit
+        // digest and is not part of it): nothing may submit before the last one.
+        let frontier: Vec<_> = h
             .ancestors
             .iter()
             .filter(|b| b.author() != h.peer)
             .cloned()
             .collect();
-        h.receiver_dag.write().accept_blocks(rest);
+        let (last, first) = frontier.split_last().unwrap();
+        for ancestor in first {
+            h.receiver_dag.write().accept_block(ancestor.clone());
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            assert!(h.service.lock().handle_send_block.is_empty());
+        }
+        h.receiver_dag.write().accept_block(last.clone());
         wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
         let received = h.service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
@@ -887,22 +912,36 @@ mod tests {
         );
     }
 
-    /// Exhausting the inflate-attempt budget escalates to exactly one repair fetch.
+    /// GC crossing ONE of several awaited frontier slots ends the wait and repairs
+    /// the live child: that slot can never fill, and without its omitted digest the
+    /// minimal can never inflate — waiting on the others would be pointless.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_repairs_after_attempt_budget_exhausted() {
-        let h = harness(None);
+    async fn recovery_gc_cross_of_one_frontier_slot_triggers_repair() {
+        let h = harness(Some(3));
         let client = Arc::new(RepairOnlyClient::new(vec![h.block.serialized().clone()]));
         let mut join_set = tokio::task::JoinSet::new();
         h.spawn(&mut join_set, client.clone());
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(h.service.lock().handle_send_block.is_empty());
 
-        // Feed missing ancestors ONE at a time: each acceptance wakes the task into
-        // another inflation that discovers the next missing slot. Attempt 3 comes up
-        // still-missing, so the task escalates to repair rather than waiting again.
-        for ancestor in h.ancestors.iter().filter(|b| b.author() != h.peer).take(2) {
-            tokio::time::sleep(Duration::from_millis(5)).await;
-            assert!(h.service.lock().handle_send_block.is_empty());
-            h.receiver_dag.write().accept_block(ancestor.clone());
-        }
+        // Fill two of the three frontier slots; the third stays empty.
+        let filled: Vec<_> = h
+            .ancestors
+            .iter()
+            .filter(|b| b.author() != h.peer)
+            .take(2)
+            .cloned()
+            .collect();
+        h.receiver_dag.write().accept_blocks(filled);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(h.service.lock().handle_send_block.is_empty());
+
+        // Commit with leader round 13: gc_round = 10 >= the unfilled slot (10),
+        // while the claimed block (11) stays above GC.
+        let leader = BlockRef::new(13, h.peer, BlockDigest::MIN);
+        let commit = TrustedCommit::new_for_test(1, CommitDigest::MIN, 100, leader, vec![leader]);
+        h.receiver_dag.write().add_commit(commit);
+
         wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
         assert_eq!(
             client.fetch_calls.lock().as_slice(),
@@ -980,9 +1019,10 @@ mod tests {
         let slot_notifier = h.receiver_dag.read().accepted_slot_notifier();
         let ref_notifier = h.receiver_dag.read().accepted_ref_notifier();
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
-        // One registration per notifier per waiter: the missing slot, and the claimed
-        // block's exact reference (the replay-termination wake).
-        assert_eq!(slot_notifier.num_pending(), 1);
+        // One registration per missing-frontier slot (three non-own ancestors; the
+        // own parent rides an explicit digest), plus the claimed block's exact
+        // reference (the replay-termination wake).
+        assert_eq!(slot_notifier.num_pending(), 3);
         assert_eq!(ref_notifier.num_pending(), 1);
 
         // shutdown() aborts and awaits every task: cleanup is deterministic.
