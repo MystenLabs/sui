@@ -2051,19 +2051,35 @@ impl IndexStore {
 
         self.metrics.balance_lookup_from_total.inc();
 
-        let balance = self
-            .caches
-            .per_coin_type_balance
-            .get(&(owner, coin_type.clone()));
+        let cache_key = (owner, coin_type.clone());
+        let balance = self.caches.per_coin_type_balance.get(&cache_key);
         if let Some(balance) = balance {
-            return balance;
+            if Self::contains_negative_total_balance(&balance) {
+                debug!(
+                    ?owner,
+                    ?coin_type,
+                    "invalidating negative per-coin balance cache entry"
+                );
+                self.caches.per_coin_type_balance.invalidate(&cache_key);
+            } else {
+                return balance;
+            }
         }
         // cache miss, lookup in all balance cache
-        let all_balance = self.caches.all_balances.get(&owner.clone());
+        let all_balance = self.caches.all_balances.get(&owner);
         if let Some(Ok(all_balance)) = all_balance
             && let Some(balance) = all_balance.get(&coin_type)
         {
-            return Ok(*balance);
+            if balance.balance < 0 || balance.num_coins < 0 {
+                debug!(
+                    ?owner,
+                    ?coin_type,
+                    "invalidating all-balances cache entry containing a negative balance"
+                );
+                self.caches.all_balances.invalidate(&owner);
+            } else {
+                return Ok(*balance);
+            }
         }
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
@@ -2109,6 +2125,17 @@ impl IndexStore {
         }
 
         self.metrics.all_balance_lookup_from_total.inc();
+        if let Some(all_balance) = self.caches.all_balances.get(&owner) {
+            if Self::contains_negative_all_balance(&all_balance) {
+                debug!(
+                    ?owner,
+                    "invalidating all-balances cache entry containing a negative balance"
+                );
+                self.caches.all_balances.invalidate(&owner);
+            } else {
+                return all_balance;
+            }
+        }
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         self.caches.all_balances.get_with(owner, move || {
@@ -2117,6 +2144,18 @@ impl IndexStore {
                     .into()
             })
         })
+    }
+
+    fn contains_negative_total_balance(balance: &SuiResult<TotalBalance>) -> bool {
+        matches!(balance, Ok(balance) if balance.balance < 0 || balance.num_coins < 0)
+    }
+
+    fn contains_negative_all_balance(
+        balances: &SuiResult<Arc<HashMap<TypeTag, TotalBalance>>>,
+    ) -> bool {
+        matches!(balances, Ok(balances) if balances
+            .values()
+            .any(|balance| balance.balance < 0 || balance.num_coins < 0))
     }
 
     /// Read balance for a `SuiAddress` and `CoinType` from the backend database
@@ -2272,17 +2311,109 @@ impl IndexStore {
 
 #[cfg(test)]
 mod tests {
+    use super::CoinIndexKey2;
+    use super::CoinInfo;
     use super::IndexStore;
     use super::ObjectIndexChanges;
+    use super::TotalBalance;
     use move_core_types::account_address::AccountAddress;
     use prometheus::Registry;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
+    use std::sync::Arc;
     use sui_types::base_types::{ObjectInfo, ObjectType, SuiAddress};
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::TransactionEvents;
     use sui_types::gas_coin::GAS;
     use sui_types::object;
     use sui_types::object::Owner;
+    use typed_store::traits::Map;
+
+    fn index_store_with_gas_balance(balance: u64) -> (tempfile::TempDir, IndexStore, SuiAddress) {
+        let dir = tempfile::tempdir().unwrap();
+        let index_store = IndexStore::new_without_init(
+            dir.path().to_path_buf(),
+            &Registry::default(),
+            Some(128),
+            false,
+        );
+        let address: SuiAddress = AccountAddress::random().into();
+        let object = object::Object::new_gas_with_balance_and_owner_for_testing(balance, address);
+        let key = CoinIndexKey2::new(address, GAS::type_tag().to_string(), balance, object.id());
+        let coin_info = CoinInfo::from_object(&object).unwrap();
+        index_store
+            .tables
+            .coin_index_2
+            .insert(&key, &coin_info)
+            .unwrap();
+
+        (dir, index_store, address)
+    }
+
+    #[tokio::test]
+    async fn test_negative_per_coin_balance_cache_is_recomputed_from_db() {
+        let (_dir, index_store, address) = index_store_with_gas_balance(100);
+        let cache_key = (address, GAS::type_tag());
+        let _ = index_store
+            .caches
+            .per_coin_type_balance
+            .get_with(cache_key.clone(), || {
+                Ok(TotalBalance {
+                    balance: -100,
+                    num_coins: -1,
+                    address_balance: 0,
+                })
+            });
+
+        let balance = index_store
+            .get_coin_object_balance(address, GAS::type_tag())
+            .unwrap();
+
+        assert_eq!(balance.balance, 100);
+        assert_eq!(balance.num_coins, 1);
+        assert_eq!(
+            index_store
+                .caches
+                .per_coin_type_balance
+                .get(&cache_key)
+                .unwrap()
+                .unwrap(),
+            balance
+        );
+    }
+
+    #[tokio::test]
+    async fn test_negative_all_balance_cache_is_recomputed_from_db() {
+        let (_dir, index_store, address) = index_store_with_gas_balance(100);
+        let negative_balances = || {
+            Ok(Arc::new(HashMap::from([(
+                GAS::type_tag(),
+                TotalBalance {
+                    balance: -100,
+                    num_coins: -1,
+                    address_balance: 0,
+                },
+            )])))
+        };
+        let _ = index_store
+            .caches
+            .all_balances
+            .get_with(address, negative_balances);
+
+        let balance = index_store
+            .get_coin_object_balance(address, GAS::type_tag())
+            .unwrap();
+        assert_eq!(balance.balance, 100);
+        assert_eq!(balance.num_coins, 1);
+
+        let _ = index_store
+            .caches
+            .all_balances
+            .get_with(address, negative_balances);
+        let all_balances = index_store.get_all_coin_object_balances(address).unwrap();
+        let balance = all_balances.get(&GAS::type_tag()).unwrap();
+        assert_eq!(balance.balance, 100);
+        assert_eq!(balance.num_coins, 1);
+    }
 
     #[tokio::test]
     async fn test_index_cache() -> anyhow::Result<()> {
