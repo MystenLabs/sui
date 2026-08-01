@@ -40,17 +40,34 @@ use crate::{
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
 };
 
-/// Byte and count bounds on retained minimal payloads across all recovery tasks.
-/// The global bytes cap bounds aggregate memory; the per-peer count cap prevents one
-/// peer from consuming unbounded task overhead with tiny encodings.
+/// Bounds on recovery admission. Parking is NORMAL at tip: at a large committee a
+/// sizable fraction of live minimal blocks race their ancestors' arrival (43%
+/// measured at 132 validators) and park for around a second, so the quotas must fit
+/// steady-state racing with generous tail headroom — the v3 run showed that a quota
+/// sized for the average (16 MiB ≈ a few thousand blocks) saturates on the residency
+/// tail and turns ordinary racing into reset/full-replay storms. 64 MiB gives ~4x
+/// headroom over the worst node observed in that degraded run; the global count cap
+/// bounds task overhead when payloads are tiny.
 ///
-/// The per-peer byte cap must stay above the subscriber's pre-decode size cap
-/// (2 x consensus_max_transactions_in_block_bytes, currently 1 MiB): a legitimate
-/// minimal block larger than this quota could never be admitted, and every arrival
-/// would divert to a stream reset (safe — replay is full-form — but wasteful).
-const MAX_PARKED_BYTES: usize = 16 << 20;
-const MAX_PARKED_BYTES_PER_PEER: usize = 2 << 20;
+/// The per-peer byte cap is derived from the subscriber's pre-decode size cap at
+/// construction (never below it): a legitimate minimal block larger than the peer
+/// quota could never be admitted, and every arrival would divert to a stream reset.
+///
+/// Waiter slots are their own resource: a frontier wait registers one notifier entry
+/// per missing slot, so admission charges the frontier size — otherwise one peer's
+/// parked payload bytes could pin hundreds of thousands of registrations.
+const MAX_PARKED_BYTES: usize = 64 << 20;
+const MAX_PARKED_BLOCKS: usize = 32_768;
+const MIN_PARKED_BYTES_PER_PEER: usize = 4 << 20;
 const MAX_PARKED_BLOCKS_PER_PEER: usize = 256;
+const MAX_WAITER_SLOTS: usize = 1 << 20;
+
+/// Cap on untrusted minimal bytes, enforced before ANY decoding: a legitimate
+/// minimal block is bounded by the max transaction payload plus small per-ancestor
+/// structure.
+pub(crate) fn max_minimal_size(context: &Context) -> usize {
+    (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2)
+}
 
 /// Task-level inflation attempts (each preceded by a slot wait after the first)
 /// before escalating to the exact-reference repair fetch. Distinct from the codec's
@@ -68,16 +85,20 @@ const RECOVERY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum QuotaLimit {
     GlobalBytes,
+    GlobalCount,
     PeerBytes,
     PeerCount,
+    WaiterSlots,
 }
 
 impl QuotaLimit {
     pub(crate) fn label(self) -> &'static str {
         match self {
             QuotaLimit::GlobalBytes => "global_bytes",
+            QuotaLimit::GlobalCount => "global_count",
             QuotaLimit::PeerBytes => "peer_bytes",
             QuotaLimit::PeerCount => "peer_count",
+            QuotaLimit::WaiterSlots => "waiter_slots",
         }
     }
 }
@@ -85,16 +106,20 @@ impl QuotaLimit {
 /// Quota bounds, overridable in tests to force capacity pressure.
 pub(crate) struct RecoveryLimits {
     pub(crate) global_bytes: usize,
+    pub(crate) global_count: usize,
     pub(crate) peer_bytes: usize,
     pub(crate) peer_count: usize,
+    pub(crate) waiter_slots: usize,
 }
 
 impl Default for RecoveryLimits {
     fn default() -> Self {
         Self {
             global_bytes: MAX_PARKED_BYTES,
-            peer_bytes: MAX_PARKED_BYTES_PER_PEER,
+            global_count: MAX_PARKED_BLOCKS,
+            peer_bytes: MIN_PARKED_BYTES_PER_PEER,
             peer_count: MAX_PARKED_BLOCKS_PER_PEER,
+            waiter_slots: MAX_WAITER_SLOTS,
         }
     }
 }
@@ -112,25 +137,36 @@ pub(crate) struct RecoveryQuotas {
     context: Arc<Context>,
     peer_bytes_limit: usize,
     global_bytes: Arc<Semaphore>,
+    global_count: Arc<Semaphore>,
+    waiter_slots: Arc<Semaphore>,
     per_peer: Vec<PeerQuota>,
 }
 
 impl RecoveryQuotas {
     pub(crate) fn new(context: Arc<Context>) -> Arc<Self> {
-        Self::with_limits(context, RecoveryLimits::default())
+        // The per-peer byte quota must always admit a maximum-size legitimate
+        // minimal block, whatever the protocol's size cap becomes.
+        let limits = RecoveryLimits {
+            peer_bytes: MIN_PARKED_BYTES_PER_PEER.max(max_minimal_size(&context)),
+            ..RecoveryLimits::default()
+        };
+        Self::with_limits(context, limits)
     }
 
     pub(crate) fn with_limits(context: Arc<Context>, limits: RecoveryLimits) -> Arc<Self> {
+        let peer_bytes_limit = limits.peer_bytes;
         let per_peer = (0..context.committee.size())
             .map(|_| PeerQuota {
-                bytes: Arc::new(Semaphore::new(limits.peer_bytes)),
+                bytes: Arc::new(Semaphore::new(peer_bytes_limit)),
                 count: Arc::new(Semaphore::new(limits.peer_count)),
             })
             .collect();
         Arc::new(Self {
             context,
-            peer_bytes_limit: limits.peer_bytes,
+            peer_bytes_limit,
             global_bytes: Arc::new(Semaphore::new(limits.global_bytes)),
+            global_count: Arc::new(Semaphore::new(limits.global_count)),
+            waiter_slots: Arc::new(Semaphore::new(limits.waiter_slots)),
             per_peer,
         })
     }
@@ -139,6 +175,7 @@ impl RecoveryQuotas {
         self: &Arc<Self>,
         peer: AuthorityIndex,
         bytes: usize,
+        wait_slots: usize,
     ) -> Result<RecoveryPermit, QuotaLimit> {
         // A payload larger than the per-peer byte quota can never be admitted; report
         // it as the byte limit rather than deadlocking on an unsatisfiable acquire.
@@ -146,12 +183,18 @@ impl RecoveryQuotas {
             return Err(QuotaLimit::PeerBytes);
         }
         let bytes_u32 = u32::try_from(bytes).map_err(|_| QuotaLimit::PeerBytes)?;
+        let slots_u32 = u32::try_from(wait_slots).map_err(|_| QuotaLimit::WaiterSlots)?;
         let quota = &self.per_peer[peer];
         let global = self
             .global_bytes
             .clone()
             .try_acquire_many_owned(bytes_u32)
             .map_err(|_| QuotaLimit::GlobalBytes)?;
+        let global_count = self
+            .global_count
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| QuotaLimit::GlobalCount)?;
         let peer_bytes = quota
             .bytes
             .clone()
@@ -162,17 +205,28 @@ impl RecoveryQuotas {
             .clone()
             .try_acquire_owned()
             .map_err(|_| QuotaLimit::PeerCount)?;
+        let waiters = self
+            .waiter_slots
+            .clone()
+            .try_acquire_many_owned(slots_u32)
+            .map_err(|_| QuotaLimit::WaiterSlots)?;
         let node_metrics = &self.context.metrics.node_metrics;
         node_metrics.minimal_block_recovery_parked.inc();
         node_metrics
             .minimal_block_recovery_parked_bytes
             .add(bytes as i64);
+        node_metrics
+            .minimal_block_recovery_waiters
+            .add(wait_slots as i64);
         Ok(RecoveryPermit {
             context: self.context.clone(),
             bytes,
+            wait_slots,
             _global: global,
+            _global_count: global_count,
             _peer_bytes: peer_bytes,
             _peer_count: peer_count,
+            _waiters: waiters,
         })
     }
 }
@@ -182,9 +236,12 @@ impl RecoveryQuotas {
 pub(crate) struct RecoveryPermit {
     context: Arc<Context>,
     bytes: usize,
+    wait_slots: usize,
     _global: OwnedSemaphorePermit,
+    _global_count: OwnedSemaphorePermit,
     _peer_bytes: OwnedSemaphorePermit,
     _peer_count: OwnedSemaphorePermit,
+    _waiters: OwnedSemaphorePermit,
 }
 
 impl Drop for RecoveryPermit {
@@ -194,6 +251,9 @@ impl Drop for RecoveryPermit {
         node_metrics
             .minimal_block_recovery_parked_bytes
             .sub(self.bytes as i64);
+        node_metrics
+            .minimal_block_recovery_waiters
+            .sub(self.wait_slots as i64);
     }
 }
 
@@ -781,9 +841,13 @@ mod tests {
 
     impl TaskHarness {
         fn spawn(&self, join_set: &mut tokio::task::JoinSet<()>, client: Arc<RepairOnlyClient>) {
+            let wait_slots = match &self.reason {
+                FallbackReason::MissingAncestors(slots) => slots.len(),
+                _ => 0,
+            };
             let permit = self
                 .quotas
-                .try_acquire(self.peer, self.minimal.len())
+                .try_acquire(self.peer, self.minimal.len(), wait_slots)
                 .unwrap();
             join_set.spawn(recover_minimal_block(
                 self.context.clone(),
@@ -977,7 +1041,9 @@ mod tests {
     }
 
     /// GC crossing the CLAIMED block itself makes recovery pointless: no fetch, no
-    /// submission, outcome obsolete.
+    /// submission, outcome obsolete. The single commit here crosses the whole missing
+    /// frontier (round 10) AND the claimed child (round 11) together, so this also
+    /// pins the precedence: Obsolete wins over the frontier's GC-cross repair.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn recovery_drops_child_when_child_itself_is_gced() {
         let h = harness(Some(3));
@@ -1032,7 +1098,7 @@ mod tests {
         assert_eq!(slot_notifier.num_pending(), 0);
         assert_eq!(ref_notifier.num_pending(), 0);
         // The permit is immediately reusable.
-        let permit = h.quotas.try_acquire(h.peer, h.minimal.len()).unwrap();
+        let permit = h.quotas.try_acquire(h.peer, h.minimal.len(), 3).unwrap();
         drop(permit);
     }
 
@@ -1086,36 +1152,51 @@ mod tests {
             context.clone(),
             RecoveryLimits {
                 global_bytes: 1000,
+                global_count: 16,
                 peer_bytes: 600,
                 peer_count: 2,
+                waiter_slots: 10,
             },
         );
 
         // Saturate peer A's count lane.
-        let _a1 = quotas.try_acquire(peer_a, 100).unwrap();
-        let _a2 = quotas.try_acquire(peer_a, 100).unwrap();
+        let _a1 = quotas.try_acquire(peer_a, 100, 2).unwrap();
+        let _a2 = quotas.try_acquire(peer_a, 100, 2).unwrap();
         assert_eq!(
-            quotas.try_acquire(peer_a, 100).err(),
+            quotas.try_acquire(peer_a, 100, 2).err(),
             Some(QuotaLimit::PeerCount)
         );
         // Peer B is unaffected by A's saturation.
-        let b1 = quotas.try_acquire(peer_b, 100).unwrap();
+        let b1 = quotas.try_acquire(peer_b, 100, 2).unwrap();
 
         // Failed PEER-BYTES admission must roll back the global permit it took:
         // peer B has 500 peer-bytes left but global has 700 left, so a 550-byte
         // acquisition takes global then fails on peer bytes.
         assert_eq!(
-            quotas.try_acquire(peer_b, 550).err(),
+            quotas.try_acquire(peer_b, 550, 2).err(),
             Some(QuotaLimit::PeerBytes)
         );
         // If the global permit leaked, only 150 global bytes would remain and this
         // 500-byte admission would fail on GlobalBytes.
-        let b2 = quotas.try_acquire(peer_b, 500).unwrap();
+        let b2 = quotas.try_acquire(peer_b, 500, 2).unwrap();
         drop(b1);
         drop(b2);
         // Releases return capacity fully: the whole peer-B byte quota is reusable.
-        let b3 = quotas.try_acquire(peer_b, 600).unwrap();
+        let b3 = quotas.try_acquire(peer_b, 600, 2).unwrap();
         drop(b3);
+
+        // Waiter slots are charged per missing-frontier entry and rolled back with
+        // everything else. Peer A's two live permits hold 4 of the 10 slots; taking
+        // the remaining 6 exhausts the pool, an over-ask is refused with its earlier
+        // permits released, and freed waiters are fully reusable.
+        let w1 = quotas.try_acquire(peer_b, 100, 6).unwrap();
+        assert_eq!(
+            quotas.try_acquire(peer_b, 100, 1).err(),
+            Some(QuotaLimit::WaiterSlots)
+        );
+        drop(w1);
+        let w2 = quotas.try_acquire(peer_b, 100, 6).unwrap();
+        drop(w2);
     }
 
     /// Replay can win before the task even starts: with the claimed block already
@@ -1136,7 +1217,7 @@ mod tests {
         assert!(h.service.lock().handle_send_block.is_empty());
         assert!(client.fetch_calls.lock().is_empty());
         // The permit is immediately reusable.
-        let permit = h.quotas.try_acquire(h.peer, h.minimal.len()).unwrap();
+        let permit = h.quotas.try_acquire(h.peer, h.minimal.len(), 3).unwrap();
         drop(permit);
     }
 

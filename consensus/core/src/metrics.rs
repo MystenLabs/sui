@@ -184,6 +184,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_latency: Histogram,
     pub(crate) minimal_block_recovery_parked: IntGauge,
     pub(crate) minimal_block_recovery_parked_bytes: IntGauge,
+    pub(crate) minimal_block_recovery_waiters: IntGauge,
     pub(crate) minimal_block_park_missing_slots: Histogram,
     pub(crate) minimal_block_recoveries: IntCounterVec,
     pub(crate) minimal_block_repairs: IntCounterVec,
@@ -623,6 +624,11 @@ impl NodeMetrics {
                 "Minimal payload bytes retained by recovery tasks currently holding a quota permit",
                 registry,
             ).unwrap(),
+            minimal_block_recovery_waiters: register_int_gauge_with_registry!(
+                "minimal_block_recovery_waiters",
+                "Missing-frontier waiter slots charged to recovery tasks currently holding a quota permit",
+                registry,
+            ).unwrap(),
             minimal_block_park_missing_slots: register_histogram_with_registry!(
                 "minimal_block_park_missing_slots",
                 "Size of the missing-ancestor frontier a recovery task waits on",
@@ -643,7 +649,7 @@ impl NodeMetrics {
             ).unwrap(),
             minimal_block_quota_drops: register_int_counter_vec_with_registry!(
                 "minimal_block_quota_drops",
-                "Un-inflatable minimal blocks not admitted to recovery, by cause: a quota bound (global_bytes|peer_bytes|peer_count) or a claimed round beyond the recovery horizon (round_horizon); each drop resets the stream so full replay redelivers the range",
+                "Un-inflatable minimal blocks not admitted to recovery, by cause: a quota bound (global_bytes|global_count|peer_bytes|peer_count|waiter_slots) or a claimed round beyond the recovery horizon (round_horizon); each drop resets the stream so full replay redelivers the range",
                 &["limit"],
                 registry,
             ).unwrap(),

@@ -25,7 +25,9 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     minimal_block::{FallbackReason, InflateError},
-    minimal_block_receive::{RecoveryQuotas, RepairLimits, recover_minimal_block},
+    minimal_block_receive::{
+        RecoveryQuotas, RepairLimits, max_minimal_size, recover_minimal_block,
+    },
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     task::{join_and_propagate_panic, reap_finished_task},
 };
@@ -179,13 +181,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .set(0);
     }
 
-    /// Cap on untrusted minimal bytes, enforced before ANY decoding: a legitimate
-    /// minimal block is bounded by the max transaction payload plus small per-ancestor
-    /// structure.
-    fn max_minimal_size(context: &Context) -> usize {
-        (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2)
-    }
-
     /// Replaces a minimal-form block with its inflated full serialization.
     ///
     /// Returns `Dropped` when the block cannot be inflated from local state; the caller
@@ -216,7 +211,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .with_label_values(&[peer_hostname])
             .inc();
 
-        let max_minimal_size = Self::max_minimal_size(context);
+        let max_minimal_size = max_minimal_size(context);
         if minimal.len() > max_minimal_size {
             node_metrics
                 .minimal_block_inflate_drop
@@ -443,7 +438,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     sleep(CAUSED_RESET_DELAY).await;
                                     continue 'subscription;
                                 }
-                                match recovery_quotas.try_acquire(peer, minimal.len()) {
+                                let wait_slots = match &reason {
+                                    FallbackReason::MissingAncestors(slots) => slots.len(),
+                                    _ => 0,
+                                };
+                                match recovery_quotas.try_acquire(peer, minimal.len(), wait_slots) {
                                     // The stream itself is healthy — it delivered a
                                     // well-formed block — so the reconnect backoff
                                     // resets as for an accepted block. The reset must
