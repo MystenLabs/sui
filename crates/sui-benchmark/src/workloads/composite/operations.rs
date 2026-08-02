@@ -10,7 +10,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::committee::EpochId;
 use sui_types::digests::ChainIdentifier;
-use sui_types::gas_coin::GAS;
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
@@ -31,6 +31,9 @@ pub enum InitRequirement {
     SeedTestCoinAddressBalance,
     EnableAddressAlias,
     CreateImmutableObject,
+    /// Create a balance pool that is never seeded, so its `Balance<T>` is always
+    /// zero for every type `T`. Used to guarantee withdrawals trigger IFFW.
+    CreateEmptyBalancePool,
 }
 
 pub const ALIAS_TX: &str = "alias_tx";
@@ -58,6 +61,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     AddressBalanceOverdraw::DESCRIPTOR,
     AccumulatorBalanceRead::DESCRIPTOR,
     ObjectBalanceOverdraw::DESCRIPTOR,
+    ObjectBalanceLargeWithdraw::DESCRIPTOR,
     AuthenticatedEventEmit::DESCRIPTOR,
     ImmutableObjectRead::DESCRIPTOR,
     CoinReservationWithdraw::DESCRIPTOR,
@@ -73,6 +77,7 @@ pub enum ResourceRequest {
     AccumulatorRoot,
     ImmutableObject,
     CoinReservation,
+    EmptyBalancePool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -87,6 +92,7 @@ pub struct OperationResources {
     pub package_id: ObjectID,
     pub address_balance_amount: u64,
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
+    pub empty_balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
     pub immutable_object: Option<ObjectRef>,
@@ -999,6 +1005,123 @@ impl Operation for ObjectBalanceOverdraw {
             Identifier::new("coin").unwrap(),
             Identifier::new("from_balance").unwrap(),
             vec![GAS::type_tag()],
+            vec![balance],
+        );
+
+        let recipient = SuiAddress::random_for_testing_only();
+        builder.transfer_arg(recipient, coin);
+    }
+}
+
+/// Picks a withdrawal amount from a set of boundary values that are most likely to
+/// expose overflow or balance-accounting bugs in funds-accumulator withdrawals. Each case is
+/// equally likely, including a uniform full-range draw so any `u64` can occur in
+/// principle. `0` is intentionally excluded: a zero reservation is rejected as
+/// invalid rather than executed, so it would not exercise the withdrawal path.
+fn large_withdraw_amount() -> u64 {
+    let mut rng = get_rng();
+    // 2^63: the u64 sign-bit boundary (one past i64::MAX).
+    const SIGN_BIT: u64 = i64::MAX as u64 + 1;
+    let cases: [u64; 15] = [
+        rng.gen_range(1..=u64::MAX), // uniform over the full (nonzero) u64 range
+        1,
+        2,
+        u64::MAX,
+        u64::MAX - 1,
+        i64::MAX as u64,
+        i64::MAX as u64 - 1,
+        SIGN_BIT,
+        SIGN_BIT + 1,
+        u32::MAX as u64, // 2^32 - 1, the 32-bit boundary
+        u32::MAX as u64 + 1,
+        TOTAL_SUPPLY_MIST,
+        TOTAL_SUPPLY_MIST - 1,
+        TOTAL_SUPPLY_MIST + 1,
+        TOTAL_SUPPLY_MIST + TOTAL_SUPPLY_MIST / 2, // beyond any conceivable real supply (~1.5x)
+    ];
+    cases[rng.gen_range(0..cases.len())]
+}
+
+/// Withdraws a potentially enormous amount (up to `u64::MAX`) from an object balance
+/// that is guaranteed to be empty. Exercises both SUI and a custom coin type.
+///
+/// Because the target object's `Balance<T>` is always zero, every such withdrawal
+/// must fail (IFFW). A success would mean funds were withdrawn that never existed, so a
+/// successful transaction containing this operation is treated as a critical bug in
+/// `handle_batch_results`.
+pub struct ObjectBalanceLargeWithdraw;
+
+impl ObjectBalanceLargeWithdraw {
+    pub const NAME: &'static str = "object_balance_large_withdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(ObjectBalanceLargeWithdraw),
+    };
+}
+
+impl Operation for ObjectBalanceLargeWithdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::EmptyBalancePool]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::CreateEmptyBalancePool]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let (pool_id, initial_shared_version) = resources
+            .empty_balance_pool
+            .expect("Empty balance pool not resolved");
+
+        // Withdraw SUI or, when a custom coin is configured, the custom coin with equal
+        // probability. The empty pool holds neither, so both withdrawals trigger IFFW.
+        let coin_type = match &resources.test_coin_type {
+            Some(test_coin_type) if get_rng().gen_bool(0.5) => test_coin_type.clone(),
+            _ => GAS::type_tag(),
+        };
+
+        let withdraw_amount = large_withdraw_amount();
+
+        let pool_arg = builder
+            .obj(ObjectArg::SharedObject {
+                id: pool_id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+
+        let amount_arg = builder.pure(withdraw_amount).unwrap();
+
+        let withdrawal = builder.programmable_move_call(
+            resources.package_id,
+            Identifier::new("balance_pool").unwrap(),
+            Identifier::new("withdraw").unwrap(),
+            vec![coin_type.clone()],
+            vec![pool_arg, amount_arg],
+        );
+
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![coin_type.clone()],
+            vec![withdrawal],
+        );
+
+        let coin = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("from_balance").unwrap(),
+            vec![coin_type],
             vec![balance],
         );
 

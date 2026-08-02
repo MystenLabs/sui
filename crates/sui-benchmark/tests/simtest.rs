@@ -2001,6 +2001,7 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
+        .with_probability(ObjectBalanceLargeWithdraw::NAME, 0.2)
         .with_probability(CoinReservationWithdraw::NAME, 0.3);
 
         let test_cluster_for_scan = test_cluster.clone();
@@ -2040,6 +2041,29 @@ mod test {
             assert!(
                 accum_read_stats.success_count > 0,
                 "expected at least one accumulator balance read"
+            );
+
+            // Large withdrawals target an always-empty pool, so they must be exercised
+            // but must never succeed (a success would mean withdrawing funds that never existed).
+            let mut large_withdraw_txs = 0;
+            let mut large_withdraw_successes = 0;
+            for (op_set, stats) in metrics.iter_stats() {
+                if op_set.contains(ObjectBalanceLargeWithdraw::NAME) {
+                    large_withdraw_txs += stats.signed_and_sent_count;
+                    large_withdraw_successes += stats.success_count;
+                }
+            }
+            info!(
+                "large object-balance withdraw metrics: sent={}, successes={}",
+                large_withdraw_txs, large_withdraw_successes
+            );
+            assert!(
+                large_withdraw_txs > 0,
+                "expected at least one large object-balance withdrawal to be attempted"
+            );
+            assert_eq!(
+                large_withdraw_successes, 0,
+                "large object-balance withdrawal from an empty pool must never succeed"
             );
 
             // Verify accumulators are actually being deleted by scanning all checkpoints
@@ -2789,6 +2813,26 @@ mod test {
             .build()
             .await
             .into();
-        test_simulated_load(test_cluster, 30).await;
+
+        // The large object-balance withdrawal operation exposes a bug present in the older
+        // execution layers this test targets, so disable it here. It is exercised against
+        // the latest execution version elsewhere.
+        let config = SimulatedLoadConfig {
+            composite_config: Some(CompositeWorkloadConfig::balanced().with_probability(
+                sui_benchmark::workloads::composite::ObjectBalanceLargeWithdraw::NAME,
+                0.0,
+            )),
+            ..Default::default()
+        };
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
+        )
+        .await;
     }
 }
