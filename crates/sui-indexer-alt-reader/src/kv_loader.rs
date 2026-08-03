@@ -10,7 +10,6 @@ use prometheus::Registry;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
 use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
-use sui_kvstore::validate_pipeline_name;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
@@ -31,7 +30,6 @@ use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
 use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use crate::bigtable_reader::BigtableArgs;
 use crate::bigtable_reader::BigtableReader;
 use crate::checkpoints::CheckpointDigestKey;
 use crate::checkpoints::CheckpointKey;
@@ -46,39 +44,20 @@ use crate::pg_reader::PgReader;
 use crate::transactions::TransactionKey;
 use crate::transactions::TransactionTimestampKey;
 
-/// Arguments for configuring KV store access (either Bigtable or Ledger gRPC).
+/// Arguments for configuring KV store access via the Ledger gRPC service, with a Postgres
+/// fallback.
 ///
-/// These options are mutually exclusive - only one KV store source can be configured at a time.
+/// Some binaries additionally support connecting directly to Bigtable as a KV source (see e.g.
+/// `BigtableKvArgs` in `sui-indexer-alt-jsonrpc`), which is mutually exclusive with
+/// `ledger_grpc_url` via the shared `kv_source` arg group.
 #[derive(clap::Args, Debug, Clone, Default)]
 #[group(required = false)]
 pub struct KvArgs {
-    /// Bigtable instance ID to make KV store requests to.
-    #[arg(long, group = "kv_source")]
-    pub bigtable_instance: Option<String>,
-
-    /// GCP project ID for the BigTable instance (defaults to the token provider's project).
-    #[arg(long)]
-    pub bigtable_project: Option<String>,
-
-    /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
-    #[arg(long)]
-    pub bigtable_app_profile_id: Option<String>,
-
     /// Maximum gRPC decoding message size for KV responses, in bytes.
     ///
     /// Applies to both Bigtable and Ledger gRPC readers.
     #[arg(long, alias = "bigtable-max-decoding-message-size")]
     pub kv_max_decoding_message_size: Option<usize>,
-
-    /// Bigtable pipeline watermark to include when reporting the Bigtable reader watermark.
-    /// Repeat to include multiple pipelines.
-    #[arg(
-        long = "bigtable-watermark-pipeline",
-        value_name = "PIPELINE",
-        value_delimiter = ',',
-        value_parser = validate_pipeline_name
-    )]
-    pub bigtable_watermark_pipeline: Vec<&'static str>,
 
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long, group = "kv_source")]
@@ -150,26 +129,6 @@ pub enum BalanceChangeContents {
 }
 
 impl KvArgs {
-    pub async fn bigtable_reader(
-        &self,
-        client_name: String,
-        registry: &Registry,
-    ) -> anyhow::Result<Option<BigtableReader>> {
-        let Some(instance_id) = self.bigtable_instance.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            BigtableReader::new(
-                instance_id.clone(),
-                client_name,
-                self.bigtable_args(),
-                registry,
-            )
-            .await?,
-        ))
-    }
-
     pub async fn ledger_grpc_reader(
         &self,
         prefix: Option<&str>,
@@ -214,16 +173,6 @@ impl KvArgs {
             )
             .await?,
         ))
-    }
-
-    fn bigtable_args(&self) -> BigtableArgs {
-        BigtableArgs {
-            bigtable_statement_timeout_ms: self.kv_statement_timeout_ms,
-            bigtable_project: self.bigtable_project.clone(),
-            bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
-            bigtable_max_decoding_message_size: self.kv_max_decoding_message_size,
-            bigtable_watermark_pipeline: self.bigtable_watermark_pipeline.clone(),
-        }
     }
 
     fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
