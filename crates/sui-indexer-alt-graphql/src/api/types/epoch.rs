@@ -558,6 +558,20 @@ impl Epoch {
         .map(Some)
     }
 
+    /// The protocol version this epoch runs at.
+    ///
+    /// Returns `None` when the epoch start information is not available in scope.
+    pub(crate) async fn protocol_version(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<u64>, RpcError> {
+        Ok(self
+            .start(ctx)
+            .await?
+            .as_ref()
+            .map(|start| start.protocol_version as u64))
+    }
+
     /// Get the epoch start information.
     ///
     /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).

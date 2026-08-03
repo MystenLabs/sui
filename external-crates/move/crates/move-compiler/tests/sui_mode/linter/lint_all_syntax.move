@@ -2,5 +2,5 @@
 #[lint_allow(share_owned)]
 module a::m {
     #[lint_allow(all)]
-    public fun foo() {}
+    public entry fun foo() {}
 }

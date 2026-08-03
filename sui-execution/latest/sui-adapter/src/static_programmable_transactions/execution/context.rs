@@ -15,7 +15,7 @@ use crate::{
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
-        loading::ast::Datatype,
+        loading::ast::{Datatype, DeserializedPackage, PackagePayload},
         typing::ast::{self as T, Type},
     },
 };
@@ -88,6 +88,12 @@ use sui_types::{
 };
 use sui_verifier::INIT_FN_NAME;
 use tracing::instrument;
+
+/// Publish init runs before any command arguments are read, so the gas stack is still empty.
+const PUBLISH_INIT_EXPECTED_STACK_HEIGHT: u64 = 0;
+/// Upgrade init runs after the upgrade ticket argument has been read. Command stack balancing
+/// happens later in the interpreter, after the upgrade command returns.
+const UPGRADE_INIT_EXPECTED_STACK_HEIGHT: u64 = 1;
 
 macro_rules! unwrap {
     ($e:expr, $($args:expr),* $(,)?) => {
@@ -1022,27 +1028,27 @@ where
     //
     // Publish and Upgrade
     //
-    pub fn deserialize_modules(
-        &mut self,
-        module_bytes: &[Vec<u8>],
-    ) -> Result<Vec<CompiledModule>, Mode::Error> {
-        assert_invariant!(
-            !module_bytes.is_empty(),
-            "empty package is checked in transaction input checker"
-        );
-        let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
-        self.gas_charger.charge_publish_package(total_bytes)?;
 
-        let binary_config = self.env.protocol_config.binary_config(None);
-        let modules = module_bytes
-            .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(b, &binary_config)
-                    .map_err(|e| e.finish(Location::Undefined))
-            })
-            .collect::<VMResult<Vec<CompiledModule>>>()
-            .map_err(|e| self.env.convert_vm_error(e))?;
-        Ok(modules)
+    pub fn deserialize_package(
+        &mut self,
+        package_payload: PackagePayload,
+        dep_ids: &[ObjectID],
+    ) -> Result<DeserializedPackage, Mode::Error> {
+        Ok(match package_payload {
+            PackagePayload::Deserialized(deserialized_pkg) => deserialized_pkg,
+            PackagePayload::Serialized(module_bytes) => {
+                // This assertion is also checked in the call to `deserialize_modules`, but we
+                // want to check it here first to keep existing behavior around checking this
+                // invariant before the charge on pre-existing pathways.
+                assert_invariant!(
+                    !module_bytes.is_empty(),
+                    "empty package is checked in transaction input checker"
+                );
+                let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
+                self.gas_charger.charge_publish_package(total_bytes)?;
+                self.env.deserialize_package(&module_bytes, dep_ids)?
+            }
+        })
     }
 
     fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<Rc<MovePackage>, Mode::Error> {
@@ -1145,14 +1151,60 @@ where
         Ok(vm)
     }
 
-    fn init_modules(
+    // Here we optimistically push the package that is being published/upgraded
+    // and if there is an error of any kind (verification or module init) we
+    // remove it.
+    // The call to `pop_last_package` later is fine because we cannot re-enter and
+    // the last package we pushed is the one we are verifying and running the init from
+    fn push_package_and_init_selected_modules<'a>(
+        &mut self,
+        package_id: ObjectID,
+        package: MovePackage,
+        verified_pkg: VerifiedPackage,
+        vm: MoveVM<'env>,
+        modules: impl IntoIterator<Item = &'a CompiledModule>,
+        linkage: &ExecutableLinkage,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        expected_stack_height: u64,
+    ) -> Result<(), Mode::Error> {
+        self.env.linkable_store.package_store.push_package(
+            package_id,
+            Rc::new(package),
+            verified_pkg,
+        )?;
+
+        match self.init_selected_modules(
+            vm,
+            package_id,
+            modules,
+            linkage,
+            trace_builder_opt,
+            expected_stack_height,
+        ) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                self.env
+                    .linkable_store
+                    .package_store
+                    .pop_package(package_id)?;
+                Err(e)
+            }
+        }
+    }
+
+    fn init_selected_modules<'a>(
         &mut self,
         mut vm: MoveVM<'env>,
         package_id: ObjectID,
-        modules: &[CompiledModule],
+        modules: impl IntoIterator<Item = &'a CompiledModule>,
         linkage: &ExecutableLinkage,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        expected_stack_height: u64,
     ) -> Result<(), Mode::Error> {
+        debug_assert_eq!(
+            self.gas_charger.move_gas_status().stack_height_current(),
+            expected_stack_height,
+        );
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
             else {
@@ -1178,7 +1230,10 @@ where
             } else {
                 vec![CtxValue(tx_context)]
             };
-            debug_assert_eq!(self.gas_charger.move_gas_status().stack_height_current(), 0);
+            debug_assert_eq!(
+                self.gas_charger.move_gas_status().stack_height_current(),
+                expected_stack_height,
+            );
             trace_utils::trace_move_call_start(trace_builder_opt);
             let return_values = self.execute_function_bypass_visibility_with_vm(
                 &mut vm,
@@ -1207,7 +1262,10 @@ where
                 return_values.is_empty(),
                 "init should not have return values"
             );
-            debug_assert_eq!(self.gas_charger.move_gas_status().stack_height_current(), 0);
+            debug_assert_eq!(
+                self.gas_charger.move_gas_status().stack_height_current(),
+                expected_stack_height,
+            );
         }
 
         Ok(())
@@ -1233,37 +1291,28 @@ where
         };
 
         let dependencies = self.fetch_packages(dep_ids)?;
-        let package = Rc::new(MovePackage::new_initial(
+        let package = MovePackage::new_initial(
             &modules,
             self.env.protocol_config,
             dependencies.iter().map(|p| p.as_ref()),
-        )?);
+        )?;
         let package_id = package.id();
 
         let linkage = ResolvedLinkage::update_for_publication(package_id, original_id, linkage);
 
         let (pkg, vm) =
             self.publish_and_verify_modules(original_id, &package, &modules, &linkage)?;
-        // Here we optimistically push the package that is being published/upgraded
-        // and if there is an error of any kind (verification or module init) we
-        // remove it.
-        // The call to `pop_last_package` later is fine because we cannot re-enter and
-        // the last package we pushed is the one we are verifying and running the init from
-        self.env
-            .linkable_store
-            .package_store
-            .push_package(package_id, package.clone(), pkg)?;
-
-        match self.init_modules(vm, package_id, &modules, &linkage, trace_builder_opt) {
-            Ok(()) => Ok(original_id),
-            Err(e) => {
-                self.env
-                    .linkable_store
-                    .package_store
-                    .pop_package(package_id)?;
-                Err(e)
-            }
-        }
+        self.push_package_and_init_selected_modules(
+            package_id,
+            package,
+            pkg,
+            vm,
+            &modules,
+            &linkage,
+            trace_builder_opt,
+            PUBLISH_INIT_EXPECTED_STACK_HEIGHT,
+        )?;
+        Ok(original_id)
     }
 
     pub fn upgrade(
@@ -1273,6 +1322,7 @@ where
         current_package_id: ObjectID,
         upgrade_ticket_policy: u8,
         linkage: ResolvedLinkage,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<ObjectID, Mode::Error> {
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_move_package = self.fetch_package(&current_package_id)?;
@@ -1295,7 +1345,7 @@ where
         )?;
 
         let linkage = ResolvedLinkage::update_for_publication(version_id, original_id, linkage);
-        let (verified_pkg, _) =
+        let (verified_pkg, vm) =
             self.publish_and_verify_modules(original_id, &package, &modules, &linkage)?;
 
         check_compatibility(
@@ -1305,49 +1355,54 @@ where
             upgrade_ticket_policy,
         )?;
 
-        // find newly added modules to the package,
-        // and error if they have init functions
+        // Find newly added modules to the package. Only these modules are eligible for init on
+        // upgrade; existing modules must not have init called even if they newly add one.
         let current_module_names: BTreeSet<&str> = current_move_package
             .serialized_module_map()
             .keys()
             .map(|s| s.as_str())
             .collect();
-        let upgrade_module_names: BTreeSet<&str> = package
-            .serialized_module_map()
-            .keys()
-            .map(|s| s.as_str())
-            .collect();
-        let new_module_names = upgrade_module_names
-            .difference(&current_module_names)
-            .copied()
-            .collect::<BTreeSet<&str>>();
         let new_modules = modules
             .iter()
             .filter(|m| {
                 let name = m.identifier_at(m.self_handle().name).as_str();
-                new_module_names.contains(name)
+                !current_module_names.contains(name)
             })
             .collect::<Vec<&CompiledModule>>();
-        let new_module_has_init = new_modules.iter().any(|module| {
-            module.function_defs.iter().any(|fdef| {
-                let fhandle = module.function_handle_at(fdef.function);
-                let fname = module.identifier_at(fhandle.name);
-                fname == INIT_FN_NAME
-            })
-        });
-        if new_module_has_init {
-            // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
-            return Err(Mode::Error::new_with_source(
-                ExecutionErrorKind::FeatureNotYetSupported,
-                "`init` in new modules on upgrade is not yet supported",
-            ));
+
+        if self.env.protocol_config.enable_init_on_upgrade() {
+            self.push_package_and_init_selected_modules(
+                version_id,
+                package,
+                verified_pkg,
+                vm,
+                new_modules.iter().copied(),
+                &linkage,
+                trace_builder_opt,
+                UPGRADE_INIT_EXPECTED_STACK_HEIGHT,
+            )?;
+        } else {
+            let new_module_has_init = new_modules.iter().any(|module| {
+                module.function_defs.iter().any(|fdef| {
+                    let fhandle = module.function_handle_at(fdef.function);
+                    let fname = module.identifier_at(fhandle.name);
+                    fname == INIT_FN_NAME
+                })
+            });
+            if new_module_has_init {
+                return Err(Mode::Error::new_with_source(
+                    ExecutionErrorKind::FeatureNotYetSupported,
+                    "`init` in new modules on upgrade is not yet supported",
+                ));
+            }
+
+            self.env.linkable_store.package_store.push_package(
+                version_id,
+                Rc::new(package),
+                verified_pkg,
+            )?;
         }
 
-        self.env.linkable_store.package_store.push_package(
-            version_id,
-            Rc::new(package),
-            verified_pkg,
-        )?;
         Ok(version_id)
     }
 

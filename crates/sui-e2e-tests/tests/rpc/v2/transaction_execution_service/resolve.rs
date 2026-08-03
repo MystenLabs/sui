@@ -755,7 +755,7 @@ async fn resolve_transaction_shared_object_with_generic_type_parameter() {
 #[sim_test]
 async fn test_gas_selection_with_address_balance() {
     let _guard = sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
+        cfg.set_create_root_accumulator_object_for_testing(true);
         cfg.enable_address_balance_gas_payments_for_testing();
         cfg
     });
@@ -868,7 +868,7 @@ async fn test_gas_selection_with_address_balance() {
 #[sim_test]
 async fn simulate_transaction_with_valid_during_expiration() {
     let _guard = sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
+        cfg.set_create_root_accumulator_object_for_testing(true);
         cfg.enable_address_balance_gas_payments_for_testing();
         cfg
     });

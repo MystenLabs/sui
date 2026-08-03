@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 12 tasks
 
@@ -84,10 +83,10 @@ task 10, lines 59-64:
 //> TransferObjects([Result(0)], Input(1))
 // Case 7: empty gas payment (pure address balance) with insufficient balance
 // B has no address balance, needs 5 SUI
-Error: Error checking transaction input objects: Invalid withdraw reservation: Available amount in account for object id object(1,0) is less than requested: 200000000 < 1000000000000
+Error: Error checking transaction input objects: Invalid withdraw reservation: Insufficient address balance of coin type 0x2::sui::SUI for address @A: the transaction requires 1000000000000 but only 200000000 is available. Note that the address balance does not include funds held in Coin objects owned by the address; to spend those funds, use the Coin objects directly as transaction inputs.
 
 task 11, lines 65-67:
 //# programmable --sender B --address-balance-gas --inputs 1000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-Error: Error checking transaction input objects: Invalid withdraw reservation: Available amount in account for object id 0xdcf0f9a42cd89c92e9c18323982089d90141a58a8bd04ba8334eaa06fbfc692f is less than requested: 0 < 5000000000
+Error: Error checking transaction input objects: Invalid withdraw reservation: Insufficient address balance of coin type 0x2::sui::SUI for address @B: the transaction requires 5000000000 but only 0 is available. Note that the address balance does not include funds held in Coin objects owned by the address; to spend those funds, use the Coin objects directly as transaction inputs.

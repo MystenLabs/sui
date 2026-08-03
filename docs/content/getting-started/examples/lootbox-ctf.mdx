@@ -1,13 +1,22 @@
 ---
 title: Lootbox
-description: Exploit a public randomness function in a lootbox contract by deploying a wrapper module that aborts losing transactions, so you only pay when you win.
-keywords: [example, lootbox, randomness, security, composition-attack, move, public-random]
+description: >-
+  Exploit a public randomness function in a lootbox contract by deploying a
+  wrapper module that aborts losing transactions, so you only pay when you win.
+keywords:
+  - example
+  - lootbox
+  - randomness
+  - security
+  - composition-attack
+  - move
+  - public-random
 example_id: lootbox-ctf
 shape: ctf-challenge
 network: testnet
-last_verified: 2026-04-30
+last_verified: 2026-04-30T00:00:00.000Z
 sui_release: testnet
-repo: https://github.com/MystenLabs/CTF
+repo: 'https://github.com/MystenLabs/CTF'
 path: /
 concepts:
   - onchain_randomness
@@ -16,6 +25,46 @@ concepts:
   - transaction_atomicity
   - security_vulnerability
   - abort_filtering
+goal:
+  description: >-
+    Reader can exploit a public randomness function in a lootbox contract by
+    deploying a wrapper module that aborts
+  requires:
+    - headings:
+        - pattern: When to use|Use case
+        - pattern: What you learn|Learning
+        - pattern: Prerequisites
+        - pattern: Setup|Getting started
+        - pattern: Run
+        - pattern: Troubleshooting|Common issues
+      label: Has standard example page sections
+    - pattern: '```'
+      min: 3
+      label: 'Has code blocks for setup, source, and output'
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 800
+      label: Needs more explanation depth
+    - pattern: mermaid|sequenceDiagram|graph|flowchart
+      min: 1
+      label: Has architecture diagram
+    - headings:
+        - pattern: Key code|Code highlight|Walkthrough
+      label: Has code explanation section
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I build a lootbox system on Sui?
+  - What does the lootbox CTF example demonstrate?
+  - How do I use randomness for loot drops in Move?
+answer: >-
+  Exploit a public randomness function in a lootbox contract by deploying a
+  wrapper module that aborts losing transactions, so you only pay when you win.
 ---
 
 This example creates a lootbox application. The `open_lootbox` function has a 25% chance of producing a flag, costs 12 USDC per attempt, and is marked `public` instead of `entry`. Because it is `public`, you can call it from your own Move module, check the result, and abort the transaction if you lose. You only pay USDC when you win. 

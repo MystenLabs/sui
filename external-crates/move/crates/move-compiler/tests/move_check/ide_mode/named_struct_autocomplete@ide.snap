@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:1:1
    │  
  1 │ ╭ module a::m {
@@ -22,7 +22,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
   ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:4:12
   │
 4 │         x: u64
@@ -33,7 +33,7 @@ note[I15006]: IDE path autocomplete
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
   ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:8:12
   │
 8 │         a: A
@@ -44,7 +44,7 @@ note[I15006]: IDE path autocomplete
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:12:18
    │
 12 │         let _s = B { a: A { x: 0 } };
@@ -55,7 +55,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:12:25
    │
 12 │         let _s = B { a: A { x: 0 } };
@@ -66,7 +66,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:21
    │
 13 │         let _tmp1 = _s.;
@@ -77,13 +77,13 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:23
    │
 13 │         let _tmp1 = _s.;
    │                       ^ Possible dot names: 'a'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:13:24
    │
 13 │         let _tmp1 = _s.;
@@ -92,7 +92,7 @@ error[E01002]: unexpected token
    │                        Unexpected ';'
    │                        Expected an identifier or a decimal number
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:21
    │
 14 │         let _tmp2 = _s.a.;
@@ -103,25 +103,25 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:23
    │
 14 │         let _tmp2 = _s.a.;
    │                       ^ Possible dot names: 'a'
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:24
    │
 14 │         let _tmp2 = _s.a.;
    │                        ^ Possible dot names: 'a'
 
-note[I15001]: IDE dot autocomplete
+note[NC15001]: IDE dot autocomplete
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:25
    │
 14 │         let _tmp2 = _s.a.;
    │                         ^ Possible dot names: 'x'
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_check/ide_mode/named_struct_autocomplete.move:14:26
    │
 14 │         let _tmp2 = _s.a.;

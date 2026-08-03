@@ -5,6 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use anyhow::bail;
+use backoff::ExponentialBackoff;
 use sui_rpc_api::client::ExecutedTransaction;
 use sui_sdk::types::effects::TransactionEffectsAPI;
 use tokio::sync::Mutex;
@@ -27,6 +28,12 @@ use sui_sdk::wallet_context::WalletContext;
 
 const GAS_BUDGET: u64 = 10_000_000;
 const NUM_RETRIES: u8 = 2;
+
+/// On a freshly created `--force-regenesis` network the genesis coin objects may not yet be
+/// readable the instant the cluster reports started — especially on slow or contended storage —
+/// so the gas-coin scan is retried with backoff for up to this long before failing.
+const GAS_COIN_LOOKUP_INITIAL_INTERVAL: Duration = Duration::from_millis(200);
+const GAS_COIN_LOOKUP_MAX_ELAPSED_TIME: Duration = Duration::from_secs(10);
 
 pub struct LocalFaucet {
     wallet: WalletContext,
@@ -176,6 +183,9 @@ impl LocalFaucet {
 /// Finds gas coins with sufficient balance and returns the address to use as the active address
 /// for the faucet. If the initial active address in the wallet does not have enough gas coins,
 /// it will iterate through the addresses to find one with sufficient gas coins.
+///
+/// Retries the scan with exponential backoff so that a transient startup race — where genesis
+/// coins are not yet readable — does not fail the faucet.
 async fn find_gas_coins_and_address(
     wallet: &mut WalletContext,
     config: &FaucetConfig,
@@ -183,8 +193,38 @@ async fn find_gas_coins_and_address(
     let active_address = wallet
         .active_address()
         .map_err(|e| FaucetError::Wallet(e.to_string()))?;
+    let wallet = &*wallet;
 
-    for address in std::iter::once(active_address).chain(wallet.get_addresses().into_iter()) {
+    let backoff = ExponentialBackoff {
+        initial_interval: GAS_COIN_LOOKUP_INITIAL_INTERVAL,
+        current_interval: GAS_COIN_LOOKUP_INITIAL_INTERVAL,
+        max_elapsed_time: Some(GAS_COIN_LOOKUP_MAX_ELAPSED_TIME),
+        ..Default::default()
+    };
+
+    backoff::future::retry(backoff, || async move {
+        let found = scan_for_gas_coins(wallet, active_address, config)
+            .await
+            .map_err(backoff::Error::transient)?;
+
+        found.ok_or_else(|| {
+            backoff::Error::transient(FaucetError::Wallet(
+                "No address found with sufficient coins".to_string(),
+            ))
+        })
+    })
+    .await
+}
+
+/// Scans the wallet's addresses once for a gas coin with a balance of at least `config.amount`,
+/// returning the matching coins and the address that holds them, or `Ok(None)` if no such coin is
+/// currently visible.
+async fn scan_for_gas_coins(
+    wallet: &WalletContext,
+    active_address: SuiAddress,
+    config: &FaucetConfig,
+) -> Result<Option<(Vec<GasCoin>, SuiAddress)>, FaucetError> {
+    for address in std::iter::once(active_address).chain(wallet.get_addresses()) {
         let coins: Vec<_> = wallet
             .gas_objects(address)
             .await
@@ -200,13 +240,11 @@ async fn find_gas_coins_and_address(
             .collect();
 
         if !coins.is_empty() {
-            return Ok((coins, address));
+            return Ok(Some((coins, address)));
         }
     }
 
-    Err(FaucetError::Wallet(
-        "No address found with sufficient coins".to_string(),
-    ))
+    Ok(None)
 }
 
 #[cfg(test)]

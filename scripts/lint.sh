@@ -45,7 +45,7 @@ else
 fi
 
 echo "Running cargo xclippy with warnings as errors..."
-cargo xclippy -D warnings
+cargo xclippy -- -D warnings
 
 echo "Running cargo xlint with warnings as errors..."
 cargo xlint

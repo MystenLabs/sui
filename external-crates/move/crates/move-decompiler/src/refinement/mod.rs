@@ -25,6 +25,7 @@ mod remove_trailing_return;
 mod simplify_borrow_deref;
 mod simplify_if;
 mod simplify_zero_compare;
+mod sink_declare;
 mod strip_loop_labels;
 mod swap_continue_break;
 mod swap_continue_break_else;
@@ -46,7 +47,7 @@ const REFINEMENTS: &[Refinement] = &[
     introduce_while::refine,
     loop_to_seq::refine,
     reconstruct_match::refine,
-    // Strip spurious trailing `continue`/`return` markers first — they're structurer
+    // Strip spurious trailing `continue`/`return` markers first - they're structurer
     // artifacts that would otherwise make `simplify_if`'s `always_terminates` predicate
     // fire on arms whose true Move-level shape doesn't actually terminate.
     remove_trailing_continue::refine,
@@ -57,7 +58,13 @@ const REFINEMENTS: &[Refinement] = &[
     negate_comparison::refine,
     simplify_if::refine,
     bool_if_simplify::refine,
+    // Run after `simplify_if` so empty-arm drops and other if-shape rewrites have happened;
+    // the sink decision uses the post-rewrite use counts.
+    sink_declare::refine,
     recover_asserts::refine,
+    // Run after `recover_asserts` so `assert!(...)` calls are identifiable; the pass drops
+    // wrappers whose guards are implied by previous asserts, freeing the synthetic `__cN`
+    // locals for later inlining.
     strip_loop_labels::refine,
     swap_continue_break::refine,
     swap_continue_break_else::refine,
@@ -124,6 +131,13 @@ trait Refine {
                 let mut changed = self.refine(e);
                 for (_, _, e) in es.iter_mut() {
                     changed |= self.refine(e);
+                }
+                changed
+            }
+            E::MatchLit(e, arms) => {
+                let mut changed = self.refine(e);
+                for (_, body) in arms.iter_mut() {
+                    changed |= self.refine(body);
                 }
                 changed
             }

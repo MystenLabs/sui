@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E10008]: ambiguous attribute value
+error[EC10008]: ambiguous attribute value
   ┌─ tests/move_check/warning_suppression/conflict_allow_expect.move:2:9
   │
 2 │ #[allow(unused_variable)]

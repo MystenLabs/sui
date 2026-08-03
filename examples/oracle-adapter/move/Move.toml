@@ -1,0 +1,13 @@
+[package]
+name = "oracle_adapter"
+edition = "2024.beta"
+
+[dependencies]
+# Pinned to the resolved commit rather than the `sui-contract-testnet` branch so
+# the dependency does not drift. This is the deployed Testnet Pyth package
+# (published-at 0xabf837...). See crates/sui-framework-tests/tests/move_tests.rs
+# for why this example is excluded from the strict lint harness.
+Pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "62c7a5bc0fc857ba6417ad780190552d4919ceca" }
+
+[addresses]
+oracle_adapter = "0x0"

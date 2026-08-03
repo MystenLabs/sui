@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E02004]: invalid 'module' declaration
+error[EC02004]: invalid 'module' declaration
    ┌─ tests/move_check/dependencies/intersecting_use_cycles.move:10:14
    │
  5 │     fun b(): 0x2::B::S { abort 0 }

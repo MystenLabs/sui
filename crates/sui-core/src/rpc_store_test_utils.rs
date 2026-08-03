@@ -48,6 +48,7 @@ pub(crate) fn checkpoint(sequence_number: u64) -> Arc<Checkpoint> {
 /// checkpoints. Only the methods the ingestion / streaming clients
 /// exercise are implemented; the rest panic so a future change that
 /// starts relying on them is caught loudly.
+#[derive(Clone)]
 pub(crate) struct MockReadStore {
     pub(crate) checkpoints: BTreeMap<CheckpointSequenceNumber, Checkpoint>,
     /// When set, `get_checkpoint_contents_by_digest` returns `None` for

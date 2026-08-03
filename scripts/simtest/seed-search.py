@@ -266,7 +266,11 @@ def discover_binaries(args, repo_root):
     discovered = []
 
     if not args.no_build and (args.package or test_names_in_build):
-        cmd = ["cargo", "simtest", "build", "--tests"]
+        cmd = ["cargo", "simtest", "build"]
+        # `--tests` builds all test targets; it conflicts with naming specific
+        # targets via `--test`, so only pass it when no `--test` is present.
+        if not test_names_in_build:
+            cmd.append("--tests")
         for pkg in args.package or []:
             cmd.extend(["--package", pkg])
         for name in test_names_in_build:
@@ -595,10 +599,6 @@ if __name__ == "__main__":
 
     rust_log = "error" if (args.no_capture or args.log_dir or args.error_regex) else "off"
 
-    # SIMTEST_STATIC_INIT_MOVE is normally exported by cargo-simtest at runtime;
-    # since we invoke test binaries directly, we have to set it ourselves.
-    simtest_static_init_move = os.path.join(repo_root, "examples/move/basics")
-
     jobs = []
     for package_name, binary_name, binary_path, manifest_dir, tests in bin_tests:
         for test_name in tests:
@@ -608,7 +608,6 @@ if __name__ == "__main__":
                     "MSIM_TEST_SEED": "%d" % seed,
                     "RUST_LOG": rust_log,
                     "MSIM_WATCHDOG_TIMEOUT_MS": str(args.watchdog_timeout_ms),
-                    "SIMTEST_STATIC_INIT_MOVE": simtest_static_init_move,
                 }
                 if reach_log_dir:
                     env_vars["MSIM_LOG_REACHABLE_ASSERTIONS"] = reach_log_dir

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09012]: unused 'mut' modifiers
+warning[WC09012]: unused 'mut' modifiers
    ┌─ tests/move_2024/parser/mut_match.move:11:30
    │
 11 │          Option::Other { mut x } => x,

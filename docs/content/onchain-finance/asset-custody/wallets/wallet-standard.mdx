@@ -1,8 +1,53 @@
 ---
 title: Wallet Standard
-description: The Wallet Standard defines how apps can automatically discover and interact with wallets.
-keywords: [ mysten/wallet-standard, wallet standards, Wallet Standard, browser extensions, exposing accounts, wallet events, register in window, wallet best practices, efficient transaction execution, wallet data, managing wallets, wallet-standard ]
+description: >-
+  The Wallet Standard defines how apps can automatically discover and interact
+  with wallets.
+keywords:
+  - mysten/wallet-standard
+  - wallet standards
+  - Wallet Standard
+  - browser extensions
+  - exposing accounts
+  - wallet events
+  - register in window
+  - wallet best practices
+  - efficient transaction execution
+  - wallet data
+  - managing wallets
+  - wallet-standard
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands the Wallet Standard defines how apps can automatically
+    discover and interact with wallets
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Wallet Standard
+    stage: Wallets & Funding
+questions:
+  - What is Wallet Standard in Sui?
+  - How does wallet standard work on Sui?
+  - Why should I use wallet standard?
+answer: >-
+  Browser extension wallets built for Sui use the [Wallet
+  Standard](https://github.com/wallet-standard/wallet-standard/).
 ---
 
 Browser extension wallets built for Sui use the [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This is a cross-chain standard that defines how apps can automatically discover and interact with wallets.

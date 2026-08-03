@@ -1363,6 +1363,9 @@ bridge
 address_alias_state
 	public(package) fun
 	0x2::object
+forwarding_address_registry
+	public(package) fun
+	0x2::object
 uid_as_inner
 	public fun
 	0x2::object
@@ -1402,7 +1405,7 @@ new_uid_from_hash
 delete_impl
 	fun
 	0x2::object
-record_new_uid
+record_new_uid_from_hash
 	fun
 	0x2::object
 Receiving
@@ -2896,6 +2899,12 @@ authorize_upgrade
 commit_upgrade
 	public fun
 	0x2::package
+original_package_id
+	public fun
+	0x2::package
+original_package_id_impl
+	fun
+	0x2::package
 restrict
 	fun
 	0x2::package
@@ -3019,6 +3028,12 @@ new_display
 create
 	fun
 	0x2::display_registry
+ForwardingAddressRegistry
+	public struct
+	0x2::forwarding_address
+create
+	fun
+	0x2::forwarding_address
 Curve
 	public struct
 	0x2::groth16
@@ -3362,6 +3377,12 @@ push_front
 	public fun
 	0x2::linked_table
 push_back
+	public fun
+	0x2::linked_table
+insert_before
+	public fun
+	0x2::linked_table
+insert_after
 	public fun
 	0x2::linked_table
 borrow
@@ -3757,6 +3778,69 @@ verify_bulletproofs_ristretto255
 verify_bulletproofs_with_dst_ristretto255_internal
 	fun
 	0x2::rangeproofs
+Permit
+	public struct
+	0x2::scratch
+BorrowMarker
+	public struct
+	0x2::scratch
+BorrowMarkerKey
+	public struct
+	0x2::scratch
+permit
+	public fun
+	0x2::scratch
+add
+	public fun
+	0x2::scratch
+read
+	public fun
+	0x2::scratch
+remove
+	public fun
+	0x2::scratch
+exists
+	public fun
+	0x2::scratch
+exists_with_type
+	public fun
+	0x2::scratch
+read_opt
+	public fun
+	0x2::scratch
+remove_opt
+	public fun
+	0x2::scratch
+replace
+	public fun
+	0x2::scratch
+begin_borrow
+	public fun
+	0x2::scratch
+end_borrow
+	public fun
+	0x2::scratch
+borrow_marker
+	fun
+	0x2::scratch
+hash_type_and_key
+	fun
+	0x2::scratch
+add_impl
+	fun
+	0x2::scratch
+read_impl
+	fun
+	0x2::scratch
+remove_impl
+	fun
+	0x2::scratch
+exists_impl
+	fun
+	0x2::scratch
+exists_with_type_impl
+	fun
+	0x2::scratch
 TableVec
 	public struct
 	0x2::table_vec

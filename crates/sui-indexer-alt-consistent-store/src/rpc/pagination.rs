@@ -4,9 +4,9 @@
 use anyhow::Context;
 use bincode::Decode;
 use bincode::Encode;
+use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use sui_default_config::DefaultConfig;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
 use crate::db::iter::FwdIter;
@@ -16,7 +16,8 @@ use crate::db::map::DbMap;
 use crate::rpc::error::RpcError;
 use crate::rpc::error::db_error;
 
-#[DefaultConfig]
+#[derive(Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PaginationConfig {
     pub default_page_size: u32,
     pub max_batch_size: u32,

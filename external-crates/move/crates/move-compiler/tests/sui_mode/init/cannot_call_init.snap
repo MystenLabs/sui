@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02006]: invalid 'init' call
+error[ESC02006]: invalid 'init' call
    ┌─ tests/sui_mode/init/cannot_call_init.move:10:9
    │
 10 │         init(ctx)

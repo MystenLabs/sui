@@ -4,8 +4,12 @@
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::Context;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
+use move_core_types::ident_str;
 use prometheus::Registry;
 use reqwest::Client;
 use serde_json::Value;
@@ -27,6 +31,15 @@ use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_types::MOVE_STDLIB_PACKAGE_ID;
+use sui_types::TypeTag;
+use sui_types::crypto::ToFromBytes as _;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::SenderSignedData;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionKind;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use url::Url;
@@ -109,13 +122,32 @@ impl WriteTestCluster {
         .await
         .context("Failed to start JSON-RPC server")?;
 
-        Ok(Self {
+        let cluster = Self {
             onchain_cluster,
             rpc_url,
             service: rpc_service.merge(indexer_service),
             database,
             client: Client::new(),
+        };
+
+        // Dev-inspect reads its gas defaults from `kv_epoch_starts` and `kv_protocol_configs`.
+        // The latter is only populated once the indexer's pipeline processes the genesis
+        // checkpoint, so wait for it before handing the cluster to a test.
+        tokio::time::timeout(Duration::from_secs(60), async {
+            loop {
+                let response = cluster
+                    .execute_jsonrpc("sui_getProtocolConfig", json!([]))
+                    .await;
+                if matches!(&response, Ok(r) if r["error"].is_null()) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
         })
+        .await
+        .context("Timed out waiting for the genesis protocol config to be indexed")?;
+
+        Ok(cluster)
     }
 
     async fn transfer_transaction(&self) -> anyhow::Result<(String, String, Vec<String>)> {
@@ -155,6 +187,23 @@ impl WriteTestCluster {
     }
 
     async fn execute_jsonrpc(&self, method: &str, params: Value) -> anyhow::Result<Value> {
+        self.execute_jsonrpc_at(self.rpc_url.clone(), method, params)
+            .await
+    }
+
+    /// Send a JSON-RPC request to the fullnode's legacy JSON-RPC server (rather than the
+    /// indexer's JSON-RPC server), to compare implementations of the same method.
+    async fn execute_fullnode_jsonrpc(&self, method: &str, params: Value) -> anyhow::Result<Value> {
+        let url = Url::parse(self.onchain_cluster.rpc_url()).context("Invalid fullnode URL")?;
+        self.execute_jsonrpc_at(url, method, params).await
+    }
+
+    async fn execute_jsonrpc_at(
+        &self,
+        url: Url,
+        method: &str,
+        params: Value,
+    ) -> anyhow::Result<Value> {
         let query = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -164,7 +213,7 @@ impl WriteTestCluster {
 
         let response = self
             .client
-            .post(self.rpc_url.clone())
+            .post(url)
             .json(&query)
             .send()
             .await
@@ -175,6 +224,51 @@ impl WriteTestCluster {
             .await
             .context("Failed to parse JSON-RPC response")
     }
+}
+
+/// BCS- and Base64-encode a `TransactionKind`, the input format for
+/// `sui_devInspectTransactionBlock`.
+fn encode_transaction_kind(kind: &TransactionKind) -> String {
+    Base64::encode(bcs::to_bytes(kind).expect("Failed to serialize TransactionKind"))
+}
+
+/// Extract a byte vector from a JSON array of numbers.
+fn json_bytes(value: &Value) -> Vec<u8> {
+    value
+        .as_array()
+        .expect("Expected a JSON array of bytes")
+        .iter()
+        .map(|b| b.as_u64().unwrap() as u8)
+        .collect()
+}
+
+/// A transaction that calls the non-entry function `std::option::none<u64>()` and leaves its
+/// result unused -- only valid under dev-inspect.
+fn option_none_transaction_kind() -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("option").to_owned(),
+        ident_str!("none").to_owned(),
+        vec![TypeTag::U64],
+        vec![],
+    );
+    TransactionKind::programmable(builder.finish())
+}
+
+/// A transaction that fails execution with an arithmetic error (division by zero).
+fn divide_by_zero_transaction_kind() -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let one = builder.pure(1u64).expect("Failed to create pure input");
+    let zero = builder.pure(0u64).expect("Failed to create pure input");
+    builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        ident_str!("u64").to_owned(),
+        ident_str!("divide_and_round_up").to_owned(),
+        vec![],
+        vec![one, zero],
+    );
+    TransactionKind::programmable(builder.finish())
 }
 
 #[tokio::test]
@@ -224,7 +318,14 @@ async fn test_execute_transfer_correctness() {
     );
 
     // -- raw input --
-    assert!(!result["rawTransaction"].as_str().unwrap().is_empty());
+    let raw_transaction = Base64::decode(result["rawTransaction"].as_str().unwrap()).unwrap();
+    let actual: SenderSignedData = bcs::from_bytes(&raw_transaction).unwrap();
+    let tx_data: TransactionData = bcs::from_bytes(&Base64::decode(&tx_bytes).unwrap()).unwrap();
+    let tx_signatures = sigs
+        .iter()
+        .map(|sig| GenericSignature::from_bytes(&Base64::decode(sig).unwrap()).unwrap())
+        .collect();
+    assert_eq!(actual, SenderSignedData::new(tx_data, tx_signatures));
 
     // -- effects --
     let effects = &result["effects"];
@@ -636,4 +737,221 @@ async fn test_execute_and_dry_run_gas_costs_agree() {
         dry_run["result"]["effects"]["gasUsed"],
         execute["result"]["effects"]["gasUsed"],
     );
+}
+
+#[tokio::test]
+async fn test_dev_inspect_returns_values() {
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response["error"].is_null(),
+        "RPC error: {}",
+        response["error"]
+    );
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+    assert!(result["error"].is_null());
+
+    // One command, returning `std::option::Option<u64>`. The BCS encoding of `none` is a single
+    // zero byte (an empty vector).
+    let results = result["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1);
+
+    let return_values = results[0]["returnValues"].as_array().unwrap();
+    assert_eq!(return_values.len(), 1);
+    assert_eq!(return_values[0][0], json!([0]));
+    assert!(
+        return_values[0][1]
+            .as_str()
+            .unwrap()
+            .contains("option::Option<u64>"),
+        "Unexpected return type: {}",
+        return_values[0][1],
+    );
+
+    // Raw transaction data and effects were not requested.
+    assert!(result["rawTxnData"].is_null());
+    assert!(result["rawEffects"].is_null());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_synthesized_transaction_defaults() {
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+    let reference_gas_price = cluster.onchain_cluster.get_reference_gas_price().await;
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+                "additional_args": { "showRawTxnDataAndEffects": true },
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+
+    // The raw transaction data reflects the synthesized `TransactionData`: gas price defaults to
+    // the reference gas price, the sender sponsors the gas, and the gas payment is left empty (a
+    // mock gas coin is injected fullnode-side).
+    let tx_data: TransactionData = bcs::from_bytes(&json_bytes(&result["rawTxnData"])).unwrap();
+    assert_eq!(tx_data.sender(), sender);
+
+    let gas_data = tx_data.gas_data();
+    assert_eq!(gas_data.owner, sender);
+    assert_eq!(gas_data.price, reference_gas_price);
+    assert!(gas_data.payment.is_empty());
+    assert!(gas_data.budget > 0);
+
+    assert!(!result["rawEffects"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_with_checks_enabled() {
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+                "additional_args": { "skipChecks": false },
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        response["error"].is_null(),
+        "RPC error: {}",
+        response["error"]
+    );
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "success");
+    assert_eq!(result["results"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_dev_inspect_execution_failure() {
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result = &response["result"];
+    assert_eq!(result["effects"]["status"]["status"], "failure");
+    assert!(!result["error"].is_null(), "Expected an execution error");
+    assert!(result["results"].is_null());
+}
+
+#[tokio::test]
+async fn test_dev_inspect_matches_fullnode_jsonrpc() {
+    telemetry_subscribers::init_for_testing();
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    // Successful execution: the responses must match in full, including the raw transaction
+    // bytes (proving the synthesized TransactionData is identical) and effects.
+    let params = json!({
+        "sender_address": sender.to_string(),
+        "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
+        "additional_args": { "showRawTxnDataAndEffects": true },
+    });
+
+    let indexer = cluster
+        .execute_jsonrpc("sui_devInspectTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let fullnode = cluster
+        .execute_fullnode_jsonrpc("sui_devInspectTransactionBlock", params)
+        .await
+        .unwrap();
+
+    assert!(
+        indexer["error"].is_null(),
+        "indexer RPC error: {}",
+        indexer["error"]
+    );
+    assert!(
+        fullnode["error"].is_null(),
+        "fullnode RPC error: {}",
+        fullnode["error"]
+    );
+    assert_eq!(indexer["result"], fullnode["result"]);
+
+    // Failed execution: the responses must match except for the `error` message -- the fullnode
+    // stringifies the executor's error, which is not part of the gRPC simulate response that the
+    // indexer's implementation is built on, so the indexer recovers a differently-formatted
+    // message from the effects' execution status.
+    let params = json!({
+        "sender_address": sender.to_string(),
+        "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
+    });
+
+    let indexer = cluster
+        .execute_jsonrpc("sui_devInspectTransactionBlock", params.clone())
+        .await
+        .unwrap();
+    let fullnode = cluster
+        .execute_fullnode_jsonrpc("sui_devInspectTransactionBlock", params)
+        .await
+        .unwrap();
+
+    let mut indexer_result = indexer["result"].clone();
+    let mut fullnode_result = fullnode["result"].clone();
+
+    let indexer_error = indexer_result.as_object_mut().unwrap().remove("error");
+    let fullnode_error = fullnode_result.as_object_mut().unwrap().remove("error");
+    assert!(indexer_error.is_some_and(|e| !e.is_null()));
+    assert!(fullnode_error.is_some_and(|e| !e.is_null()));
+
+    assert_eq!(indexer_result, fullnode_result);
+}
+
+#[tokio::test]
+async fn test_dev_inspect_invalid_tx_bytes() {
+    let cluster = WriteTestCluster::new().await.unwrap();
+    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
+
+    let response = cluster
+        .execute_jsonrpc(
+            "sui_devInspectTransactionBlock",
+            json!({
+                "sender_address": sender.to_string(),
+                "tx_bytes": "invalid_tx_bytes",
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["error"]["code"], -32602);
 }

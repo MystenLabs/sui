@@ -1,11 +1,45 @@
 ---
 title: Programmable Transaction Blocks
-description: Programmable transaction blocks are a group of commands that complete a transaction on Sui.
-keywords: [ programmable transaction blocks, transaction blocks, program transaction blocks, PTB, PTBs, what are PTBs, what is PTB, transaction group, programmable group of transactions, program transaction block, block of transactions, group of transactions ]
+description: >-
+  Programmable transaction blocks are a group of commands that complete a
+  transaction on Sui.
+keywords:
+  - programmable transaction blocks
+  - transaction blocks
+  - program transaction blocks
+  - PTB
+  - PTBs
+  - what are PTBs
+  - what is PTB
+  - transaction group
+  - programmable group of transactions
+  - program transaction block
+  - block of transactions
+  - group of transactions
 pagination_prev: null
+goal:
+  description: >-
+    Reader understands what programmable transaction blocks are and how their
+    commands compose into a single transaction
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is Programmable Transaction Blocks in Sui?
+  - What topics does Programmable Transaction Blocks cover?
+  - How does programmable transaction blocks work on Sui?
+answer: >-
+  Programmable transaction blocks are a group of commands that complete a
+  transaction on Sui.
 ---
 
-Programmable transaction blocks are a group of commands that complete a transaction on Sui.
+Programmable transaction blocks (PTBs) let you compose multiple commands into a single atomic transaction on Sui. Commands can transfer objects, call Move functions, split and merge coins, and more, with results from one command flowing into the next.
 
 import DocCardList from '@theme/DocCardList';
 

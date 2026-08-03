@@ -1,0 +1,59 @@
+// Call transfer checks rejected by both reference safety checkers after joins and loop fixed points.
+
+//# publish
+mvir 0x3::possibly_aliased_arguments_invalid {
+
+fun consume_two(x: &mut u64, y: &mut u64) {
+label b0:
+    abort 0;
+}
+
+fun t(a: &mut u64, b: &mut u64, cond: bool) {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    jump_if (move(cond)) b2;
+label b1:
+    x = copy(a);
+    y = copy(b);
+    jump b3;
+label b2:
+    x = copy(a);
+    y = copy(a);
+    jump b3;
+label b3:
+    // The arguments are epsilon aliases on one incoming path.
+    Self::consume_two(move(x), move(y));
+    return;
+}
+
+}
+
+//# publish
+mvir 0x5::loop_carried_call_result_invalid {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+fun t(root: &mut Self::S, cond: bool) {
+    let result: &mut Self::S;
+label b0:
+    result = Self::id(copy(root));
+label loop_header:
+    jump_if (copy(cond)) loop_exit;
+label loop_body:
+    result = Self::id(move(result));
+    cond = true;
+    jump loop_header;
+label loop_exit:
+    // The loop-carried call result remains a possible extension of root.
+    *copy(root) = S { f: 0 };
+    _ = move(result);
+    return;
+}
+
+}

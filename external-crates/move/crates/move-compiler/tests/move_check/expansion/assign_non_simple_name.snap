@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:16:9
    │
 16 │         X::S = ();
@@ -13,7 +13,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'X::S {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:17:9
    │
 17 │         Self::S<u64> = ();
@@ -21,7 +21,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'Self::S {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:18:9
    │
 18 │         Self::R = ();
@@ -29,7 +29,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'Self::R {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:22:9
    │
 22 │         0x42::X::S = ();
@@ -37,7 +37,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'0x42::X::S {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:23:9
    │
 23 │         0x42::M::S<u64> = ();
@@ -45,7 +45,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'0x42::M::S {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:24:9
    │
 24 │         0x42::M::R = ();
@@ -53,7 +53,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'0x42::M::R {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:28:9
    │
 28 │         x<u64> = ();
@@ -61,7 +61,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'x {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:29:9
    │
 29 │         S<u64> = ();
@@ -69,7 +69,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'S {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:33:9
    │
 33 │         X = ();
@@ -77,7 +77,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'X {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:34:9
    │
 34 │         S = ();
@@ -85,7 +85,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'S {}'
 
-error[E01009]: invalid assignment
+error[EC01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:35:9
    │
 35 │         R = ();
@@ -93,7 +93,7 @@ error[E01009]: invalid assignment
    │
    = If you are trying to unpack a struct, try adding fields, e.g.'R {}'
 
-error[E03009]: unbound variable
+error[EC03009]: unbound variable
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:39:9
    │
 39 │         Y = 0u64;

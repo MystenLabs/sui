@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04009]: expected specific type
+error[EC04009]: expected specific type
   ┌─ tests/move_2024/ide_mode/type_param_autocomplete.move:6:10
   │
 5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {

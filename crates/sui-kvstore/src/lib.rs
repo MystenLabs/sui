@@ -76,6 +76,7 @@ pub use config::IndexerConfig;
 pub use config::IngestionConfig;
 pub use config::PipelineLayer;
 pub use config::SequentialLayer;
+pub use config::default_committer_config;
 pub use sui_inverted_index::BitmapLiteral;
 pub use sui_inverted_index::BitmapQuery;
 pub use sui_inverted_index::BitmapTerm;
@@ -110,12 +111,6 @@ pub const TX_SEQ_DIGEST_PIPELINE: &str =
 pub const EVENT_BITMAP_INDEX_PIPELINE: &str =
     <BitmapIndexHandler<EventBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
-pub const ALPHA_PIPELINE_NAMES: [&str; 3] = [
-    TX_SEQ_DIGEST_PIPELINE,
-    BITMAP_INDEX_PIPELINE,
-    EVENT_BITMAP_INDEX_PIPELINE,
-];
-
 /// All pipeline names known to the indexer.
 pub const ALL_PIPELINE_NAMES: [&str; 14] = [
     CHECKPOINTS_PIPELINE,
@@ -143,19 +138,6 @@ pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
             format!(
                 "unknown pipeline `{value}`; expected one of: {}",
                 ALL_PIPELINE_NAMES.join(", ")
-            )
-        })
-}
-
-pub fn parse_alpha_pipeline_name(value: &str) -> Result<&'static str, String> {
-    ALPHA_PIPELINE_NAMES
-        .iter()
-        .copied()
-        .find(|name| *name == value)
-        .ok_or_else(|| {
-            format!(
-                "unknown alpha pipeline `{value}`; expected one of: {}",
-                ALPHA_PIPELINE_NAMES.join(", ")
             )
         })
 }
@@ -269,10 +251,6 @@ pub struct PackageData {
 /// Protocol config data returned by reader methods.
 #[derive(Clone, Debug, Default)]
 pub struct ProtocolConfigData {
-    /// Legacy scalar-only attributes map, BCS-encoded on disk. New readers should prefer the
-    /// lossless `configs` map instead.
-    pub attributes: std::collections::BTreeMap<String, Option<String>>,
-    pub flags: std::collections::BTreeMap<String, bool>,
     /// Lossless view of every protocol-config attribute (scalar and non-scalar) and feature
     /// flag rendered to `prost_types::Value`. Fields unset at this protocol version are
     /// preserved as explicit `NullValue` entries so the keyset is stable across versions.
@@ -344,6 +322,12 @@ pub trait KeyValueStoreReader {
         &mut self,
         keys: &[TransactionDigest],
     ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
+    /// Fetch only the checkpoint timestamp for each transaction, avoiding a read of the full
+    /// transaction row.
+    async fn get_transaction_timestamps(
+        &mut self,
+        keys: &[TransactionDigest],
+    ) -> Result<Vec<(TransactionDigest, u64)>>;
 
     /// Resolve package_ids to their original_ids.
     async fn get_package_original_ids(
@@ -403,7 +387,6 @@ impl BigTableIndexer {
         config: IndexerConfig,
         pipeline: PipelineLayer,
         chain: Chain,
-        alpha_pipelines: &[&str],
         registry: &Registry,
     ) -> Result<Self> {
         let mut indexer = Indexer::new(
@@ -441,33 +424,31 @@ impl BigTableIndexer {
         };
         let mut store_runtime_builder = store.runtime_builder();
 
-        if alpha_pipelines.contains(&BITMAP_INDEX_PIPELINE) {
-            let tx_bitmap_rate_limiter = build_rate_limiter(
-                pipeline.transaction_bitmap_index.max_rows_per_second,
-                base_rps,
-                &global,
+        let tx_bitmap_rate_limiter = build_rate_limiter(
+            pipeline.transaction_bitmap_index.max_rows_per_second,
+            base_rps,
+            &global,
+        );
+        store_runtime_builder = store_runtime_builder
+            .with_bitmap_committer::<TransactionBitmapProcessor>(
+                pipeline.transaction_bitmap_index.max_rows_or_default(),
+                pipeline
+                    .transaction_bitmap_index
+                    .write_concurrency
+                    .unwrap_or(base.committer.write_concurrency),
+                tx_bitmap_rate_limiter,
+                Some(registry),
             );
-            store_runtime_builder = store_runtime_builder
-                .with_bitmap_committer::<TransactionBitmapProcessor>(
-                    pipeline.transaction_bitmap_index.max_rows_or_default(),
-                    pipeline
-                        .transaction_bitmap_index
-                        .write_concurrency
-                        .unwrap_or(base.committer.write_concurrency),
-                    tx_bitmap_rate_limiter,
-                    Some(registry),
-                );
-            let tx_bitmap_handler = BitmapIndexHandler::new(TransactionBitmapProcessor);
-            indexer
-                .sequential_pipeline(
-                    tx_bitmap_handler,
-                    pipeline
-                        .transaction_bitmap_index
-                        .clone()
-                        .finish(base.clone()),
-                )
-                .await?;
-        }
+        let tx_bitmap_handler = BitmapIndexHandler::new(TransactionBitmapProcessor);
+        indexer
+            .sequential_pipeline(
+                tx_bitmap_handler,
+                pipeline
+                    .transaction_bitmap_index
+                    .clone()
+                    .finish(base.clone()),
+            )
+            .await?;
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(
@@ -602,46 +583,42 @@ impl BigTableIndexer {
                 pipeline.system_packages.finish(base.clone()),
             )
             .await?;
-        if alpha_pipelines.contains(&TX_SEQ_DIGEST_PIPELINE) {
-            indexer
-                .concurrent_pipeline(
-                    BigTableHandler::new(
-                        TxSeqDigestPipeline,
-                        &pipeline.tx_seq_digest,
-                        build_rate_limiter(
-                            pipeline.tx_seq_digest.max_rows_per_second,
-                            base_rps,
-                            &global,
-                        ),
+        indexer
+            .concurrent_pipeline(
+                BigTableHandler::new(
+                    TxSeqDigestPipeline,
+                    &pipeline.tx_seq_digest,
+                    build_rate_limiter(
+                        pipeline.tx_seq_digest.max_rows_per_second,
+                        base_rps,
+                        &global,
                     ),
-                    pipeline.tx_seq_digest.finish(base.clone()),
-                )
-                .await?;
-        }
-        if alpha_pipelines.contains(&EVENT_BITMAP_INDEX_PIPELINE) {
-            let ev_bitmap_rate_limiter = build_rate_limiter(
-                pipeline.event_bitmap_index.max_rows_per_second,
-                base_rps,
-                &global,
+                ),
+                pipeline.tx_seq_digest.finish(base.clone()),
+            )
+            .await?;
+        let ev_bitmap_rate_limiter = build_rate_limiter(
+            pipeline.event_bitmap_index.max_rows_per_second,
+            base_rps,
+            &global,
+        );
+        store_runtime_builder = store_runtime_builder
+            .with_bitmap_committer::<EventBitmapProcessor>(
+                pipeline.event_bitmap_index.max_rows_or_default(),
+                pipeline
+                    .event_bitmap_index
+                    .write_concurrency
+                    .unwrap_or(base.committer.write_concurrency),
+                ev_bitmap_rate_limiter,
+                Some(registry),
             );
-            store_runtime_builder = store_runtime_builder
-                .with_bitmap_committer::<EventBitmapProcessor>(
-                    pipeline.event_bitmap_index.max_rows_or_default(),
-                    pipeline
-                        .event_bitmap_index
-                        .write_concurrency
-                        .unwrap_or(base.committer.write_concurrency),
-                    ev_bitmap_rate_limiter,
-                    Some(registry),
-                );
-            let ev_bitmap_handler = BitmapIndexHandler::new(EventBitmapProcessor);
-            indexer
-                .sequential_pipeline(
-                    ev_bitmap_handler,
-                    pipeline.event_bitmap_index.clone().finish(base.clone()),
-                )
-                .await?;
-        }
+        let ev_bitmap_handler = BitmapIndexHandler::new(EventBitmapProcessor);
+        indexer
+            .sequential_pipeline(
+                ev_bitmap_handler,
+                pipeline.event_bitmap_index.clone().finish(base.clone()),
+            )
+            .await?;
         Ok(Self {
             indexer,
             store_service: store_runtime_builder.into_service(),

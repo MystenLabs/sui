@@ -77,6 +77,18 @@ pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::O
     resolver.options(NAME)
 }
 
+/// Prefix encoder for "every version of `id`". Encodes as the 32 raw
+/// id bytes -- the leading bytes of every `Key` whose `id` matches, so
+/// a prefix scan walks one object's versions in isolation.
+pub struct ObjectIdPrefix(pub ObjectID);
+
+impl Encode for ObjectIdPrefix {
+    fn encode_into<B: BufMut>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        buf.put_slice(self.0.as_ref());
+        Ok(())
+    }
+}
+
 /// Why a tombstone row was written: the object was either
 /// `Deleted` (including the `unwrapped_then_deleted` shape) or
 /// `Wrapped` (nested inside another object and removed from the
@@ -166,9 +178,9 @@ impl<R: Reader> super::RpcStoreSchema<R> {
     /// callers that need to distinguish the two should use
     /// [`get_object_status_by_key`](Self::get_object_status_by_key).
     ///
-    /// For the "latest live version" of an object id, callers
-    /// should go through `live_objects` first to resolve the
-    /// version, then pass it here.
+    /// For the "latest live version" of an object id, use
+    /// [`get_object`](Self::get_object), which reverse-scans this CF
+    /// for the greatest version.
     pub fn get_object_by_key(
         &self,
         id: ObjectID,
@@ -192,6 +204,22 @@ impl<R: Reader> super::RpcStoreSchema<R> {
             return Ok(None);
         };
         Ok(Some(decode(stored.into_inner())?))
+    }
+
+    /// Look up the latest live version of an object by id.
+    ///
+    /// A single reverse prefix scan takes the object's greatest
+    /// `(id, version)` row and decodes it, returning the live object or
+    /// `None` if that row is a tombstone. This mirrors the validator
+    /// perpetual store's `get_object` (reverse scan, then collapse
+    /// `Deleted` / `Wrapped` to `None`). Returns `Ok(None)` when the
+    /// object has no recorded version.
+    pub fn get_object(&self, id: ObjectID) -> Result<Option<Object>, Error> {
+        let Some(row) = self.objects.iter_rev_prefix(&ObjectIdPrefix(id))?.next() else {
+            return Ok(None);
+        };
+        let (_key, value) = row?;
+        Ok(decode(value.into_inner())?.into_live())
     }
 }
 
@@ -337,5 +365,96 @@ mod tests {
 
         assert_eq!(schema.get_object_by_key(id, v1).unwrap().unwrap(), o1,);
         assert_eq!(schema.get_object_by_key(id, v2).unwrap().unwrap(), o2,);
+    }
+
+    #[test]
+    fn get_object_returns_the_latest_live_version() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        let object = dummy_object(id);
+        let version = object.version();
+
+        let mut batch = db.batch();
+        batch
+            .put(&schema.objects, &Key { id, version }, &store(&object))
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(schema.get_object(id).unwrap(), Some(object));
+    }
+
+    #[test]
+    fn get_object_returns_none_when_latest_is_tombstone() {
+        let (_dir, db, schema) = fresh_db();
+        let id = ObjectID::random();
+        let live = dummy_object(id);
+        let live_version = SequenceNumber::from_u64(1);
+        let tombstone_version = SequenceNumber::from_u64(5);
+
+        let mut batch = db.batch();
+        // An older live version, then a newer tombstone marking the
+        // object's removal.
+        batch
+            .put(
+                &schema.objects,
+                &Key {
+                    id,
+                    version: live_version,
+                },
+                &store(&live),
+            )
+            .unwrap();
+        batch
+            .put(
+                &schema.objects,
+                &Key {
+                    id,
+                    version: tombstone_version,
+                },
+                &tombstone(TombstoneKind::Deleted),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        // The greatest row is the tombstone, which collapses to "no
+        // live object" even though an older live version is still
+        // present.
+        assert!(schema.get_object(id).unwrap().is_none());
+    }
+
+    #[test]
+    fn get_object_isolates_objects_by_id() {
+        let (_dir, db, schema) = fresh_db();
+        let a = ObjectID::from_single_byte(1);
+        let b = ObjectID::from_single_byte(2);
+        let oa = dummy_object(a);
+        let ob = dummy_object(b);
+
+        let mut batch = db.batch();
+        batch
+            .put(
+                &schema.objects,
+                &Key {
+                    id: a,
+                    version: SequenceNumber::from_u64(9),
+                },
+                &store(&oa),
+            )
+            .unwrap();
+        batch
+            .put(
+                &schema.objects,
+                &Key {
+                    id: b,
+                    version: SequenceNumber::from_u64(4),
+                },
+                &store(&ob),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        // The reverse prefix scan must not spill across the id bound.
+        assert_eq!(schema.get_object(a).unwrap(), Some(oa));
+        assert_eq!(schema.get_object(b).unwrap(), Some(ob));
     }
 }

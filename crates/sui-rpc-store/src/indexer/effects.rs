@@ -17,7 +17,7 @@ use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::tx_seq_at;
 use crate::schema::effects;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 /// Pipeline marker for `effects`.
 pub struct Effects;

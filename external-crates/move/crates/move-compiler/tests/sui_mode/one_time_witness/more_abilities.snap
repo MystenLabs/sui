@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02004]: invalid one-time witness declaration
+error[ESC02004]: invalid one-time witness declaration
   ┌─ tests/sui_mode/one_time_witness/more_abilities.move:6:12
   │
 6 │     struct M1 has copy, drop { dummy: bool }
@@ -15,7 +15,7 @@ error[Sui E02004]: invalid one-time witness declaration
   │
   = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.
 
-error[Sui E02004]: invalid one-time witness declaration
+error[ESC02004]: invalid one-time witness declaration
    ┌─ tests/sui_mode/one_time_witness/more_abilities.move:14:12
    │
 14 │     struct M2 has drop, store { dummy: bool }
@@ -25,7 +25,7 @@ error[Sui E02004]: invalid one-time witness declaration
    │
    = One-time witness types are structs with the following requirements: their name is the upper-case version of the module's name, they have no fields (or a single boolean field), they have no type parameters, and they have only the 'drop' ability.
 
-error[Sui E02004]: invalid one-time witness declaration
+error[ESC02004]: invalid one-time witness declaration
    ┌─ tests/sui_mode/one_time_witness/more_abilities.move:22:12
    │
 22 │     struct M3 has copy, drop, store { dummy: bool }

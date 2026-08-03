@@ -1,0 +1,65 @@
+// Borrow-graph state for references returned from calls.
+
+//# publish
+mvir 0x2::shapes {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun id_mut(r: &mut Self::S): &mut Self::S {
+label b0:
+    return move(r);
+}
+
+fun id(r: &Self::S): &Self::S {
+label b0:
+    return move(r);
+}
+
+fun chained(s: &mut Self::S) {
+    let r1: &mut Self::S;
+    let r2: &mut Self::S;
+label b0:
+    r1 = Self::id_mut(copy(s));
+    r2 = Self::id_mut(copy(r1));
+    jump b1;
+label b1:
+    _ = move(r1);
+    _ = move(r2);
+    return;
+}
+
+fun call_after_field(s: &Self::S) {
+    let fi: &u64;
+    let ri: &Self::S;
+label b0:
+    fi = &copy(s).S::f;
+    ri = Self::id(move(s));
+    jump b1;
+label b1:
+    _ = move(fi);
+    _ = move(ri);
+    return;
+}
+
+fun joined(s: &mut Self::S, cond: bool) {
+    let x: &mut Self::S;
+label b0:
+    jump_if (move(cond)) b2;
+label b1:
+    x = copy(s);
+    jump b3;
+label b2:
+    x = Self::id_mut(copy(s));
+    jump b3;
+label b3:
+    _ = move(x);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x2::shapes::chained
+
+//# view-abstract-state 0x2::shapes::call_after_field
+
+//# view-abstract-state 0x2::shapes::joined

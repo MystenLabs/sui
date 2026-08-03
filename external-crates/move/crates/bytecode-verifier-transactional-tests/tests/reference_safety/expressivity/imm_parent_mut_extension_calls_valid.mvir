@@ -1,0 +1,94 @@
+// Calls can transfer either side of an immutable-parent/mutable-extension relationship when the
+// related reference remains in the caller.
+
+//# publish
+mvir 0x2::transfer_mut_extension {
+
+public struct Inner has copy, drop { value: u64 }
+public struct Outer has copy, drop { field: Self::Inner }
+
+fun mutate(inner: &mut Self::Inner) {
+label b0:
+    *move(inner) = Inner { value: 1 };
+    return;
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+label b0:
+    a = Outer { field: Inner { value: 0 } };
+    x = &mut (&mut a).Outer::field;
+    // The old checker rejects this immutable parent while x is live.
+    y = &a;
+    // Transferring only the mutable extension cannot cause a dangling reference
+    Self::mutate(copy(x));
+    *move(x) = Inner { value: 2 };
+    _ = *move(y);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::transfer_imm_parent {
+
+public struct Inner has copy, drop { value: u64 }
+public struct Outer has copy, drop { field: Self::Inner }
+
+fun observe(outer: &Self::Outer) {
+label b0:
+    _ = *move(outer);
+    return;
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+label b0:
+    a = Outer { field: Inner { value: 0 } };
+    x = &mut (&mut a).Outer::field;
+    // The old checker rejects this immutable parent while x is live.
+    y = &a;
+    // Transferring only the immutable parent cannot cause a dangling reference
+    Self::observe(copy(y));
+    *move(x) = Inner { value: 1 };
+    _ = *move(y);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x6::release_returned_extension_then_write {
+
+public struct Inner has copy, drop { value: u64 }
+public struct Outer has copy, drop { field: Self::Inner }
+
+fun borrow_value(inner: &mut Self::Inner): &mut u64 {
+label b0:
+    return &mut move(inner).Inner::value;
+}
+
+fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Inner;
+    let y: &Self::Outer;
+    let result: &mut u64;
+label b0:
+    a = Outer { field: Inner { value: 0 } };
+    x = &mut (&mut a).Outer::field;
+    // The old checker rejects this immutable parent while x is live.
+    y = &a;
+    result = Self::borrow_value(copy(x));
+    // The returned extension is writable. Consuming it releases the borrow of x.
+    *move(result) = 1;
+    // Once the returned extension is gone, replacing x cannot dangle it.
+    *move(x) = Inner { value: 2 };
+    _ = *move(y);
+    return;
+}
+
+}

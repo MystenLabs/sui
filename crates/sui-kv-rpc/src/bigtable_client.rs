@@ -39,6 +39,9 @@ use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::ScanDirection;
+use sui_inverted_index::ScanStop;
+use sui_inverted_index::SkipPolicy;
+use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
@@ -47,6 +50,7 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::EventPosition;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -54,24 +58,27 @@ use sui_types::storage::ObjectKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-/// Stage label values for the `permit_wait_ms` metric. `&'static str` so they
+/// Stage label values for the permit timing metrics. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
 pub(crate) mod stage {
     pub const TRANSACTIONS: &str = "transactions";
     pub const OBJECTS: &str = "objects";
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
+    pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
 }
 
 /// Histograms for tuning the request-scoped `BigTableClient` semaphore.
-/// Cardinality is bounded: 3 methods × 4 stages = 12 series for
-/// `permit_wait_ms`, 3 series for the request-end `permits_peak` and
-/// `ops_total` histograms.
+/// Cardinality is bounded: 3 methods × 5 stages = 15 series each for
+/// `permit_wait_ms` and `permit_hold_ms`, and 3 series each for the request-end
+/// `permits_peak` and `ops_total` histograms.
 #[derive(Clone)]
 pub(crate) struct Metrics {
     /// Time spent waiting for one limiter permit, recorded once per successful
     /// `acquire_owned()` call.
     pub permit_wait_ms: HistogramVec,
+    /// Time one limiter permit is held from acquisition through release.
+    pub permit_hold_ms: HistogramVec,
     /// Peak in-use permit count observed during a single request, recorded
     /// once when the request's `BigTableClient` is dropped.
     pub permits_peak: HistogramVec,
@@ -91,17 +98,28 @@ impl Metrics {
                 registry,
             )
             .unwrap(),
+            permit_hold_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_bigtable_permit_hold_ms",
+                "Time a request-scoped BigTable limiter permit is held, from successful acquire to release (the gated stream's full drain or drop).",
+                &["method", "stage"],
+                prometheus::exponential_buckets(0.5, 2.0, 16).unwrap(),
+                registry,
+            )
+            .unwrap(),
             permits_peak: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_permits_peak",
-                "Peak in-use BigTable limiter permits observed during a single v2alpha request.",
+                "Peak in-use BigTable limiter permits observed during a single list request.",
                 &["method"],
-                vec![1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0],
+                vec![
+                    1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 65.0, 80.0,
+                    100.0, 130.0, 166.0, 200.0,
+                ],
                 registry,
             )
             .unwrap(),
             ops_total: register_histogram_vec_with_registry!(
                 "kv_rpc_bigtable_ops_total",
-                "Total BigTable limiter acquisitions issued by a single v2alpha request.",
+                "Total BigTable limiter acquisitions issued by a single list request.",
                 &["method"],
                 prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
                 registry,
@@ -286,12 +304,29 @@ impl BigTableClient {
         &self,
         tx_sequence_numbers: &[u64],
     ) -> Result<Vec<(u64, CheckpointSequenceNumber)>, RpcError> {
-        let _permit = self.acquire(stage::CHECKPOINTS).await?;
+        let _permit = self.acquire(stage::TX_CP_RESOLVE).await?;
         self.inner
             .clone()
             .resolve_tx_checkpoints(tx_sequence_numbers)
             .await
             .map_err(RpcError::from)
+    }
+
+    /// Streaming variant of `resolve_tx_checkpoints`. The permit is held for the
+    /// stream's lifetime (see `gate_stream`); rows arrive in BigTable order.
+    pub(crate) async fn resolve_tx_checkpoints_stream(
+        &self,
+        tx_sequence_numbers: Vec<u64>,
+    ) -> Result<BoxStream<'static, Result<(u64, CheckpointSequenceNumber), anyhow::Error>>, RpcError>
+    {
+        let permit = self.acquire(stage::TX_CP_RESOLVE).await?;
+        let inner = self
+            .inner
+            .clone()
+            .resolve_tx_checkpoints_stream(tx_sequence_numbers)
+            .await
+            .map_err(RpcError::from)?;
+        Ok(gate_stream(permit, inner.boxed()))
     }
 
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
@@ -304,8 +339,9 @@ impl BigTableClient {
         spec: BitmapIndexSpec,
         direction: ScanDirection,
         budget: u64,
+        policy: SkipPolicy,
         on_metrics: F,
-    ) -> BoxStream<'static, Result<sui_inverted_index::Watermarked<u64>, anyhow::Error>>
+    ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
     where
         F: FnOnce(sui_inverted_index::BitmapScanMetrics) + Send + 'static,
     {
@@ -317,6 +353,7 @@ impl BigTableClient {
             spec.bucket_size,
             direction,
             budget,
+            policy,
             on_metrics,
         )
     }
@@ -327,48 +364,22 @@ impl BigTableClient {
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
     }
 
-    /// Resolve a bitmap-evaluator watermark to its containing cp via one
-    /// `resolve_tx_checkpoints` row read.
-    ///
-    /// `position` is the watermark in its source domain (tx_seq for the
-    /// tx bitmap, event_seq for the event bitmap). `decode` translates
-    /// the in-domain lookup position into a tx_seq for the BigTable
-    /// lookup — identity for tx-bitmap callers, [`decode_event_seq`] for
-    /// event-bitmap callers.
-    ///
-    /// Asc: lookup the cp containing `position - 1` (the last
-    /// fully-scanned position; the cp it falls in may still produce items
-    /// at positions `≥ position`). Desc: lookup the cp containing
-    /// `position` itself (symmetric).
-    ///
-    /// Returns `Ok(None)` (caller drops the watermark) when the boundary
-    /// tx has no cp: ascending `position == 0` (no preceding tx), or a
-    /// frontier sitting just outside indexed history (e.g. a descending
-    /// scan starting at the ledger tip). A watermark is a best-effort
-    /// progress hint, so an unresolvable one is dropped rather than
-    /// failing the query — divergence that affects returned items still
-    /// surfaces loudly at the item-fetch path.
-    pub(crate) async fn resolve_wm_cp(
-        &self,
-        direction: ScanDirection,
-        position: u64,
-        decode: impl FnOnce(u64) -> u64,
-    ) -> Result<Option<u64>, RpcError> {
-        let lookup_position = if direction.is_ascending() {
-            match position.checked_sub(1) {
-                Some(p) => p,
-                None => return Ok(None),
-            }
-        } else {
-            position
-        };
-        let lookup_tx_seq = decode(lookup_position);
-        let pairs = self.resolve_tx_checkpoints(&[lookup_tx_seq]).await?;
-        Ok(pairs.into_iter().next().map(|(_, cp)| cp))
+    async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<u64, RpcError> {
+        self.resolve_tx_checkpoints(&[tx_seq])
+            .await?
+            .into_iter()
+            .next()
+            .map(|(_, cp)| cp)
+            .ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("missing checkpoint mapping for transaction sequence number {tx_seq}"),
+                )
+            })
     }
 
     /// Build a resolver closure for tx-bitmap watermarks (identity
-    /// decode). Hand directly to [`crate::pipeline::resolve_watermarks`].
+    /// decode). Hand directly to [`crate::pipeline::resolve_scan_watermarks`].
     pub(crate) fn tx_wm_resolver(
         &self,
         direction: ScanDirection,
@@ -377,32 +388,50 @@ impl BigTableClient {
         move |position| {
             let client = client.clone();
             Box::pin(async move {
+                let lookup_tx_seq = if direction.is_ascending() {
+                    match position.checked_sub(1) {
+                        Some(tx_seq) => tx_seq,
+                        None => return Ok(None),
+                    }
+                } else {
+                    position
+                };
                 client
-                    .resolve_wm_cp(direction, position, |x| x)
+                    .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(anyhow::Error::new)
+                    .map(Some)
+                    .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
     }
 
-    /// Build a resolver closure for event-bitmap watermarks. The
-    /// bitmap-domain position is a packed event_seq; decode to its
-    /// tx_seq for the BigTable lookup. Hand directly to
-    /// [`crate::pipeline::resolve_watermarks`].
+    /// Build a resolver closure for event-bitmap watermarks. Hand directly to
+    /// [`crate::pipeline::resolve_scan_watermarks`].
     pub(crate) fn event_wm_resolver(
         &self,
         direction: ScanDirection,
-    ) -> impl Fn(u64) -> WmResolverFut + Send + 'static {
+    ) -> impl Fn(EventPosition) -> WmResolverFut + Send + 'static {
         let client = self.clone();
         move |position| {
             let client = client.clone();
             Box::pin(async move {
+                let lookup_tx_seq = if direction.is_ascending() {
+                    if position.event_index > 0 {
+                        position.tx_seq
+                    } else {
+                        match position.tx_seq.checked_sub(1) {
+                            Some(tx_seq) => tx_seq,
+                            None => return Ok(None),
+                        }
+                    }
+                } else {
+                    position.tx_seq
+                };
                 client
-                    .resolve_wm_cp(direction, position, |evt| {
-                        sui_kvstore::tables::event_bitmap_index::decode_event_seq(evt).0
-                    })
+                    .tx_seq_checkpoint(lookup_tx_seq)
                     .await
-                    .map_err(anyhow::Error::new)
+                    .map(Some)
+                    .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))
             })
         }
     }
@@ -411,15 +440,23 @@ impl BigTableClient {
 /// Future returned by resolver closures from
 /// [`BigTableClient::tx_wm_resolver`] and [`BigTableClient::event_wm_resolver`].
 pub(crate) type WmResolverFut =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<u64>, anyhow::Error>> + Send>>;
+    std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, ScanStop>> + Send>>;
 
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,
     context: Arc<BigTableClientContext>,
+    stage: &'static str,
+    acquired_at: Instant,
 }
 
 impl Drop for LimitedPermit {
     fn drop(&mut self) {
+        let hold_ms = self.acquired_at.elapsed().as_secs_f64() * 1000.0;
+        self.context
+            .metrics
+            .permit_hold_ms
+            .with_label_values(&[self.context.method, self.stage])
+            .observe(hold_ms);
         record_release(&self.context);
     }
 }
@@ -431,10 +468,13 @@ async fn acquire_limited(
 ) -> Result<LimitedPermit, tokio::sync::AcquireError> {
     let start = Instant::now();
     let permit = limiter.acquire_owned().await?;
-    record_acquired(&context, stage, start.elapsed());
+    let acquired_at = Instant::now();
+    record_acquired(&context, stage, acquired_at.duration_since(start));
     Ok(LimitedPermit {
         _permit: permit,
         context,
+        stage,
+        acquired_at,
     })
 }
 
@@ -642,6 +682,37 @@ mod tests {
             histogram_sample_count(family(&families, "kv_rpc_bigtable_ops_total")),
             1,
             "ops_total observed once on context drop"
+        );
+    }
+
+    #[tokio::test]
+    async fn limited_permit_records_hold_once_on_drop() {
+        let (metrics, registry) = Metrics::for_testing();
+        let context = test_context(metrics, "list_transactions");
+        let limiter = Arc::new(Semaphore::new(1));
+
+        let permit = acquire_limited(limiter.clone(), context.clone(), stage::TX_CP_RESOLVE)
+            .await
+            .unwrap();
+        assert_eq!(limiter.available_permits(), 0);
+
+        drop(permit);
+        assert_eq!(limiter.available_permits(), 1);
+        drop(context);
+
+        let families = registry.gather();
+        let permit_hold = family(&families, "kv_rpc_bigtable_permit_hold_ms");
+        assert_eq!(histogram_sample_count(permit_hold), 1);
+        let labels = permit_hold.get_metric()[0].get_label();
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.name() == "method" && label.value() == "list_transactions")
+        );
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.name() == "stage" && label.value() == "tx_cp_resolve")
         );
     }
 

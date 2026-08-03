@@ -9,7 +9,9 @@ use crate::{
     Flags,
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
-        codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
+        codes::{
+            Category, DiagnosticCode, DiagnosticInfo, DiagnosticOrigin, DiagnosticsID, Severity,
+        },
         filter::{FilterName, FilterPrefix, FilterResult, FilterScope, FilterStack},
     },
     shared::{
@@ -657,7 +659,7 @@ impl Diagnostics {
         inner.diagnostics.retain(f);
     }
 
-    pub fn any_with_prefix(&self, prefix: &str) -> bool {
+    pub fn any_with_origin(&self, origin: DiagnosticOrigin) -> bool {
         let Self {
             diags: Some(inner),
             format: _,
@@ -665,10 +667,7 @@ impl Diagnostics {
         else {
             return false;
         };
-        inner
-            .diagnostics
-            .iter()
-            .any(|d| d.info.external_prefix() == Some(prefix))
+        inner.diagnostics.iter().any(|d| d.info.origin() == origin)
     }
 
     /// Returns true if any diagnostic in the Syntax category have already been recorded.
@@ -687,8 +686,8 @@ impl Diagnostics {
     }
 
     /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
-    /// have a given prefix and how many different unique lints were filtered.
-    pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
+    /// have a given origin and how many different unique lints were filtered.
+    pub fn filtered_source_diags_with_origin(&self, origin: DiagnosticOrigin) -> (usize, usize) {
         let Self {
             diags: Some(inner),
             format: _,
@@ -699,7 +698,7 @@ impl Diagnostics {
         let mut filtered_diags_num = 0;
         let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
-            if d.info.external_prefix() == Some(prefix) {
+            if d.info.origin() == origin {
                 filtered_diags_num += 1;
                 unique.insert((d.info.category(), d.info.code()));
             }

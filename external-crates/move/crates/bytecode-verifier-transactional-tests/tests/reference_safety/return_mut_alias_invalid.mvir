@@ -1,0 +1,51 @@
+// a mutable reference and its alias cannot be returned together
+
+//# publish
+mvir 0x2::copy_alias {
+
+fun t(r: &mut u64): &mut u64 * &mut u64 {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    x = copy(r);
+    y = move(r);
+    return (move(x), move(y));
+}
+
+}
+
+//# publish
+mvir 0x3::direct_copy {
+
+fun t(r: &mut u64): &mut u64 * &mut u64 {
+label b0:
+    return (copy(r), move(r));
+}
+
+}
+
+//# publish
+mvir 0x4::disjoint_fields_valid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun t(s: &mut Self::S): &mut u64 * &mut u64 {
+label b0:
+    return (&mut copy(s).S::f, &mut copy(s).S::g);
+}
+
+}
+
+//# publish
+mvir 0x5::mut_and_frozen_alias {
+
+fun t(r: &mut u64): &mut u64 * &u64 {
+    let x: &mut u64;
+    let i: &u64;
+label b0:
+    x = copy(r);
+    i = freeze(move(r));
+    return (move(x), move(i));
+}
+
+}

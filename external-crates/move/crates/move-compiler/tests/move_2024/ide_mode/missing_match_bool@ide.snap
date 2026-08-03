@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:16
   │
 4 │         match (true) {
   │                ^^^^ Pattern 'false' not covered
 
-note[I15004]: IDE missing match arms
+note[NC15004]: IDE missing match arms
   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:22
   │  
 4 │           match (true) {
@@ -20,13 +20,13 @@ note[I15004]: IDE missing match arms
 6 │ │         }
   │ ╰─────────^ Missing arms: 'false'
 
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
    ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:16
    │
 10 │         match (true) {
    │                ^^^^ Pattern '_' not covered
 
-note[I15004]: IDE missing match arms
+note[NC15004]: IDE missing match arms
    ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:22
    │  
 10 │           match (true) {

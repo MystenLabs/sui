@@ -21,7 +21,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 
 use crate::proto::StoredEpoch;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 pub const NAME: &str = "epochs";
 
@@ -64,13 +64,53 @@ pub fn start(
     })
 }
 
+/// The end-of-epoch fields staged as a merge operand by [`end`].
+///
+/// The `SystemEpochInfoEvent` counters (everything from
+/// [`total_stake`](Self::total_stake) onward) are `None` when the
+/// epoch ended in safe mode, where no such event is emitted;
+/// [`safe_mode`](Self::safe_mode) records which case applies.
+/// Mirrors the columns of the postgres `kv_epoch_ends` table.
+#[derive(Debug, Default, Clone)]
+pub struct EpochEnd {
+    pub end_timestamp_ms: u64,
+    pub end_checkpoint: u64,
+    /// `network_total_transactions` at the epoch's final checkpoint.
+    pub tx_hi: u64,
+    pub safe_mode: bool,
+    /// BCS-encoded `Vec<CheckpointCommitment>` from the checkpoint's
+    /// end-of-epoch data.
+    pub epoch_commitments: Vec<u8>,
+    pub total_stake: Option<u64>,
+    pub storage_fund_balance: Option<u64>,
+    pub storage_fund_reinvestment: Option<u64>,
+    pub storage_charge: Option<u64>,
+    pub storage_rebate: Option<u64>,
+    pub stake_subsidy_amount: Option<u64>,
+    pub total_gas_fees: Option<u64>,
+    pub total_stake_rewards_distributed: Option<u64>,
+    pub leftover_storage_fund_inflow: Option<u64>,
+}
+
 /// Build a partial `StoredEpoch` carrying the end-of-epoch fields.
 /// Indexer pipelines that observe an epoch's final checkpoint
 /// stage this as a merge operand against the epoch's key.
-pub fn end(end_timestamp_ms: u64, end_checkpoint: u64) -> Value {
+pub fn end(end: EpochEnd) -> Value {
     Protobuf(StoredEpoch {
-        end_timestamp_ms: Some(end_timestamp_ms),
-        end_checkpoint: Some(end_checkpoint),
+        end_timestamp_ms: Some(end.end_timestamp_ms),
+        end_checkpoint: Some(end.end_checkpoint),
+        tx_hi: Some(end.tx_hi),
+        safe_mode: Some(end.safe_mode),
+        epoch_commitments: Some(end.epoch_commitments.into()),
+        total_stake: end.total_stake,
+        storage_fund_balance: end.storage_fund_balance,
+        storage_fund_reinvestment: end.storage_fund_reinvestment,
+        storage_charge: end.storage_charge,
+        storage_rebate: end.storage_rebate,
+        stake_subsidy_amount: end.stake_subsidy_amount,
+        total_gas_fees: end.total_gas_fees,
+        total_stake_rewards_distributed: end.total_stake_rewards_distributed,
+        leftover_storage_fund_inflow: end.leftover_storage_fund_inflow,
         ..StoredEpoch::default()
     })
 }
@@ -113,6 +153,42 @@ fn merge(
         }
         if next.system_state_bcs.is_some() {
             merged.system_state_bcs = next.system_state_bcs;
+        }
+        if next.tx_hi.is_some() {
+            merged.tx_hi = next.tx_hi;
+        }
+        if next.safe_mode.is_some() {
+            merged.safe_mode = next.safe_mode;
+        }
+        if next.epoch_commitments.is_some() {
+            merged.epoch_commitments = next.epoch_commitments;
+        }
+        if next.total_stake.is_some() {
+            merged.total_stake = next.total_stake;
+        }
+        if next.storage_fund_balance.is_some() {
+            merged.storage_fund_balance = next.storage_fund_balance;
+        }
+        if next.storage_fund_reinvestment.is_some() {
+            merged.storage_fund_reinvestment = next.storage_fund_reinvestment;
+        }
+        if next.storage_charge.is_some() {
+            merged.storage_charge = next.storage_charge;
+        }
+        if next.storage_rebate.is_some() {
+            merged.storage_rebate = next.storage_rebate;
+        }
+        if next.stake_subsidy_amount.is_some() {
+            merged.stake_subsidy_amount = next.stake_subsidy_amount;
+        }
+        if next.total_gas_fees.is_some() {
+            merged.total_gas_fees = next.total_gas_fees;
+        }
+        if next.total_stake_rewards_distributed.is_some() {
+            merged.total_stake_rewards_distributed = next.total_stake_rewards_distributed;
+        }
+        if next.leftover_storage_fund_inflow.is_some() {
+            merged.leftover_storage_fund_inflow = next.leftover_storage_fund_inflow;
         }
     }
     Some(merged.encode_to_vec())
@@ -206,7 +282,15 @@ mod tests {
             )
             .unwrap();
         batch
-            .merge(&schema.epochs, &U64Be(42), &end(999, 600))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &end(EpochEnd {
+                    end_timestamp_ms: 999,
+                    end_checkpoint: 600,
+                    ..Default::default()
+                }),
+            )
             .unwrap();
         batch.commit().unwrap();
 
@@ -231,7 +315,15 @@ mod tests {
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
-            .merge(&schema.epochs, &U64Be(42), &end(999, 600))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &end(EpochEnd {
+                    end_timestamp_ms: 999,
+                    end_checkpoint: 600,
+                    ..Default::default()
+                }),
+            )
             .unwrap();
         batch
             .merge(
@@ -290,7 +382,15 @@ mod tests {
         let (_dir, db, schema) = fresh_db();
         let mut batch = db.batch();
         batch
-            .merge(&schema.epochs, &U64Be(42), &end(999, 600))
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &end(EpochEnd {
+                    end_timestamp_ms: 999,
+                    end_checkpoint: 600,
+                    ..Default::default()
+                }),
+            )
             .unwrap();
         batch.commit().unwrap();
 
@@ -370,5 +470,91 @@ mod tests {
 
         let info = schema.get_epoch(42).unwrap().expect("epoch present");
         assert_eq!(info.start_checkpoint, Some(500));
+    }
+
+    #[test]
+    fn end_record_stores_system_epoch_info_fields() {
+        let (_dir, db, schema) = fresh_db();
+        let mut batch = db.batch();
+        batch
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &end(EpochEnd {
+                    end_timestamp_ms: 999,
+                    end_checkpoint: 600,
+                    tx_hi: 12_345,
+                    safe_mode: false,
+                    epoch_commitments: vec![1, 2, 3],
+                    total_stake: Some(1_000),
+                    storage_fund_balance: Some(2_000),
+                    storage_fund_reinvestment: Some(3_000),
+                    storage_charge: Some(4_000),
+                    storage_rebate: Some(5_000),
+                    stake_subsidy_amount: Some(6_000),
+                    total_gas_fees: Some(7_000),
+                    total_stake_rewards_distributed: Some(8_000),
+                    leftover_storage_fund_inflow: Some(9_000),
+                }),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        // `get_epoch` deliberately does not surface these fields yet,
+        // so read the raw stored record to confirm they were written.
+        let stored = schema
+            .epochs
+            .get(&U64Be(42))
+            .unwrap()
+            .expect("epoch present")
+            .into_inner();
+        assert_eq!(stored.tx_hi, Some(12_345));
+        assert_eq!(stored.safe_mode, Some(false));
+        assert_eq!(stored.epoch_commitments.as_deref(), Some(&[1, 2, 3][..]));
+        assert_eq!(stored.total_stake, Some(1_000));
+        assert_eq!(stored.storage_fund_balance, Some(2_000));
+        assert_eq!(stored.storage_fund_reinvestment, Some(3_000));
+        assert_eq!(stored.storage_charge, Some(4_000));
+        assert_eq!(stored.storage_rebate, Some(5_000));
+        assert_eq!(stored.stake_subsidy_amount, Some(6_000));
+        assert_eq!(stored.total_gas_fees, Some(7_000));
+        assert_eq!(stored.total_stake_rewards_distributed, Some(8_000));
+        assert_eq!(stored.leftover_storage_fund_inflow, Some(9_000));
+    }
+
+    #[test]
+    fn safe_mode_end_leaves_event_counters_unset() {
+        // A safe-mode epoch emits no `SystemEpochInfoEvent`, so the
+        // counters stay `None` while `safe_mode`, `tx_hi`, and the
+        // commitments are still recorded.
+        let (_dir, db, schema) = fresh_db();
+        let mut batch = db.batch();
+        batch
+            .merge(
+                &schema.epochs,
+                &U64Be(42),
+                &end(EpochEnd {
+                    end_timestamp_ms: 999,
+                    end_checkpoint: 600,
+                    tx_hi: 7,
+                    safe_mode: true,
+                    epoch_commitments: vec![0],
+                    ..Default::default()
+                }),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let stored = schema
+            .epochs
+            .get(&U64Be(42))
+            .unwrap()
+            .expect("epoch present")
+            .into_inner();
+        assert_eq!(stored.safe_mode, Some(true));
+        assert_eq!(stored.tx_hi, Some(7));
+        assert_eq!(stored.total_stake, None);
+        assert_eq!(stored.total_gas_fees, None);
+        assert_eq!(stored.storage_charge, None);
     }
 }

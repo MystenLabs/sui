@@ -86,6 +86,14 @@ impl Commit<'_> {
         self.repo.tag(&self.sha, name.as_ref()).await;
         name.as_ref().to_string()
     }
+
+    /// Create an annotated tag `name` pointing at this commit. Unlike [Self::tag] (which
+    /// creates a lightweight tag), an annotated tag introduces a tag object that git
+    /// resolves to via `<name>` while the underlying commit is reachable via `<name>^{}`.
+    pub async fn annotated_tag(&self, name: impl AsRef<str>) -> String {
+        self.repo.annotated_tag(&self.sha, name.as_ref()).await;
+        name.as_ref().to_string()
+    }
 }
 
 impl RepoProject {
@@ -165,11 +173,21 @@ impl RepoProject {
         .unwrap();
     }
 
-    /// update `tag` to refer to `sha`
+    /// update lightweight `tag` to refer to `sha`
     async fn tag(&self, sha: &str, tag_name: &str) {
         run_git_cmd_with_args(&["tag", "-f", tag_name, sha], Some(&self.repo_path()))
             .await
             .unwrap();
+    }
+
+    /// create an annotated `tag` (a tag object) referring to `sha`
+    async fn annotated_tag(&self, sha: &str, tag_name: &str) {
+        run_git_cmd_with_args(
+            &["tag", "-f", "-a", "-m", "test annotated tag", tag_name, sha],
+            Some(&self.repo_path()),
+        )
+        .await
+        .unwrap();
     }
 
     /// create an empty repository with an initial empty commit inside of [Self::repo_path]

@@ -1,0 +1,20 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 1-5:
+//# print-bytecode
+Error: ParserError: Invalid Token: 'public' is not a valid modifier on constant declarations
+
+task 1, lines 7-11:
+//# print-bytecode
+Error: ParserError: Invalid Token: 'public(friend)' is not a valid modifier on constant declarations
+
+task 2, lines 13-17:
+//# print-bytecode
+Error: ParserError: Invalid Token: 'native' is not a valid modifier on constant declarations
+
+task 3, lines 19-23:
+//# print-bytecode
+Error: ParserError: Invalid Token: 'entry' is not a valid modifier on constant declarations

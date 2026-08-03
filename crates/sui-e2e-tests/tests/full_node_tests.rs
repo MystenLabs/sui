@@ -528,11 +528,6 @@ async fn test_full_node_sync_flood() {
     do_test_full_node_sync_flood().await
 }
 
-#[sim_test(check_determinism)]
-async fn test_full_node_sync_flood_determinism() {
-    do_test_full_node_sync_flood().await
-}
-
 async fn do_test_full_node_sync_flood() {
     let mut test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
@@ -1243,10 +1238,7 @@ async fn test_access_old_object_pruned() {
                 let state = node.state();
                 state
                     .database_for_testing()
-                    .prune_objects_and_compact_for_testing(
-                        state.get_checkpoint_store(),
-                        state.rpc_index.as_deref(),
-                    )
+                    .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
                     .await;
                 // Make sure the old version of the object is already pruned.
                 assert!(

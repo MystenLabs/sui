@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W04039]: unable to determine literal's type
+warning[WC04039]: unable to determine literal's type
   ┌─ tests/move_2024/typing/string_literal_bad_op.move:2:31
   │
 2 │     fun test(): u64 { let x = "hi"; x + 10u64 }
@@ -14,7 +14,7 @@ warning[W04039]: unable to determine literal's type
   = To avoid this warning, add an explicit annotation, e.g., 'b"<const>"'
   = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04007]: incompatible types
+error[EC04007]: incompatible types
   ┌─ tests/move_2024/typing/string_literal_bad_op.move:2:39
   │
 2 │     fun test(): u64 { let x = "hi"; x + 10u64 }

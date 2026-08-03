@@ -14,10 +14,13 @@ Module 'another_dep'
     TARGET     : '(use Import::another_dep)'
     ADDITIONAL EDIT: '
     use Import::another_dep;'
-Module 'Import'
-    TARGET     : '(use Import::Import)'
+Module 'function_import_convention'
+    TARGET     : '(use Import::function_import_convention)'
     ADDITIONAL EDIT: '
-    use Import::Import;'
+    use Import::function_import_convention;'
+Module 'Import'
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: '
@@ -39,23 +42,17 @@ Method 'foo()'
     TARGET     : '(Import::colon_colon::foo)'
     TYPE       : 'fun ()'
 Method 'bar()'
-    INSERT TEXT: 'bar()'
-    TARGET     : '(use Import::dep::bar)'
+    INSERT TEXT: 'dep::bar()'
+    TARGET     : '(Import::dep::bar)'
     TYPE       : 'fun ()'
-    ADDITIONAL EDIT: '
-    use Import::dep::bar;'
 Method 'pkg_fun()'
-    INSERT TEXT: 'pkg_fun()'
-    TARGET     : '(use Import::dep::pkg_fun)'
+    INSERT TEXT: 'dep::pkg_fun()'
+    TARGET     : '(Import::dep::pkg_fun)'
     TYPE       : 'fun ()'
-    ADDITIONAL EDIT: '
-    use Import::dep::pkg_fun;'
 Method 'pub_fun()'
-    INSERT TEXT: 'pub_fun()'
-    TARGET     : '(use Import::dep::pub_fun)'
+    INSERT TEXT: 'dep::pub_fun()'
+    TARGET     : '(Import::dep::pub_fun)'
     TYPE       : 'fun ()'
-    ADDITIONAL EDIT: '
-    use Import::dep::pub_fun;'
 Struct 'AnotherDepStruct'
     TARGET     : '(use Import::another_dep::AnotherDepStruct)'
     ADDITIONAL EDIT: '
@@ -74,18 +71,33 @@ Enum 'PubEnum'
     use Import::dep::PubEnum;'
 
 -- test 1 -------------------
-use line: 15, use_col: 21
-Struct 'AnotherDepStruct'
-    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
-    ADDITIONAL EDIT: '
-    use Import::another_dep::AnotherDepStruct;'
+use line: 11, use_col: 13
+Method 'bar()'
+    INSERT TEXT: 'bar()'
+    TARGET     : '(Import::dep::bar)'
+    TYPE       : 'fun ()'
+Method 'pkg_fun()'
+    INSERT TEXT: 'pkg_fun()'
+    TARGET     : '(Import::dep::pkg_fun)'
+    TYPE       : 'fun ()'
+Method 'pub_fun()'
+    INSERT TEXT: 'pub_fun()'
+    TARGET     : '(Import::dep::pub_fun)'
+    TYPE       : 'fun ()'
 
 -- test 2 -------------------
+use line: 15, use_col: 21
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep;'
+
+-- test 3 -------------------
 use line: 19, use_col: 22
 Struct 'AnotherDepStruct'
-    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    TARGET     : '(use Import::another_dep)'
     ADDITIONAL EDIT: '
-    use Import::another_dep::AnotherDepStruct;'
+    use Import::another_dep;'
 
 == dep.move ========================================================
 -- test 0 -------------------
@@ -105,11 +117,14 @@ Module 'colon_colon'
     ADDITIONAL EDIT: 'use Import::colon_colon;
 
     '
-Module 'Import'
-    TARGET     : '(use Import::Import)'
-    ADDITIONAL EDIT: 'use Import::Import;
+Module 'function_import_convention'
+    TARGET     : '(use Import::function_import_convention)'
+    ADDITIONAL EDIT: 'use Import::function_import_convention;
 
     '
+Module 'Import'
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: 'use SamePkgAddr::empty;
@@ -145,6 +160,154 @@ Struct 'SomeStruct'
 
     '
 
+== function_import_convention.move ========================================================
+-- test 0 -------------------
+use line: 5, use_col: 9
+Unit '0xCAFE'
+Unit '0xCAFE2'
+Unit 'Import'
+Unit 'SamePkgAddr'
+Module 'Self'
+Module 'another_dep'
+    TARGET     : '(use Import::another_dep)'
+    ADDITIONAL EDIT: 'use Import::another_dep;
+
+    '
+Module 'colon_colon'
+    TARGET     : '(use Import::colon_colon)'
+    ADDITIONAL EDIT: 'use Import::colon_colon;
+
+    '
+Module 'dep'
+    TARGET     : '(use Import::dep)'
+    ADDITIONAL EDIT: 'use Import::dep;
+
+    '
+Module 'Import'
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
+Module 'empty'
+    TARGET     : '(use SamePkgAddr::empty)'
+    ADDITIONAL EDIT: 'use SamePkgAddr::empty;
+
+    '
+Method 'function_auto_import()'
+    INSERT TEXT: 'function_auto_import()'
+    TARGET     : '(Import::function_import_convention::function_auto_import)'
+    TYPE       : 'fun ()'
+Method 'type_auto_import()'
+    INSERT TEXT: 'type_auto_import()'
+    TARGET     : '(Import::function_import_convention::type_auto_import)'
+    TYPE       : 'fun ()'
+Method 'foo()'
+    INSERT TEXT: 'colon_colon::foo()'
+    TARGET     : '(use Import::colon_colon)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: 'use Import::colon_colon;
+
+    '
+Method 'bar()'
+    INSERT TEXT: 'dep::bar()'
+    TARGET     : '(use Import::dep)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: 'use Import::dep;
+
+    '
+Method 'pkg_fun()'
+    INSERT TEXT: 'dep::pkg_fun()'
+    TARGET     : '(use Import::dep)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: 'use Import::dep;
+
+    '
+Method 'pub_fun()'
+    INSERT TEXT: 'dep::pub_fun()'
+    TARGET     : '(use Import::dep)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: 'use Import::dep;
+
+    '
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: 'use Import::another_dep::AnotherDepStruct;
+
+    '
+Struct 'PubStruct'
+    TARGET     : '(use Import::dep::PubStruct)'
+    ADDITIONAL EDIT: 'use Import::dep::PubStruct;
+
+    '
+Struct 'SomeStruct'
+    TARGET     : '(use Import::Import::SomeStruct)'
+    ADDITIONAL EDIT: 'use Import::Import::SomeStruct;
+
+    '
+Enum 'PubEnum'
+    TARGET     : '(use Import::dep::PubEnum)'
+    ADDITIONAL EDIT: 'use Import::dep::PubEnum;
+
+    '
+
+-- test 1 -------------------
+use line: 10, use_col: 17
+Unit '0xCAFE'
+Unit '0xCAFE2'
+Unit 'Import'
+Unit 'SamePkgAddr'
+Module 'Self'
+Module 'another_dep'
+    TARGET     : '(use Import::another_dep)'
+    ADDITIONAL EDIT: 'use Import::another_dep;
+
+    '
+Module 'colon_colon'
+    TARGET     : '(use Import::colon_colon)'
+    ADDITIONAL EDIT: 'use Import::colon_colon;
+
+    '
+Module 'dep'
+    TARGET     : '(use Import::dep)'
+    ADDITIONAL EDIT: 'use Import::dep;
+
+    '
+Module 'Import'
+    INSERT TEXT: 'Import::Import'
+    TARGET     : '(Import::Import)'
+Module 'empty'
+    TARGET     : '(use SamePkgAddr::empty)'
+    ADDITIONAL EDIT: 'use SamePkgAddr::empty;
+
+    '
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: 'use Import::another_dep::AnotherDepStruct;
+
+    '
+Struct 'PubStruct'
+    TARGET     : '(use Import::dep::PubStruct)'
+    ADDITIONAL EDIT: 'use Import::dep::PubStruct;
+
+    '
+Struct 'SomeStruct'
+    TARGET     : '(use Import::Import::SomeStruct)'
+    ADDITIONAL EDIT: 'use Import::Import::SomeStruct;
+
+    '
+Enum 'PubEnum'
+    TARGET     : '(use Import::dep::PubEnum)'
+    ADDITIONAL EDIT: 'use Import::dep::PubEnum;
+
+    '
+Keyword 'u8'
+Keyword 'u16'
+Keyword 'u32'
+Keyword 'u64'
+Keyword 'u128'
+Keyword 'u256'
+Keyword 'bool'
+Keyword 'vector'
+Keyword 'address'
+
 == import.move ========================================================
 -- test 0 -------------------
 use line: 10, use_col: 23
@@ -152,8 +315,4 @@ Module 'Import'
 Module 'another_dep'
 Module 'colon_colon'
 Module 'dep'
-Struct 'SomeStruct'
-    TARGET     : '(use Import::Import::SomeStruct)'
-    ADDITIONAL EDIT: 'use Import::Import::SomeStruct;
-
-    '
+Module 'function_import_convention'

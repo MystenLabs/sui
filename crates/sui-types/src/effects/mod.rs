@@ -10,7 +10,6 @@ use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
 use crate::event::Event;
-use crate::execution::SharedInput;
 use crate::execution_status::{ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -25,7 +24,7 @@ pub use object_change::{
 };
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
@@ -125,8 +124,7 @@ impl TransactionEffects {
         status: ExecutionStatus,
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
-        shared_objects: Vec<SharedInput>,
-        loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
+        unchanged_consensus_objects: Vec<(ObjectID, UnchangedConsensusKind)>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
@@ -138,8 +136,7 @@ impl TransactionEffects {
             status,
             executed_epoch,
             gas_used,
-            shared_objects,
-            loaded_per_epoch_config_objects,
+            unchanged_consensus_objects,
             transaction_digest,
             lamport_version,
             changed_objects,

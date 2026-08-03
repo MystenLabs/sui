@@ -13,7 +13,7 @@ use sui::authenticator_state::{
     update_authenticator_state_for_testing,
     get_active_jwks_for_testing,
     expire_jwks_for_testing,
-    ActiveJwk
+    ActiveJwk,
 };
 use sui::test_scenario;
 

@@ -1,7 +1,52 @@
 ---
 title: Self-Custodial Wallets
-description: Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
-keywords: [ wallet, self-custodial, phantom, ledger, hardware wallet, wallet standard, dapp kit, dapp-kit-react, dapp-kit-core ]
+description: >-
+  Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and
+  how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
+keywords:
+  - wallet
+  - self-custodial
+  - phantom
+  - ledger
+  - hardware wallet
+  - wallet standard
+  - dapp kit
+  - dapp-kit-react
+  - dapp-kit-core
+goal:
+  description: >-
+    Reader can learn about self-custodial wallets on Sui, how Phantom and Ledger
+    work
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Self-custody wallets
+    stage: Wallets & Funding
+questions:
+  - What is Self-Custodial Wallets in Sui?
+  - How does self-custodial wallets work on Sui?
+  - Why should I use self-custodial wallets?
+answer: >-
+  Learn about self-custodial wallets on Sui, how Phantom and Ledger work, and
+  how to integrate any Wallet Standard wallet into your app using Sui dApp Kit.
 ---
 
 A self-custodial wallet stores your private key on a device you control. No third party holds the key, and no third party can authorize transactions on your behalf. If you lose the device and your recovery passphrase, access to your assets is permanently lost. Every self-custodial wallet compatible with Sui implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wallet-standard), which means [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) and other apps can discover and connect to them automatically, without any wallet-specific code.

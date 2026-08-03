@@ -30,7 +30,8 @@ use tokio::time::timeout;
 use super::{FundsSettlement, FundsWithdrawSchedulerType};
 use crate::{
     authority::{
-        AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
+        AuthorityState, ExecutionEnv,
+        shared_object_version_manager::{AssignedVersions, Schedulable},
         test_authority_builder::TestAuthorityBuilder,
     },
     execution_scheduler::{ExecutionScheduler, PendingCertificate},
@@ -61,7 +62,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
     let account_objects = starting_objects.iter().map(|o| o.id()).collect();
     starting_objects.push(gas_object.clone());
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    protocol_config.enable_accumulators_for_testing();
+    protocol_config.set_enable_accumulators_for_testing(true);
     let state = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config)
         .with_starting_objects(&starting_objects)
@@ -136,8 +137,9 @@ impl TestEnv {
             transactions
                 .iter()
                 .map(|tx| {
-                    let mut env = ExecutionEnv::default();
-                    env.assigned_versions.accumulator_version = Some(version);
+                    let env = ExecutionEnv::default().with_assigned_versions(
+                        AssignedVersions::new_for_testing(vec![], Some(version)),
+                    );
                     (Schedulable::Transaction(tx.clone()), env)
                 })
                 .collect(),

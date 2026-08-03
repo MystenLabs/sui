@@ -165,26 +165,6 @@ async fn test_observer_uses_verify_checkpoint_path() {
         missing_local_checkpoints,
     );
 
-    // Verify that the RPC index is being populated on the observer.
-    // The verify path calls process_checkpoint_data which feeds index_checkpoint,
-    // and the pipeline then commits the index updates. A non-zero highest indexed
-    // checkpoint proves the indexing pipeline is working end-to-end.
-    let rpc_index = observer_state
-        .rpc_index
-        .as_ref()
-        .expect("observer should have an rpc_index");
-    let highest_indexed = rpc_index
-        .get_highest_indexed_checkpoint_seq_number()
-        .expect("db error")
-        .unwrap_or(0);
-
-    info!("Observer highest indexed checkpoint: {}", highest_indexed);
-    assert!(
-        highest_indexed >= max_checkpoint_seq,
-        "Observer RPC index should have indexed through checkpoint {}",
-        max_checkpoint_seq
-    );
-
     // Verify the legacy IndexStore post-processing pipeline works.
     // commit_post_processing_index_batches collects per-transaction index data
     // (built during execution) and commits it at checkpoint boundaries. If this

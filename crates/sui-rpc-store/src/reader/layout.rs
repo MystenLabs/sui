@@ -11,7 +11,7 @@
 //!
 //! 1. A [`BackingPackageStore`] (here:
 //!    [`PackageStoreOverObjects`]) that returns package objects
-//!    by id, looking them up through `live_objects` + `objects`.
+//!    by id, looking them up through a reverse scan of `objects`.
 //!    Packages are immutable, so a single lookup is enough.
 //! 2. An overlay wrapping the caller-supplied [`ObjectSet`] on top
 //!    of the backing store.
@@ -146,9 +146,9 @@ impl<R: Reader + Send + Sync> RpcStoreReader<R> {
 
 /// [`BackingPackageStore`] backed by the typed
 /// [`RpcStoreSchema`] CFs. Looks each package up by its storage
-/// id through `get_object` (which composes `live_objects` →
-/// `objects`); packages are immutable, so the latest live row
-/// IS the entirety of the package's on-chain state.
+/// id through `get_object` (a reverse scan of `objects`); packages
+/// are immutable, so the latest live row IS the entirety of the
+/// package's on-chain state.
 struct PackageStoreOverObjects<'a, R: Reader> {
     schema: &'a RpcStoreSchema<R>,
 }
@@ -169,8 +169,8 @@ impl<R: Reader> PackageStoreOverObjects<'_, R> {
     /// Adapt the schema's inherent `get_object` helper into a
     /// small struct that implements [`ObjectStore`], so we can
     /// route `BackingPackageStore` lookups through the existing
-    /// trait surface without re-implementing the `live_objects →
-    /// objects` composition.
+    /// trait surface without re-implementing the `objects` reverse
+    /// scan.
     fn schema_object_store(&self) -> SchemaObjectStore<'_, R> {
         SchemaObjectStore {
             schema: self.schema,

@@ -16,7 +16,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::schema::checkpoint_summary;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 /// Pipeline marker for `checkpoint_summary`.
 pub struct CheckpointSummary;

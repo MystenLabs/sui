@@ -21,7 +21,7 @@ use bridge::bridge::{
     transfer_status_claimed,
     transfer_status_not_found,
     transfer_status_pending,
-    Bridge
+    Bridge,
 };
 use bridge::bridge_env::{
     btc_id,
@@ -42,7 +42,7 @@ use bridge::bridge_env::{
     claimed,
     clock_timestamp_ms,
     limit_exceeded,
-    update_bridge_limit
+    update_bridge_limit,
 };
 use bridge::btc::BTC;
 use bridge::chain_ids;

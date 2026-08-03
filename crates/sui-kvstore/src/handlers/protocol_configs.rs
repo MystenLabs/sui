@@ -46,12 +46,6 @@ impl Processor for ProtocolConfigsPipeline {
             );
         };
 
-        let attributes = protocol_config
-            .attr_map()
-            .into_iter()
-            .map(|(k, v)| (k, v.map(|v| v.to_string())))
-            .collect();
-        let flags = protocol_config.feature_map();
         // The lossless `configs` map carries every attribute (scalar and non-scalar) at this
         // protocol version. Unset fields render as `NullValue`; we keep them so downstream
         // readers see the stable keyset. Feature flags merge in alongside attributes so the
@@ -69,7 +63,7 @@ impl Processor for ProtocolConfigsPipeline {
 
         let entry = tables::make_entry(
             tables::protocol_configs::encode_key(protocol_version.as_u64()),
-            tables::protocol_configs::encode(&attributes, &flags, &configs)?,
+            tables::protocol_configs::encode(&configs),
             None,
         );
 

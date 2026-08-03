@@ -49,3 +49,5 @@ module v1::n {
         transfer::transfer(obj, ctx.sender());
     }
 }
+
+//# view-object 3,1

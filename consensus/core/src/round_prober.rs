@@ -27,7 +27,7 @@ use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
     BlockAPI as _, context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::ValidatorNetworkClient, round_tracker::RoundTracker,
+    network::ValidatorNetworkClient, round_tracker::RoundTracker, task::join_and_propagate_panic,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -40,11 +40,7 @@ impl RoundProberHandle {
     pub(crate) async fn stop(self) {
         let _ = self.shutdown_notify.notify();
         // Do not abort prober task, which waits for requests to be cancelled.
-        if let Err(e) = self.prober_task.await
-            && e.is_panic()
-        {
-            std::panic::resume_unwind(e.into_panic());
-        }
+        join_and_propagate_panic(self.prober_task).await;
     }
 }
 

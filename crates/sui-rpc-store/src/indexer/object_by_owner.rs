@@ -5,8 +5,8 @@
 //! [`schema::object_by_owner`](crate::schema::object_by_owner)
 //! index.
 //!
-//! Like [`live_objects`](crate::indexer::live_objects), the
-//! pipeline reads the checkpoint as a diff: inputs emit a
+//! Like the other live-set-bounded indexes, the pipeline reads the
+//! checkpoint as a diff: inputs emit a
 //! `Delete` keyed by the *prior* `(kind, owner, type, balance,
 //! id)`, outputs emit a `Put` keyed by the *posterior*
 //! `(kind, owner, type, balance, id)`. For an object that was
@@ -29,8 +29,8 @@ use crate::indexer::Schema;
 use crate::indexer::Store;
 use crate::indexer::checkpoint_input_objects;
 use crate::indexer::checkpoint_output_objects;
-use crate::schema::keys::U64Varint;
 use crate::schema::object_by_owner;
+use crate::schema::primitives::U64Varint;
 
 /// Pipeline marker for `object_by_owner`.
 pub struct ObjectByOwner;

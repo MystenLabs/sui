@@ -26,9 +26,9 @@ pub mod effects;
 pub mod epochs;
 pub mod event_bitmap;
 pub mod events;
-pub mod live_objects;
 pub mod object_by_owner;
 pub mod object_by_type;
+pub mod object_version_by_checkpoint;
 pub mod objects;
 pub mod package_versions;
 pub mod pruner;
@@ -41,7 +41,6 @@ pub mod tx_seq_by_digest;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::btree_map::Entry;
-use std::num::NonZero;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -54,9 +53,8 @@ use sui_consistent_store::Synchronizer;
 use sui_consistent_store::restore_state;
 use sui_indexer_alt_framework as framework;
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_framework::ingestion::BoxedStreamingClient;
+use sui_indexer_alt_framework::ingestion::ArcStreamingClient;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
-use sui_indexer_alt_framework::ingestion::IngestionService;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
@@ -77,8 +75,7 @@ use crate::indexer::pruner::PrunerMetrics;
 /// underlying ingestion service. Surfaced as a constant so the
 /// prefix is consistent across the metrics built in [`Indexer::new`]
 /// and the ones the standalone-binary entry point builds when it
-/// constructs the [`IngestionClient`] / [`IngestionService`] from
-/// `ClientArgs`.
+/// constructs the [`IngestionClient`] from `ClientArgs`.
 pub const METRICS_PREFIX: &str = "rpc_store_indexer";
 
 /// The schema parameter the framework's `Store` / pipelines bind
@@ -164,9 +161,9 @@ pub fn checkpoint_input_objects(
 /// live at the end. Mirrors the helper of the same name in
 /// `sui-indexer-alt-consistent-store::handlers`.
 ///
-/// Used to populate the latest-version views
-/// ([`live_objects`]) and the
-/// diff-based indexes once the prior state has been retracted.
+/// Used to populate the checkpoint-pinned
+/// [`object_version_by_checkpoint`] index and the diff-based indexes
+/// once the prior state has been retracted.
 pub fn checkpoint_output_objects(
     checkpoint: &Checkpoint,
 ) -> anyhow::Result<BTreeMap<ObjectID, (&Object, ObjectDigest)>> {
@@ -258,7 +255,7 @@ impl Indexer {
         path: impl AsRef<Path>,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -292,7 +289,7 @@ impl Indexer {
         store: Store,
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
-        streaming_client: Option<BoxedStreamingClient>,
+        streaming_client: Option<ArcStreamingClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -309,27 +306,18 @@ impl Indexer {
             .refresh_pruning_atomics()
             .context("Failed to refresh pruning watermarks")?;
 
-        let stride = NonZero::new(consistency_config.stride)
-            .context("ConsistencyConfig::stride must be non-zero")?;
         let sync = Synchronizer::new(
             store.db().clone(),
-            stride,
             consistency_config.buffer_size,
             indexer_args.first_checkpoint,
         );
 
-        let ingestion_metrics = ingestion_client.metrics().clone();
-        let ingestion_service = IngestionService::with_clients(
+        let indexer = framework::Indexer::with_ingestion_clients(
+            store,
+            indexer_args,
             ingestion_client,
             streaming_client,
             ingestion_config,
-            ingestion_metrics,
-        );
-
-        let indexer = framework::Indexer::with_ingestion_service(
-            store,
-            indexer_args,
-            ingestion_service,
             metrics_prefix,
             registry,
         )
@@ -388,7 +376,7 @@ impl Indexer {
             effects,
             events,
             objects,
-            live_objects,
+            object_version_by_checkpoint,
             object_by_owner,
             object_by_type,
             balance,
@@ -440,7 +428,15 @@ impl Indexer {
         add!(self::effects::Effects, effects);
         add!(self::events::Events, events);
         add!(self::objects::Objects, objects);
-        add!(self::live_objects::LiveObjects, live_objects);
+        // `object_version_by_checkpoint` needs its restore anchor `T` so
+        // its processor scopes floor candidates to the backfill window
+        // `[L, T]`. The restore (if any) has already run by the time
+        // pipelines are registered, so read it once here.
+        let ovbc_anchor = self::object_version_by_checkpoint::restored_anchor(self.store().db())?;
+        add!(
+            self::object_version_by_checkpoint::ObjectVersionByCheckpoint::with_anchor(ovbc_anchor),
+            object_version_by_checkpoint
+        );
 
         // Indexes.
         add!(self::object_by_owner::ObjectByOwner, object_by_owner);
@@ -655,7 +651,7 @@ mod tests {
     }
 
     /// `embedded` registers exactly the ten embedded-cohort
-    /// pipelines (five live + five history) and none of the
+    /// pipelines (three live + seven history) and none of the
     /// deactivated raw-chain-data ones, so the synchronizer's
     /// snapshot cohort covers exactly those. Pinned to the
     /// [`LIVE_COHORT`] / [`HISTORY_COHORT`] constants (via the real
@@ -695,7 +691,7 @@ mod tests {
                 "effects",
                 "events",
                 "objects",
-                "live_objects",
+                "object_version_by_checkpoint",
                 // Indexes.
                 "object_by_owner",
                 "object_by_type",

@@ -366,6 +366,9 @@ pub enum UserInputError {
 
     #[error("Transaction chain ID {provided} does not match network chain ID {expected}.")]
     InvalidChainId { provided: String, expected: String },
+
+    #[error("Transaction {digest} appears more than once in the request")]
+    RepeatedTransactions { digest: TransactionDigest },
 }
 
 #[derive(
@@ -820,6 +823,15 @@ pub enum SuiErrorKind {
         "Transaction was outbid by higher-gas-price transactions in the admission queue (current minimum gas price required: {min_gas_price})"
     )]
     TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
+
+    #[error("Transaction {digest} is being processed post-consensus: {status}")]
+    TransactionProcessing {
+        digest: TransactionDigest,
+        status: String,
+    },
+
+    #[error("Transaction {digest} has been recently submitted to this validator.")]
+    TransactionSubmitted { digest: TransactionDigest },
 }
 
 #[repr(u64)]
@@ -845,6 +857,7 @@ pub enum VMMemoryLimitExceededSubStatusCode {
     OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED = 5,
     OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED = 6,
     TOTAL_EVENT_SIZE_LIMIT_EXCEEDED = 7,
+    SCRATCH_SIZE_LIMIT_EXCEEDED = 8,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -1043,6 +1056,12 @@ impl SuiErrorKind {
             SuiErrorKind::TooManyTransactionsPendingConsensus => true,
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. } => true,
             SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => true,
+
+            // The transaction is already being processed by consensus, so a fresh
+            // submission is pointless. The client should retry by waiting for effects
+            // rather than resubmitting.
+            SuiErrorKind::TransactionProcessing { .. } => true,
+            SuiErrorKind::TransactionSubmitted { .. } => true,
 
             // Non retryable error
             SuiErrorKind::ExecutionError(..) => false,

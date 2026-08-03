@@ -756,7 +756,6 @@ impl TestCheckpointBuilder {
             self.checkpoint_builder.epoch,
             GasCostSummary::default(),
             vec![],
-            BTreeSet::new(),
             end_of_epoch_tx_signed.digest(),
             lamport_version,
             changed_objects,

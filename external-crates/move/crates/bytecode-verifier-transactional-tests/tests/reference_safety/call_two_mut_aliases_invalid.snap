@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-23:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::copy_alias'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x2::copy_alias,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}
+
+task 1, lines 25-43:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::direct_copy'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x3::direct_copy,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}
+
+task 2, lines 45-65:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::borrow_twice'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x4::borrow_twice,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}

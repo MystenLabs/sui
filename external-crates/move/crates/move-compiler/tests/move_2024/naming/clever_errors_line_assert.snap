@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+warning[WC00001]: DEPRECATED. will be removed
   ┌─ tests/move_2024/naming/clever_errors_line_assert.move:3:9
   │
 3 │         assert(false);
@@ -13,7 +13,7 @@ warning[W00001]: DEPRECATED. will be removed
   │
   = Replace with 'assert!'. 'assert' has been replaced with a 'assert!' built-in macro so that arguments are no longer eagerly evaluated
 
-error[E13002]: feature is deprecated in specified edition
+error[EC13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/naming/clever_errors_line_assert.move:3:9
   │
 3 │         assert(false);

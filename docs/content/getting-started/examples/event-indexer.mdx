@@ -1,10 +1,23 @@
 ---
 title: Real-Time Event Indexer
-description: Build a real-time event indexer that subscribes to Sui checkpoints through gRPC, filters for specific Move events, and decodes BCS-encoded event data in TypeScript.
-keywords: [example, indexer, events, grpc, bcs, checkpoint, streaming, move, typescript, bootcamp]
+description: >-
+  Build a real-time event indexer that subscribes to Sui checkpoints through
+  gRPC, filters for specific Move events, and decodes BCS-encoded event data in
+  TypeScript.
+keywords:
+  - example
+  - indexer
+  - events
+  - grpc
+  - bcs
+  - checkpoint
+  - streaming
+  - move
+  - typescript
+  - bootcamp
 example_id: event-indexer-bootcamp
-last_verified: 2026-04-30
-repo: https://github.com/MystenLabs/sui-move-bootcamp
+last_verified: 2026-04-30T00:00:00.000Z
+repo: 'https://github.com/MystenLabs/sui-move-bootcamp'
 path: /K1
 concepts:
   - event_emission
@@ -13,6 +26,47 @@ concepts:
   - checkpoint_subscription
   - shared_counter
   - custom_indexer
+goal:
+  description: >-
+    Reader can build a real-time event indexer that subscribes to Sui
+    checkpoints through gRPC
+  requires:
+    - headings:
+        - pattern: When to use|Use case
+        - pattern: What you learn|Learning
+        - pattern: Prerequisites
+        - pattern: Setup|Getting started
+        - pattern: Run
+        - pattern: Troubleshooting|Common issues
+      label: Has standard example page sections
+    - pattern: '```'
+      min: 3
+      label: 'Has code blocks for setup, source, and output'
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 800
+      label: Needs more explanation depth
+    - pattern: mermaid|sequenceDiagram|graph|flowchart
+      min: 1
+      label: Has architecture diagram
+    - headings:
+        - pattern: Key code|Code highlight|Walkthrough
+      label: Has code explanation section
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I build a real-time event indexer for Sui?
+  - How do I subscribe to Sui checkpoints via gRPC?
+  - How do I decode BCS-encoded Move events in TypeScript?
+answer: >-
+  Build a real-time event indexer that subscribes to Sui checkpoints through
+  gRPC, filters for specific Move events, and decodes BCS-encoded event data in
+  TypeScript.
 ---
 
 A real-time event indexer demonstrates how to listen for onchain events as they happen. In this example, a Move contract emits `UserRegistered` events when users register, and a TypeScript backend subscribes to Sui checkpoints through [gRPC](/develop/accessing-data/grpc), filters for those events, and decodes the BCS-encoded data into readable objects.

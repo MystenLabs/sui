@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09001]: unused alias
+warning[WC09001]: unused alias
   ┌─ tests/move_check/expansion/duplicate_alias.move:8:19
   │
 8 │     use 0x2::Y as Z;
@@ -13,7 +13,7 @@ warning[W09001]: unused alias
   │
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/expansion/duplicate_alias.move:8:19
   │
 7 │     use 0x2::X as Z;

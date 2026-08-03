@@ -1265,7 +1265,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
         }
 
         different.append(&mut same_filtered);
-        different.sort_by(|a1, a2| a1.method_name.cmp(&a2.method_name));
+        different.sort_by_key(|a1| a1.method_name);
         different
     }
 

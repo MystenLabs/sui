@@ -1,7 +1,41 @@
 ---
 title: SuiLink
 description: Use SuiLink to connect wallets across different chains.
-keywords: [ wallet, wallets, sui, playtron, cross-chain, ethereum, solana, link, connect ]
+keywords:
+  - wallet
+  - wallets
+  - sui
+  - playtron
+  - cross-chain
+  - ethereum
+  - solana
+  - link
+  - connect
+goal:
+  description: Reader can use SuiLink to connect wallets across different chains
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is SuiLink in Sui?
+  - How do I create a suilink?
+  - How do I integrate suilink?
+answer: Use SuiLink to connect wallets across different chains.
 ---
 
 [SuiLink](https://www.suilink.io/) enables securely linking wallet addresses from different blockchains to a Sui wallet address. Upon creating a SuiLink, you receive a soulbound NFT that serves as authenticated proof of ownership for your connected wallets.
@@ -23,7 +57,7 @@ Sui-to-Sui linking is currently only supported programmatically with a custom so
 
 ## Creating a SuiLink
 
-Creating a SuiLink incurs a small gas fee on the Sui network to mint the soulbound NFT. Ensure you have some SUI tokens in your wallet to complete the connection. 
+Creating a SuiLink incurs a small gas fee on the Sui network to mint the soulbound NFT. Ensure you have some SUI tokens in your wallet to complete the connection.
 
 To create a SuiLink:
 
@@ -136,10 +170,3 @@ After retrieving a user's SuiLink objects, you can verify their ownership of spe
 2. Use the appropriate blockchain APIs to query assets at that address, such as [Alchemy](https://www.alchemy.com/) for Ethereum, and [Metaplex](https://www.metaplex.com/) for Solana.
 3. Verify the presence of the required asset.
 4. Attribute benefits to the user through their Sui wallet.
-
-## Related links
-
-- [SuiLink](https://www.suilink.io/): SuiLink main product page
-- [Sui gRPC Client](https://sdk.mystenlabs.com/sui/clients/grpc): Full Node gRPC API documentation
-- [Sui JSON-RPC Migration](https://sdk.mystenlabs.com/sui/migrations/sui-2.0/json-rpc-migration): Migration guide for deprecated Sui JSON-RPC
-- [Wallet Integration Options](/sui-stack/suiplay0x1/wallet-integration): Comprehensive guide on wallet strategies for SuiPlay0X1

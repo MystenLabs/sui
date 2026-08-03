@@ -13,7 +13,10 @@ use tokio::{
 };
 use tracing::{debug, warn};
 
-use crate::{context::Context, core::CoreSignalsReceivers, core_thread::CoreThreadDispatcher};
+use crate::{
+    context::Context, core::CoreSignalsReceivers, core_thread::CoreThreadDispatcher,
+    task::join_and_propagate_panic,
+};
 
 pub(crate) struct LeaderTimeoutTaskHandle {
     handle: JoinHandle<()>,
@@ -23,7 +26,7 @@ pub(crate) struct LeaderTimeoutTaskHandle {
 impl LeaderTimeoutTaskHandle {
     pub async fn stop(self) {
         self.stop.send(()).ok();
-        self.handle.await.ok();
+        join_and_propagate_panic(self.handle).await;
     }
 }
 
@@ -88,6 +91,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
                 // if the round has not advanced in the meantime. Otherwise, the max timeout will not get
                 // triggered at all.
                 () = &mut max_leader_timeout, if !max_leader_round_timed_out => {
+                    debug!("Max leader timeout, will attempt new block for leader round {leader_round}");
                     if let Err(err) = self.dispatcher.new_block(leader_round, true).await {
                         warn!("Error received while calling dispatcher, probably dispatcher is shutting down, will now exit: {err:?}");
                         return;

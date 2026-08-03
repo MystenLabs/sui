@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use backoff::ExponentialBackoff;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::AbortHandle;
 use futures::future::join_all;
@@ -13,7 +14,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use std::{fs, io};
 use sui_config::{NodeConfig, genesis::Genesis};
@@ -871,6 +872,7 @@ pub async fn download_formal_snapshot(
                 epoch,
                 ingestion_url,
                 num_parallel_downloads,
+                max_retries,
                 m,
                 end_of_epoch_checkpoint_seq_nums,
             )
@@ -1072,6 +1074,7 @@ async fn backfill_epoch_transaction_digests(
     epoch: EpochId,
     ingestion_url: String,
     concurrency: usize,
+    max_retries: usize,
     m: MultiProgress,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
 ) -> Result<()> {
@@ -1115,7 +1118,7 @@ async fn backfill_epoch_transaction_digests(
         ),
     );
 
-    let client = build_object_store(&ingestion_url, vec![]);
+    let client = build_object_store(&ingestion_url, vec![], vec![]);
     let checkpoint_counter = Arc::new(AtomicU64::new(0));
     let tx_counter = Arc::new(AtomicU64::new(0));
     let cloned_checkpoint_counter = checkpoint_counter.clone();
@@ -1144,9 +1147,41 @@ async fn backfill_epoch_transaction_digests(
         .map(|sq| {
             let client = client.clone();
             async move {
-                fetch_checkpoint(&client, sq)
-                    .await
-                    .map(|c| Arc::new(CheckpointData::from(c)))
+                // Retry with exponential backoff. This backfill runs concurrently with the
+                // CPU-bound state accumulation; on a busy host the async runtime can be starved
+                // long enough that a single checkpoint fetch times out, and the
+                // `.try_for_each().await?` below then aborts the entire (multi-hour) snapshot
+                // restore, discarding all progress. Retry (up to `max_retries` attempts) so the
+                // fetch waits out the contention and completes instead.
+                let attempts = AtomicUsize::new(0);
+                backoff::future::retry_notify(
+                    ExponentialBackoff {
+                        max_interval: Duration::from_secs(30),
+                        max_elapsed_time: None,
+                        ..Default::default()
+                    },
+                    || async {
+                        fetch_checkpoint(&client, sq).await.map_err(|e| {
+                            if attempts.fetch_add(1, Ordering::Relaxed) + 1 >= max_retries {
+                                backoff::Error::permanent(e)
+                            } else {
+                                backoff::Error::transient(e)
+                            }
+                        })
+                    },
+                    |e, delay: Duration| {
+                        tracing::warn!(
+                            "backfill: checkpoint {} fetch failed (attempt {}/{}): {}; retrying in {:?}",
+                            sq,
+                            attempts.load(Ordering::Relaxed),
+                            max_retries,
+                            e,
+                            delay,
+                        );
+                    },
+                )
+                .await
+                .map(|c| Arc::new(CheckpointData::from(c)))
             }
         })
         .buffer_unordered(concurrency)

@@ -1,13 +1,92 @@
 ---
 title: Manifest Reference
 description: Explore examples of package manifest files.
-keywords: [ move, move reference, package management, package manager, move packages, move package management ]
+keywords:
+  - move
+  - move reference
+  - package management
+  - package manager
+  - move packages
+  - move package management
 pagination_prev: null
+goal:
+  description: Reader can look up manifest reference syntax and configuration options
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 100
+      label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What fields are available in Move.toml?
+  - How do I configure Move.toml for different networks?
+  - What is the Move package manifest format?
+  - What is the [environments] section in Move.toml?
+  - Can I use Base58 or Hex chain IDs in Move.toml?
+answer: Explore examples of package manifest files.
 ---
 
-This section provides sample manifest files for you to use as templates in your project.
+Explore examples of package manifest files.
 
-For a basic project that only depends on `sui` and `std`, the minimal lockfile is:
+This section provides the structure and available fields for `Move.toml`, along with sample manifests you can use as templates.
+
+## Move.toml structure
+
+A `Move.toml` manifest can contain the following top-level sections:
+
+```toml
+[package]
+name = "<package-name>"
+# Optional: edition = "2024"
+# Optional: implicit-dependencies = false
+
+[dependencies]
+# Package dependencies (mvr, git, local, or system)
+
+[environments]
+# Custom environment definitions mapping names to chain IDs
+
+[dep-replacements.<env>]
+# Environment-specific dependency overrides
+```
+
+### `[package]`
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | The package name. |
+| `edition` | No | Move edition (for example, `"2024"`). |
+| `implicit-dependencies` | No | Set to `false` to exclude the default `std` and `sui` dependencies. |
+
+### `[dependencies]`
+
+Lists the packages your project depends on. See [dependency types](/develop/manage-packages/move-package-management#dependency-types) for the available formats (`mvr`, `git`, `local`, `system`).
+
+### `[environments]` {#environments}
+
+Maps custom environment names to chain identifiers. The `mainnet` and `testnet` environments are implicitly available and do not need to be listed.
+
+Chain IDs accept either format interchangeably:
+
+- **Hex** (short form) — the first 4 bytes of the genesis checkpoint digest, hex-encoded (for example, `"aba3e445"`).
+- **Base58** (full form) — the complete genesis checkpoint digest, Base58-encoded (for example, `"69WiPg3DAQhKenaFN9I6pYc7MYk..."`).
+
+The package system compares chain IDs by their underlying bytes, so a Hex value in the manifest matches a Base58 value from the CLI and vice versa.
+
+Use `sui client chain-identifier` to look up both formats for the network you are connected to.
+
+### `[dep-replacements.<env>]`
+
+Overrides dependencies for a specific environment. See [environment-specific dependencies](/develop/manage-packages/move-package-management#environment-specific-dependencies) for details.
+
+## Example manifests
+
+For a basic project that only depends on `sui` and `std`, the minimal manifest is:
 
 ```toml
 [package]
@@ -15,8 +94,6 @@ name = "example"
 ```
 
 For a package that has a `mvr` dependency and a git dependency with different Mainnet and Testnet branches:
-
-<!-- TODO: usdc doesn't actually have different tags; find a package that does -->
 
 ```toml
 [package]
@@ -30,13 +107,14 @@ usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "pack
 usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/mainnet" }
 ```
 
-For a package that defines a `testnet_alpha` environment:
+For a package that defines a `testnet_alpha` environment (chain IDs can be Hex or Base58):
 
 ```toml
 [package]
 name = "example"
 
 [environments]
+# Hex (short form) and Base58 (full form) are both valid
 testnet_alpha = "4c78adac"
 
 [dependencies]

@@ -4,10 +4,11 @@
 //! Shared proto-rendering layer: turns resolved BigTable data
 //! (`CheckpointData`/`TransactionData` + object maps) into the `sui.rpc.v2`
 //! proto messages, honoring a `FieldMaskTree`. Used by both the v2 point-get
-//! handlers and the v2alpha list handlers so rendering is identical across
+//! handlers and the list handlers so rendering is identical across
 //! them.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use move_core_types::language_storage::StructTag;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -15,8 +16,8 @@ use sui_kvstore::{CheckpointData, TransactionData};
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc::v2::{
-    Checkpoint, Event, ExecutedTransaction, Transaction, TransactionEffects, TransactionEvents,
-    UserSignature,
+    Checkpoint, Event, ExecutedTransaction, Object as ProtoObject, ObjectSet as ProtoObjectSet,
+    Transaction, TransactionEffects, TransactionEvents, UserSignature,
 };
 use sui_rpc_api::RpcError;
 use sui_rpc_api::proto::timestamp_ms_to_proto;
@@ -32,6 +33,8 @@ use sui_types::storage::ObjectKey;
 use tracing::warn;
 
 use crate::PackageResolver;
+use crate::object_cache::ObjectMap;
+use crate::resolve::compute_object_keys;
 
 /// Maximum size in bytes for JSON-rendered Move values (1 MiB).
 const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;
@@ -47,6 +50,27 @@ pub(crate) async fn render_json(
     ProtoVisitor::new(MAX_JSON_MOVE_VALUE_SIZE)
         .deserialize_value(contents, &layout)
         .ok()
+}
+
+pub(crate) async fn object_to_response(
+    source: &sui_types::object::Object,
+    mask: &FieldMaskTree,
+    resolver: &PackageResolver,
+) -> ProtoObject {
+    let mut message = ProtoObject::default();
+    if mask.contains(ProtoObject::JSON_FIELD)
+        && let Some(move_object) = source.data.try_as_move()
+    {
+        message.json = render_json(
+            resolver,
+            &move_object.type_().clone().into(),
+            move_object.contents(),
+        )
+        .await
+        .map(Box::new);
+    }
+    message.merge(source, mask);
+    message
 }
 
 /// Render a summary-only `CheckpointData` into the proto `Checkpoint` (the fast
@@ -86,11 +110,13 @@ pub(crate) fn checkpoint_to_response(
 /// Build the full proto `Checkpoint` (summary + signatures + contents +
 /// transactions + objects) from resolved BigTable data. `objects` must contain
 /// exactly the objects referenced by this checkpoint's transactions — the whole
-/// map is folded into the rendered `ObjectSet`.
+/// map is folded into the rendered `ObjectSet`. Takes the `ObjectMap` by value
+/// so objects can be moved into the `ObjectSet` when the map is uniquely owned
+/// (the common case: one map per checkpoint); a shared map falls back to a clone.
 pub(crate) fn render_full_checkpoint(
     checkpoint: CheckpointData,
     txs: Vec<TransactionData>,
-    objects: &HashMap<ObjectKey, Object>,
+    objects: ObjectMap,
     read_mask: &FieldMaskTree,
 ) -> Result<Checkpoint, RpcError> {
     let summary = checkpoint
@@ -136,8 +162,12 @@ pub(crate) fn render_full_checkpoint(
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut object_set = ObjectSet::default();
-    for (_, obj) in objects.iter() {
-        object_set.insert(obj.clone());
+    // The map is uniquely owned per checkpoint, so move each `Object` into the
+    // set rather than deep-cloning it; a shared map (refcount > 1) falls back
+    // to a one-time clone.
+    let objects = Arc::try_unwrap(objects).unwrap_or_else(|arc| (*arc).clone());
+    for (_, obj) in objects {
+        object_set.insert(obj);
     }
 
     let full_checkpoint = FullCheckpoint {
@@ -153,35 +183,56 @@ pub(crate) fn render_full_checkpoint(
 }
 
 /// Render a `TransactionData` into the proto `ExecutedTransaction`. `objects`
-/// supplies the object types for the transaction's changed/unchanged-consensus
-/// objects (keyed by `(id, version)`); keys absent from the map are simply not
-/// annotated.
+/// supplies the transaction's canonical object set and the object types for
+/// changed/unchanged-consensus effects. Missing entries fail an explicitly
+/// requested complete object set but remain best-effort for effects annotation.
 pub(crate) async fn transaction_to_response(
     source: TransactionData,
     mask: &FieldMaskTree,
     objects: &HashMap<ObjectKey, Object>,
     resolver: &PackageResolver,
 ) -> Result<ExecutedTransaction, RpcError> {
+    let digest = source.digest;
+    let object_mask = mask
+        .subtree(ExecutedTransaction::OBJECTS_FIELD.name)
+        .and_then(|object_set_mask| object_set_mask.subtree(ProtoObjectSet::OBJECTS_FIELD.name));
+    let object_keys = if object_mask.is_some() {
+        source.transaction_data.as_ref().ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!("transaction {digest} data column missing"),
+            )
+        })?;
+        source.effects.as_ref().ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!("transaction {digest} effects column missing"),
+            )
+        })?;
+        Some(compute_object_keys(&source))
+    } else {
+        None
+    };
     let mut message = ExecutedTransaction::default();
 
     if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
-        message.digest = Some(source.digest.to_string());
+        message.digest = Some(digest.to_string());
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
-        && let Some(tx_data) = &source.transaction_data
+        && let Some(tx_data) = source.transaction_data
     {
-        let transaction = sui_sdk_types::Transaction::try_from(tx_data.clone())?;
+        let transaction = sui_sdk_types::Transaction::try_from(tx_data)?;
         message.transaction = Some(Transaction::merge_from(transaction, &submask));
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
-        && let Some(sigs) = &source.signatures
+        && let Some(sigs) = source.signatures
     {
         message.signatures = sigs
-            .iter()
+            .into_iter()
             .map(|s| {
-                sui_sdk_types::UserSignature::try_from(s.clone())
+                sui_sdk_types::UserSignature::try_from(s)
                     .map(|s| UserSignature::merge_from(s, &submask))
             })
             .collect::<Result<_, _>>()?;
@@ -262,6 +313,21 @@ pub(crate) async fn transaction_to_response(
         message.balance_changes = source.balance_changes.into_iter().map(Into::into).collect();
     }
 
+    if let Some(object_mask) = object_mask {
+        let object_keys = object_keys.expect("object keys exist when an object mask is present");
+        let mut rendered_objects = Vec::with_capacity(object_keys.len());
+        for object_key in object_keys {
+            let object = objects.get(&object_key).ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("unable to fetch object {object_key:?} for transaction {digest}"),
+                )
+            })?;
+            rendered_objects.push(object_to_response(object, &object_mask, resolver).await);
+        }
+        message.objects = Some(ProtoObjectSet::default().with_objects(rendered_objects));
+    }
+
     Ok(message)
 }
 
@@ -295,6 +361,10 @@ mod tests {
         SenderSignedData, Transaction, TransactionData as SuiTransactionData,
     };
 
+    use crate::v2::test_utils::{
+        assert_identity_only_object_mask, canonical_transaction_object_keys, kv_transaction_data,
+        response_object_keys, two_transaction_object_checkpoint,
+    };
     use sui_types::digests::TransactionDigest;
 
     fn test_tx_data() -> (TransactionDigest, SuiTransactionData) {
@@ -395,6 +465,104 @@ mod tests {
         assert_eq!(
             effects.unchanged_loaded_runtime_objects,
             vec![ObjectReference::from(&obj_key)]
+        );
+    }
+
+    #[tokio::test]
+    async fn transaction_objects_are_canonical_and_honor_nested_masks() {
+        let checkpoint = two_transaction_object_checkpoint();
+        let objects = checkpoint
+            .object_set
+            .iter()
+            .cloned()
+            .map(|object| (ObjectKey(object.id(), object.version()), object))
+            .collect::<HashMap<_, _>>();
+        let expected_keys = canonical_transaction_object_keys(&checkpoint, 0);
+        let sibling_created_id =
+            sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::derive_object_id(11);
+        let resolver = test_resolver();
+
+        for (mask, identity_only) in [
+            (FieldMask::from_paths(["objects"]), false),
+            (
+                FieldMask::from_paths(["objects.objects.object_id", "objects.objects.version"]),
+                true,
+            ),
+        ] {
+            let response = transaction_to_response(
+                kv_transaction_data(&checkpoint, 0),
+                &FieldMaskTree::from(mask),
+                &objects,
+                &resolver,
+            )
+            .await
+            .expect("render should succeed");
+
+            assert_eq!(response_object_keys(&response), expected_keys);
+            assert!(
+                response_object_keys(&response)
+                    .iter()
+                    .all(|key| key.0 != sibling_created_id),
+                "transaction object set must exclude the sibling transaction's created object"
+            );
+            if identity_only {
+                assert_identity_only_object_mask(&response);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn transaction_objects_require_complete_source_data() {
+        let checkpoint = two_transaction_object_checkpoint();
+        let source = kv_transaction_data(&checkpoint, 0);
+        let digest = source.digest;
+        let objects = checkpoint
+            .object_set
+            .iter()
+            .cloned()
+            .map(|object| (ObjectKey(object.id(), object.version()), object))
+            .collect::<HashMap<_, _>>();
+        let mask = FieldMaskTree::from(FieldMask::from_paths(["objects"]));
+        let resolver = test_resolver();
+
+        let mut missing_data = source.clone();
+        missing_data.transaction_data = None;
+        let status = tonic::Status::from(
+            transaction_to_response(missing_data, &mask, &objects, &resolver)
+                .await
+                .expect_err("missing transaction data should fail"),
+        );
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert_eq!(
+            status.message(),
+            format!("transaction {digest} data column missing")
+        );
+
+        let mut missing_effects = source.clone();
+        missing_effects.effects = None;
+        let status = tonic::Status::from(
+            transaction_to_response(missing_effects, &mask, &objects, &resolver)
+                .await
+                .expect_err("missing effects should fail"),
+        );
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert_eq!(
+            status.message(),
+            format!("transaction {digest} effects column missing")
+        );
+
+        let mut missing_object_map = objects;
+        let missing_key = canonical_transaction_object_keys(&checkpoint, 0)[0];
+        missing_object_map.remove(&missing_key);
+        let status = tonic::Status::from(
+            transaction_to_response(source, &mask, &missing_object_map, &resolver)
+                .await
+                .expect_err("missing canonical object should fail"),
+        );
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert_eq!(
+            status.message(),
+            format!("unable to fetch object {missing_key:?} for transaction {digest}")
         );
     }
 }

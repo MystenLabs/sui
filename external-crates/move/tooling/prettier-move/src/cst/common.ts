@@ -69,8 +69,6 @@ export default function (path: AstPath<Node>): treeFn | null {
 
         case Common.Label:
             return printLabel;
-        case Common.Alias:
-            return printAlias;
         case Common.BlockIdentifier:
             return printBlockIdentifier;
         case Common.UnaryOperator:
@@ -121,7 +119,6 @@ export enum Common {
     MutRef = 'mut_ref',
 
     Label = 'label',
-    Alias = 'alias',
     UnaryOperator = 'unary_op',
     FieldInitializeList = 'field_initialize_list',
     ExpressionField = 'exp_field',
@@ -286,7 +283,13 @@ function printAtBind(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Do
  * Print `or_bind_list` node.
  */
 function printOrBindList(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-    return group(join([' |', line], path.map(print, 'nonFormattingChildren')));
+    // the pattern list may be parenthesized: `(a | b)`
+    const hasParens = path.node.child(0)?.type === '(';
+    return group([
+        hasParens ? '(' : '',
+        join([' |', line], path.map(print, 'nonFormattingChildren')),
+        hasParens ? ')' : '',
+    ]);
 }
 
 /**
@@ -336,13 +339,6 @@ function printImmRef(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Do
  */
 function printMutRef(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
     return '&mut ';
-}
-
-/**
- * Print `alias` node. ...as `identifier`
- */
-export function printAlias(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-    return ['as ', path.call(print, 'nonFormattingChildren', 0)];
 }
 
 /**

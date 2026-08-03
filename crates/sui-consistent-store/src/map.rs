@@ -514,6 +514,42 @@ where
         self.iter_forward(prefix_to_byte_bounds(prefix)?)
     }
 
+    /// Iterate forward over the subset of entries whose keys, when
+    /// encoded, begin with `prefix`'s encoding and sort at or after
+    /// `from`'s encoding.
+    ///
+    /// Like [`iter_prefix`](Self::iter_prefix) but with the lower bound
+    /// raised to `from` (inclusive) -- typically a pagination cursor
+    /// whose encoding extends `prefix`. The upper bound stays the
+    /// prefix's lex successor, so the scan still stops cleanly at the
+    /// end of the prefix range without per-item filtering. The same
+    /// prefix-encoding contract as [`iter_prefix`](Self::iter_prefix)
+    /// applies: the schema's encoding must make `from`'s bytes
+    /// well-ordered against the full keys.
+    ///
+    /// `from` must itself lie within the prefix: its encoded bytes
+    /// must start with `prefix`'s encoding. This is enforced --
+    /// [`Error::CursorOutsidePrefix`] otherwise -- because cursors
+    /// typically derive from client-supplied page tokens, and a
+    /// cursor sorting before the prefix would otherwise widen the
+    /// scan below the prefix's start and leak foreign rows into the
+    /// result. (A cursor past the prefix's last *row* is fine -- it
+    /// still starts with the prefix and simply yields nothing.)
+    pub fn iter_prefix_from<P: Encode, F: Encode>(
+        &self,
+        prefix: &P,
+        from: &F,
+    ) -> Result<Iter<'_, K, V>, Error> {
+        let ByteBounds::Range(lower, upper) = prefix_to_byte_bounds(prefix)? else {
+            return Ok(Iter::empty());
+        };
+        let from_bytes = from.encode()?;
+        if !lower.is_some_and(|p| from_bytes.starts_with(&p)) {
+            return Err(Error::CursorOutsidePrefix);
+        }
+        self.iter_forward(ByteBounds::Range(Some(from_bytes), upper))
+    }
+
     /// Iterate in reverse over the subset of entries whose keys fall
     /// within `range`.
     pub fn iter_rev(&self, range: impl RangeBounds<K>) -> Result<RevIter<'_, K, V>, Error> {
@@ -1430,6 +1466,26 @@ mod tests {
     }
 
     #[test]
+    fn iter_rev_seek_inside_bounded_range_respects_upper_bound() {
+        let (_dir, db, schema) = open();
+        for k in 0..=10u64 {
+            seed(&db, "items", &U64Be(k), &U64Be(k));
+        }
+        let mut iter = schema.items.iter_rev(U64Be(4)..U64Be(8)).unwrap();
+
+        iter.seek(9u64.to_be_bytes());
+        let (k, _) = iter.next().unwrap().unwrap();
+        assert_eq!(k, U64Be(7));
+
+        iter.seek(5u64.to_be_bytes());
+        let (k, _) = iter.next().unwrap().unwrap();
+        assert_eq!(k, U64Be(5));
+
+        iter.seek(3u64.to_be_bytes());
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
     fn iter_seek_past_upper_bound_yields_nothing() {
         // Mirrors alt's "overflow" case.
         let (_dir, db, schema) = open();
@@ -1580,6 +1636,81 @@ mod tests {
             collected,
             vec![ByteAndU32(2, 0), ByteAndU32(2, 1), ByteAndU32(2, 2),],
         );
+    }
+
+    #[test]
+    fn iter_prefix_from_resumes_within_prefix_and_stops_at_prefix_end() {
+        let (_dir, db, schema) = open_compound();
+        // Three first-byte buckets, three rows each.
+        for first in [1u8, 2, 3] {
+            for second in 0u32..3 {
+                seed_compound(&db, &ByteAndU32(first, second), &U64Be(0));
+            }
+        }
+        // Resume from `(2, 1)`: inclusive of the cursor, and bounded to bucket 2
+        // -- bucket 1 (before the cursor) and bucket 3 (past the prefix) are
+        // both excluded.
+        let collected: Vec<_> = schema
+            .rows
+            .iter_prefix_from(&BytePrefix(2), &ByteAndU32(2, 1))
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(collected, vec![ByteAndU32(2, 1), ByteAndU32(2, 2)]);
+    }
+
+    #[test]
+    fn iter_prefix_from_past_last_row_yields_nothing_without_spilling() {
+        let (_dir, db, schema) = open_compound();
+        // Bucket 2 and a bucket 3 row that must not leak through.
+        for second in 0u32..3 {
+            seed_compound(&db, &ByteAndU32(2, second), &U64Be(0));
+        }
+        seed_compound(&db, &ByteAndU32(3, 0), &U64Be(0));
+        // A `from` above every bucket-2 row yields nothing and does not spill
+        // into bucket 3, because the upper bound stays the prefix successor.
+        let count = schema
+            .rows
+            .iter_prefix_from(&BytePrefix(2), &ByteAndU32(2, u32::MAX))
+            .unwrap()
+            .count();
+        assert_eq!(count, 0);
+    }
+
+    /// A cursor whose encoding does not start with the prefix's bytes
+    /// is rejected rather than scanned: sorting before the prefix
+    /// would widen the scan below the prefix's start and leak foreign
+    /// rows (cursors derive from client page tokens, so this is
+    /// reachable from untrusted input), and sorting after it claims a
+    /// resume position the query could never have produced.
+    #[test]
+    fn iter_prefix_from_rejects_cursor_outside_prefix() {
+        let (_dir, db, schema) = open_compound();
+        for first in [1u8, 2, 3] {
+            for second in 0u32..3 {
+                seed_compound(&db, &ByteAndU32(first, second), &U64Be(0));
+            }
+        }
+
+        // Before the prefix: would otherwise scan bucket 1's rows into
+        // a bucket-2 listing.
+        let Err(err) = schema
+            .rows
+            .iter_prefix_from(&BytePrefix(2), &ByteAndU32(1, 2))
+        else {
+            panic!("a cursor before the prefix must be rejected");
+        };
+        assert!(matches!(err, Error::CursorOutsidePrefix), "got {err:?}");
+
+        // Past the prefix: not a position this prefix's scan could
+        // have yielded.
+        let Err(err) = schema
+            .rows
+            .iter_prefix_from(&BytePrefix(2), &ByteAndU32(3, 0))
+        else {
+            panic!("a cursor past the prefix must be rejected");
+        };
+        assert!(matches!(err, Error::CursorOutsidePrefix), "got {err:?}");
     }
 
     #[test]

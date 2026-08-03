@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
   ┌─ tests/move_check/locals/use_before_assign_while.move:4:32
   │
 3 │         let x: u64;
@@ -13,7 +13,7 @@ error[E06002]: use of unassigned variable
 4 │         while (cond) { let y = move x + 1; x = 0; y; }
   │                                ^^^^^^ Invalid usage of unassigned variable 'x'
 
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
   ┌─ tests/move_check/locals/use_before_assign_while.move:9:32
   │
 8 │         let x: u64;
@@ -21,7 +21,7 @@ error[E06002]: use of unassigned variable
 9 │         while (cond) { let y = move x + 1; if (cond) { continue }; x = 0; y; }
   │                                ^^^^^^ Invalid usage of unassigned variable 'x'
 
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
    ┌─ tests/move_check/locals/use_before_assign_while.move:14:32
    │
 13 │         let x: u64;
@@ -29,7 +29,7 @@ error[E06002]: use of unassigned variable
 14 │         while (cond) { let y = &x; _ = move y; x = 0 }
    │                                ^^ Invalid usage of unassigned variable 'x'
 
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
    ┌─ tests/move_check/locals/use_before_assign_while.move:19:32
    │
 18 │         let x: u64;
@@ -37,7 +37,7 @@ error[E06002]: use of unassigned variable
 19 │         while (cond) { let y = &x; _ = move y; if (cond) { x = 0 }; break }
    │                                ^^ Invalid usage of unassigned variable 'x'
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_check/locals/use_before_assign_while.move:19:60
    │
 19 │         while (cond) { let y = &x; _ = move y; if (cond) { x = 0 }; break }

@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:9:9
   │
 8 │     public fun t1(s: other::S) {
@@ -13,7 +13,7 @@ error[Sui E02009]: invalid private transfer call
 9 │         transfer::transfer(s, @0x100);
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module, 'a::other'
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer.move:13:9
    │
 12 │     public fun t2(s: other::S) {
@@ -21,7 +21,7 @@ error[Sui E02009]: invalid private transfer call
 13 │         transfer::freeze_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module, 'a::other'
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer.move:17:9
    │
 16 │     public fun t3(s: other::S) {
@@ -29,7 +29,7 @@ error[Sui E02009]: invalid private transfer call
 17 │         transfer::share_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module, 'a::other'
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer.move:21:9
    │
 20 │     public fun t4(p: &mut UID, s: Receiving<other::S>): other::S {
@@ -37,7 +37,7 @@ error[Sui E02009]: invalid private transfer call
 21 │         transfer::receive(p, s)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module, 'a::other'
 
-error[Sui E02009]: invalid private transfer call
+error[ESC02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer.move:29:9
    │
 28 │     public fun t6(s: other::S, p: sui::party::Party) {

@@ -1,7 +1,42 @@
 ---
 title: Sui Validator Alert Reference
 sidebar_label: Alert Reference
-description: A collection of the Prometheus Alertmanager rules that trigger alerts and warnings on Validator and Full nodes.
+description: >-
+  A collection of the Prometheus Alertmanager rules that trigger alerts and
+  warnings on Validator and Full nodes.
+keywords:
+  - validator
+  - alerts
+  - Prometheus
+  - monitoring
+  - full node
+  - Alertmanager
+goal:
+  description: >-
+    Validator operator understands a collection of the Prometheus Alertmanager
+    rules that trigger alerts
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What Prometheus alerts should I configure for a Sui validator?
+  - How do I set up Alertmanager for Sui validator monitoring?
+  - What are the critical alert thresholds for Sui validators?
+answer: >-
+  A collection of the Prometheus Alertmanager rules that trigger alerts and
+  warnings on Validator and Full nodes.
 ---
 
 When running a Sui Validator or full node, it is recommended to monitor the health of the nodes and set up alerts on problems.

@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 3-33:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::alias_and_stloc_loop'. Got VMError: {
+    major_status: STLOC_UNSAFE_TO_DESTROY_ERROR,
+    sub_status: None,
+    location: 0x2::alias_and_stloc_loop,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 1, lines 35-61:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::vector_alias_loop'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::vector_alias_loop,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 13)],
+}

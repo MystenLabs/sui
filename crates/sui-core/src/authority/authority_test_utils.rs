@@ -99,7 +99,7 @@ pub async fn submit_to_consensus(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_else(|| AssignedVersions::new(vec![], None));
+        .unwrap_or_default();
 
     Ok((executable, versions))
 }
@@ -182,9 +182,9 @@ pub async fn submit_and_execute_with_error(
             .into_map()
             .get(&executable.key())
             .cloned()
-            .unwrap_or_else(|| AssignedVersions::new(vec![], None))
+            .unwrap_or_default()
     } else {
-        AssignedVersions::new(vec![], None)
+        AssignedVersions::default()
     };
 
     // State accumulator for validation
@@ -460,7 +460,7 @@ pub async fn assign_versions_and_schedule(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_else(|| AssignedVersions::new(vec![], None));
+        .unwrap_or_default();
 
     let env = ExecutionEnv::new().with_assigned_versions(versions.clone());
     authority.execution_scheduler().enqueue_transactions(
@@ -489,5 +489,5 @@ pub async fn assign_shared_object_versions(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_else(|| AssignedVersions::new(vec![], None))
+        .unwrap_or_default()
 }

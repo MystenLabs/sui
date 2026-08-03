@@ -44,7 +44,7 @@ It has the following main components:
 
     This interception behavior is in effect only in threads that have explicitly enabled it, which generally includes the main test thread only. In other threads, the interceptors delegate the call to the system library implementation via `dlsym()`. See implementation [here](https://github.com/MystenLabs/mysten-sim/blob/main/msim/src/sim/intercept.rs#L34-L48).
 
-1. Procedural macros that replace `#[tokio::test]` and run test code inside a testing environment. These are `#[sui_test]` and `#[sim_test]` and are documented below. The test harness created by these macros initializes the simulator runtime with a starting seed, generates the simulator configuration, and runs the test inside a newly created thread. The test must be run in its own thread in order to provide each test case with fresh thread local storage.
+1. Procedural macros that replace `#[tokio::test]` and run test code inside a testing environment. These are `#[sui_test]` and `#[sim_test]` and are documented below. The test harness created by these macros initializes the simulator runtime with a starting seed, generates the simulator configuration, and runs the test inside a newly created thread. Note that the simulator keeps its per-test state (fail-point registries, injection overrides, etc.) in process globals, so a process runs at most one simulation - to run many seeds, run one process per seed (see below).
 
 
 ## How to run sim tests
@@ -63,21 +63,13 @@ The simtest command calls `cargo nextest`, so you can add any valid `nextest` op
 
 - `MSIM_TEST_SEED` - the random seed for the global PRNG. Must be a positive decimal integer that fits into a `u64`. The default value is `1`.
 
-- `MSIM_TEST_NUM` - the number of times to repeat each test. Each repetition of a test is done with a different random seed, starting from the value of `MSIM_TEST_SEED` for the first repetition. The next seed is computed using the following function:
+`MSIM_TEST_NUM` and `MSIM_TEST_CHECK_DETERMINISM` have been retired. Both ran a test multiple times *within a single process*, which is no longer possible now that the simulator keeps its per-test state in process globals (a process runs at most one simulation).
 
-        fn next_seed(seed: u64) -> u64 {
-            use rand::Rng;
-            rand::GlobalRng::new_with_seed(seed).gen::<u64>()
-        }
+- To run a test across many seeds, use `scripts/simtest/seed-search.py`, which runs each (test, seed) pair in its own process, e.g.:
 
-    This means that if you run these two commands:
+        $ scripts/simtest/seed-search.py --package sui-e2e-tests --num-seeds 10 my_test
 
-        $ MSIM_TEST_SEED=1 MSIM_TEST_NUM=10 cargo simtest
-        $ MSIM_TEST_SEED=2 MSIM_TEST_NUM=10 cargo simtest
-
-    No two iterations will have the same seed (with very high probability).
-
-- `MSIM_TEST_CHECK_DETERMINISM` - if set, the specified tests will be run twice, and the framework will verify that the test executes identically in both runs. (This check can also be done by defining a test case with: `#[sim_test(check_determinism)]`.). *Note: Many existing tests in sui do not pass this check, which runs the test case twice in the same process, although those same tests do execute identically if run twice in separate processes. This is a bug, is most likely due to tests sharing static storage or on-disk state, and will hopefully be fixed shortly.*
+- To check determinism, run a test twice in two separate processes with the same seed and compare the (normalized) output. `scripts/simtest/check-determinism.sh` does this and runs in CI.
 
 
 ## How to write simulation tests:
@@ -159,7 +151,7 @@ Also, the world will not end if you break this rule. You just might see confusin
 
 - `config = "config_expr"` - This argument accepts a string which will be evaluated as an expression that returns the configuration for the test. Generally, you should make this a function call, and then define the function to return the config. The function must return a type that can implements `Into<TestConfig>` - the most common choice is `SimConfig`, but `Vec<SimConfig>` and `Vec<(usize /* repeat count */, SimConfig)>` are also supported by default. See https://github.com/MystenLabs/mysten-sim/blob/main/msim/src/sim/config.rs for the `TestConfig` implementation.
 
-- `check_determinism` - If set, the framework will run the test twice, and verify that it executes identically each time. (It does this by keeping a log which contains an entry for every call to the PRNG. Each entry contains a hash of the value yielded by the PRNG at that point + the current time.). Tests with `check_determinism` are usually for testing the framework itself, so you probably won't need to use this.
+- `check_determinism` - Retired. This formerly ran the test twice within one process, comparing a PRNG-call log. Since a simulation now runs in its own process, determinism is checked instead by running a test twice in separate processes and comparing the output (see `scripts/simtest/check-determinism.sh`). The attribute is still accepted for compatibility but has no effect.
 
 ### Configuring the network:
 
@@ -254,23 +246,22 @@ In other words, flaky code may also cause flaky tests.
 
 It's impossible to list every possible cause of flakiness in a document, but the best place to start looking is at anything timing related, especially hard-coded delays in the test.
 n t
-Once you have found the bug or the source of the flakiness, you can validator your fix by running:
+Once you have found the bug or the source of the flakiness, you can validate your fix by running the test across many seeds:
 
-      $ MSIM_TEST_NUM=20 cargo simtest my_flaky_test
+      $ scripts/simtest/seed-search.py --package sui-e2e-tests --num-seeds 20 my_flaky_test
 
-This will run your test 20 times with different seeds.
-Feel free to increase this number - theoretically working code should work no matter how many times you repeat the test, but you probably don't have time for more than a few dozen iterations.
+This runs your test 20 times, each with a different seed in its own process.
+Feel free to increase `--num-seeds` - theoretically working code should work no matter how many times you repeat the test, but you probably don't have time for more than a few dozen iterations.
 
-(Soon, we will add a nightly workflow that runs all tests with a high iteration count in order to pro-actively find bugs and flaky tests.)
+(A nightly workflow, `scripts/simtest/simtest-run.sh`, runs tests across many seeds to pro-actively find bugs and flaky tests.)
 
 ## Reproducing failures
 
 The point of having a deterministic execution environment for tests is that failures can be reproduced easily once found.
 
-When tests fail, they print out a random seed that you can use to reproduce the failure.
-In normal CI runs, this seed should always be `1` (the default value).
-However, when a test is run with a higher iteration count, the reported seed will be some large random number.
-Ideally you should be able to immediately reproduce the failure by running a single iteration of the test with the given seed.
+When tests fail, they print out the random seed that you can use to reproduce the failure.
+In the normal CI simtest run, this seed is derived from the commit hash; a seed search reports the specific seed of each failing run.
+Ideally you should be able to immediately reproduce the failure by running the test with the given seed, e.g. `MSIM_TEST_SEED=<seed> cargo simtest my_test`.
 
 *Currently, this feature is in progress due to some isolation failures in the simulator framework that I am trying to track down.*
 

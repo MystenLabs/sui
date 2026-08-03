@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:9
   │
 3 │         public use fun bar as X.baz;
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │         Unexpected 'public'
   │         Expected an expression term
 
-error[E13001]: feature is not supported in specified edition
+error[EC13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:9
   │
 3 │         public use fun bar as X.baz;
@@ -22,19 +22,19 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E03005]: unbound unscoped name
+error[EC03005]: unbound unscoped name
   ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:24
   │
 3 │         public use fun bar as X.baz;
   │                        ^^^ Unbound function 'bar' in current scope
 
-error[E03004]: unbound type
+error[EC03004]: unbound type
   ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:31
   │
 3 │         public use fun bar as X.baz;
   │                               ^ Unbound type 'X' in current scope
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/use_with_modifiers_exp.move:5:1
   │
 5 │ }

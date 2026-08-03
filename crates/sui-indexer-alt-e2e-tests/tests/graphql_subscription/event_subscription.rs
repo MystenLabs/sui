@@ -18,11 +18,11 @@ use crate::testing::emit_event_harness;
 use crate::testing::graphql_redactions;
 
 fn event_value(item: &Value) -> Option<&str> {
-    item["data"]["events"]["contents"]["json"]["value"].as_str()
+    item["data"]["events"]["node"]["contents"]["json"]["value"].as_str()
 }
 
 fn event_bcs(item: &Value) -> Option<&str> {
-    item["data"]["events"]["eventBcs"].as_str()
+    item["data"]["events"]["node"]["eventBcs"].as_str()
 }
 
 #[tokio::test]
@@ -34,14 +34,16 @@ async fn test_event_subscription() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    sender { address }
-                    transaction { digest }
-                    contents {
-                        type { repr }
-                        json
+                    node {
+                        sender { address }
+                        transaction { digest }
+                        contents {
+                            type { repr }
+                            json
+                        }
+                        sequenceNumber
+                        timestamp
                     }
-                    sequenceNumber
-                    timestamp
                 }
             }"#,
             Some(json!({ "pkg": package_id.to_string() })),
@@ -66,8 +68,10 @@ async fn test_event_subscription_sender_filter() {
         .subscribe_with_variables(
             r#"subscription($sender: SuiAddress!) {
                 events(filter: { sender: $sender }) {
-                    sender { address }
-                    contents { type { repr } }
+                    node {
+                        sender { address }
+                        contents { type { repr } }
+                    }
                 }
             }"#,
             Some(json!({ "sender": sender.to_string() })),
@@ -94,13 +98,15 @@ async fn test_event_subscription_transaction_fields() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    transaction {
-                        digest
-                        sender { address }
-                        kind { __typename }
-                        gasInput { gasBudget gasPrice }
+                    node {
+                        transaction {
+                            digest
+                            sender { address }
+                            kind { __typename }
+                            gasInput { gasBudget gasPrice }
+                        }
+                        contents { type { repr } }
                     }
-                    contents { type { repr } }
                 }
             }"#,
             Some(json!({ "pkg": package_id.to_string() })),
@@ -132,17 +138,19 @@ async fn test_event_subscription_as_transaction_object_change() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    contents {
-                        extract(path: "address_event_id") {
-                            asAddress {
-                                asTransactionObject {
-                                    __typename
-                                    ... on ObjectChange {
-                                        inputState {
-                                            asMoveObject { contents { json } }
-                                        }
-                                        outputState {
-                                            asMoveObject { contents { json } }
+                    node {
+                        contents {
+                            extract(path: "address_event_id") {
+                                asAddress {
+                                    asTransactionObject {
+                                        __typename
+                                        ... on ObjectChange {
+                                            inputState {
+                                                asMoveObject { contents { json } }
+                                            }
+                                            outputState {
+                                                asMoveObject { contents { json } }
+                                            }
                                         }
                                     }
                                 }
@@ -181,14 +189,16 @@ async fn test_event_subscription_as_transaction_object_consensus_read() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    contents {
-                        extract(path: "address_event_id") {
-                            asAddress {
-                                asTransactionObject {
-                                    __typename
-                                    ... on ConsensusObjectRead {
-                                        object {
-                                            asMoveObject { contents { type { repr } } }
+                    node {
+                        contents {
+                            extract(path: "address_event_id") {
+                                asAddress {
+                                    asTransactionObject {
+                                        __typename
+                                        ... on ConsensusObjectRead {
+                                            object {
+                                                asMoveObject { contents { type { repr } } }
+                                            }
                                         }
                                     }
                                 }
@@ -225,17 +235,19 @@ async fn test_event_subscription_object_changes() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    transaction {
-                        effects {
-                            status
-                            objectChanges {
-                                nodes {
-                                    outputState {
-                                        address
-                                        version
-                                        digest
-                                        asMoveObject {
-                                            contents { type { repr } }
+                    node {
+                        transaction {
+                            effects {
+                                status
+                                objectChanges {
+                                    nodes {
+                                        outputState {
+                                            address
+                                            version
+                                            digest
+                                            asMoveObject {
+                                                contents { type { repr } }
+                                            }
                                         }
                                     }
                                 }
@@ -265,7 +277,9 @@ async fn test_event_subscription_module_filter() {
         .subscribe_with_variables(
             r#"subscription($mod: String!) {
                 events(filter: { module: $mod }) {
-                    contents { type { repr } }
+                    node {
+                        contents { type { repr } }
+                    }
                 }
             }"#,
             Some(json!({ "mod": format!("{}::emit_test_event", package_id) })),
@@ -296,8 +310,10 @@ async fn test_event_subscription_recovers_from_upstream_disconnect() {
         .subscribe_with_variables(
             r#"subscription($pkg: SuiAddress!) {
                 events(filter: { type: $pkg }) {
-                    eventBcs
-                    contents { json }
+                    node {
+                        eventBcs
+                        contents { json }
+                    }
                 }
             }"#,
             Some(json!({ "pkg": package_id.to_string() })),

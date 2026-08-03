@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/parser/phantom_param_invalid_keyword.move:2:18
   │
 2 │     struct S<T1, phatom T2> {
@@ -13,7 +13,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_check/parser/phantom_param_invalid_keyword.move:2:25
   │
 2 │     struct S<T1, phatom T2> {

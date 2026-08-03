@@ -15,3 +15,6 @@ pub mod gas_meter;
 pub mod static_programmable_transactions;
 pub mod temporary_store;
 pub mod type_layout_resolver;
+
+#[cfg(test)]
+mod unit_tests;

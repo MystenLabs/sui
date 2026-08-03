@@ -21,7 +21,7 @@
 // `gas summary` / `accumulators_written` lines is attributable to smash
 // order alone.
 
-//# init --addresses test=0x0 --accounts A B C --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C
 
 // Seed A's and B's address balances identically.
 //# programmable --sender A --inputs 100000000000 @A

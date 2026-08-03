@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:5:7
   │
 5 │     #[test(_a=@0x1)]
@@ -14,7 +14,7 @@ warning[W10007]: issue with attribute value
   │       Arguments are no longer supported in `#[test]` attributes
   │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:6:7
   │
 6 │     #[test(_b=@0x2)]
@@ -23,7 +23,7 @@ warning[W10007]: issue with attribute value
   │       Arguments are no longer supported in `#[test]` attributes
   │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:6:7
   │
 5 │     #[test(_a=@0x1)]
@@ -33,7 +33,7 @@ warning[W10007]: issue with attribute value
   │
   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
-error[E10001]: invalid duplicate attribute
+error[EC10001]: invalid duplicate attribute
   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:6:7
   │
 5 │     #[test(_a=@0x1)]
@@ -41,7 +41,7 @@ error[E10001]: invalid duplicate attribute
 6 │     #[test(_b=@0x2)]
   │       ^^^^^^^^^^^^^ Duplicate attribute 'test' attached to the same item
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:7:5
   │
 7 │     public fun a(_a: signer, _b: signer) { }
@@ -50,7 +50,7 @@ warning[W10007]: issue with attribute value
   = Test functions with arguments have been deprecated
   = If you would like to test functions with random inputs, consider using '#[random_test]' instead
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_test_annotations.move:10:7
    │
 10 │     #[test(_a=@0x1, _b=@0x2)]
@@ -59,7 +59,7 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_test_annotations.move:10:7
    │
  9 │     #[test]
@@ -69,7 +69,7 @@ warning[W10007]: issue with attribute value
    │
    = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
-error[E10001]: invalid duplicate attribute
+error[EC10001]: invalid duplicate attribute
    ┌─ tests/move_check/unit_test/multiple_test_annotations.move:10:7
    │
  9 │     #[test]
@@ -77,7 +77,7 @@ error[E10001]: invalid duplicate attribute
 10 │     #[test(_a=@0x1, _b=@0x2)]
    │       ^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'test' attached to the same item
 
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_test_annotations.move:11:5
    │
 11 │     public fun b(_a: signer, _b: signer) { }

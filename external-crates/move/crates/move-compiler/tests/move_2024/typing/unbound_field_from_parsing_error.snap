@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/typing/unbound_field_from_parsing_error.move:3:11
   │
 3 │         V x{: u8},
@@ -14,7 +14,7 @@ error[E01002]: unexpected token
   │           Unexpected 'x'
   │           Expected ',' or '}'
 
-error[E03013]: positional call mismatch
+error[EC03013]: positional call mismatch
   ┌─ tests/move_2024/typing/unbound_field_from_parsing_error.move:6:9
   │
 3 │         V x{: u8},

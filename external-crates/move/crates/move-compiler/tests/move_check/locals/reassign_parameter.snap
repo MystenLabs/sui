@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
   ┌─ tests/move_check/locals/reassign_parameter.move:7:9
   │  
 2 │       struct R {}

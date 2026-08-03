@@ -14,6 +14,7 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use mysten_common::ZipDebugEqIteratorExt;
 use object_store::aws::{AmazonS3Builder, AmazonS3ConfigKey};
+use object_store::gcp::{GoogleCloudStorageBuilder, GoogleConfigKey};
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path;
@@ -21,6 +22,7 @@ use object_store::{
     ClientOptions, DynObjectStore, Error, ObjectStore, ObjectStoreExt, RetryConfig,
 };
 use prost::Message;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::BTreeMap;
@@ -442,11 +444,22 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
 pub fn build_object_store(
     ingestion_url: &str,
     remote_store_options: Vec<(String, String)>,
+    remote_store_headers: Vec<(String, String)>,
 ) -> Arc<dyn ObjectStore> {
     let timeout_secs = 5;
-    let client_options = ClientOptions::new()
+    let mut client_options = ClientOptions::new()
         .with_timeout(Duration::from_secs(timeout_secs))
         .with_allow_http(true);
+    if !remote_store_headers.is_empty() {
+        let mut headers = HeaderMap::new();
+        for (name, value) in &remote_store_headers {
+            headers.insert(
+                HeaderName::from_bytes(name.as_bytes()).expect("invalid remote store header name"),
+                HeaderValue::from_str(value).expect("invalid remote store header value"),
+            );
+        }
+        client_options = client_options.with_default_headers(headers);
+    }
     let retry_config = RetryConfig {
         max_retries: 10,
         retry_timeout: Duration::from_secs(timeout_secs + 1),
@@ -463,6 +476,18 @@ pub fn build_object_store(
             )
             .expect("failed to create local file system store"),
         )
+    } else if url.scheme() == "gs" {
+        let mut builder = GoogleCloudStorageBuilder::new()
+            .with_client_options(client_options)
+            .with_retry(retry_config)
+            .with_url(ingestion_url);
+        for (key, value) in &remote_store_options {
+            builder = builder.with_config(
+                GoogleConfigKey::from_str(key).expect("invalid GCS config key"),
+                value.clone(),
+            );
+        }
+        Arc::new(builder.build().expect("failed to build GCS store"))
     } else if url.host_str().unwrap_or_default().starts_with("s3") {
         let mut builder = AmazonS3Builder::new()
             .with_client_options(client_options)
@@ -529,7 +554,7 @@ pub async fn end_of_epoch_data(
     url: &str,
     remote_store_options: Vec<(String, String)>,
 ) -> anyhow::Result<Vec<CheckpointSequenceNumber>> {
-    let store = build_object_store(url, remote_store_options);
+    let store = build_object_store(url, remote_store_options, vec![]);
     let response = store.get(&Path::from("epochs.json")).await?;
     let bytes = response.bytes().await?;
     Ok(serde_json::from_slice(&bytes)?)

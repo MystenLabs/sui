@@ -284,7 +284,7 @@ async fn test_sampling_time() {
 mod tidehunter_tests {
     use super::*;
     use std::collections::BTreeMap;
-    use typed_store::tidehunter_util::ThConfig;
+    use typed_store::tidehunter_util::{KeyType, ThConfig};
 
     #[derive(DBMapUtils)]
     #[tidehunter]
@@ -297,8 +297,14 @@ mod tidehunter_tests {
     async fn test_tidehunter_map() {
         let primary_path = temp_dir();
         let configs = vec![
-            ("table1".to_string(), ThConfig::new(11, 1, 1)),
-            ("table2".to_string(), ThConfig::new(11, 1, 1)),
+            (
+                "table1".to_string(),
+                ThConfig::new(11, 1, KeyType::uniform(1)),
+            ),
+            (
+                "table2".to_string(),
+                ThConfig::new(11, 1, KeyType::uniform(1)),
+            ),
         ];
         let db = ThTable::open_tables_read_write(
             primary_path.clone(),

@@ -4,8 +4,8 @@
 //! [`ObjectStore`] adapter — point lookups by id or `(id, version)`.
 //!
 //! Delegates to the inherent helpers
-//! [`RpcStoreSchema::get_object`] (latest live version via
-//! `live_objects` → `objects`) and
+//! [`RpcStoreSchema::get_object`] (latest live version via a reverse
+//! scan of the `objects` CF) and
 //! [`RpcStoreSchema::get_object_by_key`] (direct version lookup).
 //! The trait returns `Option<Object>`, so storage errors are
 //! logged and surfaced as `None`; callers that need to distinguish
@@ -57,8 +57,6 @@ mod tests {
 
     use crate::RpcStoreSchema;
     use crate::reader::RpcStoreReader;
-    use crate::schema::keys::U64Varint;
-    use crate::schema::live_objects;
     use crate::schema::objects;
 
     fn open() -> (tempfile::TempDir, Db, RpcStoreSchema) {
@@ -72,6 +70,8 @@ mod tests {
     }
 
     fn seed(db: &Db, schema: &RpcStoreSchema, object: &Object) {
+        // The latest-version read reverse-scans `objects`, so a single
+        // version row is all the live lookup needs.
         let mut batch = db.batch();
         batch
             .put(
@@ -83,18 +83,11 @@ mod tests {
                 &objects::store(object),
             )
             .unwrap();
-        batch
-            .put(
-                &schema.live_objects,
-                &live_objects::Key(object.id()),
-                &U64Varint(object.version().value()),
-            )
-            .unwrap();
         batch.commit().unwrap();
     }
 
     #[test]
-    fn get_object_returns_latest_via_live_pointer() {
+    fn get_object_returns_latest_via_checkpoint_index() {
         let (_dir, db, schema) = open();
         let object = dummy(ObjectID::from_single_byte(1));
         seed(&db, &schema, &object);
@@ -102,7 +95,7 @@ mod tests {
         let reader = RpcStoreReader::new(db.clone(), Arc::new(schema));
         let read = reader
             .get_object(&object.id())
-            .expect("object present via live pointer");
+            .expect("object present via checkpoint index");
         assert_eq!(read, object);
     }
 

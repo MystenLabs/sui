@@ -4,7 +4,8 @@
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
-use sui_default_config::DefaultConfig;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
@@ -19,8 +20,18 @@ use crate::bigtable::client::PoolConfig;
 /// Java client default.
 pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+const DEFAULT_WRITE_CONCURRENCY: usize = 256;
+
+/// Returns the committer defaults used by sui-kvstore before applying config overrides.
+pub fn default_committer_config() -> CommitterConfig {
+    CommitterConfig {
+        write_concurrency: DEFAULT_WRITE_CONCURRENCY,
+        ..CommitterConfig::default()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct IndexerConfig {
     pub ingestion: IngestionConfig,
     pub committer: CommitterLayer,
@@ -35,12 +46,33 @@ pub struct IndexerConfig {
     pub bigtable_connection_pool_size: Option<usize>,
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000).
     pub bigtable_channel_timeout_ms: Option<u64>,
+    /// Enable Bigtable batch write flow control by advertising the mutate-rows
+    /// rate-limit feature flags and adaptively throttling MutateRows from
+    /// `RateLimitInfo`. Requires a single-cluster-routing app profile and pairs
+    /// with Bigtable autoscaling. Enabled by default; set to false to disable.
+    pub batch_write_flow_control: bool,
     /// Bigtable connection pool configuration.
     pub bigtable_pool: BigtablePoolLayer,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+impl Default for IndexerConfig {
+    fn default() -> Self {
+        Self {
+            ingestion: IngestionConfig::default(),
+            committer: CommitterLayer::default(),
+            pipeline: PipelineLayer::default(),
+            total_max_rows_per_second: None,
+            max_rows_per_second: None,
+            bigtable_connection_pool_size: None,
+            bigtable_channel_timeout_ms: None,
+            batch_write_flow_control: true,
+            bigtable_pool: BigtablePoolLayer::default(),
+        }
+    }
+}
+
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct BigtablePoolLayer {
     /// Number of channels to create at startup (default: 10).
     pub initial_pool_size: Option<usize>,
@@ -105,8 +137,8 @@ impl BigtablePoolLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
@@ -129,8 +161,8 @@ impl CommitterLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
     pub ingestion: Option<PipelineIngestionLayer>,
@@ -148,8 +180,8 @@ pub struct ConcurrentLayer {
     pub committer_channel_size: Option<usize>,
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineIngestionLayer {
     pub subscriber_channel_size: Option<usize>,
 }
@@ -193,8 +225,8 @@ impl PipelineIngestionLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct SequentialLayer {
     // Framework sequential surface — mirrors the fields actually read by
     // `sui_indexer_alt_framework::pipeline::sequential`.
@@ -254,8 +286,8 @@ impl SequentialLayer {
     }
 }
 
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct PipelineLayer {
     pub checkpoints: ConcurrentLayer,
     pub checkpoints_by_digest: ConcurrentLayer,
@@ -275,9 +307,8 @@ pub struct PipelineLayer {
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
 /// serialized and deserialized by `serde`.
-#[DefaultConfig]
-#[derive(Clone, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct IngestionConfig {
     pub ingest_concurrency: framework::config::ConcurrencyConfig,
     pub retry_interval_ms: u64,
@@ -285,6 +316,7 @@ pub struct IngestionConfig {
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
+    pub min_cohort_boundary: u64,
 
     /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
     /// per-pipeline `ingestion.subscriber-channel-size`.
@@ -306,6 +338,7 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            min_cohort_boundary: config.min_cohort_boundary,
             checkpoint_buffer_size: None,
         }
     }
@@ -328,6 +361,7 @@ impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            min_cohort_boundary: config.min_cohort_boundary,
         }
     }
 }

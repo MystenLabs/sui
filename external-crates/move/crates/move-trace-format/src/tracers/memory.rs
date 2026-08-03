@@ -13,10 +13,11 @@
 
 use crate::{
     format::{DataLoad, Effect, Location, Read, TraceEvent, TraceIndex, TraceValue, Write},
-    interface::{Tracer, Writer},
+    interface::{EventFilter, Tracer, Writer},
     value::SerializableMoveValue,
 };
 use core::fmt;
+use move_binary_format::file_format_common::Opcodes;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
@@ -160,8 +161,8 @@ impl Tracer for TraceState {
         true
     }
 
-    fn wants_effects(&self) -> bool {
-        true
+    fn instruction_filter(&self, _instruction: &Opcodes, _pc: u16) -> Option<EventFilter> {
+        Some(|_event_index| true)
     }
 }
 

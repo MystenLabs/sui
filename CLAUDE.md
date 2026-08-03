@@ -11,7 +11,7 @@ Individual preferences supersede and extend project preferences:
 
 ### License comments
 
-All new files must start with the following license in comments at the top of the file:
+All applicable source code files must start with the following license in comments at the top of the file:
 
     Copyright (c) Mysten Labs, Inc.
     SPDX-License-Identifier: Apache-2.0
@@ -22,7 +22,7 @@ All new files must start with the following license in comments at the top of th
 # Build a specific crate. Generally don't need to do release build.
 cargo build -p sui-core
 
-# Check code without building (preferred)
+# Check code without code generation or linking (preferred)
 cargo check
 ```
 
@@ -33,7 +33,7 @@ cargo check
 cargo simtest -p sui-e2e-tests
 
 # Run Rust unittests. skip simulation tests as they may cause false negatives with `cargo nextest`
-SUI_SKIP_SIMTESTS=1 cargo nextest run
+SUI_SKIP_SIMTESTS=1 cargo nextest run -p <crate-name>
 ```
 
 **Important Notes for Testing:**
@@ -46,19 +46,18 @@ SUI_SKIP_SIMTESTS=1 cargo nextest run
 ### Linting and Formatting
 
 ```bash
-# Formats & lints all Rust & Move, run before commit:
+# Formats & lints all Rust & Move (can be slow).
 ./scripts/lint.sh
 
-# Alternatively, run individual lints on specific crates (much faster than linting the whole repo):
-# For crates in `crates/`: cd into the crate directory and run:
-cargo xclippy
-# For crates in `external-crates/`: cd into the crate directory and run:
-cargo move-clippy
 # For formatting:
-cargo fmt --all -- --check
-```
+cargo fmt --all
 
-`cargo xclippy` does not recognize the `-p` option - cd into the crate directory instead.
+# Lint a single crate in `crates/`, `consensus/`, `sui-execution/`:
+cargo xclippy -p <crate-name>
+
+# Linting all crates in `external-crates/`: cd into the crate directory and run:
+cargo move-clippy
+```
 
 ## High-Level Architecture
 
@@ -89,10 +88,10 @@ sui/
 3. **Transaction Flow**:
    - User → Fullnode → Validators
    - All user transactions require consensus voting and commit before execution.
-   - Pre and post-consensus fastpath executions have been removed. Surviving mentions of "fastpath" either refer to consensus transaction-voting logic, or should be removed. There is no longer a separate execution path called fastpath.
+   - Pre and post-consensus fastpath executions have been removed. Surviving mentions of "fastpath" refer to consensus transaction-voting logic, owned object logic, or should be reworded or removed. There is no longer a separate execution path called fastpath.
 
 4. **Storage Layer**:
-   - Uses RocksDB for persistent storage
+   - Uses RocksDB or Tidehunter for persistent storage on Sui nodes.
    - Separate stores for permanent, per-epoch, checkpoint, consensus and indexing data
 
 5. **Execution Pipeline**:
@@ -100,23 +99,25 @@ sui/
    - Move VM executes smart contracts with gas metering
    - Parallel execution for non-conflicting transactions
 
+## Development Notes
+
+### Build flags
+
+Sui binaries like sui-node built with `release` profile have `panic=abort` enabled.
+
 ### Test-Only Code
 
 Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(feature = "testing")]` for test-only code that must be callable cross-crate. For the `testing` feature: define `testing = []` in the crate's `Cargo.toml`, and callers must propagate it via `features = ["testing"]` in their dependency declaration.
 
-### Critical Development Notes
-1. **Testing Requirements**:
-   - Always run tests before submitting changes
-   - Framework changes require snapshot updates
-2. **Protocol Config Changes**:
-   - When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
-3. **Raising a PR**:
-   - When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
-4. **CRITICAL - Final Development Steps**:
-   - **ALWAYS run `cargo xclippy` after finishing development** to ensure code passes all linting checks
-   - **NEVER disable or ignore tests** - all tests must pass and be enabled
-   - **NEVER use `#[allow(dead_code)]`, `#[allow(unused)]`, or any other linting suppressions** - fix the underlying issues instead
-   - **All unit tests must work properly** - use `#[tokio::test]` for async tests, not `#[test]`
+Use `#[tokio::test]` for async tests, not `#[test]`.
+
+### Protocol Config Changes:
+
+When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
+
+### Raising a PR:
+
+When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
 
 ### Comment Writing Guidelines
 

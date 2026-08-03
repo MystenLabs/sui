@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
   ┌─ tests/move_2024/migration/let_mut_migrate.move:7:9
   │
 7 │         yip = 0;
@@ -13,7 +13,7 @@ warning[W09003]: unused assignment
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/migration/let_mut_migrate.move:7:9
   │
 3 │     public fun t(x: u64, yip: u64, s: S): u64  {
@@ -22,7 +22,7 @@ error[E04024]: invalid usage of immutable variable
 7 │         yip = 0;
   │         ^^^ Invalid assignment of immutable variable 'yip'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/migration/let_mut_migrate.move:8:9
   │
 3 │     public fun t(x: u64, yip: u64, s: S): u64  {
@@ -31,7 +31,7 @@ error[E04024]: invalid usage of immutable variable
 8 │         x = yes + 1;
   │         ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/migration/let_mut_migrate.move:9:9
   │
 5 │         let S { f: fin } = s;
@@ -40,7 +40,7 @@ error[E04024]: invalid usage of immutable variable
 9 │         fin = fin + 1;
   │         ^^^ Invalid assignment of immutable variable 'fin'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/migration/let_mut_migrate.move:10:9
    │
  4 │         let yes = 0;
@@ -49,7 +49,7 @@ error[E04024]: invalid usage of immutable variable
 10 │         yes = x + fin;
    │         ^^^ Invalid assignment of immutable variable 'yes'
 
-warning[W09003]: unused assignment
+warning[WC09003]: unused assignment
    ┌─ tests/move_2024/migration/let_mut_migrate.move:15:24
    │
 15 │         let x = 5; let y = 10;
@@ -57,7 +57,7 @@ warning[W09003]: unused assignment
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/migration/let_mut_migrate.move:16:9
    │
 15 │         let x = 5; let y = 10;
@@ -65,7 +65,7 @@ error[E04024]: invalid usage of immutable variable
 16 │         x = x + 1;
    │         ^ Invalid assignment of immutable variable 'x'
 
-error[E04024]: invalid usage of immutable variable
+error[EC04024]: invalid usage of immutable variable
    ┌─ tests/move_2024/migration/let_mut_migrate.move:17:9
    │
 15 │         let x = 5; let y = 10;

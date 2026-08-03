@@ -1,0 +1,172 @@
+---
+title: Consumer App Cookbook
+description: >-
+  Patterns for building consumer applications with invisible crypto onboarding
+  using zkLogin, Enoki, and Seal.
+keywords:
+  - zklogin
+  - enoki
+  - seal
+  - consumer app
+  - onboarding
+  - sponsored transactions
+  - invisible crypto
+  - cookbook
+questions:
+  - How do I build a consumer app on Sui with invisible crypto onboarding?
+  - How do I combine zkLogin with Enoki and Seal?
+  - How do I hide blockchain complexity from end users?
+answer: >-
+  This cookbook shows how to combine zkLogin, Enoki, and Seal to build consumer
+  applications where users never see seed phrases, gas fees, or wallet popups.
+---
+
+
+Consumer applications targeting non-crypto users need to eliminate every point of friction in the onboarding flow. The Sui stack provides three primitives that, when combined, create an invisible-crypto experience:
+
+| **Primitive** | **What it handles** |
+| --- | --- |
+| [zkLogin](/sui-stack/zklogin-integration) | Authentication: users sign in with Google, Apple, or other OAuth providers instead of managing keys |
+| [Enoki](https://docs.enoki.mystenlabs.com/) | Managed infrastructure: handles salt storage, proof generation, and sponsored transactions behind a single API |
+| [Seal](/sui-stack/seal) | Encrypted storage: lets you gate access to content or data based on onchain conditions without exposing it publicly |
+
+## Pattern 1: Zero-friction sign-up
+
+**Goal:** User taps **Sign in with Google** and lands in the app with a funded address, ready to transact.
+
+**Stack:** zkLogin (auth) and Enoki (salt, proof, sponsored gas)
+
+### Set up dApp Kit with Enoki
+
+Register Enoki wallets so they appear in the standard wallet connection UI.
+
+```typescript
+import { createDAppKit } from '@mysten/dapp-kit-react';
+import { registerEnokiWallets } from '@mysten/enoki';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const GRPC_URLS = {
+  mainnet: 'https://fullnode.mainnet.sui.io:443',
+  testnet: 'https://fullnode.testnet.sui.io:443',
+} as const;
+
+export const dAppKit = createDAppKit({
+  networks: ['mainnet', 'testnet'],
+  defaultNetwork: 'testnet',
+  createClient(network) {
+    return new SuiGrpcClient({ network, baseUrl: GRPC_URLS[network] });
+  },
+});
+
+registerEnokiWallets({
+  apiKey: process.env.NEXT_PUBLIC_ENOKI_API_KEY!,
+  providers: {
+    google: {
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+    },
+  },
+  clients: dAppKit.networks.map((network) => dAppKit.getClient(network)),
+  getCurrentNetwork: () => dAppKit.stores.$currentNetwork.get(),
+});
+```
+
+### Add the connect button
+
+The `ConnectButton` renders a **Sign in with Google** flow through Enoki. After sign-in, `useCurrentAccount` returns the user's zkLogin address.
+
+```typescript
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
+
+function App() {
+  const account = useCurrentAccount();
+
+  return (
+    <div>
+      <ConnectButton />
+      {account && <p>Welcome! Your address: {account.address}</p>}
+    </div>
+  );
+}
+```
+
+## Pattern 2: Gasless transactions with Enoki
+
+**Goal:** Users perform onchain actions without holding SUI or understanding gas.
+
+**Stack:** Enoki sponsored transactions and zkLogin
+
+The Enoki sponsorship flow has 3 steps:
+
+1. **Client** builds the transaction and serializes it as transaction kind bytes.
+2. **Server** calls `enoki.createSponsoredTransaction()` with the kind bytes, which returns sponsored `bytes` and a `digest`.
+3. **Client** signs the sponsored `bytes` with the wallet and sends the signature back to the server, which calls `enoki.executeSponsoredTransaction({ digest, signature })`.
+
+See the [zkLogin for DeFi](/getting-started/examples/defi-trading-zklogin) guide for a complete example of this flow with DeepBook swaps.
+
+## Pattern 3: Gated content with Seal
+
+**Goal:** Gate access to premium content, features, or data based on NFT ownership or other onchain conditions, while the user's identity stays private.
+
+**Stack:** zkLogin (identity), Seal (encryption), and Enoki (gas sponsorship)
+
+Seal uses session keys to authorize decryption without requiring a wallet signature for every request. The flow:
+
+1. Create a `SessionKey` scoped to your content package with a short time-to-live (TTL).
+2. Have the user sign the session key's personal message through dApp Kit.
+3. Build an approval transaction that calls your Move module's `seal_approve_access` function.
+4. Pass the approval transaction bytes and session key to `sealClient.decrypt()`.
+
+```typescript
+import { SealClient, SessionKey } from '@mysten/seal';
+import { Transaction } from '@mysten/sui/transactions';
+import { fromHex } from '@mysten/sui/utils';
+
+const sealClient = new SealClient({
+  suiClient,
+  serverConfigs: KEY_SERVER_CONFIGS,
+  verifyKeyServers: true,
+});
+
+const sessionKey = await SessionKey.create({
+  address: account.address,
+  packageId: CONTENT_PACKAGE_ID,
+  ttlMin: 10,
+  suiClient,
+});
+
+const { signature } = await dAppKit.signPersonalMessage({
+  message: sessionKey.getPersonalMessage(),
+});
+await sessionKey.setPersonalMessageSignature(signature);
+
+const approvalTx = new Transaction();
+approvalTx.setSender(account.address);
+approvalTx.moveCall({
+  target: `${CONTENT_PACKAGE_ID}::content::seal_approve_access`,
+  arguments: [
+    approvalTx.pure.vector('u8', fromHex(encryptionId)),
+    approvalTx.object(contentObjectId),
+    approvalTx.object(accessTokenId),
+  ],
+});
+
+const txBytes = await approvalTx.build({
+  client: suiClient,
+  onlyTransactionKind: true,
+});
+
+const decrypted = await sealClient.decrypt({
+  data: encryptedObject,
+  sessionKey,
+  txBytes,
+});
+```
+
+## Related resources
+
+- [zkLogin Integration Guide](/sui-stack/zklogin-integration/integration-guide): implement zkLogin from scratch
+- [Enoki documentation](https://docs.enoki.mystenlabs.com/): managed zkLogin and sponsored transactions
+- [Seal documentation](/sui-stack/seal): encrypted storage and access control
+- [zkLogin Wallets](/onchain-finance/asset-custody/wallets/zk-login-wallets): wallet implementations using zkLogin
+- [Sponsored Transactions](/develop/transaction-payment/sponsor-txn): how gas sponsorship works on Sui

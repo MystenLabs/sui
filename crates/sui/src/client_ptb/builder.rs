@@ -586,7 +586,7 @@ impl<'a> PTBBuilder<'a> {
         }
 
         let mut call_args = vec![];
-        for (param, arg) in parameters.iter().zip_debug_eq(args.into_iter()) {
+        for (param, arg) in parameters.iter().zip_debug_eq(args) {
             let call_arg = self
                 .resolve_move_call_arg(&module, ty_args, arg, param)
                 .await?;

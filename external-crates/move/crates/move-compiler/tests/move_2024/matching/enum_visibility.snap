@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/matching/enum_visibility.move:15:13
    │
  3 │     public enum E {

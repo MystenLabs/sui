@@ -3,11 +3,10 @@
 
 use crate::{TestCaseImpl, TestContext, helper::ObjectChecker};
 use async_trait::async_trait;
-use jsonrpsee::rpc_params;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
+use sui_rpc_api::client::ExecutedTransaction;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
-use sui_types::sui_serde::BigInt;
 use tracing::{debug, info};
 
 pub struct CoinMergeSplitTest;
@@ -25,6 +24,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         let mut sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
         let gas_obj = sui_objs.swap_remove(0);
+        let gas_obj_id = *gas_obj.id();
 
         let signer = ctx.get_wallet_address();
         let mut sui_objs_2 = ctx.get_sui_from_faucet(Some(1)).await;
@@ -35,72 +35,56 @@ impl TestCaseImpl for CoinMergeSplitTest {
 
         // Split
         info!("Testing coin split.");
-        let amounts = vec![1.into(), ((original_value - 2) / 2).into()];
+        let amounts = vec![1, (original_value - 2) / 2];
 
-        let response =
-            Self::split_coin(ctx, signer, *primary_coin.id(), amounts, *gas_obj.id()).await;
-        let tx_digest = response.digest;
-        let new_coins = response.effects.as_ref().unwrap().created();
+        let response = Self::split_coin(ctx, signer, primary_coin_id, amounts, gas_obj_id).await;
+        // The created coins are read straight from the native effects
+        // (`LedgerService`).
+        let new_coins: Vec<ObjectID> = response
+            .effects
+            .created()
+            .iter()
+            .map(|(obj_ref, _owner)| obj_ref.0)
+            .collect();
+        assert!(
+            !new_coins.is_empty(),
+            "Expected the split to create new coins"
+        );
 
-        // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![tx_digest], 5).await;
-
-        let _ = futures::future::join_all(
-            new_coins
-                .iter()
-                .map(|coin_ref| {
-                    ObjectChecker::new(coin_ref.reference.object_id)
-                        .owner(Owner::AddressOwner(signer))
-                        .check_into_gas_coin(ctx.get_fullnode_client())
-                })
-                .collect::<Vec<_>>(),
-        )
-        .await;
+        for coin_id in &new_coins {
+            let _ = ObjectChecker::new(*coin_id)
+                .owner(Owner::AddressOwner(signer))
+                .check_into_gas_coin(&ctx.get_grpc_client())
+                .await;
+        }
 
         // Merge
         info!("Testing coin merge.");
         let mut coins_merged = Vec::new();
-        let mut txes = Vec::new();
-        // We on purpose linearize the merge operations, otherwise the primary coin may be locked
-        for new_coin in new_coins {
-            let coin_to_merge = new_coin.reference.object_id;
+        // We on purpose linearize the merge operations, otherwise the primary
+        // coin may be locked. Both the primary coin and the gas coin refs are
+        // refreshed before every mutation.
+        for coin_to_merge in &new_coins {
             debug!(
                 "Merging coin {} back to {}.",
                 coin_to_merge, primary_coin_id
             );
             let response =
-                Self::merge_coin(ctx, signer, primary_coin_id, coin_to_merge, *gas_obj.id()).await;
-            debug!("Verifying the merged coin {} is deleted.", coin_to_merge);
-            coins_merged.push(coin_to_merge);
-            txes.push(response.digest);
+                Self::merge_coin(ctx, signer, primary_coin_id, *coin_to_merge, gas_obj_id).await;
+            // The merged-in coin must be reported as deleted by the effects.
+            let deleted: Vec<ObjectID> = response.effects.deleted().iter().map(|r| r.0).collect();
+            assert!(
+                deleted.contains(coin_to_merge),
+                "Merged coin {coin_to_merge} should be deleted, deleted set: {deleted:?}",
+            );
+            coins_merged.push(*coin_to_merge);
         }
 
-        // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(txes, 5).await;
-
-        let _ = futures::future::join_all(
-            coins_merged
-                .iter()
-                .map(|obj_id| {
-                    ObjectChecker::new(*obj_id)
-                        .owner(Owner::AddressOwner(signer))
-                        .deleted()
-                        .check(ctx.get_fullnode_client())
-                })
-                .collect::<Vec<_>>(),
-        )
-        .await
-        .into_iter()
-        .collect::<Vec<_>>();
-
-        // Owner still owns the primary coin
-        debug!(
-            "Verifying owner still owns the primary coin {}",
-            *primary_coin.id()
-        );
+        // Owner still owns the primary coin, and its value is restored.
+        debug!("Verifying owner still owns the primary coin {primary_coin_id}");
         let primary_after_merge = ObjectChecker::new(primary_coin_id)
-            .owner(Owner::AddressOwner(ctx.get_wallet_address()))
-            .check_into_gas_coin(ctx.get_fullnode_client())
+            .owner(Owner::AddressOwner(signer))
+            .check_into_gas_coin(&ctx.get_grpc_client())
             .await;
         assert_eq!(
             primary_after_merge.value(),
@@ -120,20 +104,19 @@ impl CoinMergeSplitTest {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
-    ) -> SuiTransactionBlockResponse {
-        let params = rpc_params![
-            signer,
-            primary_coin,
-            coin_to_merge,
-            Some(gas_obj_id),
-            (20_000_000).to_string()
-        ];
-
-        let data = ctx
-            .build_transaction_remotely("unsafe_mergeCoins", params)
+    ) -> ExecutedTransaction {
+        let gas_ref = ctx.current_object_ref(gas_obj_id).await;
+        let builder = ctx.get_grpc_client().transaction_builder();
+        let data = builder
+            .merge_coins(
+                signer,
+                primary_coin,
+                coin_to_merge,
+                Some(gas_ref.0),
+                20_000_000,
+            )
             .await
             .unwrap();
-
         ctx.sign_and_execute(data, "coin merge").await
     }
 
@@ -141,22 +124,15 @@ impl CoinMergeSplitTest {
         ctx: &TestContext,
         signer: SuiAddress,
         primary_coin: ObjectID,
-        amounts: Vec<BigInt<u64>>,
+        amounts: Vec<u64>,
         gas_obj_id: ObjectID,
-    ) -> SuiTransactionBlockResponse {
-        let params = rpc_params![
-            signer,
-            primary_coin,
-            amounts,
-            Some(gas_obj_id),
-            (20_000_000).to_string()
-        ];
-
-        let data = ctx
-            .build_transaction_remotely("unsafe_splitCoin", params)
+    ) -> ExecutedTransaction {
+        let gas_ref = ctx.current_object_ref(gas_obj_id).await;
+        let builder = ctx.get_grpc_client().transaction_builder();
+        let data = builder
+            .split_coin(signer, primary_coin, amounts, Some(gas_ref.0), 20_000_000)
             .await
             .unwrap();
-
-        ctx.sign_and_execute(data, "coin merge").await
+        ctx.sign_and_execute(data, "coin split").await
     }
 }

@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04036]: non-exhaustive pattern
+error[EC04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_binding_var.move:8:16
   │
 8 │         match (opt) {
   │                ^^^ Pattern 'Option::Some(_)' not covered
 
-error[E02010]: invalid declaration name
+error[EC02010]: invalid declaration name
   ┌─ tests/move_2024/matching/invalid_binding_var.move:9:26
   │
 9 │             Option::Some(Hello) => (),

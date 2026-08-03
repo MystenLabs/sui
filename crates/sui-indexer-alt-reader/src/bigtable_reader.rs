@@ -113,6 +113,7 @@ impl BigtableReader {
                 Some(registry),
                 bigtable_args.bigtable_app_profile_id,
                 Default::default(),
+                false,
             )
             .await
             .context("Failed to create BigTable client")?,
@@ -179,6 +180,19 @@ impl BigtableReader {
             "transactions",
             &keys,
             self.client.clone().get_transactions(keys),
+        )
+        .await
+    }
+
+    /// Multi-get checkpoint timestamps for transactions by digest.
+    pub(crate) async fn transaction_timestamps(
+        &self,
+        keys: &[TransactionDigest],
+    ) -> anyhow::Result<Vec<(TransactionDigest, u64)>> {
+        measure(
+            "transaction_timestamps",
+            &keys,
+            self.client.clone().get_transaction_timestamps(keys),
         )
         .await
     }

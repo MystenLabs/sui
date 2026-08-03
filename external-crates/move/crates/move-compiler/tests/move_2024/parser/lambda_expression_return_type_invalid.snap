@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04016]: too few arguments
+error[EC04016]: too few arguments
   ┌─ tests/move_2024/parser/lambda_expression_return_type_invalid.move:7:9
   │
 7 │         call!(|| -> u64 0);
@@ -14,13 +14,13 @@ error[E04016]: too few arguments
   │         │    Found 0 argument(s) here
   │         Invalid call of 'a::m::call'. The call expected 1 argument(s) but got 0
 
-error[E04032]: unable to expand macro function
+error[EC04032]: unable to expand macro function
   ┌─ tests/move_2024/parser/lambda_expression_return_type_invalid.move:7:9
   │
 7 │         call!(|| -> u64 0);
   │         ^^^^^^^^^^^^^^^^^^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/parser/lambda_expression_return_type_invalid.move:7:25
   │
 7 │         call!(|| -> u64 0);

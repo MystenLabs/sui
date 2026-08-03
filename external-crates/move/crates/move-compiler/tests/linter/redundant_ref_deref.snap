@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
   ┌─ tests/linter/redundant_ref_deref.move:8:21
   │
 8 │         let _ref = &*(&resource);  // Redundant borrow-dereference
@@ -13,7 +13,7 @@ warning[Lint W01009]: redundant reference/dereference
   │
   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/redundant_ref_deref.move:13:25
    │
 13 │         let _ref = &mut *(&mut resource);
@@ -21,7 +21,7 @@ warning[Lint W01009]: redundant reference/dereference
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01009]: redundant reference/dereference
+warning[WL01009]: redundant reference/dereference
    ┌─ tests/linter/redundant_ref_deref.move:18:22
    │
 18 │         let _value = *(&resource.value);

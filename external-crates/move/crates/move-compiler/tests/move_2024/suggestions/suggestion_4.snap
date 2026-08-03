@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/suggestions/suggestion_4.move:3:28
   │
 3 │     public fun call<T>(x: &Q::r::S, y: &T): (&Q::r::S, &T) { (x, y) }
@@ -14,7 +14,7 @@ error[E03006]: unexpected name in this position
   │                            Could not resolve the name 'Q'
   │                            Did you mean: 'A'
 
-error[E03006]: unexpected name in this position
+error[EC03006]: unexpected name in this position
   ┌─ tests/move_2024/suggestions/suggestion_4.move:3:47
   │
 3 │     public fun call<T>(x: &Q::r::S, y: &T): (&Q::r::S, &T) { (x, y) }

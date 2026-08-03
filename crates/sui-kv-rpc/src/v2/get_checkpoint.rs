@@ -109,5 +109,5 @@ async fn resolve_full_checkpoint(
     )
     .await?;
 
-    render::render_full_checkpoint(cp_data, txs, objects.as_ref(), read_mask)
+    render::render_full_checkpoint(cp_data, txs, objects, read_mask)
 }

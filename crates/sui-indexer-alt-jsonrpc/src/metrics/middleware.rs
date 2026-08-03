@@ -94,9 +94,11 @@ where
     type Future = MetricsFuture<'a, S::Future>;
 
     fn call(&self, request: Request<'a>) -> Self::Future {
-        let method = if self.layer.methods.contains(request.method_name()) {
+        let name = request.method_name();
+        let method = if self.layer.methods.contains(name) {
             request.method.clone()
         } else {
+            debug!(method = name, "Unknown RPC method");
             "<UNKNOWN>".into()
         };
 

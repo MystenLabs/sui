@@ -10,6 +10,7 @@
 
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_inverted_index::IndexDimension;
+use sui_inverted_index::event_seq;
 use sui_inverted_index::for_each_event_dimension;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI;
@@ -47,7 +48,7 @@ impl BitmapIndexProcessor for EventBitmapProcessor {
                 &tx.effects,
                 tx.events.as_ref(),
                 |event_idx, dim, value| {
-                    let event_seq = event_bitmap_index::encode_event_seq(tx_seq, event_idx);
+                    let event_seq = event_seq::encode_event_seq(tx_seq, event_idx);
                     let bucket_id = event_seq / event_bitmap_index::BUCKET_SIZE;
                     let bit_position = (event_seq % event_bitmap_index::BUCKET_SIZE) as u32;
                     emit(bucket_id, bit_position, dim, value);
@@ -61,7 +62,7 @@ impl BitmapIndexProcessor for EventBitmapProcessor {
         // (`event_seq_lo(tx) = tx * MAX_EVENTS_PER_TX`) is past bucket B's
         // upper end. Solve for the smallest tx satisfying that.
         let seal_tx_hi = ((bucket_id + 1) * event_bitmap_index::BUCKET_SIZE)
-            .div_ceil(event_bitmap_index::MAX_EVENTS_PER_TX as u64);
+            .div_ceil(event_seq::MAX_EVENTS_PER_TX as u64);
         watermark.tx_hi >= seal_tx_hi
     }
 }
@@ -158,16 +159,8 @@ mod tests {
         let value = row(&values, &row_key);
         assert_eq!(value.bucket_id, 0);
         assert_eq!(value.bitmap.len(), 2);
-        assert!(
-            value
-                .bitmap
-                .contains(event_bitmap_index::event_seq_lo(100) as u32)
-        );
-        assert!(
-            value
-                .bitmap
-                .contains(event_bitmap_index::event_seq_lo(101) as u32)
-        );
+        assert!(value.bitmap.contains(event_seq::event_seq_lo(100) as u32));
+        assert!(value.bitmap.contains(event_seq::event_seq_lo(101) as u32));
     }
 
     #[tokio::test]
@@ -202,15 +195,14 @@ mod tests {
             assert!(
                 value
                     .bitmap
-                    .contains(event_bitmap_index::encode_event_seq(tx_seq, event_idx) as u32)
+                    .contains(event_seq::encode_event_seq(tx_seq, event_idx) as u32)
             );
         }
     }
 
     #[tokio::test]
     async fn transactions_crossing_event_bucket_boundary_emit_distinct_bucket_rows() {
-        let txs_per_bucket =
-            event_bitmap_index::BUCKET_SIZE / event_bitmap_index::MAX_EVENTS_PER_TX as u64;
+        let txs_per_bucket = event_bitmap_index::BUCKET_SIZE / event_seq::MAX_EVENTS_PER_TX as u64;
         let checkpoint = TestCheckpointBuilder::new(0)
             .with_network_total_transactions(txs_per_bucket - 1)
             .start_transaction(1)
@@ -233,7 +225,7 @@ mod tests {
         assert!(
             bucket_0
                 .bitmap
-                .contains(event_bitmap_index::event_seq_lo(txs_per_bucket - 1) as u32)
+                .contains(event_seq::event_seq_lo(txs_per_bucket - 1) as u32)
         );
 
         let bucket_1_key = emit_module_row_key(1);

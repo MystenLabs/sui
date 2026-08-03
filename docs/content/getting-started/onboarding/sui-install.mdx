@@ -1,9 +1,74 @@
 ---
 title: Install Sui
 description: Install the Sui framework and its required prerequisites on your system.
-keywords: [ install sui, how to install sui, install sui cli, interact with sui networks, connect to sui networks, sui command line interface ]
+keywords:
+  - install sui
+  - how to install sui
+  - install sui cli
+  - interact with sui networks
+  - connect to sui networks
+  - sui command line interface
 pagination_prev: null
 pagination_next: null
+goal:
+  description: >-
+    Reader can install the Sui CLI, verify it works, and understand available
+    toolchain components
+  requires:
+    - pattern: '```|ImportContent'
+      min: 2
+      label: Has command or code examples
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - links_to:
+        - /getting-started/onboarding/configure-sui-client
+      label: Links to next onboarding step
+    - pattern: sui --version|sui -V
+      min: 1
+      label: Shows how to verify installation
+    - min_words: 300
+      label: Needs more walkthrough depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Install Sui CLI
+    stage: Setup
+    eval: covered
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Install Sui CLI
+    stage: Setup
+    eval: covered
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Install toolchain
+    stage: Environment
+    eval: covered
+  - path_id: walrus-general
+    path_name: Walrus General Data Storage
+    step: Install toolchain
+    stage: Environment
+    eval: covered
+  - path_id: walrus-agentic
+    path_name: Walrus Agentic Data Storage
+    step: Programmatic toolchain
+    stage: Environment
+    eval: covered
+builder_paths_source:
+  dashboard: 'https://docs-analytics-dashboard.vercel.app/evals'
+  snapshot: '2026-07-10'
+questions:
+  - How do I install the Sui CLI?
+  - What are the prerequisites for installing Sui?
+  - How do I verify that Sui is installed correctly?
+answer: Install the Sui framework and its required prerequisites on your system.
 ---
 
 <AgentPrompt
@@ -43,9 +108,19 @@ Installations using Homebrew or Chocolatey might take several minutes if you do 
 
 <ImportContent source="quick-install" mode="snippet" />
 
-The quick install is suitable for most use cases. For those wanting more control over the installation process, you can [install from source](/getting-started/onboarding/install-source) or [install binaries](/getting-started/onboarding/install-binaries). 
+The quick install is suitable for most use cases. For those wanting more control over the installation process, you can [install from source](/getting-started/onboarding/install-source) or [install binaries](/getting-started/onboarding/install-binaries).
 
 If Sui is already installed from a previous development environment, be sure to upgrade to the [latest version](/getting-started/onboarding/install-binaries).
+
+### Verify the installation
+
+After installing, open a new terminal and run:
+
+```sh
+$ sui --version
+```
+
+If the installation succeeded, the command prints the installed Sui version.
 
 :::info Looking for a project to clone?
 

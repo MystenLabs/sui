@@ -39,12 +39,18 @@
 //!     PackageCache (shared, LRU + system-package invalidation) → DB
 //! ```
 
+// Only the (staging-gated) subscription resolvers backfill via `scan_checkpoints`; `test` keeps the
+// module's own unit tests compiling without the feature.
+#[cfg(any(feature = "staging", test))]
+mod checkpoint_resume;
 mod checkpoint_stream_task;
 mod gap_recovery;
 mod package_eviction_task;
 mod processed_checkpoint;
 mod streamed_package_store;
 mod subscription_readiness;
+#[cfg(test)]
+mod test_utils;
 
 use std::sync::Arc;
 
@@ -53,6 +59,14 @@ use sui_indexer_alt_reader::package_resolver::PackageCache;
 #[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::CheckpointBroadcaster;
 pub(crate) use checkpoint_stream_task::CheckpointStreamTask;
+#[cfg(feature = "staging")]
+pub(crate) use checkpoint_stream_task::SubscriptionBroadcast;
+#[cfg(feature = "staging")]
+pub(crate) use checkpoint_stream_task::broadcast_error;
+#[cfg(feature = "staging")]
+pub(crate) use checkpoint_stream_task::reconnect_error;
+#[cfg(feature = "staging")]
+pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
 pub(crate) use package_eviction_task::PackageEvictionTask;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;

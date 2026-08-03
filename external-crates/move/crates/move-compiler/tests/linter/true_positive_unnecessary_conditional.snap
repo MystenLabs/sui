@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W01007]: 'if' expression can be removed
+warning[WL01007]: 'if' expression can be removed
   ┌─ tests/linter/true_positive_unnecessary_conditional.move:4:9
   │
 4 │         if (!condition) true else false;
@@ -13,7 +13,7 @@ warning[Lint W01007]: 'if' expression can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01007]: 'if' expression can be removed
+warning[WL01007]: 'if' expression can be removed
   ┌─ tests/linter/true_positive_unnecessary_conditional.move:5:9
   │
 5 │         if (condition) { { false } } else { (true: bool) };
@@ -21,7 +21,7 @@ warning[Lint W01007]: 'if' expression can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01007]: 'if' expression can be removed
+warning[WL01007]: 'if' expression can be removed
   ┌─ tests/linter/true_positive_unnecessary_conditional.move:9:9
   │
 9 │         if (true) true else true;
@@ -33,7 +33,7 @@ warning[Lint W01007]: 'if' expression can be removed
   │
   = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01007]: 'if' expression can be removed
+warning[WL01007]: 'if' expression can be removed
    ┌─ tests/linter/true_positive_unnecessary_conditional.move:10:9
    │
 10 │         if (foo()) 0u64 else 0;
@@ -45,7 +45,7 @@ warning[Lint W01007]: 'if' expression can be removed
    │
    = This warning can be suppressed with '#[allow(lint(unnecessary_conditional))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W01007]: 'if' expression can be removed
+warning[WL01007]: 'if' expression can be removed
    ┌─ tests/linter/true_positive_unnecessary_conditional.move:11:9
    │
 11 │         if (!foo()) b"" else x"";

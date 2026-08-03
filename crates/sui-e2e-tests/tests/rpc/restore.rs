@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Restore/resume behavior of the embedded `sui-rpc-store` index backend
-//! (`use_experimental_rpc_store`).
+//! Restore/resume behavior of the embedded `sui-rpc-store` index backend.
 //!
 //! Each test drives a dedicated fullnode through a sequence of restarts,
 //! toggling its index configuration between runs, and checks two things:
@@ -42,22 +41,21 @@ use sui_node::SuiNode;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetBalanceRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsRequest;
-use sui_rpc::proto::sui::rpc::v2alpha::QueryOptions;
-use sui_rpc::proto::sui::rpc::v2alpha::SenderFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionFilter;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionLiteral;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionPredicate;
-use sui_rpc::proto::sui::rpc::v2alpha::TransactionTerm;
-use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_client::LedgerServiceClient;
-use sui_rpc::proto::sui::rpc::v2alpha::list_transactions_response;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_literal;
-use sui_rpc::proto::sui::rpc::v2alpha::transaction_predicate;
+use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+use sui_rpc::proto::sui::rpc::v2::SenderFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
+use sui_rpc::proto::sui::rpc::v2::TransactionLiteral;
+use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::AuthorityName;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -70,13 +68,11 @@ const SUI_COIN_TYPE: &str =
 /// history cohort from genesis, so this is generous.
 const WAIT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// An rpc config that builds the embedded `sui-rpc-store` index backend
-/// with the ledger-history (bitmap) cohort enabled.
+/// An rpc config that builds the embedded `sui-rpc-store` index backend,
+/// which indexes both the live and ledger-history (bitmap) cohorts.
 fn embedded_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(true),
-        use_experimental_rpc_store: Some(true),
-        ledger_history_indexing: Some(true),
         ..Default::default()
     }
 }
@@ -86,7 +82,6 @@ fn embedded_indexing_config() -> RpcConfig {
 fn no_indexing_config() -> RpcConfig {
     RpcConfig {
         enable_indexing: Some(false),
-        use_experimental_rpc_store: Some(false),
         ..Default::default()
     }
 }
@@ -206,6 +201,9 @@ struct Transfer {
     receiver: SuiAddress,
     amount: u64,
     digest: TransactionDigest,
+    /// The coin object the transfer created for `receiver`, at the
+    /// version it was created with.
+    created_coin: ObjectRef,
 }
 
 /// Transfer `amount` MIST of SUI to a fresh address through the cluster's
@@ -215,11 +213,19 @@ async fn transfer_to_fresh_address(cluster: &TestCluster, amount: u64) -> Transf
     let receiver = SuiAddress::random_for_testing_only();
     let txn = make_transfer_sui_transaction(&cluster.wallet, Some(receiver), Some(amount)).await;
     let executed = cluster.execute_transaction(txn).await;
+    let created_coin = executed
+        .effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(a) if *a == receiver))
+        .expect("the transfer creates the receiver's coin")
+        .0;
     let transfer = Transfer {
         sender: executed.transaction.sender(),
         receiver,
         amount,
         digest: *executed.effects.transaction_digest(),
+        created_coin,
     };
     cluster.wait_for_tx_settlement(&[transfer.digest]).await;
     transfer
@@ -259,10 +265,8 @@ async fn sui_balance(rpc_url: &str, owner: SuiAddress) -> u64 {
 fn sender_filter(sender: SuiAddress) -> TransactionFilter {
     let mut sender_filter = SenderFilter::default();
     sender_filter.address = Some(sender.to_string());
-    let mut predicate = TransactionPredicate::default();
-    predicate.predicate = Some(transaction_predicate::Predicate::Sender(sender_filter));
     let mut literal = TransactionLiteral::default();
-    literal.polarity = Some(transaction_literal::Polarity::Include(predicate));
+    literal.predicate = Some(transaction_literal::Predicate::Sender(sender_filter));
     let mut term = TransactionTerm::default();
     term.literals = vec![literal];
     let mut filter = TransactionFilter::default();
@@ -277,7 +281,7 @@ async fn list_transaction_digests_by_sender(rpc_url: &str, sender: SuiAddress) -
         .await
         .unwrap();
     let mut options = QueryOptions::default();
-    options.limit_items = Some(500);
+    options.limit = Some(500);
     let mut request = ListTransactionsRequest::default();
     request.read_mask = Some(FieldMask::from_paths(["digest"]));
     request.filter = Some(sender_filter(sender));
@@ -289,9 +293,7 @@ async fn list_transaction_digests_by_sender(rpc_url: &str, sender: SuiAddress) -
         .into_inner();
     let mut digests = HashSet::new();
     while let Some(response) = stream.message().await.unwrap() {
-        if let Some(list_transactions_response::Response::Item(item)) = response.response
-            && let Some(digest) = item.transaction.and_then(|tx| tx.digest)
-        {
+        if let Some(digest) = response.transaction.and_then(|tx| tx.digest) {
             digests.insert(digest);
         }
     }
@@ -364,18 +366,48 @@ async fn enabling_embedded_store_rebuilds_indexes() {
     let target = chain_tip(&cluster);
 
     // Turn on the embedded store and restart. With no prior rpc-store
-    // database the live cohort has no watermark, so the store rebuilds it
-    // (resuming any partial restore in place rather than clearing).
+    // database the live cohort has no watermark and no restore is in
+    // progress, so the store rebuilds from a clean slate (the clear is
+    // a no-op on the fresh database; only a restore actually mid-run
+    // resumes without clearing).
     restart_fullnode(&cluster, &name, embedded_indexing_config()).await;
     assert_eq!(
         bootstrap_action(&cluster, &name),
-        Some(Bootstrap::Restore { clear: false }),
+        Some(Bootstrap::Restore { clear: true }),
     );
 
     // After the rebuild + backfill the pre-enable transfer is visible
     // through both index cohorts.
     wait_for_indexed(&cluster, &name, target).await;
     assert_transfer_indexed(&rpc_url, &transfer).await;
+
+    // With nothing pruned the from-genesis backfill owns the whole
+    // `object_version_by_checkpoint` history: the receiver's coin --
+    // created mid-chain, before indexing was enabled -- must not exist
+    // at genesis, and must resolve to its creation version at the tip.
+    // A restore of that CF at the tip would instead leave only a floor
+    // row there, making the genesis read fall back to it and resolve
+    // an object that did not exist yet.
+    let (coin_id, coin_version, _) = transfer.created_coin;
+    with_node(&cluster, &name, |node| {
+        let reader = node.embedded_rpc_store().unwrap().reader();
+        assert_eq!(
+            reader
+                .schema()
+                .get_object_version_at_checkpoint(coin_id, 0)
+                .unwrap(),
+            None,
+            "a coin created mid-chain must not resolve at genesis",
+        );
+        assert_eq!(
+            reader
+                .schema()
+                .get_object_version_at_checkpoint(coin_id, target)
+                .unwrap(),
+            Some(coin_version),
+            "the backfill should record the coin's creation version",
+        );
+    });
 }
 
 /// Toggling indexing off, advancing the chain, then back on lets the store

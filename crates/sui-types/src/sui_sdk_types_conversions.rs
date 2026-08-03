@@ -14,7 +14,7 @@ use sui_sdk_types::{
     Bls12381PublicKey, Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
     CheckpointCommitment, CheckpointContents, CheckpointData, CheckpointSummary, Command,
     CommandArgumentError, ConsensusDeterminedVersionAssignments, Digest, Ed25519PublicKey,
-    Ed25519Signature, EndOfEpochTransactionKind, ExecutionError, ExecutionStatus,
+    Ed25519Signature, EndOfEpochTransactionKind, Event, ExecutionError, ExecutionStatus,
     ExecutionTimeObservationKey, ExecutionTimeObservations, FundsWithdrawal, IdOperation,
     Identifier, Input, Jwk, JwkId, MakeMoveVector, MergeCoins, MoveCall, MoveLocation, MovePackage,
     MultisigMemberPublicKey, MultisigMemberSignature, Mutability, Object, ObjectIn, ObjectOut,
@@ -131,6 +131,7 @@ bcs_convert_impl!(
     crate::passkey_authenticator::PasskeyAuthenticator,
     PasskeyAuthenticator
 );
+bcs_convert_impl!(crate::event::Event, Event);
 bcs_convert_impl!(crate::effects::TransactionEvents, TransactionEvents);
 bcs_convert_impl!(crate::transaction::TransactionKind, TransactionKind);
 bcs_convert_impl!(crate::move_package::MovePackage, MovePackage);
@@ -1627,6 +1628,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             ) => Self::WriteAccumulatorStorageCost {
                 storage_cost: storage_cost.storage_cost,
             },
+            crate::transaction::EndOfEpochTransactionKind::ForwardingAddressRegistryCreate => {
+                Self::ForwardingAddressRegistryCreate
+            }
         }
     }
 }

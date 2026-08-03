@@ -31,7 +31,7 @@ use sui_types::transaction::VerifiedTransaction;
 use tracing::error;
 
 use crate::reader::RpcStoreReader;
-use crate::schema::keys::U64Be;
+use crate::schema::primitives::U64Be;
 
 impl<R: Reader + Send + Sync> ReadStore for RpcStoreReader<R> {
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
@@ -295,8 +295,8 @@ mod tests {
     use crate::schema::checkpoint_contents;
     use crate::schema::checkpoint_seq_by_digest;
     use crate::schema::checkpoint_summary;
-    use crate::schema::keys::U64Be;
-    use crate::schema::keys::U64Varint;
+    use crate::schema::primitives::U64Be;
+    use crate::schema::primitives::U64Varint;
     use crate::schema::pruning_watermark;
 
     fn dummy_summary(seq: u64) -> CheckpointSummary {
@@ -398,7 +398,7 @@ mod tests {
         batch
             .put(
                 &reader.schema().pruning_watermark,
-                &crate::schema::keys::UnitKey,
+                &crate::schema::primitives::UnitKey,
                 &pruning_watermark::store(&pruning_watermark::Watermarks {
                     tx_seq_lo: 100,
                     checkpoint_lo: 42,

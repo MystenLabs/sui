@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::endpoint_manager::ConsensusAddressUpdater;
 use crate::{
     endpoint_manager::{AddressSource, EndpointId},
     utils::{build_network_and_key, build_network_with_anemo_config},
@@ -11,7 +12,24 @@ use fastcrypto::ed25519::Ed25519PublicKey;
 use futures::stream::FuturesUnordered;
 use std::collections::HashSet;
 use sui_config::p2p::{AllowlistedPeer, DiscoveryConfig, SeedPeer};
+use sui_types::error::SuiResult;
 use tokio::time::timeout;
+
+/// Test `ConsensusAddressUpdater` that records every forwarded consensus update,
+/// for asserting which (source, address) reached the consensus endpoint.
+struct RecordingUpdater(std::sync::Mutex<Vec<(NetworkPublicKey, AddressSource, Vec<Multiaddr>)>>);
+
+impl ConsensusAddressUpdater for RecordingUpdater {
+    fn update_address(
+        &self,
+        pubkey: NetworkPublicKey,
+        source: AddressSource,
+        addrs: Vec<Multiaddr>,
+    ) -> SuiResult<()> {
+        self.0.lock().unwrap().push((pubkey, source, addrs));
+        Ok(())
+    }
+}
 
 #[tokio::test]
 async fn get_known_peers() -> Result<()> {
@@ -1475,24 +1493,6 @@ async fn test_discovery_address_cleared_on_expiry() -> Result<()> {
     // Verify Consensus Discovery address was also cleared.
     // The endpoint_manager buffers consensus updates when no updater is set.
     // Set a mock updater to drain the buffer and inspect the updates.
-    use crate::endpoint_manager::ConsensusAddressUpdater;
-    use sui_types::error::SuiResult;
-
-    struct RecordingUpdater(
-        std::sync::Mutex<Vec<(NetworkPublicKey, AddressSource, Vec<Multiaddr>)>>,
-    );
-    impl ConsensusAddressUpdater for RecordingUpdater {
-        fn update_address(
-            &self,
-            pubkey: NetworkPublicKey,
-            source: AddressSource,
-            addrs: Vec<Multiaddr>,
-        ) -> SuiResult<()> {
-            self.0.lock().unwrap().push((pubkey, source, addrs));
-            Ok(())
-        }
-    }
-
     let updater = Arc::new(RecordingUpdater(std::sync::Mutex::new(Vec::new())));
     event_loop
         .endpoint_manager
@@ -1619,7 +1619,6 @@ async fn test_discovery_only_peer_not_in_network_known_peers() -> Result<()> {
 
     update_known_peers_versioned(
         event_loop.state.clone(),
-        event_loop.metrics.clone(),
         vec![gossiped_info],
         event_loop.configured_peers.clone(),
         &event_loop.chain_peers,
@@ -1818,7 +1817,6 @@ async fn test_runtime_gossip_updates_configured_peer_address() -> Result<()> {
 
     update_known_peers_versioned(
         event_loop.state.clone(),
-        event_loop.metrics.clone(),
         vec![gossiped_info],
         event_loop.configured_peers.clone(),
         &event_loop.chain_peers,
@@ -2073,7 +2071,6 @@ async fn test_discovery_address_overrides_chain_for_chain_peer() -> Result<()> {
 
     update_known_peers_versioned(
         event_loop.state.clone(),
-        event_loop.metrics.clone(),
         vec![gossiped_info],
         event_loop.configured_peers.clone(),
         &event_loop.chain_peers,
@@ -2093,11 +2090,219 @@ async fn test_discovery_address_overrides_chain_for_chain_peer() -> Result<()> {
         "network.known_peers should use the Discovery address from gossip"
     );
 
-    // Both sources should be tracked.
+    // Both sources should be tracked, and the Chain address must remain available
+    // in peer_addresses as the lower-priority fallback (not overwritten by Discovery).
     let state = event_loop.state.read().unwrap();
     let sources = state.peer_addresses.get(&remote_peer_id).unwrap();
     assert!(sources.contains_key(&AddressSource::Discovery));
     assert!(sources.contains_key(&AddressSource::Chain));
+    let chain_anemo_addr = chain_multiaddr.to_anemo_address().unwrap();
+    assert_eq!(
+        sources.get(&AddressSource::Chain),
+        Some(&vec![chain_anemo_addr]),
+        "Chain address should be retained as the fallback under Discovery"
+    );
+
+    Ok(())
+}
+
+/// Reads the value of the single-series `discovery_active_p2p_address_source` gauge
+/// for a given `peer_id`, or `None` if that series is absent. The value is the
+/// active source's `metric_code` (0 = no address installed).
+fn active_p2p_source_code(registry: &prometheus::Registry, peer_id: &str) -> Option<i64> {
+    let families = registry.gather();
+    let family = families
+        .iter()
+        .find(|f| f.name() == "discovery_active_p2p_address_source")?;
+    family.get_metric().iter().find_map(|m| {
+        m.get_label()
+            .iter()
+            .any(|l| l.name() == "peer_id" && l.value() == peer_id)
+            .then(|| m.gauge.value() as i64)
+    })
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_active_p2p_address_source_metric() -> Result<()> {
+    // A gossiped Discovery address overriding a Chain address must change the
+    // value-encoded gauge from the Chain code to the Discovery code.
+    use fastcrypto::traits::KeyPair as _;
+
+    let remote_keypair = sui_types::crypto::NetworkKeyPair::generate(&mut rand::thread_rng());
+    let remote_peer_id = PeerId(
+        *fastcrypto::traits::KeyPair::public(&remote_keypair)
+            .0
+            .as_bytes(),
+    );
+
+    let registry = prometheus::Registry::new();
+    let config = P2pConfig::default();
+    let (builder, server, endpoint_manager) = Builder::new()
+        .config(config)
+        .with_metrics(&registry)
+        .build();
+    let (network, key) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network.clone(), key);
+
+    event_loop.construct_our_info();
+    event_loop.configure_preferred_peers();
+
+    let peer_label = remote_peer_id.to_string();
+
+    // Deliver a Chain address: the peer becomes trusted with Chain as the active source.
+    let chain_multiaddr: Multiaddr = "/ip4/172.16.0.1/udp/8080".parse().unwrap();
+    endpoint_manager
+        .update_endpoint(
+            EndpointId::P2p(remote_peer_id),
+            AddressSource::Chain,
+            vec![chain_multiaddr],
+        )
+        .unwrap();
+    while let Ok(msg) = event_loop.mailbox.try_recv() {
+        event_loop.handle_message(msg);
+    }
+
+    assert_eq!(
+        active_p2p_source_code(&registry, &peer_label),
+        Some(AddressSource::Chain.metric_code()),
+        "Chain should be the active source"
+    );
+
+    // Gossip a higher-priority Discovery address for the same (trusted) peer.
+    let discovery_multiaddr: Multiaddr = "/ip4/10.0.0.1/udp/9000".parse().unwrap();
+    let mut addresses = BTreeMap::new();
+    addresses.insert(EndpointId::P2p(remote_peer_id), vec![discovery_multiaddr]);
+    let gossiped_info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    })
+    .sign(&remote_keypair);
+
+    update_known_peers_versioned(
+        event_loop.state.clone(),
+        vec![gossiped_info],
+        event_loop.configured_peers.clone(),
+        &event_loop.chain_peers,
+        &event_loop.endpoint_manager,
+    );
+    while let Ok(msg) = event_loop.mailbox.try_recv() {
+        event_loop.handle_message(msg);
+    }
+
+    // Discovery now outranks Chain: the gauge value flips to the Discovery code.
+    assert_eq!(
+        active_p2p_source_code(&registry, &peer_label),
+        Some(AddressSource::Discovery.metric_code()),
+        "Discovery should now be the active source"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_divergent_discovery_consensus_address_applied() -> Result<()> {
+    // A trusted peer advertises a Discovery *consensus* address that differs from
+    // its on-chain Chain consensus address. The gossiped address must be forwarded
+    // to the consensus updater with AddressSource::Discovery, while the lower-priority
+    // Chain address is also forwarded (so consensus can retain it as a fallback).
+    use fastcrypto::traits::KeyPair as _;
+
+    let remote_keypair = sui_types::crypto::NetworkKeyPair::generate(&mut rand::thread_rng());
+    let remote_peer_id = PeerId(
+        *fastcrypto::traits::KeyPair::public(&remote_keypair)
+            .0
+            .as_bytes(),
+    );
+    let remote_network_pubkey =
+        NetworkPublicKey::from_bytes(&remote_peer_id.0).expect("PeerId is a valid public key");
+
+    let config = P2pConfig::default();
+    let (builder, server, endpoint_manager) = Builder::new().config(config).build();
+    let (network, key) = build_network_and_key(|router| router.add_rpc_service(server));
+    let (mut event_loop, _handle) = builder.build(network.clone(), key);
+
+    event_loop.construct_our_info();
+    event_loop.configure_preferred_peers();
+
+    // Mark the peer as trusted so its gossiped Consensus endpoint is forwarded.
+    event_loop
+        .chain_peers
+        .write()
+        .unwrap()
+        .insert(remote_peer_id);
+
+    let updater = Arc::new(RecordingUpdater(std::sync::Mutex::new(Vec::new())));
+    event_loop
+        .endpoint_manager
+        .set_consensus_address_updater(updater.clone());
+
+    // The peer's on-chain consensus address (lower priority than Discovery).
+    let chain_consensus_addr: Multiaddr = "/ip4/172.16.0.1/udp/8081".parse().unwrap();
+    endpoint_manager
+        .update_endpoint(
+            EndpointId::Consensus(remote_network_pubkey.clone()),
+            AddressSource::Chain,
+            vec![chain_consensus_addr.clone()],
+        )
+        .unwrap();
+
+    // Gossip a V2 NodeInfo whose Consensus address differs from the Chain address.
+    let discovery_consensus_addr: Multiaddr = "/ip4/10.0.0.1/udp/9001".parse().unwrap();
+    assert_ne!(
+        chain_consensus_addr, discovery_consensus_addr,
+        "test requires divergent Chain vs Discovery consensus addresses"
+    );
+    let mut addresses = BTreeMap::new();
+    addresses.insert(
+        EndpointId::P2p(remote_peer_id),
+        vec!["/ip4/10.0.0.1/udp/9000".parse().unwrap()],
+    );
+    addresses.insert(
+        EndpointId::Consensus(remote_network_pubkey.clone()),
+        vec![discovery_consensus_addr.clone()],
+    );
+    let gossiped_info = VersionedNodeInfo::V2(NodeInfoV2 {
+        addresses,
+        timestamp_ms: now_unix(),
+        access_type: AccessType::Public,
+    })
+    .sign(&remote_keypair);
+
+    update_known_peers_versioned(
+        event_loop.state.clone(),
+        vec![gossiped_info],
+        event_loop.configured_peers.clone(),
+        &event_loop.chain_peers,
+        &event_loop.endpoint_manager,
+    );
+    while let Ok(msg) = event_loop.mailbox.try_recv() {
+        event_loop.handle_message(msg);
+    }
+
+    let updates = updater.0.lock().unwrap();
+
+    // The gossiped consensus address is forwarded with AddressSource::Discovery.
+    let discovery_update = updates
+        .iter()
+        .find(|(pubkey, source, _)| {
+            *pubkey == remote_network_pubkey && *source == AddressSource::Discovery
+        })
+        .expect("gossiped Consensus address should be forwarded with Discovery source");
+    assert_eq!(
+        discovery_update.2,
+        vec![discovery_consensus_addr.clone()],
+        "Discovery consensus address should be the gossiped (divergent) one"
+    );
+
+    // The Chain consensus address is also forwarded, available as a lower-priority fallback.
+    let chain_update = updates
+        .iter()
+        .find(|(pubkey, source, _)| {
+            *pubkey == remote_network_pubkey && *source == AddressSource::Chain
+        })
+        .expect("Chain consensus address should remain available as a fallback");
+    assert_eq!(chain_update.2, vec![chain_consensus_addr]);
 
     Ok(())
 }

@@ -59,7 +59,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     object::{Object, Owner},
     storage::get_module_by_id,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    storage::{BackingPackageStore, ObjectStore, ParentSync, RuntimeObjectResolver},
     transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         SenderSignedData, Transaction, TransactionDataAPI, TransactionKind, VerifiedTransaction,
@@ -502,7 +502,7 @@ impl LocalExec {
             .multi_download_latest(&non_system_package_objs)
             .await?
             .into_iter()
-            .chain(syst_packages_objs.into_iter());
+            .chain(syst_packages_objs);
 
         for obj in objs.clone() {
             let o_ref = obj.compute_object_reference();
@@ -802,6 +802,7 @@ impl LocalExec {
                 &tx_info.executed_epoch,
                 tx_info.epoch_start_timestamp,
                 checked_input_objects,
+                std::collections::BTreeMap::new(),
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
@@ -998,6 +999,7 @@ impl LocalExec {
                 &executed_epoch,
                 epoch_start_timestamp,
                 input_objects,
+                std::collections::BTreeMap::new(),
                 gas_data,
                 gas_status,
                 kind,
@@ -1936,7 +1938,7 @@ impl BackingPackageStore for LocalExec {
     }
 }
 
-impl ChildObjectResolver for LocalExec {
+impl RuntimeObjectResolver for LocalExec {
     /// This uses `get_object`, which does not download from the network
     /// Hence all objects must be in store already
     fn read_child_object(
@@ -1981,7 +1983,7 @@ impl ChildObjectResolver for LocalExec {
             .lock()
             .expect("Unable to lock events list")
             .push(
-                ExecutionStoreEvent::ChildObjectResolverStoreReadChildObject {
+                ExecutionStoreEvent::RuntimeObjectResolverStoreReadChildObject {
                     parent: *parent,
                     child: *child,
                     result: res.clone(),

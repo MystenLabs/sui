@@ -1,8 +1,42 @@
 ---
 title: Sui Archive Data
 sidebar_label: Archive Data
-description: The archive is a historical record of all transactions on Sui. Enable archiving on your Full nodes as a best practice.
-keywords: [ archive, archive data, full node archive, node archive, fallback, archival fallback ] 
+description: >-
+  The archive is a historical record of all transactions on Sui. Enable
+  archiving on your Full nodes as a best practice.
+keywords:
+  - archive
+  - archive data
+  - full node archive
+  - node archive
+  - fallback
+  - archival fallback
+goal:
+  description: >-
+    Operator understands the archive is a historical record of all transactions
+    on Sui.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is the Sui archive and why should I enable it?
+  - How do I enable archiving on a Sui full node?
+  - What data does the Sui archive contain?
+answer: >-
+  The archive is a historical record of all transactions on Sui. Enable
+  archiving on your Full nodes as a best practice.
 ---
 
 A Sui archive is a history of all transaction data on Sui. In some cases, peer nodes might not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. In such cases, instead of relying on synchronization, peer nodes can fall back to downloading the relevant information from an archive.

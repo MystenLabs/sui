@@ -1,0 +1,56 @@
+// Reassigning a local is allowed while it is directly (whole-local) borrowed;
+// only borrows into its contents block the store.
+
+//# run
+mvir 0x2::direct_mut {
+
+entry fun t() {
+    let a: u64;
+    let x: &mut u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    a = 1;
+    // x still points to the local's memory cell
+    assert(*move(x) == 1, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::direct_imm {
+
+entry fun t() {
+    let a: u64;
+    let x: &u64;
+label b0:
+    a = 0;
+    x = &a;
+    a = 1;
+    assert(*move(x) == 1, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::direct_both {
+
+entry fun t() {
+    let a: u64;
+    let x: &mut u64;
+    let y: &u64;
+label b0:
+    a = 0;
+    x = &mut a;
+    y = freeze(copy(x));
+    a = 1;
+    assert(*copy(y) == 1, 42);
+    *copy(x) = 2;
+    assert(*move(y) == 2, 42);
+    assert(*move(x) == 2, 42);
+    return;
+}
+
+}

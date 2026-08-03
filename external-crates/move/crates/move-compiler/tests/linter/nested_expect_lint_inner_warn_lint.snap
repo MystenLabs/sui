@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[W10009]: unfulfilled '#[expect(...)]'
+warning[WC10009]: unfulfilled '#[expect(...)]'
   ┌─ tests/linter/nested_expect_lint_inner_warn_lint.move:3:15
   │
 3 │ #[expect(lint(constant_naming))]
@@ -13,7 +13,7 @@ warning[W10009]: unfulfilled '#[expect(...)]'
   │
   = The '#[expect(...)]' attribute will only suppress a warning that actually occurs. Remove the attribute if the warning is intentionally fixed.
 
-warning[Lint W04001]: constant should follow naming convention
+warning[WL04001]: constant should follow naming convention
   ┌─ tests/linter/nested_expect_lint_inner_warn_lint.move:6:5
   │
 5 │     #[warn(lint(constant_naming))]

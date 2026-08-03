@@ -6,7 +6,7 @@
 //! For an `Seq([..., LetBind([X], e), next, ...])` we fire when:
 //!   - `X` has exactly one defining `LetBind` (this one), zero `Assign`/`Declare`/`Unpack`,
 //!     and exactly one `Variable` read across the whole function.
-//!   - The unique read sits at `next`'s *head position* — the first child evaluated when
+//!   - The unique read sits at `next`'s *head position* - the first child evaluated when
 //!     `next` runs. We walk `next` down its leftmost evaluation chain (`Return([head])`,
 //!     `Call(_, [head, ..])`, `IfElse(head, _, _)`, etc.) and require to arrive at
 //!     `Variable(X)`.
@@ -16,7 +16,7 @@
 //! `let X = e` had it execute (first), so any side effects in `e` happen at the same point.
 //!
 //! Complements `inline_immutable_alias` (which only handles `let X = Y;` where the RHS is a
-//! variable). Here `e` can be any expression — `f(...)`, a struct unpack, a literal, etc.
+//! variable). Here `e` can be any expression - `f(...)`, a struct unpack, a literal, etc.
 //! The decompiler emits many `let regN = expr; ...next...` shapes that this collapses.
 
 use crate::{
@@ -78,7 +78,7 @@ fn collapse_in_seq(items: &mut Vec<Exp>, counts: &NameCounts) -> bool {
             "head_var_is returned true but replace_head_var did not"
         );
         changed = true;
-        // Don't advance `i` — the new items[i] might itself be a candidate for further
+        // Don't advance `i` - the new items[i] might itself be a candidate for further
         // collapsing on the next iteration of this loop.
     }
     changed
@@ -140,6 +140,7 @@ fn head_ref(exp: &Exp) -> Option<&Exp> {
         Exp::IfElse(cond, _, _) => Some(cond),
         Exp::Switch(subj, _, _) => Some(subj),
         Exp::Match(subj, _, _) => Some(subj),
+        Exp::MatchLit(subj, _) => Some(subj),
         // No safe head to substitute through:
         //   - Loop/While bodies execute repeatedly; substituting in would change frequency.
         //   - Seq has multiple items; the head idea doesn't compose cleanly here (a `Seq`
@@ -174,6 +175,7 @@ fn head_mut(exp: &mut Exp) -> Option<&mut Exp> {
         Exp::IfElse(cond, _, _) => Some(cond),
         Exp::Switch(subj, _, _) => Some(subj),
         Exp::Match(subj, _, _) => Some(subj),
+        Exp::MatchLit(subj, _) => Some(subj),
         Exp::Loop(_, _)
         | Exp::While(_, _, _)
         | Exp::Seq(_)

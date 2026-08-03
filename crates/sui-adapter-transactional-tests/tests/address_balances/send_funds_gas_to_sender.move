@@ -7,7 +7,7 @@
 // overridden to the recipient's AB -- the same address as the original
 // payer, so the override is logically a no-op.
 
-//# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A
 
 // Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A

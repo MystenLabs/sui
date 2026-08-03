@@ -26,11 +26,11 @@ pub fn refine(exp: &mut Exp) -> bool {
 // We want to recover the source-form `let X = e;`. This pass walks each `Declare` and, looking
 // forward in its enclosing `Seq`, tries to find the assignment that initializes each declared
 // name. When the *first* item that touches a name `X` is exactly the `Assign` that initializes
-// it — i.e., `Assign(targets, rhs)` whose `targets` are a subset of the declared names and
-// whose `rhs` doesn't read any of them — we rewrite that `Assign` to a `LetBind` and drop the
+// it - i.e., `Assign(targets, rhs)` whose `targets` are a subset of the declared names and
+// whose `rhs` doesn't read any of them - we rewrite that `Assign` to a `LetBind` and drop the
 // fused names from the `Declare`. If any pending name is touched in some other way first
 // (read, used inside a nested expression, multi-target assign with non-pending targets, etc.)
-// it stays in the `Declare` — fusing in that case would either reorder a read past an unbound
+// it stays in the `Declare` - fusing in that case would either reorder a read past an unbound
 // use or change scoping.
 //
 // The pass is forward-scanning per `Declare` and conservative: a name that's blocked stays
@@ -89,7 +89,7 @@ fn fuse_seq(items: &mut Vec<Exp>) -> bool {
         changed = true;
         if remaining.is_empty() {
             items.remove(i);
-            // Don't advance i — what was at i+1 is now at i, and we want to keep walking.
+            // Don't advance i - what was at i+1 is now at i, and we want to keep walking.
         } else {
             items[i] = Exp::Declare(remaining);
             i += 1;
@@ -112,7 +112,7 @@ fn classify_item(
     fusion_positions: &mut Vec<usize>,
     j: usize,
 ) {
-    // Peek through `Block` wrappers — the `Assign` we're hunting may sit inside one.
+    // Peek through `Block` wrappers - the `Assign` we're hunting may sit inside one.
     if let Exp::Assign(targets, rhs) = peek(item) {
         let rhs_refs = liveness::referenced_names(rhs);
         let all_targets_pending = targets.iter().all(|t| pending.contains(t));

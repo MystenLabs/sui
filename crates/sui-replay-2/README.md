@@ -63,7 +63,7 @@ The 3 main interfaces are:
 <p>
 
 `execution.rs` is the wrapper around `execute_transaction_to_effects` and the implementation of the storage traits
-is there (`BackingPackageStore`, `ObjectStore`, `ChildObjectResolver`)
+is there (`BackingPackageStore`, `ObjectStore`, `RuntimeObjectResolver`)
 </p>
 <p>
 

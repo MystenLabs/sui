@@ -1,0 +1,70 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Publish Prettier Move
+run-name: Publish Prettier Move${{ inputs.dry_run && ' (dry run)' || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and validate the package without publishing it
+        type: boolean
+        required: true
+        default: true
+
+concurrency:
+  group: publish-prettier-move
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Build, test, and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main for publishing
+        if: ${{ ! inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Publishing is only allowed from main (selected ref: $GITHUB_REF)"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+
+      - name: Install tree-sitter CLI
+        run: cargo install tree-sitter-cli
+
+      - name: Build parser WASM
+        working-directory: external-crates/move/tooling/tree-sitter
+        run: tree-sitter build --wasm --output ../prettier-move/tree-sitter-move.wasm
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # pin@v4.2.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pin@v6.2.0
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --filter @mysten/prettier-plugin-move... --frozen-lockfile --ignore-scripts
+
+      - name: Test
+        run: pnpm --filter @mysten/prettier-plugin-move test
+
+      - name: Publish to npm
+        working-directory: external-crates/move/tooling/prettier-move
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [[ "$DRY_RUN" == "true" ]]; then
+            npm publish --dry-run --access public
+          else
+            npm publish --access public
+          fi

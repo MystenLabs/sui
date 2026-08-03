@@ -39,6 +39,7 @@ use crate::api::types::epoch::CEpoch;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::event::CEvent;
 use crate::api::types::event::Event;
+use crate::api::types::event::EventConnection;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
@@ -311,7 +312,7 @@ impl Query {
         last: Option<u64>,
         before: Option<CEvent>,
         filter: Option<EventFilter>,
-    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+    ) -> Option<Result<EventConnection, RpcError>> {
         Some(
             async {
                 let scope = self.scope(ctx)?;

@@ -1,8 +1,47 @@
 ---
 title: Sui Full Node Configuration
 sidebar_label: Configuration
-description: Operate a Sui full node to validate blockchain activities, like transactions, checkpoints, and epoch changes.  
-keywords: [ fullnode configuration, full node configuration, sui full nodes, state synchronization, state sync, full node architecture, node hardware requirements, node software requirements, grpc, starting a full node, running a full node ]
+description: >-
+  Operate a Sui full node to validate blockchain activities, like transactions,
+  checkpoints, and epoch changes.
+keywords:
+  - fullnode configuration
+  - full node configuration
+  - sui full nodes
+  - state synchronization
+  - state sync
+  - full node architecture
+  - node hardware requirements
+  - node software requirements
+  - grpc
+  - starting a full node
+  - running a full node
+goal:
+  description: >-
+    Node operator understands operate a Sui full node to validate blockchain
+    activities, like transactions, checkpoints
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more operational depth
+    - pattern: '```'
+      min: 1
+      label: Has configuration or command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I set up a Sui full node?
+  - What are the hardware requirements for a Sui full node?
+  - How do I configure a Sui full node for production?
+answer: >-
+  Operate a Sui full node to validate blockchain activities, like transactions,
+  checkpoints, and epoch changes.
 ---
 
 :::info
@@ -105,7 +144,58 @@ The `rpc` configuration block supports additional settings. The most important o
 
 Refer to the [`RpcConfig` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/src/rpc_config.rs) for the complete list of available `rpc` options.
 
-You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
+#### Ledger history configuration {#ledger-history-configuration}
+
+The `rpc.ledger-history` block tunes the three historical list APIs: `ListTransactions`, `ListEvents`, and `ListCheckpoints`. These APIs scan inverted indexes to serve filtered queries over past transactions and events. See [Ledger history list APIs](/develop/accessing-data/grpc/using-grpc#ledger-history-list-apis) for developer-facing usage.
+
+```yaml
+rpc:
+  enable-indexing: true
+  ledger-history:
+    list-transactions:
+      timeout-ms: 5000
+      default-limit-items: 50
+      max-limit-items: 500
+      chunk-max: 32
+    list-events:
+      timeout-ms: 5000
+      default-limit-items: 50
+      max-limit-items: 1000
+      chunk-max: 32
+    list-checkpoints:
+      timeout-ms: 5000
+      default-limit-items: 10
+      max-limit-items: 100
+      chunk-max: 16
+    bitmap-bucket-scan-budget: 1024
+    chunk-bucket-scan-budget: 256
+    max-bitmap-filter-literals: 10
+```
+
+**Per-endpoint settings** (configurable for each of `list-transactions`, `list-events`, `list-checkpoints`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `timeout-ms` | `5000` | Maximum time in milliseconds for the request. |
+| `default-limit-items` | Varies | Default number of items returned if the client does not specify a limit. |
+| `max-limit-items` | Varies | Maximum number of items the client can request. |
+| `chunk-max` | Varies | Maximum chunks processed per streaming response. |
+
+**Global scan settings:**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `bitmap-bucket-scan-budget` | `1024` | Total evaluated-bucket budget for one filtered request. When exhausted, the query ends with `SCAN_LIMIT` and a resume cursor. |
+| `chunk-bucket-scan-budget` | `256` | Per-chunk evaluated-bucket cap. Clamped to `bitmap-bucket-scan-budget`. |
+| `max-bitmap-filter-literals` | `10` | Maximum total filter literals accepted in one request. Each literal becomes one bitmap leaf. |
+
+:::caution
+
+`bitmap-bucket-scan-budget` must be greater than or equal to `max-bitmap-filter-literals`. If not, the node rejects the configuration at startup because a filtered request could exhaust its scan budget before any filter leaf produces a result.
+
+:::
+
+You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh
 

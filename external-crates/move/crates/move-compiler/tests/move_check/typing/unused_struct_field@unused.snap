@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09009]: unused struct field
+warning[WC09009]: unused struct field
    ┌─ tests/move_check/typing/unused_struct_field.move:13:9
    │
 13 │         field_unused: u8
@@ -13,7 +13,7 @@ warning[W09009]: unused struct field
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09009]: unused struct field
+warning[WC09009]: unused struct field
    ┌─ tests/move_check/typing/unused_struct_field.move:27:9
    │
 27 │         field1: u8,
@@ -21,7 +21,7 @@ warning[W09009]: unused struct field
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09009]: unused struct field
+warning[WC09009]: unused struct field
    ┌─ tests/move_check/typing/unused_struct_field.move:28:9
    │
 28 │         field2: u8,
@@ -29,7 +29,7 @@ warning[W09009]: unused struct field
    │
    = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_check/typing/unused_struct_field.move:63:57
    │
 63 │     public fun flaky(x: 0x42::private_struct::S): u64 { x.f }

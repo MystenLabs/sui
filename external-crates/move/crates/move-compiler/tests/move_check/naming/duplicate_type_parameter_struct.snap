@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:2:14
   │
 2 │     struct S<T, T> { f: T }
@@ -13,7 +13,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:2:17
   │
 2 │     struct S<T, T> { f: T }
@@ -21,7 +21,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │              │   
   │              Type parameter previously defined here
 
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:3:15
   │
 3 │     struct S2<T: drop, T: key, T> { f: T }
@@ -29,7 +29,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:3:24
   │
 3 │     struct S2<T: drop, T: key, T> { f: T }
@@ -37,7 +37,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:3:24
   │
 3 │     struct S2<T: drop, T: key, T> { f: T }
@@ -45,7 +45,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │               │         
   │               Type parameter previously defined here
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:3:32
   │
 3 │     struct S2<T: drop, T: key, T> { f: T }
@@ -53,7 +53,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │               │                 
   │               Type parameter previously defined here
 
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:4:14
   │
 4 │     struct R<T, T> { f: T }
@@ -61,7 +61,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:4:17
   │
 4 │     struct R<T, T> { f: T }
@@ -69,7 +69,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │              │   
   │              Type parameter previously defined here
 
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:5:15
   │
 5 │     struct R2<T: drop, T: key, T> { f: T }
@@ -77,7 +77,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09006]: unused struct type parameter
+warning[WC09006]: unused struct type parameter
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:5:24
   │
 5 │     struct R2<T: drop, T: key, T> { f: T }
@@ -85,7 +85,7 @@ warning[W09006]: unused struct type parameter
   │
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:5:24
   │
 5 │     struct R2<T: drop, T: key, T> { f: T }
@@ -93,7 +93,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │               │         
   │               Type parameter previously defined here
 
-error[E02001]: duplicate declaration, item, or annotation
+error[EC02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/naming/duplicate_type_parameter_struct.move:5:32
   │
 5 │     struct R2<T: drop, T: key, T> { f: T }

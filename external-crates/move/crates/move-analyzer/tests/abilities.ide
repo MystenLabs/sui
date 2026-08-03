@@ -1,0 +1,22 @@
+// Checks that hover renders abilities in canonical formatter order.
+{
+  "UseDef": {
+    "project": "tests/abilities",
+    "file_tests": {
+      "abilities.move": [
+        {
+          "use_line": 3,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 5,
+          "use_ndx": 0
+        },
+        {
+          "use_line": 7,
+          "use_ndx": 0
+        }
+      ]
+    }
+  }
+}

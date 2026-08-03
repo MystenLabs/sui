@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_2024/matching/invalid_match_lhs.move:8:10
   │
 8 │ fun test(z: &mut Maybe<u64>) {
@@ -13,7 +13,7 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_match_lhs.move:9:9
   │
 9 │     let { match (z) { Maybe::Just(n) => n, Maybe::Nothing => abort 0 } } = 5;

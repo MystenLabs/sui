@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09002]: unused variable
+warning[WC09002]: unused variable
   ┌─ tests/move_2024/hlir/macro_type_error_binding.move:2:17
   │
 2 │     macro fun f($x: u64): (u64, u64) {
@@ -13,13 +13,13 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
   ┌─ tests/move_2024/hlir/macro_type_error_binding.move:3:9
   │
 3 │        ($, $x)
   │         ^ Expected an identifier following '$', e.g. '$x'
 
-warning[W09005]: dead or unreachable code
+warning[WC09005]: dead or unreachable code
   ┌─ tests/move_2024/hlir/macro_type_error_binding.move:6:25
   │
 6 │         let (a, b) = f!(0);
@@ -27,7 +27,7 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E06002]: use of unassigned variable
+error[EC06002]: use of unassigned variable
    ┌─ tests/move_2024/hlir/macro_type_error_binding.move:13:9
    │
 12 │         move x;

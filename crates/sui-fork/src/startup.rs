@@ -162,7 +162,8 @@ pub async fn initialize(
     //    `Context` (producers push here on `advance_checkpoint`); the handle
     //    is wired into `RpcService` in `run` so subscribers can register.
     let registry = Registry::new();
-    let (checkpoint_sender, subscription_handle) = SubscriptionService::build(&registry, None);
+    let (checkpoint_sender, subscription_handle) =
+        SubscriptionService::build(&registry, None, None, None, None);
 
     Ok((
         Context::new(simulacrum, chain_identifier, checkpoint_sender),

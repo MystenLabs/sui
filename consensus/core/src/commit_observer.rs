@@ -17,6 +17,7 @@ use crate::{
     error::ConsensusResult,
     linearizer::Linearizer,
     storage::Store,
+    task::spawn_blocking,
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -73,18 +74,23 @@ impl CommitObserver {
         // Recover blocks needed for future commits (and block proposals).
         // Some blocks might have been recovered as committed blocks in recover_and_send_commits().
         // They will just be ignored.
-        tokio::runtime::Handle::current()
-            .spawn_blocking({
-                let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
-                let gc_round = observer.dag_state.read().gc_round();
-                move || {
-                    transaction_vote_tracker.recover_blocks_after_round(gc_round);
-                }
-            })
-            .await
-            .expect("Spawn blocking should not fail");
+        if let Err(e) = spawn_blocking({
+            let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
+            let gc_round = observer.dag_state.read().gc_round();
+            move || {
+                transaction_vote_tracker.recover_blocks_after_round(gc_round);
+            }
+        })
+        .await
+        {
+            info!("Skipping block recovery for transaction voting: {e}");
+        }
 
         observer
+    }
+
+    pub(crate) async fn stop(&mut self) {
+        self.commit_finalizer_handle.stop().await;
     }
 
     /// Creates and returns a list of committed subdags containing committed blocks, from a sequence
@@ -284,12 +290,15 @@ impl CommitObserver {
                 .observe(commit.blocks.len() as f64);
 
             for block in &commit.blocks {
-                let latency_ms = utc_now
-                    .checked_sub(block.timestamp_ms())
-                    .unwrap_or_default();
+                let latency_ms = utc_now.saturating_sub(block.timestamp_ms());
                 metrics
                     .block_commit_latency
                     .observe(Duration::from_millis(latency_ms).as_secs_f64());
+                if block.author() == self.context.own_index {
+                    metrics
+                        .proposed_block_commit_latency
+                        .observe(Duration::from_millis(latency_ms).as_secs_f64());
+                }
             }
         }
 
@@ -382,11 +391,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let blocks = dag_state
-                    .read()
-                    .get_blocks(&block_refs)
-                    .into_iter()
-                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                let block_opts = dag_state.read().get_blocks(&block_refs);
+                let blocks = block_opts.iter().map(|block_opt| {
+                    block_opt
+                        .as_ref()
+                        .expect("We should have all blocks in dag state.")
+                });
                 median_timestamp_by_stake(&context, blocks).unwrap()
             };
 
@@ -424,6 +434,31 @@ mod tests {
             }
         }
         assert_eq!(processed_subdag_index, leaders.len());
+
+        // Own block latencies are observed once per committed & finalized block
+        // authored by this authority.
+        let own_committed_blocks = commits
+            .iter()
+            .flat_map(|commit| commit.blocks.iter())
+            .filter(|block| block.author() == context.own_index)
+            .count() as u64;
+        assert!(own_committed_blocks > 0);
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_commit_latency
+                .get_sample_count(),
+            own_committed_blocks
+        );
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .proposed_block_finalization_latency
+                .get_sample_count(),
+            own_committed_blocks
+        );
 
         verify_channel_empty(&mut commit_receiver).await;
 

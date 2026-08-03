@@ -3,7 +3,7 @@
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
 ARG PROFILE=release-unwind
-FROM rust:1.92-bullseye AS builder
+FROM rust:1.96.1-bullseye AS builder
 ARG PROFILE
 WORKDIR "$WORKDIR/sui"
 

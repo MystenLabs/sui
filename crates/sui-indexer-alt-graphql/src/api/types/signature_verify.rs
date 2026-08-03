@@ -12,6 +12,7 @@ use im::hashmap::HashMap;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use shared_crypto::intent::PersonalMessage;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_AUTHENTICATOR_STATE_ADDRESS;
 use sui_types::TypeTag;
 use sui_types::authenticator_state::ActiveJwk;
@@ -34,6 +35,7 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::scope::Scope;
+use crate::task::chain_identifier::ChainIdentifier;
 
 /// An enum that specifies the intent scope for signature verification.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -108,6 +110,27 @@ pub(crate) async fn fetch_jwks(
     Ok(jwks)
 }
 
+/// The zkLogin circuit mode the chain's validators enforce at `epoch`'s protocol version, so
+/// that verification results here match on-chain acceptance.
+pub(crate) async fn chain_zklogin_circuit_mode(
+    ctx: &Context<'_>,
+    epoch: &Epoch,
+) -> Result<u64, RpcError> {
+    let chain_identifier: &ChainIdentifier = ctx.data()?;
+    let chain = chain_identifier.wait().await.chain();
+
+    let protocol_version = epoch
+        .protocol_version(ctx)
+        .await?
+        .context("Failed to fetch the epoch's protocol version")?;
+
+    Ok(
+        ProtocolConfig::get_for_version_if_supported(protocol_version.into(), chain)
+            .with_context(|| format!("Protocol version {protocol_version} is not supported"))?
+            .zklogin_circuit_mode(),
+    )
+}
+
 /// Verify any signature type locally. Supports Ed25519, Secp256k1, Secp256r1, MultiSig, ZkLogin,
 /// and Passkey.
 pub(crate) async fn verify_signature(
@@ -130,10 +153,15 @@ pub(crate) async fn verify_signature(
 
     let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
 
+    let zklogin_circuit_mode = chain_zklogin_circuit_mode(ctx, &epoch)
+        .await
+        .map_err(upcast)?;
+
     let params = VerifyParams::new(
         jwks,
         vec![],
         config.env,
+        zklogin_circuit_mode,
         true,
         true,
         true,

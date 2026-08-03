@@ -1,0 +1,54 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 4-30:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::enum_contains_vector'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::enum_contains_vector,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 32-57:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::vector_contains_enum'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::vector_contains_enum,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 2, lines 59-79:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::nested_vectors'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::nested_vectors,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}
+
+task 3, lines 81-106:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::returned_inner_vector'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::returned_inner_vector,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}
+
+task 4, lines 108-130:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::swap_nonflat_with_imm_alias'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::swap_nonflat_with_imm_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_2024/parser/enum_invalid.move:2:5
   │
 2 │     enum Temperature {
@@ -13,7 +13,7 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on enum declarations.
 
-error[E01003]: invalid modifier
+error[EC01003]: invalid modifier
   ┌─ tests/move_2024/parser/enum_invalid.move:8:5
   │
 8 │     public(package) enum EnumWithPhantom<phantom T> {
@@ -21,13 +21,13 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on enum declarations.
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/parser/enum_invalid.move:13:13
    │
 13 │        Done(x: u64),
    │             ^ Cannot use named fields in a positional definition
 
-error[E01002]: unexpected token
+error[EC01002]: unexpected token
    ┌─ tests/move_2024/parser/enum_invalid.move:14:18
    │
 14 │        Add { u64 },

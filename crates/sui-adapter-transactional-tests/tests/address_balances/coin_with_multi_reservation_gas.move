@@ -9,7 +9,7 @@
 //   - a single accumulator event is emitted for the merged reservation,
 //   - leftover reservation lands in the gas coin (not refunded to the balance).
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B
 
 //# view-object 0,0
 

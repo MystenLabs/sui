@@ -1,0 +1,16 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 1-5:
+//# print-bytecode
+Error: ParserError: Invalid Token: constant names must begin with an uppercase letter
+
+task 1, lines 7-16:
+//# print-bytecode
+Error: ParserError: Invalid Token: local and parameter names must not begin with an uppercase letter (that is reserved for constants)
+
+task 2, lines 18-25:
+//# print-bytecode
+Error: ParserError: Invalid Token: local and parameter names must not begin with an uppercase letter (that is reserved for constants)

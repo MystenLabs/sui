@@ -8,10 +8,10 @@
 //!
 //! ```text
 //!   let X = if (t) { ...; return e } else { rhs };
-//!     ⇒  if (t) { ...; return e }; let X = rhs;
+//!     =>  if (t) { ...; return e }; let X = rhs;
 //!
 //!   let X = if (t) { rhs } else { ...; abort };
-//!     ⇒  if (!t) { ...; abort }; let X = rhs;
+//!     =>  if (!t) { ...; abort }; let X = rhs;
 //! ```
 //!
 //! The lifted `if` becomes an unconditional early-exit guard, and the assignment to `X` no
@@ -21,7 +21,7 @@
 //! Soundness: items before the `LetBind` in the surrounding `Seq` run unconditionally (same
 //! as before); the lifted `if` either terminates control flow (matching the original arm's
 //! exit) or falls through to the `let X = rhs`, which evaluates the surviving arm and
-//! continues — matching the original's behavior in that branch. Both-arm-terminate cases
+//! continues - matching the original's behavior in that branch. Both-arm-terminate cases
 //! are skipped: the assignment to `X` is unreachable, and other refinements handle that.
 
 use crate::{

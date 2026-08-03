@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[W10007]: issue with attribute value
+warning[WC10007]: issue with attribute value
   ┌─ tests/sui_mode/linter/lint_all_syntax_missing.move:2:14
   │
 2 │ #[lint_allow(x)]

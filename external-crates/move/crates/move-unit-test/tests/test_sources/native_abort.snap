@@ -11,7 +11,7 @@ Test failures:
 Failures in 0x6::A:
 
 ┌── native_abort_good_wrong_code ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │    ┌─ native_abort.move:11:9
 │    │
 │ 10 │     fun native_abort_good_wrong_code() {
@@ -24,7 +24,7 @@ Failures in 0x6::A:
 
 
 ┌── native_abort_unexpected_abort ──────
-│ error[E11001]: test failure
+│ error[EC11001]: test failure
 │   ┌─ native_abort.move:5:9
 │   │
 │ 4 │     fun native_abort_unexpected_abort() {

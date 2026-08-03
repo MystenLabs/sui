@@ -50,8 +50,11 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 ///
 /// Scalar (`u16`/`u32`/`u64`/`bool`) fields continue to feed `ProtocolConfigValue` / `attr_map`
 /// for back-compat with existing consumers. Non-scalar fields appear only in `render`. Add
-/// `#[skip_accessor]` to keep a field internal and out of every generated surface.
-#[proc_macro_derive(ProtocolConfigAccessors, attributes(skip_accessor))]
+/// `#[skip_accessor]` to keep a field internal and out of every generated surface. Add
+/// `#[custom_setter]` to suppress the generated `set_x_for_testing` so the struct can provide a
+/// hand-written one (e.g. to validate the new value); the `from_str` setter and
+/// `set_attr_for_testing` still route through it by name.
+#[proc_macro_derive(ProtocolConfigAccessors, attributes(skip_accessor, custom_setter))]
 pub fn accessors_macro(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
@@ -255,10 +258,17 @@ fn expand_field(f: &AccessorField) -> ExpandedField {
             self.#field_name.clone()
         }
     };
-    let common_setters = quote! {
-        pub fn #test_setter_name(&mut self, val: #inner_type) {
-            self.#field_name = Some(val);
+    let typed_setter = if f.custom_setter {
+        quote! {}
+    } else {
+        quote! {
+            pub fn #test_setter_name(&mut self, val: #inner_type) {
+                self.#field_name = Some(val);
+            }
         }
+    };
+    let common_setters = quote! {
+        #typed_setter
 
         pub fn #test_un_setter_name(&mut self) {
             self.#field_name = None;
@@ -328,6 +338,9 @@ struct AccessorField {
     /// `ProtocolConfigValue` variant ident (`u16`/`u32`/`u64`/`bool`). `None` for non-scalar
     /// fields, which never appear in `ProtocolConfigValue`.
     scalar_variant: Option<syn::Ident>,
+    /// `#[custom_setter]` — the struct hand-writes `set_x_for_testing` instead of the derive
+    /// emitting the plain field assignment.
+    custom_setter: bool,
 }
 
 fn parse_accessor_field(field: &syn::Field) -> Option<AccessorField> {
@@ -360,11 +373,17 @@ fn parse_accessor_field(field: &syn::Field) -> Option<AccessorField> {
 
     let scalar_variant = inferred_scalar_variant_ident(&inner_type);
 
+    let custom_setter = field
+        .attrs
+        .iter()
+        .any(|attr| attr.path.is_ident("custom_setter"));
+
     Some(AccessorField {
         field_name,
         field_type: field_type.clone(),
         inner_type,
         scalar_variant,
+        custom_setter,
     })
 }
 
@@ -446,7 +465,10 @@ pub fn protocol_config_override_macro(input: TokenStream) -> TokenStream {
     TokenStream::from(output)
 }
 
-#[proc_macro_derive(ProtocolConfigFeatureFlagsGetters, attributes(skip_accessor))]
+#[proc_macro_derive(
+    ProtocolConfigFeatureFlagsGetters,
+    attributes(skip_accessor, skip_protocol_config_accessor)
+)]
 pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
@@ -456,64 +478,105 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
     let getters = match data {
         Data::Struct(data_struct) => match &data_struct.fields {
             // Operate on each field of the ProtocolConfig struct
-            Fields::Named(fields_named) => fields_named.named.iter().filter_map(|field| {
-                // Extract field name and type
-                let field_name = field.ident.as_ref().expect("Field must be named");
-                let field_type = &field.ty;
-                let skip_accessor = field
-                    .attrs
-                    .iter()
-                    .any(|attr| attr.path.is_ident("skip_accessor"));
-                if skip_accessor {
-                    return None;
-                }
-                // Check if field is of type bool
-                match field_type {
-                    Type::Path(type_path)
-                        if type_path
-                            .path
-                            .segments
-                            .last()
-                            .is_some_and(|segment| segment.ident == "bool") =>
-                    {
-                        Some((
-                            quote! {
-                                // Derive the getter
-                                pub fn #field_name(&self) -> #field_type {
-                                    self.#field_name
-                                }
-                            },
-                            (
-                                quote! {
-                                    stringify!(#field_name) => Some(self.#field_name),
-                                },
-                                quote! {
-                                    stringify!(#field_name)
-                                },
-                            ),
-                        ))
+            Fields::Named(fields_named) => fields_named
+                .named
+                .iter()
+                .filter_map(|field| {
+                    // Extract field name and type
+                    let field_name = field.ident.as_ref().expect("Field must be named");
+                    let field_type = &field.ty;
+                    let skip_accessor = field
+                        .attrs
+                        .iter()
+                        .any(|attr| attr.path.is_ident("skip_accessor"));
+                    if skip_accessor {
+                        return None;
                     }
-                    _ => None,
-                }
-            }),
+                    let skip_protocol_config_accessor = field
+                        .attrs
+                        .iter()
+                        .any(|attr| attr.path.is_ident("skip_protocol_config_accessor"));
+                    // Check if field is of type bool
+                    match field_type {
+                        Type::Path(type_path)
+                            if type_path
+                                .path
+                                .segments
+                                .last()
+                                .is_some_and(|segment| segment.ident == "bool") =>
+                        {
+                            let getter = if skip_protocol_config_accessor {
+                                quote! {}
+                            } else {
+                                quote! {
+                                    // Forward the flag from ProtocolConfig.
+                                    pub fn #field_name(&self) -> #field_type {
+                                        self.feature_flags.#field_name
+                                    }
+                                }
+                            };
+                            let setter_name: proc_macro2::TokenStream =
+                                format!("set_{}_for_testing", field_name).parse().unwrap();
+                            let protocol_config_getter = quote! {
+                                #getter
+
+                                pub fn #setter_name(&mut self, val: bool) {
+                                    self.feature_flags.#field_name = val;
+                                }
+                            };
+                            Some((
+                                protocol_config_getter,
+                                (
+                                    quote! {
+                                        stringify!(#field_name) => Some(self.#field_name),
+                                    },
+                                    (
+                                        quote! {
+                                            stringify!(#field_name) => self.#field_name = val,
+                                        },
+                                        quote! {
+                                            stringify!(#field_name)
+                                        },
+                                    ),
+                                ),
+                            ))
+                        }
+                        _ => None,
+                    }
+                })
+                .collect::<Vec<_>>(),
             _ => panic!("Only named fields are supported."),
         },
         _ => panic!("Only structs supported."),
     };
 
-    let (by_fn_getters, (string_name_getters, field_names)): (Vec<_>, (Vec<_>, Vec<_>)) =
-        getters.unzip();
+    let mut protocol_config_getters = Vec::new();
+    let mut string_name_getters = Vec::new();
+    let mut string_name_setters = Vec::new();
+    let mut field_names = Vec::new();
+    for (protocol_config_getter, (string_name_getter, (string_name_setter, field_name))) in getters
+    {
+        protocol_config_getters.push(protocol_config_getter);
+        string_name_getters.push(string_name_getter);
+        string_name_setters.push(string_name_setter);
+        field_names.push(field_name);
+    }
 
     let output = quote! {
-        // For each getter, expand it out into a function in the impl block
         impl #struct_name {
-            #(#by_fn_getters)*
-
             /// Lookup a feature flag by its string representation
             pub fn lookup_attr(&self, value: String) -> Option<bool> {
                 match value.as_str() {
                     #(#string_name_getters)*
                     _ => None,
+                }
+            }
+
+            /// Set a feature flag by its string representation
+            pub fn set_attr_for_testing(&mut self, attr: String, val: bool) {
+                match attr.as_str() {
+                    #(#string_name_setters)*
+                    _ => panic!("Attempting to set unknown feature flag: {}", attr),
                 }
             }
 
@@ -523,6 +586,15 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                     // Okay to unwrap since we added all above
                     #(((#field_names).to_owned(), self.lookup_attr((#field_names).to_owned()).unwrap()),)*
                     ].into_iter().collect()
+            }
+        }
+
+        impl ProtocolConfig {
+            #(#protocol_config_getters)*
+
+            /// Set a feature flag by its string representation
+            pub fn set_feature_flag_for_testing(&mut self, flag: String, val: bool) {
+                self.feature_flags.set_attr_for_testing(flag, val)
             }
         }
     };

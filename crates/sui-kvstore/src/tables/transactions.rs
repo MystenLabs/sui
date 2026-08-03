@@ -145,6 +145,16 @@ pub fn decode_events(row: &[(Bytes, Bytes)]) -> Result<TransactionEventsData> {
     })
 }
 
+/// Decode only the timestamp from a row (for partial reads).
+pub fn decode_timestamp(row: &[(Bytes, Bytes)]) -> Result<u64> {
+    for (column, value) in row {
+        if column.as_ref() == b"ts" {
+            return Ok(bcs::from_bytes(value)?);
+        }
+    }
+    anyhow::bail!("timestamp field is missing")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

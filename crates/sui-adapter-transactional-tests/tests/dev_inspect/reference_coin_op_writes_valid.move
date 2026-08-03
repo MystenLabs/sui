@@ -3,7 +3,7 @@
 
 // tests valid writes of mut references using coin operations
 
-//# init --addresses test=0x0 --accounts A --allow-references-in-ptbs
+//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
 
 //# publish
 module test::m {

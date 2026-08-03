@@ -31,7 +31,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
-    storage::ChildObjectResolver,
+    storage::RuntimeObjectResolver,
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
@@ -176,7 +176,7 @@ impl TestInventories {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: &'a dyn ChildObjectResolver,
+        object_resolver: &'a dyn RuntimeObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,

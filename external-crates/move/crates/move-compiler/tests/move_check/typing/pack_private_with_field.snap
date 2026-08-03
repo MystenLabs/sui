@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_check/typing/pack_private_with_field.move:19:11
    │  
  3 │   struct S {

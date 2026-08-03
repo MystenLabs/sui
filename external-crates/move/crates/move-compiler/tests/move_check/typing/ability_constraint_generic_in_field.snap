@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/ability_constraint_generic_in_field.move:3:22
   │
 2 │     struct S<T: copy> { v: T }
@@ -17,7 +17,7 @@ error[E05001]: ability constraint not satisfied
   │              │       'copy' constraint not satisifed
   │              To satisfy the constraint, the 'copy' ability would need to be added here
 
-error[E05001]: ability constraint not satisfied
+error[EC05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/ability_constraint_generic_in_field.move:10:22
    │
  7 │     struct A<T: copy> has copy { a: T }

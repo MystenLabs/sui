@@ -81,7 +81,8 @@ impl ServerHarness {
         );
 
         let registry = Registry::new();
-        let (checkpoint_sender, subscription_handle) = SubscriptionService::build(&registry, None);
+        let (checkpoint_sender, subscription_handle) =
+            SubscriptionService::build(&registry, None, None, None, None);
 
         let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
 

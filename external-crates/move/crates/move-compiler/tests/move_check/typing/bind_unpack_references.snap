@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_check/typing/bind_unpack_references.move:16:14
    │
  3 │     struct R { s1: S, s2: S }
@@ -20,7 +20,7 @@ error[E06001]: unused value without 'drop'
 16 │         f; s2;
    │              ^ Invalid return
 
-error[E06001]: unused value without 'drop'
+error[EC06001]: unused value without 'drop'
    ┌─ tests/move_check/typing/bind_unpack_references.move:23:14
    │
  3 │     struct R { s1: S, s2: S }

@@ -192,7 +192,7 @@ impl Handle {
         let sends = self
             .shard_merge_senders
             .iter()
-            .zip_debug_eq(batch.into_iter())
+            .zip_debug_eq(batch)
             .enumerate()
             .map(|(shard_id, (tx, values))| async move {
                 let merge = shard::Merge { checkpoint, values };

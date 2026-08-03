@@ -3,7 +3,7 @@
 
 // Verify authenticated events used in multi-command ptbs.
 
-//# init --addresses test=0x0 --accounts A --enable-authenticated-event-streams
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 
