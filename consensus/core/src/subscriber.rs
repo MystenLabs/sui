@@ -1175,6 +1175,36 @@ mod test {
         wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
     }
 
+    /// A parked minimal block must credit the round tracker's RECEIVED vector at
+    /// receipt — before quota/horizon decisions — so parking cannot distort the
+    /// propagation-delay signal for the park's duration. Accepted rows must not move.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_block_credits_received_round_at_receipt() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker) = test_subscriber_deps(&s.context);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            registry,
+            tracker.clone(),
+        );
+        subscriber.subscribe(s.peer);
+
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 1).await;
+        // Parked, unsubmitted — yet already counted as received at the claimed round.
+        assert!(authority_service.lock().handle_send_block.is_empty());
+        assert_eq!(
+            tracker.read().local_highest_received_rounds()[s.peer],
+            s.blocks[0].round()
+        );
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn subscriber_retries() {
         let (context, _keys) = Context::new_for_test(4);
