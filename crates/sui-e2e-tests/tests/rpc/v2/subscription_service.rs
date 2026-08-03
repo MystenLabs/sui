@@ -453,12 +453,31 @@ async fn subscribe_transactions_unfiltered() {
     let expected_digest = tx.digest().to_owned();
     let tx_checkpoint = tx.checkpoint.expect("executed tx has a checkpoint");
 
+    let start_frame = stream.next().await.expect("stream open").unwrap();
+    assert!(
+        start_frame.transaction.is_none(),
+        "unfiltered transaction subscription starts with a progress-only frame"
+    );
+    let start_watermark = start_frame
+        .watermark
+        .as_ref()
+        .expect("start frame watermark");
+    assert!(
+        start_watermark.cursor.is_some(),
+        "start frame watermark carries a cursor"
+    );
+    assert!(
+        start_watermark.checkpoint.is_some(),
+        "start frame covers the checkpoint before subscription entry"
+    );
+    let mut last_hi = None;
+    assert_checkpoint_monotone(&mut last_hi, start_watermark);
+
     // Collect every transaction the unfiltered stream reports for the
     // transfer's checkpoint, stopping once a later checkpoint or a boundary
     // watermark proves it complete.
     let mut indices = Vec::new();
     let mut digests = Vec::new();
-    let mut last_hi = None;
     loop {
         let frame = stream.next().await.expect("stream open").unwrap();
         let watermark = frame.watermark.as_ref().expect("frame watermark");
@@ -679,6 +698,26 @@ async fn subscribe_events_unfiltered() {
     let expected_digest = tx.digest().to_owned();
     let tx_checkpoint = tx.checkpoint.expect("executed tx has a checkpoint");
 
+    let start_frame = stream.next().await.expect("stream open").unwrap();
+    assert!(
+        start_frame.event.is_none(),
+        "unfiltered event subscription starts with a progress-only frame"
+    );
+    let start_watermark = start_frame
+        .watermark
+        .as_ref()
+        .expect("start frame watermark");
+    assert!(
+        start_watermark.cursor.is_some(),
+        "start frame watermark carries a cursor"
+    );
+    assert!(
+        start_watermark.checkpoint.is_some(),
+        "start frame covers the checkpoint before subscription entry"
+    );
+    let mut last_hi = None;
+    assert_checkpoint_monotone(&mut last_hi, start_watermark);
+
     // Collect our transaction's events from the emitting checkpoint. Any other
     // transactions' events are ignored: the point is that the unfiltered
     // stream expands our tx's events, in order, with no filter registered.
@@ -690,6 +729,7 @@ async fn subscribe_events_unfiltered() {
             watermark.cursor.is_some(),
             "frame watermark carries a cursor"
         );
+        assert_checkpoint_monotone(&mut last_hi, watermark);
         if let Some(event) = frame.event.as_ref() {
             let checkpoint = event.checkpoint.expect("checkpoint in read mask");
             if checkpoint > tx_checkpoint {
