@@ -1020,9 +1020,6 @@ impl ValidatorService {
                         if !matches!(error.as_inner(), SuiErrorKind::ObjectLockConflict { .. }) {
                             return Err(error);
                         }
-                        assert_reachable!(
-                            "submit path reported owned-object lock conflict before execution"
-                        );
                         debug!(
                             ?tx_digest,
                             "handle_submit_transaction: processed transaction rejected on lock conflict: {error}"
