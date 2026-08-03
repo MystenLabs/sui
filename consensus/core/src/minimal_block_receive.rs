@@ -1,66 +1,61 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Receive-side recovery for minimal blocks that cannot be inflated at receipt.
+//! Receive-side recovery for minimal blocks that cannot be inflated at receipt —
+//! block-manager suspension, transposed to slots.
 //!
-//! Each un-inflatable minimal block becomes one bounded task that waits directly on
-//! authoritative DAG state: inflation reports the COMPLETE frontier of missing
-//! ancestor slots, the task registers on all of them via `DagState`'s accepted-slot
-//! notifier, re-checks, and sleeps until the whole frontier fills — one wake, one
-//! re-inflation. Inflation success against accepted-DAG candidates implies the
-//! block's causal history is locally complete, so the inflated block is submitted
-//! through the normal `handle_send_block` path immediately.
+//! Each un-inflatable minimal block becomes one bounded task mirroring what
+//! suspension does for full blocks: it holds the claim, registers on the COMPLETE
+//! missing-slot frontier via `DagState`'s accepted-slot notifier, and durably
+//! registers the claimed reference with the synchronizer — the same component that
+//! fetches suspended blocks' missing ancestors. At tip the frontier fills from the
+//! streams within milliseconds and the registration is pruned before the periodic
+//! scheduler ever fetches; for a receiver that is behind, the scheduler fetches the
+//! full block on its existing cadence and the accepted result wakes the task through
+//! its exact-reference registration. Ordinary racing produces no fetches; recovery
+//! needs no timers of its own.
 //!
-//! Termination is guaranteed without deadlines: every waited slot either fills (the
-//! network keeps moving, and a quorum of streams feeds acceptance) or falls below the
-//! GC round (commits keep advancing), both of which wake the task. Ambiguity, a
-//! digest mismatch, or a required slot crossing GC under a live child escalate to a
-//! single digest-verified fetch of the exact claimed block from its author; an
-//! exhausted re-inflation budget (exceptional once the frontier is complete) DROPS
-//! the block — descendants that do inflate drive normal missing-ancestor sync, which
-//! is the backstop. Ordinary tip racing must never produce fetches.
+//! Termination: the frontier fills (inflate + submit), the claimed block arrives
+//! through another path (release, delivering the excluded-ancestors sidecar), or GC
+//! passes the claimed round (obsolete). All quota admission is per-peer only and
+//! charges resident memory — payload, sidecar, task overhead, and notifier
+//! registrations — sized so honest traffic can never approach the caps.
 
 use std::sync::{Arc, Weak};
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::BlockRef;
+use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
 use parking_lot::RwLock;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::{
-    block::{BlockAPI as _, SignedBlock, Slot, VerifiedBlock},
+    block::Slot,
     block_inflater::BlockInflater,
     context::Context,
     dag_state::DagState,
+    error::ConsensusResult,
     minimal_block::{FallbackReason, InflateError},
-    network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
+    network::{ExtendedSerializedBlock, ValidatorNetworkService},
+    synchronizer::SynchronizerHandle,
 };
 
-/// Bounds on recovery admission. Parking is NORMAL at tip: at a large committee a
-/// sizable fraction of live minimal blocks race their ancestors' arrival (43%
-/// measured at 132 validators) and park for around a second, so the quotas must fit
-/// steady-state racing with generous tail headroom — the v3 run showed that a quota
-/// sized for the average (16 MiB ≈ a few thousand blocks) saturates on the residency
-/// tail and turns ordinary racing into reset/full-replay storms. 64 MiB gives ~4x
-/// headroom over the worst node observed in that degraded run; the global count cap
-/// bounds task overhead when payloads are tiny.
-///
-/// The per-peer byte cap is derived from the subscriber's pre-decode size cap at
-/// construction (never below it): a legitimate minimal block larger than the peer
-/// quota could never be admitted, and every arrival would divert to a stream reset.
-///
-/// Waiter slots are their own resource: a frontier wait registers one notifier entry
-/// per missing slot, so admission charges the frontier size — otherwise one peer's
-/// parked payload bytes could pin hundreds of thousands of registrations.
-const MAX_PARKED_BYTES: usize = 64 << 20;
-const MAX_PARKED_BLOCKS: usize = 32_768;
-const MIN_PARKED_BYTES_PER_PEER: usize = 4 << 20;
-const MAX_PARKED_BLOCKS_PER_PEER: usize = 256;
-const MAX_WAITER_SLOTS: usize = 1 << 20;
+/// Per-peer admission caps on resident recovery memory. Honest steady state is a few
+/// hundred KB per peer (stream rate x GC window); these are ~100x anti-fabrication
+/// backstops — parked claims carry no verifiable signature yet, so unlike suspended
+/// blocks their creation costs an attacker nothing. A quota hit indicates an attack
+/// (or a bug) and resets that peer's stream; it must never fire for honest traffic.
+const MAX_PARKED_BYTES_PER_PEER: usize = 32 << 20;
+const MAX_PARKED_BLOCKS_PER_PEER: usize = 2048;
+
+/// Resident-memory estimate charged per admission, beyond the wire payloads:
+/// task/future/envelope overhead plus one notifier registration per frontier slot.
+const TASK_OVERHEAD_BYTES: usize = 2048;
+const REGISTRATION_CHARGE_BYTES: usize = 256;
 
 /// Cap on untrusted minimal bytes, enforced before ANY decoding: a legitimate
 /// minimal block is bounded by the max transaction payload plus small per-ancestor
@@ -69,57 +64,45 @@ pub(crate) fn max_minimal_size(context: &Context) -> usize {
     (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2)
 }
 
-/// Task-level inflation attempts (each preceded by a slot wait after the first)
-/// before escalating to the exact-reference repair fetch. Distinct from the codec's
-/// internal bounded candidate variations within one inflation call.
-const MAX_RECOVERY_INFLATE_ATTEMPTS: usize = 3;
+/// Resident-memory charge for admitting one parked block.
+pub(crate) fn admission_charge(
+    minimal_len: usize,
+    excluded_ancestors_len: usize,
+    frontier_len: usize,
+) -> usize {
+    minimal_len
+        .saturating_add(excluded_ancestors_len)
+        .saturating_add(TASK_OVERHEAD_BYTES)
+        .saturating_add(frontier_len.saturating_mul(REGISTRATION_CHARGE_BYTES))
+}
 
-/// Concurrent exact-reference repair fetches, globally and per claimed author. Repair
-/// is rare and Byzantine-driven; these caps keep one misbehaving peer from occupying
-/// every repair slot.
-const MAX_REPAIR_FETCHES: usize = 64;
-const MAX_REPAIR_FETCHES_PER_PEER: usize = 6;
-const RECOVERY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
-/// Which quota bound rejected a recovery admission.
+/// Which per-peer bound rejected a recovery admission.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum QuotaLimit {
-    GlobalBytes,
-    GlobalCount,
     PeerBytes,
     PeerCount,
-    WaiterSlots,
 }
 
 impl QuotaLimit {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            QuotaLimit::GlobalBytes => "global_bytes",
-            QuotaLimit::GlobalCount => "global_count",
             QuotaLimit::PeerBytes => "peer_bytes",
             QuotaLimit::PeerCount => "peer_count",
-            QuotaLimit::WaiterSlots => "waiter_slots",
         }
     }
 }
 
 /// Quota bounds, overridable in tests to force capacity pressure.
 pub(crate) struct RecoveryLimits {
-    pub(crate) global_bytes: usize,
-    pub(crate) global_count: usize,
     pub(crate) peer_bytes: usize,
     pub(crate) peer_count: usize,
-    pub(crate) waiter_slots: usize,
 }
 
 impl Default for RecoveryLimits {
     fn default() -> Self {
         Self {
-            global_bytes: MAX_PARKED_BYTES,
-            global_count: MAX_PARKED_BLOCKS,
-            peer_bytes: MIN_PARKED_BYTES_PER_PEER,
+            peer_bytes: MAX_PARKED_BYTES_PER_PEER,
             peer_count: MAX_PARKED_BLOCKS_PER_PEER,
-            waiter_slots: MAX_WAITER_SLOTS,
         }
     }
 }
@@ -129,16 +112,12 @@ struct PeerQuota {
     count: Arc<Semaphore>,
 }
 
-/// Admission control for recovery tasks. All acquisition is non-blocking and happens
-/// before the task is spawned; the returned RAII permit releases every resource — and
-/// corrects the parked gauges — on success, error, panic, task abort, and shutdown
-/// alike.
+/// Per-peer admission control. Acquisition is non-blocking and happens before the
+/// task is spawned; the RAII permit releases everything — and corrects the parked
+/// gauges — on success, error, panic, task abort, and shutdown alike.
 pub(crate) struct RecoveryQuotas {
     context: Arc<Context>,
     peer_bytes_limit: usize,
-    global_bytes: Arc<Semaphore>,
-    global_count: Arc<Semaphore>,
-    waiter_slots: Arc<Semaphore>,
     per_peer: Vec<PeerQuota>,
 }
 
@@ -147,26 +126,22 @@ impl RecoveryQuotas {
         // The per-peer byte quota must always admit a maximum-size legitimate
         // minimal block, whatever the protocol's size cap becomes.
         let limits = RecoveryLimits {
-            peer_bytes: MIN_PARKED_BYTES_PER_PEER.max(max_minimal_size(&context)),
+            peer_bytes: MAX_PARKED_BYTES_PER_PEER.max(max_minimal_size(&context)),
             ..RecoveryLimits::default()
         };
         Self::with_limits(context, limits)
     }
 
     pub(crate) fn with_limits(context: Arc<Context>, limits: RecoveryLimits) -> Arc<Self> {
-        let peer_bytes_limit = limits.peer_bytes;
         let per_peer = (0..context.committee.size())
             .map(|_| PeerQuota {
-                bytes: Arc::new(Semaphore::new(peer_bytes_limit)),
+                bytes: Arc::new(Semaphore::new(limits.peer_bytes)),
                 count: Arc::new(Semaphore::new(limits.peer_count)),
             })
             .collect();
         Arc::new(Self {
             context,
-            peer_bytes_limit,
-            global_bytes: Arc::new(Semaphore::new(limits.global_bytes)),
-            global_count: Arc::new(Semaphore::new(limits.global_count)),
-            waiter_slots: Arc::new(Semaphore::new(limits.waiter_slots)),
+            peer_bytes_limit: limits.peer_bytes,
             per_peer,
         })
     }
@@ -174,59 +149,35 @@ impl RecoveryQuotas {
     pub(crate) fn try_acquire(
         self: &Arc<Self>,
         peer: AuthorityIndex,
-        bytes: usize,
-        wait_slots: usize,
+        charge: usize,
     ) -> Result<RecoveryPermit, QuotaLimit> {
-        // A payload larger than the per-peer byte quota can never be admitted; report
+        // A charge larger than the per-peer byte quota can never be admitted; report
         // it as the byte limit rather than deadlocking on an unsatisfiable acquire.
-        if bytes > self.peer_bytes_limit {
+        if charge > self.peer_bytes_limit {
             return Err(QuotaLimit::PeerBytes);
         }
-        let bytes_u32 = u32::try_from(bytes).map_err(|_| QuotaLimit::PeerBytes)?;
-        let slots_u32 = u32::try_from(wait_slots).map_err(|_| QuotaLimit::WaiterSlots)?;
+        let charge_u32 = u32::try_from(charge).map_err(|_| QuotaLimit::PeerBytes)?;
         let quota = &self.per_peer[peer];
-        let global = self
-            .global_bytes
-            .clone()
-            .try_acquire_many_owned(bytes_u32)
-            .map_err(|_| QuotaLimit::GlobalBytes)?;
-        let global_count = self
-            .global_count
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| QuotaLimit::GlobalCount)?;
         let peer_bytes = quota
             .bytes
             .clone()
-            .try_acquire_many_owned(bytes_u32)
+            .try_acquire_many_owned(charge_u32)
             .map_err(|_| QuotaLimit::PeerBytes)?;
         let peer_count = quota
             .count
             .clone()
             .try_acquire_owned()
             .map_err(|_| QuotaLimit::PeerCount)?;
-        let waiters = self
-            .waiter_slots
-            .clone()
-            .try_acquire_many_owned(slots_u32)
-            .map_err(|_| QuotaLimit::WaiterSlots)?;
         let node_metrics = &self.context.metrics.node_metrics;
         node_metrics.minimal_block_recovery_parked.inc();
         node_metrics
             .minimal_block_recovery_parked_bytes
-            .add(bytes as i64);
-        node_metrics
-            .minimal_block_recovery_waiters
-            .add(wait_slots as i64);
+            .add(charge as i64);
         Ok(RecoveryPermit {
             context: self.context.clone(),
-            bytes,
-            wait_slots,
-            _global: global,
-            _global_count: global_count,
+            charge,
             _peer_bytes: peer_bytes,
             _peer_count: peer_count,
-            _waiters: waiters,
         })
     }
 }
@@ -235,13 +186,9 @@ impl RecoveryQuotas {
 /// existence exactly: incremented at acquisition, decremented on drop.
 pub(crate) struct RecoveryPermit {
     context: Arc<Context>,
-    bytes: usize,
-    wait_slots: usize,
-    _global: OwnedSemaphorePermit,
-    _global_count: OwnedSemaphorePermit,
+    charge: usize,
     _peer_bytes: OwnedSemaphorePermit,
     _peer_count: OwnedSemaphorePermit,
-    _waiters: OwnedSemaphorePermit,
 }
 
 impl Drop for RecoveryPermit {
@@ -250,38 +197,30 @@ impl Drop for RecoveryPermit {
         node_metrics.minimal_block_recovery_parked.dec();
         node_metrics
             .minimal_block_recovery_parked_bytes
-            .sub(self.bytes as i64);
-        node_metrics
-            .minimal_block_recovery_waiters
-            .sub(self.wait_slots as i64);
+            .sub(self.charge as i64);
     }
 }
 
-/// Concurrency bounds for exact-reference repair fetches.
-pub(crate) struct RepairLimits {
-    global: Arc<Semaphore>,
-    per_peer: Vec<Arc<Semaphore>>,
+/// Durable registration of an exact missing block with the fetching machinery. In
+/// production this is the synchronizer's periodic scheduler; tests substitute a
+/// recorder.
+#[async_trait]
+pub(crate) trait MissingBlockRegistry: Send + Sync + 'static {
+    async fn register_missing_block(&self, block_ref: BlockRef) -> ConsensusResult<()>;
 }
 
-impl RepairLimits {
-    pub(crate) fn new(committee_size: usize) -> Arc<Self> {
-        Arc::new(Self {
-            global: Arc::new(Semaphore::new(MAX_REPAIR_FETCHES)),
-            per_peer: (0..committee_size)
-                .map(|_| Arc::new(Semaphore::new(MAX_REPAIR_FETCHES_PER_PEER)))
-                .collect(),
-        })
+#[async_trait]
+impl MissingBlockRegistry for SynchronizerHandle {
+    async fn register_missing_block(&self, block_ref: BlockRef) -> ConsensusResult<()> {
+        SynchronizerHandle::register_missing_block(self, block_ref).await
     }
 }
 
 /// Terminal outcome labels for the `minimal_block_recoveries` metric.
 enum RecoveryOutcome {
     Inflated,
-    Repaired,
     Obsolete,
     AlreadyAccepted,
-    RetryExhausted,
-    RepairFailed,
     SubmitRejected,
 }
 
@@ -289,30 +228,9 @@ impl RecoveryOutcome {
     fn label(&self) -> &'static str {
         match self {
             RecoveryOutcome::Inflated => "inflated",
-            RecoveryOutcome::Repaired => "repaired",
             RecoveryOutcome::Obsolete => "obsolete",
             RecoveryOutcome::AlreadyAccepted => "already_accepted",
-            RecoveryOutcome::RetryExhausted => "retry_exhausted",
-            RecoveryOutcome::RepairFailed => "repair_failed",
             RecoveryOutcome::SubmitRejected => "submit_rejected",
-        }
-    }
-}
-
-enum RepairError {
-    Fetch,
-    Missing,
-    Malformed,
-    ReferenceMismatch,
-}
-
-impl RepairError {
-    fn label(&self) -> &'static str {
-        match self {
-            RepairError::Fetch => "fetch_failed",
-            RepairError::Missing => "missing",
-            RepairError::Malformed => "malformed",
-            RepairError::ReferenceMismatch => "reference_mismatch",
         }
     }
 }
@@ -321,34 +239,41 @@ impl RepairError {
 enum WaitCheck<'a> {
     /// The claimed block itself fell below GC: nothing to recover.
     Obsolete,
-    /// The claimed block was accepted through another path (typically full-form
-    /// replay after a reconnect): recovery is redundant, release the quota now.
+    /// The claimed block was accepted through another path (synchronizer fetch or
+    /// full-form replay): recovery is redundant — release quota, deliver the sidecar.
     AlreadyAccepted,
-    /// A required slot fell below GC while the child is live: without its omitted
-    /// digest the minimal can never inflate — only the exact full block resolves it.
-    Repair,
     /// Every slot in the frontier has an accepted candidate: retry inflation now.
     Retry,
-    /// Await the registrations of the still-empty slots as one barrier.
-    Wait(Vec<mysten_common::sync::notify_read::Registration<'a, Slot, ()>>),
+    /// A required slot fell below GC while the child is live: the frontier can never
+    /// complete, so only the registered synchronizer fetch (or replay) can finish
+    /// this block. Wait on the exact reference and GC alone.
+    FrontierDead,
+    /// Await the registrations of the still-empty slots as one barrier. Carries the
+    /// lowest still-missing round for the GC wake threshold.
+    Wait(
+        Vec<mysten_common::sync::notify_read::Registration<'a, Slot, ()>>,
+        Round,
+    ),
 }
 
 /// Recovers one un-inflatable minimal block, starting from the receipt-time
-/// classification (`reason`) so the same immutable bytes are not re-decoded before the
-/// first wait. Spawned (quota-first) by the subscriber; aborted with its owning
-/// `JoinSet` on shutdown, which releases the permit and deregisters any pending wait.
+/// classification (`reason`). Spawned (quota-first) by the subscriber; aborted with
+/// its owning `JoinSet` on shutdown, which releases the permit and deregisters any
+/// pending waits. The claimed reference is durably registered with the synchronizer,
+/// which fetches it on its periodic cadence for as long as the block stays missing
+/// and above GC — the task itself never fetches and never times anything.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: ValidatorNetworkService>(
+pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
     context: Arc<Context>,
     block_inflater: Arc<BlockInflater>,
     dag_state: Weak<RwLock<DagState>>,
-    network_client: Arc<C>,
+    registry: Arc<dyn MissingBlockRegistry>,
     authority_service: Weak<S>,
-    repair_limits: Arc<RepairLimits>,
     peer: AuthorityIndex,
     claimed_ref: BlockRef,
     reason: FallbackReason,
     minimal: Bytes,
+    excluded_ancestors: Vec<Vec<u8>>,
     permit: RecoveryPermit,
 ) {
     let _permit = permit;
@@ -366,42 +291,35 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
         )
     };
 
+    // Durably register the claimed reference for fetching. At tip the block resolves
+    // from the streams before the periodic scheduler's next pass and the registration
+    // is pruned unfetched; behind the tip, the scheduler fetches the full block on
+    // its existing cadence. The awaited send backpressures instead of dropping; a
+    // shutdown error just ends the task (the permit releases via RAII).
+    if registry.register_missing_block(claimed_ref).await.is_err() {
+        return;
+    }
+
     let mut reason = reason;
-    // The receipt-time inflation that produced `reason` was attempt one; the budget
-    // counts inflations of these immutable bytes, wherever they run. With the codec
-    // reporting the COMPLETE missing frontier, the second attempt normally succeeds;
-    // exhaustion is exceptional and terminates as a drop, never a fetch — normal
-    // missing-ancestor sync (driven by descendants that do inflate) is the backstop.
-    let mut inflate_attempts = 1;
     let outcome = 'recovery: {
         loop {
-            let missing = match reason {
-                FallbackReason::MissingAncestors(slots) => slots,
-                // Ambiguity or a digest mismatch cannot be repaired by waiting.
-                FallbackReason::AmbiguousSlot(_) | FallbackReason::DigestMismatch => {
-                    break 'recovery repair(
-                        &context,
-                        network_client.as_ref(),
-                        &authority_service,
-                        &repair_limits,
-                        peer,
-                        claimed_ref,
-                    )
-                    .await;
-                }
+            let missing = match &reason {
+                FallbackReason::MissingAncestors(slots) => slots.clone(),
+                // Ambiguity or a digest mismatch cannot be repaired by waiting on
+                // slots; the registered synchronizer fetch (or replay) resolves the
+                // block, so wait on the exact reference and GC alone.
+                FallbackReason::AmbiguousSlot(_) | FallbackReason::DigestMismatch => vec![],
             };
-            node_metrics
-                .minimal_block_park_missing_slots
-                .observe(missing.len() as f64);
+            if !missing.is_empty() {
+                node_metrics
+                    .minimal_block_park_missing_slots
+                    .observe(missing.len() as f64);
+            }
 
-            // Register on EVERY missing slot before re-checking the DAG, so an
-            // acceptance between the check and the await has already fired its
-            // registration — then wait for the whole frontier as one barrier and
-            // re-inflate once, instead of rediscovering the frontier one wake at a
-            // time. A registration on the claimed block's exact reference lets the
-            // task terminate promptly when full-form replay delivers the block
-            // through the normal path (keyed by BlockRef, not slot: equivocating
-            // siblings must not wake every parked task for the slot).
+            // Register BEFORE re-checking the DAG, so an acceptance between the check
+            // and the await has already fired its registration: the frontier slots as
+            // one barrier, and the claimed block's exact reference so the task ends
+            // promptly when the synchronizer fetch or full-form replay wins.
             'wait: loop {
                 let registrations = accepted_slots.register_all(&missing);
                 let mut own_registration = accepted_refs.register_one(&claimed_ref);
@@ -410,32 +328,33 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                         return;
                     };
                     let dag_state = dag_state.read();
-                    let gc_round = dag_state.gc_round();
-                    if claimed_ref.round <= gc_round {
+                    let gc = dag_state.gc_round();
+                    if claimed_ref.round <= gc {
                         WaitCheck::Obsolete
                     } else if dag_state.contains_block(&claimed_ref) {
                         WaitCheck::AlreadyAccepted
                     } else {
                         let mut remaining = Vec::new();
+                        let mut lowest_missing = Round::MAX;
                         let mut crossed_gc = false;
                         for (slot, registration) in missing.iter().zip_eq(registrations) {
                             if !dag_state.get_uncommitted_blocks_at_slot(*slot).is_empty() {
                                 // Already filled: dropping deregisters it.
-                            } else if slot.round <= gc_round {
-                                // This slot can never fill, and without its omitted
-                                // digest the minimal can never inflate: only the
-                                // exact full block can resolve the live child.
+                            } else if slot.round <= gc {
                                 crossed_gc = true;
                             } else {
+                                lowest_missing = lowest_missing.min(slot.round);
                                 remaining.push(registration);
                             }
                         }
-                        if crossed_gc {
-                            WaitCheck::Repair
+                        if crossed_gc || missing.is_empty() {
+                            // Either a required slot can never fill, or the reason
+                            // (ambiguity/mismatch) never had a frontier to wait on.
+                            WaitCheck::FrontierDead
                         } else if remaining.is_empty() {
                             WaitCheck::Retry
                         } else {
-                            WaitCheck::Wait(remaining)
+                            WaitCheck::Wait(remaining, lowest_missing)
                         }
                     }
                 };
@@ -444,33 +363,34 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
                     WaitCheck::AlreadyAccepted => {
                         break 'recovery RecoveryOutcome::AlreadyAccepted;
                     }
-                    WaitCheck::Repair => {
-                        break 'recovery repair(
-                            &context,
-                            network_client.as_ref(),
-                            &authority_service,
-                            &repair_limits,
-                            peer,
-                            claimed_ref,
-                        )
-                        .await;
-                    }
                     WaitCheck::Retry => break 'wait,
-                    WaitCheck::Wait(remaining) => {
-                        let frontier = futures::future::join_all(remaining);
-                        tokio::pin!(frontier);
+                    WaitCheck::FrontierDead => {
+                        // Nothing slot-shaped left to wait for: only the fetched or
+                        // replayed full block (own-ref wake) or GC can end this.
                         tokio::select! {
-                            _ = &mut frontier => break 'wait,
-                            // The exact claimed block was accepted; loop into the
-                            // re-check, which concludes AlreadyAccepted.
                             _ = &mut own_registration => continue 'wait,
-                            changed = gc_round.changed() => {
+                            changed = gc_round
+                                .wait_for(|gc| *gc >= claimed_ref.round) => {
                                 if changed.is_err() {
-                                    // DagState (and its watch sender) is gone.
                                     return;
                                 }
-                                // Re-register and re-evaluate every slot against
-                                // the advanced GC round.
+                                continue 'wait;
+                            }
+                        }
+                    }
+                    WaitCheck::Wait(remaining, lowest_missing) => {
+                        let frontier = futures::future::join_all(remaining);
+                        tokio::pin!(frontier);
+                        // The GC arm wakes only when GC crosses a round the wait
+                        // actually depends on — not on every commit tick.
+                        let gc_threshold = lowest_missing.min(claimed_ref.round);
+                        tokio::select! {
+                            _ = &mut frontier => break 'wait,
+                            _ = &mut own_registration => continue 'wait,
+                            changed = gc_round.wait_for(move |gc| *gc >= gc_threshold) => {
+                                if changed.is_err() {
+                                    return;
+                                }
                                 continue 'wait;
                             }
                         }
@@ -479,15 +399,6 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
             }
 
             // The whole frontier has candidates: re-classify by inflating.
-            if inflate_attempts == MAX_RECOVERY_INFLATE_ATTEMPTS {
-                warn!(
-                    "Recovery of minimal block {} from peer {} exhausted {} inflation \
-                     attempts; dropping (sync recovers via descendants)",
-                    claimed_ref, peer, inflate_attempts
-                );
-                break 'recovery RecoveryOutcome::RetryExhausted;
-            }
-            inflate_attempts += 1;
             let inflated = {
                 let Some(dag_state) = dag_state.upgrade() else {
                     return;
@@ -497,12 +408,23 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
             };
             match inflated {
                 Ok((_signed, serialized)) => {
-                    break 'recovery match submit(&context, &authority_service, peer, serialized)
-                        .await
-                    {
-                        Some(true) => RecoveryOutcome::Inflated,
-                        Some(false) => RecoveryOutcome::SubmitRejected,
-                        None => return,
+                    let Some(service) = authority_service.upgrade() else {
+                        return;
+                    };
+                    let block = ExtendedSerializedBlock {
+                        block: serialized,
+                        minimal: None,
+                        excluded_ancestors: excluded_ancestors.clone(),
+                    };
+                    break 'recovery match service.handle_send_block(peer, block).await {
+                        Ok(()) => RecoveryOutcome::Inflated,
+                        Err(error) => {
+                            debug!(
+                                "Recovered minimal block {} from peer {} was rejected: {}",
+                                claimed_ref, peer, error
+                            );
+                            RecoveryOutcome::SubmitRejected
+                        }
                     };
                 }
                 Err(InflateError::NeedFullBlock {
@@ -528,13 +450,21 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
         }
     };
 
-    match outcome {
-        RecoveryOutcome::Inflated | RecoveryOutcome::Repaired => {
-            node_metrics
-                .minimal_block_recovery_latency
-                .observe(parked_at.elapsed().as_secs_f64());
-        }
-        _ => {}
+    // A block accepted through another path still owes its propagation hints: the
+    // fetched or replayed form arrived without the sidecar.
+    if matches!(outcome, RecoveryOutcome::AlreadyAccepted)
+        && !excluded_ancestors.is_empty()
+        && let Some(service) = authority_service.upgrade()
+    {
+        let _ = service
+            .handle_excluded_ancestors(peer, claimed_ref, excluded_ancestors)
+            .await;
+    }
+
+    if let RecoveryOutcome::Inflated = outcome {
+        node_metrics
+            .minimal_block_recovery_latency
+            .observe(parked_at.elapsed().as_secs_f64());
     }
     node_metrics
         .minimal_block_recoveries
@@ -542,228 +472,39 @@ pub(crate) async fn recover_minimal_block<C: ValidatorNetworkClient, S: Validato
         .inc();
 }
 
-/// Submits recovered full-form bytes through the normal receive path, deliberately
-/// reusing its parsing, signature verification, vote tracking, and Core dispatch.
-/// Returns None on shutdown, Some(accepted) otherwise.
-async fn submit<S: ValidatorNetworkService>(
-    context: &Context,
-    authority_service: &Weak<S>,
-    peer: AuthorityIndex,
-    serialized: Bytes,
-) -> Option<bool> {
-    let authority_service = authority_service.upgrade()?;
-    let block = ExtendedSerializedBlock {
-        block: serialized,
-        minimal: None,
-        excluded_ancestors: vec![],
-    };
-    match authority_service.handle_send_block(peer, block).await {
-        Ok(()) => Some(true),
-        Err(error) => {
-            debug!(
-                "Recovered minimal block from peer {} {} was rejected: {}",
-                peer,
-                context.committee.authority(peer).hostname,
-                error
-            );
-            Some(false)
-        }
-    }
-}
-
-/// One bounded, digest-verified fetch of the exact claimed block from its author.
-/// Other peers are deliberately not tried: the sending peer authored the block and
-/// should possess it; later full descendants and normal missing-ancestor sync remain
-/// the backstop when the author fails to serve it.
-async fn repair<C: ValidatorNetworkClient, S: ValidatorNetworkService>(
-    context: &Context,
-    network_client: &C,
-    authority_service: &Weak<S>,
-    repair_limits: &RepairLimits,
-    peer: AuthorityIndex,
-    claimed_ref: BlockRef,
-) -> RecoveryOutcome {
-    let node_metrics = &context.metrics.node_metrics;
-    // Bounded waits: tasks queued here hold RecoveryPermits, so the queue is bounded
-    // by the parked-block quotas; acquire fails only on semaphore closure. The
-    // per-peer permit is taken FIRST so one peer with a saturated repair lane can
-    // occupy at most MAX_REPAIR_FETCHES_PER_PEER global slots — global-first would
-    // let it park quota-bounded task counts on the global semaphore and starve every
-    // other peer's repairs.
-    let (Ok(_per_peer), Ok(_global)) = (
-        repair_limits.per_peer[peer].clone().acquire_owned().await,
-        repair_limits.global.clone().acquire_owned().await,
-    ) else {
-        return RecoveryOutcome::RepairFailed;
-    };
-    match fetch_exact_block(network_client, peer, claimed_ref).await {
-        Ok(serialized) => match submit(context, authority_service, peer, serialized).await {
-            Some(true) => {
-                node_metrics
-                    .minimal_block_repairs
-                    .with_label_values(&["success"])
-                    .inc();
-                RecoveryOutcome::Repaired
-            }
-            Some(false) => {
-                node_metrics
-                    .minimal_block_repairs
-                    .with_label_values(&["submit_rejected"])
-                    .inc();
-                RecoveryOutcome::SubmitRejected
-            }
-            None => RecoveryOutcome::RepairFailed,
-        },
-        Err(error) => {
-            node_metrics
-                .minimal_block_repairs
-                .with_label_values(&[error.label()])
-                .inc();
-            RecoveryOutcome::RepairFailed
-        }
-    }
-}
-
-/// Fetches `block_ref` from `peer` and returns the response bytes whose computed
-/// reference matches it exactly. Unrelated response entries are ignored; a response
-/// without an exact match fails the repair.
-async fn fetch_exact_block<C: ValidatorNetworkClient>(
-    network_client: &C,
-    peer: AuthorityIndex,
-    block_ref: BlockRef,
-) -> Result<Bytes, RepairError> {
-    let blocks = network_client
-        .fetch_blocks(peer, vec![block_ref], vec![], false, RECOVERY_FETCH_TIMEOUT)
-        .await
-        .map_err(|error| {
-            debug!(
-                "Repair fetch of {} from peer {} failed: {}",
-                block_ref, peer, error
-            );
-            RepairError::Fetch
-        })?;
-    if blocks.is_empty() {
-        return Err(RepairError::Missing);
-    }
-    let mut saw_parseable = false;
-    for bytes in blocks {
-        let Ok(signed) = bcs::from_bytes::<SignedBlock>(&bytes) else {
-            continue;
-        };
-        saw_parseable = true;
-        let reference = BlockRef::new(
-            signed.round(),
-            signed.author(),
-            VerifiedBlock::compute_digest(&bytes),
-        );
-        if reference == block_ref {
-            return Ok(bytes);
-        }
-    }
-    if saw_parseable {
-        // The author could not produce its own claimed block: a peer fault.
-        Err(RepairError::ReferenceMismatch)
-    } else {
-        Err(RepairError::Malformed)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use async_trait::async_trait;
-    use consensus_types::block::BlockDigest;
     use parking_lot::Mutex;
-
-    use consensus_types::block::Round;
 
     use super::*;
     use crate::{
         VerifiedBlock,
-        block::TestBlock,
-        commit::{CommitDigest, CommitRange, TrustedCommit},
-        network::{BlockStream, test_network::TestService},
+        block::{BlockAPI as _, TestBlock},
+        commit::{CommitDigest, TrustedCommit},
+        network::test_network::TestService,
         storage::mem_store::MemStore,
     };
+    use consensus_types::block::BlockDigest;
 
-    /// Serves repair fetches from a fixed set; everything else is unreachable in
-    /// these tests.
-    struct RepairOnlyClient {
-        fetchable: Vec<Bytes>,
-        fetch_calls: Mutex<Vec<Vec<BlockRef>>>,
-    }
-
-    impl RepairOnlyClient {
-        fn new(fetchable: Vec<Bytes>) -> Self {
-            Self {
-                fetchable,
-                fetch_calls: Mutex::new(Vec::new()),
-            }
-        }
+    /// Records durable registrations; the real synchronizer is exercised by the
+    /// committee and simulation tests.
+    #[derive(Default)]
+    struct RecordingRegistry {
+        registered: Mutex<Vec<BlockRef>>,
     }
 
     #[async_trait]
-    impl ValidatorNetworkClient for RepairOnlyClient {
-        async fn send_block(
-            &self,
-            _peer: AuthorityIndex,
-            _block: &VerifiedBlock,
-            _timeout: Duration,
-        ) -> crate::error::ConsensusResult<()> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn subscribe_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            _last_received: Round,
-            _timeout: Duration,
-        ) -> crate::error::ConsensusResult<BlockStream> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn fetch_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            block_refs: Vec<BlockRef>,
-            _fetch_after_rounds: Vec<Round>,
-            _fetch_missing_ancestors: bool,
-            _timeout: Duration,
-        ) -> crate::error::ConsensusResult<Vec<Bytes>> {
-            self.fetch_calls.lock().push(block_refs);
-            Ok(self.fetchable.clone())
-        }
-
-        async fn fetch_commits(
-            &self,
-            _peer: AuthorityIndex,
-            _commit_range: CommitRange,
-            _timeout: Duration,
-        ) -> crate::error::ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn fetch_latest_blocks(
-            &self,
-            _peer: AuthorityIndex,
-            _authorities: Vec<AuthorityIndex>,
-            _timeout: Duration,
-        ) -> crate::error::ConsensusResult<Vec<Bytes>> {
-            unimplemented!("Unimplemented")
-        }
-
-        async fn get_latest_rounds(
-            &self,
-            _peer: AuthorityIndex,
-            _timeout: Duration,
-        ) -> crate::error::ConsensusResult<(Vec<Round>, Vec<Round>)> {
-            unimplemented!("Unimplemented")
+    impl MissingBlockRegistry for RecordingRegistry {
+        async fn register_missing_block(&self, block_ref: BlockRef) -> ConsensusResult<()> {
+            self.registered.lock().push(block_ref);
+            Ok(())
         }
     }
 
     /// One recovery-task scenario: a receiver DAG, a peer block whose minimal form
-    /// misses `missing_count` ancestors, and everything needed to spawn the task.
+    /// misses its non-own-parent ancestors, and everything needed to spawn the task.
     struct TaskHarness {
         context: Arc<Context>,
         peer: AuthorityIndex,
@@ -771,11 +512,12 @@ mod tests {
         inflater: Arc<BlockInflater>,
         service: Arc<Mutex<TestService>>,
         quotas: Arc<RecoveryQuotas>,
-        repair_limits: Arc<RepairLimits>,
+        registry: Arc<RecordingRegistry>,
         // Ancestors of `block`, NOT accepted into the receiver DAG.
         ancestors: Vec<VerifiedBlock>,
         block: VerifiedBlock,
         minimal: Bytes,
+        excluded: Vec<Vec<u8>>,
         // Receipt-time classification against the (empty) receiver DAG, captured at
         // construction exactly as the subscriber captures it before spawning. Tests
         // that accept blocks before spawn exercise the stale-reason race on purpose.
@@ -811,6 +553,15 @@ mod tests {
         let minimal = sender_inflater
             .serialize(&block, &sender_dag.read())
             .unwrap();
+        // A propagation-hint sidecar that must survive every recovery path.
+        let excluded = vec![
+            bcs::to_bytes(&BlockRef::new(
+                9,
+                context.committee.to_authority_index(1).unwrap(),
+                BlockDigest::MIN,
+            ))
+            .unwrap(),
+        ];
 
         let receiver_dag = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -830,36 +581,39 @@ mod tests {
             inflater,
             service: Arc::new(Mutex::new(TestService::new())),
             quotas: RecoveryQuotas::new(context.clone()),
-            repair_limits: RepairLimits::new(4),
+            registry: Arc::new(RecordingRegistry::default()),
             context,
             ancestors,
             block,
             minimal,
+            excluded,
             reason,
         }
     }
 
     impl TaskHarness {
-        fn spawn(&self, join_set: &mut tokio::task::JoinSet<()>, client: Arc<RepairOnlyClient>) {
-            let wait_slots = match &self.reason {
+        fn spawn(&self, join_set: &mut tokio::task::JoinSet<()>) {
+            let frontier_len = match &self.reason {
                 FallbackReason::MissingAncestors(slots) => slots.len(),
                 _ => 0,
             };
-            let permit = self
-                .quotas
-                .try_acquire(self.peer, self.minimal.len(), wait_slots)
-                .unwrap();
+            let charge = admission_charge(
+                self.minimal.len(),
+                self.excluded.iter().map(|a| a.len()).sum(),
+                frontier_len,
+            );
+            let permit = self.quotas.try_acquire(self.peer, charge).unwrap();
             join_set.spawn(recover_minimal_block(
                 self.context.clone(),
                 self.inflater.clone(),
                 Arc::downgrade(&self.receiver_dag),
-                client,
+                self.registry.clone(),
                 Arc::downgrade(&self.service),
-                self.repair_limits.clone(),
                 self.peer,
                 self.block.reference(),
                 self.reason.clone(),
                 self.minimal.clone(),
+                self.excluded.clone(),
                 permit,
             ));
         }
@@ -875,50 +629,46 @@ mod tests {
         panic!("condition not reached in time");
     }
 
-    /// The register-then-recheck ordering must close the race at every boundary:
-    /// acceptance strictly before the task starts, and acceptance racing the task's
-    /// first wait, must both complete the recovery without hanging.
+    /// The register-then-recheck ordering must close the race at every boundary,
+    /// including acceptance strictly before the task starts (stale receipt reason).
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn recovery_closes_register_then_accept_race() {
-        // Acceptance BEFORE the task starts: the recheck (not the wake) must find it.
         {
             let h = harness(None);
-            let client = Arc::new(RepairOnlyClient::new(vec![]));
             h.receiver_dag.write().accept_blocks(h.ancestors.clone());
             let mut join_set = tokio::task::JoinSet::new();
-            h.spawn(&mut join_set, client.clone());
+            h.spawn(&mut join_set);
             wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
-            assert!(client.fetch_calls.lock().is_empty());
         }
-        // Acceptance racing the parked task, at a few interleaving offsets.
         for delay_ms in [0u64, 1, 5, 25] {
             let h = harness(None);
-            let client = Arc::new(RepairOnlyClient::new(vec![]));
             let mut join_set = tokio::task::JoinSet::new();
-            h.spawn(&mut join_set, client.clone());
+            h.spawn(&mut join_set);
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             h.receiver_dag.write().accept_blocks(h.ancestors.clone());
             wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
             let received = h.service.lock().handle_send_block.clone();
             assert_eq!(&received[0].1.block, h.block.serialized(), "{delay_ms}ms");
-            assert!(client.fetch_calls.lock().is_empty(), "{delay_ms}ms");
         }
     }
 
-    /// The task waits on the whole missing frontier as one barrier: partial arrivals
-    /// neither re-inflate nor submit, and the final arrival produces exactly one
-    /// submission — with zero fetches.
+    /// The task registers the claimed reference durably at spawn (the synchronizer
+    /// fetches it if the streams never resolve the frontier), waits on the WHOLE
+    /// frontier as one barrier — partial arrivals neither re-inflate nor submit —
+    /// and the final arrival produces exactly one submission carrying the sidecar.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn recovery_waits_for_full_frontier_then_inflates_once() {
         let h = harness(None);
-        let client = Arc::new(RepairOnlyClient::new(vec![]));
         let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
+        h.spawn(&mut join_set);
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert!(h.service.lock().handle_send_block.is_empty());
+        assert_eq!(
+            h.registry.registered.lock().as_slice(),
+            &[h.block.reference()],
+            "claimed ref must be durably registered for fetching"
+        );
 
-        // Fill the frontier one slot at a time (the own parent rides an explicit
-        // digest and is not part of it): nothing may submit before the last one.
         let frontier: Vec<_> = h
             .ancestors
             .iter()
@@ -936,25 +686,25 @@ mod tests {
         let received = h.service.lock().handle_send_block.clone();
         assert_eq!(received.len(), 1);
         assert_eq!(&received[0].1.block, h.block.serialized());
-        assert!(client.fetch_calls.lock().is_empty());
+        // The propagation-hint sidecar rides the recovered submission.
+        assert_eq!(received[0].1.excluded_ancestors, h.excluded);
     }
 
-    /// A wake by the WRONG sibling in the waited slot must never submit a wrong
-    /// reconstruction: the digest gate fails it and exact repair fetches the claimed
-    /// block only.
+    /// Wrong siblings filling every frontier slot complete the barrier but fail the
+    /// digest gate; the task then waits passively for the registered fetch or replay
+    /// to deliver the exact block — it never submits a wrong reconstruction, and the
+    /// sidecar is still delivered when the exact block arrives elsewhere.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_repairs_when_wrong_sibling_arrives_first() {
+    async fn recovery_never_submits_wrong_reconstruction() {
         let h = harness(None);
-        let client = Arc::new(RepairOnlyClient::new(vec![h.block.serialized().clone()]));
         let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
+        h.spawn(&mut join_set);
         tokio::time::sleep(Duration::from_millis(5)).await;
 
-        // Fill every missing slot with a WRONG sibling (equivocations with digests the
-        // block does not reference).
         let siblings: Vec<_> = h
             .ancestors
             .iter()
+            .filter(|b| b.author() != h.peer)
             .map(|b| {
                 VerifiedBlock::new_for_test(
                     TestBlock::new(10, b.author().value() as u32)
@@ -964,31 +714,40 @@ mod tests {
             })
             .collect();
         h.receiver_dag.write().accept_blocks(siblings);
-
-        wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
-        let received = h.service.lock().handle_send_block.clone();
-        assert_eq!(received.len(), 1);
-        // Only the exact claimed block was submitted, and only via the repair fetch.
-        assert_eq!(&received[0].1.block, h.block.serialized());
-        assert_eq!(
-            client.fetch_calls.lock().as_slice(),
-            &[vec![h.block.reference()]]
-        );
-    }
-
-    /// GC crossing ONE of several awaited frontier slots ends the wait and repairs
-    /// the live child: that slot can never fill, and without its omitted digest the
-    /// minimal can never inflate — waiting on the others would be pointless.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_gc_cross_of_one_frontier_slot_triggers_repair() {
-        let h = harness(Some(3));
-        let client = Arc::new(RepairOnlyClient::new(vec![h.block.serialized().clone()]));
-        let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        // Digest mismatch: nothing submitted, nothing wrong accepted.
         assert!(h.service.lock().handle_send_block.is_empty());
 
-        // Fill two of the three frontier slots; the third stays empty.
+        // The registered fetch (or replay) wins: exact block accepted elsewhere.
+        h.receiver_dag.write().accept_block(h.block.clone());
+        wait_until(|| {
+            h.context
+                .metrics
+                .node_metrics
+                .minimal_block_recoveries
+                .with_label_values(&["already_accepted"])
+                .get()
+                == 1
+        })
+        .await;
+        assert!(h.service.lock().handle_send_block.is_empty());
+        // Sidecar parity: the hints arrive through the dedicated path instead.
+        let delivered = h.service.lock().handle_excluded_ancestors.clone();
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0].1, h.block.reference());
+        assert_eq!(delivered[0].2, h.excluded);
+    }
+
+    /// GC crossing ONE frontier slot makes the frontier permanently incompletable:
+    /// the task stops slot-waiting and ends only via the exact block arriving
+    /// (registered fetch/replay) or its own round crossing GC.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn recovery_frontier_death_waits_for_exact_block() {
+        let h = harness(Some(3));
+        let mut join_set = tokio::task::JoinSet::new();
+        h.spawn(&mut join_set);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
         let filled: Vec<_> = h
             .ancestors
             .iter()
@@ -998,61 +757,32 @@ mod tests {
             .collect();
         h.receiver_dag.write().accept_blocks(filled);
         tokio::time::sleep(Duration::from_millis(5)).await;
-        assert!(h.service.lock().handle_send_block.is_empty());
 
-        // Commit with leader round 13: gc_round = 10 >= the unfilled slot (10),
-        // while the claimed block (11) stays above GC.
+        // Commit with leader round 13: gc_round = 10 kills the unfilled slot while
+        // the claimed block (11) stays live.
         let leader = BlockRef::new(13, h.peer, BlockDigest::MIN);
         let commit = TrustedCommit::new_for_test(1, CommitDigest::MIN, 100, leader, vec![leader]);
         h.receiver_dag.write().add_commit(commit);
-
-        wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
-        assert_eq!(
-            client.fetch_calls.lock().as_slice(),
-            &[vec![h.block.reference()]]
-        );
-        let received = h.service.lock().handle_send_block.clone();
-        assert_eq!(&received[0].1.block, h.block.serialized());
-    }
-
-    /// GC crossing the WAITED slot ends the wait and repairs the child instead.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_gc_cross_triggers_repair() {
-        let h = harness(Some(3));
-        let client = Arc::new(RepairOnlyClient::new(vec![h.block.serialized().clone()]));
-        let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(20)).await;
         assert!(h.service.lock().handle_send_block.is_empty());
 
-        // Commit with leader round 13: gc_round = 10 >= the waited slot (10), while
-        // the claimed block (11) stays above GC.
-        let leader = BlockRef::new(13, h.peer, BlockDigest::MIN);
-        let commit = TrustedCommit::new_for_test(1, CommitDigest::MIN, 100, leader, vec![leader]);
-        h.receiver_dag.write().add_commit(commit);
-
-        wait_until(|| !h.service.lock().handle_send_block.is_empty()).await;
-        assert_eq!(
-            client.fetch_calls.lock().as_slice(),
-            &[vec![h.block.reference()]]
-        );
-        let received = h.service.lock().handle_send_block.clone();
-        assert_eq!(&received[0].1.block, h.block.serialized());
+        // The fetched exact block arrives: task ends AlreadyAccepted with sidecar.
+        h.receiver_dag.write().accept_block(h.block.clone());
+        wait_until(|| !h.service.lock().handle_excluded_ancestors.is_empty()).await;
+        assert!(h.service.lock().handle_send_block.is_empty());
     }
 
-    /// GC crossing the CLAIMED block itself makes recovery pointless: no fetch, no
-    /// submission, outcome obsolete. The single commit here crosses the whole missing
-    /// frontier (round 10) AND the claimed child (round 11) together, so this also
-    /// pins the precedence: Obsolete wins over the frontier's GC-cross repair.
+    /// GC crossing the CLAIMED block itself makes recovery pointless: no submission,
+    /// outcome obsolete, and no sidecar (the block never existed locally). The single
+    /// commit crosses the whole frontier AND the child together, pinning the
+    /// precedence of Obsolete over frontier death.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn recovery_drops_child_when_child_itself_is_gced() {
         let h = harness(Some(3));
-        let client = Arc::new(RepairOnlyClient::new(vec![h.block.serialized().clone()]));
         let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
+        h.spawn(&mut join_set);
         tokio::time::sleep(Duration::from_millis(5)).await;
 
-        // Commit with leader round 20: gc_round = 17 >= the claimed block round (11).
         let leader = BlockRef::new(20, h.peer, BlockDigest::MIN);
         let commit = TrustedCommit::new_for_test(1, CommitDigest::MIN, 100, leader, vec![leader]);
         h.receiver_dag.write().add_commit(commit);
@@ -1068,80 +798,80 @@ mod tests {
         })
         .await;
         assert!(h.service.lock().handle_send_block.is_empty());
-        assert!(client.fetch_calls.lock().is_empty());
+        assert!(h.service.lock().handle_excluded_ancestors.is_empty());
     }
 
-    /// Aborting the owning JoinSet mid-wait releases the quota permit, corrects the
-    /// gauges, and deregisters the slot wait.
+    /// Replay can win before the task even starts: with the claimed block already
+    /// accepted at spawn, the first register-recheck concludes AlreadyAccepted,
+    /// releases the permit, and still delivers the sidecar. A sibling in the own
+    /// slot must NOT trigger this.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_shutdown_aborts_waiters_and_releases_quota() {
+    async fn recovery_terminates_when_claimed_block_already_accepted_at_spawn() {
         let h = harness(None);
-        let client = Arc::new(RepairOnlyClient::new(vec![]));
+        h.receiver_dag.write().accept_block(h.block.clone());
         let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        h.spawn(&mut join_set);
 
         let node_metrics = &h.context.metrics.node_metrics;
-        let slot_notifier = h.receiver_dag.read().accepted_slot_notifier();
-        let ref_notifier = h.receiver_dag.read().accepted_ref_notifier();
-        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
-        // One registration per missing-frontier slot (three non-own ancestors; the
-        // own parent rides an explicit digest), plus the claimed block's exact
-        // reference (the replay-termination wake).
-        assert_eq!(slot_notifier.num_pending(), 3);
-        assert_eq!(ref_notifier.num_pending(), 1);
-
-        // shutdown() aborts and awaits every task: cleanup is deterministic.
-        join_set.shutdown().await;
-        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
-        assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
-        assert_eq!(slot_notifier.num_pending(), 0);
-        assert_eq!(ref_notifier.num_pending(), 0);
-        // The permit is immediately reusable.
-        let permit = h.quotas.try_acquire(h.peer, h.minimal.len(), 3).unwrap();
-        drop(permit);
+        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
+        assert!(h.service.lock().handle_send_block.is_empty());
+        assert_eq!(h.service.lock().handle_excluded_ancestors.len(), 1);
     }
 
-    /// When the claimed block itself lands through another path (full-form replay
-    /// after a reconnect), the parked task must terminate and release its quota — not
-    /// keep waiting on an ancestor slot the block no longer needs. A sibling in the
-    /// own slot must NOT trigger this.
+    /// A sibling in the claimed slot must not wake or terminate the task: the
+    /// termination registration is keyed by exact reference.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_terminates_when_claimed_block_arrives_via_replay() {
+    async fn recovery_ignores_equivocating_sibling_in_own_slot() {
         let h = harness(None);
-        let client = Arc::new(RepairOnlyClient::new(vec![]));
         let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
+        h.spawn(&mut join_set);
         tokio::time::sleep(Duration::from_millis(5)).await;
         let node_metrics = &h.context.metrics.node_metrics;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
 
-        // A sibling in the claimed block's own slot must not even wake the task:
-        // the termination registration is keyed by exact reference, and the claimed
-        // block itself is still unaccepted.
-        let ref_notifier = h.receiver_dag.read().accepted_ref_notifier();
         let sibling = VerifiedBlock::new_for_test(
             TestBlock::new(11, h.peer.value() as u32)
                 .set_timestamp_ms(777_777)
                 .build(),
         );
         h.receiver_dag.write().accept_block(sibling);
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
-        assert_eq!(ref_notifier.num_pending(), 1);
 
-        // The claimed block arrives (as replay would deliver it): the task ends,
-        // submits nothing, fetches nothing, and frees its permit.
         h.receiver_dag.write().accept_block(h.block.clone());
         wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-        assert!(h.service.lock().handle_send_block.is_empty());
-        assert!(client.fetch_calls.lock().is_empty());
-        assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
     }
 
-    /// Quota isolation across peers: one peer saturating its own lanes must not
-    /// impede another peer's admission, and a failed partial acquisition must roll
-    /// back the permits it already took.
+    /// Aborting the owning JoinSet mid-wait releases the quota permit, corrects the
+    /// gauges, and deregisters every notifier registration.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn recovery_shutdown_aborts_waiters_and_releases_quota() {
+        let h = harness(None);
+        let mut join_set = tokio::task::JoinSet::new();
+        h.spawn(&mut join_set);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        let node_metrics = &h.context.metrics.node_metrics;
+        let slot_notifier = h.receiver_dag.read().accepted_slot_notifier();
+        let ref_notifier = h.receiver_dag.read().accepted_ref_notifier();
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
+        // One registration per frontier slot (three non-own ancestors) plus the
+        // claimed block's exact reference.
+        assert_eq!(slot_notifier.num_pending(), 3);
+        assert_eq!(ref_notifier.num_pending(), 1);
+
+        join_set.shutdown().await;
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
+        assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
+        assert_eq!(slot_notifier.num_pending(), 0);
+        assert_eq!(ref_notifier.num_pending(), 0);
+        let charge = admission_charge(h.minimal.len(), 0, 3);
+        let permit = h.quotas.try_acquire(h.peer, charge).unwrap();
+        drop(permit);
+    }
+
+    /// Per-peer admission is isolated and rolls back partial acquisitions; the charge
+    /// covers payload, sidecar, task overhead, and frontier registrations.
     #[tokio::test]
     async fn quota_isolation_across_peers_and_rollback() {
         let (context, _keys) = Context::new_for_test(4);
@@ -1151,116 +881,33 @@ mod tests {
         let quotas = RecoveryQuotas::with_limits(
             context.clone(),
             RecoveryLimits {
-                global_bytes: 1000,
-                global_count: 16,
-                peer_bytes: 600,
+                peer_bytes: 10_000,
                 peer_count: 2,
-                waiter_slots: 10,
             },
         );
 
-        // Saturate peer A's count lane.
-        let _a1 = quotas.try_acquire(peer_a, 100, 2).unwrap();
-        let _a2 = quotas.try_acquire(peer_a, 100, 2).unwrap();
+        // Charge arithmetic: payload + sidecar + overhead + per-slot registration.
+        assert_eq!(admission_charge(1000, 100, 3), 1000 + 100 + 2048 + 3 * 256);
+
+        // Saturate peer A's count lane; peer B is unaffected.
+        let _a1 = quotas.try_acquire(peer_a, 4000).unwrap();
+        let _a2 = quotas.try_acquire(peer_a, 4000).unwrap();
         assert_eq!(
-            quotas.try_acquire(peer_a, 100, 2).err(),
+            quotas.try_acquire(peer_a, 100).err(),
             Some(QuotaLimit::PeerCount)
         );
-        // Peer B is unaffected by A's saturation.
-        let b1 = quotas.try_acquire(peer_b, 100, 2).unwrap();
+        let b1 = quotas.try_acquire(peer_b, 4000).unwrap();
 
-        // Failed PEER-BYTES admission must roll back the global permit it took:
-        // peer B has 500 peer-bytes left but global has 700 left, so a 550-byte
-        // acquisition takes global then fails on peer bytes.
+        // Byte exhaustion on B: second acquisition of 7,000 exceeds 10,000 total.
         assert_eq!(
-            quotas.try_acquire(peer_b, 550, 2).err(),
+            quotas.try_acquire(peer_b, 7000).err(),
             Some(QuotaLimit::PeerBytes)
         );
-        // If the global permit leaked, only 150 global bytes would remain and this
-        // 500-byte admission would fail on GlobalBytes.
-        let b2 = quotas.try_acquire(peer_b, 500, 2).unwrap();
+        // The failed acquisition rolled back: 6,000 more still fits.
+        let b2 = quotas.try_acquire(peer_b, 6000).unwrap();
         drop(b1);
         drop(b2);
-        // Releases return capacity fully: the whole peer-B byte quota is reusable.
-        let b3 = quotas.try_acquire(peer_b, 600, 2).unwrap();
+        let b3 = quotas.try_acquire(peer_b, 10_000).unwrap();
         drop(b3);
-
-        // Waiter slots are charged per missing-frontier entry and rolled back with
-        // everything else. Peer A's two live permits hold 4 of the 10 slots; taking
-        // the remaining 6 exhausts the pool, an over-ask is refused with its earlier
-        // permits released, and freed waiters are fully reusable.
-        let w1 = quotas.try_acquire(peer_b, 100, 6).unwrap();
-        assert_eq!(
-            quotas.try_acquire(peer_b, 100, 1).err(),
-            Some(QuotaLimit::WaiterSlots)
-        );
-        drop(w1);
-        let w2 = quotas.try_acquire(peer_b, 100, 6).unwrap();
-        drop(w2);
-    }
-
-    /// Replay can win before the task even starts: with the claimed block already
-    /// accepted at spawn, the first register-recheck must conclude AlreadyAccepted and
-    /// release the permit — no wait, no fetch, no submission. This pins the
-    /// contains_block arm of the recheck for the pre-spawn timing.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_terminates_when_claimed_block_already_accepted_at_spawn() {
-        let h = harness(None);
-        let client = Arc::new(RepairOnlyClient::new(vec![]));
-        // The harness captured its (now stale) receipt-time reason before this.
-        h.receiver_dag.write().accept_block(h.block.clone());
-        let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
-
-        let node_metrics = &h.context.metrics.node_metrics;
-        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-        assert!(h.service.lock().handle_send_block.is_empty());
-        assert!(client.fetch_calls.lock().is_empty());
-        // The permit is immediately reusable.
-        let permit = h.quotas.try_acquire(h.peer, h.minimal.len(), 3).unwrap();
-        drop(permit);
-    }
-
-    /// A repair response whose computed reference differs from the claimed one is a
-    /// peer fault: nothing may be submitted.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn exact_repair_rejects_wrong_digest_response() {
-        let h = harness(None);
-        // The author serves a DIFFERENT block than the claimed one.
-        let wrong = VerifiedBlock::new_for_test(
-            TestBlock::new(11, h.peer.value() as u32)
-                .set_timestamp_ms(424_242)
-                .build(),
-        );
-        let client = Arc::new(RepairOnlyClient::new(vec![wrong.serialized().clone()]));
-        let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set, client.clone());
-        tokio::time::sleep(Duration::from_millis(5)).await;
-
-        // Wrong siblings force the digest-mismatch path into repair.
-        let siblings: Vec<_> = h
-            .ancestors
-            .iter()
-            .map(|b| {
-                VerifiedBlock::new_for_test(
-                    TestBlock::new(10, b.author().value() as u32)
-                        .set_timestamp_ms(999_999)
-                        .build(),
-                )
-            })
-            .collect();
-        h.receiver_dag.write().accept_blocks(siblings);
-
-        wait_until(|| {
-            h.context
-                .metrics
-                .node_metrics
-                .minimal_block_repairs
-                .with_label_values(&["reference_mismatch"])
-                .get()
-                == 1
-        })
-        .await;
-        assert!(h.service.lock().handle_send_block.is_empty());
     }
 }

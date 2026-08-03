@@ -135,6 +135,42 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         }
     }
 
+    /// Shared tail of excluded-ancestors processing: schedules fetches for the ones
+    /// the local DAG does not know. Used by both the live receive path and the
+    /// recovered-block delivery path.
+    async fn process_missing_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        excluded_ancestors: Vec<BlockRef>,
+    ) -> ConsensusResult<()> {
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+        let missing_excluded_ancestors = self
+            .core_dispatcher
+            .check_block_refs(excluded_ancestors)
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
+        if !missing_excluded_ancestors.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_sent_to_fetch
+                .with_label_values(&[peer_hostname])
+                .inc_by(missing_excluded_ancestors.len() as u64);
+
+            let synchronizer = self.synchronizer.clone();
+            spawn_monitored_task!(async move {
+                // This does not wait for the fetch request to complete.
+                if let Err(err) = synchronizer
+                    .fetch_blocks(missing_excluded_ancestors, PeerId::Validator(peer))
+                    .await
+                {
+                    debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
+                }
+            });
+        }
+        Ok(())
+    }
+
     // Parses and validates serialized excluded ancestors.
     fn parse_excluded_ancestors(
         &self,
@@ -366,31 +402,26 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Schedule fetching missing soft links from this peer in the background.
-        let missing_excluded_ancestors = self
-            .core_dispatcher
-            .check_block_refs(excluded_ancestors)
-            .await
-            .map_err(|_| ConsensusError::Shutdown)?;
-        if !missing_excluded_ancestors.is_empty() {
-            self.context
-                .metrics
-                .node_metrics
-                .network_excluded_ancestors_sent_to_fetch
-                .with_label_values(&[peer_hostname])
-                .inc_by(missing_excluded_ancestors.len() as u64);
-
-            let synchronizer = self.synchronizer.clone();
-            spawn_monitored_task!(async move {
-                if let Err(err) = synchronizer
-                    .fetch_blocks(missing_excluded_ancestors, PeerId::Validator(peer))
-                    .await
-                {
-                    debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
-                }
-            });
-        }
+        self.process_missing_excluded_ancestors(peer, excluded_ancestors)
+            .await?;
 
         Ok(())
+    }
+
+    async fn handle_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        block_ref: BlockRef,
+        excluded_ancestors: Vec<Vec<u8>>,
+    ) -> ConsensusResult<()> {
+        // The block must already be accepted; its verified form anchors validation of
+        // the untrusted sidecar exactly as on the live receive path.
+        let Some(block) = self.dag_state.read().get_block(&block_ref) else {
+            return Ok(());
+        };
+        let excluded_ancestors = self.parse_excluded_ancestors(peer, &block, excluded_ancestors)?;
+        self.process_missing_excluded_ancestors(peer, excluded_ancestors)
+            .await
     }
 
     async fn handle_subscribe_blocks(

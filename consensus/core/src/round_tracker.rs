@@ -119,6 +119,17 @@ impl RoundTracker {
     }
 
     /// Returns the highest received round per authority tracked locally.
+    /// Credits a structurally valid, author-authenticated claim from `author`'s own
+    /// subscription stream as RECEIVED, before verification. Restores arrival parity
+    /// for minimal blocks that park before reaching `handle_send_block`. Touches only
+    /// the received vector — never accepted rows or propagation evidence — so a
+    /// Byzantine peer can only inflate its own column, which only affects its own
+    /// propagation gate.
+    pub(crate) fn update_received_claim(&mut self, author: AuthorityIndex, round: Round) {
+        self.local_highest_received_rounds[author] =
+            self.local_highest_received_rounds[author].max(round);
+    }
+
     pub(crate) fn local_highest_received_rounds(&self) -> Vec<Round> {
         self.local_highest_received_rounds.clone()
     }

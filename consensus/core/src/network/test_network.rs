@@ -22,6 +22,7 @@ use super::ExtendedSerializedBlock;
 
 pub(crate) struct TestService {
     pub(crate) handle_send_block: Vec<(AuthorityIndex, ExtendedSerializedBlock)>,
+    pub(crate) handle_excluded_ancestors: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>)>,
     pub(crate) handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
     pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
@@ -33,6 +34,7 @@ impl TestService {
     pub(crate) fn new() -> Self {
         Self {
             handle_send_block: Vec::new(),
+            handle_excluded_ancestors: Vec::new(),
             handle_fetch_blocks: Vec::new(),
             handle_subscribe_blocks: Vec::new(),
             handle_fetch_commits: Vec::new(),
@@ -56,6 +58,19 @@ impl ValidatorNetworkService for Mutex<TestService> {
     ) -> ConsensusResult<()> {
         let mut state = self.lock();
         state.handle_send_block.push((peer, block));
+        Ok(())
+    }
+
+    async fn handle_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        block_ref: BlockRef,
+        excluded_ancestors: Vec<Vec<u8>>,
+    ) -> ConsensusResult<()> {
+        let mut state = self.lock();
+        state
+            .handle_excluded_ancestors
+            .push((peer, block_ref, excluded_ancestors));
         Ok(())
     }
 

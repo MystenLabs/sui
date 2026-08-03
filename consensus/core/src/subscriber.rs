@@ -26,9 +26,11 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     minimal_block::{FallbackReason, InflateError},
     minimal_block_receive::{
-        RecoveryQuotas, RepairLimits, max_minimal_size, recover_minimal_block,
+        MissingBlockRegistry, RecoveryQuotas, admission_charge, max_minimal_size,
+        recover_minimal_block,
     },
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
+    round_tracker::RoundTracker,
     task::{join_and_propagate_panic, reap_finished_task},
 };
 
@@ -43,10 +45,16 @@ const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 /// (quota overflow, recovery horizon, malformed threshold). The regular backoff can
 /// be cleared by any admitted block, so a peer interleaving valid blocks with
 /// reset-triggering ones could otherwise force immediate reconnects in an unbounded
-/// loop; this floor caps that at one reset per second regardless of backoff state.
-/// An honest deep laggard pays it once per overflow, ahead of a replay that covers
-/// hundreds of rounds.
-const CAUSED_RESET_DELAY: Duration = Duration::from_secs(1);
+/// loop. Jittered per (node, peer, attempt): the v4 incident showed a fixed delay
+/// synchronizes resets across every subscription into committee-wide thrash.
+const CAUSED_RESET_DELAY_FLOOR_MS: u64 = 700;
+const CAUSED_RESET_DELAY_JITTER_MS: u64 = 600;
+
+fn caused_reset_delay(own: AuthorityIndex, peer: AuthorityIndex, attempt: i64) -> Duration {
+    let jitter = (own.value() as u64 * 31 + peer.value() as u64 * 7 + attempt as u64 * 13)
+        % CAUSED_RESET_DELAY_JITTER_MS;
+    Duration::from_millis(CAUSED_RESET_DELAY_FLOOR_MS + jitter)
+}
 
 /// Outcome of processing one received block envelope before it is handed to the service.
 enum InflateOutcome {
@@ -59,6 +67,7 @@ enum InflateOutcome {
         block_ref: BlockRef,
         reason: FallbackReason,
         minimal: Bytes,
+        excluded_ancestors: Vec<Vec<u8>>,
     },
 }
 
@@ -74,7 +83,8 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     dag_state: Arc<RwLock<DagState>>,
     block_inflater: Arc<BlockInflater>,
     recovery_quotas: Arc<RecoveryQuotas>,
-    repair_limits: Arc<RepairLimits>,
+    missing_block_registry: Arc<dyn MissingBlockRegistry>,
+    round_tracker: Arc<RwLock<RoundTracker>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -86,13 +96,14 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         network_client: Arc<C>,
         authority_service: Arc<S>,
         dag_state: Arc<RwLock<DagState>>,
+        missing_block_registry: Arc<dyn MissingBlockRegistry>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
     ) -> Self {
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
         let block_inflater = Arc::new(BlockInflater::new(context.clone()));
         let recovery_quotas = RecoveryQuotas::new(context.clone());
-        let repair_limits = RepairLimits::new(context.committee.size());
         Self {
             context,
             network_client,
@@ -100,7 +111,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             recovery_quotas,
-            repair_limits,
+            missing_block_registry,
+            round_tracker,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
@@ -127,7 +139,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let dag_state = Arc::downgrade(&self.dag_state);
         let block_inflater = self.block_inflater.clone();
         let recovery_quotas = self.recovery_quotas.clone();
-        let repair_limits = self.repair_limits.clone();
+        let missing_block_registry = self.missing_block_registry.clone();
+        let round_tracker = self.round_tracker.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -138,7 +151,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             recovery_quotas,
-            repair_limits,
+            missing_block_registry,
+            round_tracker,
             peer,
         )));
     }
@@ -239,6 +253,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     block_ref,
                     reason,
                     minimal,
+                    excluded_ancestors: std::mem::take(&mut block.excluded_ancestors),
                 })
             }
             Err(error @ InflateError::Malformed(_)) => {
@@ -259,7 +274,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
         recovery_quotas: Arc<RecoveryQuotas>,
-        repair_limits: Arc<RepairLimits>,
+        missing_block_registry: Arc<dyn MissingBlockRegistry>,
+        round_tracker: Arc<RwLock<RoundTracker>>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -409,7 +425,17 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 block_ref,
                                 reason,
                                 minimal,
+                                excluded_ancestors,
                             }) => {
+                                // Receipt-time received credit: the claim is
+                                // structurally valid and author-authenticated, and a
+                                // parked block must not distort the propagation-delay
+                                // signal for the park's duration. Received vector
+                                // only; before the horizon/quota branches so refused
+                                // admissions still count as received.
+                                round_tracker
+                                    .write()
+                                    .update_received_claim(block_ref.author, block_ref.round);
                                 // Spawn-eligibility horizon: an admitted wait is
                                 // GC-bounded only if the claimed round is one the
                                 // local DAG can plausibly reach — a fabricated
@@ -435,14 +461,20 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                          subscription for full replay",
                                         block_ref, peer, peer_hostname, horizon
                                     );
-                                    sleep(CAUSED_RESET_DELAY).await;
+                                    sleep(caused_reset_delay(context.own_index, peer, retries))
+                                        .await;
                                     continue 'subscription;
                                 }
-                                let wait_slots = match &reason {
+                                let frontier_len = match &reason {
                                     FallbackReason::MissingAncestors(slots) => slots.len(),
                                     _ => 0,
                                 };
-                                match recovery_quotas.try_acquire(peer, minimal.len(), wait_slots) {
+                                let charge = admission_charge(
+                                    minimal.len(),
+                                    excluded_ancestors.iter().map(|a| a.len()).sum(),
+                                    frontier_len,
+                                );
+                                match recovery_quotas.try_acquire(peer, charge) {
                                     // The stream itself is healthy — it delivered a
                                     // well-formed block — so the reconnect backoff
                                     // resets as for an accepted block. The reset must
@@ -456,13 +488,13 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             context.clone(),
                                             block_inflater.clone(),
                                             dag_state.clone(),
-                                            network_client.clone(),
+                                            missing_block_registry.clone(),
                                             authority_service.clone(),
-                                            repair_limits.clone(),
                                             peer,
                                             block_ref,
                                             reason,
                                             minimal,
+                                            excluded_ancestors,
                                             permit,
                                         ));
                                         continue 'stream;
@@ -487,7 +519,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             peer,
                                             peer_hostname
                                         );
-                                        sleep(CAUSED_RESET_DELAY).await;
+                                        sleep(caused_reset_delay(context.own_index, peer, retries))
+                                            .await;
                                         continue 'subscription;
                                     }
                                 }
@@ -505,7 +538,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             "Too many malformed minimal blocks from peer {} {}; resetting subscription",
                                             peer, peer_hostname
                                         );
-                                        sleep(CAUSED_RESET_DELAY).await;
+                                        sleep(caused_reset_delay(context.own_index, peer, retries))
+                                            .await;
                                         continue 'subscription;
                                     }
                                 }
@@ -822,6 +856,30 @@ mod test {
         )))
     }
 
+    struct NoopRegistry;
+
+    #[async_trait]
+    impl crate::minimal_block_receive::MissingBlockRegistry for NoopRegistry {
+        async fn register_missing_block(
+            &self,
+            _block_ref: BlockRef,
+        ) -> crate::error::ConsensusResult<()> {
+            Ok(())
+        }
+    }
+
+    fn test_subscriber_deps(
+        context: &Arc<Context>,
+    ) -> (
+        Arc<dyn crate::minimal_block_receive::MissingBlockRegistry>,
+        Arc<RwLock<RoundTracker>>,
+    ) {
+        (
+            Arc::new(NoopRegistry),
+            Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![]))),
+        )
+    }
+
     async fn wait_until(mut condition: impl FnMut() -> bool) {
         for _ in 0..200 {
             if condition() {
@@ -860,11 +918,14 @@ mod test {
         let network_client = Arc::new(FixedStreamClient::new(wire));
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag.clone(),
+            registry,
+            tracker,
         );
         subscriber.subscribe(s.peer);
 
@@ -913,14 +974,17 @@ mod test {
         let network_client = Arc::new(client);
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag,
+            registry,
+            tracker,
         )
         .with_recovery_limits(RecoveryLimits {
-            global_bytes: 8,
+            peer_bytes: 8,
             ..RecoveryLimits::default()
         });
         subscriber.subscribe(s.peer);
@@ -931,7 +995,7 @@ mod test {
                 .metrics
                 .node_metrics
                 .minimal_block_quota_drops
-                .with_label_values(&["global_bytes"])
+                .with_label_values(&["peer_bytes"])
                 .get()
                 >= 1
         })
@@ -941,7 +1005,7 @@ mod test {
         let dropped_at = tokio::time::Instant::now();
         wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
         assert!(
-            dropped_at.elapsed() >= CAUSED_RESET_DELAY,
+            dropped_at.elapsed() >= Duration::from_millis(CAUSED_RESET_DELAY_FLOOR_MS),
             "reconnect after a caused reset must wait out the floor delay"
         );
         // Nothing was admitted, so nothing is parked; the replayed full form arrives.
@@ -971,11 +1035,14 @@ mod test {
         let network_client = Arc::new(client);
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag.clone(),
+            registry,
+            tracker,
         )
         .with_recovery_limits(RecoveryLimits {
             peer_count: 2,
@@ -1032,11 +1099,14 @@ mod test {
         let network_client = Arc::new(client);
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&context);
+        let (registry, tracker) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag,
+            registry,
+            tracker,
         );
         subscriber.subscribe(peer);
 
@@ -1070,11 +1140,14 @@ mod test {
         receiver_dag
             .write()
             .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1499, 0).build()));
+        let (registry, tracker) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
             authority_service.clone(),
             receiver_dag,
+            registry,
+            tracker,
         );
         subscriber.subscribe(s.peer);
 
@@ -1110,11 +1183,14 @@ mod test {
         let network_client = Arc::new(SubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let (registry, tracker) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client,
             authority_service.clone(),
             dag_state,
+            registry,
+            tracker,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1157,11 +1233,14 @@ mod test {
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         let network_client = Arc::new(SubscriberTestClient::new());
         let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let (registry, tracker) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
             authority_service,
             dag_state.clone(),
+            registry,
+            tracker,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();

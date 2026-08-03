@@ -171,6 +171,12 @@ enum Command {
         peer: PeerId,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
+    /// Durably registers a block reference to be fetched by the periodic scheduler
+    /// until it is accepted locally or falls below the GC round. Used by minimal-block
+    /// recovery for parked blocks, which are absent from BlockManager's missing set.
+    RegisterMissingBlock {
+        block_ref: BlockRef,
+    },
     FetchOwnLastBlock,
     KickOffScheduler,
     Shutdown {
@@ -201,6 +207,18 @@ impl SynchronizerHandle {
             .await
             .map_err(|_err| ConsensusError::Shutdown)?;
         receiver.await.map_err(|_err| ConsensusError::Shutdown)?
+    }
+
+    /// Durably registers `block_ref` for periodic fetching until it is accepted or
+    /// GC'ed. Unlike `fetch_blocks`, registration survives queue saturation and empty
+    /// or unrelated fetch responses: the reference stays in the scheduler's set and is
+    /// retried every pass, and is only released by local acceptance or GC. The awaited
+    /// send provides backpressure instead of a drop when the command channel is full.
+    pub(crate) async fn register_missing_block(&self, block_ref: BlockRef) -> ConsensusResult<()> {
+        self.commands_sender
+            .send(Command::RegisterMissingBlock { block_ref })
+            .await
+            .map_err(|_err| ConsensusError::Shutdown)
     }
 
     pub(crate) async fn stop(&self) {
@@ -270,6 +288,10 @@ pub(crate) struct Synchronizer<
     round_tracker: Arc<RwLock<RoundTracker>>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
     commands_sender: Sender<Command>,
+    // Exact block references registered by minimal-block recovery: fetched by every
+    // periodic pass (even while commit sync owns ordinary catch-up) until accepted
+    // locally or below GC. Owned exclusively by the command loop.
+    pending_exact_requests: BTreeSet<BlockRef>,
     last_changed_commit_index: CommitIndex,
     last_commit_change_time: Instant,
     // When commit is not progressing, commit sync fails over to periodic sync for catchup.
@@ -353,6 +375,7 @@ where
                 commands_sender: commands_sender_clone,
                 dag_state,
                 round_tracker,
+                pending_exact_requests: BTreeSet::new(),
                 last_changed_commit_index: 0,
                 last_commit_change_time: Instant::now(),
                 commit_sync_failover: false,
@@ -427,6 +450,9 @@ where
                                 });
 
                             result.send(r).ok();
+                        }
+                        Command::RegisterMissingBlock { block_ref } => {
+                            self.pending_exact_requests.insert(block_ref);
                         }
                         Command::FetchOwnLastBlock => {
                             if self.fetch_own_last_block_task.is_empty() {
@@ -944,10 +970,28 @@ where
             return Ok(());
         }
 
+        // Prune registered exact requests that resolved (accepted through any path) or
+        // fell below GC; what remains must be fetched THIS pass. These are live blocks
+        // parked by minimal-block recovery — commit sync will not deliver them (they
+        // are uncommitted), so they must not honor the commit-sync skip below.
+        if !self.pending_exact_requests.is_empty() {
+            let dag_state = self.dag_state.read();
+            let gc_round = dag_state.gc_round();
+            self.pending_exact_requests.retain(|block_ref| {
+                block_ref.round > gc_round
+                    && !dag_state
+                        .contains_blocks(vec![*block_ref])
+                        .first()
+                        .copied()
+                        .unwrap_or(false)
+            });
+        }
+        let pending_exact = self.pending_exact_requests.clone();
+
         // If commit is lagging and commit sync is making progress, skip periodic sync.
         // Commit syncer fetches certified commits with all necessary causal history.
         // If commit sync is not making progress, periodic sync resumes as a fallback.
-        if !self.should_run_periodic_sync() {
+        if !self.should_run_periodic_sync() && pending_exact.is_empty() {
             return Ok(());
         }
 
@@ -963,11 +1007,17 @@ where
         let round_tracker = self.round_tracker.clone();
         let peers_pool = self.peers_pool.clone();
 
-        let mut missing_blocks = self
-            .core_dispatcher
-            .get_missing_blocks()
-            .await
-            .map_err(|_err| ConsensusError::Shutdown)?;
+        let mut missing_blocks = if self.should_run_periodic_sync() {
+            self.core_dispatcher
+                .get_missing_blocks()
+                .await
+                .map_err(|_err| ConsensusError::Shutdown)?
+        } else {
+            // Commit sync owns ordinary catch-up; fetch only the registered exact
+            // requests this pass.
+            BTreeSet::new()
+        };
+        missing_blocks.extend(pending_exact);
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
             // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.

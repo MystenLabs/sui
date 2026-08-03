@@ -198,6 +198,17 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
         block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()>;
 
+    /// Handles the excluded-ancestors sidecar of a block that was accepted through a
+    /// path that strips it (synchronizer fetch or full-form replay racing a parked
+    /// minimal). `block_ref` must already be accepted locally. Propagation hints must
+    /// never be dropped, whichever path wins the recovery race.
+    async fn handle_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        block_ref: BlockRef,
+        excluded_ancestors: Vec<Vec<u8>>,
+    ) -> ConsensusResult<()>;
+
     /// Handles the subscription request from the peer.
     /// A stream of newly proposed blocks is returned to the peer.
     /// The stream continues until the end of epoch, peer unsubscribes, or a network error / crash
