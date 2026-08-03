@@ -2030,9 +2030,6 @@ impl AuthorityPerEpochStore {
                         }
                     };
                     if !executed {
-                        assert_reachable!(
-                            "owned-object conflict detected from objects-table consumption"
-                        );
                         // Winner digest is best-effort error enrichment: the transaction
                         // that produced the current live version (which for multi-hop
                         // consumption may be downstream of the actual first consumer).

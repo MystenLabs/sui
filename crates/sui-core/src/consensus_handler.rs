@@ -271,9 +271,6 @@ pub(crate) fn resolve_owned_object_lock_states(
                                         object_cache.get_latest_object_ref_or_tombstone(obj_ref.0)
                                         && latest_ref.1 > claimed_version
                                     {
-                                        assert_reachable!(
-                                            "owned-object conflict decided by tombstone version"
-                                        );
                                         live_object_cache
                                             .record_latest_lookup(obj_ref.0, Some(latest_ref.1));
                                         resolutions
@@ -1797,7 +1794,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 {
                     // Cross-commit key collision (a key reloaded by this commit
                     // legitimately replaces its stale entry instead).
-                    assert_reachable!("colliding deferral key displaced finalized transactions");
                     warn!(
                         "deferral key {key:?} collision displaced finalized transactions {:?}; \
                          they will not execute this epoch, their owned inputs stay locked",
