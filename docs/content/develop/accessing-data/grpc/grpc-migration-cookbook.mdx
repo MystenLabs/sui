@@ -367,6 +367,7 @@ The List APIs differ from JSON-RPC pagination in the following ways:
   - `SCAN_LIMIT`: the server's internal scan budget was exhausted before finding enough matches. Resume from the cursor to continue scanning.
   - `LEDGER_TIP`: reached the current tip of the chain (no `end_checkpoint` was specified).
   - `CHECKPOINT_BOUND`: reached the specified `end_checkpoint`.
+  - `CURSOR_BOUND`: reached a cursor-derived boundary (for example, the `options.before` cursor used during backfill).
 
 `ListCheckpoints` and `ListEvents` follow the same streaming pattern with the same watermark and `QueryEnd` semantics. `ListCheckpoints` accepts a `TransactionFilter` (filtering checkpoints that contain matching transactions), while `ListEvents` accepts an `EventFilter`.
 
@@ -1050,7 +1051,7 @@ const result = await client.core.executeTransaction({
 });
 ```
 
-For sponsored transactions, the sponsor sets `setGasPayment` and `setGasOwner` on the transaction, builds the kind-only bytes with `tx.build({ client, onlyTransactionKind: true })`, and provides an additional signature. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) for the full pattern.
+For sponsored transactions, both the sender and sponsor must sign the same full transaction bytes (including gas fields). The sponsor sets `setGasPayment` and `setGasOwner`, then both parties sign the complete built transaction. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) for the full pattern.
 
 ## Simulate a transaction (dry run)
 
@@ -1181,50 +1182,21 @@ See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recom
 
 ### Backfill and subscribe without gaps
 
-To combine historical backfill with a live subscription without missing data, open the subscription first, note its starting watermark, then backfill up to that point. The general sequence is:
+To combine historical backfill with a live subscription without missing data, open the subscription first, start consuming it concurrently, then backfill up to the subscription's starting point. The general sequence is:
 
 1. Open the subscription. It starts at the current tip and sends a progress-only first frame with no payload.
 2. Read the first frame to get the starting watermark (a checkpoint number or opaque cursor depending on the API).
-3. Backfill historical data from your last processed checkpoint up to the subscription's starting watermark using the corresponding `List*` API.
-4. After backfill completes, consume from the already-open subscription.
+3. Start consuming the subscription concurrently into a buffer or queue so the server does not evict your client as a slow consumer (the server drops subscribers whose 256-item buffer fills).
+4. Backfill historical data from your last processed checkpoint up to the subscription's starting watermark using the corresponding `List*` API (not per-item `Get*` calls, which are too slow for large gaps).
+5. After backfill completes, drain the buffer and continue consuming from the live subscription.
 
 This pattern works with all three subscription and list API pairs: `SubscribeCheckpoints` with `ListCheckpoints`, `SubscribeTransactions` with `ListTransactions`, and `SubscribeEvents` with `ListEvents`. The subscription and list APIs accept the same filter types, so you can reuse the same filter for both.
 
-The following example demonstrates this pattern with `SubscribeCheckpoints` (which the TypeScript SDK supports today) and `GetCheckpoint` for backfill:
+:::caution
 
-```ts
-// 1. Open the subscription (starts at the current tip)
-const { responses } = client.subscriptionService.subscribeCheckpoints({
-  readMask: { paths: ['sequenceNumber', 'transactions'] },
-});
+The subscription's per-subscriber buffer holds 256 items. If backfill takes long enough for the live stream to queue 256 frames, the server evicts your subscriber. Always consume the subscription concurrently during backfill, or use a short enough backfill range that the buffer cannot overflow.
 
-const iterator = responses[Symbol.asyncIterator]();
-
-// 2. Read the first frame to get the starting checkpoint cursor
-const firstFrame = await iterator.next();
-const startCursor = firstFrame.value?.cursor ?? 0n;
-console.log('Subscription starts at checkpoint:', startCursor);
-
-// 3. Backfill from your last processed checkpoint up to the start cursor
-for (let seq = YOUR_LAST_PROCESSED_CHECKPOINT + 1n; seq < startCursor; seq++) {
-  const { response } = await client.ledgerService.getCheckpoint({
-    checkpointId: { oneofKind: 'sequenceNumber', sequenceNumber: seq },
-    readMask: { paths: ['transactions'] },
-  });
-  processCheckpoint(response.checkpoint);
-}
-
-// 4. Consume from the already-open subscription
-let frame = firstFrame;
-while (!frame.done) {
-  if (frame.value?.checkpoint) {
-    processCheckpoint(frame.value.checkpoint);
-  }
-  frame = await iterator.next();
-}
-```
-
-For `SubscribeTransactions` and `SubscribeEvents`, apply the same pattern using the proto client (`client.subscriptionService.subscribeTransactions()` or `client.subscriptionService.subscribeEvents()`). The subscription response carries a `watermark` with an opaque `cursor` and a `checkpoint` field. Pass the `cursor` to the corresponding `List*` API's `options.before` to set the backfill upper bound.
+:::
 
 ### Reconnect a checkpoint stream
 
@@ -1257,9 +1229,13 @@ async function startStream() {
       lastProcessed = seq;
     }
   } catch (err) {
-    console.error('Stream disconnected, reconnecting...', err);
-    startStream(); // reconnect
+    console.error('Stream error, reconnecting...', err);
   }
+
+  // Reconnect on both errors and normal termination (slow-consumer
+  // eviction and source-lag drops end the stream without an error).
+  console.log('Stream ended, reconnecting from checkpoint', lastProcessed);
+  startStream();
 }
 ```
 
@@ -1341,6 +1317,6 @@ gRPC streams can terminate for several reasons. Understanding the server's conne
 
 **Source lag:** If the subscription service falls behind the checkpoint broadcast (for example, due to high server load), the server drops all subscribers. Reconnect and backfill from your last processed checkpoint.
 
-**Server-side timeout:** The server applies a configurable timeout (default: 60 seconds) as a deadline for unary requests. For streaming `List*` APIs, this timeout bounds the time to the first response. If a sparse filter scans a large range before finding its first match, the server may terminate the stream. Retry with a narrower checkpoint range or a less selective filter.
+**Server-side timeout:** The server applies a configurable timeout (default: 60 seconds) as a deadline for unary requests. For streaming `List*` APIs, this timeout covers the entire stream duration, not just time to first response. A large query can terminate after returning partial results. Always resume from the last `watermark.cursor` rather than retrying from scratch.
 
 **Public endpoint limitations:** The public URLs at `https://fullnode.<network>.sui.io` are behind load balancers that impose their own connection timeouts and rate limits beyond what the Sui node configures. Long-running streams are more likely to be interrupted on public endpoints. For production streaming workloads, run your own [Sui full node](/operators/full-node/sui-full-node) or use a provider with a dedicated gRPC endpoint.
