@@ -210,7 +210,8 @@ Not all tools in the Sui ecosystem require manual migration:
 
   // After (gRPC)
   import { SuiGrpcClient } from '@mysten/sui/grpc';
-  createClient: (network) => new SuiGrpcClient({ network })
+  import { getFullnodeUrl } from '@mysten/sui/client';
+  createClient: (network) => new SuiGrpcClient({ network, baseUrl: getFullnodeUrl(network) })
   ```
 
 - **Kiosk SDK** (`@mysten/kiosk`): No changes needed. Kiosk operations are PTB move calls that you build with the `Transaction` class and execute through your app's Sui client. Swap the app's client to `SuiGrpcClient` and all Kiosk code works unchanged.
