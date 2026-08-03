@@ -206,9 +206,9 @@ A full node creates the following directories under its configured `db-path` (in
 | `checkpoints/` | Checkpoint summaries and contents. Do not delete. | Always |
 | `rpc_store/` | gRPC index data (derived indexes and ledger history). Required for gRPC filtered queries and list APIs. | When `rpc.enable-indexing: true` |
 | `indexes/` | Legacy JSON-RPC indexes (transaction lookups by address, object queries). Safe to delete after migrating to gRPC. | When `enable-index-processing: true` |
-| `rpc-index/` | Predecessor to `rpc_store/`. Automatically deleted on startup. No action needed. | Never (legacy, auto-removed) |
+| `rpc-index/` | Predecessor to `rpc_store/`. Automatically deleted on startup when `rpc.enable-indexing: true`. | Never (legacy) |
 
-To reclaim disk space after migrating to gRPC, disable legacy JSON-RPC indexing (see below), then stop the node and delete the `live/indexes/` directory. The `rpc-index/` directory is removed automatically on startup.
+To reclaim disk space after migrating to gRPC, disable legacy JSON-RPC indexing (see below), then stop the node and delete the `live/indexes/` directory. If `rpc-index/` exists and you have `rpc.enable-indexing: true`, the node removes it automatically on the next startup. Otherwise, delete it manually while the node is stopped.
 
 ### Disable legacy JSON-RPC indexing
 
