@@ -1075,7 +1075,7 @@ curl -X POST https://fullnode.mainnet.sui.io:443 \
 
 To compute validator APY after migration:
 
-1. Query the validator set:
+1. Query the validator set through `contents`, which returns each validator's full Move struct as JSON. The staking pool and exchange rate table ID are fields inside this struct.
 
 ```graphql
 query {
@@ -1084,10 +1084,8 @@ query {
     validatorSet {
       activeValidators {
         nodes {
-          name
-          stakingPoolSuiBalance
-          exchangeRates {
-            address
+          contents {
+            json
           }
         }
       }
@@ -1096,7 +1094,7 @@ query {
 }
 ```
 
-2. For each validator, read the exchange rate history from the dynamic fields on the `exchangeRates` object returned above.
+2. From each validator's `contents.json`, extract the `staking_pool.exchange_rates` table ID. Then read the exchange rate history from the dynamic fields on that table object.
 3. Apply a compounding formula across multiple epoch samples.
 
 See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation and the legacy implementation as a reference.

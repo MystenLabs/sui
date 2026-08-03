@@ -184,12 +184,12 @@ GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few
 
 JSON-RPC cursors are opaque strings. GraphQL passes cursors through the `after` (or `before`) field on a connection, with the page size in `first` (or `last`). gRPC paging uses fields on the typed request and response messages. Do not try to reuse a JSON-RPC `nextCursor` value in a GraphQL or gRPC request. Fetch a fresh cursor from the new API and persist it as the resume point.
 
-### Negative filters (MatchNone) have no direct equivalent
+### Negative filters (MatchNone) work differently
 
-JSON-RPC object queries supported `MatchAll`, `MatchAny`, and `MatchNone` filter combinators to include or exclude results by type. Neither gRPC nor GraphQL supports negation filters.
+JSON-RPC object queries supported `MatchAll`, `MatchAny`, and `MatchNone` filter combinators to include or exclude results by type.
 
-- **gRPC** uses a Disjunctive Normal Form (DNF) filter structure: `terms` (OR) containing `literals` (AND). You can express "match A or B" and "match A and B", but not "match everything except C". Filter client-side for exclusion logic, or restructure the query to list only the types you want.
-- **GraphQL** uses flat filter fields (`type`, `sender`, `emittingModule`) without boolean combinators. Use multiple queries or client-side filtering for exclusion patterns.
+- **gRPC** transaction and event filters support negation through the `negated` field on each literal. Set `negated: true` on a literal to exclude matching items. For example, to match all transactions except those from a specific sender, use `{ negated: true, predicate: { oneofKind: 'sender', sender: { address: '0x...' } } }`. Negated literals combine with other literals in the same term using AND logic.
+- **GraphQL** uses flat filter fields (`type`, `sender`, `emittingModule`) without boolean combinators or negation. Use multiple queries or client-side filtering for exclusion patterns.
 
 ### Retention windows
 
