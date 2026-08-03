@@ -8,12 +8,14 @@
 //! suspension does for full blocks: it holds the claim, registers on the COMPLETE
 //! missing-slot frontier via `DagState`'s accepted-slot notifier, and durably
 //! registers the claimed reference with the synchronizer — the same component that
-//! fetches suspended blocks' missing ancestors. At tip the frontier fills from the
-//! streams within milliseconds and the registration is pruned before the periodic
-//! scheduler ever fetches; for a receiver that is behind, the scheduler fetches the
-//! full block on its existing cadence and the accepted result wakes the task through
-//! its exact-reference registration. Ordinary racing produces no fetches; recovery
-//! needs no timers of its own.
+//! fetches suspended blocks' missing ancestors. At tip the frontier usually fills
+//! from the streams within milliseconds and the registration is pruned before the
+//! periodic scheduler fetches it (a pass that snapshots the set just before local
+//! acceptance can still spend one redundant fetch); for a receiver that is behind,
+//! the scheduler fetches the full block on its existing cadence and the accepted
+//! result wakes the task through its exact-reference registration. Registrations are
+//! released by acceptance through ANY path or by GC, so a block that arrives via
+//! commit sync or replay costs nothing further. Recovery needs no timers of its own.
 //!
 //! Termination: the frontier fills (inflate + submit), the claimed block arrives
 //! through another path (release, delivering the excluded-ancestors sidecar), or GC
@@ -62,6 +64,17 @@ const REGISTRATION_CHARGE_BYTES: usize = 256;
 /// structure.
 pub(crate) fn max_minimal_size(context: &Context) -> usize {
     (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2)
+}
+
+/// Upper bound on a legitimate excluded-ancestors sidecar: the receive path caps the
+/// list at twice the committee size, each a serialized `BlockRef`.
+pub(crate) fn max_excluded_ancestors_size(context: &Context) -> usize {
+    const SERIALIZED_BLOCK_REF_BYTES: usize = 64;
+    context
+        .committee
+        .size()
+        .saturating_mul(2)
+        .saturating_mul(SERIALIZED_BLOCK_REF_BYTES)
 }
 
 /// Resident-memory charge for admitting one parked block.
@@ -123,10 +136,16 @@ pub(crate) struct RecoveryQuotas {
 
 impl RecoveryQuotas {
     pub(crate) fn new(context: Arc<Context>) -> Arc<Self> {
-        // The per-peer byte quota must always admit a maximum-size legitimate
-        // minimal block, whatever the protocol's size cap becomes.
+        // The per-peer byte quota must always admit ONE maximum-charge legitimate
+        // block — payload, sidecar, overhead and a full-committee frontier — whatever
+        // the protocol's size caps become, or such a block could never be recovered.
+        let max_charge = admission_charge(
+            max_minimal_size(&context),
+            max_excluded_ancestors_size(&context),
+            context.committee.size(),
+        );
         let limits = RecoveryLimits {
-            peer_bytes: MAX_PARKED_BYTES_PER_PEER.max(max_minimal_size(&context)),
+            peer_bytes: MAX_PARKED_BYTES_PER_PEER.max(max_charge),
             ..RecoveryLimits::default()
         };
         Self::with_limits(context, limits)
@@ -221,7 +240,6 @@ enum RecoveryOutcome {
     Inflated,
     Obsolete,
     AlreadyAccepted,
-    SubmitRejected,
 }
 
 impl RecoveryOutcome {
@@ -230,7 +248,6 @@ impl RecoveryOutcome {
             RecoveryOutcome::Inflated => "inflated",
             RecoveryOutcome::Obsolete => "obsolete",
             RecoveryOutcome::AlreadyAccepted => "already_accepted",
-            RecoveryOutcome::SubmitRejected => "submit_rejected",
         }
     }
 }
@@ -416,16 +433,27 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
                         minimal: None,
                         excluded_ancestors: excluded_ancestors.clone(),
                     };
-                    break 'recovery match service.handle_send_block(peer, block).await {
-                        Ok(()) => RecoveryOutcome::Inflated,
+                    match service.handle_send_block(peer, block).await {
+                        Ok(()) => break 'recovery RecoveryOutcome::Inflated,
                         Err(error) => {
+                            // Typically commit-lagging admission control. The block is
+                            // still registered for fetching, so keep the task alive to
+                            // deliver the sidecar when another path accepts it — and
+                            // to retry once local state moves. Terminates on
+                            // acceptance, GC, or shutdown like any other wait.
                             debug!(
-                                "Recovered minimal block {} from peer {} was rejected: {}",
+                                "Recovered minimal block {} from peer {} was rejected: {}; \
+                                 awaiting acceptance through the registered fetch",
                                 claimed_ref, peer, error
                             );
-                            RecoveryOutcome::SubmitRejected
+                            node_metrics
+                                .minimal_block_recoveries
+                                .with_label_values(&["submit_rejected"])
+                                .inc();
+                            // Nothing slot-shaped left to do: wait for the exact block.
+                            reason = FallbackReason::DigestMismatch;
                         }
-                    };
+                    }
                 }
                 Err(InflateError::NeedFullBlock {
                     reason: next_reason,
@@ -868,6 +896,53 @@ mod tests {
         let charge = admission_charge(h.minimal.len(), 0, 3);
         let permit = h.quotas.try_acquire(h.peer, charge).unwrap();
         drop(permit);
+    }
+
+    /// A rejected submission (commit-lagging admission control) must NOT end
+    /// recovery: the block stays registered for fetching, and when another path
+    /// accepts it the task still delivers the propagation-hint sidecar.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn recovery_survives_submission_rejection_and_delivers_sidecar() {
+        let h = harness(None);
+        h.service.lock().reject_send_block = true;
+        let mut join_set = tokio::task::JoinSet::new();
+        h.spawn(&mut join_set);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        // Complete the frontier: the task inflates and submits, and is rejected.
+        h.receiver_dag.write().accept_blocks(h.ancestors.clone());
+        wait_until(|| {
+            h.context
+                .metrics
+                .node_metrics
+                .minimal_block_recoveries
+                .with_label_values(&["submit_rejected"])
+                .get()
+                == 1
+        })
+        .await;
+        // Still parked — not terminated.
+        assert_eq!(
+            h.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get(),
+            1
+        );
+
+        // The registered fetch later lands the block: sidecar delivered, quota freed.
+        h.receiver_dag.write().accept_block(h.block.clone());
+        wait_until(|| !h.service.lock().handle_excluded_ancestors.is_empty()).await;
+        wait_until(|| {
+            h.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get()
+                == 0
+        })
+        .await;
     }
 
     /// Per-peer admission is isolated and rolls back partial acquisitions; the charge

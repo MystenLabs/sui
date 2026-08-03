@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use crate::{
     block::VerifiedBlock,
     commit::{CommitRange, TrustedCommit},
-    error::ConsensusResult,
+    error::{ConsensusError, ConsensusResult},
     network::{
         BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem,
         PeerId, ValidatorNetworkService,
@@ -23,6 +23,8 @@ use super::ExtendedSerializedBlock;
 pub(crate) struct TestService {
     pub(crate) handle_send_block: Vec<(AuthorityIndex, ExtendedSerializedBlock)>,
     pub(crate) handle_excluded_ancestors: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>)>,
+    /// When set, handle_send_block rejects (models commit-lagging admission control).
+    pub(crate) reject_send_block: bool,
     pub(crate) handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
     pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
@@ -35,6 +37,7 @@ impl TestService {
         Self {
             handle_send_block: Vec::new(),
             handle_excluded_ancestors: Vec::new(),
+            reject_send_block: false,
             handle_fetch_blocks: Vec::new(),
             handle_subscribe_blocks: Vec::new(),
             handle_fetch_commits: Vec::new(),
@@ -57,6 +60,12 @@ impl ValidatorNetworkService for Mutex<TestService> {
         block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()> {
         let mut state = self.lock();
+        if state.reject_send_block {
+            return Err(ConsensusError::BlockRejected {
+                block_ref: BlockRef::MIN,
+                reason: "test rejection".to_string(),
+            });
+        }
         state.handle_send_block.push((peer, block));
         Ok(())
     }

@@ -970,10 +970,14 @@ where
             return Ok(());
         }
 
-        // Prune registered exact requests that resolved (accepted through any path) or
-        // fell below GC; what remains must be fetched THIS pass. These are live blocks
-        // parked by minimal-block recovery — commit sync will not deliver them (they
-        // are uncommitted), so they must not honor the commit-sync skip below.
+        // Prune registered exact requests that resolved (accepted through ANY path,
+        // including commit sync) or fell below GC; what remains must be fetched THIS
+        // pass. These are live blocks parked by minimal-block recovery, and no other
+        // path fetches them in time: they are absent from BlockManager's missing set
+        // (they never reached it), and commit sync only delivers committed history in
+        // commit order — for a node at tip it is not running at all, and for a node
+        // behind, the commit carrying a tip block may be many commits ahead of where
+        // it is fetching. Hence the exemption from the commit-sync skip below.
         if !self.pending_exact_requests.is_empty() {
             let dag_state = self.dag_state.read();
             let gc_round = dag_state.gc_round();
@@ -1017,15 +1021,36 @@ where
             // requests this pass.
             BTreeSet::new()
         };
-        missing_blocks.extend(pending_exact);
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
             // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.
             let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
-        } else if missing_blocks.is_empty() {
+        }
+        // Registered exact requests are merged AFTER the failover filter and are
+        // ordered first for truncation: they are live blocks parked by minimal-block
+        // recovery, so no other path (commit sync, fetch_after_rounds, or the
+        // block-manager missing set) will ever deliver them, and a low-round backlog
+        // must not starve them pass after pass.
+        let exact_count = pending_exact.len();
+        let mut ordered_blocks = Vec::with_capacity(exact_count + missing_blocks.len());
+        ordered_blocks.extend(pending_exact.iter().copied());
+        ordered_blocks.extend(
+            missing_blocks
+                .into_iter()
+                .filter(|block_ref| !pending_exact.contains(block_ref)),
+        );
+        // Under commit-sync failover an empty set is meaningful: it selects the
+        // fetch_after_rounds path below. Only the non-failover pass has nothing to do.
+        if ordered_blocks.is_empty() && !self.commit_sync_failover {
             return Ok(());
         }
+        let missing_blocks = ordered_blocks;
+        context
+            .metrics
+            .node_metrics
+            .synchronizer_pending_exact_requests
+            .set(exact_count as i64);
 
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
@@ -1259,7 +1284,8 @@ where
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
-        missing_blocks: BTreeSet<BlockRef>,
+        // Ordered: registered exact requests first, so truncation cannot starve them.
+        missing_blocks: Vec<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
