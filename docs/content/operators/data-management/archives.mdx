@@ -60,9 +60,6 @@ state-archive-read-config:
     # How many objects to read ahead when catching up
     concurrency: 5
     remote-store-options:
-      # Replace with your actual AWS credentials
-      - ["aws_access_key_id", "YOUR_AWS_ACCESS_KEY_ID"]
-      - ["aws_secret_access_key", "YOUR_AWS_SECRET_ACCESS_KEY"]
       # Required for this Requester Pays bucket
       - ["aws_request_payer", "true"]
 ```
@@ -82,7 +79,7 @@ state-archive-read-config:
 
 :::info
 
-Mainnet archival fallback requires the S3 Requester Pays bucket with AWS credentials. State sync explicitly rejects `checkpoints.mainnet.sui.io` as an archive source. Testnet uses a public HTTPS endpoint that does not require credentials.
+Mainnet archival fallback requires AWS credentials for the S3 Requester Pays bucket. Supply credentials through the AWS default credential chain, preferably with an IAM role attached to the node. Do not put access keys in `fullnode.yaml`: the node configuration can be exposed through administrative diagnostics. State sync explicitly rejects `checkpoints.mainnet.sui.io` as an archive source. Testnet uses a public HTTPS endpoint that does not require credentials.
 
 :::
 
