@@ -42,7 +42,7 @@ Each Sui network (Mainnet, Testnet, Devnet) has its own `genesis.blob` file. Dow
 $ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
 ```
 
-Place the file where your `fullnode.yaml` configuration points. The default template uses `genesis-file-location: "/opt/sui/config/genesis.blob"`. You can also use a relative path like `genesis-file-location: "genesis.blob"` if the file is in the same directory as your config.
+Place the file where your `fullnode.yaml` configuration points. The default template uses `genesis-file-location: "/opt/sui/config/genesis.blob"`. Use an absolute path to avoid ambiguity. Relative paths resolve from the process working directory (the directory where you run `sui-node`), not from the directory containing `fullnode.yaml`.
 
 All genesis files are hosted in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository. See [Sui Full Node Configuration](/operators/full-node/sui-full-node#setting-up-a-full-node) for the complete setup steps.
 
@@ -54,9 +54,9 @@ The `genesis.blob` file determines the network identity. The node derives a chai
 Genesis file is for chain <X>, but formal snapshot download is configured for --network <Y>.
 ```
 
-A normal `sui-node` startup with a mismatched genesis file causes the node to reject peer connections and checkpoint data from the actual network.
+A normal `sui-node` startup with a mismatched genesis file causes the node to reject peer connections and checkpoint data from the actual network. If the node's database was already initialized with the wrong genesis, the node asserts that the stored and configured checkpoint-0 digests match and refuses to start.
 
-To fix a mismatch, download the correct `genesis.blob` for your target network using the command above.
+To fix a mismatch, download the correct `genesis.blob` for your target network using the command above. If the database was initialized with the wrong genesis, you must also delete the existing database and restore from a [snapshot](/operators/snapshots) for the correct network before restarting.
 
 ## File format
 

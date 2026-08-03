@@ -272,9 +272,9 @@ After starting a full node, verify it is healthy before serving traffic:
     $ curl -s http://localhost:9184/metrics | grep uptime
     ```
 
-3. **Confirm checkpoint execution.** Verify that `last_executed_checkpoint` advances over time and `checkpoint_exec_errors` stays at 0.
+3. **Confirm checkpoint execution.** Verify that `last_executed_checkpoint` advances over time.
 
-A node that syncs checkpoints, executes them without errors, and reports the correct chain identifier is ready to serve read traffic. You do not need to execute a test transaction unless the node is expected to submit transactions for clients.
+A node that syncs checkpoints, executes them, and reports the correct chain identifier is ready to serve read traffic. You do not need to execute a test transaction unless the node is expected to submit transactions for clients.
 
 :::tip
 

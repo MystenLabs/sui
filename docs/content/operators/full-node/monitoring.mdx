@@ -60,7 +60,6 @@ The following metrics are the most important for monitoring node health:
 | `current_epoch` | Gauge | Current epoch ID |
 | `uptime` | Counter | Node uptime in seconds (includes `version` and `chain_identifier` labels) |
 | `total_transaction_certificates` | Counter | Total transaction certificates handled |
-| `checkpoint_exec_errors` | Counter | Checkpoint execution error count (should stay at 0) |
 
 **Sync health check:** Compare `highest_known_checkpoint` with `highest_synced_checkpoint`. If the gap grows, the node is falling behind. Compare your node's `highest_synced_checkpoint` against a trusted public endpoint to measure absolute lag:
 
@@ -90,7 +89,6 @@ scrape_configs:
 Set up alerts for the following conditions:
 
 - **Sync lag:** `highest_known_checkpoint - highest_synced_checkpoint > 100` sustained for 5 minutes indicates the node is falling behind.
-- **Execution errors:** `rate(checkpoint_exec_errors[5m]) > 0` indicates checkpoint execution failures.
 - **Node down:** `up{job="sui-fullnode"} == 0` indicates the node is unreachable.
-- **Stale checkpoint:** `time() - last_executed_checkpoint_timestamp_ms / 1000 > 60` indicates the node has not executed a checkpoint in over 60 seconds.
+- **Stale checkpoint:** `last_executed_checkpoint_timestamp_ms > 0 and time() - last_executed_checkpoint_timestamp_ms / 1000 > 120` sustained for 2 minutes indicates the node has stopped executing checkpoints. The `> 0` guard avoids false alerts during startup, when the timestamp has not yet been populated.
 

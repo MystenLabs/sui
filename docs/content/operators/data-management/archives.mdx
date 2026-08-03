@@ -49,16 +49,20 @@ Starting with the 1.51 release, the default archive bucket for Mainnet switches 
 
 ## Set up archival fallback {#set-up-archival-fallback}
 
-To enable your node to fall back to an archive in case of lag, add the following to your `fullnode.yaml` file. The public HTTPS endpoints work for both Mainnet and Testnet and do not require AWS credentials:
+To enable your node to fall back to an archive in case of lag, add the following to your `fullnode.yaml` file:
 
 <Tabs groupId="object-store">
 <TabItem value="mainnet" label="Mainnet">
 
 ```yaml
 state-archive-read-config:
-  - ingestion-url: "https://checkpoints.mainnet.sui.io"
+  - ingestion-url: "https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints"
     # How many objects to read ahead when catching up
     concurrency: 5
+    remote-store-options:
+      # Replace with your actual AWS credentials
+      - ["aws_access_key_id", "YOUR_AWS_ACCESS_KEY_ID"]
+      - ["aws_secret_access_key", "YOUR_AWS_SECRET_ACCESS_KEY"]
 ```
 
 </TabItem>
@@ -76,7 +80,7 @@ state-archive-read-config:
 
 :::info
 
-The public HTTPS endpoints (`checkpoints.mainnet.sui.io` and `checkpoints.testnet.sui.io`) retain only the most recent 30 days of checkpoints. This is sufficient for archival fallback (catching up from short-term lag), but not for full-retention backfill. For indexer backfill or full checkpoint history, use the Requester Pays GCS or S3 buckets listed in the [archive source table](#archive-sources) below. Those buckets require cloud provider credentials.
+Mainnet archival fallback requires the S3 Requester Pays bucket with AWS credentials. State sync explicitly rejects `checkpoints.mainnet.sui.io` as an archive source. Testnet uses a public HTTPS endpoint that does not require credentials.
 
 :::
 
@@ -94,10 +98,15 @@ If the counter increases over time, the archival fallback is active.
 
 | Source | Retention | Credentials | Use case |
 |--------|-----------|-------------|----------|
-| `https://checkpoints.mainnet.sui.io` | 30 days | None | Mainnet fullnode archival fallback |
-| `https://checkpoints.testnet.sui.io` | 30 days | None | Testnet fullnode archival fallback |
-| `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | AWS credentials | Mainnet full-retention backfill (S3 Requester Pays) |
-| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials | Mainnet full-retention backfill (GCS Requester Pays) |
-| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials | Testnet full-retention backfill (GCS Requester Pays) |
+| `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | AWS credentials | Mainnet archival fallback and full-retention backfill |
+| `https://checkpoints.testnet.sui.io` | 30 days | None | Testnet archival fallback |
+| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
+| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
+
+:::caution
+
+Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the S3 or GCS bucket instead.
+
+:::
 
 For starting a new full node, always use a [snapshot](/operators/snapshots) rather than syncing from the archive.
