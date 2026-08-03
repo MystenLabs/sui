@@ -197,6 +197,13 @@ For checkpoint ingestion, the public `https://checkpoints.mainnet.sui.io` and `h
 
 Use the TOML files below; they are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
 
+Each TOML file can include an optional `[ingestion]` section to tune checkpoint ingestion. The most common setting is `min-cohort-boundary`, which controls how pipelines are grouped into ingestion cohorts based on their distance from the tip. The default is `25000` checkpoints. A higher value prevents nearly caught-up pipelines from being fragmented into many small cohorts. You do not need to set this for most deployments.
+
+```toml
+[ingestion]
+min-cohort-boundary = 25000
+```
+
 :::info
 The example configurations linked below use a fixed concurrency of 20 for simplicity, but this leads to longer backfill times.
 When backfilling a pipeline, consider setting the `ingest-concurrency` to a higher initial concurrency, such as `{ kind = "adaptive", initial = 200, min = 50, max = 2000 }`. The indexer automatically adjusts concurrency based on current load and performance.

@@ -195,6 +195,23 @@ rpc:
 
 :::
 
+### Storage directories {#storage-directories}
+
+A full node creates the following directories under its configured `db-path` (inside the `live/` subdirectory):
+
+| Directory | Purpose | When created |
+|-----------|---------|--------------|
+| `store/` | Core chain state (objects, transactions, effects). Do not delete. | Always |
+| `epochs/` | Committee (validator set) data per epoch. Do not delete. | Always |
+| `checkpoints/` | Checkpoint summaries and contents. Do not delete. | Always |
+| `rpc_store/` | gRPC index data (derived indexes and ledger history). Required for gRPC filtered queries and list APIs. | When `rpc.enable-indexing: true` |
+| `indexes/` | Legacy JSON-RPC indexes (transaction lookups by address, object queries). Safe to delete after migrating to gRPC. | When `enable-index-processing: true` |
+| `rpc-index/` | Predecessor to `rpc_store/`. Automatically deleted on startup. No action needed. | Never (legacy, auto-removed) |
+
+To reclaim disk space after migrating to gRPC, disable legacy JSON-RPC indexing (see below), then stop the node and delete the `live/indexes/` directory. The `rpc-index/` directory is removed automatically on startup.
+
+### Disable legacy JSON-RPC indexing
+
 You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh

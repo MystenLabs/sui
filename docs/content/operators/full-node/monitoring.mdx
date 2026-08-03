@@ -39,7 +39,7 @@ These instructions are for advanced users. If you just need a local development 
 
 :::
 
-Nodes expose metrics on `localhost:9184/metrics` by default.
+Nodes expose metrics on `localhost:9184/metrics` by default. During formal snapshot restoration (`sui-tool download-db-snapshot`), the restore process exposes metrics on `localhost:9185/metrics` instead.
 
 You can view the metrics in the metrics UI, or use a tool like `curl` to get the metrics in a format that is easy to parse.
 
