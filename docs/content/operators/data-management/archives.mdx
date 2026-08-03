@@ -63,6 +63,8 @@ state-archive-read-config:
       # Replace with your actual AWS credentials
       - ["aws_access_key_id", "YOUR_AWS_ACCESS_KEY_ID"]
       - ["aws_secret_access_key", "YOUR_AWS_SECRET_ACCESS_KEY"]
+      # Required for this Requester Pays bucket
+      - ["aws_request_payer", "true"]
 ```
 
 </TabItem>
