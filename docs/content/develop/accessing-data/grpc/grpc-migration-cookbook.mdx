@@ -488,7 +488,7 @@ $ buf curl --protocol grpc \
 The gRPC subscription differs from the JSON-RPC subscription in the following ways:
 
 - JSON-RPC WebSocket subscriptions filtered events server-side, and have been deprecated since mid-2024. gRPC `SubscribeEvents` also filters server-side using an `EventFilter`, so your client receives only matching events.
-- Subscriptions always begin at the current tip of the chain and do not accept a resume point. To avoid missing data between a backfill and a subscription, open the subscription first, note the first `Watermark` from `SubscribeEvents`, then backfill with `LedgerService.ListEvents` up to that watermark. After the backfill completes, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+- Subscriptions begin at the current tip and do not accept a resume point. Filtered subscriptions start with a progress-only frame whose cursor marks the point immediately before live delivery; an unfiltered subscription can start with a payload, so never discard the first frame. Immediately consume live frames into durable, capacity-managed storage while `LedgerService.ListEvents` backfills to that boundary. If the spool fills or the stream drops, restart from the last durably processed cursor and backfill the gap. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 - For filtered historical event queries over a range, use `LedgerService.ListEvents` or [GraphQL `Query.events`](/develop/accessing-data/using-events#querying-events-with-graphql).
 
 ### Query events over a checkpoint range
@@ -612,7 +612,7 @@ The gRPC stream differs from the JSON-RPC polling pattern in the following ways:
 
 - You do not need a polling loop. The gRPC stream pushes checkpoints as they finalize.
 - Use `LedgerService.ListCheckpoints` to query a historical range of checkpoints, optionally filtered by a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` for live streaming from the current tip.
-- Subscriptions do not support resumption. To avoid gaps, open the subscription first, note the first `cursor` from `SubscribeCheckpoints`, then backfill missed checkpoints with `ListCheckpoints` up to that cursor before you consume from the already-open stream.
+- Subscriptions do not support resumption. Filtered subscriptions start with a progress-only frame whose cursor marks the point immediately before live delivery; an unfiltered subscription can start with a payload, so never discard the first frame. Open the subscription first and immediately drain live frames into durable, bounded storage while `ListCheckpoints` backfills to the starting boundary. If the spool fills or the stream drops, restart from the last durably processed cursor and backfill the gap.
 - `grpcurl` supports server-side streaming for the `LedgerService.List*` calls on this page. For `SubscriptionService` subscriptions, which are indefinite streams, the Buf CLI or an SDK client provides better control over timeouts and reconnection.
 
 ## Stream transactions
@@ -1182,19 +1182,19 @@ See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recom
 
 ### Backfill and subscribe without gaps
 
-To combine historical backfill with a live subscription without missing data, open the subscription first, start consuming it concurrently, then backfill up to the subscription's starting point. The general sequence is:
+To combine historical backfill with a live subscription without missing data:
 
-1. Open the subscription. It starts at the current tip and sends a progress-only first frame with no payload.
-2. Read the first frame to get the starting watermark (a checkpoint number or opaque cursor depending on the API).
-3. Start consuming the subscription concurrently into a buffer or queue so the server does not evict your client as a slow consumer (the server drops subscribers whose 256-item buffer fills).
-4. Backfill historical data from your last processed checkpoint up to the subscription's starting watermark using the corresponding `List*` API (not per-item `Get*` calls, which are too slow for large gaps).
-5. After backfill completes, drain the buffer and continue consuming from the live subscription.
+1. Open the subscription and immediately consume frames into durable, capacity-managed storage. Do not leave the stream unread during backfill.
+2. Use the first frame's cursor as the live boundary. Filtered subscriptions begin with a progress-only frame whose cursor is the checkpoint immediately before live delivery; unfiltered subscriptions can begin with a payload, which you must also spool.
+3. Backfill from the last durably processed cursor with the matching `List*` API. Keep the initial `before` cursor fixed while advancing `after` from each response watermark until the server returns `CURSOR_BOUND`. Checkpoint bounds are exclusive at the end, so for a filtered progress cursor at checkpoint `C - 1`, use `endCheckpoint: C`.
+4. Process the durable live spool after backfill catches up, deduplicating by cursor. Atomically persist each cursor with the corresponding application updates.
+5. If the spool reaches its capacity or the subscription ends, restart from the last durable cursor and backfill before resuming live processing.
 
-This pattern works with all three subscription and list API pairs: `SubscribeCheckpoints` with `ListCheckpoints`, `SubscribeTransactions` with `ListTransactions`, and `SubscribeEvents` with `ListEvents`. The subscription and list APIs accept the same filter types, so you can reuse the same filter for both.
+This pattern works with all three subscription and list API pairs: `SubscribeCheckpoints` with `ListCheckpoints`, `SubscribeTransactions` with `ListTransactions`, and `SubscribeEvents` with `ListEvents`. Reuse the same filter for the subscription and historical query.
 
 :::caution
 
-The subscription's per-subscriber buffer holds 256 items. If backfill takes long enough for the live stream to queue 256 frames, the server evicts your subscriber. Always consume the subscription concurrently during backfill, or use a short enough backfill range that the buffer cannot overflow.
+The server's per-subscriber buffer holds 256 frames and evicts a slow consumer when it fills. A client-side in-memory queue only moves the limit; use a durable bounded spool with explicit overflow recovery for long backfills.
 
 :::
 
@@ -1203,39 +1203,53 @@ The subscription's per-subscriber buffer holds 256 items. If backfill takes long
 If the gRPC stream disconnects, backfill any missed checkpoints before you resubscribe:
 
 ```ts
-let lastProcessed = 0n;
+let lastProcessed = await loadLastProcessedCheckpoint();
 
-async function startStream() {
-  const { responses } = client.subscriptionService.subscribeCheckpoints({
+async function commit(checkpoint) {
+  // Make this operation idempotent and atomically persist the cursor with
+  // the application updates.
+  await processAndPersistCheckpoint(checkpoint);
+  lastProcessed = checkpoint.sequenceNumber;
+}
+
+async function backfillBefore(endCheckpoint: bigint) {
+  if (lastProcessed + 1n >= endCheckpoint) return;
+
+  const { responses } = client.ledgerService.listCheckpoints({
+    startCheckpoint: lastProcessed + 1n,
+    endCheckpoint, // Exclusive.
     readMask: { paths: ['sequenceNumber', 'transactions'] },
   });
 
-  try {
-    for await (const response of responses) {
-      const seq = response.checkpoint?.sequenceNumber ?? 0n;
-
-      // Detect and backfill gaps
-      if (seq > lastProcessed + 1n && lastProcessed > 0n) {
-        for (let i = lastProcessed + 1n; i < seq; i++) {
-          const { response: missed } = await client.ledgerService.getCheckpoint({
-            checkpointId: { oneofKind: 'sequenceNumber', sequenceNumber: i },
-            readMask: { paths: ['transactions'] },
-          });
-          processCheckpoint(missed.checkpoint);
-        }
-      }
-
-      processCheckpoint(response.checkpoint);
-      lastProcessed = seq;
-    }
-  } catch (err) {
-    console.error('Stream error, reconnecting...', err);
+  for await (const response of responses) {
+    if (response.checkpoint) await commit(response.checkpoint);
   }
+}
 
-  // Reconnect on both errors and normal termination (slow-consumer
-  // eviction and source-lag drops end the stream without an error).
-  console.log('Stream ended, reconnecting from checkpoint', lastProcessed);
-  startStream();
+for (let attempt = 0; ; attempt++) {
+  try {
+    const { responses } = client.subscriptionService.subscribeCheckpoints({
+      readMask: { paths: ['sequenceNumber', 'transactions'] },
+    });
+
+    for await (const response of responses) {
+      const checkpoint = response.checkpoint;
+      if (!checkpoint) continue;
+
+      const seq = checkpoint.sequenceNumber;
+      if (seq > lastProcessed + 1n) await backfillBefore(seq);
+      if (seq > lastProcessed) await commit(checkpoint); // Skip replayed data.
+      attempt = 0;
+    }
+
+    throw new Error('checkpoint subscription ended');
+  } catch (err) {
+    console.error('Stream ended; reconnecting from checkpoint', lastProcessed, err);
+    const delay = Math.min(30_000, 500 * 2 ** Math.min(attempt, 6));
+    await new Promise((resolve) =>
+      setTimeout(resolve, delay + Math.random() * delay * 0.4),
+    );
+  }
 }
 ```
 
@@ -1317,6 +1331,6 @@ gRPC streams can terminate for several reasons. Understanding the server's conne
 
 **Source lag:** If the subscription service falls behind the checkpoint broadcast (for example, due to high server load), the server drops all subscribers. Reconnect and backfill from your last processed checkpoint.
 
-**Server-side timeout:** The server applies a configurable timeout (default: 60 seconds) as a deadline for unary requests. For streaming `List*` APIs, this timeout covers the entire stream duration, not just time to first response. A large query can terminate after returning partial results. Always resume from the last `watermark.cursor` rather than retrying from scratch.
+**Server-side timeout:** The server applies a configurable timeout (default: 60 seconds) to the full execution of unary requests. For streaming `List*` APIs, it applies only to request setup and time to first response; after the first frame, it does not limit the stream's lifetime. A later network, proxy, or GOAWAY interruption can still leave a query partially consumed. Resume from the last `watermark.cursor` while preserving the original upper bound instead of restarting from scratch.
 
 **Public endpoint limitations:** The public URLs at `https://fullnode.<network>.sui.io` are behind load balancers that impose their own connection timeouts and rate limits beyond what the Sui node configures. Long-running streams are more likely to be interrupted on public endpoints. For production streaming workloads, run your own [Sui full node](/operators/full-node/sui-full-node) or use a provider with a dedicated gRPC endpoint.
