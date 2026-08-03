@@ -31,10 +31,32 @@ questions:
 answer: Genesis refers to the initial state of the Sui blockchain at launch.
 ---
 
-Genesis is the initial state of the Sui blockchain. To launch a network, the initial committee of validators collaborate by providing their validator information (public keys, network addresses, and so on) to a shared workspace. After all of the initial validators have contributed their information, Sui generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0) and each validator provides their signature. Sui aggregates these signatures to form a certificate on the genesis checkpoint. Sui bundles this checkpoint, as well as the initial objects, together into a single genesis.blob file that is used to initialize the state when running the `sui-node` binary for both validators and full nodes.
+Genesis is the initial state of the Sui blockchain. To launch a network, the initial committee of validators collaborate by providing their validator information (public keys, network addresses, and so on) to a shared workspace. After all of the initial validators have contributed their information, Sui generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0) and each validator provides their signature. Sui aggregates these signatures to form a certificate on the genesis checkpoint. Sui bundles this checkpoint, as well as the initial objects, together into a single `genesis.blob` file that is used to initialize the state when running the `sui-node` binary for both validators and full nodes.
 
-## Genesis blob locations
+## Download genesis.blob
 
-The `genesis.blob` files for each network are in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository.
+Each Sui network (Mainnet, Testnet, Devnet) has its own `genesis.blob` file. Download the file for your target network:
 
-See [Sui Full Node](/operators/full-node/sui-full-node) for how to get the genesis.blob file for each network.
+```sh
+# Replace <network> with mainnet, testnet, or devnet
+$ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
+```
+
+Place the file where your `fullnode.yaml` configuration points. The default template uses `genesis-file-location: "/opt/sui/config/genesis.blob"`. You can also use a relative path like `genesis-file-location: "genesis.blob"` if the file is in the same directory as your config.
+
+All genesis files are hosted in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository. See [Sui Full Node Configuration](/operators/full-node/sui-full-node#setting-up-a-full-node) for the complete setup steps.
+
+## Network identity
+
+The `genesis.blob` file determines the network identity. The node derives a chain identifier from the genesis checkpoint digest and uses it to verify that peers, snapshots, and archive data belong to the same network. If you start a node with the wrong `genesis.blob` for its network, the node fails with an error like:
+
+```
+Genesis file is for chain <X>, but snapshot download is configured for --network <Y>.
+Use the matching genesis.blob or pass the correct --network flag.
+```
+
+To fix this, download the correct `genesis.blob` for your target network using the command above.
+
+## File format
+
+The `genesis.blob` file is a BCS-serialized binary containing the genesis checkpoint, its certificate (aggregated validator signatures), and the initial onchain objects (system packages, the Sui framework, and validator staking objects). It is not human-readable. The node deserializes it at startup to initialize its state.

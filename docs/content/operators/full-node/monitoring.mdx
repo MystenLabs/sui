@@ -47,9 +47,50 @@ You can view the metrics in the metrics UI, or use a tool like `curl` to get the
 $ curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
 ```
 
+## Key metrics
+
+The following metrics are the most important for monitoring node health:
+
+| Metric | Type | What it tells you |
+|--------|------|-------------------|
+| `highest_known_checkpoint` | Gauge | Highest checkpoint the node knows about from the network |
+| `highest_synced_checkpoint` | Gauge | Highest checkpoint fully synced (contents and effects) |
+| `last_executed_checkpoint` | Gauge | Last checkpoint the node executed |
+| `last_executed_checkpoint_timestamp_ms` | Gauge | Timestamp of the last executed checkpoint |
+| `current_epoch` | Gauge | Current epoch ID |
+| `uptime` | Counter | Node uptime in seconds (includes `version` and `chain_identifier` labels) |
+| `total_transaction_certificates` | Counter | Total transaction certificates handled |
+| `checkpoint_exec_errors` | Counter | Checkpoint execution error count (should stay at 0) |
+
+**Sync health check:** Compare `highest_known_checkpoint` with `highest_synced_checkpoint`. If the gap grows, the node is falling behind. Compare your node's `highest_synced_checkpoint` against a trusted public endpoint to measure absolute lag:
+
+```sh
+# Check your node's sync progress
+$ curl -s http://localhost:9184/metrics | grep -E 'highest_known_checkpoint|highest_synced_checkpoint|last_executed_checkpoint'
+```
+
 ## Production monitoring
 
 For production monitoring, [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/) are recommended.
 
 You can use Grafana Agent, Grafana Alloy, or another tool to scrape the metrics from your node.
+
+Add a scrape target for your node in your Prometheus configuration:
+
+```yaml
+scrape_configs:
+  - job_name: 'sui-fullnode'
+    static_configs:
+      - targets: ['localhost:9184']
+    scrape_interval: 15s
+```
+
+### Suggested alerts
+
+Set up alerts for the following conditions:
+
+- **Sync lag:** `highest_known_checkpoint - highest_synced_checkpoint > 100` sustained for 5 minutes indicates the node is falling behind.
+- **Execution errors:** `rate(checkpoint_exec_errors[5m]) > 0` indicates checkpoint execution failures.
+- **Node down:** `up{job="sui-fullnode"} == 0` indicates the node is unreachable.
+- **Stale checkpoint:** `time() - last_executed_checkpoint_timestamp_ms / 1000 > 60` indicates the node has not executed a checkpoint in over 60 seconds.
 

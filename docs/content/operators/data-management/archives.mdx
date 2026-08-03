@@ -60,8 +60,9 @@ state-archive-read-config:
     # How many objects to read ahead when catching up
     concurrency: 5
     remote-store-options:
-      - ["aws_access_key_id", <YOUR_AWS_ACCESS_KEY_ID|PATH_TO_AWS_ACCESS_KEY>]
-      - ["aws_secret_access_key", <AWS_SECRET_ACCESS_KEY|PATH_TO_AWS_SECRET_ACCESS_KEY>]
+      # Replace with your actual AWS credentials or credential file paths
+      - ["aws_access_key_id", "AKIAIOSFODNN7EXAMPLE"]
+      - ["aws_secret_access_key", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]
 ```
 
 </TabItem>
@@ -72,7 +73,35 @@ state-archive-read-config:
   - ingestion-url: "https://checkpoints.testnet.sui.io"
     # How many objects to read ahead when catching up
     concurrency: 5
+    # No AWS credentials needed for Testnet public endpoint
 ```
 
 </TabItem>
 </Tabs>
+
+:::info
+
+Testnet uses a public HTTPS endpoint that does not require AWS credentials. Mainnet uses a Requester Pays S3 bucket, so you must provide valid AWS credentials with permission to read from the bucket.
+
+:::
+
+### Verify archival fallback
+
+After adding the configuration and restarting your node, check the node logs for archive-related messages. You can also monitor the `checkpoints_synced_from_archive` Prometheus metric to confirm the node is fetching data from the archive:
+
+```sh
+$ curl -s http://localhost:9184/metrics | grep checkpoints_synced_from_archive
+```
+
+If the counter increases over time, the archival fallback is active.
+
+### When to use each archive source
+
+| Source | Retention | Use case |
+|--------|-----------|----------|
+| `https://checkpoints.testnet.sui.io` | 30 days | Testnet development and testing |
+| `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | Mainnet archival fallback (requires AWS credentials) |
+| `gs://mysten-mainnet-checkpoints-use4` | Full history | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
+| `gs://mysten-testnet-checkpoints-use4` | Full history | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
+
+For starting a new full node, always use a [snapshot](/operators/snapshots) rather than syncing from the archive.
