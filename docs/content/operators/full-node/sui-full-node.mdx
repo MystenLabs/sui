@@ -223,9 +223,19 @@ A Sui full node uses the following ports by default:
 |------|----------|---------|------------------|
 | `9000` | TCP | gRPC and JSON-RPC API | Yes (through TLS proxy on port 443) |
 | `8084` | UDP | P2P (state sync and peer discovery) | Yes (required for peering) |
-| `9184` | TCP | Prometheus metrics | No (localhost only) |
-| `1337` | TCP | Admin interface | No (localhost only) |
+| `9184` | TCP | Prometheus metrics | No (binds to `0.0.0.0` by default; restrict in production) |
+| `1337` | TCP | Admin interface | No (binds to `localhost` by default) |
 | `8080` | TCP | Internal validator network | No (validators only) |
+
+:::caution
+
+The default `fullnode.yaml` template binds the metrics port to `0.0.0.0:9184`, which makes it reachable from any network interface. In production, restrict it to localhost:
+
+```yaml
+metrics-address: "127.0.0.1:9184"
+```
+
+:::
 
 ### Firewall configuration {#firewall}
 
@@ -233,7 +243,7 @@ Allow only the ports your node needs and block everything else:
 
 - **Inbound:** Allow `8084/UDP` (P2P) from the internet. If serving API traffic, allow `443/TCP` (TLS proxy) or `9000/TCP` (direct, not recommended for production).
 - **Outbound:** Allow all outbound traffic so the node can reach peers and archive endpoints.
-- **Block:** `9184` (metrics) and `1337` (admin) should never be reachable from untrusted networks. Bind them to `127.0.0.1`.
+- **Block:** `9184` (metrics) and `1337` (admin) should never be reachable from untrusted networks. Bind metrics to `127.0.0.1` as shown above, and use a firewall rule to block external access to both ports.
 
 ### TLS termination {#tls}
 

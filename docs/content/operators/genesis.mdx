@@ -48,14 +48,15 @@ All genesis files are hosted in the [sui-genesis](https://github.com/MystenLabs/
 
 ## Network identity
 
-The `genesis.blob` file determines the network identity. The node derives a chain identifier from the genesis checkpoint digest and uses it to verify that peers, snapshots, and archive data belong to the same network. If you start a node with the wrong `genesis.blob` for its network, the node fails with an error like:
+The `genesis.blob` file determines the network identity. The node derives a chain identifier from the genesis checkpoint digest and uses it to verify that peers, snapshots, and archive data belong to the same network. If you use the wrong `genesis.blob` for your target network, the node or related tooling (such as snapshot restore) fails with a chain identifier mismatch error. For example, `sui-tool` reports:
 
 ```
-Genesis file is for chain <X>, but snapshot download is configured for --network <Y>.
-Use the matching genesis.blob or pass the correct --network flag.
+Genesis file is for chain <X>, but formal snapshot download is configured for --network <Y>.
 ```
 
-To fix this, download the correct `genesis.blob` for your target network using the command above.
+A normal `sui-node` startup with a mismatched genesis file causes the node to reject peer connections and checkpoint data from the actual network.
+
+To fix a mismatch, download the correct `genesis.blob` for your target network using the command above.
 
 ## File format
 
