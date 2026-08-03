@@ -12,6 +12,8 @@ use jsonrpsee::server::ServerBuilder;
 use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
@@ -19,6 +21,7 @@ use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_kvstore::validate_pipeline_name;
 use sui_open_rpc::Project;
 use tower_http::catch_panic;
 use tower_layer::Identity;
@@ -243,15 +246,77 @@ pub struct NodeArgs {
     pub fullnode_grpc_url: Option<String>,
 }
 
+/// Arguments for configuring a direct connection to Bigtable, in addition to `KvArgs`. Mutually
+/// exclusive with `KvArgs::ledger_grpc_url` (both belong to the shared `kv_source` arg group).
+#[derive(clap::Args, Debug, Clone, Default)]
+#[group(required = false)]
+pub struct BigtableKvArgs {
+    /// Bigtable instance ID to make KV store requests to.
+    #[arg(long, group = "kv_source")]
+    pub bigtable_instance: Option<String>,
+
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project).
+    #[arg(long)]
+    pub bigtable_project: Option<String>,
+
+    /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
+    #[arg(long)]
+    pub bigtable_app_profile_id: Option<String>,
+
+    /// Bigtable pipeline watermark to include when reporting the Bigtable reader watermark.
+    /// Repeat to include multiple pipelines.
+    #[arg(
+        long = "bigtable-watermark-pipeline",
+        value_name = "PIPELINE",
+        value_delimiter = ',',
+        value_parser = validate_pipeline_name
+    )]
+    pub bigtable_watermark_pipeline: Vec<&'static str>,
+}
+
+impl BigtableKvArgs {
+    pub async fn bigtable_reader(
+        &self,
+        kv_args: &KvArgs,
+        client_name: String,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<BigtableReader>> {
+        let Some(instance_id) = self.bigtable_instance.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            BigtableReader::new(
+                instance_id.clone(),
+                client_name,
+                self.bigtable_args(kv_args),
+                registry,
+            )
+            .await?,
+        ))
+    }
+
+    fn bigtable_args(&self, kv_args: &KvArgs) -> BigtableArgs {
+        BigtableArgs {
+            bigtable_statement_timeout_ms: kv_args.kv_statement_timeout_ms,
+            bigtable_project: self.bigtable_project.clone(),
+            bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
+            bigtable_max_decoding_message_size: kv_args.kv_max_decoding_message_size,
+            bigtable_watermark_pipeline: self.bigtable_watermark_pipeline.clone(),
+        }
+    }
+}
+
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not
 /// work.
 ///
-/// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
-/// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
-/// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
+/// KV queries can optionally be served by a Bigtable instance, if `bigtable_kv_args.bigtable_instance`
+/// is provided. Otherwise these requests are served by the database. If a `bigtable_instance` is
+/// provided, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials
+/// JSON file.
 ///
 /// Access to writes (executing and dry-running transactions) is controlled by
 /// `node_args.fullnode_grpc_url`, which can be omitted to disable writes from this RPC.
@@ -262,6 +327,7 @@ pub async fn start_rpc(
     database_url: Option<Url>,
     db_args: DbArgs,
     kv_args: KvArgs,
+    bigtable_kv_args: BigtableKvArgs,
     consistent_reader_args: ConsistentReaderArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
@@ -289,6 +355,7 @@ pub async fn start_rpc(
         database_url,
         db_args,
         kv_args,
+        bigtable_kv_args,
         consistent_reader_args,
         fullnode_client.clone(),
         rpc_config,

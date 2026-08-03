@@ -9,6 +9,7 @@ use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use url::Url;
 
+use crate::BigtableKvArgs;
 use crate::NodeArgs;
 use crate::RpcArgs;
 
@@ -37,6 +38,9 @@ pub enum Command {
 
         #[command(flatten)]
         kv_args: KvArgs,
+
+        #[command(flatten)]
+        bigtable_kv_args: BigtableKvArgs,
 
         #[command(flatten)]
         consistent_reader_args: ConsistentReaderArgs,

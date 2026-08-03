@@ -22,6 +22,7 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use url::Url;
 
+use crate::BigtableKvArgs;
 use crate::config::RpcConfig;
 use crate::metrics::RpcMetrics;
 
@@ -77,6 +78,7 @@ impl Context {
         database_url: Option<Url>,
         db_args: DbArgs,
         kv_args: KvArgs,
+        bigtable_kv_args: BigtableKvArgs,
         consistent_reader_args: ConsistentReaderArgs,
         fullnode_client: Option<FullnodeClient>,
         config: RpcConfig,
@@ -88,8 +90,8 @@ impl Context {
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = KvLoader::from_kv_sources(
-            kv_args
-                .bigtable_reader("indexer-alt-jsonrpc".to_owned(), registry)
+            bigtable_kv_args
+                .bigtable_reader(&kv_args, "indexer-alt-jsonrpc".to_owned(), registry)
                 .await?,
             kv_args
                 .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
