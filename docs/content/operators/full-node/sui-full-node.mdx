@@ -120,6 +120,19 @@ clang \
 cmake
 ```
 
+### gRPC quickstart checklist {#grpc-quickstart}
+
+Follow these steps to enable gRPC on a full node. Operators who miss the indexing step are the most common source of gRPC setup questions.
+
+1. Add `rpc.enable-indexing: true` to `fullnode.yaml` (see config below).
+2. Restart the node. The initial gRPC index build takes time depending on your hardware; the node may not serve other traffic during this phase.
+3. Verify gRPC is working:
+    ```sh
+    $ grpcurl <YOUR_NODE>:9000 sui.rpc.v2.LedgerService/GetCheckpoint
+    ```
+4. Disable legacy JSON-RPC indexing if you no longer need it: set `enable-index-processing: false` (see [Disable legacy JSON-RPC indexing](#disable-legacy-json-rpc-indexing)).
+5. Optionally configure the [ledger history list APIs](#ledger-history-configuration) and [retention window](#gRPC-retention).
+
 ### Considerations to enable gRPC
 
 You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving) for guidance on the overall transition plan.
@@ -202,6 +215,8 @@ You can reclaim the storage used by legacy JSON-RPC indexing after all your clie
 enable-index-processing: false
 
 ```
+
+#### Retention window {#gRPC-retention}
 
 You can configure the retention window for the gRPC index on your full node by adding the following to its `fullnode.yaml` configuration:
 
