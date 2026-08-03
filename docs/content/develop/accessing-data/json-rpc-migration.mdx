@@ -184,9 +184,38 @@ GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few
 
 JSON-RPC cursors are opaque strings. GraphQL passes cursors through the `after` (or `before`) field on a connection, with the page size in `first` (or `last`). gRPC paging uses fields on the typed request and response messages. Do not try to reuse a JSON-RPC `nextCursor` value in a GraphQL or gRPC request. Fetch a fresh cursor from the new API and persist it as the resume point.
 
+### Negative filters (MatchNone) have no direct equivalent
+
+JSON-RPC object queries supported `MatchAll`, `MatchAny`, and `MatchNone` filter combinators to include or exclude results by type. Neither gRPC nor GraphQL supports negation filters.
+
+- **gRPC** uses a Disjunctive Normal Form (DNF) filter structure: `terms` (OR) containing `literals` (AND). You can express "match A or B" and "match A and B", but not "match everything except C". Filter client-side for exclusion logic, or restructure the query to list only the types you want.
+- **GraphQL** uses flat filter fields (`type`, `sender`, `emittingModule`) without boolean combinators. Use multiple queries or client-side filtering for exclusion patterns.
+
 ### Retention windows
 
 A full node retains a configurable window of recent data and prunes older history. Your application sees this as "not found" responses. For long-running queries, replays, or audits, plan to fall back to the [Archival Service](/develop/accessing-data/archival-store) for data outside the full node's retention.
+
+### Ecosystem tools use different migration paths
+
+Not all tools in the Sui ecosystem require manual migration:
+
+- **Sui CLI**: No changes needed. The CLI already uses gRPC internally. The `rpc` field in `~/.sui/sui_config/client.yaml` points at the same `fullnode.*.sui.io:443` URLs, which serve both JSON-RPC and gRPC.
+
+- **dApp Kit** (`@mysten/dapp-kit-react`, `@mysten/dapp-kit-core`): Replace `SuiClient` with `SuiGrpcClient` in the `createClient` factory. All hooks and transaction methods work identically with either client.
+
+  ```ts
+  // Before (JSON-RPC)
+  import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+  createClient: (network) => new SuiClient({ url: getFullnodeUrl(network) })
+
+  // After (gRPC)
+  import { SuiGrpcClient } from '@mysten/sui/grpc';
+  createClient: (network) => new SuiGrpcClient({ network })
+  ```
+
+- **Kiosk SDK** (`@mysten/kiosk`): No changes needed. Kiosk operations are PTB move calls that you build with the `Transaction` class and execute through your app's Sui client. Swap the app's client to `SuiGrpcClient` and all Kiosk code works unchanged.
+
+- **Walrus site-builder**: The site-builder manages its own Sui connection through `sites-config.yaml`. Check the [Walrus documentation](https://docs.wal.app/) for gRPC migration status, as the transport is controlled by the Walrus team.
 
 ## Examples for high-traffic paths
 
@@ -352,3 +381,28 @@ For real-time checkpoint streaming, use gRPC `SubscriptionService.SubscribeCheck
 
 </TabItem>
 </Tabs>
+
+### Sign and execute (end-to-end)
+
+Replace `signAndExecuteTransactionBlock` with the gRPC equivalent. The SDK handles gas coin selection, gas budget estimation, signing, and execution in a single call.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#sign-and-execute-a-transaction-end-to-end@json-rpc}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#sign-and-execute-a-transaction-end-to-end@grpc-sdk}
+
+</TabItem>
+</Tabs>
+
+For manual gas resolution (sponsored transactions, custom gas coin selection), see [Manual gas resolution](/develop/accessing-data/grpc/grpc-migration-cookbook#manual-gas-resolution).
+
+### Validator APY
+
+JSON-RPC provided `suix_getValidatorsApy`. Neither gRPC nor GraphQL has a direct APY field. Validator APY is derived from staking pool exchange rate history stored in dynamic fields on each validator's system-state object. The legacy method used a compounding calculation across up to 30 epoch samples with outlier filtering.
+
+To compute APY after migration, query the validator set and each validator's exchange rate history, then apply a compounding formula client-side. See the [GraphQL migration cookbook](/develop/accessing-data/graphql/graphql-migration-cookbook#get-validator-apy) for the query pattern and [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation.

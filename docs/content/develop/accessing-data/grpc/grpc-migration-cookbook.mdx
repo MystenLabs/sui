@@ -326,6 +326,50 @@ $ grpcurl -d '{
 
 The same `read_mask` rules apply as for batch objects: the service respects only the top-level mask.
 
+## List and paginate transactions
+
+Replace `suix_queryTransactionBlocks` with `LedgerService.ListTransactions` for filtered, paginated queries over a checkpoint range. Unlike `StateService` list APIs (which return a single page), `ListTransactions` returns a server-side stream. Each response frame carries a `watermark` with a resume `cursor`, and the final frame includes a `QueryEnd` with the reason the stream ended.
+
+:::info
+
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `client.listTransactions()` as a high-level wrapper. You can also use the proto client directly through `client.ledgerService.listTransactions()`. The `grpcurl` example below shows the raw protobuf JSON request shape.
+
+:::
+
+<Tabs groupId="transport">
+<TabItem value="grpcurl" label="gRPC (grpcurl)">
+
+```sh
+$ grpcurl -d '{
+  "start_checkpoint": "1000000",
+  "filter": {
+    "terms": [{
+      "literals": [{
+        "sender": { "address": "<ADDRESS>" }
+      }]
+    }]
+  },
+  "options": { "limit": 50 },
+  "read_mask": { "paths": ["digest", "effects"] }
+}' <FULL_NODE_URL> sui.rpc.v2.LedgerService/ListTransactions
+```
+
+</TabItem>
+</Tabs>
+
+The List APIs differ from JSON-RPC pagination in the following ways:
+
+- `ListTransactions` is a server-side stream. Each response frame contains a `transaction` (the matched item), a `watermark` (progress marker), and optionally a `QueryEnd` (on the final frame).
+- The `watermark.cursor` is an opaque binary token. Pass it as `options.after` to resume ascending pagination, or `options.before` for descending.
+- The `watermark.checkpoint` field tells you how much of the checkpoint range the server scanned, which is useful for sparse filters that produce few results across many checkpoints.
+- The `QueryEnd.reason` tells you why the stream ended:
+  - `ITEM_LIMIT`: returned the requested number of items. Use the cursor to fetch the next page.
+  - `SCAN_LIMIT`: the server's internal scan budget was exhausted before finding enough matches. Resume from the cursor to continue scanning.
+  - `LEDGER_TIP`: reached the current tip of the chain (no `end_checkpoint` was specified).
+  - `CHECKPOINT_BOUND`: reached the specified `end_checkpoint`.
+
+`ListCheckpoints` and `ListEvents` follow the same streaming pattern with the same watermark and `QueryEnd` semantics. `ListCheckpoints` accepts a `TransactionFilter` (filtering checkpoints that contain matching transactions), while `ListEvents` accepts an `EventFilter`.
+
 ## Query events
 
 JSON-RPC uses `suix_queryEvents` with filters such as `MoveModule`, `MoveEventType`, `Sender`, and `Transaction`. gRPC provides `LedgerService.ListEvents` for paginated, filtered historical queries and `SubscriptionService.SubscribeEvents` for live streaming with the same filters. You can also read events from a specific transaction.
@@ -394,7 +438,7 @@ ws.onmessage = (msg) => console.log(JSON.parse(msg.data));
 
 :::info
 
-The `@mysten/sui` TypeScript SDK does not yet expose `SubscribeEvents`. Use the generated proto client directly until the SDK adds a wrapper. The `grpcurl` and Buf CLI examples on this page work today.
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `SubscribeEvents` through the proto client at `client.subscriptionService.subscribeEvents()`. The Buf CLI example below shows the raw protobuf JSON request shape.
 
 :::
 
@@ -404,7 +448,11 @@ const stream = client.subscriptionService.subscribeEvents({
   filter: {
     terms: [{
       literals: [{
-        eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+        negated: false,
+        predicate: {
+          oneofKind: 'eventType',
+          eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+        },
       }],
     }],
   },
@@ -451,7 +499,7 @@ Use `LedgerService.ListEvents` to retrieve events matching an `EventFilter` acro
 
 :::info
 
-The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents`. Use the generated proto client directly until the SDK adds a wrapper, or use the Rust SDK, which supports `ListEvents`. The `grpcurl` example in the next tab works today.
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `client.listEvents()` as a high-level wrapper. You can also use the proto client directly through `client.ledgerService.listEvents()`. The `grpcurl` example in the next tab shows the raw protobuf JSON request shape.
 
 :::
 
@@ -463,7 +511,11 @@ const stream = client.ledgerService.listEvents({
   filter: {
     terms: [{
       literals: [{
-        eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+        negated: false,
+        predicate: {
+          oneofKind: 'eventType',
+          eventType: { eventType: '<PACKAGE>::module::MyEvent' },
+        },
       }],
     }],
   },
@@ -561,6 +613,40 @@ The gRPC stream differs from the JSON-RPC polling pattern in the following ways:
 - Use `LedgerService.ListCheckpoints` to query a historical range of checkpoints, optionally filtered by a `TransactionFilter`. Use `SubscriptionService.SubscribeCheckpoints` for live streaming from the current tip.
 - Subscriptions do not support resumption. To avoid gaps, open the subscription first, note the first `cursor` from `SubscribeCheckpoints`, then backfill missed checkpoints with `ListCheckpoints` up to that cursor before you consume from the already-open stream.
 - `grpcurl` supports server-side streaming for the `LedgerService.List*` calls on this page. For `SubscriptionService` subscriptions, which are indefinite streams, the Buf CLI or an SDK client provides better control over timeouts and reconnection.
+
+## Stream transactions
+
+Use `SubscriptionService.SubscribeTransactions` for a real-time, filtered stream of transactions. This replaces both JSON-RPC WebSocket subscriptions and polling patterns.
+
+:::info
+
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `SubscribeTransactions` through the proto client at `client.subscriptionService.subscribeTransactions()`. The Buf CLI example below shows the raw protobuf JSON request shape.
+
+:::
+
+<Tabs groupId="transport">
+<TabItem value="buf-cli" label="gRPC (Buf CLI)">
+
+```sh
+$ buf curl --protocol grpc \
+  https://<FULL_NODE_URL>/sui.rpc.v2.SubscriptionService/SubscribeTransactions \
+  -d '{
+    "filter": {
+      "terms": [{
+        "literals": [{
+          "sender": { "address": "<ADDRESS>" }
+        }]
+      }]
+    },
+    "read_mask": { "paths": ["digest", "effects"] }
+  }' \
+  --timeout 5m
+```
+
+</TabItem>
+</Tabs>
+
+Subscriptions begin at the current tip of the chain. The first frame is a progress-only frame (no transaction payload) that establishes the stream's start position. To avoid gaps between historical data and the live stream, see [Backfill and subscribe without gaps](#backfill-and-subscribe-without-gaps).
 
 ## Look up a single checkpoint
 
@@ -859,6 +945,113 @@ if (result.$kind === 'Transaction') {
 
 The JSON-RPC `unsafe_*` builder methods, such as `unsafe_moveCall` and `unsafe_transferObject`, have no gRPC equivalent. Build transactions with [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK, then submit the bytes. See [Building PTBs](/develop/transactions/ptbs/building-ptb) and [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview).
 
+## Sign and execute a transaction (end-to-end)
+
+Replace the JSON-RPC `signAndExecuteTransactionBlock` pattern with `signAndExecuteTransaction` on the gRPC client. This method builds the transaction (including gas resolution), signs it, and executes it in a single call.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```ts
+// Old JSON-RPC pattern
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+
+const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
+const keypair = new Ed25519Keypair();
+
+const tx = new Transaction();
+const [coin] = tx.splitCoins(tx.gas, [1_000_000]);
+tx.transferObjects([coin], '<RECIPIENT_ADDRESS>');
+
+const result = await client.signAndExecuteTransaction({
+  signer: keypair,
+  transaction: tx,
+});
+console.log('Digest:', result.digest);
+```
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+```ts
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+
+const client = new SuiGrpcClient({
+  baseUrl: '<FULL_NODE_URL>',
+  network: 'mainnet',
+});
+const keypair = new Ed25519Keypair();
+
+// Build a PTB: split 0.001 SUI and transfer to a recipient
+const tx = new Transaction();
+const [coin] = tx.splitCoins(tx.gas, [1_000_000]); // 0.001 SUI in MIST
+tx.transferObjects([coin], '<RECIPIENT_ADDRESS>');
+
+// signAndExecuteTransaction handles build, gas resolution, signing, and execution
+const result = await client.signAndExecuteTransaction({
+  signer: keypair,
+  transaction: tx,
+  include: { effects: true, events: true, balanceChanges: true },
+});
+
+if (result.$kind === 'Transaction') {
+  console.log('Digest:', result.Transaction.digest);
+  console.log('Status:', result.Transaction.effects?.status);
+  console.log('Balance changes:', result.Transaction.balanceChanges);
+}
+```
+
+</TabItem>
+</Tabs>
+
+The gRPC call differs from the JSON-RPC call in the following ways:
+
+- Both use `signAndExecuteTransaction`, but the gRPC version accepts `signer` (a keypair) and `transaction` (a `Transaction` object or raw bytes).
+- The gRPC version uses `include` to select which fields the response contains, instead of request options.
+- The response is a discriminated union: check `result.$kind` for `'Transaction'` (success) or `'FailedTransaction'` (failure).
+- Gas resolution happens automatically during `build`. The SDK calls `SimulateTransaction` with `doGasSelection: true` to select gas coins and set the gas budget.
+
+### Manual gas resolution
+
+For sponsored transactions or when you need to select specific gas coins, set gas parameters before building:
+
+```ts
+// Get the current reference gas price
+const { referenceGasPrice } = await client.core.getReferenceGasPrice();
+
+const tx = new Transaction();
+tx.setSender(keypair.toSuiAddress());
+tx.setGasPrice(BigInt(referenceGasPrice));
+tx.setGasBudget(10_000_000);
+
+// Select specific gas coins
+tx.setGasPayment([{
+  objectId: '0xGAS_COIN_ID',
+  version: '1',
+  digest: 'COIN_DIGEST',
+}]);
+
+// Add your commands
+const [coin] = tx.splitCoins(tx.gas, [1_000_000]);
+tx.transferObjects([coin], '<RECIPIENT_ADDRESS>');
+
+// Build and sign manually
+const bytes = await tx.build({ client });
+const { signature } = await keypair.signTransaction(bytes);
+
+const result = await client.core.executeTransaction({
+  transaction: bytes,
+  signatures: [signature],
+  include: { effects: true },
+});
+```
+
+For sponsored transactions, the sponsor sets `setGasPayment` and `setGasOwner` on the transaction, builds the kind-only bytes with `tx.build({ client, onlyTransactionKind: true })`, and provides an additional signature. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) for the full pattern.
+
 ## Simulate a transaction (dry run)
 
 Replace `sui_dryRunTransactionBlock` and `sui_devInspectTransactionBlock` with `TransactionExecutionService.SimulateTransaction`.
@@ -972,7 +1165,66 @@ $ grpcurl -d '{ "address": "<ADDRESS>" }' \
 </TabItem>
 </Tabs>
 
+## Get validator APY
+
+JSON-RPC provided `suix_getValidatorsApy` as a convenience method. Neither gRPC nor GraphQL has a direct APY field or method. Validator APY is derived from staking pool exchange rate history stored in dynamic fields on each validator's system-state object. The legacy `suix_getValidatorsApy` used a compounding calculation across up to 30 epoch samples with outlier filtering, so a simple two-epoch ratio does not reproduce the same values.
+
+To compute validator APY after migration:
+
+1. Query the validator set through `Epoch.validatorSet` in GraphQL or `LedgerService.GetEpoch` in gRPC.
+2. Read each validator's staking pool exchange rate history from the dynamic fields on the pool's `exchange_rates` table.
+3. Apply a compounding formula across multiple epoch samples.
+
+See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation and the legacy implementation as a reference.
+
 ## Common patterns
+
+### Backfill and subscribe without gaps
+
+To combine historical backfill with a live subscription without missing data, open the subscription first, note its starting watermark, then backfill up to that point. The general sequence is:
+
+1. Open the subscription. It starts at the current tip and sends a progress-only first frame with no payload.
+2. Read the first frame to get the starting watermark (a checkpoint number or opaque cursor depending on the API).
+3. Backfill historical data from your last processed checkpoint up to the subscription's starting watermark using the corresponding `List*` API.
+4. After backfill completes, consume from the already-open subscription.
+
+This pattern works with all three subscription and list API pairs: `SubscribeCheckpoints` with `ListCheckpoints`, `SubscribeTransactions` with `ListTransactions`, and `SubscribeEvents` with `ListEvents`. The subscription and list APIs accept the same filter types, so you can reuse the same filter for both.
+
+The following example demonstrates this pattern with `SubscribeCheckpoints` (which the TypeScript SDK supports today) and `GetCheckpoint` for backfill:
+
+```ts
+// 1. Open the subscription (starts at the current tip)
+const { responses } = client.subscriptionService.subscribeCheckpoints({
+  readMask: { paths: ['sequenceNumber', 'transactions'] },
+});
+
+const iterator = responses[Symbol.asyncIterator]();
+
+// 2. Read the first frame to get the starting checkpoint cursor
+const firstFrame = await iterator.next();
+const startCursor = firstFrame.value?.cursor ?? 0n;
+console.log('Subscription starts at checkpoint:', startCursor);
+
+// 3. Backfill from your last processed checkpoint up to the start cursor
+for (let seq = YOUR_LAST_PROCESSED_CHECKPOINT + 1n; seq < startCursor; seq++) {
+  const { response } = await client.ledgerService.getCheckpoint({
+    checkpointId: { oneofKind: 'sequenceNumber', sequenceNumber: seq },
+    readMask: { paths: ['transactions'] },
+  });
+  processCheckpoint(response.checkpoint);
+}
+
+// 4. Consume from the already-open subscription
+let frame = firstFrame;
+while (!frame.done) {
+  if (frame.value?.checkpoint) {
+    processCheckpoint(frame.value.checkpoint);
+  }
+  frame = await iterator.next();
+}
+```
+
+For `SubscribeTransactions` and `SubscribeEvents`, apply the same pattern using the proto client (`client.subscriptionService.subscribeTransactions()` or `client.subscriptionService.subscribeEvents()`). The subscription response carries a `watermark` with an opaque `cursor` and a `checkpoint` field. Pass the `cursor` to the corresponding `List*` API's `options.before` to set the backfill upper bound.
 
 ### Reconnect a checkpoint stream
 
@@ -1075,3 +1327,20 @@ async function getTransaction(digest: string) {
   throw new Error(`Transaction ${digest} not found in full node or archive`);
 }
 ```
+
+### Troubleshoot streaming connections
+
+gRPC streams can terminate for several reasons. Understanding the server's connection lifecycle helps you build reliable streaming clients.
+
+**Connection age limits (GOAWAY):** The Sui full node closes connections after a configurable maximum age (default: 4 hours). When a connection reaches this limit, the server sends a GOAWAY frame, stops accepting new streams, and gives in-flight requests a grace period (default: 10 minutes) to complete. Clients observe this as a stream termination. Implement automatic reconnection with backfill from your last processed checkpoint, as shown in [Reconnect a checkpoint stream](#reconnect-a-checkpoint-stream).
+
+**Slow consumer eviction:** The server buffers up to 256 items per subscriber. If your client cannot keep up and the buffer fills, the server drops the subscription immediately without a graceful close. To avoid this:
+- Process items asynchronously. Write to a queue and process from the queue in a separate worker.
+- Use a `read_mask` to request only the fields you need, reducing frame size.
+- Use server-side filters to reduce the volume of matching items.
+
+**Source lag:** If the subscription service falls behind the checkpoint broadcast (for example, due to high server load), the server drops all subscribers. Reconnect and backfill from your last processed checkpoint.
+
+**Server-side timeout:** The server applies a configurable timeout (default: 60 seconds) as a deadline for unary requests. For streaming `List*` APIs, this timeout bounds the time to the first response. If a sparse filter scans a large range before finding its first match, the server may terminate the stream. Retry with a narrower checkpoint range or a less selective filter.
+
+**Public endpoint limitations:** The public URLs at `https://fullnode.<network>.sui.io` are behind load balancers that impose their own connection timeouts and rate limits beyond what the Sui node configures. Long-running streams are more likely to be interrupted on public endpoints. For production streaming workloads, run your own [Sui full node](/operators/full-node/sui-full-node) or use a provider with a dedicated gRPC endpoint.

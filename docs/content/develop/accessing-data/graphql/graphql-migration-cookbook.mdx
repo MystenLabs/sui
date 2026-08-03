@@ -1052,6 +1052,62 @@ query {
 </TabItem>
 </Tabs>
 
+## Get validator APY
+
+JSON-RPC provided `suix_getValidatorsApy` as a convenience method. GraphQL does not have a direct APY field. Validator APY is derived from staking pool exchange rate history stored in dynamic fields on each validator's system-state object. The legacy `suix_getValidatorsApy` used a compounding calculation across up to 30 epoch samples with outlier filtering, so a simple two-epoch ratio does not reproduce the same values.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+```sh
+curl -X POST https://fullnode.mainnet.sui.io:443 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "suix_getValidatorsApy",
+    "params": []
+  }'
+```
+
+</TabItem>
+<TabItem value="graphql" label="GraphQL">
+
+To compute validator APY after migration:
+
+1. Query the validator set:
+
+```graphql
+query {
+  epoch {
+    epochId
+    validatorSet {
+      activeValidators {
+        nodes {
+          name
+          stakingPoolSuiBalance
+          exchangeRates {
+            address
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+2. For each validator, read the exchange rate history from the dynamic fields on the `exchangeRates` object returned above.
+3. Apply a compounding formula across multiple epoch samples.
+
+See [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation and the legacy implementation as a reference.
+
+</TabItem>
+</Tabs>
+
+**Key differences:**
+- There is no direct APY field in GraphQL or gRPC. You must query exchange rate history from dynamic fields on each validator's staking pool and compute APY client-side.
+- The legacy computation used compounding across up to 30 samples with outlier filtering. A simple ratio between two epochs produces materially different results.
+
 ## Get Move module information
 
 Replace `sui_getNormalizedMoveModule`, `sui_getNormalizedMoveFunction`, and `sui_getNormalizedMoveStruct` with `Query.package` and nested `module`, `function`, and `struct` fields.
