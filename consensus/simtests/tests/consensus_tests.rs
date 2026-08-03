@@ -139,12 +139,13 @@ mod consensus_tests {
     /// Asserted per node from its metrics registry, plus commit catch-up and
     /// early-cohort authorship from commit contents.
     ///
-    /// NOTE: full proposal liveness of the LATE cohort is deliberately NOT asserted
-    /// yet: the propagation-delay proposal gate has no recovery path, and a
-    /// full-form-baseline run of this exact scenario (minimal blocks disabled) loses
-    /// the late cohort's proposals the same way — a pre-existing mainline fragility,
-    /// tracked as the separate upstream gate-recovery fix. That PR takes over this
-    /// assertion.
+    /// NOTE on scope: the late cohort's blocks are NOT asserted to appear in commits.
+    /// Diagnostics show they propose freely (~1200 blocks each, caught up to the
+    /// fleet round, propagation delay 0 — the proposal gate never fires here), yet a
+    /// minimal-blocks-disabled baseline run shows their blocks going uncommitted
+    /// identically. That is late-joiner ancestor exclusion, independent of this
+    /// feature, so the assertion covers the early cohort and the late cohort's own
+    /// proposal counters instead.
     #[sim_test(config = "test_config()")]
     async fn test_late_cohort_regains_proposal_liveness_under_load() {
         telemetry_subscribers::init_for_testing();
@@ -273,8 +274,40 @@ mod consensus_tests {
                 })
                 .sum()
         }
-        for node in authorities.iter().skip(NUM_OF_AUTHORITIES - LATE) {
+        for (offset, node) in authorities
+            .iter()
+            .enumerate()
+            .skip(NUM_OF_AUTHORITIES - LATE)
+        {
             let registry = node.registry();
+            // Diagnostic: why (if at all) is this node not proposing?
+            for reason in [
+                "high_propagation_delay",
+                "no_last_known_proposed_round",
+                "leader_not_found",
+                "not_enough_ancestors",
+            ] {
+                let skipped = metric_sum(&registry, "core_skipped_proposals", Some(reason));
+                if skipped > 0.0 {
+                    tracing::info!("late node {offset}: skipped_proposals[{reason}]={skipped}");
+                }
+            }
+            let proposed = metric_sum(&registry, "proposed_blocks", None);
+            let delay = metric_sum(&registry, "round_tracker_last_propagation_delay", None);
+            tracing::info!(
+                "late node {offset}: proposed={proposed} propagation_delay={delay} \
+                 accepted_round={}",
+                metric_sum(&registry, "highest_accepted_round", None),
+            );
+            // The v4 incident's signature: a caught-up node that has gone silent.
+            assert!(
+                proposed > 0.0,
+                "late node {offset} proposed nothing after catching up"
+            );
+            assert!(
+                delay <= f64::from(default_parameters().propagation_delay_stop_proposal_threshold),
+                "late node {offset} is gated by propagation delay {delay} after catch-up"
+            );
             // Byte/count quota pressure is the v4 reset-storm class and must never
             // fire for an honest bootstrap. Horizon resets are the designed
             // extreme-behind escape and are only reported.
@@ -319,8 +352,6 @@ mod consensus_tests {
         }
         for (authority_index, _) in committee.authorities() {
             if authority_index.value() >= NUM_OF_AUTHORITIES - LATE {
-                // Late-cohort authorship awaits the upstream propagation-gate
-                // recovery fix (see the doc comment).
                 continue;
             }
             assert!(
