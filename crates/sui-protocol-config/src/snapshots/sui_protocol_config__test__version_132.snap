@@ -107,6 +107,7 @@ feature_flags:
   record_additional_state_digest_in_prologue: true
   move_native_context: true
   consensus_median_based_commit_timestamp: true
+  consensus_minimal_block_propagation: true
   normalize_ptb_arguments: true
   consensus_batched_block_sync: true
   enforce_checkpoint_timestamp_monotonicity: true

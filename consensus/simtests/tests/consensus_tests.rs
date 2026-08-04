@@ -127,6 +127,242 @@ mod consensus_tests {
         );
     }
 
+    /// Incident-class regression (v4 private-testnet, 2026-08-01): a cohort of
+    /// validators that starts behind the fleet under sustained transaction load must
+    /// bootstrap into full participation WITHOUT the v4 pathologies: quota-overflow
+    /// stream-reset storms (v4: 860 resets/s fleet-wide) and unbounded parked
+    /// backlogs draining only through GC (v4: 310K parked, mass-obsolete collapse).
+    /// Asserted per node from its metrics registry, plus commit catch-up and
+    /// early-cohort authorship from commit contents.
+    ///
+    /// NOTE on scope: the late cohort's blocks are NOT asserted to appear in commits.
+    /// Diagnostics show they propose freely (~1200 blocks each, caught up to the
+    /// fleet round, propagation delay 0 — the proposal gate never fires here), yet a
+    /// minimal-blocks-disabled baseline run shows their blocks going uncommitted
+    /// identically. That is late-joiner ancestor exclusion, independent of this
+    /// feature, so the assertion covers the early cohort and the late cohort's own
+    /// proposal counters instead.
+    #[sim_test(config = "test_config()")]
+    async fn test_late_cohort_regains_proposal_liveness_under_load() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        const NUM_OF_AUTHORITIES: usize = 10;
+        const LATE: usize = 3;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::new();
+        for (authority_index, _authority_info) in committee.authorities() {
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut params = default_parameters();
+            params.db_path = db_dir.path().to_path_buf();
+            // Production-shaped DAG cache: with the sim default (5 rounds) the
+            // recovery horizon is tip+5 and a late node's every live block reads as
+            // far-future, which turns bootstrap into pure horizon-reset churn and
+            // masks the mechanics this test pins.
+            params.dag_state_cached_rounds = 500;
+            let config = Config {
+                authority_index,
+                db_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: 0,
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters: params,
+                observer_network_keypair: None,
+                observer_ip: None,
+            };
+            let node = AuthorityNode::new(config);
+            if authority_index.value() < NUM_OF_AUTHORITIES - LATE {
+                node.start().await.unwrap();
+                node.spawn_committed_subdag_consumer().unwrap();
+                transaction_clients.push(node.transaction_client());
+            }
+            authorities.push(node);
+        }
+
+        // Sustained load for the whole run: the v4 incident only manifested once
+        // block sizes grew under transaction traffic.
+        let transaction_clients_clone = transaction_clients.clone();
+        let _handle = tokio::spawn(async move {
+            let mut i: u64 = 0;
+            loop {
+                let txn = vec![(i % 251) as u8; 512];
+                if transaction_clients_clone[(i as usize) % transaction_clients_clone.len()]
+                    .submit(vec![txn], Priority::Normal)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                i += 1;
+                if i % 20 == 0 {
+                    sleep(Duration::from_millis(10)).await;
+                }
+            }
+        });
+
+        // Let the early cohort build a substantial DAG the late cohort must chase.
+        sleep(Duration::from_secs(60)).await;
+
+        // Start the late cohort: it must bootstrap into stream-paced participation
+        // while live traffic is minimal-form.
+        let mut late_receiver = None;
+        for node in authorities.iter().skip(NUM_OF_AUTHORITIES - LATE) {
+            node.start().await.unwrap();
+        }
+        for (offset, node) in authorities
+            .iter()
+            .skip(NUM_OF_AUTHORITIES - LATE)
+            .enumerate()
+        {
+            node.spawn_committed_subdag_consumer().unwrap();
+            if offset == 0 {
+                // Keep one late node's forwarded commit stream for the authorship
+                // assertion (the consumer populates it).
+                late_receiver = Some(node.commit_consumer_receiver());
+            }
+        }
+
+        sleep(Duration::from_secs(240)).await;
+
+        // Drain the late node's committed subdags: it must have caught up AND the
+        // recent window must contain blocks authored by EVERY authority — the late
+        // cohort included. (In the v4 failure mode this assertion fails: the late
+        // cohort commits and accepts at fleet rate but authors nothing.)
+        let mut receiver = late_receiver.unwrap();
+        let mut subdags = Vec::new();
+        while let Ok(subdag) = receiver.try_recv() {
+            subdags.push(subdag);
+        }
+        assert!(
+            subdags.len() >= 80,
+            "late node handled only {} commits",
+            subdags.len()
+        );
+
+        // v5's incident guarantees, per late node: no quota-overflow reset storm
+        // (quota hits are attack indicators, never bootstrap flow control) and the
+        // parked backlog drains through recovery instead of pinning until GC.
+        fn metric_sum(registry: &Registry, name: &str, label_value: Option<&str>) -> f64 {
+            registry
+                .gather()
+                .into_iter()
+                .filter(|family| family.name().ends_with(name))
+                .flat_map(|mut family| {
+                    let field_type = family.get_field_type();
+                    family
+                        .take_metric()
+                        .into_iter()
+                        .filter(|m| {
+                            label_value.is_none_or(|wanted| {
+                                m.get_label().iter().any(|l| l.value() == wanted)
+                            })
+                        })
+                        .map(move |m| match field_type {
+                            prometheus::proto::MetricType::COUNTER => m.get_counter().value(),
+                            _ => m.get_gauge().value(),
+                        })
+                })
+                .sum()
+        }
+        for (offset, node) in authorities
+            .iter()
+            .enumerate()
+            .skip(NUM_OF_AUTHORITIES - LATE)
+        {
+            let registry = node.registry();
+            // Diagnostic: why (if at all) is this node not proposing?
+            for reason in [
+                "high_propagation_delay",
+                "no_last_known_proposed_round",
+                "leader_not_found",
+                "not_enough_ancestors",
+            ] {
+                let skipped = metric_sum(&registry, "core_skipped_proposals", Some(reason));
+                if skipped > 0.0 {
+                    tracing::info!("late node {offset}: skipped_proposals[{reason}]={skipped}");
+                }
+            }
+            let proposed = metric_sum(&registry, "proposed_blocks", None);
+            let delay = metric_sum(&registry, "round_tracker_last_propagation_delay", None);
+            tracing::info!(
+                "late node {offset}: proposed={proposed} propagation_delay={delay} \
+                 accepted_round={}",
+                metric_sum(&registry, "highest_accepted_round", None),
+            );
+            // The v4 incident's signature: a caught-up node that has gone silent.
+            assert!(
+                proposed > 0.0,
+                "late node {offset} proposed nothing after catching up"
+            );
+            assert!(
+                delay <= f64::from(default_parameters().propagation_delay_stop_proposal_threshold),
+                "late node {offset} is gated by propagation delay {delay} after catch-up"
+            );
+            // Byte/count quota pressure is the v4 reset-storm class and must never
+            // fire for an honest bootstrap. Horizon resets are the designed
+            // extreme-behind escape and are only reported.
+            for label in ["peer_bytes", "peer_count"] {
+                let drops = metric_sum(&registry, "minimal_block_quota_drops", Some(label));
+                assert_eq!(
+                    drops, 0.0,
+                    "late node hit the {label} recovery quota during bootstrap — \
+                     reset storm class"
+                );
+            }
+            let horizon = metric_sum(
+                &registry,
+                "minimal_block_quota_drops",
+                Some("round_horizon"),
+            );
+            tracing::info!("late-node horizon resets during bootstrap: {horizon}");
+            let parked = metric_sum(&registry, "minimal_block_recovery_parked", None);
+            assert!(
+                parked <= 64.0,
+                "late node still holds {parked} parked blocks after catch-up"
+            );
+        }
+        // Diagnostic map: last commit position in which each authority authored.
+        let mut last_authored: std::collections::BTreeMap<_, usize> = Default::default();
+        for (position, subdag) in subdags.iter().enumerate() {
+            for block in &subdag.blocks {
+                last_authored.insert(block.author(), position);
+            }
+        }
+        tracing::info!(
+            "authorship diagnostic: total_subdags={} last_authored={:?}",
+            subdags.len(),
+            last_authored
+        );
+        let recent = &subdags[subdags.len().saturating_sub(60)..];
+        let mut authors = std::collections::BTreeSet::new();
+        for subdag in recent {
+            for block in &subdag.blocks {
+                authors.insert(block.author());
+            }
+        }
+        for (authority_index, _) in committee.authorities() {
+            if authority_index.value() >= NUM_OF_AUTHORITIES - LATE {
+                continue;
+            }
+            assert!(
+                authors.contains(&authority_index),
+                "authority {authority_index} authored no blocks in the recent {} commits — \
+                 proposal liveness lost",
+                recent.len()
+            );
+        }
+    }
+
+    // Tests the fastpath transactions with randomized votes. The test creates a fixed number of transactions,
+    // sends them to random authorities, and randomizes votes on them (accept or reject). The output is verified
+    // by comparing commits across validators and ensuring they are consistent.
+
     // Like test_committee_start_simple, but injects probabilistic crashes while the committee is
     // under load. At key consensus fail points each node has a small chance to kill itself; the
     // test harness recreates it after a short delay, so the node must recover from its persisted

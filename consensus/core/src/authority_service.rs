@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -18,6 +23,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
+    block_inflater::BlockInflater,
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
@@ -46,6 +52,56 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
+    block_inflater: Arc<BlockInflater>,
+    minimal_cache: Arc<MinimalBlockCache>,
+}
+
+/// Shares one minimal encoding of each broadcast block across all subscriber streams,
+/// which would otherwise each re-encode it — O(committee size) work per block. A few
+/// recent entries suffice since subscribers observe a block at nearly the same time.
+struct MinimalBlockCache {
+    // Small enough that a linear scan under a short-lived lock beats a hash map.
+    recent: parking_lot::Mutex<VecDeque<(BlockRef, Bytes)>>,
+}
+
+impl MinimalBlockCache {
+    // A few slots absorb subscribers that lag by a block or two without unbounded growth.
+    const CAPACITY: usize = 8;
+
+    fn new() -> Self {
+        Self {
+            recent: parking_lot::Mutex::new(VecDeque::with_capacity(Self::CAPACITY)),
+        }
+    }
+
+    /// Returns the block's minimal encoding, encoding it only on the first request.
+    /// `None` means this block cannot be sent minimally (e.g. an unsupported variant);
+    /// the caller falls back to the full form.
+    fn encode(
+        &self,
+        inflater: &BlockInflater,
+        block: &VerifiedBlock,
+        dag_state: &RwLock<DagState>,
+    ) -> Option<Bytes> {
+        let block_ref = block.reference();
+        {
+            let recent = self.recent.lock();
+            if let Some((_, bytes)) = recent.iter().find(|(r, _)| *r == block_ref) {
+                return Some(bytes.clone());
+            }
+        }
+        // Encode outside the lock: a concurrent subscriber may duplicate this work for the
+        // same block, which is harmless and far cheaper than serializing all subscribers.
+        let bytes = inflater.serialize(block, &dag_state.read()).ok()?;
+        let mut recent = self.recent.lock();
+        if !recent.iter().any(|(r, _)| *r == block_ref) {
+            if recent.len() == Self::CAPACITY {
+                recent.pop_front();
+            }
+            recent.push_back((block_ref, bytes.clone()));
+        }
+        Some(bytes)
+    }
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -62,6 +118,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
+        let block_inflater = Arc::new(BlockInflater::new(context.clone()));
         Self {
             context,
             block_verifier,
@@ -74,7 +131,45 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
+            block_inflater,
+            minimal_cache: Arc::new(MinimalBlockCache::new()),
         }
+    }
+
+    /// Shared tail of excluded-ancestors processing: schedules fetches for the ones
+    /// the local DAG does not know. Used by both the live receive path and the
+    /// recovered-block delivery path.
+    async fn process_missing_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        excluded_ancestors: Vec<BlockRef>,
+    ) -> ConsensusResult<()> {
+        let peer_hostname = &self.context.committee.authority(peer).hostname;
+        let missing_excluded_ancestors = self
+            .core_dispatcher
+            .check_block_refs(excluded_ancestors)
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
+        if !missing_excluded_ancestors.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .network_excluded_ancestors_sent_to_fetch
+                .with_label_values(&[peer_hostname])
+                .inc_by(missing_excluded_ancestors.len() as u64);
+
+            let synchronizer = self.synchronizer.clone();
+            spawn_monitored_task!(async move {
+                // This does not wait for the fetch request to complete.
+                if let Err(err) = synchronizer
+                    .fetch_blocks(missing_excluded_ancestors, PeerId::Validator(peer))
+                    .await
+                {
+                    debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
+                }
+            });
+        }
+        Ok(())
     }
 
     // Parses and validates serialized excluded ancestors.
@@ -306,31 +401,26 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         }
 
         // Schedule fetching missing soft links from this peer in the background.
-        let missing_excluded_ancestors = self
-            .core_dispatcher
-            .check_block_refs(excluded_ancestors)
-            .await
-            .map_err(|_| ConsensusError::Shutdown)?;
-        if !missing_excluded_ancestors.is_empty() {
-            self.context
-                .metrics
-                .node_metrics
-                .network_excluded_ancestors_sent_to_fetch
-                .with_label_values(&[peer_hostname])
-                .inc_by(missing_excluded_ancestors.len() as u64);
-
-            let synchronizer = self.synchronizer.clone();
-            spawn_monitored_task!(async move {
-                if let Err(err) = synchronizer
-                    .fetch_blocks(missing_excluded_ancestors, PeerId::Validator(peer))
-                    .await
-                {
-                    debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
-                }
-            });
-        }
+        self.process_missing_excluded_ancestors(peer, excluded_ancestors)
+            .await?;
 
         Ok(())
+    }
+
+    async fn handle_excluded_ancestors(
+        &self,
+        peer: AuthorityIndex,
+        block_ref: BlockRef,
+        excluded_ancestors: Vec<Vec<u8>>,
+    ) -> ConsensusResult<()> {
+        // The block must already be accepted; its verified form anchors validation of
+        // the untrusted sidecar exactly as on the live receive path.
+        let Some(block) = self.dag_state.read().get_block(&block_ref) else {
+            return Ok(());
+        };
+        let excluded_ancestors = self.parse_excluded_ancestors(peer, &block, excluded_ancestors)?;
+        self.process_missing_excluded_ancestors(peer, excluded_ancestors)
+            .await
     }
 
     async fn handle_subscribe_blocks(
@@ -377,6 +467,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .map(|block| ExtendedSerializedBlock {
                         block: block.serialized().clone(),
                         excluded_ancestors: vec![],
+                        minimal: None,
                     }),
             )
         };
@@ -390,16 +481,62 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             self.subscription_counter.clone(),
         );
 
+        // Minimal blocks are emitted for live broadcasts only: the catch-up replay above
+        // serves rounds where the subscriber's cache state is unpredictable, so it always
+        // sends full blocks — which is also what makes the receive-side quota-overflow
+        // reset sound (the replayed range bypasses recovery entirely) and gives deep
+        // laggards a deterministic catch-up path. Emission is protocol-gated: every
+        // validator on a version with the flag can decode both forms. No lag gate is
+        // needed: a receiver that cannot inflate a live minimal block parks it in a
+        // bounded slot-wait and inflates it as its DAG advances, at any lag.
+        let emit_minimal = self
+            .context
+            .protocol_config
+            .minimal_block_propagation_enabled();
+        let block_inflater = self.block_inflater.clone();
+        let minimal_cache = self.minimal_cache.clone();
+        let context = self.context.clone();
+        let peer_hostname = context.committee.authority(peer).hostname.clone();
+        // The response stream must not keep the stopped authority's DagState alive
+        // (spawned-task/stream state holds it weakly, like the subscription loops);
+        // with the state gone, emission degrades to full form.
+        let dag_state = Arc::downgrade(&self.dag_state);
+
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
-        Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(|items| {
-                debug_assert!(
-                    items.len() <= MAX_BLOCKS_PER_POLL,
-                    "Too many blocks received from broadcast"
-                );
-                stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
-            }),
-        )))
+        let stream = past_proposed_blocks.chain(broadcasted_blocks.flat_map(move |items| {
+            debug_assert!(
+                items.len() <= MAX_BLOCKS_PER_POLL,
+                "Too many blocks received from broadcast"
+            );
+            let block_inflater = block_inflater.clone();
+            let context = context.clone();
+            let peer_hostname = peer_hostname.clone();
+            let minimal_cache = minimal_cache.clone();
+            let dag_state = dag_state.clone();
+            stream::iter(items.into_iter().map(move |extended_block| {
+                let minimal = emit_minimal
+                    .then(|| {
+                        let dag_state = dag_state.upgrade()?;
+                        minimal_cache.encode(&block_inflater, &extended_block.block, &dag_state)
+                    })
+                    .flatten();
+                let mut serialized = ExtendedSerializedBlock::from(extended_block);
+                if let Some(minimal) = &minimal {
+                    let node_metrics = &context.metrics.node_metrics;
+                    node_metrics
+                        .minimal_blocks_sent
+                        .with_label_values(&[peer_hostname.as_str()])
+                        .inc();
+                    node_metrics
+                        .minimal_blocks_sent_bytes_saved
+                        .with_label_values(&[peer_hostname.as_str()])
+                        .inc_by(serialized.block.len().saturating_sub(minimal.len()) as u64);
+                }
+                serialized.minimal = minimal;
+                serialized
+            }))
+        }));
+        Ok(Box::pin(stream))
     }
 
     // Handles 3 types of requests:
@@ -712,7 +849,7 @@ mod tests {
 
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
         block_sync_service::BlockSyncService,
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
@@ -943,6 +1080,7 @@ mod tests {
 
         let service = authority_service.clone();
         let serialized = ExtendedSerializedBlock {
+            minimal: None,
             block: input_block.serialized().clone(),
             excluded_ancestors: vec![],
         };
@@ -968,6 +1106,7 @@ mod tests {
         let invalid_block =
             VerifiedBlock::new_for_test(TestBlock::new(10, 1000).set_timestamp_ms(10).build());
         let extended_block = ExtendedSerializedBlock {
+            minimal: None,
             block: invalid_block.serialized().clone(),
             excluded_ancestors: vec![],
         };
@@ -991,6 +1130,7 @@ mod tests {
             bcs::to_bytes(&invalid_block.reference()).unwrap(),
         ];
         let extended_block = ExtendedSerializedBlock {
+            minimal: None,
             block: input_block.serialized().clone(),
             excluded_ancestors: invalid_excluded_ancestors,
         };
@@ -1396,6 +1536,110 @@ mod tests {
 
             let block2: SignedBlock = bcs::from_bytes(&stream.next().await.unwrap().block).unwrap();
             assert_eq!(block2.round(), 15, "Should return block at round 15");
+        }
+    }
+
+    /// Live broadcasts carry a minimal form exactly when the protocol flag allows it
+    /// (rollout safety: flag off means full-only), and replay always rides full.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_subscribe_blocks_emission_follows_protocol_flag() {
+        subscribe_blocks_emission(true).await;
+        subscribe_blocks_emission(false).await;
+    }
+
+    async fn subscribe_blocks_emission(emit_minimal: bool) {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_minimal_block_propagation_enabled_for_testing(emit_minimal);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_vote_tracker.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            peers_pool.clone(),
+            false,
+        );
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+
+        // Proposed block for the catch-up replay, and one block per authority at round 15
+        // to serve as resolvable ancestors of the live blocks.
+        let own_block = VerifiedBlock::new_for_test(TestBlock::new(15, 0).build());
+        dag_state.write().accept_block(own_block.clone());
+        let mut ancestors = vec![own_block.reference()];
+        for authority in 1..4 {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(15, authority).build());
+            ancestors.push(block.reference());
+            dag_state.write().accept_block(block);
+        }
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
+            transaction_vote_tracker,
+            dag_state.clone(),
+            block_sync_service,
+        ));
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let mut stream = authority_service
+            .handle_subscribe_blocks(peer, 10)
+            .await
+            .unwrap();
+
+        // The replayed block must ride full, without a minimal form.
+        let replayed = stream.next().await.unwrap();
+        assert_eq!(replayed.block, *own_block.serialized());
+        assert!(replayed.minimal.is_none());
+
+        // A live broadcast carries the minimal form (the tonic layer sends only one of
+        // the two on the wire) exactly when the protocol flag allows emission.
+        let live_block =
+            VerifiedBlock::new_for_test(TestBlock::new(16, 0).set_ancestors_raw(ancestors).build());
+        tx_block_broadcast
+            .send(ExtendedBlock {
+                block: live_block.clone(),
+                excluded_ancestors: vec![],
+            })
+            .unwrap();
+        let live = stream.next().await.unwrap();
+        assert_eq!(live.block, *live_block.serialized());
+        if emit_minimal {
+            let minimal = live
+                .minimal
+                .expect("live block should carry a minimal form");
+            assert!(minimal.len() < live.block.len());
+        } else {
+            assert!(live.minimal.is_none());
         }
     }
 

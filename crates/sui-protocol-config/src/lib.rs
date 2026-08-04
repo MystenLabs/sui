@@ -374,6 +374,8 @@ const MAINNET_USDB: &str =
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
 // Version 133: Add `package::original_package_id` and its native costs.
+//              Enable consensus_minimal_block_propagation on devnet: broadcast blocks
+//              travel without ancestor digests and are reconstructed at the receiver.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -854,6 +856,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     consensus_median_based_commit_timestamp: bool,
+
+    // If true, validators emit minimal (ancestor-compressed) blocks on the consensus
+    // block subscription stream. Receivers always accept both full and minimal forms,
+    // independent of this flag; it gates emission only.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_minimal_block_propagation: bool,
 
     // If true, enables the normalization of PTB arguments but does not yet enable splatting
     // `Result`s of length not equal to 1
@@ -4568,6 +4576,9 @@ impl ProtocolConfig {
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
                         Some(package_read_cost_per_byte);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.consensus_minimal_block_propagation = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
