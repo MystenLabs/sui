@@ -57,6 +57,16 @@ mod consensus_tests {
         )
     }
 
+    /// Latency model for the minimal-block repro: parking happens only when a
+    /// block's ancestors arrive AFTER the block itself. The default 10-20ms uniform
+    /// latency delivers every ancestor long before its child at any realistic round
+    /// period, so nothing ever parks and the behaviour under study is invisible.
+    /// Production sees 30-150ms cross-region latency against a ~57ms round period,
+    /// which is why a large fraction of blocks park there.
+    fn wan_config() -> SimConfig {
+        env_config(bimodal_latency_ms(60..80, 500..1500, 0.01), [])
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_committee_start_simple() {
         telemetry_subscribers::init_for_testing();
@@ -357,6 +367,136 @@ mod consensus_tests {
                 recent.len()
             );
         }
+    }
+
+    /// Diagnostic reproduction attempt for the private-testnet round-rate collapse:
+    /// a wide committee under sustained load, sampling fleet round rate and parked
+    /// backlog over time. The production pathology compounds with committee width —
+    /// a block's frontier spans every author, so once a fraction of blocks park, the
+    /// chance a given block waits on another parked block rises with the number of
+    /// authors. Ten authorities (the width used elsewhere here) is far below where
+    /// this appeared, so widen the committee and use a production-shaped GC depth.
+    #[sim_test(config = "wan_config()")]
+    async fn test_minimal_block_round_rate_under_sustained_load() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        const NUM_OF_AUTHORITIES: usize = 30;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        // Production-shaped: the sim defaults (gc_depth 6, 8 transactions per block)
+        // keep blocks tiny and the GC window short, which is the opposite of the
+        // regime where this appeared — large blocks that take real time to inflate,
+        // and a GC window wide enough for a parked block to sit for seconds.
+        protocol_config.set_gc_depth_for_testing(60);
+        protocol_config.set_max_num_transactions_in_block_for_testing(512);
+        protocol_config.set_max_transactions_in_block_bytes_for_testing(512 * 1024);
+        let mut authorities = Vec::with_capacity(committee.size());
+        let mut transaction_clients = Vec::new();
+        for (authority_index, _authority_info) in committee.authorities() {
+            let db_dir = Arc::new(TempDir::new().unwrap());
+            let mut params = default_parameters();
+            params.db_path = db_dir.path().to_path_buf();
+            params.dag_state_cached_rounds = 500;
+            let config = Config {
+                authority_index,
+                db_dir,
+                committee: committee.clone(),
+                keypairs: keypairs.clone(),
+                boot_counter: 0,
+                protocol_config: protocol_config.clone(),
+                clock_drift: 0,
+                transaction_verifier: Arc::new(NoopTransactionVerifier {}),
+                parameters: params,
+                observer_network_keypair: None,
+                observer_ip: None,
+            };
+            let node = AuthorityNode::new(config);
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            transaction_clients.push(node.transaction_client());
+            authorities.push(node);
+        }
+
+        let transaction_clients_clone = transaction_clients.clone();
+        let _load = tokio::spawn(async move {
+            let mut i: u64 = 0;
+            loop {
+                let txn = vec![(i % 251) as u8; 512];
+                if transaction_clients_clone[(i as usize) % transaction_clients_clone.len()]
+                    .submit(vec![txn], Priority::Normal)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                i += 1;
+                if i % 20 == 0 {
+                    sleep(Duration::from_millis(10)).await;
+                }
+            }
+        });
+
+        fn gauge_or_counter_sum(registry: &Registry, name: &str) -> f64 {
+            registry
+                .gather()
+                .into_iter()
+                .filter(|family| family.name().ends_with(name))
+                .flat_map(|mut family| {
+                    let field_type = family.get_field_type();
+                    family
+                        .take_metric()
+                        .into_iter()
+                        .map(move |m| match field_type {
+                            prometheus::proto::MetricType::COUNTER => m.get_counter().value(),
+                            _ => m.get_gauge().value(),
+                        })
+                })
+                .sum()
+        }
+        let fleet_sum = |authorities: &[AuthorityNode], name: &str| -> f64 {
+            authorities
+                .iter()
+                .map(|n| gauge_or_counter_sum(&n.registry(), name))
+                .sum()
+        };
+
+        // A collapse shows up as round rate falling while the parked backlog climbs,
+        // which is the shape observed in production.
+        const SAMPLES: usize = 12;
+        const SAMPLE_SECS: u64 = 20;
+        let mut prev_round = 0.0f64;
+        let mut rates = Vec::with_capacity(SAMPLES);
+        sleep(Duration::from_secs(30)).await;
+        for sample in 0..SAMPLES {
+            sleep(Duration::from_secs(SAMPLE_SECS)).await;
+            let round_total = fleet_sum(&authorities, "highest_accepted_round");
+            let rate =
+                (round_total - prev_round) / (SAMPLE_SECS as f64) / (NUM_OF_AUTHORITIES as f64);
+            prev_round = round_total;
+            println!(
+                "REPRO sample {sample}: round_rate={rate:.2}/s sent={:.0} received={:.0} \
+                 parked={:.0} recoveries={:.0} pending_exact={:.0} proposed_blocks={:.0}",
+                fleet_sum(&authorities, "minimal_blocks_sent"),
+                fleet_sum(&authorities, "minimal_blocks_received"),
+                fleet_sum(&authorities, "minimal_block_recovery_parked"),
+                fleet_sum(&authorities, "minimal_block_recoveries"),
+                fleet_sum(&authorities, "synchronizer_pending_exact_requests"),
+                fleet_sum(&authorities, "proposed_blocks"),
+            );
+            rates.push(rate);
+        }
+
+        // Skip the first sample: it absorbs start-up and the load ramp.
+        let steady = &rates[1..];
+        let min_rate = steady.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_rate = steady.iter().cloned().fold(0.0f64, f64::max);
+        println!("REPRO steady round rate: min={min_rate:.2} max={max_rate:.2}");
+        assert!(
+            min_rate > max_rate / 3.0,
+            "round rate collapsed under sustained load: min={min_rate:.2}/s vs \
+             max={max_rate:.2}/s across samples {rates:?}"
+        );
     }
 
     // Tests the fastpath transactions with randomized votes. The test creates a fixed number of transactions,
