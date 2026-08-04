@@ -1,30 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from "@mysten/sui/client";
-import type { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { Transaction } from "@mysten/sui/transactions";
+import type { ClientWithCoreApi } from '@mysten/sui/client';
+import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 
-declare const client: SuiClient;
+declare const client: ClientWithCoreApi;
 declare const signer: Ed25519Keypair;
+declare const recipient: string;
+declare const amount: bigint;
+declare const idempotencyKey: string;
 
 // docs::#kill-switch
 function assertNotPaused() {
-    if (process.env.AGENT_PAUSED === "true") {
-        throw new Error("Agent is paused via kill-switch");
+    if (process.env.AGENT_PAUSED === 'true') {
+        throw new Error('Agent is paused via kill-switch');
     }
 }
 
 // Check before every transaction
 assertNotPaused();
+
 const tx = new Transaction();
-const result = await client.signAndExecuteTransaction({ transaction: tx, signer });
+const [payment] = tx.splitCoins(tx.gas, [amount]);
+tx.transferObjects([payment], recipient);
+
+const result = await client.core.signAndExecuteTransaction({
+    transaction: tx,
+    signer,
+    include: { effects: true },
+});
+
+if (result.$kind === 'FailedTransaction') {
+    throw new Error(`Transaction failed: ${result.FailedTransaction.status.error}`);
+}
 // docs::/#kill-switch
 
 // docs::#safe-execute
 type IdempotencyRecord =
-    | { status: "submitting"; digest: string; transactionBytes: string; signature: string }
-    | { status: "succeeded"; digest: string };
+    | { status: 'submitting'; digest: string }
+    | { status: 'succeeded'; digest: string };
 
 interface IdempotencyStore {
     get(key: string): Promise<IdempotencyRecord | null>;
@@ -32,18 +47,22 @@ interface IdempotencyStore {
     markSucceeded(key: string, digest: string): Promise<void>;
 }
 
-async function reconcileDigest(suiClient: SuiClient, digest: string) {
+// Returns the transaction if it landed onchain, or null if the network has never seen it.
+// Throws if it landed but aborted, because that is a real failure, not an unknown outcome.
+async function reconcileDigest(coreClient: ClientWithCoreApi, digest: string) {
     try {
-        const result = await suiClient.getTransactionBlock({
+        const onchain = await coreClient.core.getTransaction({
             digest,
-            options: { showEffects: true },
+            include: { effects: true },
         });
-        if (result.effects?.status.status !== "success") {
-            throw new Error(`Transaction failed: ${result.effects?.status.error}`);
+
+        if (onchain.$kind === 'FailedTransaction') {
+            throw new Error(`Transaction failed: ${onchain.FailedTransaction.status.error}`);
         }
-        return result;
+
+        return onchain.Transaction;
     } catch (error) {
-        if (error instanceof Error && error.message.includes("not found")) {
+        if (error instanceof Error && error.message.includes('not found')) {
             return null;
         }
         throw error;
@@ -51,63 +70,70 @@ async function reconcileDigest(suiClient: SuiClient, digest: string) {
 }
 
 async function safeExecute(
-    suiClient: SuiClient,
+    coreClient: ClientWithCoreApi,
     transaction: Transaction,
     keypair: Ed25519Keypair,
-    idempotencyKey: string,
+    key: string,
     db: IdempotencyStore,
 ) {
-    const existing = await db.get(idempotencyKey);
-    if (existing?.status === "succeeded") {
-        const onchainResult = await reconcileDigest(suiClient, existing.digest);
-        if (!onchainResult) {
-            throw new Error("Recorded transaction was not found onchain");
-        }
-        return onchainResult;
-    }
+    const existing = await db.get(key);
+
     if (existing) {
-        const onchainResult = await reconcileDigest(suiClient, existing.digest);
-        if (onchainResult) {
-            await db.markSucceeded(idempotencyKey, existing.digest);
-            return onchainResult;
+        const onchain = await reconcileDigest(coreClient, existing.digest);
+
+        if (onchain) {
+            await db.markSucceeded(key, existing.digest);
+            return onchain;
         }
-        throw new Error("Submission is unresolved; reconcile it before retrying");
+
+        if (existing.status === 'succeeded') {
+            throw new Error('Recorded transaction was not found onchain');
+        }
+
+        // Transactions built with a client expire at the end of the next epoch, so an
+        // unresolved submission that never landed can be rebuilt and retried safely.
+        throw new Error('Submission is unresolved; reconcile it before retrying');
     }
 
-    const bytes = await transaction.build({ client: suiClient });
-    const { bytes: transactionBytes, signature } = await keypair.signTransaction(bytes);
-    const digest = await transaction.getDigest({ client: suiClient });
-    const claimed = await db.claim(idempotencyKey, {
-        status: "submitting",
-        digest,
-        transactionBytes,
-        signature,
-    });
+    // Pin the sender so the digest computed below matches the bytes that get signed.
+    transaction.setSender(keypair.toSuiAddress());
+
+    const bytes = await transaction.build({ client: coreClient });
+    const { signature } = await keypair.signTransaction(bytes);
+    const digest = await transaction.getDigest({ client: coreClient });
+
+    const claimed = await db.claim(key, { status: 'submitting', digest });
     if (!claimed) {
-        throw new Error("Another worker is processing this idempotency key");
+        throw new Error('Another worker is processing this idempotency key');
     }
 
     try {
-        const execResult = await suiClient.executeTransactionBlock({
-            transactionBlock: transactionBytes,
-            signature,
-            options: { showEffects: true },
+        const execResult = await coreClient.core.executeTransaction({
+            transaction: bytes,
+            signatures: [signature],
+            include: { effects: true },
         });
-        if (execResult.digest !== digest) {
-            throw new Error("Node returned an unexpected transaction digest");
+
+        if (execResult.$kind === 'FailedTransaction') {
+            throw new Error(`Transaction failed: ${execResult.FailedTransaction.status.error}`);
         }
-        if (execResult.effects?.status.status !== "success") {
-            throw new Error(`Transaction failed: ${execResult.effects?.status.error}`);
+
+        if (execResult.Transaction.digest !== digest) {
+            throw new Error('Node returned an unexpected transaction digest');
         }
-        await db.markSucceeded(idempotencyKey, digest);
-        await suiClient.waitForTransaction({ digest });
-        return execResult;
+
+        await db.markSucceeded(key, digest);
+        await coreClient.core.waitForTransaction({ digest });
+
+        return execResult.Transaction;
     } catch (error) {
-        const onchainResult = await reconcileDigest(suiClient, digest);
-        if (onchainResult) {
-            await db.markSucceeded(idempotencyKey, digest);
-            return onchainResult;
+        const onchain = await reconcileDigest(coreClient, digest);
+
+        if (onchain) {
+            await db.markSucceeded(key, digest);
+            return onchain;
         }
+
         throw error;
     }
 }
@@ -147,13 +173,23 @@ const breaker = new CircuitBreaker(5, 60_000);
 
 async function executeWithBreaker(transaction: Transaction) {
     if (breaker.isOpen()) {
-        throw new Error("Circuit breaker open: too many consecutive failures");
+        throw new Error('Circuit breaker open: too many consecutive failures');
     }
 
     try {
-        const breakerResult = await client.signAndExecuteTransaction({ transaction, signer });
+        const breakerResult = await client.core.signAndExecuteTransaction({
+            transaction,
+            signer,
+            include: { effects: true },
+        });
+
+        if (breakerResult.$kind === 'FailedTransaction') {
+            breaker.recordFailure();
+            throw new Error(`Transaction failed: ${breakerResult.FailedTransaction.status.error}`);
+        }
+
         breaker.recordSuccess();
-        return breakerResult;
+        return breakerResult.Transaction;
     } catch (error) {
         breaker.recordFailure();
         throw error;
@@ -187,23 +223,21 @@ class RateLimiter {
 const limiter = new RateLimiter(10, 60_000);
 
 if (!limiter.tryAcquire()) {
-    throw new Error("Rate limit exceeded");
+    throw new Error('Rate limit exceeded');
 }
 // docs::/#rate-limiter
 
 // docs::#structured-log
-declare const agentAddress: string;
-declare const idempotencyKey: string;
-declare const amount: bigint;
-declare const recipient: string;
+const logged = result.Transaction ?? result.FailedTransaction;
 
 console.log(
     JSON.stringify({
-        event: "tx_attempt",
-        agent: agentAddress,
+        event: 'tx_attempt',
+        agent: signer.toSuiAddress(),
         idempotencyKey,
-        digest: result.digest,
-        status: result.effects?.status.status,
+        digest: logged.digest,
+        success: logged.status.success,
+        error: logged.status.error ?? null,
         amount: amount.toString(),
         recipient,
         timestamp: new Date().toISOString(),
@@ -211,4 +245,4 @@ console.log(
 );
 // docs::/#structured-log
 
-export { CircuitBreaker, RateLimiter, safeExecute, executeWithBreaker };
+export { assertNotPaused, CircuitBreaker, executeWithBreaker, RateLimiter, safeExecute };

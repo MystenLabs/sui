@@ -1,43 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 
-const client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443' });
+const client = new SuiGrpcClient({
+    baseUrl: 'https://fullnode.mainnet.sui.io:443',
+    network: 'mainnet',
+});
+
 const agentKeypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
+
+const PACKAGE_ID = '0xPACKAGE';
 
 // docs::#execute-recurring
 async function executeRecurringPayment(
-	mandateId: string,
-	recipientAddress: string,
-	amountMist: bigint,
+    mandateId: string,
+    recipientAddress: string,
+    amountMist: bigint,
 ) {
-	const tx = new Transaction();
-	tx.setSender(agentKeypair.toSuiAddress());
+    const tx = new Transaction();
+    tx.setSender(agentKeypair.toSuiAddress());
 
-	tx.moveCall({
-		target: '0xPACKAGE::spending_mandate::execute_spend',
-		arguments: [
-			tx.object(mandateId),
-			tx.pure.u64(amountMist),
-			tx.pure.address(recipientAddress),
-			tx.object('0x6'), // Clock
-		],
-	});
+    // execute_spend takes the Coin to send, not an amount. Keep this call in sync
+    // with the create/spend example in the spending-policies page.
+    const [paymentCoin] = tx.splitCoins(tx.gas, [amountMist]);
 
-	const result = await client.signAndExecuteTransaction({
-		transaction: tx,
-		signer: agentKeypair,
-		options: { showEffects: true },
-	});
+    tx.moveCall({
+        target: `${PACKAGE_ID}::spending_mandate::execute_spend`,
+        typeArguments: ['0x2::sui::SUI'],
+        arguments: [
+            tx.object(mandateId), // SpendingMandate
+            paymentCoin, // Coin to send
+            tx.pure.address(recipientAddress), // Must be in allowlist
+            tx.object('0x6'), // Clock
+        ],
+    });
 
-	if (result.effects?.status.status !== 'success') {
-		throw new Error(`Recurring payment failed: ${result.effects?.status.error}`);
-	}
+    const result = await client.core.signAndExecuteTransaction({
+        transaction: tx,
+        signer: agentKeypair,
+        include: { effects: true },
+    });
 
-	return result.digest;
+    if (result.$kind === 'FailedTransaction') {
+        throw new Error(`Recurring payment failed: ${result.FailedTransaction.status.error}`);
+    }
+
+    return result.Transaction.digest;
 }
 // docs::/#execute-recurring
 
