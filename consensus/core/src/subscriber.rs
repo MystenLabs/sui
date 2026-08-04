@@ -10,7 +10,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use futures::StreamExt;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::{Mutex, RwLock};
 use tokio::{
     task::{JoinHandle, JoinSet},
@@ -436,6 +436,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             let Some(dag_state) = dag_state.upgrade() else {
                                 return;
                             };
+                            // Scoped so the DagState read-guard hold time on the
+                            // receive path is measurable against the writer-side
+                            // BlockManager::try_accept_blocks scope: reconstruction
+                            // and hashing run under this guard today, and whether
+                            // that delays acceptance is a question only data settles.
+                            let _scope = monitored_scope("MinimalBlock::inflate_at_receipt");
                             let guard = dag_state.read();
                             (
                                 Self::inflate_received_block(

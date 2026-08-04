@@ -31,6 +31,7 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::debug;
@@ -431,6 +432,7 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
                 let Some(dag_state) = dag_state.upgrade() else {
                     return;
                 };
+                let _scope = monitored_scope("MinimalBlock::inflate_in_recovery");
                 let dag_state = dag_state.read();
                 block_inflater.inflate(&minimal, peer, &dag_state)
             };
