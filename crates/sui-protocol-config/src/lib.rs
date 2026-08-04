@@ -392,6 +392,7 @@ const MAINNET_USDB: &str =
 //              bound on batch size * range bits from 512 to 1024.
 //              Enable allowances.
 //              Enable fix_ptb_generated_reads.
+//              Enable check_object_funds_withdraw_in_execution on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4653,7 +4654,6 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                         cfg.feature_flags.create_forwarding_address_registry = true;
-                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                     cfg.feature_flags
@@ -4719,6 +4719,9 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.enable_allowances = true;
                     cfg.feature_flags.fix_ptb_generated_reads = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
