@@ -1,0 +1,87 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { SuiClient } from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction, TransactionDataBuilder } from "@mysten/sui/transactions";
+import { fromBase64, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
+
+const client = new SuiClient({ url: "https://fullnode.testnet.sui.io:443" });
+const user = new Ed25519Keypair();
+const gasStationUrl = "http://localhost:3001";
+const apiKey = process.env.SPONSOR_API_KEY!;
+const expectedSponsor = normalizeSuiAddress(process.env.SPONSOR_ADDRESS!);
+const maxGasBudget = 10_000_000n;
+
+// docs::#client-flow
+const tx = new Transaction();
+tx.moveCall({ target: "0xPACKAGE::module::function" });
+
+const kindBytes = await tx.build({ client, onlyTransactionKind: true });
+const response = await fetch(`${gasStationUrl}/sponsor`, {
+    method: "POST",
+    headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ txBytes: toBase64(kindBytes), sender: user.toSuiAddress() }),
+});
+if (!response.ok) throw new Error(`Sponsorship rejected: ${response.status}`);
+
+const sponsored = (await response.json()) as Record<string, unknown>;
+if (
+    typeof sponsored.txBytes !== "string" ||
+    typeof sponsored.sponsorSignature !== "string" ||
+    typeof sponsored.sponsorAddress !== "string" ||
+    typeof sponsored.gasCoinId !== "string" ||
+    typeof sponsored.digest !== "string"
+) {
+    throw new Error("Invalid gas station response");
+}
+
+// Verify everything the gas station added before crossing the signing boundary.
+const finalBytes = fromBase64(sponsored.txBytes);
+const finalData = TransactionDataBuilder.fromBytes(finalBytes);
+const returnedKind = finalData.build({ onlyTransactionKind: true });
+if (!Buffer.from(returnedKind).equals(Buffer.from(kindBytes))) {
+    throw new Error("Gas station changed the transaction kind");
+}
+if (normalizeSuiAddress(finalData.sender!) !== user.toSuiAddress()) {
+    throw new Error("Gas station changed the sender");
+}
+if (
+    normalizeSuiAddress(finalData.gasConfig.owner!) !== expectedSponsor ||
+    normalizeSuiAddress(sponsored.sponsorAddress) !== expectedSponsor ||
+    finalData.gasConfig.payment?.length !== 1 ||
+    BigInt(finalData.gasConfig.budget ?? 0) > maxGasBudget ||
+    finalData.gasConfig.payment[0].objectId !== sponsored.gasCoinId
+) {
+    throw new Error("Gas station returned gas data outside policy");
+}
+const digest = TransactionDataBuilder.getDigestFromBytes(finalBytes);
+if (digest !== sponsored.digest) throw new Error("Gas station returned the wrong digest");
+
+const dryRun = await client.dryRunTransactionBlock({ transactionBlock: finalBytes });
+if (dryRun.effects.status.status !== "success")
+    throw new Error("Sponsored transaction dry run failed");
+const userSig = await user.signTransaction(finalBytes);
+
+try {
+    await client.executeTransactionBlock({
+        transactionBlock: finalBytes,
+        signature: [userSig.signature, sponsored.sponsorSignature],
+        options: { showEffects: true },
+    });
+} finally {
+    // Confirm the digest the client inspected, even if execution reports an
+    // error: failed transactions can still consume gas and advance the coin.
+    await fetch(`${gasStationUrl}/sponsor/confirm`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ gasCoinId: sponsored.gasCoinId, digest }),
+    });
+}
+// docs::/#client-flow
