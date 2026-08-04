@@ -1,0 +1,188 @@
+---
+title: Full Node Troubleshooting
+sidebar_label: Troubleshooting
+description: Diagnose and fix common Sui full node issues including sync problems, snapshot restore failures, disk space, and startup errors.
+keywords:
+  - troubleshooting
+  - full node errors
+  - sync issues
+  - snapshot restore
+  - disk space
+  - node not syncing
+  - genesis mismatch
+  - operator runbook
+goal:
+  description: >-
+    Operator can diagnose and fix common Sui full node issues
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs operational depth
+    - pattern: '```'
+      min: 1
+      label: Has command examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - Why is my Sui full node not syncing?
+  - How do I fix a genesis mismatch error?
+  - How do I restore a Sui full node from a snapshot?
+  - What do I do when my Sui node runs out of disk space?
+  - How do I upgrade sui-node to a new version?
+  - Why does my node say "Address already in use"?
+answer: >-
+  Diagnose and fix common Sui full node issues including sync failures, snapshot
+  restore errors, genesis mismatches, disk space problems, and startup crashes.
+---
+
+## Node not syncing
+
+If your node is running but falling behind the network, check these metrics:
+
+```sh
+$ curl -s http://localhost:9184/metrics | grep -E 'highest_known_checkpoint|highest_synced_checkpoint|last_executed_checkpoint '
+```
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `highest_known_checkpoint` is stale | Node lost peer connections | Check P2P config, firewall rules (port `8084/UDP` must be open), and seed peers in `fullnode.yaml` |
+| `highest_known_checkpoint` grows but `highest_synced_checkpoint` does not | State sync is stuck downloading checkpoint data | Configure [archival fallback](/operators/data-management/archives) so the node can fetch data from an archive instead of relying on peers |
+| `highest_synced_checkpoint` grows but `last_executed_checkpoint` does not | Execution is stuck | Check logs for execution errors. The node may need more CPU or memory, or the database may be corrupted |
+| All metrics advance but lag behind the network | Node is catching up | Wait for it to catch up, or restore from a more recent [snapshot](/operators/snapshots) |
+
+To measure absolute lag, compare your node against a trusted endpoint:
+
+```sh
+$ grpcurl fullnode.mainnet.sui.io:443 sui.rpc.v2.LedgerService/GetCheckpoint | grep sequenceNumber
+```
+
+## Snapshot restore
+
+Restore a full node from a formal snapshot using `sui-tool download-formal-snapshot`. The free Cloudflare endpoints (`--no-sign-request`) work without credentials.
+
+```sh
+$ sui-tool download-formal-snapshot \
+    --latest \
+    --network mainnet \
+    --genesis genesis.blob \
+    --path /opt/sui/db \
+    --no-sign-request \
+    --num-parallel-downloads 50
+```
+
+### Common restore failures
+
+**Genesis mismatch:**
+```
+Genesis file is for chain <X>, but formal snapshot download is configured for --network <Y>.
+```
+Download the correct `genesis.blob` for your target network. See [Genesis](/operators/genesis).
+
+**Snapshot not uploaded yet:**
+```
+Aborting snapshot restore: ..., snapshot may not be uploaded yet
+```
+Use `--latest` to auto-select the most recent available snapshot, or try a lower epoch number with `--epoch`.
+
+**Epoch too old for verification:** Formal snapshot verification requires epoch commitments. For Mainnet, `--epoch` must be greater than 20; for Testnet, greater than 12.
+
+**Disk space:** The restore creates a `staging/` directory under `--path`, downloads the snapshot there, then renames it to `live/`. You need roughly 2x the snapshot size in free disk space during the restore.
+
+### Verification modes
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Normal | `--verify normal` (default) | Verifies snapshot state during download and validates checkpoints |
+| Strict | `--verify strict` | Everything in normal plus post-restore DB verification against the epoch's root state commitment |
+| None | `--verify none` | Skips verification. Only use if you trust the snapshot source |
+
+### Additional flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--num-parallel-downloads` | 50 | Concurrent download tasks (max 200) |
+| `--num-parallel-chunks` | 8 | Concurrent chunks per download |
+| `--max-retries` | 10 | Retries for failed HTTP requests |
+| `--metrics-port` | 9185 | Prometheus metrics during restore |
+| `--verbose` | off | Enable detailed logging |
+
+## Version upgrades
+
+1. Stop the node.
+2. Replace the `sui-node` binary with the new version.
+3. Start the node.
+
+No database migration is needed between versions. The node opens its existing database on startup.
+
+**If you miss a protocol upgrade**, the node cannot connect to the network. Update the binary before the upgrade takes effect. See [Updates](/operators/full-node/updates) for the release schedule.
+
+### Post-upgrade verification
+
+After restarting, confirm the node is healthy:
+
+```sh
+# Verify the new version
+$ curl -s http://localhost:9184/metrics | grep uptime
+
+# Confirm checkpoints are advancing
+$ watch -n 5 'curl -s http://localhost:9184/metrics | grep last_executed_checkpoint'
+```
+
+### Config compatibility
+
+- **`supported_protocol_versions`** must NOT be set in `fullnode.yaml`. The node asserts this field is absent and crashes if it is present.
+- **`enable-event-processing`** is a legacy field with no effect. Remove it from old configs to avoid confusion.
+
+## Node crashes at startup
+
+### Config file errors
+
+If `fullnode.yaml` is missing, unreadable, or has invalid YAML syntax, the node exits with a parse error. Validate your config:
+
+```sh
+# Check YAML syntax
+$ python3 -c "import yaml; yaml.safe_load(open('fullnode.yaml'))"
+```
+
+### Missing genesis file
+
+If `genesis-file-location` in the config points to a missing file, the node fails at startup. Use an absolute path to avoid ambiguity (relative paths resolve from the working directory, not the config directory).
+
+### Database mismatch
+
+If the database was initialized with a different genesis (wrong network), the node asserts that the stored and configured checkpoint-0 digests match and refuses to start. To fix: delete the database, download the correct `genesis.blob`, and restore from a [snapshot](/operators/snapshots).
+
+### Port conflicts
+
+```
+panicked at error binding to 0.0.0.0:9184: Address already in use (os error 98)
+```
+
+Another process is using the port. Change the port in `fullnode.yaml` or stop the conflicting process. Default ports: `9000` (API), `8084` (P2P), `9184` (metrics), `1337` (admin).
+
+## Disk space
+
+When the disk fills, RocksDB writes fail and the node crashes. To prevent this:
+
+1. **Enable pruning.** Set retention in `fullnode.yaml`:
+    ```yaml
+    authority-store-pruning-config:
+      num-epochs-to-retain: 2
+      num-epochs-to-retain-for-checkpoints: 2
+    ```
+2. **Disable legacy JSON-RPC indexing** if not needed: `enable-index-processing: false`.
+3. **Delete the `live/indexes/` directory** (legacy JSON-RPC indexes) after disabling JSON-RPC indexing. Stop the node first.
+4. **Monitor disk usage** with OS-level metrics and set alerts before the disk fills.
+
+Pruning does not free disk space immediately. RocksDB reclaims space during background compaction, which can take hours. See [Managing Data](/operators/data-management/managing-data) for detailed pruning policies.
+
+## Pruned data "not found"
+
+When an RPC client queries for a transaction, object, or checkpoint that has been pruned, the node returns a "not found" response. This is expected behavior.
+
+To serve older data, either increase the retention window in `authority-store-pruning-config` or direct historical queries to the [Archival Service](/develop/accessing-data/archival-store).

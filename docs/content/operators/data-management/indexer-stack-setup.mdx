@@ -651,3 +651,108 @@ While autovacuum enables reusing dead rows for future inserts, it does not retur
 | `VACUUM FULL` | Built-in  | Entire operation                      | No          | [PostgreSQL VACUUM documentation](https://www.postgresql.org/docs/current/sql-vacuum.html) |
 | pg_repack     | Extension | Briefly during initial and final step | No          | [pg_repack documentation](https://reorg.github.io/pg_repack/)                      |
 | pg_squeeze    | Extension | Briefly during final step             | Yes         | [pg_squeeze on GitHub](https://github.com/cybertec-postgresql/pg_squeeze)       |
+
+## The cp_sequence_numbers pipeline {#cp-sequence-numbers}
+
+The `cp_sequence_numbers` pipeline maps each checkpoint sequence number to its epoch and first transaction sequence number. It is required for:
+
+- **GraphQL checkpoint and transaction queries.** The GraphQL server JOINs the `watermarks` table with `cp_sequence_numbers` to determine the queryable range. Without it, `Query.checkpoints`, `Query.transactions`, and `Epoch.checkpoints` return `FEATURE_UNAVAILABLE` errors.
+- **Pruning other pipelines.** Pipelines that prune by transaction sequence number or epoch rely on `cp_sequence_numbers` to translate checkpoint boundaries.
+
+This pipeline is included in `unpruned.toml`. It must start from genesis (checkpoint 0) and cannot be pruned. Only one indexer instance per database needs to populate this table.
+
+## Watermark troubleshooting {#watermark-troubleshooting}
+
+The GraphQL server reads pipeline watermarks to determine which checkpoint range is queryable. If watermarks are missing or stale, GraphQL queries fail or return incomplete data.
+
+### Check watermark health
+
+Use the GraphQL health endpoint to see per-pipeline lag:
+
+```sh
+$ curl -s http://localhost:7000/health | python3 -m json.tool
+```
+
+The response includes:
+- `checkpoint_lag_ms`: overall lag from wall clock
+- `pipelines`: map of pipeline name to its individual lag in milliseconds
+- `errors`: list of error messages (empty when healthy)
+
+HTTP 200 means healthy. HTTP 500 means one or more checks failed.
+
+You can also query the database directly:
+
+```sql
+SELECT pipeline, checkpoint_hi_inclusive, reader_lo, timestamp_ms_hi_inclusive
+FROM watermarks
+ORDER BY checkpoint_hi_inclusive ASC;
+```
+
+The slowest pipeline (lowest `checkpoint_hi_inclusive`) determines the GraphQL server's queryable upper bound.
+
+### Common watermark errors
+
+**"Missing watermarks for [pipeline_names]"** (logged as warning, service keeps running)
+
+The watermark task found that some pipelines listed in `--indexer-config` files do not yet have rows in the `watermarks` table, or the JOIN with `cp_sequence_numbers` returned no rows.
+
+Causes:
+- The indexer has not caught up yet. Wait for it to process checkpoints.
+- The `cp_sequence_numbers` pipeline is not running. Add `[pipeline.cp_sequence_numbers]` to one of your indexer TOML configs (it is in `unpruned.toml` by default).
+- The `cp_sequence_numbers` pipeline started from a checkpoint later than other pipelines. It must start from genesis.
+
+**"Watermark has not been initialized"** (health check returns HTTP 500)
+
+The watermark task has not successfully polled even once. The GraphQL server just started, or no indexer has written watermarks to the database yet.
+
+**"Watermark lag is too high"** (health check returns HTTP 500)
+
+The difference between the latest checkpoint timestamp and current time exceeds `max-checkpoint-lag-ms` (default: 300,000 ms / 5 minutes). The indexer is behind. Check indexer logs and ensure it has network access to the checkpoint source.
+
+**"querying checkpoints not available" / "querying transactions not available"** (GraphQL query error, code `FEATURE_UNAVAILABLE`)
+
+A query requires a pipeline that is not in the watermarks map. The most common cause is a missing `cp_sequence_numbers` or `tx_digests` pipeline.
+
+### Required pipelines for GraphQL features
+
+| Pipeline | GraphQL features it enables |
+|----------|----------------------------|
+| `cp_sequence_numbers` | `Query.checkpoints`, `Query.transactions`, `Epoch.checkpoints` |
+| `tx_digests` | `Query.transactions`, `Query.events` |
+| `consistent` | `Query.objects`, balance queries, `Query.coinMetadata`, dynamic fields |
+| `obj_versions` | `Query.object`, `Query.objectVersions`, dynamic field lookups, `Query.coinMetadata` |
+| `ev_emit_mod` | Querying events by emitting module |
+| `ev_struct_inst` | Querying events by type |
+| `tx_affected_addresses` | Filtering transactions by affected address |
+| `tx_affected_objects` | Filtering transactions by affected object |
+| `tx_calls` | Filtering transactions by function calls |
+| `tx_kinds` | Filtering transactions by kind |
+| `tx_balance_changes` | Querying transaction balance changes |
+
+### Check available range with GraphQL
+
+Query the available checkpoint range for a specific feature:
+
+```graphql
+{
+  serviceConfig {
+    availableRange(type: "Query", field: "checkpoints") {
+      first { sequenceNumber }
+      last { sequenceNumber }
+    }
+  }
+}
+```
+
+If `first` and `last` are both null, the required pipelines have no watermarks yet.
+
+### Prometheus metrics
+
+The GraphQL server exposes per-pipeline watermark metrics:
+
+| Metric | Description |
+|--------|-------------|
+| `graphql_alt_watermark_checkpoint` | Highest checkpoint per pipeline |
+| `graphql_alt_watermark_timestamp_ms` | Timestamp of highest checkpoint per pipeline |
+| `graphql_alt_watermark_reader_checkpoint_lo` | Reader low watermark per pipeline |
+| `graphql_alt_watermark_epoch` | Highest epoch per pipeline |
