@@ -3,10 +3,17 @@
 
 import crypto from "node:crypto";
 import express from "express";
-import { SuiClient } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction, TransactionDataBuilder } from "@mysten/sui/transactions";
-import { fromBase64, isValidSuiAddress, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
+import {
+    fromBase64,
+    isValidSuiAddress,
+    normalizeStructTag,
+    normalizeSuiAddress,
+    normalizeSuiObjectId,
+    toBase64,
+} from "@mysten/sui/utils";
 
 import { GasCoinPool } from "./pool.js";
 
@@ -14,25 +21,74 @@ import { GasCoinPool } from "./pool.js";
 const app = express();
 app.use(express.json({ limit: "32kb" }));
 
-const client = new SuiClient({ url: "https://fullnode.testnet.sui.io:443" });
+const client = new SuiGrpcClient({
+    network: "testnet",
+    baseUrl: "https://fullnode.testnet.sui.io:443",
+});
 const sponsor = Ed25519Keypair.fromSecretKey(process.env.SPONSOR_SECRET_KEY!);
 const sponsorAddress = sponsor.toSuiAddress();
-const sponsorApiKey = process.env.SPONSOR_API_KEY!;
-
-const pool = new GasCoinPool();
-await pool.initialize(client, sponsorAddress);
 
 const GAS_BUDGET = 10_000_000;
 const MAX_COMMANDS = 4;
 const MAX_INPUTS = 16;
+const MAX_TYPE_ARGUMENTS = 2;
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 const RECONCILE_INTERVAL_MS = 30_000;
-const allowedMoveCalls = new Set(
-    (process.env.ALLOWED_MOVE_CALLS ?? "0xPACKAGE::module::function")
+
+// Reserve headroom above the budget so a coin is never handed out when it
+// cannot actually pay for the transaction it is about to sponsor.
+const MIN_COIN_BALANCE = BigInt(GAS_BUDGET) * 2n;
+
+const pool = new GasCoinPool(MIN_COIN_BALANCE);
+await pool.initialize(client, sponsorAddress);
+
+function normalizeMoveTarget(target: string): string {
+    const parts = target.split("::");
+    if (parts.length !== 3 || parts.some((part) => part.length === 0)) {
+        throw new Error(`Malformed Move target: ${target}`);
+    }
+    const [packageId, module, functionName] = parts;
+    return `${normalizeSuiObjectId(packageId)}::${module}::${functionName}`;
+}
+
+function parseList(value: string | undefined): string[] {
+    return (value ?? "")
         .split(",")
-        .map((value) => value.trim()),
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+}
+
+// Normalize both sides of the comparison. Package IDs appear in both short and
+// 32-byte padded form, and an unnormalized Set silently rejects valid calls.
+const allowedMoveCalls = new Set(parseList(process.env.ALLOWED_MOVE_CALLS).map(normalizeMoveTarget));
+const allowedTypeArguments = new Set(
+    parseList(process.env.ALLOWED_TYPE_ARGUMENTS).map(normalizeStructTag),
 );
+
+// Fail to start rather than start with an empty allowlist.
+if (allowedMoveCalls.size === 0) {
+    throw new Error("ALLOWED_MOVE_CALLS must list at least one Move target");
+}
+
+function hashSecret(value: string): string {
+    return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+// Per-client credentials, so one caller's rate limit cannot starve the others.
+// Format: SPONSOR_API_KEYS="clientA:secretA,clientB:secretB"
+const clientIdsByKeyHash = new Map(
+    parseList(process.env.SPONSOR_API_KEYS).map((entry) => {
+        const separator = entry.indexOf(":");
+        if (separator <= 0 || separator === entry.length - 1) {
+            throw new Error("SPONSOR_API_KEYS entries must be clientId:secret");
+        }
+        return [hashSecret(entry.slice(separator + 1)), entry.slice(0, separator)] as const;
+    }),
+);
+if (clientIdsByKeyHash.size === 0) {
+    throw new Error("SPONSOR_API_KEYS must define at least one credential");
+}
 
 interface PendingSponsorship {
     expectedDigest: string;
@@ -45,33 +101,39 @@ const claimedSponsorships = new Set<string>();
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
 // docs::/#server-setup
 
-function authenticate(req: express.Request): boolean {
+// Hashing both sides gives a fixed-length comparison and avoids leaking the
+// key length that a direct timingSafeEqual on raw input would expose.
+function authenticate(req: express.Request): string | null {
     const supplied = req.header("authorization")?.replace(/^Bearer /, "");
-    if (!supplied || !sponsorApiKey) return false;
-    const actual = Buffer.from(supplied);
-    const expected = Buffer.from(sponsorApiKey);
-    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+    if (!supplied) return null;
+    return clientIdsByKeyHash.get(hashSecret(supplied)) ?? null;
 }
 
-function consumeRateLimit(key: string, now: number): boolean {
+function canConsume(key: string, now: number): boolean {
+    const current = requestCounts.get(key);
+    return !current || now >= current.resetAt || current.count < RATE_LIMIT;
+}
+
+function consume(key: string, now: number): void {
     const current = requestCounts.get(key);
     if (!current || now >= current.resetAt) {
         requestCounts.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
-        return true;
+        return;
     }
-    if (current.count >= RATE_LIMIT) return false;
     current.count += 1;
-    return true;
 }
 
-function enforceRateLimit(sender: string): boolean {
+// Check every bucket before consuming any, so a request rejected on the sender
+// bucket does not still burn the client's quota.
+function enforceRateLimit(clientId: string, sender: string): boolean {
     const now = Date.now();
     for (const [key, value] of requestCounts) {
         if (now >= value.resetAt) requestCounts.delete(key);
     }
-    // Limit the authenticated credential as well as the claimed sender so a
-    // caller cannot bypass the limit by rotating sender addresses.
-    return consumeRateLimit("credential", now) && consumeRateLimit(`sender:${sender}`, now);
+    const keys = [`client:${clientId}`, `sender:${sender}`];
+    if (!keys.every((key) => canConsume(key, now))) return false;
+    for (const key of keys) consume(key, now);
+    return true;
 }
 
 function validateTransactionKind(tx: Transaction): void {
@@ -92,35 +154,52 @@ function validateTransactionKind(tx: Transaction): void {
         // cannot transfer or split the sponsor's GasCoin.
         if (command.$kind !== "MoveCall") throw new Error("Transaction command is not allowed");
         const moveCall = command.MoveCall;
-        const target = `${moveCall.package}::${moveCall.module}::${moveCall.function}`;
+        const target = normalizeMoveTarget(
+            `${moveCall.package}::${moveCall.module}::${moveCall.function}`,
+        );
         if (!allowedMoveCalls.has(target)) throw new Error(`Move call is not allowed: ${target}`);
         if (moveCall.arguments.some((argument) => argument.$kind === "GasCoin")) {
             throw new Error("Move calls cannot use the sponsor gas coin");
         }
+        // An allowlisted generic function still reaches arbitrary code through
+        // an attacker-chosen type argument, so bound and allowlist them too.
+        if (moveCall.typeArguments.length > MAX_TYPE_ARGUMENTS) {
+            throw new Error("Move call has too many type arguments");
+        }
+        for (const typeArgument of moveCall.typeArguments) {
+            if (!allowedTypeArguments.has(normalizeStructTag(typeArgument))) {
+                throw new Error(`Type argument is not allowed: ${typeArgument}`);
+            }
+        }
     }
 }
 
+// TODO(verify): confirm the core API epoch accessor against the installed types.
+async function getCurrentEpoch(): Promise<bigint> {
+    const { epoch } = await client.core.getCurrentEpoch();
+    return BigInt(epoch.epochId);
+}
+
 async function refreshGasCoin(gasCoinId: string): Promise<void> {
-    const coinObj = await client.getObject({ id: gasCoinId, options: { showOwner: true } });
-    const owner = coinObj.data?.owner;
-    if (
-        !coinObj.data ||
-        owner === null ||
-        typeof owner !== "object" ||
-        !("AddressOwner" in owner) ||
-        normalizeSuiAddress(owner.AddressOwner) !== sponsorAddress
-    ) {
+    // TODO(verify): confirm getObject include flags and the owner discriminant.
+    const { object } = await client.core.getObject({
+        objectId: gasCoinId,
+        include: { content: true },
+    });
+    if (!object || normalizeSuiAddress(object.owner?.AddressOwner ?? "") !== sponsorAddress) {
         pool.discard(gasCoinId);
         return;
     }
-    pool.release(gasCoinId, coinObj.data.version, coinObj.data.digest);
+    pool.release(gasCoinId, object.version, object.digest, BigInt(object.balance ?? 0n));
 }
 
 // docs::#sponsor-endpoint
 app.post("/sponsor", async (req, res) => {
     let gasCoinId: string | undefined;
+    let signed = false;
     try {
-        if (!authenticate(req)) {
+        const clientId = authenticate(req);
+        if (!clientId) {
             res.status(401).json({ error: "Authentication required" });
             return;
         }
@@ -134,7 +213,7 @@ app.post("/sponsor", async (req, res) => {
             throw new Error("Invalid transaction bytes or sender");
         }
         const normalizedSender = normalizeSuiAddress(sender);
-        if (!enforceRateLimit(normalizedSender)) {
+        if (!enforceRateLimit(clientId, normalizedSender)) {
             res.status(429).json({ error: "Sponsorship rate limit exceeded" });
             return;
         }
@@ -150,9 +229,8 @@ app.post("/sponsor", async (req, res) => {
         }
         gasCoinId = gasCoin.objectId;
 
-        const { epoch } = await client.getLatestSuiSystemState();
-        const expirationEpoch = BigInt(epoch);
-        tx.setExpiration({ Epoch: epoch });
+        const expirationEpoch = await getCurrentEpoch();
+        tx.setExpiration({ Epoch: Number(expirationEpoch) });
         tx.setGasOwner(sponsorAddress);
         tx.setGasBudget(GAS_BUDGET);
         tx.setGasPayment([
@@ -160,15 +238,22 @@ app.post("/sponsor", async (req, res) => {
         ]);
 
         const bytes = await tx.build({ client });
-        const dryRun = await client.dryRunTransactionBlock({ transactionBlock: bytes });
-        if (dryRun.effects.status.status !== "success") {
+        // TODO(verify): confirm simulateTransaction's request and result shape.
+        const simulation = await client.core.simulateTransaction({ transaction: bytes });
+        if (!simulation.transaction.effects.status.success) {
             throw new Error(
-                `Transaction dry run failed: ${dryRun.effects.status.error ?? "unknown error"}`,
+                `Transaction simulation failed: ${
+                    simulation.transaction.effects.status.error ?? "unknown error"
+                }`,
             );
         }
 
         const expectedDigest = TransactionDataBuilder.getDigestFromBytes(bytes);
         const sponsorSig = await sponsor.signTransaction(bytes);
+        // Past this point a valid signature exists for this coin version. The
+        // error path must not release the coin, or a later request would sign a
+        // second transaction against the same version and one of them dies.
+        signed = true;
         pendingSponsorships.set(gasCoin.objectId, {
             expectedDigest,
             coinVersionAtSponsorship: gasCoin.version,
@@ -183,7 +268,7 @@ app.post("/sponsor", async (req, res) => {
             digest: expectedDigest,
         });
     } catch (error) {
-        if (gasCoinId) pool.release(gasCoinId);
+        if (gasCoinId && !signed) pool.release(gasCoinId);
         res.status(400).json({ error: (error as Error).message });
     }
 });
@@ -211,6 +296,7 @@ app.post("/sponsor/confirm", async (req, res) => {
     // the same coin twice or delete a newer reservation for the same coin ID.
     claimedSponsorships.add(gasCoinId);
     try {
+        // TODO(verify): confirm waitForTransaction accepts a bare digest.
         await client.waitForTransaction({ digest: pending.expectedDigest });
         if (pendingSponsorships.get(gasCoinId) !== pending) throw new Error("Reservation changed");
         pendingSponsorships.delete(gasCoinId);
@@ -229,8 +315,7 @@ app.post("/sponsor/confirm", async (req, res) => {
 
 // docs::#reservation-reconciliation
 async function reconcileReservations(): Promise<void> {
-    const { epoch } = await client.getLatestSuiSystemState();
-    const currentEpoch = BigInt(epoch);
+    const currentEpoch = await getCurrentEpoch();
 
     for (const [gasCoinId, pending] of pendingSponsorships) {
         if (claimedSponsorships.has(gasCoinId)) continue;
@@ -238,7 +323,9 @@ async function reconcileReservations(): Promise<void> {
         try {
             let releasable = false;
             try {
-                await client.getTransactionBlock({ digest: pending.expectedDigest });
+                // TODO(verify): confirm getTransaction's not-found behavior;
+                // if it resolves with a $kind instead of throwing, branch on that.
+                await client.core.getTransaction({ digest: pending.expectedDigest });
                 releasable = true;
             } catch {
                 releasable = currentEpoch > pending.expiresAfterEpoch;
