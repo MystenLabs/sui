@@ -11,13 +11,11 @@ use diesel::QueryDsl;
 use prost_types::FieldMask;
 use sui_indexer_alt_schema::schema::kv_transactions;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
-use sui_kvstore::TransactionData;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::digests::TransactionDigest;
 
-use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::ChunkedLoader;
@@ -66,29 +64,6 @@ impl Loader<TransactionKey> for PgReader {
                 let slice: &[u8] = key.0.as_ref();
                 Some((*key, digest_to_stored.get(slice).cloned()?))
             })
-            .collect())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<TransactionKey> for BigtableReader {
-    type Value = TransactionData;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[TransactionKey],
-    ) -> Result<HashMap<TransactionKey, Self::Value>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let digests: Vec<_> = keys.iter().map(|k| k.0).collect();
-        Ok(self
-            .transactions(&digests)
-            .await?
-            .into_iter()
-            .map(|t| (TransactionKey(t.digest), t))
             .collect())
     }
 }
@@ -190,29 +165,6 @@ impl Loader<TransactionTimestampKey> for PgReader {
                 let slice: &[u8] = key.0.as_ref();
                 Some((*key, *digest_to_timestamp.get(slice)? as u64))
             })
-            .collect())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<TransactionTimestampKey> for BigtableReader {
-    type Value = u64;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[TransactionTimestampKey],
-    ) -> Result<HashMap<TransactionTimestampKey, Self::Value>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let digests: Vec<_> = keys.iter().map(|k| k.0).collect();
-        Ok(self
-            .transaction_timestamps(&digests)
-            .await?
-            .into_iter()
-            .map(|(digest, timestamp_ms)| (TransactionTimestampKey(digest), timestamp_ms))
             .collect())
     }
 }
