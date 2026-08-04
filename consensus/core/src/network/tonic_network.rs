@@ -150,6 +150,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     Ok(response) => Some(ExtendedSerializedBlock {
                         block: response.block,
                         excluded_ancestors: response.excluded_ancestors,
+                        minimal: response.minimal_block,
                     }),
                     Err(e) => {
                         debug!("Network error received from {}: {e:?}", peer);
@@ -581,6 +582,7 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
         let block = ExtendedSerializedBlock {
             block,
             excluded_ancestors: vec![],
+            minimal: None,
         };
         self.service()?
             .handle_send_block(peer_index, block)
@@ -617,16 +619,35 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 return Err(tonic::Status::invalid_argument("Missing request"));
             }
         };
+        let context = self.context.clone();
+        let subscriber_hostname = context.committee.authority(peer_index).hostname.clone();
         let stream = self
             .service()?
             .handle_subscribe_blocks(peer_index, first_request.last_received_round)
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?
-            .map(|block| {
-                Ok(SubscribeBlocksResponse {
-                    block: block.block,
+            .map(move |block| {
+                let has_minimal = block.minimal.is_some();
+                let response = SubscribeBlocksResponse {
+                    block: if has_minimal {
+                        Bytes::new()
+                    } else {
+                        block.block
+                    },
                     excluded_ancestors: block.excluded_ancestors,
-                })
+                    minimal_block: block.minimal,
+                };
+                // Pre-compression payload bytes by form; zstd applies below this layer.
+                context
+                    .metrics
+                    .node_metrics
+                    .subscribe_blocks_response_bytes
+                    .with_label_values(&[
+                        subscriber_hostname.as_str(),
+                        if has_minimal { "minimal" } else { "full" },
+                    ])
+                    .inc_by(prost::Message::encoded_len(&response) as u64);
+                Ok(response)
             });
         let rate_limited_stream =
             tokio_stream::StreamExt::throttle(stream, self.context.parameters.min_round_delay / 2)
@@ -1379,6 +1400,10 @@ pub(crate) struct SubscribeBlocksResponse {
     // Serialized BlockRefs that are excluded from the blocks ancestors.
     #[prost(bytes = "vec", repeated, tag = "2")]
     excluded_ancestors: Vec<Vec<u8>>,
+    // Minimal encoding of the block (see minimal_block.rs). When set, `block` is empty
+    // and the receiver reconstructs the full serialized block from local DAG state.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    minimal_block: Option<Bytes>,
 }
 
 #[derive(Clone, prost::Message)]

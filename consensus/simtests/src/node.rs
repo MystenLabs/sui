@@ -126,6 +126,16 @@ impl AuthorityNode {
         }
     }
 
+    /// The node's metrics registry, for test assertions on internal behavior.
+    pub fn registry(&self) -> Registry {
+        let inner = self.inner.lock();
+        if let Some(inner) = inner.as_ref() {
+            inner.registry()
+        } else {
+            panic!("Node not initialised");
+        }
+    }
+
     pub fn commit_consumer_receiver(&self) -> UnboundedReceiver<CommittedSubDag> {
         let mut commit_consumer_receiver_lock = self.commit_consumer_receiver.lock();
         commit_consumer_receiver_lock
@@ -177,6 +187,7 @@ pub(crate) struct AuthorityNodeInner {
     consensus_authority: Option<ConsensusAuthority>,
     commit_receiver: ArcSwapOption<UnboundedReceiver<CommittedSubDag>>,
     commit_consumer_monitor: Arc<CommitConsumerMonitor>,
+    registry: Registry,
 }
 
 #[derive(Debug)]
@@ -253,7 +264,7 @@ impl AuthorityNodeInner {
                 let startup_sender_clone = startup_sender.clone();
 
                 async move {
-                    let (consensus_authority, commit_receiver, commit_consumer_monitor) =
+                    let (consensus_authority, commit_receiver, commit_consumer_monitor, registry) =
                         super::node::make_authority(config).await;
 
                     startup_sender_clone.send(true).ok();
@@ -261,6 +272,7 @@ impl AuthorityNodeInner {
                         consensus_authority,
                         commit_receiver,
                         commit_consumer_monitor,
+                        registry,
                     ))));
 
                     // run until canceled
@@ -280,7 +292,7 @@ impl AuthorityNodeInner {
             panic!("Components should be initialised by now");
         };
 
-        let Ok((consensus_authority, commit_receiver, commit_consumer_monitor)) =
+        let Ok((consensus_authority, commit_receiver, commit_consumer_monitor, registry)) =
             Arc::try_unwrap(init_tuple)
         else {
             panic!("commit receiver still in use");
@@ -292,6 +304,7 @@ impl AuthorityNodeInner {
             consensus_authority: Some(consensus_authority),
             commit_receiver: ArcSwapOption::new(Some(Arc::new(commit_receiver))),
             commit_consumer_monitor,
+            registry,
         }
     }
 
@@ -324,6 +337,10 @@ impl AuthorityNodeInner {
         self.commit_consumer_monitor.clone()
     }
 
+    pub fn registry(&self) -> Registry {
+        self.registry.clone()
+    }
+
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
         self.consensus_authority
             .as_ref()
@@ -338,6 +355,7 @@ pub(crate) async fn make_authority(
     ConsensusAuthority,
     UnboundedReceiver<CommittedSubDag>,
     Arc<CommitConsumerMonitor>,
+    Registry,
 ) {
     let Config {
         authority_index,
@@ -382,13 +400,18 @@ pub(crate) async fn make_authority(
         transaction_verifier,
         None,
         commit_consumer,
-        registry,
+        registry.clone(),
         boot_counter,
         None,
     )
     .await;
 
-    (authority, commit_receiver, commit_consumer_monitor)
+    (
+        authority,
+        commit_receiver,
+        commit_consumer_monitor,
+        registry,
+    )
 }
 
 pub fn default_parameters() -> Parameters {

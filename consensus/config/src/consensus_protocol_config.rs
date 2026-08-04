@@ -31,6 +31,10 @@ pub struct ConsensusProtocolConfig {
     leader_schedule_window_size: u32,
     /// Number of commit indices that use the same Mysticeti v3 leader schedule.
     leader_schedule_update_interval: u32,
+    /// Whether validators emit minimal (ancestor-compressed) blocks on the block
+    /// subscription stream. Receivers always accept both full and minimal forms,
+    /// independent of this flag; it gates emission only.
+    minimal_block_propagation_enabled: bool,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -48,6 +52,7 @@ impl Default for ConsensusProtocolConfig {
             enable_v3: false,
             leader_schedule_window_size: 600,
             leader_schedule_update_interval: 60,
+            minimal_block_propagation_enabled: false,
         }
     }
 }
@@ -66,6 +71,7 @@ impl ConsensusProtocolConfig {
         enable_v3: bool,
         leader_schedule_window_size: u32,
         leader_schedule_update_interval: u32,
+        minimal_block_propagation_enabled: bool,
     ) -> Self {
         Self {
             protocol_version,
@@ -80,6 +86,7 @@ impl ConsensusProtocolConfig {
             enable_v3,
             leader_schedule_window_size,
             leader_schedule_update_interval,
+            minimal_block_propagation_enabled,
         }
     }
 
@@ -99,6 +106,7 @@ impl ConsensusProtocolConfig {
             enable_v3: false,
             leader_schedule_window_size: 600,
             leader_schedule_update_interval: 60,
+            minimal_block_propagation_enabled: true,
         }
     }
 
@@ -144,6 +152,10 @@ impl ConsensusProtocolConfig {
         self.enable_v3
     }
 
+    pub fn minimal_block_propagation_enabled(&self) -> bool {
+        self.minimal_block_propagation_enabled
+    }
+
     // Clamped to ≥ 1: downstream code (LeaderScheduleV3) uses these as window
     // sizes and modulus operands, so a 0 config would divide by zero or be
     // an empty window. Treat 0 as "effectively 1" instead of panicking.
@@ -187,6 +199,10 @@ impl ConsensusProtocolConfig {
 
     pub fn set_enable_v3_for_testing(&mut self, val: bool) {
         self.enable_v3 = val;
+    }
+
+    pub fn set_minimal_block_propagation_enabled_for_testing(&mut self, val: bool) {
+        self.minimal_block_propagation_enabled = val;
     }
 
     pub fn set_leader_schedule_window_size_for_testing(&mut self, val: u32) {

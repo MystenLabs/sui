@@ -563,6 +563,7 @@ mod tests {
 
     fn block_for_round(round: Round) -> ExtendedSerializedBlock {
         ExtendedSerializedBlock {
+            minimal: None,
             block: Bytes::from(vec![round as u8; 16]),
             excluded_ancestors: vec![],
         }
