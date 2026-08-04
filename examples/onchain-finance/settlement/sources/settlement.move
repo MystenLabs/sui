@@ -4,6 +4,7 @@
 module example::settlement;
 
 use std::ascii::String;
+use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::event;
 
@@ -31,7 +32,8 @@ public fun settle<T>(
     let amount = payment.value();
     assert!(amount >= required_amount, EPaymentTooSmall);
 
-    let coin_type = std::type_name::with_defining_ids<T>().into_string().to_ascii();
+    // `into_string` already yields an `ascii::String`; no further conversion is needed.
+    let coin_type = type_name::with_defining_ids<T>().into_string();
     balance::send_funds(payment, recipient);
     event::emit(PaymentSettled<T> {
         payer: ctx.sender(),

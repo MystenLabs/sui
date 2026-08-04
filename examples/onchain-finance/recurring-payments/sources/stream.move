@@ -1,24 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs::#stream
 module example::stream;
 
-use sui::balance::Balance;
+use sui::balance::{Self, Balance};
 use sui::clock::Clock;
-use sui::coin::{Self, Coin};
-use sui::sui::SUI;
+use sui::event;
 
-#[error]
+#[error(code = 0)]
 const EStreamNotStarted: vector<u8> = b"Stream has not started yet";
-#[error]
+#[error(code = 1)]
 const ENotRecipient: vector<u8> = b"Only the recipient can claim";
-#[error]
+#[error(code = 2)]
 const ENotSender: vector<u8> = b"Only the sender can cancel";
-#[error]
+#[error(code = 3)]
 const ENothingToClaim: vector<u8> = b"No claimable amount available";
+#[error(code = 4)]
+const EInvalidDuration: vector<u8> = b"End time must be after start time";
 
-public struct StreamPayment has key {
+public struct StreamCreated<phantom T> has copy, drop {
+    stream_id: ID,
+    sender: address,
+    recipient: address,
+    total_amount: u64,
+    start_time_ms: u64,
+    end_time_ms: u64,
+}
+
+public struct StreamClaimed<phantom T> has copy, drop {
+    stream_id: ID,
+    recipient: address,
+    amount: u64,
+    claimed_to_date: u64,
+}
+
+public struct StreamCancelled<phantom T> has copy, drop {
+    stream_id: ID,
+    sender: address,
+    recipient: address,
+    paid_to_recipient: u64,
+    refunded_to_sender: u64,
+}
+
+// docs::#stream
+/// A linear vesting stream. The stream holds custody of the funds, so the
+/// sender cannot spend them elsewhere once the stream is created.
+public struct StreamPayment<phantom T> has key {
     id: UID,
     sender: address,
     recipient: address,
@@ -26,98 +53,104 @@ public struct StreamPayment has key {
     claimed_amount: u64,
     start_time_ms: u64,
     end_time_ms: u64,
-    balance: Balance<SUI>,
+    funds: Balance<T>,
 }
 
-#[error]
-const EInvalidDuration: vector<u8> = b"End time must be after start time";
-
 /// Create a new stream. Funds are locked until the recipient claims them.
-public fun create(
-    coin: Coin<SUI>,
+public fun create<T>(
+    funds: Balance<T>,
     recipient: address,
     start_time_ms: u64,
     end_time_ms: u64,
     ctx: &mut TxContext,
 ) {
     assert!(end_time_ms > start_time_ms, EInvalidDuration);
-    let total = coin.value();
-    let stream = StreamPayment {
+
+    let sender = ctx.sender();
+    let total_amount = funds.value();
+    let stream = StreamPayment<T> {
         id: object::new(ctx),
-        sender: ctx.sender(),
+        sender,
         recipient,
-        total_amount: total,
+        total_amount,
         claimed_amount: 0,
         start_time_ms,
         end_time_ms,
-        balance: coin.into_balance(),
+        funds,
     };
+
+    event::emit(StreamCreated<T> {
+        stream_id: object::id(&stream),
+        sender,
+        recipient,
+        total_amount,
+        start_time_ms,
+        end_time_ms,
+    });
     transfer::share_object(stream);
 }
 
-/// Claim the unlocked portion of the stream.
-public fun claim(stream: &mut StreamPayment, clock: &Clock, ctx: &mut TxContext): Coin<SUI> {
+/// Amount vested as of `now_ms`, clamped to the stream window.
+fun vested_amount<T>(stream: &StreamPayment<T>, now_ms: u64): u64 {
+    if (now_ms <= stream.start_time_ms) {
+        0
+    } else if (now_ms >= stream.end_time_ms) {
+        stream.total_amount
+    } else {
+        let elapsed = now_ms - stream.start_time_ms;
+        let duration = stream.end_time_ms - stream.start_time_ms;
+        (((stream.total_amount as u128) * (elapsed as u128) / (duration as u128)) as u64)
+    }
+}
+
+/// Claim the vested-but-unclaimed portion into the recipient's address balance.
+public fun claim<T>(stream: &mut StreamPayment<T>, clock: &Clock, ctx: &TxContext) {
     assert!(ctx.sender() == stream.recipient, ENotRecipient);
 
     let now = clock.timestamp_ms();
     assert!(now >= stream.start_time_ms, EStreamNotStarted);
 
-    let elapsed = if (now >= stream.end_time_ms) {
-        stream.end_time_ms - stream.start_time_ms
-    } else {
-        now - stream.start_time_ms
-    };
-
-    let total_duration = stream.end_time_ms - stream.start_time_ms;
-    let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
-    let claimable = (vested as u64) - stream.claimed_amount;
-
+    let claimable = stream.vested_amount(now) - stream.claimed_amount;
     assert!(claimable > 0, ENothingToClaim);
 
     stream.claimed_amount = stream.claimed_amount + claimable;
-    coin::from_balance(stream.balance.split(claimable), ctx)
+    balance::send_funds(stream.funds.split(claimable), stream.recipient);
+    event::emit(StreamClaimed<T> {
+        stream_id: object::id(stream),
+        recipient: stream.recipient,
+        amount: claimable,
+        claimed_to_date: stream.claimed_amount,
+    });
 }
 
 /// Cancel the stream. Vested-but-unclaimed funds go to the recipient;
-/// unvested funds return to the sender.
-public fun cancel(stream: StreamPayment, clock: &Clock, ctx: &mut TxContext) {
+/// the unvested remainder returns to the sender.
+public fun cancel<T>(stream: StreamPayment<T>, clock: &Clock, ctx: &TxContext) {
     assert!(ctx.sender() == stream.sender, ENotSender);
 
-    let now = clock.timestamp_ms();
-    let elapsed = if (now >= stream.end_time_ms) {
-        stream.end_time_ms - stream.start_time_ms
-    } else if (now > stream.start_time_ms) {
-        now - stream.start_time_ms
-    } else {
-        0
+    let owed_to_recipient = stream.vested_amount(clock.timestamp_ms()) - stream.claimed_amount;
+
+    let StreamPayment { id, sender, recipient, mut funds, .. } = stream;
+    let stream_id = id.to_inner();
+
+    if (owed_to_recipient > 0) {
+        balance::send_funds(funds.split(owed_to_recipient), recipient);
     };
 
-    let total_duration = stream.end_time_ms - stream.start_time_ms;
-    let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
-    let owed_to_recipient = (vested as u64) - stream.claimed_amount;
+    let refunded_to_sender = funds.value();
+    if (refunded_to_sender > 0) {
+        balance::send_funds(funds, sender);
+    } else {
+        funds.destroy_zero();
+    };
 
-    let StreamPayment {
-        id,
+    event::emit(StreamCancelled<T> {
+        stream_id,
         sender,
         recipient,
-        mut balance,
-        ..,
-    } = stream;
-
-    // Transfer vested-but-unclaimed funds to recipient
-    if (owed_to_recipient > 0) {
-        let recipient_coin = coin::from_balance(balance.split(owed_to_recipient), ctx);
-        transfer::public_transfer(recipient_coin, recipient);
-    };
-
-    // Return unvested remainder to sender
-    if (balance.value() > 0) {
-        let sender_coin = coin::from_balance(balance, ctx);
-        transfer::public_transfer(sender_coin, sender);
-    } else {
-        balance.destroy_zero();
-    };
-
+        paid_to_recipient: owed_to_recipient,
+        refunded_to_sender,
+    });
     id.delete();
 }
 // docs::/#stream

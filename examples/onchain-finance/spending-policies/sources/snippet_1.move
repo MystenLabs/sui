@@ -5,6 +5,7 @@
 module example::spending_mandate_tests;
 
 use example::spending_mandate::{create_mandate, execute_spend, remaining_cap, SpendingMandate};
+use std::unit_test::assert_eq;
 use sui::balance;
 use sui::clock;
 use sui::sui::SUI;
@@ -31,7 +32,7 @@ fun test_spend_within_limits() {
     let mut mandate = scenario.take_from_sender<SpendingMandate<SUI>>();
     let clock = clock::create_for_testing(scenario.ctx());
     execute_spend(&mut mandate, 5_000_000_000, recipient, &clock, scenario.ctx());
-    assert!(remaining_cap(&mandate) == 95_000_000_000);
+    assert_eq!(remaining_cap(&mandate), 95_000_000_000);
 
     test_scenario::return_to_sender(&scenario, mandate);
     clock.destroy_for_testing();
