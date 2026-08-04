@@ -647,7 +647,7 @@ $ buf curl --protocol grpc \
 </TabItem>
 </Tabs>
 
-Subscriptions begin at the current tip of the chain. The first frame is a progress-only frame (no transaction payload) that establishes the stream's start position. To avoid gaps between historical data and the live stream, see [Backfill and subscribe without gaps](#backfill-and-subscribe-without-gaps).
+Subscriptions begin at the current tip of the chain. A filtered subscription starts with a progress-only frame (no transaction payload) that establishes the stream's start position. An unfiltered subscription can start with a transaction payload, so do not discard its first frame. To avoid gaps between historical data and the live stream, see [Backfill and subscribe without gaps](#backfill-and-subscribe-without-gaps).
 
 ## Look up a single checkpoint
 

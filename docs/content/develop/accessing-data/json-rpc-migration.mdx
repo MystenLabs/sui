@@ -201,18 +201,7 @@ Not all tools in the Sui ecosystem require manual migration:
 
 - **Sui CLI**: No changes needed. The CLI already uses gRPC internally. The `rpc` field in `~/.sui/sui_config/client.yaml` points at the same `fullnode.*.sui.io:443` URLs, which serve both JSON-RPC and gRPC.
 
-- **dApp Kit** (`@mysten/dapp-kit-react`, `@mysten/dapp-kit-core`): Replace `SuiClient` with `SuiGrpcClient` in the `createClient` factory. All hooks and transaction methods work identically with either client.
-
-  ```ts
-  // Before (JSON-RPC)
-  import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-  createClient: (network) => new SuiClient({ url: getFullnodeUrl(network) })
-
-  // After (gRPC)
-  import { SuiGrpcClient } from '@mysten/sui/grpc';
-  import { getFullnodeUrl } from '@mysten/sui/client';
-  createClient: (network) => new SuiGrpcClient({ network, baseUrl: getFullnodeUrl(network) })
-  ```
+- **dApp Kit**: The currently published `@mysten/dapp-kit` client factory requires `SuiJsonRpcClient` and does not accept `SuiGrpcClient`. Continue using its JSON-RPC client until a dApp Kit release explicitly adds transport-agnostic client support; do not substitute `SuiGrpcClient` in `createClient`.
 
 - **Kiosk SDK** (`@mysten/kiosk`): No changes needed. Kiosk operations are PTB move calls that you build with the `Transaction` class and execute through your app's Sui client. Swap the app's client to `SuiGrpcClient` and all Kiosk code works unchanged.
 
