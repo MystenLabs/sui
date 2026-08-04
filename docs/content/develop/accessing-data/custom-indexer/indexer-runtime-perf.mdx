@@ -98,6 +98,9 @@ let ingestion_config = IngestionConfig {
 
     // Timeout for streaming operations (peek/next) in ms (default: 5000)
     streaming_statement_timeout_ms: 10000,
+
+    // Minimum boundary (in checkpoints) for an ingestion cohort (default: 25000)
+    min_cohort_boundary: 25000,
 };
 ```
 
@@ -107,6 +110,7 @@ let ingestion_config = IngestionConfig {
 - `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries.
 - `streaming_backoff_initial_batch_size`: Number of checkpoints to process through polling after the initial streaming failure. Lower values restore streaming faster, higher values reduce connection attempts.
 - `streaming_backoff_max_batch_size`: Maximum checkpoints to process through polling after repeated failures. The batch size increases exponentially from the initial size up to this maximum. Higher values reduce connection attempts during prolonged outages.
+- `min_cohort_boundary`: Minimum absolute distance from the tip for an ingestion cohort's boundary. Pipelines are grouped into cohorts based on how far behind the tip they are. The closest pipeline seeds a cohort whose boundary is `max(2 * its_distance_from_tip, min_cohort_boundary)`, and all pipelines within that boundary join the same cohort. A higher value prevents nearly caught-up pipelines from being fragmented into many small cohorts, reducing ingestion overhead. A lower value gives finer-grained grouping when pipelines have widely different lag. Default: `25000`.
 - `streaming_connection_timeout_ms`: Time to wait for streaming connection establishment. Increase for slower networks.
 - `streaming_statement_timeout_ms`: Time to wait for streaming data operations. Increase if checkpoints are large or network is slow.
 

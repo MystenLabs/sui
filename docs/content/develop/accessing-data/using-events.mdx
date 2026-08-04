@@ -127,7 +127,7 @@ gRPC provides 3 ways to access events:
 To combine historical and real-time data, open a `SubscribeEvents` stream first, note the first `Watermark` you receive, then backfill with `ListEvents` up to that watermark. Once the backfill is complete, begin consuming from the already-open subscription. This avoids missing data between the final list response and the subscription start. See the [Event indexer example](/getting-started/examples/event-indexer) for a worked example.
 
 :::info
-The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents` or `SubscribeEvents`. Use the generated proto client directly until the SDK adds wrappers, or use `grpcurl` / Buf CLI. The `GetTransaction` example below uses the existing SDK.
+Use `client.listEvents()` (v2.23.1+) for common paginated event queries. For checkpoint-bounded `ListEvents` queries, use the proto client (`client.ledgerService.listEvents()`) as shown below. The `GetTransaction` example uses the SDK's `client.core.getTransaction()` method.
 :::
 
 ```ts
