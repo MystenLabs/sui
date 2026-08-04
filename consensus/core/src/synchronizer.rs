@@ -59,6 +59,38 @@ const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 /// How long commit must be stalled before periodic sync kicks in as fallback.
 const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Fraction of the exact-request budget reserved for the oldest refs, so a node
+/// genuinely catching up still repairs its history instead of only chasing the tip.
+const EXACT_OLDEST_SHARE: usize = 4;
+
+/// Chooses which registered exact requests to fetch in one scheduler pass.
+///
+/// `pending` is ordered by `BlockRef`, which sorts on round first, so a plain
+/// prefix takes the OLDEST rounds. That is the wrong end once the set outgrows the
+/// budget: the refs that unblock current frontiers are the newest, and a ref that
+/// is never selected keeps its parked block waiting until GC no matter how many
+/// passes run — the prefix does not rotate. Selecting oldest-first cost a 125-node
+/// testnet ~95% of its registered refs at a 68K backlog, and took the median parked
+/// block from 4 missing frontier slots to 32.
+///
+/// Most of the budget therefore goes to the newest refs, with a reserved share for
+/// the oldest so a lagging node still makes backward progress rather than starving
+/// the history it needs to commit.
+fn select_exact_requests(pending: &BTreeSet<BlockRef>, budget: usize) -> Vec<BlockRef> {
+    if pending.len() <= budget {
+        return pending.iter().copied().collect();
+    }
+    let oldest_budget = budget / EXACT_OLDEST_SHARE;
+    let newest_budget = budget - oldest_budget;
+    let mut selected: Vec<BlockRef> = pending.iter().rev().copied().take(newest_budget).collect();
+    selected.extend(pending.iter().copied().take(oldest_budget));
+    // Restore ascending order: fetch requests are batched per authority downstream,
+    // and lowest-round-first within a batch is what lets ancestry repair progress.
+    selected.sort_unstable();
+    selected.dedup();
+    selected
+}
+
 struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
     block_refs: BTreeSet<BlockRef>,
@@ -1041,8 +1073,7 @@ where
         let pass_capacity =
             2 * MAX_PERIODIC_SYNC_PEERS * self.context.parameters.max_blocks_per_fetch;
         let exact_budget = pass_capacity / 2;
-        let exact_selected: Vec<BlockRef> =
-            pending_exact.iter().copied().take(exact_budget).collect();
+        let exact_selected = select_exact_requests(&pending_exact, exact_budget);
         let mut ordered_blocks = Vec::with_capacity(exact_selected.len() + missing_blocks.len());
         ordered_blocks.extend(exact_selected.iter().copied());
         ordered_blocks.extend(
@@ -1372,16 +1403,31 @@ where
                 break;
             };
             let peer_name = peer.hostname(&context);
-            // Fetch from the lowest round missing blocks to ensure progress.
-            // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
-            let block_refs = batch
-                .iter()
-                .flatten()
-                .cloned()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .take(context.parameters.max_blocks_per_fetch)
-                .collect::<BTreeSet<_>>();
+            // Take round-robin across this peer's authorities, preserving each
+            // authority's own order — registered exact requests first, then its
+            // lowest-round ordinary ancestors. Re-sorting the whole batch instead
+            // would truncate to the globally lowest rounds, which discards the
+            // exact requests selected for their recency and lets one lagging
+            // authority consume the entire per-peer budget. Each authority still
+            // gets its oldest blocks fetched first, so ancestry repair progresses.
+            let mut cursors: Vec<_> = batch.iter().map(|refs| refs.iter()).collect();
+            let mut block_refs = BTreeSet::new();
+            'fill: loop {
+                let mut progressed = false;
+                for cursor in &mut cursors {
+                    let Some(block_ref) = cursor.next() else {
+                        continue;
+                    };
+                    progressed = true;
+                    block_refs.insert(*block_ref);
+                    if block_refs.len() >= context.parameters.max_blocks_per_fetch {
+                        break 'fill;
+                    }
+                }
+                if !progressed {
+                    break;
+                }
+            }
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
             if let Some(blocks_guard) =
@@ -1505,7 +1551,7 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::{
             COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
-            InflightBlocksMap, Synchronizer,
+            InflightBlocksMap, Synchronizer, select_exact_requests,
         },
     };
     use crate::{
@@ -1513,6 +1559,77 @@ mod tests {
         peers_pool::PeersPool, round_tracker::RoundTracker,
         transaction_vote_tracker::TransactionVoteTracker,
     };
+
+    /// A parked minimal block is unblocked by fetching the ref it waits on, so a
+    /// backlog larger than one pass's budget must not permanently exclude the newest
+    /// refs — those are the ones holding up current frontiers, and a ref that is
+    /// never selected waits until GC no matter how many passes run.
+    ///
+    /// Shape taken from a 125-node testnet incident: ~12,000 registered refs spread
+    /// over a GC window of 60 rounds, against a production budget of 3,000.
+    #[tokio::test]
+    async fn exact_request_selection_reaches_recent_rounds() {
+        const AUTHORITIES: u32 = 131;
+        const GC_DEPTH: u32 = 60;
+        const TIP: u32 = 1_000;
+        // Production budget: 2 * MAX_PERIODIC_SYNC_PEERS * max_blocks_per_fetch / 2.
+        const BUDGET: usize = 3_000;
+
+        let mut pending = BTreeSet::new();
+        for round in (TIP - GC_DEPTH)..=TIP {
+            for authority in 0..AUTHORITIES {
+                pending.insert(BlockRef::new(
+                    round,
+                    AuthorityIndex::new_for_test(authority),
+                    BlockDigest::MIN,
+                ));
+            }
+        }
+        assert!(
+            pending.len() > BUDGET,
+            "test must exercise a backlog larger than the budget: {} refs vs budget {BUDGET}",
+            pending.len()
+        );
+
+        let selected = select_exact_requests(&pending, BUDGET);
+        assert_eq!(selected.len(), BUDGET, "the whole budget must be spent");
+        let highest_selected = selected
+            .iter()
+            .map(|block_ref| block_ref.round)
+            .max()
+            .expect("selection must not be empty");
+        let rounds_behind_tip = TIP - highest_selected;
+
+        // The newest rounds are what current frontiers wait on. Reaching them is
+        // what keeps park residency bounded; an oldest-first prefix never does,
+        // because the prefix does not rotate between passes.
+        assert!(
+            rounds_behind_tip <= 5,
+            "exact-request selection never reaches recent rounds: highest selected round is \
+             {highest_selected}, {rounds_behind_tip} rounds behind the tip of {TIP}. Refs \
+             registered above that round are not fetched by any pass and their parked blocks \
+             wait until GC."
+        );
+
+        // A node that is genuinely behind still has to repair its oldest history,
+        // so newest-first must not consume the entire budget.
+        let lowest_selected = selected
+            .iter()
+            .map(|block_ref| block_ref.round)
+            .min()
+            .expect("selection must not be empty");
+        assert_eq!(
+            lowest_selected,
+            TIP - GC_DEPTH,
+            "selection abandoned the oldest refs: a lagging node must keep repairing history"
+        );
+
+        // Selection is handed to per-authority batching, which relies on ascending order.
+        assert!(
+            selected.windows(2).all(|w| w[0] < w[1]),
+            "selection must be sorted and free of duplicates"
+        );
+    }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
     type FetchRequestResponse = (Vec<VerifiedBlock>, Option<Duration>);
