@@ -118,13 +118,12 @@ const client = new SuiGrpcClient({
 
 const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
 
-const { balance } = await client.core.getBalance({
+const { balance } = await client.getBalance({
 	owner: senderAddress,
 	coinType: USDC,
 });
 
 console.log(`Available USDC: ${balance.balance}`);
-// balance.coinBalance = coin objects, balance.addressBalance = accumulator
 ```
 
 ## Step 3: Build the transfer PTB
@@ -176,16 +175,15 @@ const finalBytes = fromBase64(sponsoredBytes);
 const userSig = await signer.signTransaction(finalBytes);
 
 // Submit with both signatures
-const result = await client.core.executeTransaction({
+const result = await client.executeTransaction({
 	transaction: finalBytes,
 	signatures: [userSig.signature, sponsorSignature],
-	include: { effects: true },
 });
 
 // Confirm to the gas station so it can release the coin.
-// Always confirm — even on failure — because gas is still charged.
-const digest =
-	result.$kind === 'Transaction' ? result.Transaction.digest : result.FailedTransaction.digest;
+// Always confirm, even on failure, because gas is still charged.
+const txResult = result.Transaction ?? result.FailedTransaction;
+const digest = txResult.digest;
 
 await fetch('https://your-gas-station.com/sponsor/confirm', {
 	method: 'POST',
@@ -209,7 +207,7 @@ Wait for finality and verify the transaction effects before showing success to t
 
 ```typescript
 if (result.$kind === 'FailedTransaction') {
-	console.error('Payment failed:', result.FailedTransaction.status.error?.message);
+	console.error('Payment failed:', result.FailedTransaction.effects.status.error);
 	// Show error UI
 } else {
 	// Wait for the transaction to be indexed
@@ -252,7 +250,7 @@ interface HistoryQueryResult {
 }
 
 const HISTORY_QUERY = `
-  query PaymentHistory($sender: SuiAddress!) {
+  query P2PPaymentHistory($sender: SuiAddress!) {
     address(address: $sender) {
       transactions(last: 20) {
         nodes {
@@ -298,7 +296,7 @@ The full flow in a single function:
 ```typescript
 async function sendPayment(
 	client: SuiGrpcClient,
-	signer: Signer,
+	signer: Keypair,
 	senderAddress: string,
 	recipientAddress: string,
 	amount: bigint,
@@ -314,10 +312,10 @@ async function sendPayment(
 	});
 
 	// Submit (SDK auto-detects gasless eligibility with gRPC)
-	const result = await signer.signAndExecuteTransaction({ transaction: tx, client });
+	const result = await client.signAndExecuteTransaction({ transaction: tx, signer });
 
 	if (result.$kind === 'FailedTransaction') {
-		throw new Error(`Payment failed: ${result.FailedTransaction.status.error?.message}`);
+		throw new Error(`Payment failed: ${result.FailedTransaction.effects.status.error}`);
 	}
 
 	// Wait for indexing

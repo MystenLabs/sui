@@ -38,10 +38,11 @@ const result = await client.executeTransaction({
 
 // Confirm to the gas station so it can release the coin.
 // Always confirm, even on failure, because gas is still charged.
+const txResult = result.Transaction ?? result.FailedTransaction;
 await fetch('https://your-gas-station.com/sponsor/confirm', {
 	method: 'POST',
 	headers: { 'Content-Type': 'application/json' },
-	body: JSON.stringify({ gasCoinId, digest: result.Transaction!.digest }),
+	body: JSON.stringify({ gasCoinId, digest: txResult.digest }),
 });
 // docs::/#sponsor-flow
 
