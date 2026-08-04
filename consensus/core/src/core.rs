@@ -837,6 +837,16 @@ impl Core {
 
             let commit: TrustedCommit = (*cert).clone();
 
+            // A certified commit must extend the local commit chain. A mismatch means
+            // local commits have diverged from the quorum-certified chain, which
+            // should be surfaced immediately instead of corrupting the commit chain.
+            assert_eq!(
+                commit.previous_digest(),
+                self.dag_state.read().last_commit_digest(),
+                "Certified commit {} does not chain onto the last local commit",
+                commit.reference(),
+            );
+
             // Certified commits are not decided locally — mark blocks
             // committed and build the sub-dag in one shot.
             let subdag = self
@@ -911,6 +921,7 @@ impl Core {
     ) -> ConsensusResult<()> {
         self.dag_state.write().add_commit(commit);
 
+        self.commit_observer.report_commit_metrics(&subdag);
         self.commit_observer.send_to_finalizer(subdag.clone())?;
 
         self.last_decided_leader = subdag.leader.into();
@@ -3082,6 +3093,222 @@ mod test {
             let commit = &commits[i - 6];
             assert_eq!(commit.reference().index, i as u32);
         }
+    }
+
+    #[tokio::test]
+    async fn try_commit_v3_local_commits() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+
+        let authority_index = AuthorityIndex::new_for_test(0);
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let mut core = core.core;
+
+        // Build a fully connected DAG and accept its blocks, without any commits yet.
+        let mut dag_builder = DagBuilder::new(core.context.clone());
+        dag_builder.layers(1..=12).build();
+        core.dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=12));
+
+        let committed = core.try_commit_v3().unwrap();
+
+        // With a fully connected DAG up to round 12, the direct rule can decide leaders
+        // up to round 11 (quorum of votes at leader round + 1), one commit per leader round.
+        assert_eq!(committed.len(), 11);
+        for (i, subdag) in committed.iter().enumerate() {
+            assert_eq!(subdag.commit_ref.index, (i + 1) as CommitIndex);
+            assert_eq!(subdag.leader.round, (i + 1) as Round);
+            assert!(subdag.decided_with_local_blocks);
+        }
+        assert_eq!(core.dag_state.read().last_commit_index(), 11);
+
+        // Re-running the commit rule must be a no-op.
+        assert!(core.try_commit_v3().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_certified_commits_v3() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        });
+
+        let authority_index = AuthorityIndex::new_for_test(0);
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let store = core.store.clone();
+        let mut core = core.core;
+
+        let mut dag_builder = DagBuilder::new(core.context.clone());
+        dag_builder.layers(1..=12).build();
+
+        // Certified commits for leader rounds 1..=5. Their blocks have not been
+        // accepted locally and are provided by the certified commits themselves.
+        let certified_commits = dag_builder
+            .get_sub_dag_and_certified_commits(1..=5)
+            .into_iter()
+            .map(|(_, c)| c)
+            .collect::<Vec<_>>();
+
+        core.add_certified_commits(CertifiedCommits::new(certified_commits.clone(), vec![]))
+            .expect("Should not fail");
+
+        assert_eq!(core.dag_state.read().last_commit_index(), 5);
+        assert_eq!(
+            core.context
+                .metrics
+                .node_metrics
+                .core_certified_commits_processed
+                .with_label_values(&["committed"])
+                .get(),
+            5
+        );
+
+        // The certified commits should be stored as-is.
+        core.dag_state.write().flush();
+        let commits = store.scan_commits((1..=5).into()).unwrap();
+        assert_eq!(commits.len(), 5);
+        for (i, commit) in commits.iter().enumerate() {
+            assert_eq!(commit.reference(), certified_commits[i].reference());
+        }
+
+        // Accept the rest of the DAG. The local commit rule should continue from the
+        // certified commits and commit the leaders of rounds 6..=11.
+        core.dag_state
+            .write()
+            .accept_blocks(dag_builder.blocks(1..=12));
+        let committed = core.try_commit_v3().unwrap();
+        assert!(!committed.is_empty());
+        assert!(committed.iter().all(|s| s.decided_with_local_blocks));
+        assert_eq!(committed.last().unwrap().commit_ref.index, 11);
+        assert_eq!(core.dag_state.read().last_commit_index(), 11);
+
+        // Re-sending the same certified commits should skip all of them.
+        core.add_certified_commits(CertifiedCommits::new(certified_commits, vec![]))
+            .expect("Should not fail");
+        assert_eq!(core.dag_state.read().last_commit_index(), 11);
+        assert_eq!(
+            core.context
+                .metrics
+                .node_metrics
+                .core_certified_commits_processed
+                .with_label_values(&["skipped"])
+                .get(),
+            5
+        );
+    }
+
+    /// Builds a Core against the provided store, for tests exercising restart
+    /// and recovery on the v3 path. The returned receivers must be kept alive
+    /// for the lifetime of Core.
+    async fn build_v3_core(
+        context: Arc<Context>,
+        store: Arc<MemStore>,
+    ) -> (
+        Core,
+        Arc<RwLock<DagState>>,
+        broadcast::Receiver<ExtendedBlock>,
+        UnboundedReceiver<CommittedSubDag>,
+    ) {
+        // Contexts created with the same committee size share deterministic keys.
+        let (_, mut key_pairs) = Context::new_for_test(context.committee.size());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+        let (_transaction_client, tx_receiver, priority_tx_receiver) =
+            TransactionClient::new(context.clone());
+        let transaction_pool = Arc::new(TransactionConsumerPool::new(TransactionConsumer::new(
+            tx_receiver,
+            priority_tx_receiver,
+            context.clone(),
+        )));
+        let transaction_vote_tracker = TransactionVoteTracker::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            dag_state.clone(),
+        );
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        // Need at least one subscriber to the block broadcast channel.
+        let block_receiver = signal_receivers.block_broadcast_receiver();
+        let (commit_consumer, commit_receiver) = CommitConsumerArgs::new(0, 0);
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            transaction_vote_tracker.clone(),
+        )
+        .await;
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let core = Core::new_validator(
+            context.clone(),
+            leader_schedule,
+            transaction_pool,
+            transaction_vote_tracker,
+            block_manager,
+            commit_observer,
+            signals,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
+            true,
+            round_tracker,
+        );
+        (core, dag_state, block_receiver, commit_receiver)
+    }
+
+    #[tokio::test]
+    async fn test_core_recover_from_store_v3() {
+        telemetry_subscribers::init_for_testing();
+
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = Arc::new(context.with_parameters(Parameters {
+            sync_last_known_own_block_timeout: Duration::from_millis(2_000),
+            ..Default::default()
+        }));
+        let store = Arc::new(MemStore::new());
+
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=12).build();
+
+        // Commit with v3 and flush the resulting state to the store.
+        let (last_commit_index, last_committed_rounds) = {
+            let (mut core, dag_state, _block_receiver, _commit_receiver) =
+                build_v3_core(context.clone(), store.clone()).await;
+            dag_state.write().accept_blocks(dag_builder.blocks(1..=12));
+            let committed = core.try_commit_v3().unwrap();
+            assert!(!committed.is_empty());
+            dag_state.write().flush();
+            (
+                dag_state.read().last_commit_index(),
+                dag_state.read().last_committed_rounds(),
+            )
+        };
+
+        // "Restart" by recovering DagState and Core from the store. On the v3 path,
+        // recovery does not read CommitInfo (never persisted with v3): committed
+        // rounds are rebuilt from the bounded commit scan, and the scoring subdag
+        // stays empty since only legacy leader scoring reads it.
+        let (_core, dag_state, _block_receiver, _commit_receiver) =
+            build_v3_core(context.clone(), store.clone()).await;
+        assert_eq!(dag_state.read().last_commit_index(), last_commit_index);
+        assert_eq!(
+            dag_state.read().last_committed_rounds(),
+            last_committed_rounds
+        );
+        assert_eq!(dag_state.read().scoring_subdags_count(), 0);
     }
 
     #[tokio::test]
