@@ -451,7 +451,7 @@ Use `LedgerService.ListEvents` to retrieve events matching an `EventFilter` acro
 
 :::info
 
-The `@mysten/sui` TypeScript SDK does not yet expose `ListEvents`. Use the generated proto client directly until the SDK adds a wrapper, or use the Rust SDK, which supports `ListEvents`. The `grpcurl` example in the next tab works today.
+The `@mysten/sui` TypeScript SDK (v2.23.1+) exposes `client.listEvents()` for common paginated event queries. For checkpoint-bounded `ListEvents` queries, use the proto client directly through `client.ledgerService.listEvents()`. The `grpcurl` example in the next tab shows the raw protobuf JSON request shape.
 
 :::
 

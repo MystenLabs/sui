@@ -39,7 +39,7 @@ These instructions are for advanced users. If you just need a local development 
 
 :::
 
-Nodes expose metrics on `localhost:9184/metrics` by default. During formal snapshot restoration (`sui-tool download-formal-snapshot`), the restore process exposes metrics on `localhost:9185/metrics` instead.
+Nodes expose metrics on `localhost:9184/metrics` by default. During formal snapshot restoration (`sui-tool download-formal-snapshot`), the restore process exposes metrics on `localhost:9185/metrics` instead. If port 9185 is unavailable, pass `--metrics-port <PORT>`; the restore process exits if it cannot bind its metrics port.
 
 You can view the metrics in the metrics UI, or use a tool like `curl` to get the metrics in a format that is easy to parse.
 

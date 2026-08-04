@@ -197,7 +197,7 @@ For checkpoint ingestion, the public `https://checkpoints.mainnet.sui.io` and `h
 
 Use the TOML files below; they are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
 
-Each TOML file can include an optional `[ingestion]` section to tune checkpoint ingestion. The most common setting is `min-cohort-boundary`, which controls how pipelines are grouped into ingestion cohorts based on their distance from the tip. The default is `25000` checkpoints. A higher value prevents nearly caught-up pipelines from being fragmented into many small cohorts. You do not need to set this for most deployments.
+You can include an optional `[ingestion]` section in each TOML file to tune checkpoint ingestion. The `min-cohort-boundary` setting controls how the indexer groups pipelines into ingestion cohorts based on their distance from the tip. The default is `25000` checkpoints. A higher value prevents nearly caught-up pipelines from being fragmented into many small cohorts. You do not need to set this for most deployments.
 
 ```toml
 [ingestion]
