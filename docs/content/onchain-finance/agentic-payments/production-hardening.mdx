@@ -47,19 +47,15 @@ answer: >-
   repeated failures, and structured monitoring to detect anomalies.
 ---
 
-An agent that moves money in production needs safety mechanisms beyond correct business logic. This page covers operational patterns that prevent runaway spending and ensure graceful recovery from failures.
+An agent that moves money in production needs safety mechanisms beyond correct business logic, such as operational patterns that prevent runaway spending and ensure graceful recovery from failures.
 
-## Kill-switch
+## Kill-switches
 
-A kill-switch lets you halt all agent operations immediately. Implement two layers: one offchain for instant response, and one onchain as a final safeguard.
+A kill-switch lets you halt all agent operations immediately. It is recommended to implement two layers: one offchain for instant response, and one onchain as a final safeguard.
 
-### Offchain kill-switch
+In the offchain kill-switch, the agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction. 
 
-The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction. For teams using feature flag services (LaunchDarkly, Unleash, or similar), check the flag instead of an environment variable. This lets you toggle the kill-switch without redeploying.
-
-### Onchain kill-switch
-
-An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the offchain kill-switch fails (agent ignoring the flag, stale config), the onchain check prevents execution.
+An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the offchain kill-switch fails (for reasons such as the agent ignores the flag or encounters a stale configuration), the onchain check prevents execution.
 
 <ImportContent
 	source="examples/onchain-finance/production-hardening/sources/admin_config.move"
@@ -67,7 +63,7 @@ An onchain kill-switch uses a shared `AdminConfig` object that your Move module 
 	tag="admin_config"
 />
 
-Your spending mandate's `execute_spend` function calls `admin_config::assert_not_paused(config)` as its first operation. When the admin pauses the system, every agent transaction aborts immediately.
+Your spending mandate's `execute_spend` function calls `admin_config::assert_not_paused(config)` as its first operation. When the admin triggers the kill-switch, every agent transaction aborts immediately.
 
 <ImportContent
 	source="examples/onchain-finance/production-hardening/sources/snippet_1.move"
@@ -77,23 +73,23 @@ Your spending mandate's `execute_spend` function calls `admin_config::assert_not
 
 ## Retry safety
 
-Sui transactions are atomic. They either fully succeed or fully revert. But network issues can make the outcome ambiguous: the transaction might have been submitted but you did not receive the response. Retrying blindly risks double-spending.
+Sui transactions are atomic. They either fully succeed or fully revert. However, network conditions can make the outcome ambiguous, such as instances where the transaction might have been submitted but you did not receive the response. Retrying blindly risks double-spending.
 
-### The safe retry pattern
+To safely retry transactions, follow this pattern:
 
-1. **Build and sign once.** Precompute the transaction bytes, signature, and digest before broadcasting.
+1. **Build and sign once:** Precompute the transaction bytes, signature, and digest before broadcasting.
 
-2. **Claim the idempotency key atomically.** Insert a durable record with a unique constraint. Store the digest, bytes, and signature in the same operation. If another worker already claimed the key, do not submit a second transaction.
+2. **Claim the idempotency key atomically:** Insert a durable record with a unique constraint. Store the digest, bytes, and signature in the same operation. If another worker already claimed the key, do not submit a second transaction.
 
-3. **Submit and confirm.** Broadcast the stored bytes and signature, then wait for the stored digest.
+3. **Submit and confirm:** Broadcast the stored bytes and signature, then wait for the stored digest.
 
-4. **Reconcile ambiguous outcomes.** If submission or confirmation times out, query the stored digest. Mark it successful if it finalized. Keep an unresolved claim if it is not yet found; do not build and sign a replacement automatically.
+4. **Reconcile ambiguous outcomes:** If submission or confirmation times out, query the stored digest. Mark it successful if it finalized. Keep an unresolved claim if it is not yet found. Do not build and sign a replacement automatically.
 
-5. **Enforce value-transfer idempotency onchain.** Offchain claims prevent concurrent workers, but a crash or database restore can still replay business operations. Use Payment Kit registry payments or a custom Move registry to consume the idempotency key atomically with the transfer.
+5. **Enforce value-transfer idempotency onchain:** Offchain claims prevent concurrent workers, but a crash or database restore can still replay business operations. Use Payment Kit registry payments or a custom Move registry to consume the idempotency key atomically with the transfer.
 
 ### Idempotency keys
 
-An idempotency key is a client-generated identifier (typically a UUIDv4) that uniquely represents an operation. Atomically claim it in a durable store before submission; a read followed by a write is not safe when workers run concurrently. Retain the claim for at least as long as the business operation can be retried, and reconcile the stored digest instead of creating a replacement transaction.
+An idempotency key is a client-generated identifier (typically a UUIDv4) that uniquely represents an operation. Atomically claim it in a durable store before submission. A read followed by a write is not safe when workers run concurrently. Retain the claim for at least as long as the business operation can be retried, and reconcile the stored digest instead of creating a replacement transaction.
 
 #### Onchain idempotency
 
@@ -105,6 +101,8 @@ For onchain idempotency, the [Payment Kit](/onchain-finance/payment-kit) provide
 	tag="onchain-idempotency"
 />
 
+{/* needs typescript examples to be complete
+
 ## Circuit breaker
 
 A circuit breaker halts the agent after a configurable number of consecutive failures. This prevents an agent from burning gas on transactions that consistently fail due to an upstream issue.
@@ -113,42 +111,29 @@ A circuit breaker halts the agent after a configurable number of consecutive fai
 
 Enforce per-agent rate limits to cap how many transactions the agent submits per minute or per hour. This protects against bugs that cause rapid-fire transaction submission.
 
+*/}
+
 ## Monitoring checklist
 
 Track these metrics for every production agent:
 
-- **Transaction success rate.** Alert if it drops below 95% over a 5-minute window.
-- **Gas spend per hour.** Alert if it exceeds the expected budget by more than 20%.
-- **Mandate utilization.** Track `remaining_cap` from `SpendExecuted` events. Alert when a mandate is near exhaustion.
-- **Circuit breaker state.** Log when the breaker opens and closes.
-- **Latency.** Measure time from transaction submission to confirmation. Sui finalizes in under a second; sustained latency above 5 seconds indicates an RPC or network issue.
+- Transaction success rate. Alert if it drops below 95% over a 5-minute window.
+- Gas spend per hour. Alert if it exceeds the expected budget by more than 20%.
+- Mandate utilization. Track `remaining_cap` from `SpendExecuted` events. Alert when a mandate is near exhaustion.
+{\* - Circuit breaker state. Log when the breaker opens and closes. */}
+- Latency. Measure time from transaction submission to confirmation. Sustained latency above 5 seconds indicates an RPC or network issue.
 
 Emit structured logs (JSON) for each transaction attempt, including the digest, status, gas used, and any error details.
 
 ## Testnet to Mainnet checklist
 
-Before switching from Testnet to Mainnet, verify each item. Testnet and Mainnet are independent networks; nothing carries over automatically.
+Before deploying to Mainnet, verify each item. Devnet, a local network, Testnet, and Mainnet are all independent networks. Nothing carries from one to the other automatically.
 
-- [ ] **Package addresses.** Republish all Move packages on Mainnet. Update every hardcoded package ID in your application configuration and SDK calls.
-- [ ] **RPC endpoint.** Switch from `https://fullnode.testnet.sui.io:443` to your Mainnet RPC provider. Do not use the public Mainnet endpoint for production traffic. Use a dedicated provider.
-- [ ] **Shared object IDs.** Any shared objects your application depends on (`AdminConfig`, `SpendingMandate`, `Registry`) must be redeployed on Mainnet. Update their object IDs in your configuration.
-- [ ] **Coin type addresses.** Token type addresses differ between networks. For example, USDC has a different package address on Mainnet than Testnet. Verify all coin type strings.
-- [ ] **Gas budgets.** Mainnet gas prices can differ from Testnet. Simulate your transaction on Mainnet before submitting. Use `dryRunTransactionBlock`, GraphQL `simulateTransaction`, or gRPC `TransactionExecutionService.SimulateTransaction` to verify gas budgets are adequate.
-- [ ] **Event monitoring.** Set up gRPC event subscriptions or an indexer pipeline to monitor production transactions. At minimum, alert on failed transactions and unexpected balance changes.
-- [ ] **Spending mandate expiry.** Set shorter expiry windows for Mainnet mandates than you used during Testnet development.
+- [ ] Republish all Move packages on Mainnet. Update every hardcoded package ID in your application configuration and SDK calls.
+- [ ] Switch to your Mainnet RPC provider. 
+- [ ] Any shared objects your application depends on (`AdminConfig`, `SpendingMandate`, `Registry`) must be redeployed on Mainnet. Update their object IDs in your configuration.
+- [ ] Token type addresses differ between networks. For example, USDC has a different package address on Mainnet than Testnet. Verify all coin type strings.
+- [ ] Mainnet gas prices can differ from Testnet. Simulate your transaction on Mainnet before submitting. Use `dryRunTransactionBlock`, GraphQL `simulateTransaction`, or gRPC `TransactionExecutionService.SimulateTransaction` to verify gas budgets are adequate.
+- [ ] Set up gRPC event subscriptions or an indexer pipeline to monitor production transactions. At minimum, alert on failed transactions and unexpected balance changes.
+- [ ] Set shorter expiry windows for Mainnet mandates than you used during development.
 
-## Security checklist
-
-Before deploying an agent to production:
-
-- [ ] Agent key is stored in a secrets manager or cloud KMS, not in source code or environment files committed to version control
-- [ ] Spending mandate has a short expiry window (hours or days, not months)
-- [ ] Recipient allowlist contains only verified addresses
-  - [ ] Offchain kill-switch is tested and accessible to on-call operators
-  - [ ] Onchain kill-switch (`AdminConfig.paused`) is deployed and the `AdminCap` is secured
-- [ ] Idempotency store is durable (survives process restarts)
-- [ ] Circuit breaker is configured with sensible thresholds
-- [ ] Rate limiter prevents more than N transactions per minute
-- [ ] Monitoring alerts are configured for success rate, gas spend, and mandate utilization
-- [ ] Key rotation procedure is documented and tested
-- [ ] Backup RPC endpoint is configured for failover

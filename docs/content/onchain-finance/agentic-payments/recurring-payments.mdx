@@ -43,7 +43,7 @@ answer: >-
   StreamPayment object with a linear unlock schedule.
 ---
 
-Sui does not have native recurring payments. There is no cron system or auto-debit mechanism that pulls funds from an account on a schedule. Instead, you implement recurring payments using an offchain scheduler that triggers onchain transactions, or a prepaid streaming object that the recipient claims from over time.
+Sui does not have native recurring payments, cron, or automatic debits from a user account. Recurring payments are usually implemented either by an offchain scheduler that submits authorized transactions, or by locking funds into an onchain stream or escrow object that the recipient claims from over time.
 
 ## Pattern 1: Scheduled agent payments
 

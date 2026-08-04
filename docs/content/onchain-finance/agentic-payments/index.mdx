@@ -41,45 +41,16 @@ answer: >-
   sponsored gas, and settlement verification for safe, bounded operation.
 ---
 
-Agentic payments let autonomous backend services sign and submit payment transactions on Sui without human interaction. An agent holds its own key pair, operates within spending policies set by the owner, and uses sponsored gas so it never needs to hold SUI for fees.
+Agentic payments let autonomous backend services sign and submit payment transactions on Sui without human interaction. An agent holds its own key pair, operates within spending policies set by the owner, and, in some instances, use sponsored gas so it doesn't need to hold SUI for fees.
 
 Building a payment agent requires four capabilities:
 
 1. **A wallet the agent can use.** The agent needs a key pair it can access programmatically, stored securely and rotatable without downtime.
 
-2. **Spending boundaries.** The agent's owner defines what the agent can spend, to whom, and for how long. These boundaries are enforced onchain so the agent cannot exceed them even if compromised.
+2. **Spending boundaries.** The agent's owner defines what the agent can spend, to whom, and for how long. These boundaries are enforced onchain so the agent cannot exceed them.
 
 3. **Settlement verification.** The agent confirms that each payment is final before releasing goods or services, handling edge cases like timeouts and reverts.
 
 4. **Production safety.** Kill-switches, idempotent retries, and circuit breakers prevent runaway spending and ensure graceful recovery from failures.
-
-import DocCardList from '@theme/DocCardList';
-
-<DocCardList items={[
-{
-type: 'link',
-label: 'Spending Policies and Mandates',
-href: '/onchain-finance/agentic-payments/spending-policies',
-description: 'Enforce onchain spending caps, allowlists, expiry, and revocation.',
-},
-{
-type: 'link',
-label: 'Recurring and Streaming Payments',
-href: '/onchain-finance/agentic-payments/recurring-payments',
-description: 'Scheduled agent payments and onchain streaming with linear unlock.',
-},
-{
-type: 'link',
-label: 'Settlement Verification',
-href: '/onchain-finance/agentic-payments/settlement-verification',
-description: 'Verify payment finality before releasing goods or services.',
-},
-{
-type: 'link',
-label: 'Production Hardening',
-href: '/onchain-finance/agentic-payments/production-hardening',
-description: 'Kill-switches, retry safety, idempotency, monitoring, and Mainnet checklist.',
-},
-]} />
 
 These guides assume familiarity with [building transactions](/develop/transactions/ptbs/building-ptb) and [sponsored transactions](/develop/transaction-payment/sponsor-txn). For choosing between payment models, see [Choose Your Payments Model](/onchain-finance/choose-payments-model).
