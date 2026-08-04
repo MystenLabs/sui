@@ -20,7 +20,6 @@ use sui_indexer_alt::setup_indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
-use sui_indexer_alt_jsonrpc::BigtableKvArgs;
 use sui_indexer_alt_jsonrpc::NodeArgs;
 use sui_indexer_alt_jsonrpc::RpcArgs;
 use sui_indexer_alt_jsonrpc::args::SystemPackageTaskArgs;
@@ -108,7 +107,6 @@ impl WriteTestCluster {
             Some(database_url),
             DbArgs::default(),
             KvArgs::default(),
-            BigtableKvArgs::default(),
             ConsistentReaderArgs::default(),
             RpcArgs {
                 rpc_listen_address,
