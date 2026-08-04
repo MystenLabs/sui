@@ -1,6 +1,5 @@
 ---
 source: consensus/config/tests/parameters_test.rs
-assertion_line: 8
 expression: parameters
 ---
 leader_timeout:
@@ -30,6 +29,7 @@ commit_sync_request_timeout:
 commit_sync_probe_timeout:
   secs: 2
   nanos: 0
+adaptive_block_cap_enabled: true
 tonic:
   keepalive_interval:
     secs: 10
