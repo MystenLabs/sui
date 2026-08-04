@@ -127,8 +127,8 @@ Follow these steps to enable indexed gRPC functionality on a full node. The gRPC
 1. Add `rpc.enable-indexing: true` to `fullnode.yaml` (see config below).
 2. In the same configuration update, optionally configure the [ledger history list APIs](#ledger-history-configuration) and [retention window](#gRPC-retention).
 3. If you no longer need legacy JSON-RPC indexing, set `enable-index-processing: false` (see [Disable legacy JSON-RPC indexing](#disable-legacy-json-rpc-indexing)).
-4. Restart the node. The initial gRPC index build takes time depending on your hardware; the node may not serve other traffic during this phase.
-5. Verify connectivity and query the historical range required by your clients. `end_checkpoint` is exclusive. Confirm that the stream terminates with `CURSOR_BOUND` at the requested end and compare the latest checkpoint returned by `GetCheckpoint` with the node's `last_executed_checkpoint` metric before cutover:
+4. Restart the node. The initial gRPC index build takes time depending on your hardware; the node might not serve other traffic during this phase.
+5. Verify connectivity and query the historical range required by your clients. `end_checkpoint` is exclusive. Paginate past any `ITEM_LIMIT` responses and confirm that the stream terminates with `CHECKPOINT_BOUND`. Compare the latest checkpoint returned by `GetCheckpoint` with the node's `last_executed_checkpoint` metric before cutover:
     ```sh
     $ grpcurl -plaintext <YOUR_NODE>:9000 sui.rpc.v2.LedgerService/GetCheckpoint
     $ grpcurl -plaintext -d '{
