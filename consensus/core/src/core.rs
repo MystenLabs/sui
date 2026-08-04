@@ -966,6 +966,15 @@ impl Core {
             }
         }
 
+        // Refresh the proposer's propagation scores so score-based ancestor
+        // exclusion tracks current v3 leader scoring, instead of staying frozen
+        // at the scores from Core construction. The legacy path refreshes them
+        // on leader schedule updates.
+        let propagation_scores = self.current_reputation_scores();
+        if let Some(proposer) = &mut self.proposer {
+            proposer.set_propagation_scores(propagation_scores);
+        }
+
         Ok(())
     }
 
