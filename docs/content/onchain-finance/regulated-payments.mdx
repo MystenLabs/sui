@@ -155,7 +155,7 @@ After removal, the address can use the coin as a transaction input immediately. 
 
 ### Global pause
 
-If your currency was created with `allow_global_pause: true`, you can freeze all transfers network-wide:
+If you created your currency with `allow_global_pause: true`, you can freeze all transfers network-wide:
 
 ```bash
 sui client call \
@@ -183,7 +183,7 @@ Sui does not maintain a sanctions list. Your compliance team or provider maintai
 2. **Enforce onchain.** When screening identifies a sanctioned address, call `deny_list_v2_add` to block it. When an address is cleared, call `deny_list_v2_remove`.
 3. **Monitor continuously.** Subscribe to deny-list change events to confirm that enforcement actions took effect.
 
-This "watch-and-act" pattern keeps the sanctions list offchain (where it belongs, since lists change frequently and vary by jurisdiction) while using Sui's deny list for deterministic onchain enforcement.
+This "watch-and-act" pattern keeps the sanctions list offchain (where it belongs, because lists change frequently and vary by jurisdiction) while using Sui's deny list for deterministic onchain enforcement.
 
 ### Batch screening
 

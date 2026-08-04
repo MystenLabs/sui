@@ -57,7 +57,7 @@ answer: >-
 
 Fiat integration connects traditional payment rails (credit cards, bank transfers, mobile payments) to Sui through third-party providers. Your application manages the onchain leg: wallet addresses, coin types, and transaction verification. The provider handles everything on the fiat side: payment collection, KYC, fraud detection, and bank settlement.
 
-This page covers the integration patterns, lifecycle flows, and error handling for both on-ramps (fiat to crypto) and off-ramps (crypto to fiat).
+The following sections cover the integration patterns, lifecycle flows, and error handling for both on-ramps (fiat to crypto) and off-ramps (crypto to fiat).
 
 ## Provider integration patterns
 
@@ -226,7 +226,7 @@ When a user disputes a card payment with their bank, the chargeback process is e
 
 **Options for handling chargebacks:**
 
-- **Absorb the loss.** If the onchain assets have already moved beyond your control, you may need to absorb the chargeback cost. Factor this into your pricing model.
+- **Absorb the loss.** If the onchain assets have already moved beyond your control, you might need to absorb the chargeback cost. Factor this into your pricing model.
 - **Freeze the address.** If you control a `DenyCapV2` for the coin type, you can [freeze the recipient's address](/onchain-finance/regulated-payments#freeze-an-address) to prevent further movement of the disputed funds.
 - **Recover through agreement.** If your terms of service allow it, request the user to return the funds. You cannot force this onchain unless you use [PAS clawback](/onchain-finance/pas/pas-workflows) capabilities.
 
