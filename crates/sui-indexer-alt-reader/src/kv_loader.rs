@@ -635,19 +635,31 @@ impl TransactionContents {
 
     /// Returns the proto TransactionEffects.
     ///
-    /// For ExecutedTransaction, returns the cached proto from gRPC (with object types, clever errors).
-    /// For other sources, converts native effects to proto.
-    pub fn proto_effects(&self) -> anyhow::Result<grpc::TransactionEffects> {
-        match self {
-            Self::ExecutedTransaction(tx) => {
-                // Use cached proto if available, otherwise convert from native
-                if let Some(proto) = &tx.proto_effects {
-                    Ok(proto.clone())
-                } else {
-                    Ok(self.effects()?.into())
-                }
-            }
-            _ => Ok(self.effects()?.into()),
+    /// Prefers the proto cached from an execution or streaming response (rendered by the fullnode).
+    /// Otherwise retrieve the rendered effects from kv.
+    pub async fn proto_effects(
+        &self,
+        kv_loader: &KvLoader,
+    ) -> anyhow::Result<grpc::TransactionEffects> {
+        if let Some(proto) = self.cached_proto_effects() {
+            return Ok(proto.clone());
+        }
+
+        // TODO: fullnode-rendered protos also include clever error rendering, which sui-kv-rpc does
+        // not implement (though it has the package resolver required).
+        //
+        // TODO: The local BCS conversion is a transitional fallback, reachable only on the pg /
+        // direct-bigtable `KvLoader` variants (no ledger service to ask). It lacks object type
+        // annotations and runtime-loaded objects, which are not derivable from the effects BCS.
+        // These paths will be unreachable once the variants are deprecated.
+
+        match kv_loader
+            .load_one_rendered_effects(self.digest()?)
+            .await
+            .context("Failed to fetch rendered effects")?
+        {
+            Some(proto) => Ok(proto),
+            None => Ok(self.effects()?.into()),
         }
     }
 

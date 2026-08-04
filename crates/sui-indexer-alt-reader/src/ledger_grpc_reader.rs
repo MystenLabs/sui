@@ -296,7 +296,7 @@ impl TryFrom<&grpc::ExecutedTransaction> for CheckpointedTransaction {
             .timestamp
             .map(proto_to_timestamp_ms)
             .transpose()
-            .map_err(|e| anyhow::anyhow!("Failed to parse timestamp: {}", e))?;
+            .with_context(|| format!("Failed to parse timestamp {:?}", executed.timestamp))?;
 
         Ok(Self {
             effects: Box::new(full_tx.effects),

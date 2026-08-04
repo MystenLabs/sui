@@ -371,30 +371,8 @@ impl EffectsContents {
 
         Some(
             async {
-                // Prefer the proto cached from an execution or streaming response (rendered by the
-                // fullnode). Otherwise ask the ledger service to render the effects.
-                //
-                // TODO: fullnode-rendered protos also include clever error rendering, which
-                // sui-kv-rpc does not implement (though it has the package resolver required).
-                //
-                // TODO: The local BCS conversion is a transitional fallback, reachable only on the
-                // pg / direct-bigtable `KvLoader` variants (no ledger service to ask). It lacks
-                // object type annotations and runtime-loaded objects, which are not derivable from
-                // the effects BCS. These paths will be unreachable once the variants are
-                // deprecated.
-                let mut proto_effects = if let Some(proto) = content.cached_proto_effects() {
-                    proto.clone()
-                } else {
-                    let kv_loader: &KvLoader = ctx.data()?;
-                    match kv_loader
-                        .load_one_rendered_effects(content.digest()?)
-                        .await
-                        .context("Failed to fetch rendered effects")?
-                    {
-                        Some(proto) => proto,
-                        None => content.proto_effects()?,
-                    }
-                };
+                let kv_loader: &KvLoader = ctx.data()?;
+                let mut proto_effects = content.proto_effects(kv_loader).await?;
                 // Clear the bcs field as effectsJson is intended to provide a full structured output
                 proto_effects.bcs = None;
                 let json_value = serde_json::to_value(&proto_effects)

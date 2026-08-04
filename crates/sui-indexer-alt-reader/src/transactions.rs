@@ -226,11 +226,11 @@ impl ChunkedLoader<TransactionTimestampKey> for LedgerGrpcReader {
                 continue;
             };
 
-            let digest = executed
+            let digest: TransactionDigest = executed
                 .digest
                 .as_deref()
                 .context("BatchGetTransactions response missing digest")?
-                .parse::<TransactionDigest>()
+                .parse()
                 .context("Failed to parse transaction digest")?;
 
             // Transactions served by the ledger service are always checkpointed, but tolerate a
@@ -280,11 +280,11 @@ impl ChunkedLoader<ProtoEffectsKey> for LedgerGrpcReader {
                 continue;
             };
 
-            let digest = executed
+            let digest: TransactionDigest = executed
                 .digest
                 .as_deref()
                 .context("BatchGetTransactions response missing digest")?
-                .parse::<TransactionDigest>()
+                .parse()
                 .context("Failed to parse transaction digest")?;
 
             let Some(effects) = executed.effects else {
