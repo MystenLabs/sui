@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use mysten_common::{random::get_rng, register_debug_fatal_handler};
+    use mysten_common::random::get_rng;
     use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
@@ -31,9 +31,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
-    use sui_config::node::{
-        AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig, RunWithRange,
-    };
+    use sui_config::node::{AuthorityOverloadConfig, RunWithRange};
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -54,9 +52,7 @@ mod test {
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
-    use sui_types::base_types::{
-        AuthorityName, ConciseableName, ObjectID, SequenceNumber, SuiAddress,
-    };
+    use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber, SuiAddress};
     use sui_types::committee::CommitteeTrait;
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::TransactionEffectsAPI;
@@ -211,7 +207,6 @@ mod test {
             simulated_load_config,
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             false, // disable surfer to isolate the test
         )
         .await;
@@ -625,7 +620,6 @@ mod test {
             simulated_load_config,
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             true, // enable_surfer
         )
         .await;
@@ -684,7 +678,6 @@ mod test {
             simulated_load_config,
             Some(target_qps),
             Some(num_workers),
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             true, // enable_surfer
         )
         .await;
@@ -1024,73 +1017,6 @@ mod test {
         }
     }
 
-    fn fork_test_node_to_authority_map(
-        test_cluster: &TestCluster,
-    ) -> std::collections::HashMap<sui_simulator::task::NodeId, AuthorityName> {
-        test_cluster
-            .swarm
-            .validator_nodes()
-            .filter_map(|validator| {
-                validator.get_node_handle().map(|handle| {
-                    let node_id = handle.with(|node| node.get_sim_node_id());
-                    (node_id, validator.name())
-                })
-            })
-            .collect()
-    }
-
-    // Intercept fork fatal!s for forked validators, shutting the node down (so it can restart into
-    // recovery) instead of aborting the sim.
-    fn register_fork_kill_failpoints(
-        forked_validators: Arc<Mutex<HashSet<AuthorityName>>>,
-        checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>>,
-        resolve_authority: impl Fn(sui_simulator::task::NodeId) -> Option<AuthorityName>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ) {
-        register_fail_point_arg("kill_checkpoint_fork_node", {
-            let forked_validators = forked_validators.clone();
-            let checkpoint_overrides = checkpoint_overrides.clone();
-            let resolve_authority = resolve_authority.clone();
-            move || {
-                let current = resolve_authority(sui_simulator::current_simnode_id())?;
-                if forked_validators.lock().unwrap().contains(&current) {
-                    Some(checkpoint_overrides.clone())
-                } else {
-                    None
-                }
-            }
-        });
-        register_fail_point_if("kill_transaction_fork_node", {
-            let forked_validators = forked_validators.clone();
-            let resolve_authority = resolve_authority.clone();
-            move || {
-                resolve_authority(sui_simulator::current_simnode_id())
-                    .is_some_and(|current| forked_validators.lock().unwrap().contains(&current))
-            }
-        });
-        // Split-brain bookkeeping: record the canonical (non-forked) digest into checkpoint_overrides.
-        register_fail_point_arg("kill_split_brain_node", {
-            let checkpoint_overrides = checkpoint_overrides.clone();
-            let forked_validators = forked_validators.clone();
-            move || Some((checkpoint_overrides.clone(), forked_validators.clone()))
-        });
-        // check_for_split_brain's debug_fatal! logs-and-continues in release; make the sim match that
-        // (instead of panicking) so validators ride through split brain.
-        register_debug_fatal_handler!(
-            "Split brain detected in checkpoint signature aggregation",
-            || {}
-        );
-    }
-
-    fn clear_fork_kill_failpoints() {
-        clear_fail_point("kill_checkpoint_fork_node");
-        clear_fail_point("kill_transaction_fork_node");
-        clear_fail_point("kill_split_brain_node");
-    }
-
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
@@ -1219,24 +1145,19 @@ mod test {
             SimulatedLoadConfig::default(),
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             true, // enable_surfer
         )
         .await;
     }
 
-    async fn test_simulated_load_with_test_config<F, Fut>(
+    async fn test_simulated_load_with_test_config(
         test_cluster: Arc<TestCluster>,
         test_duration_secs: u64,
         config: SimulatedLoadConfig,
         target_qps: Option<u64>,
         num_workers: Option<u64>,
-        pre_load_setup: Option<F>,
         enable_surfer: bool,
-    ) where
-        F: FnOnce(Arc<TestCluster>) -> Fut + Send,
-        Fut: std::future::Future<Output = ()> + Send,
-    {
+    ) {
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let genesis = test_cluster.swarm.config().genesis.clone();
@@ -1387,11 +1308,6 @@ mod test {
             Duration::from_secs(test_duration_secs)
         };
 
-        // Run any pre-load setup after gas creation but before load generation
-        if let Some(setup_fn) = pre_load_setup {
-            setup_fn(test_cluster.clone()).await;
-        }
-
         let bench_task = tokio::spawn(async move {
             let driver = BenchDriver::new(5, false);
 
@@ -1450,467 +1366,6 @@ mod test {
             info!("Surfer disabled, running only benchmark task");
             bench_task.await.unwrap();
         }
-    }
-
-    // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
-    // live with fork injection on all execution paths, so its builder constructs a divergent
-    // local checkpoint while the other three keep a quorum and certify the canonical one. After
-    // the injection is cleared it restarts under RecoverOncePerVersion as a corrected binary,
-    // clears its fork state, and rejoins.
-    #[sim_test(config = "test_config()")]
-    async fn test_auto_fork_recovery_checkpoint_fork() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        let test_cluster = build_test_cluster(4, 10_000, 4).await;
-
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
-
-        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
-
-        // Fork exactly one validator so the other three keep a quorum.
-        let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
-
-        let mut load_config = SimulatedLoadConfig::default();
-        load_config.composite_weight = 0;
-
-        test_simulated_load_with_test_config(
-            test_cluster.clone(),
-            6,
-            load_config,
-            None,
-            None,
-            Some({
-                let forked_validators = forked_validators.clone();
-                let checkpoint_overrides = checkpoint_overrides.clone();
-                let effects_overrides = effects_overrides.clone();
-                let node_to_authority_map = node_to_authority_map.clone();
-                move |_cluster: Arc<TestCluster>| async move {
-                    // Only the target validator forks, so the fork stays a minority.
-                    register_fail_point_arg("simulate_fork_during_execution", {
-                        let forked_validators = forked_validators.clone();
-                        let effects_overrides = effects_overrides.clone();
-                        let node_to_authority_map = node_to_authority_map.clone();
-                        move || {
-                            let current =
-                                node_to_authority_map.get(&sui_simulator::current_simnode_id())?;
-                            if *current == target {
-                                Some((
-                                    forked_validators.clone(),
-                                    /* full_halt: */ false,
-                                    effects_overrides.clone(),
-                                    1.0f32,
-                                    /* executor_path_only: */ false,
-                                ))
-                            } else {
-                                None
-                            }
-                        }
-                    });
-
-                    register_fork_kill_failpoints(
-                        forked_validators.clone(),
-                        checkpoint_overrides.clone(),
-                        {
-                            let node_to_authority_map = node_to_authority_map.clone();
-                            move |id| node_to_authority_map.get(&id).copied()
-                        },
-                    );
-                }
-            }),
-            false,
-        )
-        .await;
-
-        // Exactly one validator forked and detected a checkpoint fork.
-        assert_eq!(forked_validators.lock().unwrap().len(), 1);
-        assert!(
-            !checkpoint_overrides.lock().unwrap().is_empty(),
-            "expected the forked validator to detect a checkpoint fork"
-        );
-
-        // Corrected binary: stop injecting forks and report a new binary version, since recovery
-        // refuses to clear a fork under the version that produced it.
-        clear_fail_point("simulate_fork_during_execution");
-        register_fail_point_arg("override_binary_version", || {
-            Some(std::sync::Arc::new(std::sync::Mutex::new(
-                "corrected-binary".to_string(),
-            )))
-        });
-
-        // Restart the forked validator under RecoverOncePerVersion (no overrides).
-        for validator in test_cluster.swarm.validator_nodes() {
-            if forked_validators
-                .lock()
-                .unwrap()
-                .contains(&validator.name())
-            {
-                validator.stop();
-                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                {
-                    let mut cfg = validator.config();
-                    cfg.fork_recovery = Some(ForkRecoveryConfig {
-                        transaction_overrides: Default::default(),
-                        checkpoint_overrides: Default::default(),
-                        fork_crash_behavior: ForkCrashBehavior::RecoverOncePerVersion,
-                    });
-                }
-                validator.start().await.unwrap();
-            }
-        }
-
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-        clear_fork_kill_failpoints();
-        clear_fail_point("override_binary_version");
-
-        let target_name = *forked_validators
-            .lock()
-            .unwrap()
-            .iter()
-            .next()
-            .expect("a validator forked");
-
-        // The forked validator auto-recovered: fork markers cleared.
-        test_cluster
-            .swarm
-            .validator_nodes()
-            .find(|validator| validator.name() == target_name)
-            .unwrap()
-            .get_node_handle()
-            .expect("forked validator should be running after auto-recovery")
-            .with(|node| {
-                let state = node.state();
-                let cp = state.get_checkpoint_store();
-                assert!(
-                    cp.get_checkpoint_fork_detected().unwrap().is_none(),
-                    "checkpoint fork marker should be cleared after auto-recovery"
-                );
-                assert!(
-                    cp.get_transaction_fork_detected().unwrap().is_none(),
-                    "transaction fork marker should be cleared after auto-recovery"
-                );
-            });
-
-        // Liveness: every node, including the recovered validator, advances an epoch, proving it
-        // rejoined (a fullnode-only wait could be satisfied by the other three).
-        test_cluster.wait_for_next_epoch_all_nodes().await;
-    }
-
-    // A quorum-breaking fork: no checkpoint digest reaches quorum, so nothing certifies (split
-    // brain). check_for_split_brain only logs in release (debug_fatal!), so recovery is manual:
-    // restart with checkpoint_overrides naming the canonical digest. Reconvergence works because the
-    // forked effects were never durably committed (the writeback dirty set is flushed only by the
-    // checkpoint executor, on certified checkpoints), so the restart discards them and re-execution
-    // is canonical; checkpoint_overrides clears the only durable forked state, locally_computed.
-    #[sim_test(config = "test_config()")]
-    async fn test_split_brain_recovery_via_checkpoint_overrides() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        let test_cluster = build_test_cluster(4, 10_000, 4).await;
-
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
-
-        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
-
-        let mut load_config = SimulatedLoadConfig::default();
-        load_config.composite_weight = 0;
-
-        // Split brain kills liveness, so the load never returns; run it in the background just to
-        // drive traffic until the fork fires, then abort it.
-        let load_task = tokio::spawn({
-            let test_cluster = test_cluster.clone();
-            let forked_validators = forked_validators.clone();
-            let checkpoint_overrides = checkpoint_overrides.clone();
-            let effects_overrides = effects_overrides.clone();
-            let node_to_authority_map = node_to_authority_map.clone();
-            async move {
-                test_simulated_load_with_test_config(
-                    test_cluster,
-                    60,
-                    load_config,
-                    None,
-                    None,
-                    Some({
-                        let forked_validators = forked_validators.clone();
-                        let checkpoint_overrides = checkpoint_overrides.clone();
-                        let effects_overrides = effects_overrides.clone();
-                        let node_to_authority_map = node_to_authority_map.clone();
-                        move |_cluster: Arc<TestCluster>| async move {
-                            register_fail_point_arg("simulate_fork_during_execution", {
-                                let forked_validators = forked_validators.clone();
-                                let effects_overrides = effects_overrides.clone();
-                                move || {
-                                    Some((
-                                        forked_validators.clone(),
-                                        /* full_halt: */ true,
-                                        effects_overrides.clone(),
-                                        0.1f32,
-                                        /* executor_path_only: */ false,
-                                    ))
-                                }
-                            });
-                            register_fork_kill_failpoints(
-                                forked_validators.clone(),
-                                checkpoint_overrides.clone(),
-                                {
-                                    let node_to_authority_map = node_to_authority_map.clone();
-                                    move |id| node_to_authority_map.get(&id).copied()
-                                },
-                            );
-                        }
-                    }),
-                    false,
-                )
-                .await;
-            }
-        });
-
-        // Wait until split brain is detected (kill_split_brain recorded the canonical digest).
-        let mut detected = false;
-        for _ in 0..120 {
-            if forked_validators.lock().unwrap().len() > 1
-                && !checkpoint_overrides.lock().unwrap().is_empty()
-            {
-                detected = true;
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
-        load_task.abort();
-        assert!(
-            detected,
-            "expected a quorum-breaking fork with split brain detected"
-        );
-
-        // Corrected binary: stop injecting forks and clear the kill failpoints so they can't
-        // interrupt reconvergence.
-        clear_fail_point("simulate_fork_during_execution");
-        clear_fork_kill_failpoints();
-
-        // Operator recovery: stop all (discards the in-memory forked effects), then restart with
-        // checkpoint_overrides naming the canonical digest. Forked validators clear locally_computed
-        // and re-execute canonically, so quorum re-forms.
-        let overrides = checkpoint_overrides.lock().unwrap().clone();
-        for validator in test_cluster.swarm.validator_nodes() {
-            validator.stop();
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        for validator in test_cluster.swarm.validator_nodes() {
-            {
-                let mut cfg = validator.config();
-                cfg.fork_recovery = Some(ForkRecoveryConfig {
-                    transaction_overrides: Default::default(),
-                    checkpoint_overrides: overrides.clone(),
-                    fork_crash_behavior: ForkCrashBehavior::AwaitForkRecovery,
-                });
-            }
-            validator
-                .start()
-                .await
-                .expect("validator should restart under operator checkpoint_overrides recovery");
-        }
-
-        // Liveness: every node, including both recovered validators, advances an epoch — i.e. quorum
-        // re-formed and the forked validators rejoined.
-        test_cluster.wait_for_next_epoch_all_nodes().await;
-    }
-
-    // A transaction fork (vs the checkpoint fork above): a fallen-behind validator
-    // re-executes a certified checkpoint's transactions via the checkpoint executor (where
-    // expected_effects_digest is set) and diverges, tripping the per-transaction fork check. The
-    // executor_path_only injection flag forks only on that path, guaranteeing a transaction fork; it
-    // then recovers under RecoverOncePerVersion.
-    #[sim_test(config = "test_config()")]
-    async fn test_auto_fork_recovery_transaction_fork() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        let test_cluster = build_test_cluster(4, 10_000, 4).await;
-
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
-
-        let target = test_cluster.swarm.validator_nodes().next().unwrap().name();
-
-        // Stop the target so it falls behind the tip.
-        test_cluster
-            .swarm
-            .validator_nodes()
-            .find(|validator| validator.name() == target)
-            .unwrap()
-            .stop();
-
-        // The fork injection skips system transactions, so the target's catch-up must
-        // re-execute a user transaction it has never executed. Land one to checkpoint
-        // finality: submitted after the stop, the target cannot have executed it. Retrying
-        // the same signed transaction on transient failures cannot equivocate the gas object.
-        let tx_data = test_cluster
-            .test_transaction_builder()
-            .await
-            .transfer_sui(Some(1), test_cluster.get_address_1())
-            .build();
-        let tx = test_cluster.sign_transaction(&tx_data).await;
-        while test_cluster
-            .wallet
-            .execute_transaction_may_fail(tx.clone())
-            .await
-            .is_err()
-        {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        }
-
-        // Wait for the epoch holding the transfer to close: a closed epoch can only be
-        // replayed through the checkpoint executor (peers tear down its consensus at
-        // reconfig), so the target's catch-up must re-execute the transfer there — and fork.
-        let finality_epoch = test_cluster
-            .fullnode_handle
-            .sui_node
-            .with(|node| node.state().epoch_store_for_testing().epoch());
-        test_cluster.wait_for_epoch(Some(finality_epoch + 1)).await;
-
-        // Arm the injection and kill hooks BEFORE restarting the target: its catch-up
-        // re-execution can complete inside start()'s internal awaits, so arming afterwards
-        // races the executor and loses on some schedules (the fork window closes forever once
-        // catch-up finishes — and a fork tripped before the kill hooks are armed would
-        // fatal!-abort the sim). The target's new sim node id is unknowable until start()
-        // returns, so match by exclusion instead: while the target is down, snapshot the sim
-        // ids of every running node — any id outside that set executing transactions must be
-        // the restarted target (nothing else starts during this test).
-        let known_other_ids: std::collections::HashSet<sui_simulator::task::NodeId> = test_cluster
-            .swarm
-            .all_nodes()
-            .filter_map(|node| {
-                node.get_node_handle()
-                    .map(|handle| handle.with(|n| n.get_sim_node_id()))
-            })
-            .collect();
-        let node_to_authority_map = fork_test_node_to_authority_map(&test_cluster);
-
-        // Fork the target only on the executor path, so its catch-up re-execution trips the tx check.
-        register_fail_point_arg("simulate_fork_during_execution", {
-            let forked_validators = forked_validators.clone();
-            let effects_overrides = effects_overrides.clone();
-            let known_other_ids = known_other_ids.clone();
-            move || {
-                if known_other_ids.contains(&sui_simulator::current_simnode_id()) {
-                    None
-                } else {
-                    Some((
-                        forked_validators.clone(),
-                        /* full_halt: */ false,
-                        effects_overrides.clone(),
-                        1.0f32,
-                        /* executor_path_only: */ true,
-                    ))
-                }
-            }
-        });
-        register_fork_kill_failpoints(forked_validators.clone(), checkpoint_overrides.clone(), {
-            let node_to_authority_map = node_to_authority_map.clone();
-            let known_other_ids = known_other_ids.clone();
-            move |id| {
-                node_to_authority_map
-                    .get(&id)
-                    .copied()
-                    .or_else(|| (!known_other_ids.contains(&id)).then_some(target))
-            }
-        });
-
-        test_cluster
-            .swarm
-            .validator_nodes()
-            .find(|validator| validator.name() == target)
-            .unwrap()
-            .start()
-            .await
-            .unwrap();
-
-        // Wait until the target forks (after which kill_transaction_fork_node shuts it down).
-        let mut forked = false;
-        for _ in 0..60 {
-            if forked_validators.lock().unwrap().contains(&target) {
-                forked = true;
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
-        assert!(
-            forked,
-            "target should transaction-fork while catching up on the executor path"
-        );
-
-        // Corrected binary: stop injecting forks.
-        clear_fail_point("simulate_fork_during_execution");
-
-        // Confirm it was a transaction fork: checkpoint_overrides (set only by the checkpoint/split-
-        // brain failpoints) is empty even though the target forked.
-        assert!(
-            checkpoint_overrides.lock().unwrap().is_empty(),
-            "expected a transaction fork (no checkpoint fork should have been recorded)"
-        );
-
-        // Recover under RecoverOncePerVersion with a new binary version (recovery refuses to
-        // clear a fork under the version that produced it): clears the tx fork marker and
-        // re-executes canonically.
-        register_fail_point_arg("override_binary_version", || {
-            Some(std::sync::Arc::new(std::sync::Mutex::new(
-                "corrected-binary".to_string(),
-            )))
-        });
-        {
-            let target_node = test_cluster
-                .swarm
-                .validator_nodes()
-                .find(|validator| validator.name() == target)
-                .unwrap();
-            target_node.stop();
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            {
-                let mut cfg = target_node.config();
-                cfg.fork_recovery = Some(ForkRecoveryConfig {
-                    transaction_overrides: Default::default(),
-                    checkpoint_overrides: Default::default(),
-                    fork_crash_behavior: ForkCrashBehavior::RecoverOncePerVersion,
-                });
-            }
-            target_node.start().await.unwrap();
-        }
-
-        clear_fork_kill_failpoints();
-        clear_fail_point("override_binary_version");
-
-        // The recovered validator cleared its transaction fork marker.
-        test_cluster
-            .swarm
-            .validator_nodes()
-            .find(|validator| validator.name() == target)
-            .unwrap()
-            .get_node_handle()
-            .expect("target should be running after recovery")
-            .with(|node| {
-                let state = node.state();
-                let cp = state.get_checkpoint_store();
-                assert!(
-                    cp.get_transaction_fork_detected().unwrap().is_none(),
-                    "transaction fork marker should be cleared after recovery"
-                );
-            });
-
-        // Liveness: every node, including the recovered validator, advances an epoch.
-        test_cluster.wait_for_next_epoch_all_nodes().await;
     }
 
     /// Scans every executed checkpoint on the test cluster's fullnode, finds
@@ -2010,7 +1465,6 @@ mod test {
             SimulatedLoadConfig::composite_only(composite_config),
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             false,
         )
         .await;
@@ -2147,7 +1601,6 @@ mod test {
             SimulatedLoadConfig::composite_only(composite_config),
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             false,
         )
         .await;
@@ -2180,7 +1633,6 @@ mod test {
             SimulatedLoadConfig::composite_only(composite_config),
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             false,
         )
         .await;
@@ -2438,7 +1890,6 @@ mod test {
             SimulatedLoadConfig::default(),
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             false,
         )
         .await;
@@ -2646,7 +2097,6 @@ mod test {
             simulated_load_config,
             Some(30),
             Some(10),
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
             false,
         )
         .await;
