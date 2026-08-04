@@ -355,7 +355,7 @@ pub async fn start_rpc(
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-    let kv_loader = KvLoader::from_kv_sources(None, ledger_grpc_reader.clone(), pg_loader.clone());
+    let kv_loader = KvLoader::from_kv_sources(ledger_grpc_reader.clone(), pg_loader.clone());
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 

@@ -21,7 +21,6 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEvents;
 
-use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
 use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
@@ -75,29 +74,6 @@ impl Loader<TransactionEventsKey> for PgReader {
                 let slice: &[u8] = key.0.as_ref();
                 Some((*key, digest_to_stored.get(slice).cloned()?))
             })
-            .collect())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<TransactionEventsKey> for BigtableReader {
-    type Value = TransactionEventsData;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[TransactionEventsKey],
-    ) -> Result<HashMap<TransactionEventsKey, Self::Value>, Self::Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let digests: Vec<_> = keys.iter().map(|k| k.0).collect();
-        Ok(self
-            .transactions_events(&digests)
-            .await?
-            .into_iter()
-            .map(|(digest, events)| (TransactionEventsKey(digest), events))
             .collect())
     }
 }
