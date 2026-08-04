@@ -1764,13 +1764,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // held for the rest of the epoch. That matches long-standing behavior, and
             // changing it changes scheduling - a consensus-visible decision that cannot
             // differ across binary versions, so it must keep matching until fixed behind
-            // a protocol gate. What we must NOT lose is the displaced transactions' lock
-            // coverage: it backs conflict verdicts (which the lock table keeps durably),
-            // so the displaced set is persisted under a sentinel key that reloads never
-            // touch and restart seeding reads for the deferred-locks map only.
+            // a protocol gate. The displaced transactions' lock coverage survives without
+            // any extra durable state: their deferred-locks entries stay in place on a
+            // live node (only a reload-flush removes them, which never happens), and
+            // after a mid-epoch restart the recovery mode resolves claims from the lock
+            // table, which holds their rows. Nothing extra may be written here - the
+            // durable output must stay byte-identical to prior binary versions, which
+            // treat any unknown deferral row as a pending deferral and would block
+            // epoch close on it (a checkpoint fork for the node that wrote it).
             let reloaded_this_commit: BTreeSet<DeferralKey> =
                 state.output.get_deleted_deferred_txn_keys().collect();
-            let mut displaced: Vec<VerifiedExecutableTransactionWithAliases> = Vec::new();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
                 for tx in &txns {
@@ -1799,15 +1802,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                          they will not execute this epoch, their owned inputs stay locked",
                         prev.iter().map(|t| *t.tx().digest()).collect::<Vec<_>>(),
                     );
-                    displaced.extend(prev);
                 }
                 state.output.defer_transactions(key, txns);
-            }
-            if !displaced.is_empty() {
-                state.output.defer_transactions(
-                    DeferralKey::new_lock_coverage_sentinel(commit_info.round),
-                    displaced,
-                );
             }
         }
 
@@ -4792,12 +4788,13 @@ mod tests {
         );
     }
 
-    // A node restarted mid-epoch may have rebuilt its deferred-locks map from durable
-    // rows written by an older binary that could not record displaced-deferral
-    // sentinels; its in-memory layers can then miss a finalized-but-unexecuted
-    // holder's lock that the durable lock table still carries. In mid-epoch-recovery
-    // mode the resolver must route the potential-clear through the lock table so this
-    // node's verdict matches every other node's.
+    // A node restarted mid-epoch rebuilds its deferred-locks map from durable deferral
+    // rows, which do not cover transactions displaced by a colliding deferral-key
+    // insert (no sentinel rows are written - see the deferral bookkeeping); its
+    // in-memory layers can then miss a finalized-but-unexecuted holder's lock that the
+    // durable lock table still carries. In mid-epoch-recovery mode the resolver must
+    // route the potential-clear through the lock table so this node's verdict matches
+    // every other node's.
     #[tokio::test(flavor = "current_thread")]
     async fn test_mid_epoch_recovery_resolves_uncovered_locks_from_table() {
         telemetry_subscribers::init_for_testing();

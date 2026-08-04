@@ -509,9 +509,11 @@ impl ConsensusOutputCache {
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
         // Lock-coverage sentinel rows hold transactions displaced by a colliding
-        // deferral-key insert (see the deferral bookkeeping in the consensus handler):
-        // they must never be reloaded or block epoch close, so they seed only the
-        // deferred-locks map below, not the deferred-transactions map.
+        // deferral-key insert. This binary writes none itself (see
+        // `DeferralKey::new_lock_coverage_sentinel`); they appear only when rolling
+        // back from a future binary that removes the lock table. They must never be
+        // reloaded or block epoch close, so they seed only the deferred-locks map
+        // below, not the deferred-transactions map.
         let displaced_rows: Vec<_> = deferred_transactions
             .keys()
             .filter(|key| key.is_lock_coverage_sentinel())
@@ -1491,8 +1493,9 @@ mod tests {
         );
         let displaced_digest = *executable.tx().digest();
 
-        // Persist a displaced transaction under the sentinel key, as the deferral
-        // bookkeeping does on a key collision.
+        // Persist a displaced transaction under the sentinel key, as a future binary
+        // version without the lock table will on a key collision (this binary only
+        // reads sentinel rows, to stay a safe rollback target).
         let mut output = make_output(1, 5, true);
         output.defer_transactions(DeferralKey::new_lock_coverage_sentinel(5), vec![executable]);
         let mut batch = epoch_store.db_batch_for_test();
