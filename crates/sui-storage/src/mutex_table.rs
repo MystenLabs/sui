@@ -15,6 +15,7 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
+use mysten_common::sync::blocking_mutex;
 use mysten_metrics::spawn_monitored_task;
 
 type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
@@ -268,6 +269,14 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
             let lock = element.try_lock_owned();
             lock.ok_or(TryAcquireLockError::LockEntryLocked)
         }
+    }
+}
+
+impl<K: Hash + Eq + Send + Sync + 'static> LockTable<K, Mutex<()>> {
+    /// Acquires a lock from a blocking execution thread, releasing its execution
+    /// permit if acquisition is contended.
+    pub fn acquire_lock_blocking(&self, k: K) -> MutexGuard {
+        blocking_mutex::lock(self.get_lock(k))
     }
 }
 
