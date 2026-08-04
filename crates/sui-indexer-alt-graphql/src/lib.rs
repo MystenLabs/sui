@@ -31,6 +31,7 @@ use axum::routing::post;
 use axum_extra::TypedHeader;
 use config::LoggingConfig;
 use config::RpcConfig;
+use extensions::query_limits::QueryDepth;
 use extensions::query_limits::QueryLimitsChecker;
 use extensions::query_limits::rich;
 use extensions::query_limits::show_usage::ShowUsage;
@@ -55,6 +56,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use task::chain_identifier;
 use task::watermark::WatermarkTask;
 use task::watermark::WatermarksLock;
+use throttle::Throttle;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tower_http::catch_panic;
@@ -97,6 +99,7 @@ mod middleware;
 mod pagination;
 mod scope;
 mod task;
+mod throttle;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
@@ -290,6 +293,11 @@ struct IdeEnabled(bool);
 #[derive(Clone, Copy)]
 struct SubscriptionsEnabled(bool);
 
+/// Per-subscriber delivery rate in output nodes per second, surfaced to the subscription handler so
+/// it can pace each payload by its cost. `0` disables pacing.
+#[derive(Clone, Copy)]
+struct SubscriptionThrottleRate(u32);
+
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
 ///
@@ -458,6 +466,11 @@ pub async fn start_rpc(
 
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
+    rpc = rpc.layer(SubscriptionThrottleRate(
+        config
+            .subscription
+            .per_subscriber_max_output_nodes_per_second,
+    ));
 
     // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
     // needs a live view of them. Captured before the watermark task is consumed by `run()`.
@@ -560,6 +573,7 @@ async fn graphql_subscriptions(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
+    Extension(SubscriptionThrottleRate(nodes_per_second)): Extension<SubscriptionThrottleRate>,
     Extension(watermark): Extension<WatermarksLock>,
     request: GraphQLRequest,
 ) -> axum::response::Response {
@@ -572,20 +586,28 @@ async fn graphql_subscriptions(
     }
 
     let watermarks = watermark.read().await.clone();
+    // Query depth is computed once by the query-limits extension during validation and stashed here,
+    // so the throttle can add its depth surcharge to each payload's cost.
+    let query_depth = QueryDepth::default();
+    let throttle = Throttle::new(nodes_per_second);
     let req = request
         .into_inner()
         .data(Session::new(addr))
         .data(watermarks)
-        .data(rich::Meter::default());
+        .data(rich::Meter::default())
+        .data(query_depth.clone());
 
-    let stream = schema.execute_stream(req).map(|response| {
-        let payload = serde_json::to_string(&response).unwrap_or_else(|_| "null".into());
-        Ok::<_, std::convert::Infallible>(
-            axum::response::sse::Event::default()
-                .event("next")
-                .data(payload),
-        )
-    });
+    // Pace delivery per subscriber, then serialize each payload into an SSE event.
+    let stream = throttle
+        .wrap(schema.execute_stream(req), query_depth)
+        .map(|response| {
+            let payload = serde_json::to_string(&response).unwrap_or_else(|_| "null".into());
+            Ok::<_, std::convert::Infallible>(
+                axum::response::sse::Event::default()
+                    .event("next")
+                    .data(payload),
+            )
+        });
 
     axum::response::sse::Sse::new(stream)
         .keep_alive(

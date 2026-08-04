@@ -269,6 +269,14 @@ pub struct SubscriptionConfig {
     /// batch's matches resolve within the concurrency budget and coalesce their content reads into
     /// one `KvLoader` round trip.
     pub max_concurrent_resolutions: usize,
+
+    /// Per-subscriber delivery budget, in output nodes per second. After each payload we compute its
+    /// cost in output-node-equivalents (its actual output nodes, plus a surcharge for query depth)
+    /// and pause `cost / budget` seconds before the next payload, so a heavier payload streams slower
+    /// while the per-second total stays within budget. The up-front `max_output_nodes` estimate
+    /// already rejects a query whose worst case is too large, so this bounds the sustained rate, not
+    /// the peak.
+    pub per_subscriber_max_output_nodes_per_second: u32,
 }
 
 impl Default for SubscriptionConfig {
@@ -280,6 +288,7 @@ impl Default for SubscriptionConfig {
             per_subscriber_scan_max_qps: 500,
             per_subscriber_scan_max_concurrent_fetches: 50,
             max_concurrent_resolutions: 100,
+            per_subscriber_max_output_nodes_per_second: 1_000_000,
         }
     }
 }
@@ -293,6 +302,7 @@ pub struct SubscriptionLayer {
     pub per_subscriber_scan_max_qps: Option<u32>,
     pub per_subscriber_scan_max_concurrent_fetches: Option<usize>,
     pub max_concurrent_resolutions: Option<usize>,
+    pub per_subscriber_max_output_nodes_per_second: Option<u32>,
 }
 
 impl SubscriptionLayer {
@@ -314,6 +324,9 @@ impl SubscriptionLayer {
             max_concurrent_resolutions: self
                 .max_concurrent_resolutions
                 .unwrap_or(base.max_concurrent_resolutions),
+            per_subscriber_max_output_nodes_per_second: self
+                .per_subscriber_max_output_nodes_per_second
+                .unwrap_or(base.per_subscriber_max_output_nodes_per_second),
         }
     }
 }
@@ -627,6 +640,9 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
                 value.per_subscriber_scan_max_concurrent_fetches,
             ),
             max_concurrent_resolutions: Some(value.max_concurrent_resolutions),
+            per_subscriber_max_output_nodes_per_second: Some(
+                value.per_subscriber_max_output_nodes_per_second,
+            ),
         }
     }
 }
