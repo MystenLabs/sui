@@ -624,7 +624,7 @@ impl From<TransactionEffects> for Transaction {
 
 /// Hydrate a `Transaction` node from a `ListTransactions` stream item. The item carries the
 /// transaction's checkpointed contents, so fields resolve without a KV lookup.
-fn transaction_from_stream_item(
+pub(crate) fn transaction_from_stream_item(
     scope: Scope,
     payload: &v2::ExecutedTransaction,
 ) -> Result<Transaction, RpcError> {

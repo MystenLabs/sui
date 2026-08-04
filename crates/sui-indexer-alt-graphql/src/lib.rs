@@ -397,6 +397,10 @@ pub async fn start_rpc(
                 .clone()
                 .context("Ledger gRPC reader is required when streaming is enabled")?;
 
+            alpha_ledger_grpc_reader
+                .as_ref()
+                .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
+
             let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
                 package_store.clone(),
             ));

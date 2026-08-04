@@ -47,6 +47,14 @@ fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
     }
 }
 
+/// The `after` cursor string from a delivered transaction edge.
+fn cursor_of(item: &Value) -> String {
+    item["data"]["transactions"]["cursor"]
+        .as_str()
+        .expect("edge missing cursor")
+        .to_string()
+}
+
 /// The `{ "sender": ... }` variables shared by the filtered subscription queries.
 fn sender_var(sender: SuiAddress) -> Option<Value> {
     Some(json!({ "sender": sender.to_string() }))
@@ -60,7 +68,7 @@ fn tx_query(filter: &str, after_checkpoint: Option<u64>) -> String {
         .unwrap_or_default();
     format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions({resume} filter: {{ {filter} }}) {{
+            transactions(filter: {{ {resume} {filter} }}) {{
                 node {{
                     digest
                     kind {{
@@ -383,7 +391,7 @@ async fn test_transaction_subscription_resume_backfill_then_live() {
 
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
                 node {{ digest }}
             }}
         }}"#,
@@ -409,7 +417,7 @@ async fn test_transaction_subscription_empty_backfill_hands_off_to_live() {
     let resume_from = cluster.validator_checkpoint_tip();
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
                 node {{ digest }}
             }}
         }}"#,
@@ -437,7 +445,7 @@ async fn test_transaction_subscription_exactly_once_across_handoff() {
     let resume_from = cluster.validator_checkpoint_tip();
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
                 cursor
                 node {{ digest }}
             }}
@@ -480,7 +488,7 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
     // sequence number; capture its cursor and digest.
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
                 cursor
                 node {{ digest }}
             }}
@@ -626,7 +634,7 @@ async fn test_transaction_subscription_backfill_spans_scan_pages() {
 
     let query = format!(
         r#"subscription($sender: SuiAddress!) {{
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
                 cursor
                 node {{ digest }}
             }}
@@ -657,7 +665,7 @@ async fn test_transaction_subscription_concurrency_coalesces_content_reads() {
         // `KvLoader` that coalesces across a window.
         let query = format!(
             r#"subscription($sender: SuiAddress!) {{
-                transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
                     cursor
                     node {{ digest effects {{ effectsJson }} }}
                 }}
@@ -713,27 +721,82 @@ async fn test_transaction_subscription_invalid_cursor_errors() {
     );
 }
 
-/// Passing both `after` and `afterCheckpoint` is rejected: they are distinct resume modes.
+/// `after` (a cursor) and `filter.afterCheckpoint` apply together, and delivery resumes from
+/// whichever is later. Both directions are checked: with the cursor at `t1` and `afterCheckpoint`
+/// past `t2`, the checkpoint bound wins and `t2` is skipped; with the cursor at `t2` and
+/// `afterCheckpoint` before `t1`, the cursor wins and both are skipped. Either way `t3` is first.
 #[tokio::test]
-async fn test_transaction_subscription_mutually_exclusive_resume_errors() {
+async fn test_transaction_subscription_resume_intersects_after_and_checkpoint() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
     let sender = cluster.validator.wallet.active_address().unwrap();
 
-    let mut stream = cluster
-        .subscribe_with_variables(
-            r#"subscription($sender: SuiAddress!) {
-                transactions(after: "c", afterCheckpoint: 1, filter: { sentAddress: $sender }) {
-                    node { digest }
-                }
-            }"#,
-            sender_var(sender),
-        )
-        .await;
+    let resume_from = cluster.validator_checkpoint_tip();
+    let t1 = transfer_coins(&mut cluster.validator, &[100]).await;
+    let t2 = transfer_coins(&mut cluster.validator, &[200]).await;
+    // Seal `t2`'s checkpoint before capturing `bound`, so `afterCheckpoint: bound` excludes t2.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let bound = cluster.validator_checkpoint_tip();
+    let t3 = transfer_coins(&mut cluster.validator, &[300]).await;
 
-    let item = stream.next().await.unwrap();
-    assert!(
-        item.get("errors").is_some(),
-        "both after and afterCheckpoint should be rejected, got: {item}",
+    // Advance so all three are delivered by the backfill scan, where the resume bounds apply.
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+
+    // Backfill the three matches once to mint real cursors at t1 and t2.
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
+                cursor
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+    let first = stream.next().await.expect("no first match");
+    assert_eq!(transaction_digest(&first), vec![t1[0].as_str()]);
+    let cursor_t1 = cursor_of(&first);
+    let second = stream.next().await.expect("no second match");
+    assert_eq!(transaction_digest(&second), vec![t2[0].as_str()]);
+    let cursor_t2 = cursor_of(&second);
+    drop(stream);
+
+    // afterCheckpoint wins: `after` at t1 would include t2, but the later bound past t2 skips it.
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(after: "{cursor_t1}", filter: {{ afterCheckpoint: {bound}, sentAddress: $sender }}) {{
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+    let delivered = stream.next().await.expect("no delivered edge");
+    assert_eq!(
+        transaction_digest(&delivered),
+        vec![t3[0].as_str()],
+        "afterCheckpoint should win over the earlier cursor and skip t2",
+    );
+    drop(stream);
+
+    // after wins: `afterCheckpoint` before t1 would include t1 and t2, but the later cursor at t2
+    // skips both.
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(after: "{cursor_t2}", filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+    let delivered = stream.next().await.expect("no delivered edge");
+    assert_eq!(
+        transaction_digest(&delivered),
+        vec![t3[0].as_str()],
+        "the later cursor should win over afterCheckpoint and skip t1 and t2",
     );
 }
 
