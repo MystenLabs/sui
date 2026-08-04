@@ -657,12 +657,34 @@ suiStackSidebar: [
       label: 'SuiNS',
       link: { type: 'doc', id: 'sui-stack/suins/index' },
       items: [
+        'sui-stack/suins/user',
+        'sui-stack/suins/communities',
+        'sui-stack/suins/developer',
         {
-          type: 'link',
-          label: 'SuiNS Docs',
-          href: 'https://docs.suins.io',
+          type: 'category',
+          label: 'SDK',
+          link: { type: 'doc', id: 'sui-stack/suins/developer/sdk' },
+          items: [
+            'sui-stack/suins/developer/sdk/querying',
+            'sui-stack/suins/developer/sdk/transactions',
+            'sui-stack/suins/developer/sdk/subnames',
+          ],
         },
+        'sui-stack/suins/node-operator',
+        'sui-stack/suins/dao',
         'sui-stack/suins/sui-stack-suins',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Move Registry (MVR)',
+      link: { type: 'doc', id: 'sui-stack/mvr/move-registry' },
+      items: [
+        'sui-stack/mvr/mvr-names',
+        'sui-stack/mvr/managing-package-info',
+        'sui-stack/mvr/maintainer-practices',
+        'sui-stack/mvr/tooling/mvr-cli',
+        'sui-stack/mvr/tooling/typescript-sdk',
       ],
     },
     {

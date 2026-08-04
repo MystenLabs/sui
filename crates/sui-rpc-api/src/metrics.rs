@@ -661,7 +661,7 @@ impl SubscriptionMetrics {
             .unwrap(),
             watermark_messages: register_int_counter_vec_with_registry!(
                 "subscription_watermark_messages_total",
-                "Total progress-only response frames emitted by gRPC subscriptions, including initial filtered-subscription start frames, by type.",
+                "Total progress-only response frames emitted by gRPC subscriptions, including initial recovery-boundary frames, by type.",
                 &["type"],
                 registry,
             )

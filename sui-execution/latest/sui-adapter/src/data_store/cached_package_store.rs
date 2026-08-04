@@ -86,7 +86,9 @@ impl<'state, 'runtime> CachedPackageStore<'state, 'runtime> {
 }
 
 impl PackageStore for CachedPackageStore<'_, '_> {
-    fn get_package(&self, id: &ObjectID) -> SuiResult<Option<Arc<VerifiedPackage>>> {
+    type Package = Arc<VerifiedPackage>;
+
+    fn get_package(&self, id: &ObjectID) -> SuiResult<Option<Self::Package>> {
         self.get_package(id)
     }
 

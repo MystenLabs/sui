@@ -1,0 +1,86 @@
+---
+title: Querying
+description: Query onchain data using SuinsClient to retrieve name records, pricing information, and renewal costs.
+keywords: [ SuiNS, querying, name record, pricing, renewals, SuinsClient ]
+goal:
+  description: >-
+    Reader can query onchain SuiNS data including name records, pricing, and
+    renewal costs using SuinsClient
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I query a SuiNS name record?
+  - How do I get SuiNS name pricing?
+  - How do I check SuiNS renewal costs?
+answer: >-
+  Use SuinsClient methods getNameRecord, getPriceList, and getRenewalPriceList
+  to query onchain name records, active registration pricing, and renewal costs.
+---
+
+Use the `SuinsClient` that you previously created to query onchain data.
+
+## Query a name record
+
+You can query a name record's latest state by calling the `getNameRecord` method on the `SuinsClient` instance.
+
+```js
+const nameRecord = await suinsClient.getNameRecord('demo.sui');
+console.log(nameRecord);
+
+// Example output
+// {
+//   name: 'demo.sui',
+//   nftId: '0xMyNftId',
+//   targetAddress: '0xTargetAddress',
+//   expirationTimestampMs: '1746018571863',
+//   data: {
+//      avatar: '0xAvatarObjectId',
+//      contentHash: 'content',
+//      walrusSiteId: '0xWalrusSiteId',
+//   },
+//   avatar: '0xAvatarObjectId',
+//   contentHash: 'content',
+//   walrusSiteId: '0xWalrusSiteId',
+// }
+```
+
+## Query active pricing
+
+Call the `getPriceList` method on the `SuinsClient` instance to query the active names price list.
+
+```js
+const priceList = await suinsClient.getPriceList();
+console.log(priceList);
+
+// ([domain_length_from, domain_length_to]: price. Prices are in USDC MIST; 1 USDC = 1_000_000 MIST)
+// Example output:
+// {
+// 	[ 3, 3 ] => 500000000,
+// 	[ 4, 4 ] => 100000000,
+// 	[ 5, 63 ] => 20000000
+// }
+```
+
+## Query active renewal pricing
+
+Call the `getRenewalPriceList` method on the `SuinsClient` instance to query the active renewal price list.
+
+```js
+const renewalPriceList = await suinsClient.getRenewalPriceList();
+console.log(renewalPriceList);
+
+// ([domain_length_from, domain_length_to]: price. Prices are in USDC MIST; 1 USDC = 1_000_000 MIST)
+// Example output:
+// {
+// 	[ 3, 3 ] => 500000000,
+// 	[ 4, 4 ] => 100000000,
+// 	[ 5, 63 ] => 20000000
+// }
+```

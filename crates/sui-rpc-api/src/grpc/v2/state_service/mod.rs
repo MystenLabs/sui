@@ -26,18 +26,28 @@ impl StateService for RpcService {
         &self,
         request: tonic::Request<ListDynamicFieldsRequest>,
     ) -> Result<tonic::Response<ListDynamicFieldsResponse>, tonic::Status> {
-        list_dynamic_fields::list_dynamic_fields(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            list_dynamic_fields::list_dynamic_fields(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("list_dynamic_fields task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn list_owned_objects(
         &self,
         request: tonic::Request<ListOwnedObjectsRequest>,
     ) -> Result<tonic::Response<ListOwnedObjectsResponse>, tonic::Status> {
-        list_owned_objects::list_owned_objects(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            list_owned_objects::list_owned_objects(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("list_owned_objects task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_coin_info(
@@ -62,8 +72,13 @@ impl StateService for RpcService {
         &self,
         request: tonic::Request<ListBalancesRequest>,
     ) -> Result<tonic::Response<ListBalancesResponse>, tonic::Status> {
-        list_balances::list_balances(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            list_balances::list_balances(&service, request.into_inner())
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("list_balances task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 }

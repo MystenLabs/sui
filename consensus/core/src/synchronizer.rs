@@ -22,7 +22,6 @@ use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
 use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::{
-    runtime::Handle,
     sync::{mpsc::error::TrySendError, oneshot},
     task::JoinSet,
     time::{Instant, sleep, sleep_until, timeout},
@@ -41,7 +40,7 @@ use crate::{
     network::{ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient},
     peers_pool::PeersPool,
     round_tracker::RoundTracker,
-    task::shutdown_join_set,
+    task::{shutdown_join_set, spawn_blocking},
 };
 use crate::{core_thread::CoreThreadDispatcher, transaction_vote_tracker::TransactionVoteTracker};
 
@@ -592,15 +591,13 @@ where
         serialized_blocks.truncate(context.parameters.max_blocks_per_sync);
 
         // Verify all the fetched blocks
-        let (blocks, voted_blocks) = Handle::current()
-            .spawn_blocking({
-                let block_verifier = block_verifier.clone();
-                let context = context.clone();
-                let peer = peer.clone();
-                move || Self::verify_blocks(serialized_blocks, block_verifier, &context, peer)
-            })
-            .await
-            .expect("Spawn blocking should not fail")?;
+        let (blocks, voted_blocks) = spawn_blocking({
+            let block_verifier = block_verifier.clone();
+            let context = context.clone();
+            let peer = peer.clone();
+            move || Self::verify_blocks(serialized_blocks, block_verifier, &context, peer)
+        })
+        .await??;
 
         if context.protocol_config.transaction_voting_enabled() {
             transaction_vote_tracker.add_voted_blocks(voted_blocks);

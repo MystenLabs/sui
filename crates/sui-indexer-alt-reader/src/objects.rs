@@ -19,7 +19,9 @@ use sui_types::storage::ObjectKey;
 
 use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
+use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use crate::pg_reader::PgReader;
 
 /// Key for fetching the contents a particular version of an object.
@@ -103,18 +105,18 @@ impl Loader<VersionedObjectKey> for BigtableReader {
 }
 
 #[async_trait::async_trait]
-impl Loader<VersionedObjectKey> for LedgerGrpcReader {
+impl ChunkedLoader<VersionedObjectKey> for LedgerGrpcReader {
     type Value = Object;
     type Error = Error;
 
-    async fn load(
+    fn chunk_size(&self) -> usize {
+        MAX_BATCH_GET_OBJECTS
+    }
+
+    async fn load_chunk(
         &self,
         keys: &[VersionedObjectKey],
     ) -> Result<HashMap<VersionedObjectKey, Object>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
         let requests = keys
             .iter()
             .map(|key| {
@@ -143,5 +145,49 @@ impl Loader<VersionedObjectKey> for LedgerGrpcReader {
             }
         }
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_sdk_types::Address;
+    use sui_types::base_types::ObjectID;
+
+    use super::*;
+    use crate::ledger_grpc_reader::test_support::mock_reader;
+
+    #[tokio::test]
+    async fn load_chunks_oversized_batches() {
+        let (reader, mock, server) = mock_reader().await;
+        let limit = MAX_BATCH_GET_OBJECTS;
+
+        let keys: Vec<VersionedObjectKey> = (0..limit + 50)
+            .map(|i| VersionedObjectKey(ObjectID::random(), i as u64))
+            .collect();
+
+        let result = reader.load(&keys).await.expect("load should succeed");
+        assert!(result.is_empty());
+
+        let batches = mock.object_batches();
+        assert_eq!(batches.len(), 2);
+        assert!(batches.iter().all(|batch| batch.len() <= limit));
+
+        let mut requested: Vec<(String, Option<u64>)> = batches
+            .into_iter()
+            .flatten()
+            .map(|req| (req.object_id.unwrap_or_default(), req.version))
+            .collect();
+        requested.sort();
+        let mut expected: Vec<(String, Option<u64>)> = keys
+            .iter()
+            .map(|key| {
+                let address: Address = key.0.into();
+                (address.to_string(), Some(key.1))
+            })
+            .collect();
+        expected.sort();
+        assert_eq!(requested, expected);
+
+        server.abort();
     }
 }
