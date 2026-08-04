@@ -54,7 +54,7 @@ answer: >-
 
 A gas station is a backend service that pays gas on behalf of users or agents.
 
-The recommended approach is [`@mysten-incubation/sponsor`](https://www.npmjs.com/package/@mysten-incubation/sponsor), which handles gas coin management, transaction validation, and the dual-signature flow out of the box. For custom requirements (non-standard validation, self-managed coin pools), see the [self-hosted gas station](#self-hosted-gas-station) section below.
+The recommended approach is [`@mysten-incubation/sponsor`](https://www.npmjs.com/package/@mysten-incubation/sponsor), which handles gas coin management and the dual-signature flow. You must still apply an application-specific, deny-by-default transaction policy before signing. For custom requirements (non-standard validation, self-managed coin pools), see the [self-hosted gas station](#self-hosted-gas-station) section below.
 
 ## How it works
 
@@ -101,8 +101,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 const sponsorKeypair = Ed25519Keypair.fromSecretKey(process.env.SPONSOR_SECRET_KEY!);
 
 const sponsor = new Sponsor({
-  signer: sponsorKeypair,
-  network: 'testnet',
+	signer: sponsorKeypair,
+	network: 'testnet',
 });
 ```
 
@@ -116,12 +116,12 @@ The package supports pluggable transaction validation. Pass a `validate` callbac
 
 ```typescript
 const sponsor = new Sponsor({
-  signer: sponsorKeypair,
-  network: 'testnet',
-  validate: async (tx) => {
-    // Inspect tx.commands, tx.sender, etc.
-    // Throw to reject
-  },
+	signer: sponsorKeypair,
+	network: 'testnet',
+	validate: async (tx) => {
+		// Inspect tx.commands, tx.sender, etc.
+		// Throw to reject
+	},
 });
 ```
 
@@ -139,7 +139,11 @@ The sponsor address needs a pool of SUI coins to fund transactions. Two inflight
 
 Split a single large coin into many smaller coins so multiple transactions can be sponsored concurrently:
 
-<ImportContent source="examples/onchain-finance/gas-station/src/split-coins.ts" mode="code" tag="split-coins" />
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/split-coins.ts"
+	mode="code"
+	tag="split-coins"
+/>
 
 ### Pool management
 
@@ -153,34 +157,61 @@ Monitor pool size. When the number of available coins drops below a threshold, s
 
 ## Validation policies
 
-Before sponsoring a transaction, validate it against your policies. Inspect the transaction commands to enforce:
+Before sponsoring a transaction, validate it against a deny-by-default policy:
 
-- **Package allowlist:** Only sponsor transactions that call functions from approved packages.
-- **Budget cap:** Reject transactions that request more gas than your per-request limit.
-- **Rate limit:** Limit the number of sponsored transactions per sender address per time window.
-- **Sender identity:** For agents, verify an API key, a capability object, or a signed challenge.
+- **Command and package allowlist:** Sponsor only explicitly approved Move calls. Reject transfers, coin splitting or merging, publish, upgrade, intents, and every use of `GasCoin`; otherwise a client can transfer the sponsor's whole gas coin.
+- **Inputs:** Bound command and input counts. Validate object IDs, recipients, type arguments, and pure values required by every approved call. The example rejects all object inputs.
+- **Budget and expiration:** The sponsor sets a fixed gas budget and short epoch expiration.
+- **Simulation:** Dry-run the final transaction after attaching gas and reject unsuccessful execution before signing.
+- **Identity and rate limits:** Authenticate callers and limit both each credential and sender. Use per-client credentials and a shared rate-limit store in production.
 
 ## Gas station server
 
-The following Express.js server implements the full sponsor flow. The client sends serialized transaction bytes, the server validates, adds gas, signs, and returns the sponsor signature.
+The following Express.js server demonstrates this restricted flow. It authenticates and rate-limits callers, accepts only configured Move calls with pure inputs and no `GasCoin` argument, sets a capped budget and epoch expiration, dry-runs the final transaction, and then signs it. Replace the placeholder allowlist with your application's complete argument policy.
 
 ### Setup
 
-<ImportContent source="examples/onchain-finance/gas-station/src/server.ts" mode="code" tag="server-setup" />
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/server.ts"
+	mode="code"
+	tag="server-setup"
+/>
 
 ### Sponsor endpoint
 
-<ImportContent source="examples/onchain-finance/gas-station/src/server.ts" mode="code" tag="sponsor-endpoint" />
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/server.ts"
+	mode="code"
+	tag="sponsor-endpoint"
+/>
 
 ### Confirm endpoint
 
-<ImportContent source="examples/onchain-finance/gas-station/src/server.ts" mode="code" tag="confirm-endpoint" />
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/server.ts"
+	mode="code"
+	tag="confirm-endpoint"
+/>
+
+### Reservation reconciliation
+
+A client might never confirm. The server therefore reconciles reservations onchain and claims each reservation before awaiting RPC calls. It reuses a coin only after observing the sponsored transaction or after its epoch expiration makes late submission invalid.
+
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/server.ts"
+	mode="code"
+	tag="reservation-reconciliation"
+/>
 
 ## Client integration
 
-The client builds a transaction, sends it to the gas station, adds its own signature, and submits the dual-signed transaction.
+The client must not blindly sign returned bytes. It reconstructs the transaction, verifies that kind bytes and sender are unchanged, checks the sponsor identity, gas payment count and ID, budget cap, and digest, then dry-runs before signing.
 
-<ImportContent source="examples/onchain-finance/gas-station/src/client.ts" mode="code" tag="client-flow" />
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/client.ts"
+	mode="code"
+	tag="client-flow"
+/>
 
 ## Sponsoring agent transactions
 
@@ -190,7 +221,11 @@ When sponsoring transactions for an autonomous agent rather than an interactive 
 - **Spending mandate checks:** The gas station can verify that the agent has a valid [spending mandate](/onchain-finance/agentic-payments/spending-policies) onchain before sponsoring.
 - **Per-agent budgets:** Track cumulative gas spend per agent address and enforce daily or weekly caps.
 
-<ImportContent source="examples/onchain-finance/gas-station/src/agent-sponsor.ts" mode="code" tag="agent-sponsor" />
+<ImportContent
+	source="examples/onchain-finance/gas-station/src/agent-sponsor.ts"
+	mode="code"
+	tag="agent-sponsor"
+/>
 
 ## Monitoring and cost control
 

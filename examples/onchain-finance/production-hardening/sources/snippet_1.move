@@ -4,26 +4,28 @@
 module example::guarded_spend;
 
 use example::admin_config::AdminConfig;
+use sui::balance::{Self, Balance};
 use sui::clock::Clock;
-use sui::coin::Coin;
 
-public struct SpendingMandate has key {
+#[error(code = 0)]
+const EMandateExpired: vector<u8> = b"Spending mandate has expired";
+
+public struct SpendingMandate<phantom T> has key {
     id: UID,
+    expires_at_ms: u64,
+    balance: Balance<T>,
 }
 
 // docs::#guarded-spend
 public fun execute_spend<T>(
     config: &AdminConfig,
-    _mandate: &mut SpendingMandate,
-    payment: Coin<T>,
+    mandate: &mut SpendingMandate<T>,
+    amount: u64,
     recipient: address,
     clock: &Clock,
-    _ctx: &mut TxContext,
 ) {
     example::admin_config::assert_not_paused(config);
-    // Read the clock to satisfy the lint (real code checks expiry here).
-    let _ = clock.timestamp_ms();
-    // ... rest of spend logic
-    transfer::public_transfer(payment, recipient);
+    assert!(clock.timestamp_ms() < mandate.expires_at_ms, EMandateExpired);
+    balance::send_funds(mandate.balance.split(amount), recipient);
 }
 // docs::/#guarded-spend

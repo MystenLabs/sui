@@ -57,7 +57,11 @@ A kill-switch lets you halt all agent operations immediately. Implement two laye
 
 The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction.
 
-<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="kill-switch" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/src/patterns.ts"
+	mode="code"
+	tag="kill-switch"
+/>
 
 For teams using feature flag services (LaunchDarkly, Unleash, or similar), check the flag instead of an environment variable. This lets you toggle the kill-switch without redeploying.
 
@@ -65,11 +69,19 @@ For teams using feature flag services (LaunchDarkly, Unleash, or similar), check
 
 An onchain kill-switch uses a shared `AdminConfig` object that your Move module checks before executing. Even if the offchain kill-switch fails (agent ignoring the flag, stale config), the onchain check prevents execution.
 
-<ImportContent source="examples/onchain-finance/production-hardening/sources/admin_config.move" mode="code" tag="admin_config" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/sources/admin_config.move"
+	mode="code"
+	tag="admin_config"
+/>
 
 Your spending mandate's `execute_spend` function calls `admin_config::assert_not_paused(config)` as its first operation. When the admin pauses the system, every agent transaction aborts immediately.
 
-<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_1.move" mode="code" tag="guarded-spend" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/sources/snippet_1.move"
+	mode="code"
+	tag="guarded-spend"
+/>
 
 ## Retry safety
 
@@ -77,39 +89,55 @@ Sui transactions are atomic. They either fully succeed or fully revert. But netw
 
 ### The safe retry pattern
 
-1. **Submit and record the digest.** After calling `signAndExecuteTransaction`, record the transaction digest immediately (in memory or a database).
+1. **Build and sign once.** Precompute the transaction bytes, signature, and digest before broadcasting.
 
-2. **Wait for confirmation.** Use `waitForTransaction` with the digest to confirm the outcome.
+2. **Claim the idempotency key atomically.** Insert a durable record with a unique constraint. Store the digest, bytes, and signature in the same operation. If another worker already claimed the key, do not submit a second transaction.
 
-3. **If the wait times out, query before retrying.** If `waitForTransaction` times out, query the digest directly. If the transaction exists onchain, inspect `$kind`: a `Transaction` means it succeeded; a `FailedTransaction` means it executed but reverted (gas was still charged). In either case, do not retry. The transaction is final.
+3. **Submit and confirm.** Broadcast the stored bytes and signature, then wait for the stored digest.
 
-4. **Only retry if the transaction was never submitted.** If the digest does not exist onchain and you received a network error during submission, it is safe to retry.
+4. **Reconcile ambiguous outcomes.** If submission or confirmation times out, query the stored digest. Mark it successful if it finalized. Keep an unresolved claim if it is not yet found; do not build and sign a replacement automatically.
 
-<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="safe-execute" />
+5. **Enforce value-transfer idempotency onchain.** Offchain claims prevent concurrent workers, but a crash or database restore can still replay business operations. Use Payment Kit registry payments or a custom Move registry to consume the idempotency key atomically with the transfer.
+
+<ImportContent
+	source="examples/onchain-finance/production-hardening/src/patterns.ts"
+	mode="code"
+	tag="safe-execute"
+/>
 
 ### Idempotency keys
 
-An idempotency key is a client-generated identifier (typically a UUIDv4) that uniquely represents an operation. Before executing, check if the key has already been processed. This prevents double-spends across process restarts, retries, and duplicate webhook deliveries.
-
-Store idempotency keys in a durable store (database, Redis) with the transaction digest and result. Set a TTL (for example, 7 days) so old keys are eventually cleaned up.
+An idempotency key is a client-generated identifier (typically a UUIDv4) that uniquely represents an operation. Atomically claim it in a durable store before submission; a read followed by a write is not safe when workers run concurrently. Retain the claim for at least as long as the business operation can be retried, and reconcile the stored digest instead of creating a replacement transaction.
 
 #### Onchain idempotency
 
 For onchain idempotency, the [Payment Kit](/onchain-finance/payment-kit) provides built-in duplicate prevention through `PaymentRegistry`. If you are using a custom Move module, you can implement a similar pattern:
 
-<ImportContent source="examples/onchain-finance/production-hardening/sources/snippet_2.move" mode="code" tag="onchain-idempotency" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/sources/snippet_2.move"
+	mode="code"
+	tag="onchain-idempotency"
+/>
 
 ## Circuit breaker
 
 A circuit breaker halts the agent after a configurable number of consecutive failures. This prevents an agent from burning gas on transactions that consistently fail due to an upstream issue.
 
-<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="circuit-breaker" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/src/patterns.ts"
+	mode="code"
+	tag="circuit-breaker"
+/>
 
 ## Rate limiting
 
 Enforce per-agent rate limits to cap how many transactions the agent submits per minute or per hour. This protects against bugs that cause rapid-fire transaction submission.
 
-<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="rate-limiter" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/src/patterns.ts"
+	mode="code"
+	tag="rate-limiter"
+/>
 
 ## Monitoring checklist
 
@@ -123,7 +151,11 @@ Track these metrics for every production agent:
 
 Emit structured logs (JSON) for each transaction attempt:
 
-<ImportContent source="examples/onchain-finance/production-hardening/src/patterns.ts" mode="code" tag="structured-log" />
+<ImportContent
+	source="examples/onchain-finance/production-hardening/src/patterns.ts"
+	mode="code"
+	tag="structured-log"
+/>
 
 ## Testnet to Mainnet checklist
 

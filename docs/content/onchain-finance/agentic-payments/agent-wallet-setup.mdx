@@ -57,19 +57,31 @@ The TypeScript SDK supports three ways to create a key pair.
 
 ### Generate a new key pair
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="generate-new" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="generate-new"
+/>
 
 `getSecretKey()` returns a Bech32-encoded string prefixed with `suiprivkey`. Store it securely (see next section). The address is the agent's onchain identity.
 
 ### From a mnemonic
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="from-mnemonic" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="from-mnemonic"
+/>
 
 Use a mnemonic when you need to recover the key pair from a backup. Store the mnemonic with the same security as a private key.
 
 ### From a private key
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="from-secret-key" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="from-secret-key"
+/>
 
 This is the most common pattern for production agents: load the key from an environment variable or secrets manager at startup.
 
@@ -85,7 +97,11 @@ Set the key as an environment variable on the host. This is acceptable for devel
 export AGENT_SECRET_KEY="suiprivkey1..."
 ```
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="env-load" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="env-load"
+/>
 
 ### Cloud KMS (production)
 
@@ -101,15 +117,14 @@ Cloud KMS signers are available as separate packages:
 // Example: AWS KMS signer
 import { AwsKmsSigner } from '@mysten/aws-kms-signer';
 
-const signer = await AwsKmsSigner.fromKeyId(
-  'arn:aws:kms:us-east-1:123456789:key/your-key-id',
-  { region: 'us-east-1' },
-);
+const signer = await AwsKmsSigner.fromKeyId('arn:aws:kms:us-east-1:123456789:key/your-key-id', {
+	region: 'us-east-1',
+});
 
 // Use like any other signer
 const result = await client.signAndExecuteTransaction({
-  transaction: tx,
-  signer,
+	transaction: tx,
+	signer,
 });
 ```
 
@@ -121,11 +136,16 @@ If you do not use KMS-based signing, store the raw key in a secrets manager (AWS
 
 ## Deriving the agent address
 
-Every key pair maps to a Sui address. This address is where the agent receives objects, holds coins, and is identified onchain.
+Every key pair maps to a Sui address. This address is where the agent receives objects, holds payment assets in address balances, and is identified onchain. Prefer address balances for routine transfers and gas payment; use coin objects only when a contract requires explicit object inputs.
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="derive-address" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="derive-address"
+/>
 
 Before the agent can submit transactions, its address needs either:
+
 - SUI for gas payments, or
 - A [gas station](/onchain-finance/gas-station) that sponsors transactions on its behalf
 
@@ -135,11 +155,19 @@ For agents that exclusively use sponsored transactions, the agent address never 
 
 An agent signs transactions the same way a wallet does, but without user approval prompts.
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="sign-execute" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="sign-execute"
+/>
 
 For sponsored transactions where the gas station provides a co-signature, the agent signs the transaction bytes separately:
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="sign-sponsored" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="sign-sponsored"
+/>
 
 See [Offline Signing](/develop/transactions/transaction-auth/offline-signing) for the full dual-signature flow.
 
@@ -151,7 +179,7 @@ Rotating an agent's key pair changes its Sui address. Plan the rotation carefull
 
 1. **Generate a new key pair.** Create the new key pair and derive its address.
 
-2. **Transfer objects.** Move any objects the agent owns (spending mandates, coins, capability objects) from the old address to the new address.
+2. **Move assets and objects.** Send payment assets from the old address balance to the new address with `balance::send_funds`, then transfer separately owned capabilities or other objects.
 
 3. **Update configuration.** Update the gas station's allowlist, any onchain mandates, and the agent's environment variables to use the new key pair.
 
@@ -159,7 +187,11 @@ Rotating an agent's key pair changes its Sui address. Plan the rotation carefull
 
 5. **Destroy old key material.** Delete the old secret key from the secrets manager. If using KMS, schedule key deletion.
 
-<ImportContent source="examples/onchain-finance/agent-wallet/src/keypair.ts" mode="code" tag="key-rotation" />
+<ImportContent
+	source="examples/onchain-finance/agent-wallet/src/keypair.ts"
+	mode="code"
+	tag="key-rotation"
+/>
 
 ### Zero-downtime rotation
 

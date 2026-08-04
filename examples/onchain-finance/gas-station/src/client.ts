@@ -1,45 +1,87 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Transaction } from '@mysten/sui/transactions';
-import { SuiClient } from '@mysten/sui/client';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { toBase64, fromBase64 } from '@mysten/sui/utils';
+import { SuiClient } from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction, TransactionDataBuilder } from "@mysten/sui/transactions";
+import { fromBase64, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 
-const client = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' });
+const client = new SuiClient({ url: "https://fullnode.testnet.sui.io:443" });
 const user = new Ed25519Keypair();
+const gasStationUrl = "http://localhost:3001";
+const apiKey = process.env.SPONSOR_API_KEY!;
+const expectedSponsor = normalizeSuiAddress(process.env.SPONSOR_ADDRESS!);
+const maxGasBudget = 10_000_000n;
 
 // docs::#client-flow
-// 1. Build the transaction without gas
 const tx = new Transaction();
-tx.moveCall({ target: '0xPACKAGE::module::function' });
+tx.moveCall({ target: "0xPACKAGE::module::function" });
 
-// 2. Serialize and send to gas station
-const txBytes = await tx.build({ client, onlyTransactionKind: true });
-const response = await fetch('http://localhost:3001/sponsor', {
-	method: 'POST',
-	headers: { 'Content-Type': 'application/json' },
-	body: JSON.stringify({ txBytes: toBase64(txBytes), sender: user.toSuiAddress() }),
+const kindBytes = await tx.build({ client, onlyTransactionKind: true });
+const response = await fetch(`${gasStationUrl}/sponsor`, {
+    method: "POST",
+    headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ txBytes: toBase64(kindBytes), sender: user.toSuiAddress() }),
 });
+if (!response.ok) throw new Error(`Sponsorship rejected: ${response.status}`);
 
-const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await response.json();
+const sponsored = (await response.json()) as Record<string, unknown>;
+if (
+    typeof sponsored.txBytes !== "string" ||
+    typeof sponsored.sponsorSignature !== "string" ||
+    typeof sponsored.sponsorAddress !== "string" ||
+    typeof sponsored.gasCoinId !== "string" ||
+    typeof sponsored.digest !== "string"
+) {
+    throw new Error("Invalid gas station response");
+}
 
-// 3. Sign with the user's key
-const finalBytes = fromBase64(sponsoredBytes);
+// Verify everything the gas station added before crossing the signing boundary.
+const finalBytes = fromBase64(sponsored.txBytes);
+const finalData = TransactionDataBuilder.fromBytes(finalBytes);
+const returnedKind = finalData.build({ onlyTransactionKind: true });
+if (!Buffer.from(returnedKind).equals(Buffer.from(kindBytes))) {
+    throw new Error("Gas station changed the transaction kind");
+}
+if (normalizeSuiAddress(finalData.sender!) !== user.toSuiAddress()) {
+    throw new Error("Gas station changed the sender");
+}
+if (
+    normalizeSuiAddress(finalData.gasConfig.owner!) !== expectedSponsor ||
+    normalizeSuiAddress(sponsored.sponsorAddress) !== expectedSponsor ||
+    finalData.gasConfig.payment?.length !== 1 ||
+    BigInt(finalData.gasConfig.budget ?? 0) > maxGasBudget ||
+    finalData.gasConfig.payment[0].objectId !== sponsored.gasCoinId
+) {
+    throw new Error("Gas station returned gas data outside policy");
+}
+const digest = TransactionDataBuilder.getDigestFromBytes(finalBytes);
+if (digest !== sponsored.digest) throw new Error("Gas station returned the wrong digest");
+
+const dryRun = await client.dryRunTransactionBlock({ transactionBlock: finalBytes });
+if (dryRun.effects.status.status !== "success")
+    throw new Error("Sponsored transaction dry run failed");
 const userSig = await user.signTransaction(finalBytes);
 
-// 4. Submit with both signatures
-const result = await client.executeTransactionBlock({
-	transactionBlock: finalBytes,
-	signature: [userSig.signature, sponsorSignature],
-	options: { showEffects: true },
-});
-
-// 5. Confirm to the gas station so it can release the coin.
-//    Always confirm, even on failure, because gas is still charged.
-await fetch('http://localhost:3001/sponsor/confirm', {
-	method: 'POST',
-	headers: { 'Content-Type': 'application/json' },
-	body: JSON.stringify({ gasCoinId, digest: result.digest }),
-});
+try {
+    await client.executeTransactionBlock({
+        transactionBlock: finalBytes,
+        signature: [userSig.signature, sponsored.sponsorSignature],
+        options: { showEffects: true },
+    });
+} finally {
+    // Confirm the digest the client inspected, even if execution reports an
+    // error: failed transactions can still consume gas and advance the coin.
+    await fetch(`${gasStationUrl}/sponsor/confirm`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ gasCoinId: sponsored.gasCoinId, digest }),
+    });
+}
 // docs::/#client-flow

@@ -1,43 +1,74 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect } from 'vitest';
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-describe('challenge store', () => {
-	it('generates unique challenge IDs', () => {
-		const ids = new Set<string>();
-		for (let i = 0; i < 100; i++) {
-			ids.add(crypto.randomUUID());
-		}
-		expect(ids.size).toBe(100);
-	});
+import { ChallengeStore, DurableDigestStore } from "./replay-store.js";
 
-	it('expires challenges after TTL', () => {
-		const store = new Map<string, { expiry: number }>();
-		const id = crypto.randomUUID();
-		store.set(id, { expiry: Date.now() - 1000 });
+const tempDirs: string[] = [];
 
-		const pending = store.get(id);
-		expect(pending).toBeDefined();
-		expect(Date.now() > pending!.expiry).toBe(true);
-	});
+function createStores(maxPending?: number) {
+    const directory = mkdtempSync(join(tmpdir(), "x402-"));
+    tempDirs.push(directory);
+    const path = join(directory, "digests.jsonl");
+    return {
+        challenges: new ChallengeStore(new DurableDigestStore(path), maxPending),
+        path,
+    };
+}
 
-	it('prevents digest reuse', () => {
-		const usedDigests = new Set<string>();
-		const digest = '0xabc123';
+afterEach(() => {
+    for (const directory of tempDirs.splice(0)) {
+        rmSync(directory, { recursive: true, force: true });
+    }
+});
 
-		expect(usedDigests.has(digest)).toBe(false);
-		usedDigests.add(digest);
-		expect(usedDigests.has(digest)).toBe(true);
-	});
+describe("replay store", () => {
+    it("atomically reserves a challenge and digest", () => {
+        const { challenges } = createStores();
+        challenges.issue("challenge-1", Date.now() + 60_000);
+        const reservation = challenges.reserve("challenge-1", "digest-1");
 
-	it('consumes challenge after use', () => {
-		const store = new Map<string, { expiry: number }>();
-		const id = crypto.randomUUID();
-		store.set(id, { expiry: Date.now() + 300_000 });
+        expect(() => challenges.reserve("challenge-1", "digest-2")).toThrow(/already used/);
+        expect(() => {
+            challenges.issue("challenge-2", Date.now() + 60_000);
+            challenges.reserve("challenge-2", "digest-1");
+        }).toThrow(/already used/);
+        reservation.rollback();
+    });
 
-		expect(store.has(id)).toBe(true);
-		store.delete(id);
-		expect(store.has(id)).toBe(false);
-	});
+    it("rolls back both identifiers after failed verification", () => {
+        const { challenges } = createStores();
+        challenges.issue("challenge-1", Date.now() + 60_000);
+        challenges.reserve("challenge-1", "digest-1").rollback();
+
+        expect(() => challenges.reserve("challenge-1", "digest-1")).not.toThrow();
+    });
+
+    it("rejects expired challenges", () => {
+        const { challenges } = createStores();
+        challenges.issue("challenge-1", Date.now() - 1);
+
+        expect(() => challenges.reserve("challenge-1", "digest-1")).toThrow(/expired/);
+    });
+
+    it("bounds pending challenges and removes expired entries", () => {
+        const { challenges } = createStores(1);
+        challenges.issue("challenge-1", 200, 100);
+        expect(() => challenges.issue("challenge-2", 300, 100)).toThrow(/Too many/);
+        expect(() => challenges.issue("challenge-2", 300, 201)).not.toThrow();
+    });
+
+    it("persists accepted digests without expiration", () => {
+        const { challenges, path } = createStores();
+        challenges.issue("challenge-1", Date.now() + 60_000);
+        challenges.reserve("challenge-1", "digest-1").commit();
+
+        const afterRestart = new ChallengeStore(new DurableDigestStore(path));
+        afterRestart.issue("challenge-2", Date.now() + 60_000);
+        expect(() => afterRestart.reserve("challenge-2", "digest-1")).toThrow(/already used/);
+    });
 });

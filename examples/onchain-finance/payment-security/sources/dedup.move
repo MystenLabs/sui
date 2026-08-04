@@ -3,35 +3,63 @@
 
 module example::dedup;
 
+use sui::balance::{Self, Balance};
 use sui::event;
 use sui::table::{Self, Table};
 
-#[error]
+#[error(code = 0)]
 const EDuplicatePayment: vector<u8> = b"Payment ID already processed";
+#[error(code = 1)]
+const EPaymentTooSmall: vector<u8> = b"Payment amount is less than required";
 
-public struct PaymentProcessed has copy, drop {
+public struct PaymentProcessed<phantom T> has copy, drop {
+    registry_id: ID,
+    merchant: address,
+    payer: address,
     payment_id: vector<u8>,
+    amount: u64,
 }
 
 // docs::#dedup
-public struct PaymentRegistry has key {
+/// IDs can only be recorded by atomically depositing funds into this merchant registry.
+public struct PaymentRegistry<phantom T> has key {
     id: UID,
+    merchant: address,
     processed: Table<vector<u8>, bool>,
+    collected: Balance<T>,
 }
 
-fun init(ctx: &mut TxContext) {
-    let registry = PaymentRegistry {
+public fun create_registry<T>(merchant: address, ctx: &mut TxContext) {
+    transfer::share_object(PaymentRegistry<T> {
         id: object::new(ctx),
+        merchant,
         processed: table::new(ctx),
-    };
-    transfer::share_object(registry);
+        collected: balance::zero(),
+    });
 }
 
-/// Call this from your payment/settlement function to prevent duplicates.
-/// Aborts if the payment_id was already processed.
-public fun process_payment(registry: &mut PaymentRegistry, payment_id: vector<u8>) {
+public fun pay<T>(
+    registry: &mut PaymentRegistry<T>,
+    payment_id: vector<u8>,
+    minimum_amount: u64,
+    payment: Balance<T>,
+    ctx: &TxContext,
+) {
     assert!(!registry.processed.contains(payment_id), EDuplicatePayment);
+    let amount = payment.value();
+    assert!(amount >= minimum_amount, EPaymentTooSmall);
     registry.processed.add(payment_id, true);
-    event::emit(PaymentProcessed { payment_id });
+    registry.collected.join(payment);
+    event::emit(PaymentProcessed<T> {
+        registry_id: object::id(registry),
+        merchant: registry.merchant,
+        payer: ctx.sender(),
+        payment_id,
+        amount,
+    });
+}
+
+public fun withdraw<T>(registry: &mut PaymentRegistry<T>) {
+    balance::send_funds(registry.collected.withdraw_all(), registry.merchant);
 }
 // docs::/#dedup

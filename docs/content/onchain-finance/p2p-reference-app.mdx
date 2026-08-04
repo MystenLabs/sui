@@ -112,15 +112,15 @@ Before building the transfer, check the sender's available balance.
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.testnet.sui.io:443',
-  network: 'testnet',
+	baseUrl: 'https://fullnode.testnet.sui.io:443',
+	network: 'testnet',
 });
 
 const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
 
 const { balance } = await client.core.getBalance({
-  owner: senderAddress,
-  coinType: USDC,
+	owner: senderAddress,
+	coinType: USDC,
 });
 
 console.log(`Available USDC: ${balance.balance}`);
@@ -140,12 +140,9 @@ const tx = new Transaction();
 tx.setSender(senderAddress);
 
 tx.moveCall({
-  target: '0x2::balance::send_funds',
-  typeArguments: [USDC],
-  arguments: [
-    tx.balance({ type: USDC, balance: amount }),
-    tx.pure.address(recipientAddress),
-  ],
+	target: '0x2::balance::send_funds',
+	typeArguments: [USDC],
+	arguments: [tx.balance({ type: USDC, balance: amount }), tx.pure.address(recipientAddress)],
 });
 ```
 
@@ -160,16 +157,16 @@ If the transfer uses an [eligible stablecoin](/develop/transaction-payment/gasle
 If the transfer is not eligible for gasless execution (non-stablecoin, or includes other operations), request gas sponsorship from your [gas station](/onchain-finance/gas-station).
 
 ```typescript
-import { toBase64, fromBase64 } from '@mysten/sui/utils';
+import { fromBase64, toBase64 } from '@mysten/sui/utils';
 
 // Build transaction kind bytes (without gas)
 const txKindBytes = await tx.build({ client, onlyTransactionKind: true });
 
 // Request sponsorship
 const sponsorResponse = await fetch('https://your-gas-station.com/sponsor', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ txBytes: toBase64(txKindBytes), sender: signer.toSuiAddress() }),
+	method: 'POST',
+	headers: { 'Content-Type': 'application/json' },
+	body: JSON.stringify({ txBytes: toBase64(txKindBytes), sender: signer.toSuiAddress() }),
 });
 
 const { txBytes: sponsoredBytes, sponsorSignature, gasCoinId } = await sponsorResponse.json();
@@ -180,22 +177,20 @@ const userSig = await signer.signTransaction(finalBytes);
 
 // Submit with both signatures
 const result = await client.core.executeTransaction({
-  transaction: finalBytes,
-  signatures: [userSig.signature, sponsorSignature],
-  include: { effects: true },
+	transaction: finalBytes,
+	signatures: [userSig.signature, sponsorSignature],
+	include: { effects: true },
 });
 
 // Confirm to the gas station so it can release the coin.
 // Always confirm — even on failure — because gas is still charged.
 const digest =
-  result.$kind === 'Transaction'
-    ? result.Transaction.digest
-    : result.FailedTransaction.digest;
+	result.$kind === 'Transaction' ? result.Transaction.digest : result.FailedTransaction.digest;
 
 await fetch('https://your-gas-station.com/sponsor/confirm', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ gasCoinId, digest }),
+	method: 'POST',
+	headers: { 'Content-Type': 'application/json' },
+	body: JSON.stringify({ gasCoinId, digest }),
 });
 ```
 
@@ -203,8 +198,8 @@ For gasless-eligible transfers, skip the gas station and submit directly:
 
 ```typescript
 const result = await client.signAndExecuteTransaction({
-  transaction: tx,
-  signer,
+	transaction: tx,
+	signer,
 });
 ```
 
@@ -214,13 +209,13 @@ Wait for finality and verify the transaction effects before showing success to t
 
 ```typescript
 if (result.$kind === 'FailedTransaction') {
-  console.error('Payment failed:', result.FailedTransaction.status.error?.message);
-  // Show error UI
+	console.error('Payment failed:', result.FailedTransaction.status.error?.message);
+	// Show error UI
 } else {
-  // Wait for the transaction to be indexed
-  await client.waitForTransaction({ digest: result.Transaction.digest });
-  console.log('Payment confirmed:', result.Transaction.digest);
-  // Show success UI
+	// Wait for the transaction to be indexed
+	await client.waitForTransaction({ digest: result.Transaction.digest });
+	console.log('Payment confirmed:', result.Transaction.digest);
+	// Show success UI
 }
 ```
 
@@ -235,9 +230,26 @@ Display the user's past payments by querying transactions involving their addres
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 
 const gqlClient = new SuiGraphQLClient({
-  url: 'https://sui-testnet.mystenlabs.com/graphql',
-  network: 'testnet',
+	url: 'https://sui-testnet.mystenlabs.com/graphql',
+	network: 'testnet',
 });
+
+interface BalanceChange {
+	coinType: string;
+	owner: string;
+	amount: string;
+}
+
+interface HistoryQueryResult {
+	address?: {
+		transactions?: {
+			nodes: Array<{
+				digest: string;
+				effects?: { balanceChangesJson?: BalanceChange[] };
+			}>;
+		};
+	};
+}
 
 const HISTORY_QUERY = `
   query PaymentHistory($sender: SuiAddress!) {
@@ -254,33 +266,26 @@ const HISTORY_QUERY = `
   }
 `;
 
-const { data } = await gqlClient.query({
-  query: HISTORY_QUERY,
-  variables: { sender: senderAddress },
+const { data } = await gqlClient.query<HistoryQueryResult>({
+	query: HISTORY_QUERY,
+	variables: { sender: senderAddress },
 });
 
 for (const tx of data?.address?.transactions?.nodes ?? []) {
-  const changes: any[] = tx.effects?.balanceChangesJson ?? [];
+	const changes = tx.effects?.balanceChangesJson ?? [];
 
-  const sent = changes.find(
-    (c) =>
-      c.coinType === USDC &&
-      c.owner === senderAddress &&
-      BigInt(c.amount) < 0n,
-  );
-  const received = changes.find(
-    (c) =>
-      c.coinType === USDC &&
-      c.owner !== senderAddress &&
-      BigInt(c.amount) > 0n,
-  );
+	const sent = changes.find(
+		(change) =>
+			change.coinType === USDC && change.owner === senderAddress && BigInt(change.amount) < 0n,
+	);
+	const received = changes.find(
+		(change) =>
+			change.coinType === USDC && change.owner !== senderAddress && BigInt(change.amount) > 0n,
+	);
 
-  if (sent && received) {
-    console.log(
-      `Sent ${Math.abs(Number(sent.amount)) / 1_000_000} USDC`,
-      `to ${received.owner}`,
-    );
-  }
+	if (sent && received) {
+		console.log(`Sent ${Math.abs(Number(sent.amount)) / 1_000_000} USDC`, `to ${received.owner}`);
+	}
 }
 ```
 
@@ -292,36 +297,33 @@ The full flow in a single function:
 
 ```typescript
 async function sendPayment(
-  client: SuiGrpcClient,
-  signer: Signer,
-  senderAddress: string,
-  recipientAddress: string,
-  amount: bigint,
-  coinType: string,
+	client: SuiGrpcClient,
+	signer: Signer,
+	senderAddress: string,
+	recipientAddress: string,
+	amount: bigint,
+	coinType: string,
 ) {
-  // Build the transfer
-  const tx = new Transaction();
-  tx.setSender(senderAddress);
-  tx.moveCall({
-    target: '0x2::balance::send_funds',
-    typeArguments: [coinType],
-    arguments: [
-      tx.balance({ type: coinType, balance: amount }),
-      tx.pure.address(recipientAddress),
-    ],
-  });
+	// Build the transfer
+	const tx = new Transaction();
+	tx.setSender(senderAddress);
+	tx.moveCall({
+		target: '0x2::balance::send_funds',
+		typeArguments: [coinType],
+		arguments: [tx.balance({ type: coinType, balance: amount }), tx.pure.address(recipientAddress)],
+	});
 
-  // Submit (SDK auto-detects gasless eligibility with gRPC)
-  const result = await signer.signAndExecuteTransaction({ transaction: tx, client });
+	// Submit (SDK auto-detects gasless eligibility with gRPC)
+	const result = await signer.signAndExecuteTransaction({ transaction: tx, client });
 
-  if (result.$kind === 'FailedTransaction') {
-    throw new Error(`Payment failed: ${result.FailedTransaction.status.error?.message}`);
-  }
+	if (result.$kind === 'FailedTransaction') {
+		throw new Error(`Payment failed: ${result.FailedTransaction.status.error?.message}`);
+	}
 
-  // Wait for indexing
-  await client.waitForTransaction({ digest: result.Transaction.digest });
+	// Wait for indexing
+	await client.waitForTransaction({ digest: result.Transaction.digest });
 
-  return result.Transaction;
+	return result.Transaction;
 }
 ```
 

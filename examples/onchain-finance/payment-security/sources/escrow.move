@@ -4,11 +4,10 @@
 module example::escrow;
 
 use sui::balance::{Self, Balance};
-use sui::coin::Coin;
 use sui::event;
 use sui::sui::SUI;
 
-#[error]
+#[error(code = 0)]
 const EWrongEscrowCap: vector<u8> = b"Capability does not match this escrow";
 
 public struct SenderCap has key, store {
@@ -19,6 +18,13 @@ public struct SenderCap has key, store {
 public struct RecipientCap has key, store {
     id: UID,
     escrow_id: ID,
+}
+
+public struct EscrowCreated has copy, drop {
+    escrow_id: ID,
+    sender: address,
+    recipient: address,
+    amount: u64,
 }
 
 public struct EscrowClaimed has copy, drop {
@@ -34,6 +40,7 @@ public struct EscrowCancelled has copy, drop {
 }
 
 // docs::#escrow
+/// A shared escrow that is consumed on claim or cancellation, making settlement single-use.
 public struct Escrow has key {
     id: UID,
     sender: address,
@@ -41,44 +48,50 @@ public struct Escrow has key {
     balance: Balance<SUI>,
 }
 
-/// Create an escrow. The sender deposits funds.
-public fun create(coin: Coin<SUI>, recipient: address, ctx: &mut TxContext): SenderCap {
+/// Lock funds, give each party a capability marker, and share the tracked escrow.
+public fun create(payment: Balance<SUI>, recipient: address, ctx: &mut TxContext): SenderCap {
+    let sender = ctx.sender();
+    let amount = payment.value();
     let escrow = Escrow {
         id: object::new(ctx),
-        sender: ctx.sender(),
+        sender,
         recipient,
-        balance: coin.into_balance(),
+        balance: payment,
     };
     let escrow_id = object::id(&escrow);
     let recipient_cap = RecipientCap { id: object::new(ctx), escrow_id };
+
+    event::emit(EscrowCreated { escrow_id, sender, recipient, amount });
     transfer::public_transfer(recipient_cap, recipient);
     transfer::share_object(escrow);
     SenderCap { id: object::new(ctx), escrow_id }
 }
 
-/// Claim the escrow. Only the recipient can call this.
-/// Pays out through address balances.
+/// Claim and consume the escrow and recipient capability exactly once.
 public fun claim(escrow: Escrow, cap: RecipientCap) {
     assert!(cap.escrow_id == object::id(&escrow), EWrongEscrowCap);
-    let RecipientCap { id: cap_id, escrow_id: _ } = cap;
+
+    let RecipientCap { id: cap_id, .. } = cap;
     cap_id.delete();
-    let Escrow { id, sender: _, recipient, balance } = escrow;
+    let Escrow { id, recipient, balance, .. } = escrow;
     let amount = balance.value();
+    let escrow_id = id.to_inner();
     balance::send_funds(balance, recipient);
-    event::emit(EscrowClaimed { escrow_id: id.to_inner(), recipient, amount });
+    event::emit(EscrowClaimed { escrow_id, recipient, amount });
     id.delete();
 }
 
-/// Cancel the escrow and return funds. Only the sender can call this.
-/// Returns funds through address balances.
+/// Cancel and consume the escrow and sender capability exactly once.
 public fun cancel(escrow: Escrow, cap: SenderCap) {
     assert!(cap.escrow_id == object::id(&escrow), EWrongEscrowCap);
-    let SenderCap { id: cap_id, escrow_id: _ } = cap;
+
+    let SenderCap { id: cap_id, .. } = cap;
     cap_id.delete();
-    let Escrow { id, sender, recipient: _, balance } = escrow;
+    let Escrow { id, sender, balance, .. } = escrow;
     let amount = balance.value();
+    let escrow_id = id.to_inner();
     balance::send_funds(balance, sender);
-    event::emit(EscrowCancelled { escrow_id: id.to_inner(), sender, amount });
+    event::emit(EscrowCancelled { escrow_id, sender, amount });
     id.delete();
 }
 // docs::/#escrow

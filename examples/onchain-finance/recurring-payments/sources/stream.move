@@ -14,6 +14,8 @@ const EStreamNotStarted: vector<u8> = b"Stream has not started yet";
 #[error]
 const ENotRecipient: vector<u8> = b"Only the recipient can claim";
 #[error]
+const ENotSender: vector<u8> = b"Only the sender can cancel";
+#[error]
 const ENothingToClaim: vector<u8> = b"No claimable amount available";
 
 public struct StreamPayment has key {
@@ -79,7 +81,7 @@ public fun claim(stream: &mut StreamPayment, clock: &Clock, ctx: &mut TxContext)
 /// Cancel the stream. Vested-but-unclaimed funds go to the recipient;
 /// unvested funds return to the sender.
 public fun cancel(stream: StreamPayment, clock: &Clock, ctx: &mut TxContext) {
-    assert!(ctx.sender() == stream.sender, ENotRecipient);
+    assert!(ctx.sender() == stream.sender, ENotSender);
 
     let now = clock.timestamp_ms();
     let elapsed = if (now >= stream.end_time_ms) {
@@ -94,7 +96,13 @@ public fun cancel(stream: StreamPayment, clock: &Clock, ctx: &mut TxContext) {
     let vested = (stream.total_amount as u128) * (elapsed as u128) / (total_duration as u128);
     let owed_to_recipient = (vested as u64) - stream.claimed_amount;
 
-    let StreamPayment { id, sender, recipient, mut balance, .. } = stream;
+    let StreamPayment {
+        id,
+        sender,
+        recipient,
+        mut balance,
+        ..,
+    } = stream;
 
     // Transfer vested-but-unclaimed funds to recipient
     if (owed_to_recipient > 0) {

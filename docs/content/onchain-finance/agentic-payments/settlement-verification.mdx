@@ -68,7 +68,11 @@ flowchart LR
 
 After submitting a transaction, use `waitForTransaction` to block until the transaction is finalized. Do not treat a successful submission response as proof of settlement. Submission means the transaction was received, not that it succeeded.
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="wait-for-finality" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="wait-for-finality"
+/>
 
 ## Verifying transaction effects
 
@@ -78,19 +82,31 @@ After the transaction is confirmed, inspect the effects to verify the payment.
 
 The most basic check: did the transaction succeed?
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="assert-success" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="assert-success"
+/>
 
 ### Verify balance changes
 
 For basic coin transfers, check `balanceChanges` to confirm the correct amount reached the correct recipient.
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="verify-balance-changes" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="verify-balance-changes"
+/>
 
 ### Verify Payment Kit events
 
-If you are using the [Payment Kit](/onchain-finance/payment-kit), verify the payment by checking emitted events instead of raw balance changes. Payment Kit events include the nonce, amount, coin type, and receiver, which makes matching more precise.
+If you are using the [Payment Kit](/onchain-finance/payment-kit), verify the emitted `PaymentReceipt` event instead of relying only on raw balance changes. Match the full event type against your network's audited Payment Kit package ID, and match the nonce, exact amount, coin type, and receiver. Also require a successful transaction status before releasing goods.
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="verify-payment-kit-events" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="verify-payment-kit-events"
+/>
 
 ## Handling edge cases
 
@@ -98,13 +114,21 @@ If you are using the [Payment Kit](/onchain-finance/payment-kit), verify the pay
 
 This is an agent bug, not a network issue. The transaction is final and cannot be reversed. Prevent this by validating the recipient address before building the transaction:
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="validate-address" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="validate-address"
+/>
 
 ### Transaction timed out
 
 If `waitForTransaction` times out, the transaction might still succeed later. Query the digest directly before retrying:
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="handle-timeout" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="handle-timeout"
+/>
 
 See [Production Hardening](/onchain-finance/agentic-payments/production-hardening) for the full retry-safety pattern.
 
@@ -123,22 +147,30 @@ Log the error, alert the operator, and decide whether to retry (with a corrected
 
 For high-value flows, move the verification logic onchain using a Move module. The hot potato pattern ensures the settlement check happens within the same transaction as the payment. The caller cannot skip verification.
 
-<ImportContent source="examples/onchain-finance/settlement/sources/settlement.move" mode="code" tag="settlement" />
+<ImportContent
+	source="examples/onchain-finance/settlement/sources/settlement.move"
+	mode="code"
+	tag="settlement"
+/>
 
 In the PTB, chain `pay_and_prove` into `consume_proof`:
 
-<ImportContent source="examples/onchain-finance/settlement/src/verify.ts" mode="code" tag="onchain-settlement-ptb" />
+<ImportContent
+	source="examples/onchain-finance/settlement/src/verify.ts"
+	mode="code"
+	tag="onchain-settlement-ptb"
+/>
 
 ## Polling vs event subscription
 
 Choose based on your agent architecture:
 
-| | Polling | Event subscription |
-|---|---|---|
-| **How** | Call `waitForTransaction` or `getTransactionBlock` per digest | Subscribe to events through gRPC streaming |
-| **Best for** | Request-response agents that process one transaction at a time | High-throughput agents that process many transactions concurrently |
-| **Complexity** | Low | Medium (manage stream lifecycle, reconnection) |
-| **Latency** | Low for individual transactions | Lowest for bulk monitoring |
+|                | Polling                                                        | Event subscription                                                 |
+| -------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **How**        | Call `waitForTransaction` or `getTransactionBlock` per digest  | Subscribe to events through gRPC streaming                         |
+| **Best for**   | Request-response agents that process one transaction at a time | High-throughput agents that process many transactions concurrently |
+| **Complexity** | Low                                                            | Medium (manage stream lifecycle, reconnection)                     |
+| **Latency**    | Low for individual transactions                                | Lowest for bulk monitoring                                         |
 
 For most agents, polling with `waitForTransaction` is sufficient. Use event subscription when your agent monitors a stream of incoming payments (for example, a merchant backend that watches for Payment Kit events across many customers).
 

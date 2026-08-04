@@ -3,8 +3,10 @@
 
 module example::admin_config;
 
-#[error]
+#[error(code = 0)]
 const EPaused: vector<u8> = b"System is paused";
+#[error(code = 1)]
+const EWrongAdminCap: vector<u8> = b"Capability does not match this configuration";
 
 // docs::#admin_config
 public struct AdminConfig has key {
@@ -24,7 +26,7 @@ fun init(ctx: &mut TxContext) {
     };
     let cap = AdminCap {
         id: object::new(ctx),
-        config_id: config.id.to_inner(),
+        config_id: object::id(&config),
     };
     transfer::share_object(config);
     transfer::public_transfer(cap, ctx.sender());
@@ -35,12 +37,12 @@ public fun assert_not_paused(config: &AdminConfig) {
 }
 
 public fun pause(config: &mut AdminConfig, cap: &AdminCap) {
-    assert!(cap.config_id == config.id.to_inner());
+    assert!(cap.config_id == object::id(config), EWrongAdminCap);
     config.is_paused = true;
 }
 
 public fun unpause(config: &mut AdminConfig, cap: &AdminCap) {
-    assert!(cap.config_id == config.id.to_inner());
+    assert!(cap.config_id == object::id(config), EWrongAdminCap);
     config.is_paused = false;
 }
 // docs::/#admin_config

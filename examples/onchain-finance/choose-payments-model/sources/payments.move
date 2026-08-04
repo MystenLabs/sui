@@ -4,22 +4,23 @@
 module example::payments;
 
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
 use sui::event;
 
-#[error]
+#[error(code = 0)]
 const EInsufficientPayment: vector<u8> = b"Payment amount is less than required";
-#[error]
+#[error(code = 1)]
 const ENotAuthorized: vector<u8> = b"Caller is not authorized to withdraw";
+#[error(code = 2)]
+const ENothingCollected: vector<u8> = b"No funds are available to withdraw";
 
-public struct PaymentReceived has copy, drop {
+public struct PaymentReceived<phantom T> has copy, drop {
+    config_id: ID,
     payer: address,
     amount: u64,
 }
 
 // docs::#payments
-/// A shared payment configuration that accepts deposits of a specific coin type.
-/// Only the authorized collector can withdraw accumulated funds.
+/// A typed merchant checkout that takes custody of accepted payments.
 public struct PaymentConfig<phantom T> has key {
     id: UID,
     collector: address,
@@ -28,27 +29,30 @@ public struct PaymentConfig<phantom T> has key {
 }
 
 public fun create_config<T>(collector: address, min_amount: u64, ctx: &mut TxContext) {
-    let config = PaymentConfig<T> {
+    transfer::share_object(PaymentConfig<T> {
         id: object::new(ctx),
         collector,
         min_amount,
         collected: balance::zero(),
-    };
-    transfer::share_object(config);
+    });
 }
 
-/// Pay into the config. The module controls the funds after deposit.
-public fun pay<T>(config: &mut PaymentConfig<T>, payment: Coin<T>, ctx: &mut TxContext) {
-    assert!(payment.value() >= config.min_amount, EInsufficientPayment);
+/// Accept a payment supplied from an address balance or converted coin.
+public fun pay<T>(config: &mut PaymentConfig<T>, payment: Balance<T>, ctx: &TxContext) {
     let amount = payment.value();
-    config.collected.join(payment.into_balance());
-    event::emit(PaymentReceived { payer: ctx.sender(), amount });
+    assert!(amount >= config.min_amount, EInsufficientPayment);
+    config.collected.join(payment);
+    event::emit(PaymentReceived<T> {
+        config_id: object::id(config),
+        payer: ctx.sender(),
+        amount,
+    });
 }
 
-/// Withdraw collected funds. Only the designated collector can call this.
-public fun withdraw<T>(config: &mut PaymentConfig<T>, ctx: &mut TxContext): Coin<T> {
+/// Send all accepted funds to the configured collector's address balance.
+public fun withdraw<T>(config: &mut PaymentConfig<T>, ctx: &TxContext) {
     assert!(ctx.sender() == config.collector, ENotAuthorized);
-    let amount = config.collected.value();
-    coin::from_balance(config.collected.split(amount), ctx)
+    assert!(config.collected.value() > 0, ENothingCollected);
+    balance::send_funds(config.collected.withdraw_all(), config.collector);
 }
 // docs::/#payments
