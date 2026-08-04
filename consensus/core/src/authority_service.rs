@@ -13,7 +13,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt, ready, stream, task};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
@@ -90,8 +90,11 @@ impl MinimalBlockCache {
                 return Some(bytes.clone());
             }
         }
-        // Encode outside the lock: a concurrent subscriber may duplicate this work for the
-        // same block, which is harmless and far cheaper than serializing all subscribers.
+        // Encode outside the cache lock: a concurrent subscriber may duplicate this work
+        // for the same block, which is harmless and far cheaper than serializing all
+        // subscribers. Scoped so send-side encode cost — and the cache's hit rate
+        // against many interleaved subscriber streams — is measurable.
+        let _scope = monitored_scope("MinimalBlock::encode_for_send");
         let bytes = inflater.serialize(block, &dag_state.read()).ok()?;
         let mut recent = self.recent.lock();
         if !recent.iter().any(|(r, _)| *r == block_ref) {
