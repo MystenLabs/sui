@@ -100,11 +100,15 @@ pub struct DbOptions {
 /// }
 ///
 /// impl Schema for MySchema {
-///     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<CfDescriptor> {
-///         vec![CfDescriptor::new("my_cf", opts.options("my_cf"))]
+///     type OpenContext = ();
+///
+///     fn cfs(
+///         opts: &sui_consistent_store::CfOptionsResolver,
+///     ) -> (Vec<CfDescriptor>, Self::OpenContext) {
+///         (vec![CfDescriptor::new("my_cf", opts.options("my_cf"))], ())
 ///     }
 ///
-///     fn open(db: &Db) -> Result<Self, OpenError> {
+///     fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
 ///         Ok(Self { _db: db.clone() })
 ///     }
 /// }
@@ -261,7 +265,7 @@ impl Db {
         let resolver = CfOptionsResolver::new(rocksdb)?;
         let db_options = resolver.db_options();
 
-        let mut cfs = S::cfs(&resolver);
+        let (mut cfs, context) = S::cfs(&resolver);
 
         // The framework owns its bookkeeping CFs (restore, watermark,
         // chain-id); a consumer schema must not declare one itself, or
@@ -312,7 +316,7 @@ impl Db {
                 db,
             }),
         };
-        let schema = S::open(&db)?;
+        let schema = S::open(&db, context)?;
         Ok((db, schema))
     }
 
@@ -888,6 +892,10 @@ impl Default for RocksMetrics {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
     use tempfile::TempDir;
 
     use super::*;
@@ -896,18 +904,27 @@ mod tests {
     #[derive(Debug)]
     struct TestSchema {
         _db: Db,
+        open_context: Arc<AtomicU64>,
     }
 
     impl Schema for TestSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-            vec![
-                CfDescriptor::new("foo", opts.options("foo")),
-                CfDescriptor::new("bar", opts.options("bar")),
-            ]
+        type OpenContext = Arc<AtomicU64>;
+
+        fn cfs(opts: &crate::options::CfOptionsResolver) -> (Vec<CfDescriptor>, Self::OpenContext) {
+            (
+                vec![
+                    CfDescriptor::new("foo", opts.options("foo")),
+                    CfDescriptor::new("bar", opts.options("bar")),
+                ],
+                Arc::new(AtomicU64::new(42)),
+            )
         }
 
-        fn open(db: &Db) -> Result<Self, OpenError> {
-            Ok(Self { _db: db.clone() })
+        fn open(db: &Db, open_context: Self::OpenContext) -> Result<Self, OpenError> {
+            Ok(Self {
+                _db: db.clone(),
+                open_context,
+            })
         }
     }
 
@@ -917,6 +934,13 @@ mod tests {
         let (db, _schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
         assert!(db.cf_handle("foo").is_some());
         assert!(db.cf_handle("bar").is_some());
+    }
+
+    #[test]
+    fn schema_open_context_reaches_schema_constructor() {
+        let dir = TempDir::new().unwrap();
+        let (_db, schema) = Db::open::<TestSchema>(dir.path(), DbOptions::default()).unwrap();
+        assert_eq!(schema.open_context.load(Ordering::Relaxed), 42);
     }
 
     #[test]
@@ -939,14 +963,21 @@ mod tests {
         struct ShadowSchema;
 
         impl Schema for ShadowSchema {
-            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new(
-                    "__watermark",
-                    opts.options("__watermark"),
-                )]
+            type OpenContext = ();
+
+            fn cfs(
+                opts: &crate::options::CfOptionsResolver,
+            ) -> (Vec<CfDescriptor>, Self::OpenContext) {
+                (
+                    vec![CfDescriptor::new(
+                        "__watermark",
+                        opts.options("__watermark"),
+                    )],
+                    (),
+                )
             }
 
-            fn open(_: &Db) -> Result<Self, OpenError> {
+            fn open(_: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
                 Ok(Self)
             }
         }
@@ -1202,11 +1233,15 @@ mod tests {
         }
 
         impl Schema for PersistSchema {
-            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new("items", opts.options("items"))]
+            type OpenContext = ();
+
+            fn cfs(
+                opts: &crate::options::CfOptionsResolver,
+            ) -> (Vec<CfDescriptor>, Self::OpenContext) {
+                (vec![CfDescriptor::new("items", opts.options("items"))], ())
             }
 
-            fn open(db: &Db) -> Result<Self, OpenError> {
+            fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
                 Ok(Self {
                     items: DbMap::new(db.clone(), "items")?,
                 })
@@ -1291,11 +1326,15 @@ mod tests {
         }
 
         impl Schema for ItemsSchema {
-            fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                vec![CfDescriptor::new("items", opts.options("items"))]
+            type OpenContext = ();
+
+            fn cfs(
+                opts: &crate::options::CfOptionsResolver,
+            ) -> (Vec<CfDescriptor>, Self::OpenContext) {
+                (vec![CfDescriptor::new("items", opts.options("items"))], ())
             }
 
-            fn open(db: &Db) -> Result<Self, OpenError> {
+            fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
                 Ok(Self {
                     items: DbMap::new(db.clone(), "items")?,
                 })
@@ -1419,14 +1458,21 @@ mod tests {
             }
 
             impl Schema for TwoCfSchema {
-                fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-                    vec![
-                        CfDescriptor::new("a", opts.options("a")),
-                        CfDescriptor::new("b", opts.options("b")),
-                    ]
+                type OpenContext = ();
+
+                fn cfs(
+                    opts: &crate::options::CfOptionsResolver,
+                ) -> (Vec<CfDescriptor>, Self::OpenContext) {
+                    (
+                        vec![
+                            CfDescriptor::new("a", opts.options("a")),
+                            CfDescriptor::new("b", opts.options("b")),
+                        ],
+                        (),
+                    )
                 }
 
-                fn open(db: &Db) -> Result<Self, OpenError> {
+                fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
                     Ok(Self {
                         a: DbMap::new(db.clone(), "a")?,
                         b: DbMap::new(db.clone(), "b")?,

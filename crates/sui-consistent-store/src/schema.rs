@@ -41,11 +41,15 @@
 //! }
 //!
 //! impl Schema for MySchema {
-//!     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<CfDescriptor> {
-//!         vec![CfDescriptor::new("my_cf", opts.options("my_cf"))]
+//!     type OpenContext = ();
+//!
+//!     fn cfs(
+//!         opts: &sui_consistent_store::CfOptionsResolver,
+//!     ) -> (Vec<CfDescriptor>, Self::OpenContext) {
+//!         (vec![CfDescriptor::new("my_cf", opts.options("my_cf"))], ())
 //!     }
 //!
-//!     fn open(db: &Db) -> Result<Self, OpenError> {
+//!     fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
 //!         Ok(Self {
 //!             _reader: std::marker::PhantomData,
 //!             _db: db.clone(),
@@ -84,14 +88,20 @@ use crate::snapshot::Snapshot;
 /// The trait has two responsibilities:
 ///
 /// - [`cfs`](Self::cfs) returns the column families this schema
-///   requires, with per-CF [`rocksdb::Options`]. It is called once at
-///   open time, with a [`CfOptionsResolver`] as input. The
-///   order of entries does not matter.
+///   requires, with per-CF [`rocksdb::Options`], and a typed context
+///   that is carried through database open. It is called once at open
+///   time, with a [`CfOptionsResolver`] as input. The order of entries
+///   does not matter.
 /// - [`open`](Self::open) constructs the schema struct against an
-///   already-opened database. Each column family named by `cfs()` is
-///   guaranteed to exist on the database before this is called.
+///   already-opened database using that context. Each column family
+///   named by `cfs()` is guaranteed to exist before this is called.
 pub trait Schema: Sized {
-    /// The column families this schema requires.
+    /// Per-open state created with the column-family descriptors and
+    /// delivered to the schema constructor after RocksDB opens.
+    type OpenContext;
+
+    /// The column families this schema requires and the context its
+    /// constructor receives after the database opens.
     ///
     /// Each entry is a [`CfDescriptor`] carrying a column-family
     /// name (a `&'static str` so the schema's CF set is fixed at
@@ -111,16 +121,17 @@ pub trait Schema: Sized {
     /// `__watermark`, `__chain_id`) are reserved by the crate; a
     /// schema that declares one is rejected by
     /// [`Db::open`](crate::Db::open).
-    fn cfs(opts: &CfOptionsResolver) -> Vec<CfDescriptor>;
+    fn cfs(opts: &CfOptionsResolver) -> (Vec<CfDescriptor>, Self::OpenContext);
 
-    /// Construct the schema struct against `db`.
+    /// Construct the schema struct against `db` using the context
+    /// returned by [`Self::cfs`] for this open.
     ///
     /// Implementations typically clone the supplied [`Db`] handle
     /// into each column-family handle they construct (a `Db` clone
     /// is one `Arc` bump). The default implementation in user
     /// schemas is usually a one-line `Self::new(db.clone())` that
     /// delegates to inherent methods on the schema struct.
-    fn open(db: &Db) -> Result<Self, OpenError>;
+    fn open(db: &Db, context: Self::OpenContext) -> Result<Self, OpenError>;
 }
 
 /// Describes one column family in a [`Schema`].

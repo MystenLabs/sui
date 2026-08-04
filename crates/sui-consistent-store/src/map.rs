@@ -123,11 +123,18 @@ use crate::snapshot::Snapshot;
 /// }
 ///
 /// impl Schema for MySchema {
-///     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<sui_consistent_store::CfDescriptor> {
-///         vec![sui_consistent_store::CfDescriptor::new("items", opts.options("items"))]
+///     type OpenContext = ();
+///
+///     fn cfs(
+///         opts: &sui_consistent_store::CfOptionsResolver,
+///     ) -> (Vec<sui_consistent_store::CfDescriptor>, Self::OpenContext) {
+///         (
+///             vec![sui_consistent_store::CfDescriptor::new("items", opts.options("items"))],
+///             (),
+///         )
 ///     }
 ///
-///     fn open(db: &Db) -> Result<Self, OpenError> {
+///     fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
 ///         Ok(Self {
 ///             items: DbMap::new(db.clone(), "items")?,
 ///         })
@@ -711,11 +718,18 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
-            vec![crate::CfDescriptor::new("items", opts.options("items"))]
+        type OpenContext = ();
+
+        fn cfs(
+            opts: &crate::options::CfOptionsResolver,
+        ) -> (Vec<crate::CfDescriptor>, Self::OpenContext) {
+            (
+                vec![crate::CfDescriptor::new("items", opts.options("items"))],
+                (),
+            )
         }
 
-        fn open(db: &Db) -> Result<Self, OpenError> {
+        fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
             Ok(Self {
                 items: DbMap::new(db.clone(), "items")?,
             })
@@ -1593,11 +1607,18 @@ mod tests {
     }
 
     impl Schema for CompoundSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
-            vec![crate::CfDescriptor::new("rows", opts.options("rows"))]
+        type OpenContext = ();
+
+        fn cfs(
+            opts: &crate::options::CfOptionsResolver,
+        ) -> (Vec<crate::CfDescriptor>, Self::OpenContext) {
+            (
+                vec![crate::CfDescriptor::new("rows", opts.options("rows"))],
+                (),
+            )
         }
 
-        fn open(db: &Db) -> Result<Self, OpenError> {
+        fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
             Ok(Self {
                 rows: DbMap::new(db.clone(), "rows")?,
             })

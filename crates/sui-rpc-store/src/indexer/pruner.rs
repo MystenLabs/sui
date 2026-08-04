@@ -44,11 +44,11 @@
 //!   the `Retractions` collector). The retained set mirrors the `objects`
 //!   versions kept, so the index never points at a pruned version.
 //! - **Ledger-history bitmaps** (`transaction_bitmap`,
-//!   `event_bitmap`) — not deleted directly; advancing the shared
-//!   pruning floor lets their compaction filters drop fully-pruned
-//!   buckets. Merge operands can require one covering compaction to
-//!   materialize and a later compaction to filter; the forced catch-up
-//!   pass and periodic compaction provide those sweeps.
+//!   `event_bitmap`) — not deleted directly; advancing the
+//!   database-local pruning floor lets their compaction filters drop
+//!   fully-pruned buckets. Merge operands can require one covering
+//!   compaction to materialize and a later compaction to filter; the
+//!   forced catch-up pass and periodic compaction provide those sweeps.
 //!
 //! The live-set-bounded indexes (`object_by_owner`, `object_by_type`,
 //! `balance`, `package_versions`) and the tiny `epochs` CF are never
@@ -97,7 +97,6 @@ use sui_consistent_store::Batch;
 use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
-use sui_consistent_store::Schema;
 use sui_indexer_alt_framework::service::Service;
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
@@ -110,6 +109,7 @@ use tracing::warn;
 
 use crate::RpcStoreSchema;
 use crate::config::PrunerConfig;
+use crate::indexer::Store;
 use crate::indexer::restore::HISTORY_COHORT;
 use crate::indexer::restore::LIVE_COHORT;
 use crate::schema::checkpoint_seq_by_digest;
@@ -225,7 +225,7 @@ impl Retractions {
 /// it is aborted on graceful shutdown (each chunk is atomic, so an
 /// abort leaves the database consistent).
 pub fn start_pruner(
-    db: Db,
+    store: Store,
     config: PrunerConfig,
     metrics: Arc<PrunerMetrics>,
 ) -> anyhow::Result<Service> {
@@ -238,10 +238,6 @@ pub fn start_pruner(
         "PrunerConfig::max_checkpoints_per_tick must be >= 1; 0 would never make progress",
     );
 
-    // Reconstruct typed handles once; they are cheap views over the
-    // shared `Db` and are reused across every tick.
-    let schema = Arc::new(RpcStoreSchema::open(&db).context("Opening schema for pruner")?);
-
     let service = Service::new().spawn_aborting(async move {
         let mut ticker = tokio::time::interval(config.interval());
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -249,16 +245,16 @@ pub fn start_pruner(
         loop {
             ticker.tick().await;
 
-            let db = db.clone();
-            let schema = schema.clone();
+            let store = store.clone();
             let config = config.clone();
             let metrics = metrics.clone();
 
             // The pruner does blocking RocksDB iteration and writes;
             // keep it off the async runtime threads.
-            let res =
-                tokio::task::spawn_blocking(move || prune_once(&db, &schema, &config, &metrics))
-                    .await;
+            let res = tokio::task::spawn_blocking(move || {
+                prune_once(store.db(), store.schema(), &config, &metrics)
+            })
+            .await;
 
             match res {
                 Ok(Ok(())) => {}
@@ -548,8 +544,8 @@ fn retract_object_version_by_checkpoint(
 ///   the floor resolves to — and a removed object drops its rows (a later
 ///   wrap/unwrap re-creation at or above the floor survives).
 /// - `transaction_bitmap` / `event_bitmap` — evicted by advancing the
-///   shared `tx_seq` floor so their compaction filters drop fully-pruned
-///   buckets during periodic compaction.
+///   database-local `tx_seq` floor so their compaction filters drop
+///   fully-pruned buckets during periodic compaction.
 ///
 /// The live cohort, `package_versions`, and the tiny `epochs` CF are
 /// never pruned.
@@ -1094,11 +1090,6 @@ mod tests {
     /// buckets are filtered on the second while retained buckets remain.
     #[test]
     fn merge_written_bitmap_buckets_require_two_compactions_for_reclamation() {
-        use std::sync::atomic::Ordering;
-
-        use crate::schema::pruning_watermark::tx_seq_floor;
-
-        let baseline = tx_seq_floor().load(Ordering::Relaxed);
         let (_dir, db, schema) = fresh_db();
         let dimension = b"sender:alice".to_vec();
         let floor = transaction_bitmap::TX_BUCKET_SIZE;
@@ -1195,24 +1186,12 @@ mod tests {
                 .unwrap()
                 .is_some()
         );
-
-        tx_seq_floor().store(baseline, Ordering::Relaxed);
     }
 
-    /// A committed chunk advances the process-wide bitmap floor (the
-    /// value the bitmap CFs' compaction filters read) to the chunk's
-    /// new `tx_seq_lo`. The filter's own removal logic is covered by
-    /// `transaction_bitmap::should_remove_bucket`.
+    /// A committed chunk publishes its `tx_seq_lo` to this database's
+    /// bitmap compaction filters.
     #[tokio::test]
-    async fn prune_chunk_advances_the_bitmap_floor_atomic() {
-        use std::sync::atomic::Ordering;
-
-        use crate::schema::pruning_watermark::tx_seq_floor;
-
-        // The floor is process-wide; snapshot and restore it so this
-        // test doesn't perturb others sharing the same atomic.
-        let baseline = tx_seq_floor().load(Ordering::Relaxed);
-
+    async fn prune_chunk_publishes_the_db_local_bitmap_floor() {
         let (_dir, db, schema) = fresh_db();
         let checkpoint = Arc::new(
             TestCheckpointBuilder::new(0)
@@ -1230,22 +1209,22 @@ mod tests {
         let new = prune_chunk(&db, &schema, Watermarks::default(), 1, &metrics).unwrap();
 
         assert_eq!(
-            tx_seq_floor().load(Ordering::Relaxed),
+            schema.current_pruning_floor(),
             new.tx_seq_lo,
-            "the chunk must publish its new tx_seq floor to the bitmap atomic",
+            "the chunk must publish its committed tx_seq floor",
         );
-
-        tx_seq_floor().store(baseline, Ordering::Relaxed);
     }
 
     #[test]
     fn start_pruner_rejects_zero_retention() {
-        let (_dir, db, _schema) = fresh_db();
+        let (_dir, db, schema) = fresh_db();
+        let store = Store::new(db, Arc::new(schema));
         let config = PrunerConfig {
             retention_epochs: 0,
             ..PrunerConfig::default()
         };
-        let err = start_pruner(db, config, PrunerMetrics::new(None, &Registry::new())).unwrap_err();
+        let err =
+            start_pruner(store, config, PrunerMetrics::new(None, &Registry::new())).unwrap_err();
         assert!(
             format!("{err:#}").contains("retention_epochs"),
             "expected a retention_epochs validation error, got: {err:#}",
@@ -1254,12 +1233,14 @@ mod tests {
 
     #[test]
     fn start_pruner_rejects_zero_checkpoints_per_tick() {
-        let (_dir, db, _schema) = fresh_db();
+        let (_dir, db, schema) = fresh_db();
+        let store = Store::new(db, Arc::new(schema));
         let config = PrunerConfig {
             max_checkpoints_per_tick: 0,
             ..PrunerConfig::default()
         };
-        let err = start_pruner(db, config, PrunerMetrics::new(None, &Registry::new())).unwrap_err();
+        let err =
+            start_pruner(store, config, PrunerMetrics::new(None, &Registry::new())).unwrap_err();
         assert!(
             format!("{err:#}").contains("max_checkpoints_per_tick"),
             "expected a max_checkpoints_per_tick validation error, got: {err:#}",
@@ -1275,14 +1256,6 @@ mod tests {
     /// passes are no-ops.
     #[tokio::test]
     async fn prune_once_advances_at_most_the_per_tick_budget() {
-        use std::sync::atomic::Ordering;
-
-        use crate::schema::pruning_watermark::tx_seq_floor;
-
-        // The floor is process-wide; snapshot and restore it so this
-        // test doesn't perturb others sharing the same atomic.
-        let baseline = tx_seq_floor().load(Ordering::Relaxed);
-
         let (_dir, db, schema) = fresh_db();
 
         // Five single-transaction checkpoints (seq 0..=4) from one
@@ -1356,8 +1329,6 @@ mod tests {
         assert!(schema.get_checkpoint_summary(4).unwrap().is_none());
         prune_once(&db, &schema, &config, &metrics).unwrap();
         assert_eq!(floor(&schema), 5, "a pass at the target is a no-op");
-
-        tx_seq_floor().store(baseline, Ordering::Relaxed);
     }
 
     /// End-to-end chunk prune: one checkpoint where tx0 creates an

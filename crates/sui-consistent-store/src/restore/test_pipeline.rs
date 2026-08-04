@@ -84,11 +84,16 @@ pub(crate) struct ObjectVersionSchema {
 }
 
 impl Schema for ObjectVersionSchema {
-    fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-        vec![CfDescriptor::new("versions", opts.options("versions"))]
+    type OpenContext = ();
+
+    fn cfs(opts: &crate::options::CfOptionsResolver) -> (Vec<CfDescriptor>, Self::OpenContext) {
+        (
+            vec![CfDescriptor::new("versions", opts.options("versions"))],
+            (),
+        )
     }
 
-    fn open(db: &Db) -> Result<Self, OpenError> {
+    fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
         Ok(Self {
             versions: DbMap::new(db.clone(), "versions")?,
         })
