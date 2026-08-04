@@ -2189,13 +2189,24 @@ fn assert_object_funds_check_rejected_poison_writes(
     );
 }
 
+fn object_funds_in_execution_test_env() -> TestEnvBuilder {
+    TestEnvBuilder::new().with_proto_override_cb(Box::new(|_, mut cfg| {
+        cfg.set_enable_object_funds_withdraw_for_testing(true);
+        cfg.set_check_object_funds_withdraw_in_execution_for_testing(true);
+        cfg
+    }))
+}
+
 /// Regression shape for an old accumulator overflow bug: an unbacked object-sourced `u64::MAX`
 /// withdrawal would be redeemed and then combined with an address-balance gas-smash Merge to the
 /// same `(sender, Balance<SUI>)` key. With in-execution object-funds checking, the native withdraw
 /// aborts before the poison accumulator write is emitted.
 #[sim_test]
 async fn test_accumulator_merge_overflow_poison_pill_blocked_by_object_funds_check() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = object_funds_in_execution_test_env()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     // Publish the test package and fund the sender's SUI address balance so that the gas-payment
     // reservation (the smash target) is backed at signing time.
@@ -2263,7 +2274,10 @@ async fn test_accumulator_merge_overflow_poison_pill_blocked_by_object_funds_che
 /// in-execution object-funds check.
 #[sim_test]
 async fn test_accumulator_merge_overflow_custom_coin_blocked_by_object_funds_check() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = object_funds_in_execution_test_env()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
     let (_publisher, coin_a_type) = test_env.setup_custom_coin().await;
@@ -2310,7 +2324,10 @@ async fn test_accumulator_merge_overflow_custom_coin_blocked_by_object_funds_che
 /// representability or SUI-conservation checks need to reason about the oversized event.
 #[sim_test]
 async fn test_accumulator_conservation_overflow_single_withdrawal_blocked_by_object_funds_check() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = object_funds_in_execution_test_env()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -2347,7 +2364,10 @@ async fn test_accumulator_conservation_overflow_single_withdrawal_blocked_by_obj
 /// that withdrawal can put the accumulator fold or gas refund path at risk.
 #[sim_test]
 async fn test_accumulator_merge_overflow_gas_refund_blocked_by_object_funds_check() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = object_funds_in_execution_test_env()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -2438,7 +2458,10 @@ async fn test_accumulator_merge_overflow_gas_refund_blocked_by_object_funds_chec
 /// The first unbacked object withdrawal now aborts in execution, before those coins can exist.
 #[sim_test]
 async fn test_gas_coin_overflow_via_merge_into_gas_coin_blocked_by_object_funds_check() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+    let mut test_env = object_funds_in_execution_test_env()
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
