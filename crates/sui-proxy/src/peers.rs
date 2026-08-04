@@ -707,11 +707,25 @@ fn json_u64(v: &JsonValue, name: &str) -> Result<u64> {
         .with_context(|| format!("parsing {name} as u64"))
 }
 
-/// Parse a Move `Option<u64>`: JSON null = None, bare value = Some.
-fn json_option_u64(v: &JsonValue, name: &str) -> Result<Option<u64>> {
+/// Parse the `pending_epoch_change` field from the CommitteeSet JSON.
+///
+/// On-chain this is `Option<PendingEpochChange>` where the struct contains
+/// an `epoch: u64` field.  The JSON renderer turns `None` into `null` and
+/// `Some(struct)` into a bare struct object, so we may see:
+///   - null                                                   → None
+///   - {"epoch": "1181", "committee_handoff_cert": null, …}   → Some(1181)
+fn json_pending_epoch(v: &JsonValue, name: &str) -> Result<Option<u64>> {
     match &v.kind {
         Some(JsonKind::NullValue(_)) | None => Ok(None),
-        _ => Ok(Some(json_u64(v, name)?)),
+        Some(JsonKind::StructValue(_)) => {
+            let epoch_val = json_field(v, "epoch")
+                .with_context(|| format!("{name}: struct has no 'epoch' field"))?;
+            Ok(Some(json_u64(epoch_val, &format!("{name}.epoch"))?))
+        }
+        _ => {
+            // Tolerate a bare string-encoded u64 for forward/backward compat.
+            Ok(Some(json_u64(v, name)?))
+        }
     }
 }
 
@@ -922,7 +936,7 @@ async fn get_hashi_committee_snapshot(
         json_field(cs, "epoch").context("missing committee_set.epoch")?,
         "committee_set.epoch",
     )?;
-    let pending_epoch = json_option_u64(
+    let pending_epoch = json_pending_epoch(
         json_field(cs, "pending_epoch_change")
             .context("missing committee_set.pending_epoch_change")?,
         "committee_set.pending_epoch_change",
@@ -1348,6 +1362,66 @@ mod tests {
             peers[0].1.name,
         );
         assert!(peers[0].1.name.contains(&member_addr.to_string()));
+    }
+
+    // --- json_pending_epoch tests ---
+
+    /// Helper: build a JsonValue with NullValue kind.
+    fn jv_null() -> JsonValue {
+        JsonValue {
+            kind: Some(JsonKind::NullValue(0)),
+        }
+    }
+
+    /// Helper: build a JsonValue with StringValue kind.
+    fn jv_string(s: &str) -> JsonValue {
+        JsonValue {
+            kind: Some(JsonKind::StringValue(s.to_string())),
+        }
+    }
+
+    /// Helper: build a JsonValue with StructValue kind from key-value pairs.
+    fn jv_struct(fields: Vec<(&str, JsonValue)>) -> JsonValue {
+        let map: std::collections::BTreeMap<String, JsonValue> = fields
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        JsonValue {
+            kind: Some(JsonKind::StructValue(prost_types::Struct { fields: map })),
+        }
+    }
+
+    #[test]
+    fn json_pending_epoch_null_returns_none() {
+        let result = json_pending_epoch(&jv_null(), "test").unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn json_pending_epoch_struct_extracts_epoch() {
+        let v = jv_struct(vec![
+            ("epoch", jv_string("1181")),
+            ("committee_handoff_cert", jv_null()),
+        ]);
+        let result = json_pending_epoch(&v, "test").unwrap();
+        assert_eq!(result, Some(1181));
+    }
+
+    #[test]
+    fn json_pending_epoch_bare_string_u64() {
+        // Backward-compat: tolerate a bare string-encoded u64.
+        let v = jv_string("42");
+        let result = json_pending_epoch(&v, "test").unwrap();
+        assert_eq!(result, Some(42));
+    }
+
+    #[test]
+    fn json_pending_epoch_struct_missing_epoch_field_errors() {
+        let v = jv_struct(vec![("committee_handoff_cert", jv_null())]);
+        let result = json_pending_epoch(&v, "test");
+        assert!(result.is_err());
+        let msg = format!("{:#}", result.unwrap_err());
+        assert!(msg.contains("no 'epoch' field"), "unexpected error: {msg}",);
     }
 
     #[test]
