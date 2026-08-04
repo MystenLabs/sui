@@ -408,7 +408,7 @@ const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDef
 };
 const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 10,
-    max_limit_items: 100,
+    max_limit_items: 50,
     chunk_max: 16,
 };
 
