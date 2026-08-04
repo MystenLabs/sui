@@ -14,7 +14,8 @@ If you are touching code under `crates/sui-core/src/accumulators/` or
 | [`data_model.md`](./data_model.md) | On-chain layout: the `0xACC` root, `AccumulatorObjId` derivation, dynamic-field representation, and the version invariant. |
 | [`write_path.md`](./write_path.md) | How a balance changes: `FundsWithdrawalArg`, transaction rewriting, accumulator events (Split/Merge), `AccumulatorSettlementTxBuilder`, and the placeholder→settlement-txns→barrier expansion. Also covers the two paths by which settlement reaches a node (validator vs. checkpoint executor). |
 | [`address_funds_scheduling.md`](./address_funds_scheduling.md) | Pre-execution withdraw scheduling for **address-owned** accumulator accounts (max amounts known up front). Eager scheduler, naive baseline, determinism. |
-| [`object_funds_checking.md`](./object_funds_checking.md) | Post-execution sufficiency checking for **object-owned** accumulator accounts (amounts known only after the transaction is run). |
+| [`object_funds_in_execution.md`](./object_funds_in_execution.md) | In-execution sufficiency checking for **object-owned** accumulator accounts, inside the Move VM (`check_object_funds_withdraw_in_execution`). The current design. |
+| [`object_funds_checking.md`](./object_funds_checking.md) | **Deprecated** post-execution sufficiency checking for object-owned accounts, used only while the in-execution flag is off. |
 | [`coin_reservations.md`](./coin_reservations.md) | Backward-compat layer that lets pre-address-balance SDKs use address balances by encoding withdrawals as fake `ObjectRef`s. Transitional — expected to be removed once SDK migration is done. |
 
 The **read path** (RPC balance queries via `accumulators/balances.rs` and the
@@ -57,10 +58,12 @@ on those modules is the source of truth — no separate doc is provided here.
                           │             │
                           ▼             │
               ┌────────────────────────┐│
-              │  ObjectFundsChecker    ││
-              │  (POST-execution check)││
-              │  — see object_funds_   ││
-              │    checking.md         ││
+              │  Sufficiency check     ││
+              │  in-execution (VM) —   ││
+              │  see object_funds_in_  ││
+              │  execution.md; legacy  ││
+              │  post-execution — see  ││
+              │  object_funds_checking ││
               └────────────┬───────────┘│
                            │            │
                            ▼            ▼
