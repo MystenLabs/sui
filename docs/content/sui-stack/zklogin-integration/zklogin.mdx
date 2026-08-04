@@ -258,7 +258,7 @@ salt = HKDF(master_secret, iss || aud || sub)
 
 ### Master secret management
 
-The master secret is the single most sensitive value in a zkLogin deployment. If it is lost, no user can recover their salt. If it is compromised, an attacker can derive any user's salt.
+The master secret is the single most sensitive value in a zkLogin deployment. If you lose it, no user can recover their salt. If an attacker compromises it, they can derive any user's salt.
 
 - Store the master secret in a cloud KMS (AWS KMS, GCP Cloud KMS) so it never exists in plaintext outside the HSM.
 - Maintain encrypted backups in a geographically separate location.
@@ -277,7 +277,7 @@ To avoid scenario 4, use deterministic salt derivation from the start, even duri
 
 ## Session lifecycle and renewal
 
-A zkLogin session is bound to an ephemeral key pair that is valid until a specific epoch (`maxEpoch`). After that epoch, any transaction signed with the ephemeral key is rejected by validators.
+A zkLogin session binds to an ephemeral key pair that remains valid until a specific epoch (`maxEpoch`). After that epoch, validators reject any transaction signed with the ephemeral key.
 
 ### Epoch timing
 
@@ -293,7 +293,7 @@ When the session approaches expiry, the application must re-authenticate:
 4. Generate a new ephemeral key pair with a fresh `maxEpoch`.
 5. Request a new ZK proof from the proving service using the new JWT and ephemeral key.
 
-The user's Sui address does not change. It is derived from `(iss, aud, sub, salt)`, none of which change during renewal.
+The user's Sui address does not change. The system derives it from `(iss, aud, sub, salt)`, none of which change during renewal.
 
 ### Silent renewal
 
@@ -313,7 +313,7 @@ To avoid transaction failures at the epoch boundary, use overlapping sessions:
 1. Before the current session expires (`currentEpoch == maxEpoch - 1`), generate a new ephemeral key pair and proof.
 2. The old key still works for the current epoch.
 3. Switch to the new key for all new transactions.
-4. Any in-flight transactions signed with the old key complete normally as long as they are processed before the epoch ends.
+4. Any in-flight transactions signed with the old key complete normally as long as the network processes them before the epoch ends.
 
 
 ## FAQ

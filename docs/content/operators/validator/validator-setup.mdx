@@ -217,11 +217,11 @@ This calls `request_add_validator` onchain. You become a pending validator and j
 
 :::caution
 
-Start your validator node **before** the epoch changes so you can participate from the first checkpoint. If your node is offline when the epoch starts, you miss consensus participation and may receive reduced rewards. See [Validator Deployment](/operators/validator/validator-config#deployment) for node startup instructions.
+Start your validator node **before** the epoch changes so you can participate from the first checkpoint. If your node is offline when the epoch starts, you miss consensus participation and might receive reduced rewards. See [Validator Deployment](/operators/validator/validator-config#deployment) for node startup instructions.
 
 :::
 
-## Step 6: Set up Operation Cap
+## Step 6: Set up operation cap
 
 When you create a validator, the system generates an `UnverifiedValidatorOperationCap` and transfers it to your validator address. The holder of this capability can perform routine operations on your behalf (set gas prices, report other validators).
 
