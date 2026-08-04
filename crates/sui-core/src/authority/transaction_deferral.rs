@@ -67,6 +67,13 @@ impl DeferralKey {
     /// this key are never reloaded (`future_round` is past every reload range, and
     /// `range_for_up_to_consensus_round` panics before reaching it), so scheduling is
     /// unaffected; restart seeding reads them to rebuild the deferred-locks map only.
+    ///
+    /// This binary version only READS sentinel rows: it must not write them, because a
+    /// binary that predates this key treats any deferral row as a pending deferral and
+    /// blocks epoch close on it - a checkpoint fork for the writer if it is later rolled
+    /// back mid-epoch. Writing becomes safe (and necessary, for restart coverage) once
+    /// the lock table is removed, at which point every rollback target understands the
+    /// sentinel.
     pub fn new_lock_coverage_sentinel(displaced_at_round: Round) -> Self {
         Self::ConsensusRound {
             future_round: u64::MAX,
