@@ -50,25 +50,25 @@ pub(super) async fn live_object(
     object_id: ObjectID,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectResponse, RpcError> {
-    let object = if let Some(object) = load_live(ctx, object_id)
+    if let Some(object) = load_live(ctx, object_id)
         .await
         .context("Failed to load latest object")?
     {
-        return Ok(SuiObjectResponse::new_with_data(
+        Ok(SuiObjectResponse::new_with_data(
             object_data_with_options(ctx, object, options).await?,
-        ));
+        ))
     } else if let Some(coin) = AddressBalanceCoin::by_object_id(ctx, object_id)
         .await
         .context("Failed to resolve address balance object")?
     {
-        return Ok(SuiObjectResponse::new_with_data(
+        Ok(SuiObjectResponse::new_with_data(
             coin.into_sui_object_data(ctx, options).await?,
-        ));
+        ))
     } else {
-        return Ok(SuiObjectResponse::new_with_error(
+        Ok(SuiObjectResponse::new_with_error(
             SuiObjectResponseError::NotExists { object_id },
-        ));
-    };
+        ))
+    }
 }
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
