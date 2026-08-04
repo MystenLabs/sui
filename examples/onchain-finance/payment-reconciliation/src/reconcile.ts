@@ -22,7 +22,7 @@ async function extractPaymentDetails(digest: string) {
 	const payments = (txResult.Transaction.balanceChanges ?? [])
 		.filter((change) => BigInt(change.amount) > 0n)
 		.map((change) => ({
-			recipient: change.owner,
+			recipient: change.address,
 			amount: change.amount,
 			coinType: change.coinType,
 		}));
