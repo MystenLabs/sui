@@ -34,21 +34,23 @@ async function handleProviderWebhook(req: Request): Promise<Response> {
 
 	// Step 2: Verify onchain state.
 	const txDigest = payload.transactionDigest;
-	const txResult = await suiClient.getTransaction({
+	const txResult = await suiClient.core.getTransaction({
 		digest: txDigest,
-		include: { effects: true, balanceChanges: true },
+		include: { effects: true },
 	});
 
-	const txData = txResult.Transaction ?? txResult.FailedTransaction;
-	const depositConfirmed = txData?.balanceChanges?.some(
-		(change: { address: string; coinType: string; amount: string }) =>
-			change.address === payload.recipientAddress &&
-			change.coinType === payload.coinType &&
-			BigInt(change.amount) >= BigInt(payload.amount),
-	);
+	if (txResult.$kind !== 'Transaction') {
+		await complianceLogger.warn('Transaction failed onchain', payload);
+		return new Response('Onchain verification failed', { status: 422 });
+	}
 
-	if (!depositConfirmed) {
-		// Log the mismatch for investigation.
+	// Verify the recipient received at least the expected amount.
+	const { balance } = await suiClient.core.getBalance({
+		owner: payload.recipientAddress,
+		coinType: payload.coinType,
+	});
+
+	if (BigInt(balance.balance) < BigInt(payload.amount)) {
 		await complianceLogger.warn('Webhook does not match onchain state', payload);
 		return new Response('Onchain verification failed', { status: 422 });
 	}

@@ -1,6 +1,6 @@
 ---
 title: Fiat integration
-sidebar_label: Fiat Integration
+sidebar_label: Fiat integration
 description: >-
   Integrate fiat on-ramps and off-ramps into Sui payment flows using
   third-party providers for card, bank, and mobile payment methods.
@@ -111,21 +111,7 @@ sequenceDiagram
 
 After the provider reports a successful payment, verify the deposit onchain before confirming to the user. Query the recipient's [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances) or check for a matching deposit event:
 
-```typescript
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-  network: 'mainnet',
-});
-
-// Check balance after webhook notification.
-const { balance } = await client.getBalance({
-  owner: userSuiAddress,
-});
-
-console.log('Current balance:', balance.balance);
-```
+<ImportContent source="examples/regulated-payments/src/verify-deposit.ts" mode="code" tag="verify-deposit" />
 
 :::caution
 
@@ -161,28 +147,7 @@ sequenceDiagram
 
 Use [address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) to transfer the withdrawal amount to the provider's collection address:
 
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-tx.moveCall({
-  target: '0x2::balance::send_funds',
-  typeArguments: ['0x2::sui::SUI'],
-  arguments: [
-    tx.balance({ balance: withdrawalAmount }),
-    tx.pure.address(providerCollectionAddress),
-  ],
-});
-
-const result = await client.signAndExecuteTransaction({
-  signer: userKeypair,
-  transaction: tx,
-});
-
-// Send the transaction digest to the provider for reconciliation.
-await notifyProvider({ digest: result.digest, amount: withdrawalAmount });
-```
+<ImportContent source="examples/regulated-payments/src/off-ramp.ts" mode="code" tag="off-ramp-send" />
 
 For more structured off-ramp payments, use [Payment Kit](/onchain-finance/payment-kit) registry payments with the provider as the receiver. This adds duplicate prevention and receipt generation to the flow.
 

@@ -23,7 +23,7 @@ const tx = new Transaction();
 tx.moveCall({
 	target: '0x2::balance::send_funds',
 	typeArguments: ['0x2::sui::SUI'],
-	arguments: [tx.balance({ balance: withdrawalAmount }), tx.pure.address(providerCollectionAddress)],
+	arguments: [tx.balance({ type: '0x2::sui::SUI', balance: withdrawalAmount }), tx.pure.address(providerCollectionAddress)],
 });
 
 const result = await client.signAndExecuteTransaction({

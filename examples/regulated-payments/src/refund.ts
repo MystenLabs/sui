@@ -20,7 +20,7 @@ const tx = new Transaction();
 tx.moveCall({
 	target: '0x2::balance::send_funds',
 	typeArguments: [coinType],
-	arguments: [tx.balance({ balance: refundAmount }), tx.pure.address(userAddress)],
+	arguments: [tx.balance({ type: coinType, balance: refundAmount }), tx.pure.address(userAddress)],
 });
 
 await client.signAndExecuteTransaction({ signer: treasuryKeypair, transaction: tx });

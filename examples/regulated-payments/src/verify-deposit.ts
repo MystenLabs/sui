@@ -11,8 +11,9 @@ const userSuiAddress = '0xUSER_ADDRESS';
 
 // docs::#verify-deposit
 // Check balance after webhook notification.
-const { balance } = await client.getBalance({
+const { balance } = await client.core.getBalance({
 	owner: userSuiAddress,
+	coinType: '0x2::sui::SUI',
 });
 
 console.log('Current balance:', balance.balance);
