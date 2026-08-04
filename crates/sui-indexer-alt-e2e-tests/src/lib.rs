@@ -40,7 +40,6 @@ use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
-use sui_indexer_alt_jsonrpc::BigtableKvArgs;
 use sui_indexer_alt_jsonrpc::NodeArgs as JsonRpcNodeArgs;
 use sui_indexer_alt_jsonrpc::RpcArgs as JsonRpcArgs;
 use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
@@ -453,7 +452,6 @@ impl OffchainCluster {
             Some(database_url.clone()),
             DbArgs::default(),
             kv_args.clone(),
-            BigtableKvArgs::default(),
             consistent_reader_args.clone(),
             jsonrpc_args,
             jsonrpc_node_args,

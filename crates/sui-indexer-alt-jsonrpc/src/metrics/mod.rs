@@ -104,7 +104,7 @@ impl RpcMetrics {
 
             read_retries: register_int_counter_vec_with_registry!(
                 "read_retries",
-                "Number of retries for reads from Bigtable or Postgres tables",
+                "Number of retries for reads from Postgres tables",
                 &["table"],
                 registry
             )
