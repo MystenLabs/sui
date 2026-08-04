@@ -156,14 +156,15 @@ pub struct SubscriptionSpec {
     pub query: Option<BitmapQuery>,
 }
 
-/// One message per checkpoint per subscriber that either matched or is due a
-/// progress frame.
+/// Updates delivered to a subscriber while processing checkpoints. An initial
+/// progress frame may precede a matched frame for the entry checkpoint.
 pub enum SubscriptionUpdate {
     Matched(MatchedCheckpoint),
-    /// The stream advanced through `checkpoint` without a match and the
-    /// configured watermark interval elapsed. `tx_hi` is that checkpoint's
-    /// `network_total_transactions` (the exclusive tx-seq upper bound), used
-    /// to mint the boundary cursor position.
+    /// An initial tick identifies the safe position immediately before
+    /// subscription entry: `checkpoint` is the entry checkpoint minus one and
+    /// `tx_hi` is the entry checkpoint's transaction lower bound. A periodic
+    /// tick identifies a fully processed `checkpoint`; `tx_hi` is its
+    /// `network_total_transactions` (the exclusive transaction upper bound).
     WatermarkTick {
         checkpoint: u64,
         tx_hi: u64,
@@ -2068,8 +2069,26 @@ mod tests {
         .await
         .unwrap();
 
-        service.handle_checkpoint(checkpoint_with_events(1)).await;
+        let event_checkpoint = checkpoint_with_events(1);
+        let tx_lo = event_checkpoint.summary.data().network_total_transactions
+            - event_checkpoint.transactions.len() as u64;
+        service.handle_checkpoint(event_checkpoint).await;
         drain(&mut shards);
+
+        assert!(matches!(
+            tx_rx.recv().await.unwrap(),
+            SubscriptionUpdate::WatermarkTick {
+                checkpoint: 0,
+                tx_hi
+            } if tx_hi == tx_lo
+        ));
+        assert!(matches!(
+            ev_rx.recv().await.unwrap(),
+            SubscriptionUpdate::WatermarkTick {
+                checkpoint: 0,
+                tx_hi
+            } if tx_hi == tx_lo
+        ));
 
         // Unfiltered matches arrive as O(1) "all" payloads that the index
         // accessors expand to every transaction / event.

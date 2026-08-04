@@ -12,9 +12,10 @@
 //! and event frame carries a `watermark`; its payload is optional. Every
 //! checkpoint frame carries a scalar `cursor`; its checkpoint payload is
 //! optional, and progress-only checkpoint frames occur only on filtered
-//! streams. The first frame on a
-//! filtered subscription is a progress-only frame establishing the stream's
-//! start position. Further progress-only frames are emitted when a stream
+//! streams. At non-genesis entry, transaction and event streams and filtered
+//! checkpoint streams begin with a progress-only frame establishing the safe
+//! position immediately before entry. Unfiltered checkpoint streams begin with
+//! a checkpoint payload. Further progress-only frames are emitted when a stream
 //! advances a configured number of checkpoints without a matching item (see
 //! `RpcConfig::subscription_watermark_interval`). Streams have no successful
 //! end: when the subscription actor drops a subscriber (lag or backpressure),
@@ -415,8 +416,8 @@ fn render_transaction_message(
 }
 
 /// Fold a subscription progress tick into the stream's checkpoint coverage.
-/// A filtered subscription's first tick names the checkpoint immediately before
-/// its entry checkpoint; later ticks name checkpoints the actor fully processed.
+/// A subscription's first tick names the checkpoint immediately before its
+/// entry checkpoint; later ticks name checkpoints the actor fully processed.
 /// Both establish a safe covered boundary.
 fn record_watermark_tick_coverage(
     covered_checkpoint_bound: &mut Option<u64>,
