@@ -1634,7 +1634,7 @@ impl AuthorityPerEpochStore {
 
     /// Acquire the lock for a tx without writing to the WAL.
     pub fn acquire_tx_lock(&self, digest: &TransactionDigest) -> CertLockGuard {
-        CertLockGuard(self.mutex_table.acquire_lock(*digest))
+        CertLockGuard(self.mutex_table.acquire_lock_blocking(*digest))
     }
 
     pub fn store_reconfig_state(&self, new_state: &ReconfigState) -> SuiResult {
