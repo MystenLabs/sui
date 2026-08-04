@@ -9,6 +9,7 @@
 
 mod artifacts;
 mod input_loader;
+mod output;
 mod preparation;
 mod runtime_store;
 
@@ -37,6 +38,7 @@ pub use artifacts::save_local_dry_run_artifacts;
 pub use input_loader::{
     PreparedLocalDryRun, prepare_checked_local_dry_run, protocol_config_for_snapshot,
 };
+pub use output::build_local_dry_run_response;
 pub use preparation::{
     PreparedLocalSimulationTransaction, prepare_transaction_for_local_simulation,
 };
