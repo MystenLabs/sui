@@ -63,6 +63,8 @@ use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::Store as RpcStore;
 use sui_rpc_store::default_rocksdb_config;
 use sui_rpc_store::restore_indexes;
+use sui_rpc_store::schema::event_bitmap;
+use sui_rpc_store::schema::transaction_bitmap;
 use sui_rpc_store::seed_history_cohort;
 use sui_types::digests::ChainIdentifier;
 use sui_types::full_checkpoint_content::Checkpoint;
@@ -82,6 +84,8 @@ use crate::storage::RocksDbStore;
 /// Subdirectory of the node's `db_path()` holding the rpc-store.
 const RPC_STORE_DIR: &str = "rpc_store";
 
+const SECONDS_PER_DAY: u64 = 86_400;
+
 /// Number of in-memory snapshots retained for consistent reads.
 ///
 /// Zero disables snapshotting entirely (the synchronizer's
@@ -90,18 +94,37 @@ const RPC_STORE_DIR: &str = "rpc_store";
 /// it for now.
 const SNAPSHOT_CAPACITY: usize = 0;
 
-fn db_options() -> DbOptions {
-    DbOptions {
-        rocksdb: default_rocksdb_config(),
-        snapshot_capacity: SNAPSHOT_CAPACITY,
+fn bitmap_periodic_compaction_seconds(days: u64) -> anyhow::Result<u64> {
+    days.checked_mul(SECONDS_PER_DAY).ok_or_else(|| {
+        anyhow::anyhow!("rpc-store-bitmap-periodic-compaction-days value {days} overflows seconds")
+    })
+}
+
+fn db_options(bitmap_periodic_compaction_days: Option<u64>) -> anyhow::Result<DbOptions> {
+    let mut rocksdb = default_rocksdb_config();
+    if let Some(days) = bitmap_periodic_compaction_days {
+        let seconds = bitmap_periodic_compaction_seconds(days)?;
+        for name in [transaction_bitmap::NAME, event_bitmap::NAME] {
+            rocksdb
+                .column_family
+                .get_mut(name)
+                .expect("default RocksDB config must define every bitmap CF")
+                .periodic_compaction_seconds = Some(seconds);
+        }
     }
+    Ok(DbOptions {
+        rocksdb,
+        snapshot_capacity: SNAPSHOT_CAPACITY,
+    })
 }
 
 /// Open the rpc-store database at `path`.
 #[cfg(not(msim))]
-async fn open_db(path: &std::path::Path) -> anyhow::Result<(Db, RpcStoreSchema)> {
-    Db::open::<RpcStoreSchema>(path, db_options())
-        .context("opening the embedded rpc-store database")
+async fn open_db(
+    path: &std::path::Path,
+    options: DbOptions,
+) -> anyhow::Result<(Db, RpcStoreSchema)> {
+    Db::open::<RpcStoreSchema>(path, options).context("opening the embedded rpc-store database")
 }
 
 /// Open the rpc-store database at `path`, retrying a transient lock
@@ -123,13 +146,16 @@ async fn open_db(path: &std::path::Path) -> anyhow::Result<(Db, RpcStoreSchema)>
 /// thread, so the prior instance's teardown completes before the restart
 /// and the open never races.
 #[cfg(msim)]
-async fn open_db(path: &std::path::Path) -> anyhow::Result<(Db, RpcStoreSchema)> {
+async fn open_db(
+    path: &std::path::Path,
+    options: DbOptions,
+) -> anyhow::Result<(Db, RpcStoreSchema)> {
     const OPEN_ATTEMPTS: usize = 60;
     const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
 
     let mut attempt = 1;
     loop {
-        match Db::open::<RpcStoreSchema>(path, db_options()) {
+        match Db::open::<RpcStoreSchema>(path, options.clone()) {
             Ok(opened) => return Ok(opened),
             Err(e) if attempt < OPEN_ATTEMPTS => {
                 tracing::warn!(
@@ -301,7 +327,12 @@ impl EmbeddedRpcStore {
     ) -> anyhow::Result<Self> {
         let perpetual = authority_store.perpetual_tables.clone();
         let path = config.db_path().join(RPC_STORE_DIR);
-        let (db, schema) = open_db(&path).await?;
+        let options = db_options(
+            config
+                .authority_store_pruning_config
+                .rpc_store_bitmap_periodic_compaction_days,
+        )?;
+        let (db, schema) = open_db(&path, options).await?;
         let schema = Arc::new(schema);
 
         // Expose per-CF RocksDB stats (sizes, compaction backlog,
@@ -789,6 +820,51 @@ mod tests {
             chain_matches,
             restore_in_progress: false,
             history_seed_pending: false,
+        }
+    }
+
+    #[test]
+    fn bitmap_periodic_compaction_days_convert_to_seconds() {
+        assert_eq!(bitmap_periodic_compaction_seconds(0).unwrap(), 0);
+        assert_eq!(bitmap_periodic_compaction_seconds(30).unwrap(), 2_592_000);
+        let error = bitmap_periodic_compaction_seconds(u64::MAX).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("rpc-store-bitmap-periodic-compaction-days"),
+            "{message}"
+        );
+        assert!(message.contains(&u64::MAX.to_string()), "{message}");
+    }
+
+    #[test]
+    fn bitmap_periodic_compaction_defaults_and_overrides_target_only_bitmap_cfs() {
+        let defaults = db_options(None).unwrap().rocksdb;
+        assert_eq!(
+            defaults.column_family[transaction_bitmap::NAME].periodic_compaction_seconds,
+            Some(7 * SECONDS_PER_DAY)
+        );
+        assert_eq!(
+            defaults.column_family[event_bitmap::NAME].periodic_compaction_seconds,
+            Some(7 * SECONDS_PER_DAY)
+        );
+
+        let config = db_options(Some(17)).unwrap().rocksdb;
+        assert_eq!(
+            config.column_family[transaction_bitmap::NAME].periodic_compaction_seconds,
+            Some(17 * SECONDS_PER_DAY)
+        );
+        assert_eq!(
+            config.column_family[event_bitmap::NAME].periodic_compaction_seconds,
+            Some(17 * SECONDS_PER_DAY)
+        );
+        assert_eq!(config.default_cf.periodic_compaction_seconds, None);
+        for (name, tuning) in &config.column_family {
+            if tuning.periodic_compaction_seconds.is_some() {
+                assert!(
+                    [transaction_bitmap::NAME, event_bitmap::NAME].contains(&name.as_str()),
+                    "periodic compaction unexpectedly configured for {name}",
+                );
+            }
         }
     }
 
