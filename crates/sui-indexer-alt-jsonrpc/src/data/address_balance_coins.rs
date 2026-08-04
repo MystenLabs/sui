@@ -28,7 +28,7 @@ use crate::error::RpcError;
 
 /// Struct to support a view of an address balance as a coin.
 ///
-/// An address balance is an entry folded into a balance accumulator. However, consumers of of
+/// An address balance is an entry folded into a balance accumulator. However, consumers of
 /// jsonrpc-alt expect `ObjectRef`s, so the implementation spoofs one using a masked ID, the
 /// accumulator object's version, and the digest field repurposed as a carrier for (epoch, amount).
 pub(crate) struct AddressBalanceCoin {
