@@ -203,7 +203,7 @@ Not all tools in the Sui ecosystem require manual migration:
 
 - **dApp Kit**: The currently published `@mysten/dapp-kit` client factory requires `SuiJsonRpcClient` and does not accept `SuiGrpcClient`. Continue using its JSON-RPC client until a dApp Kit release explicitly adds transport-agnostic client support; do not substitute `SuiGrpcClient` in `createClient`.
 
-- **Kiosk SDK** (`@mysten/kiosk`): No changes needed. Kiosk operations are PTB move calls that you build with the `Transaction` class and execute through your app's Sui client. Swap the app's client to `SuiGrpcClient` and all Kiosk code works unchanged.
+- **Kiosk SDK** (`@mysten/kiosk`): Continue using a supported JSON-RPC or GraphQL client for Kiosk object and event queries. The currently published Kiosk SDK does not accept `SuiGrpcClient`; migrate only after a Kiosk release explicitly adds gRPC support.
 
 - **Walrus site-builder**: The site-builder manages its own Sui connection through `sites-config.yaml`. Check the [Walrus documentation](https://docs.wal.app/) for gRPC migration status, as the transport is controlled by the Walrus team.
 
