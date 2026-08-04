@@ -8,6 +8,7 @@ packages:
   - '!examples/deepbook-margin'
   - '!examples/oracle-adapter/ts'
   - '!examples/ptb-cookbook'
+  - '!examples/onchain-finance/agent-wallet'
   - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'
   - '!**/.next/**'

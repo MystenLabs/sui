@@ -63,7 +63,7 @@ The TypeScript SDK supports three ways to create a key pair.
 	tag="generate-new"
 />
 
-`getSecretKey()` returns a Bech32-encoded string prefixed with `suiprivkey`. Store it securely (see next section). The address is the agent's onchain identity.
+`getSecretKey()` returns a Bech32-encoded string prefixed with `suiprivkey`. Store it in your KMS or secrets manager (see next section). Never log the secret key. The address is the agent's onchain identity.
 
 ### From a mnemonic
 
@@ -83,7 +83,7 @@ Use a mnemonic when you need to recover the key pair from a backup. Store the mn
 	tag="from-secret-key"
 />
 
-This is the most common pattern for production agents: load the key from an environment variable or secrets manager at startup.
+This is the raw form. For production agents, load the key from an environment variable or secrets manager at startup, as shown in the next section.
 
 ## Key storage
 
@@ -102,6 +102,8 @@ export AGENT_SECRET_KEY="suiprivkey1..."
 	mode="code"
 	tag="env-load"
 />
+
+Fail fast when the variable is missing. A non-null assertion silently passes `undefined` to `fromSecretKey`, which surfaces later as an opaque error.
 
 ### Cloud KMS (production)
 
@@ -147,7 +149,7 @@ Every key pair maps to a Sui address. This address is where the agent receives o
 Before the agent can submit transactions, its address needs either:
 
 - SUI for gas payments, or
-- A [gas station](/onchain-finance/gas-station) that sponsors transactions on its behalf
+- A gas station that [sponsors transactions](/develop/transaction-payment/sponsor-txn) on its behalf
 
 For agents that exclusively use sponsored transactions, the agent address never needs to hold SUI.
 
@@ -168,6 +170,8 @@ For sponsored transactions where the gas station provides a co-signature, the ag
 	mode="code"
 	tag="sign-sponsored"
 />
+
+Transactions built with a client default to expiring at the current epoch + 1. A sponsored round trip (agent builds, gas station co-signs, agent submits) that crosses an epoch boundary is rejected. For flows where the gas station holds the bytes, set the expiration explicitly with `tx.setExpiration({ None: true })` and rely on the mandate for replay protection instead.
 
 See [Offline Signing](/develop/transactions/transaction-auth/offline-signing) for the full dual-signature flow.
 
@@ -209,4 +213,4 @@ When a single agent key is too risky (for example, an agent that manages large b
 
 A 1-of-2 multisig lets the agent operate autonomously (it can sign alone), but the operator can also sign transactions from the same address to revoke mandates or transfer objects in an emergency.
 
-For higher security, use a 2-of-3 multisig where both the agent and an operator must sign. This prevents the agent from acting unilaterally but adds latency to every transaction.
+For higher security, use a 2-of-3 multisig where the agent alone cannot act: any two of the agent, an operator, and a backup key must sign. This prevents unilateral agent action and gives you a recovery path if one key is lost, at the cost of added latency on every transaction.
