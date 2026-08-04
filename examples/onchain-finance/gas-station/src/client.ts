@@ -1,17 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction, TransactionDataBuilder } from "@mysten/sui/transactions";
 import { fromBase64, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 
-const client = new SuiClient({ url: "https://fullnode.testnet.sui.io:443" });
+const client = new SuiGrpcClient({
+    network: "testnet",
+    baseUrl: "https://fullnode.testnet.sui.io:443",
+});
 const user = new Ed25519Keypair();
 const gasStationUrl = "http://localhost:3001";
 const apiKey = process.env.SPONSOR_API_KEY!;
 const expectedSponsor = normalizeSuiAddress(process.env.SPONSOR_ADDRESS!);
 const maxGasBudget = 10_000_000n;
+
+// Node's Buffer is not available in a browser, and this flow usually runs in
+// one. Compare the bytes directly instead.
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    let difference = 0;
+    for (let i = 0; i < a.length; i++) difference |= a[i] ^ b[i];
+    return difference === 0;
+}
 
 // docs::#client-flow
 const tx = new Transaction();
@@ -43,7 +55,7 @@ if (
 const finalBytes = fromBase64(sponsored.txBytes);
 const finalData = TransactionDataBuilder.fromBytes(finalBytes);
 const returnedKind = finalData.build({ onlyTransactionKind: true });
-if (!Buffer.from(returnedKind).equals(Buffer.from(kindBytes))) {
+if (!bytesEqual(returnedKind, kindBytes)) {
     throw new Error("Gas station changed the transaction kind");
 }
 if (normalizeSuiAddress(finalData.sender!) !== user.toSuiAddress()) {
@@ -61,16 +73,17 @@ if (
 const digest = TransactionDataBuilder.getDigestFromBytes(finalBytes);
 if (digest !== sponsored.digest) throw new Error("Gas station returned the wrong digest");
 
-const dryRun = await client.dryRunTransactionBlock({ transactionBlock: finalBytes });
-if (dryRun.effects.status.status !== "success")
-    throw new Error("Sponsored transaction dry run failed");
+// TODO(verify): confirm simulateTransaction's request and result shape.
+const simulation = await client.core.simulateTransaction({ transaction: finalBytes });
+if (!simulation.transaction.effects.status.success) {
+    throw new Error("Sponsored transaction simulation failed");
+}
 const userSig = await user.signTransaction(finalBytes);
 
 try {
-    await client.executeTransactionBlock({
-        transactionBlock: finalBytes,
-        signature: [userSig.signature, sponsored.sponsorSignature],
-        options: { showEffects: true },
+    await client.core.executeTransaction({
+        transaction: finalBytes,
+        signatures: [userSig.signature, sponsored.sponsorSignature],
     });
 } finally {
     // Confirm the digest the client inspected, even if execution reports an

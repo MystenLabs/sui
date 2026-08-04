@@ -6,7 +6,15 @@ import type express from 'express';
 // Placeholder types for the agent sponsorship example
 declare function verifyApiKey(apiKey: string): Promise<{ address: string; dailyGasBudget: number } | null>;
 declare function getAgentDailySpend(address: string): Promise<number>;
+declare function sponsorTransaction(txBytes: string, sender: string): Promise<{
+    txBytes: string;
+    sponsorSignature: string;
+    sponsorAddress: string;
+    gasCoinId: string;
+    digest: string;
+}>;
 
+// Keep in sync with GAS_BUDGET in server.ts.
 const GAS_BUDGET = 10_000_000;
 
 // docs::#agent-sponsor
@@ -27,7 +35,14 @@ async function handleAgentSponsor(req: express.Request, res: express.Response) {
 		return;
 	}
 
-	// ... same sponsorship flow as the /sponsor endpoint
+	// From here the flow is identical to /sponsor: validate the transaction
+	// kind against the allowlist, acquire a gas coin, set gas data, simulate,
+	// then sign.
+	try {
+		res.json(await sponsorTransaction(txBytes, agent.address));
+	} catch (error) {
+		res.status(400).json({ error: (error as Error).message });
+	}
 }
 // docs::/#agent-sponsor
 
