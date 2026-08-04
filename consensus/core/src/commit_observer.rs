@@ -270,7 +270,9 @@ impl CommitObserver {
         );
     }
 
-    fn report_commit_metrics(&self, commit: &CommittedSubDag) {
+    /// Reports per-commit metrics and logs the commit. Called for every commit on the
+    /// legacy path via `report_metrics`, and directly by `Core::post_commit` on the v3 path.
+    pub(crate) fn report_commit_metrics(&self, commit: &CommittedSubDag) {
         let metrics = &self.context.metrics.node_metrics;
         let utc_now = self.context.clock.timestamp_utc_ms();
 
