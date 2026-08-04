@@ -4,6 +4,8 @@
 
 # Welcome to Sui
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.jessiemongeon1%2Fsui-kapa.svg)](https://mcptoplist.com/server/io.github.jessiemongeon1%2Fsui-kapa)
+
 [![Github release](https://img.shields.io/github/v/release/MystenLabs/sui.svg?sort=semver)](https://github.com/MystenLabs/sui/releases/latest)
 [![License](https://img.shields.io/github/license/MystenLabs/sui)](https://github.com/MystenLabs/sui/blob/main/LICENSE)
 
