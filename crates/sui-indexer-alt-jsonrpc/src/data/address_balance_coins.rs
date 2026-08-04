@@ -53,14 +53,18 @@ pub(crate) async fn load_address_balance_coin(
     let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)
         .context("Failed to derive accumulator field ID")?;
 
-    let Some(accumulator_obj) = load_live(ctx, *accumulator_id.inner()).await? else {
+    let (accumulator_obj, epoch) = tokio::try_join!(
+        load_live(ctx, *accumulator_id.inner()),
+        super::latest_epoch(ctx),
+    )?;
+
+    let Some(accumulator_obj) = accumulator_obj else {
         // No accumulator field exists for this owner and coin type.
         return Ok(None);
     };
 
     let accumulator_version = accumulator_obj.version();
     let previous_transaction = accumulator_obj.previous_transaction;
-    let epoch = super::latest_epoch(ctx).await?;
     let chain_identifier = ctx
         .chain_identifier()
         .context("Chain identifier not available (no database configured)")?;
