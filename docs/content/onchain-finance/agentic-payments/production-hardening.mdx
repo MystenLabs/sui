@@ -55,15 +55,7 @@ A kill-switch lets you halt all agent operations immediately. Implement two laye
 
 ### Offchain kill-switch
 
-The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction.
-
-<ImportContent
-	source="examples/onchain-finance/production-hardening/src/patterns.ts"
-	mode="code"
-	tag="kill-switch"
-/>
-
-For teams using feature flag services (LaunchDarkly, Unleash, or similar), check the flag instead of an environment variable. This lets you toggle the kill-switch without redeploying.
+The agent checks an environment variable or feature flag before every transaction. This is the fastest way to stop an agent because it requires no onchain transaction. For teams using feature flag services (LaunchDarkly, Unleash, or similar), check the flag instead of an environment variable. This lets you toggle the kill-switch without redeploying.
 
 ### Onchain kill-switch
 
@@ -99,12 +91,6 @@ Sui transactions are atomic. They either fully succeed or fully revert. But netw
 
 5. **Enforce value-transfer idempotency onchain.** Offchain claims prevent concurrent workers, but a crash or database restore can still replay business operations. Use Payment Kit registry payments or a custom Move registry to consume the idempotency key atomically with the transfer.
 
-<ImportContent
-	source="examples/onchain-finance/production-hardening/src/patterns.ts"
-	mode="code"
-	tag="safe-execute"
-/>
-
 ### Idempotency keys
 
 An idempotency key is a client-generated identifier (typically a UUIDv4) that uniquely represents an operation. Atomically claim it in a durable store before submission; a read followed by a write is not safe when workers run concurrently. Retain the claim for at least as long as the business operation can be retried, and reconcile the stored digest instead of creating a replacement transaction.
@@ -123,21 +109,9 @@ For onchain idempotency, the [Payment Kit](/onchain-finance/payment-kit) provide
 
 A circuit breaker halts the agent after a configurable number of consecutive failures. This prevents an agent from burning gas on transactions that consistently fail due to an upstream issue.
 
-<ImportContent
-	source="examples/onchain-finance/production-hardening/src/patterns.ts"
-	mode="code"
-	tag="circuit-breaker"
-/>
-
 ## Rate limiting
 
 Enforce per-agent rate limits to cap how many transactions the agent submits per minute or per hour. This protects against bugs that cause rapid-fire transaction submission.
-
-<ImportContent
-	source="examples/onchain-finance/production-hardening/src/patterns.ts"
-	mode="code"
-	tag="rate-limiter"
-/>
 
 ## Monitoring checklist
 
@@ -149,13 +123,7 @@ Track these metrics for every production agent:
 - **Circuit breaker state.** Log when the breaker opens and closes.
 - **Latency.** Measure time from transaction submission to confirmation. Sui finalizes in under a second; sustained latency above 5 seconds indicates an RPC or network issue.
 
-Emit structured logs (JSON) for each transaction attempt:
-
-<ImportContent
-	source="examples/onchain-finance/production-hardening/src/patterns.ts"
-	mode="code"
-	tag="structured-log"
-/>
+Emit structured logs (JSON) for each transaction attempt, including the digest, status, gas used, and any error details.
 
 ## Testnet to Mainnet checklist
 

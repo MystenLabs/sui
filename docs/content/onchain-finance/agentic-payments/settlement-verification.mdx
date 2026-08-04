@@ -68,67 +68,23 @@ flowchart LR
 
 After submitting a transaction, use `waitForTransaction` to block until the transaction is finalized. Do not treat a successful submission response as proof of settlement. Submission means the transaction was received, not that it succeeded.
 
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="wait-for-finality"
-/>
-
 ## Verifying transaction effects
 
-After the transaction is confirmed, inspect the effects to verify the payment.
+After the transaction is confirmed, inspect the effects to verify the payment:
 
-### Check status
-
-The most basic check: did the transaction succeed?
-
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="assert-success"
-/>
-
-### Verify balance changes
-
-For basic coin transfers, check `balanceChanges` to confirm the correct amount reached the correct recipient.
-
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="verify-balance-changes"
-/>
-
-### Verify Payment Kit events
-
-If you are using the [Payment Kit](/onchain-finance/payment-kit), verify the emitted `PaymentReceipt` event instead of relying only on raw balance changes. Match the full event type against your network's audited Payment Kit package ID, and match the nonce, exact amount, coin type, and receiver. Also require a successful transaction status before releasing goods.
-
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="verify-payment-kit-events"
-/>
+1. **Check status.** Verify the transaction succeeded (not reverted).
+2. **Verify balance changes.** For basic coin transfers, check `balanceChanges` to confirm the correct amount reached the correct recipient.
+3. **Verify Payment Kit events.** If you use the [Payment Kit](/onchain-finance/payment-kit), verify the emitted `PaymentReceipt` event. Match the full event type against your network's audited Payment Kit package ID, and match the nonce, exact amount, coin type, and receiver.
 
 ## Handling edge cases
 
 ### Transaction succeeded but recipient is wrong
 
-This is an agent bug, not a network issue. The transaction is final and cannot be reversed. Prevent this by validating the recipient address before building the transaction:
-
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="validate-address"
-/>
+This is an agent bug, not a network issue. The transaction is final and cannot be reversed. Prevent this by validating the recipient address before building the transaction.
 
 ### Transaction timed out
 
-If `waitForTransaction` times out, the transaction might still succeed later. Query the digest directly before retrying:
-
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="handle-timeout"
-/>
+If `waitForTransaction` times out, the transaction might still succeed later. Query the stored digest directly before retrying.
 
 See [Production Hardening](/onchain-finance/agentic-payments/production-hardening) for the full retry-safety pattern.
 
@@ -153,13 +109,7 @@ For high-value flows, move the verification logic onchain using a Move module. T
 	tag="settlement"
 />
 
-In the PTB, chain `pay_and_prove` into `consume_proof`:
-
-<ImportContent
-	source="examples/onchain-finance/settlement/src/verify.ts"
-	mode="code"
-	tag="onchain-settlement-ptb"
-/>
+In the PTB, chain `pay_and_prove` into `consume_proof` so that the settlement check happens atomically within the same transaction.
 
 ## Polling vs event subscription
 

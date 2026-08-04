@@ -53,9 +53,7 @@ Paying a raw Sui address like `0x7b8e...3f2a` is error-prone. Recipient resoluti
 
 ### Resolve a name with the TypeScript SDK
 
-Use the gRPC `NameService.LookupName` method through the SDK:
-
-<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="resolve-name" />
+Use the gRPC `NameService.LookupName` method through the SDK to resolve a `.sui` name to its target address.
 
 :::danger Always verify name validity
 
@@ -65,9 +63,7 @@ A `.sui` name can expire and be re-registered by a different user. `LookupName` 
 
 ### Reverse resolution
 
-To display a human-readable name in transaction history or receipts, look up the default name for an address:
-
-<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="reverse-resolve" />
+To display a human-readable name in transaction history or receipts, use `NameService.ReverseLookupName` to look up the default name for an address.
 
 ### Resolve through GraphQL
 
@@ -120,8 +116,4 @@ Clients query the registry onchain before building the payment transaction. This
 
 ## Combining with payments
 
-When building a payment flow, resolve the recipient before constructing the PTB:
-
-<ImportContent source="examples/onchain-finance/recipient-resolution/src/resolve.ts" mode="code" tag="pay-by-name" />
-
-For the full payment flow including gas sponsorship and settlement verification, see the [P2P Reference App](/onchain-finance/p2p-reference-app).
+When building a payment flow, resolve the recipient address before constructing the PTB. Call `LookupName` to get the address, then use the resolved address in your `transferObjects` or `send_funds` call.

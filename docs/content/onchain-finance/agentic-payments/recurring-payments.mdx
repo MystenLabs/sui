@@ -65,9 +65,7 @@ sequenceDiagram
 
 ### Implementation
 
-The agent runs a basic loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge):
-
-<ImportContent source="examples/onchain-finance/recurring-payments/src/scheduler.ts" mode="code" tag="execute-recurring" />
+The agent runs a basic loop or is triggered by a scheduler (cron, Cloud Scheduler, AWS EventBridge). Each execution reads the mandate, builds a PTB that calls `execute_spend`, and submits the transaction.
 
 :::tip Use idempotency keys
 

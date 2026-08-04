@@ -69,6 +69,6 @@ For development and testing, use the Sui faucet to get free SUI tokens:
 Agents that operate autonomously have two options for gas:
 
 1. **Direct funding.** Transfer SUI to the agent's address. The agent pays its own gas. Basic, but requires monitoring the agent's balance and topping up periodically.
-2. **Gas sponsorship.** Deploy a [gas station](/onchain-finance/gas-station) that sponsors the agent's transactions. The agent never needs to hold SUI. This is the recommended pattern for production agents because it separates gas management from agent logic.
+2. **Gas sponsorship.** Use [sponsored transactions](/develop/transaction-payment/sponsor-txn) so a gas station sponsors the agent's transactions. The agent never needs to hold SUI. This is the recommended pattern for production agents because it separates gas management from agent logic.
 
-For agents using spending mandates, the mandate's owner funds the mandate with the tokens the agent can spend. The agent needs gas only if it is not using a gas sponsor. See [Agent Wallet Setup](/onchain-finance/agentic-payments/agent-wallet-setup) for details.
+For agents using spending mandates, the mandate's owner funds the mandate with the tokens the agent can spend. The agent needs gas only if it is not using a gas sponsor.
