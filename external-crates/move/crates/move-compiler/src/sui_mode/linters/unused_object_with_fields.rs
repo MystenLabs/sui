@@ -47,10 +47,7 @@ use crate::{
         },
     },
     diag,
-    diagnostics::{
-        Diagnostic, Diagnostics,
-        codes::{DiagnosticInfo, Severity, custom},
-    },
+    diagnostics::{Diagnostic, Diagnostics},
     hlir::ast::{
         BaseType_, Command, Command_ as C, Exp, LValue_ as L, Label, ModuleCall, SingleType,
         SingleType_, Type, TypeName_, UnannotatedExp_, Var,
@@ -58,18 +55,10 @@ use crate::{
     naming::ast::StructFields,
     parser::ast::Ability_,
     shared::program_info::TypingProgramInfo,
-    sui_mode::linters::{LinterDiagnosticCategory, LinterDiagnosticCode},
+    sui_mode::linters::SuiLintCode,
 };
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet};
-
-const UNUSED_OBJ_WITH_FIELDS_DIAG: DiagnosticInfo = custom(
-    crate::diagnostics::codes::DiagnosticOrigin::SuiLint,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::UnusedObjWithFields as u8,
-    "unused object with fields",
-);
 
 //**************************************************************************************************
 // types
@@ -238,7 +227,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         for (var, loc) in &self.tracked_params {
             if !used.contains(var) {
                 diags.add(diag!(
-                    UNUSED_OBJ_WITH_FIELDS_DIAG,
+                    SuiLintCode::UnusedObjWithFields.diag_info(),
                     (
                         *loc,
                         "Unused object with fields. Consider reading or writing \

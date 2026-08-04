@@ -4,10 +4,9 @@
 // Implements lint rule for Move code to detect unnecessary `public entry` functions.
 // It identifies and reports functions that contain both `public` and `entry` modifiers.
 
-use super::{LinterDiagnosticCategory, LinterDiagnosticCode};
+use super::SuiLintCode;
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::{ModuleIdent, Visibility},
     parser::ast::FunctionName,
     typing::{
@@ -15,14 +14,6 @@ use crate::{
         visitor::simple_visitor,
     },
 };
-
-const PUBLIC_ENTRY_DIAG: DiagnosticInfo = custom(
-    crate::diagnostics::codes::DiagnosticOrigin::SuiLint,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
-    "unnecessary `entry` on a `public` function",
-);
 
 simple_visitor!(
     UnnecessaryPublicEntry,
@@ -43,7 +34,10 @@ simple_visitor!(
         if is_entry && is_public {
             let msg = "`entry` on `public` is meaningless. In conjunction with `public`, `entry` \
                 adds no additional permissions or restrictions.";
-            let mut d = diag!(PUBLIC_ENTRY_DIAG, (fdef.entry.unwrap(), msg));
+            let mut d = diag!(
+                SuiLintCode::UnnecessaryPublicEntry.diag_info(),
+                (fdef.entry.unwrap(), msg)
+            );
             d.add_note(PUBLIC_ENTRY_NOTE);
             self.add_diag(d);
             return true;
