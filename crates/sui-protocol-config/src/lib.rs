@@ -377,6 +377,7 @@ const MAINNET_USDB: &str =
 //              Bound type nodes in accumulators.
 // Version 134: Add `package::original_package_id` and its native costs.
 //              Reduce the consensus block transaction count and payload limits.
+//              Enable check_object_funds_withdraw_in_execution on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4572,7 +4573,6 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.defer_owned_object_double_spend = true;
                         cfg.feature_flags.create_forwarding_address_registry = true;
-                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     }
                     cfg.object_record_new_uid_from_hash_cost_base = Some(1);
                     cfg.feature_flags
@@ -4584,6 +4584,9 @@ impl ProtocolConfig {
                     cfg.max_accumulator_type_nodes = Some(16);
                 }
                 134 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
                     cfg.package_original_package_id_impl_cost_base = Some(52);
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =

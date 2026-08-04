@@ -2123,6 +2123,8 @@ impl AuthorityState {
             );
 
         if !protocol_config.check_object_funds_withdraw_in_execution() {
+            // TODO: Move the object funds checker to the executor so that it can eventually be
+            // removed from the active code path.
             let object_funds_checker = self.object_funds_checker.load();
             if let Some(object_funds_checker) = object_funds_checker.as_ref()
                 && !object_funds_checker.should_commit_object_funds_withdraws(

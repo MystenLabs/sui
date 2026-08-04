@@ -709,6 +709,8 @@ pub(crate) mod checked {
             // Ungated: this only ever turns a would-be arithmetic failure into a deterministic abort,
             // which produces no committed effects and so cannot diverge from any previously-committed
             // result, and it applies uniformly across protocol versions.
+            // TODO: Remove this check from future executor versions once object funds checks run
+            // during execution.
             if result.is_ok()
                 && let Err(e) = temporary_store.check_accumulator_amounts_representable()
             {

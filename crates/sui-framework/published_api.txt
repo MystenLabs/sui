@@ -2452,6 +2452,9 @@ add_to_accumulator_address
 withdraw_from_accumulator_address
 	fun
 	0x2::funds_accumulator
+reserve_object_funds_for_withdrawal
+	fun
+	0x2::funds_accumulator
 create_withdrawal
 	public(package) fun
 	0x2::funds_accumulator

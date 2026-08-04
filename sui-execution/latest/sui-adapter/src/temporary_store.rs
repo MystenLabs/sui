@@ -22,6 +22,7 @@ use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
     TransactionEffectsV2, TransactionEvents,
 };
+use sui_types::error::SuiErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
@@ -1077,6 +1078,9 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
         )
     }
 
+    /// Loads the object balance at the required version and subtracts withdrawals from the same
+    /// checkpoint that have not settled yet.
+    /// This function is expected never to fail; an error indicates an invariant violation.
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
         let required_version = self
             .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
@@ -1093,13 +1097,9 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             ),
             None => 0,
         };
-        settled.checked_sub(unsettled).ok_or_else(|| {
-            mysten_common::debug_fatal!(
-                "unsettled object withdrawals {unsettled} exceed settled balance {settled} \
-                 for owner {owner} type {type_}"
-            );
-            sui_types::error::SuiErrorKind::ExecutionInvariantViolation.into()
-        })
+        settled
+            .checked_sub(unsettled)
+            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
 
