@@ -39,7 +39,7 @@ These instructions are for advanced users. If you just need a local development 
 
 :::
 
-Nodes expose metrics on `localhost:9184/metrics` by default.
+The examples below scrape `localhost:9184/metrics`, but the default full node template binds metrics to `0.0.0.0:9184`. Restrict `metrics-address` with a firewall or bind it to a private interface in production.
 
 You can view the metrics in the metrics UI, or use a tool like `curl` to get the metrics in a format that is easy to parse.
 
