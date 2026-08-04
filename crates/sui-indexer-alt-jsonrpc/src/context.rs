@@ -87,7 +87,6 @@ impl Context {
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = KvLoader::from_kv_sources(
-            None,
             kv_args
                 .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry)
                 .await?,

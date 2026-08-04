@@ -15,9 +15,7 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
-use sui_types::storage::ObjectKey;
 
-use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
 use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
@@ -73,33 +71,6 @@ impl Loader<VersionedObjectKey> for PgReader {
                 let stored = *key_to_stored.get(&(slice, key.1))?;
                 Some((*key, stored.clone()))
             })
-            .collect())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<VersionedObjectKey> for BigtableReader {
-    type Value = Object;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[VersionedObjectKey],
-    ) -> Result<HashMap<VersionedObjectKey, Object>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let object_keys: Vec<ObjectKey> = keys
-            .iter()
-            .map(|key| ObjectKey(key.0, key.1.into()))
-            .collect();
-
-        Ok(self
-            .objects(&object_keys)
-            .await?
-            .into_iter()
-            .map(|o| (VersionedObjectKey(o.id(), o.version().into()), o))
             .collect())
     }
 }

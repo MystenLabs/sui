@@ -21,7 +21,6 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 
-use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::pg_reader::PgReader;
@@ -59,39 +58,6 @@ impl Loader<CheckpointKey> for PgReader {
         Ok(checkpoints
             .into_iter()
             .map(|c| (CheckpointKey(c.sequence_number as u64), c))
-            .collect())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<CheckpointKey> for BigtableReader {
-    type Value = (
-        CheckpointSummary,
-        CheckpointContents,
-        AuthorityQuorumSignInfo<true>,
-    );
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[CheckpointKey],
-    ) -> Result<HashMap<CheckpointKey, Self::Value>, Error> {
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let checkpoint_keys: Vec<_> = keys.iter().map(|k| k.0).collect();
-
-        Ok(self
-            .checkpoints(&checkpoint_keys)
-            .await?
-            .into_iter()
-            .filter_map(|c| {
-                Some((
-                    CheckpointKey(c.summary.as_ref()?.sequence_number),
-                    (c.summary?, c.contents?, c.signatures?),
-                ))
-            })
             .collect())
     }
 }
