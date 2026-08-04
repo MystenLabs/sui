@@ -99,12 +99,12 @@ If the counter increases over time, the archival fallback is active.
 |--------|-----------|-------------|----------|
 | `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | AWS credentials | Mainnet archival fallback and full-retention backfill |
 | `https://checkpoints.testnet.sui.io` | 30 days | None | Testnet archival fallback |
-| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
-| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
+| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
+| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
 
 :::caution
 
-Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the S3 or GCS bucket instead.
+Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the S3 or GCS bucket instead. When you use a GCS Requester Pays bucket, configure credentials and pass your billing project in the `x-goog-user-project` header; see [Requester Pays checkpoint buckets](/operators/data-management/indexer-stack-setup#requester-pays).
 
 :::
 

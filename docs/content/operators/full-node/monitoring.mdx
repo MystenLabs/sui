@@ -89,6 +89,6 @@ scrape_configs:
 Set up alerts for the following conditions:
 
 - **Sync lag:** `highest_known_checkpoint - highest_synced_checkpoint > 100` sustained for 5 minutes indicates the node is falling behind.
-- **Node down:** `up{job="sui-fullnode"} == 0` indicates the node is unreachable.
+- **Node down:** `up{job="sui-fullnode"} == 0` sustained for 2 minutes indicates the node is unreachable.
 - **Execution lag:** `last_executed_checkpoint_timestamp_ms > 0 and time() - last_executed_checkpoint_timestamp_ms / 1000 > 120` sustained for 2 minutes indicates that the node is executing checkpoints more than 2 minutes behind chain time. This alert also fires while a healthy node catches up after an outage or snapshot restore. The `> 0` guard avoids false alerts during startup, when the timestamp has not yet been populated. To detect a stalled executor separately, alert when `last_executed_checkpoint` does not advance over a suitable interval.
 
