@@ -979,18 +979,27 @@ where
         // behind, the commit carrying a tip block may be many commits ahead of where
         // it is fetching. Hence the exemption from the commit-sync skip below.
         if !self.pending_exact_requests.is_empty() {
-            let dag_state = self.dag_state.read();
-            let gc_round = dag_state.gc_round();
+            // One bulk existence check under a single read guard: a per-reference
+            // check can degrade into one storage lookup each while holding the guard
+            // and blocking the command loop.
+            let (gc_round, exists) = {
+                let dag_state = self.dag_state.read();
+                let refs: Vec<BlockRef> = self.pending_exact_requests.iter().copied().collect();
+                (dag_state.gc_round(), dag_state.contains_blocks(refs))
+            };
+            let mut index = 0;
             self.pending_exact_requests.retain(|block_ref| {
-                block_ref.round > gc_round
-                    && !dag_state
-                        .contains_blocks(vec![*block_ref])
-                        .first()
-                        .copied()
-                        .unwrap_or(false)
+                let keep = block_ref.round > gc_round && !exists[index];
+                index += 1;
+                keep
             });
         }
         let pending_exact = self.pending_exact_requests.clone();
+        self.context
+            .metrics
+            .node_metrics
+            .synchronizer_pending_exact_requests
+            .set(pending_exact.len() as i64);
 
         // If commit is lagging and commit sync is making progress, skip periodic sync.
         // Commit syncer fetches certified commits with all necessary causal history.
@@ -1027,14 +1036,18 @@ where
             let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         }
-        // Registered exact requests are merged AFTER the failover filter and are
-        // ordered first for truncation: they are live blocks parked by minimal-block
-        // recovery, so no other path (commit sync, fetch_after_rounds, or the
-        // block-manager missing set) will ever deliver them, and a low-round backlog
-        // must not starve them pass after pass.
-        let exact_count = pending_exact.len();
-        let mut ordered_blocks = Vec::with_capacity(exact_count + missing_blocks.len());
-        ordered_blocks.extend(pending_exact.iter().copied());
+        // Registered exact requests are merged AFTER the failover filter, ahead of
+        // ordinary missing ancestors so a low-round backlog cannot starve them pass
+        // after pass — but only up to HALF the pass's capacity. Unbounded priority
+        // starves ordinary ancestry repair exactly when a lagging node needs it,
+        // which feeds back into more parking and more exact requests.
+        let pass_capacity =
+            2 * MAX_PERIODIC_SYNC_PEERS * self.context.parameters.max_blocks_per_fetch;
+        let exact_budget = pass_capacity / 2;
+        let exact_selected: Vec<BlockRef> =
+            pending_exact.iter().copied().take(exact_budget).collect();
+        let mut ordered_blocks = Vec::with_capacity(exact_selected.len() + missing_blocks.len());
+        ordered_blocks.extend(exact_selected.iter().copied());
         ordered_blocks.extend(
             missing_blocks
                 .into_iter()
@@ -1046,11 +1059,6 @@ where
             return Ok(());
         }
         let missing_blocks = ordered_blocks;
-        context
-            .metrics
-            .node_metrics
-            .synchronizer_pending_exact_requests
-            .set(exact_count as i64);
 
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
