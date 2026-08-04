@@ -1,115 +1,187 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
-import { normalizeStructTag, normalizeSuiAddress } from "@mysten/sui/utils";
+import { normalizeStructTag, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 
-const client = new SuiClient({ url: "https://fullnode.mainnet.sui.io:443" });
-const keypair = Ed25519Keypair.fromSecretKey(process.env.AGENT_SECRET_KEY!);
+import {
+    EXACT_SCHEME,
+    PAYMENT_REQUIRED_HEADER,
+    PAYMENT_RESPONSE_HEADER,
+    PAYMENT_SIGNATURE_HEADER,
+    X402_VERSION,
+    decodeHeaderValue,
+    encodeHeaderValue,
+    parsePaymentRequired,
+    parseSettlementResponse,
+} from "./x402.js";
+import type {
+    PaymentPayload,
+    PaymentRequired,
+    PaymentRequirements,
+    SettlementResponse,
+} from "./x402.js";
 
+const SUI_COIN_TYPE = normalizeStructTag("0x2::sui::SUI");
+
+const client = new SuiGrpcClient({
+    baseUrl: "https://fullnode.mainnet.sui.io:443",
+    network: "mainnet",
+});
+let cachedKeypair: Ed25519Keypair | undefined;
+
+/** Loaded on first use so the module can be imported without a key present. */
+function agentKeypair(): Ed25519Keypair {
+    if (!cachedKeypair) {
+        const secretKey = process.env.AGENT_SECRET_KEY;
+        if (!secretKey) throw new Error("Set AGENT_SECRET_KEY to a suiprivkey-encoded key");
+        cachedKeypair = Ed25519Keypair.fromSecretKey(secretKey);
+    }
+    return cachedKeypair;
+}
+
+// docs::#payment-policy
+/** Limits the agent enforces locally before signing anything. */
 interface PaymentPolicy {
     expectedOrigin: string;
-    expectedRecipient: string;
-    allowedCoinTypes: readonly string[];
-    maxAmountMist: bigint;
+    expectedPayTo: string;
+    allowedNetworks: readonly string[];
+    allowedAssets: readonly string[];
+    maxAmount: bigint;
 }
 
-interface PaymentInstructions {
-    amount: bigint;
-    recipient: string;
-    coinType: string;
-    challenge: string;
+/**
+ * Picks the first advertised payment method that satisfies the policy. A server
+ * can advertise several; none of them is trusted until it passes these checks.
+ */
+function selectPaymentRequirements(
+    required: PaymentRequired,
+    policy: PaymentPolicy,
+): PaymentRequirements {
+    const allowedAssets = policy.allowedAssets.map(normalizeStructTag);
+    const expectedPayTo = normalizeSuiAddress(policy.expectedPayTo);
+
+    for (const candidate of required.accepts) {
+        if (candidate.scheme !== EXACT_SCHEME) continue;
+        if (!policy.allowedNetworks.includes(candidate.network)) continue;
+        if (!allowedAssets.includes(normalizeStructTag(candidate.asset))) continue;
+        if (normalizeSuiAddress(candidate.payTo) !== expectedPayTo) continue;
+
+        const amount = BigInt(candidate.amount);
+        if (amount <= 0n || amount > policy.maxAmount) continue;
+
+        return candidate;
+    }
+
+    throw new Error("No advertised payment method satisfies the policy");
 }
+// docs::/#payment-policy
 
-function parsePaymentInstructions(value: unknown, policy: PaymentPolicy): PaymentInstructions {
-    if (!value || typeof value !== "object") throw new Error("Invalid payment instructions");
-    const record = value as Record<string, unknown>;
-    if (
-        typeof record.amount !== "string" ||
-        !/^[0-9]+$/.test(record.amount) ||
-        typeof record.recipient !== "string" ||
-        typeof record.coinType !== "string" ||
-        typeof record.challenge !== "string"
-    ) {
-        throw new Error("Invalid payment instructions");
+// docs::#build-payment
+/**
+ * Builds and signs the payment transaction. The client never broadcasts it: the
+ * resource server settles it after serving the request, so a rejected request
+ * costs nothing.
+ */
+async function signPayment(requirements: PaymentRequirements): Promise<PaymentPayload["payload"]> {
+    const keypair = agentKeypair();
+    const sender = keypair.toSuiAddress();
+    const payTo = normalizeSuiAddress(requirements.payTo);
+    const asset = normalizeStructTag(requirements.asset);
+    const amount = BigInt(requirements.amount);
+
+    const tx = new Transaction();
+    tx.setSender(sender);
+
+    if (asset === SUI_COIN_TYPE) {
+        const [payment] = tx.splitCoins(tx.gas, [tx.pure.u64(amount)]);
+        tx.transferObjects([payment], payTo);
+    } else {
+        const { objects: coins } = await client.core.listCoins({ owner: sender, coinType: asset });
+
+        const selected: string[] = [];
+        let total = 0n;
+        for (const coin of coins) {
+            selected.push(coin.objectId);
+            total += BigInt(coin.balance);
+            if (total >= amount) break;
+        }
+        const [primaryId, ...restIds] = selected;
+        if (!primaryId || total < amount) {
+            throw new Error(`Insufficient ${asset} balance for payment`);
+        }
+
+        // Merge only as many coins as the payment needs, so the transaction
+        // stays small enough to fit in an HTTP header.
+        const primary = tx.object(primaryId);
+        if (restIds.length > 0) {
+            tx.mergeCoins(
+                primary,
+                restIds.map((objectId) => tx.object(objectId)),
+            );
+        }
+        const [payment] = tx.splitCoins(primary, [tx.pure.u64(amount)]);
+        tx.transferObjects([payment], payTo);
     }
 
-    if (!/^[0-9a-f-]{36}$/i.test(record.challenge) || record.challenge.length !== 36) {
-        throw new Error("Invalid payment challenge");
-    }
+    // Built with a client, so the transaction carries the 2.0 default
+    // expiration of the current epoch plus one.
+    const bytes = await tx.build({ client });
+    const { signature } = await keypair.signTransaction(bytes);
 
-    const amount = BigInt(record.amount);
-    const recipient = normalizeSuiAddress(record.recipient);
-    const coinType = normalizeStructTag(record.coinType);
-    if (recipient !== normalizeSuiAddress(policy.expectedRecipient)) {
-        throw new Error("Payment recipient does not match policy");
-    }
-    if (!policy.allowedCoinTypes.map(normalizeStructTag).includes(coinType)) {
-        throw new Error("Payment coin type is not allowed");
-    }
-    if (amount <= 0n || amount > policy.maxAmountMist) {
-        throw new Error("Payment amount exceeds policy");
-    }
-
-    return { amount, recipient, coinType, challenge: record.challenge };
+    return { signature, transaction: toBase64(bytes) };
 }
+// docs::/#build-payment
 
 // docs::#fetch-with-payment
-async function fetchWithPayment(url: string, policy: PaymentPolicy): Promise<Response> {
+interface PaidResponse {
+    response: Response;
+    settlement?: SettlementResponse;
+}
+
+async function fetchWithPayment(url: string, policy: PaymentPolicy): Promise<PaidResponse> {
     const requestUrl = new URL(url);
     const expectedOrigin = new URL(policy.expectedOrigin).origin;
-    if (requestUrl.origin !== expectedOrigin)
+    if (requestUrl.origin !== expectedOrigin) {
         throw new Error("Request origin does not match policy");
+    }
 
     // Do not follow redirects across the payment trust boundary.
     const response = await fetch(requestUrl, { redirect: "manual" });
-    if (response.url && new URL(response.url).origin !== expectedOrigin) {
-        throw new Error("Payment instructions came from an unexpected origin");
-    }
-    if (response.status !== 402) return response;
+    if (response.status !== 402) return { response };
 
-    const { amount, recipient, coinType, challenge } = parsePaymentInstructions(
-        await response.json(),
-        policy,
-    );
-    const challengeBytes = new TextEncoder().encode(challenge);
-    const { signature: challengeSignature } = await keypair.signPersonalMessage(challengeBytes);
+    const header = response.headers.get(PAYMENT_REQUIRED_HEADER);
+    if (!header) throw new Error("402 response is missing the PAYMENT-REQUIRED header");
 
-    const tx = new Transaction();
-    tx.setSender(keypair.toSuiAddress());
-    if (coinType === normalizeStructTag("0x2::sui::SUI")) {
-        const [coin] = tx.splitCoins(tx.gas, [amount]);
-        tx.transferObjects([coin], recipient);
-    } else {
-        const { data: coins } = await client.getCoins({
-            owner: keypair.toSuiAddress(),
-            coinType,
-        });
-        const paymentCoin = coins.find((coin) => BigInt(coin.balance) >= amount);
-        if (!paymentCoin) throw new Error("No single coin can cover the payment");
-        const [coin] = tx.splitCoins(tx.object(paymentCoin.coinObjectId), [amount]);
-        tx.transferObjects([coin], recipient);
+    const required = parsePaymentRequired(decodeHeaderValue(header));
+    if (new URL(required.resource.url).origin !== expectedOrigin) {
+        throw new Error("Payment instructions name an unexpected resource origin");
     }
 
-    const result = await client.signAndExecuteTransaction({
-        transaction: tx,
-        signer: keypair,
-        options: { showEffects: true },
-    });
-    if (result.effects?.status.status !== "success") throw new Error("Payment transaction failed");
+    const requirements = selectPaymentRequirements(required, policy);
+    const payload: PaymentPayload = {
+        x402Version: X402_VERSION,
+        resource: required.resource,
+        accepted: requirements,
+        payload: await signPayment(requirements),
+    };
 
-    return fetch(requestUrl, {
+    const paid = await fetch(requestUrl, {
         redirect: "manual",
-        headers: {
-            "X-Payment-Digest": result.digest,
-            "X-Payment-Challenge": challenge,
-            "X-Payment-Signature": challengeSignature,
-        },
+        headers: { [PAYMENT_SIGNATURE_HEADER]: encodeHeaderValue(payload) },
     });
+
+    const settlementHeader = paid.headers.get(PAYMENT_RESPONSE_HEADER);
+    if (!settlementHeader) return { response: paid };
+
+    return {
+        response: paid,
+        settlement: parseSettlementResponse(decodeHeaderValue(settlementHeader)),
+    };
 }
 // docs::/#fetch-with-payment
 
-export { fetchWithPayment, parsePaymentInstructions };
-export type { PaymentInstructions, PaymentPolicy };
+export { fetchWithPayment, selectPaymentRequirements, signPayment };
+export type { PaidResponse, PaymentPolicy };

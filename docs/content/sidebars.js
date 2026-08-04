@@ -309,6 +309,7 @@ export default {
   onchainFinanceSidebar: [
       'onchain-finance',
       'onchain-finance/types-of-assets',
+      'onchain-finance/x402-pay-per-request',
       {
         type: 'category',
         label: 'Asset Custody',

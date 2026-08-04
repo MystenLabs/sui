@@ -3,37 +3,42 @@
 
 import { closeSync, existsSync, fsyncSync, openSync, readFileSync, writeSync } from "node:fs";
 
-interface PendingChallenge {
-    expiry: number;
-    reservedDigest?: string;
-}
-
-interface UsedDigestRecord {
-    challengeId: string;
-    acceptedAt: number;
+// docs::#replay-store
+interface SettledPaymentRecord {
+    payer: string;
+    settledAt: number;
 }
 
 interface PaymentReservation {
-    commit(): void;
+    commit(payer: string): void;
     rollback(): void;
 }
 
-class DurableDigestStore {
-    private readonly records = new Map<string, UsedDigestRecord>();
+/**
+ * Durable record of every transaction digest this server has already accepted
+ * payment for.
+ *
+ * Sui execution is idempotent by digest: resubmitting a settled transaction
+ * returns the original result without moving funds again. Without this store a
+ * client could resend a captured PAYMENT-SIGNATURE header and be served for
+ * free forever, so accepted digests must never expire.
+ */
+class SettledPaymentStore {
+    private readonly records = new Map<string, SettledPaymentRecord>();
 
     constructor(private readonly path: string) {
         if (!existsSync(path)) return;
 
-        const lines = readFileSync(path, "utf8").split("\n");
+        const lines = readFileSync(path, "utf-8").split("\n");
         for (const [index, line] of lines.entries()) {
             if (!line) continue;
             try {
-                const record = JSON.parse(line) as UsedDigestRecord & { digest: string };
+                const record = JSON.parse(line) as SettledPaymentRecord & { digest: string };
                 this.records.set(record.digest, record);
             } catch {
                 // A process crash can truncate only the final append. Malformed
                 // earlier lines indicate corruption and require recovery.
-                if (index !== lines.length - 1) throw new Error("Corrupt digest replay log");
+                if (index !== lines.length - 1) throw new Error("Corrupt payment log");
             }
         }
     }
@@ -42,12 +47,12 @@ class DurableDigestStore {
         return this.records.has(digest);
     }
 
-    add(digest: string, record: UsedDigestRecord): void {
-        if (this.records.has(digest)) throw new Error("Payment digest already used");
+    add(digest: string, record: SettledPaymentRecord): void {
+        if (this.records.has(digest)) throw new Error("Payment already settled");
 
         const fd = openSync(this.path, "a");
         try {
-            writeSync(fd, `${JSON.stringify({ digest, ...record })}\n`);
+            writeSync(fd, JSON.stringify({ digest, ...record }) + "\n");
             fsyncSync(fd);
         } finally {
             closeSync(fd);
@@ -56,63 +61,41 @@ class DurableDigestStore {
     }
 }
 
-class ChallengeStore {
-    private readonly pending = new Map<string, PendingChallenge>();
-    private readonly reservedDigests = new Set<string>();
+/**
+ * Guards a payment digest for the duration of verification and settlement.
+ *
+ * `reserve` is synchronous and runs before the first `await`, so two concurrent
+ * requests carrying the same payload cannot both reach settlement.
+ */
+class PaymentReservations {
+    private readonly inFlight = new Set<string>();
 
-    constructor(
-        private readonly usedDigests: DurableDigestStore,
-        private readonly maxPending = 10_000,
-    ) {}
+    constructor(private readonly settled: SettledPaymentStore) {}
 
-    issue(id: string, expiry: number, now = Date.now()): void {
-        this.sweepExpired(now);
-        if (this.pending.size >= this.maxPending) throw new Error("Too many pending challenges");
-        this.pending.set(id, { expiry });
-    }
-
-    sweepExpired(now = Date.now()): void {
-        for (const [id, challenge] of this.pending) {
-            if (!challenge.reservedDigest && now > challenge.expiry) this.pending.delete(id);
-        }
-    }
-
-    reserve(challengeId: string, digest: string, now = Date.now()): PaymentReservation {
-        const challenge = this.pending.get(challengeId);
-        if (!challenge || now > challenge.expiry) {
-            this.pending.delete(challengeId);
-            throw new Error("Invalid or expired challenge");
-        }
-        if (
-            challenge.reservedDigest ||
-            this.reservedDigests.has(digest) ||
-            this.usedDigests.has(digest)
-        ) {
-            throw new Error("Challenge or payment digest already used");
+    reserve(digest: string): PaymentReservation {
+        if (this.settled.has(digest) || this.inFlight.has(digest)) {
+            throw new Error("Payment already used");
         }
 
-        challenge.reservedDigest = digest;
-        this.reservedDigests.add(digest);
+        this.inFlight.add(digest);
         let active = true;
 
         return {
-            commit: () => {
+            commit: (payer: string) => {
                 if (!active) return;
-                this.usedDigests.add(digest, { challengeId, acceptedAt: Date.now() });
-                this.pending.delete(challengeId);
-                this.reservedDigests.delete(digest);
+                this.settled.add(digest, { payer, settledAt: Date.now() });
+                this.inFlight.delete(digest);
                 active = false;
             },
             rollback: () => {
                 if (!active) return;
-                const current = this.pending.get(challengeId);
-                if (current?.reservedDigest === digest) delete current.reservedDigest;
-                this.reservedDigests.delete(digest);
+                this.inFlight.delete(digest);
                 active = false;
             },
         };
     }
 }
+// docs::/#replay-store
 
-export { ChallengeStore, DurableDigestStore };
-export type { PaymentReservation, PendingChallenge, UsedDigestRecord };
+export { PaymentReservations, SettledPaymentStore };
+export type { PaymentReservation, SettledPaymentRecord };
