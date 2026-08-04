@@ -241,7 +241,6 @@ enum RecoveryOutcome {
     Inflated,
     Obsolete,
     AlreadyAccepted,
-    SubmitRejected,
 }
 
 impl RecoveryOutcome {
@@ -250,7 +249,6 @@ impl RecoveryOutcome {
             RecoveryOutcome::Inflated => "inflated",
             RecoveryOutcome::Obsolete => "obsolete",
             RecoveryOutcome::AlreadyAccepted => "already_accepted",
-            RecoveryOutcome::SubmitRejected => "submit_rejected",
         }
     }
 }
@@ -311,14 +309,14 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
         )
     };
 
-    // The claimed reference is registered for fetching only once the streams have
-    // demonstrably failed to deliver it: after a completed frontier wait whose
-    // re-inflation still reports gaps, or when the frontier can never complete
-    // (GC-crossed, ambiguous, digest mismatch). Registering every park instead —
-    // ~65K/s at tip, virtually all of which inflate locally within milliseconds —
-    // floods the synchronizer's bounded fetch budget with work that resolves itself
-    // and starves ordinary missing-ancestor sync.
-    let mut registered = false;
+    // Durably register the claimed reference for fetching. At tip the block resolves
+    // from the streams before the periodic scheduler's next pass and the registration
+    // is pruned unfetched; behind the tip, the scheduler fetches the full block on
+    // its existing cadence. The awaited send backpressures instead of dropping; a
+    // shutdown error just ends the task (the permit releases via RAII).
+    if registry.register_missing_block(claimed_ref).await.is_err() {
+        return;
+    }
 
     let mut reason = reason;
     let outcome = 'recovery: {
@@ -385,15 +383,6 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
                     }
                     WaitCheck::Retry => break 'wait,
                     WaitCheck::FrontierDead => {
-                        // The frontier can never complete (a required slot crossed
-                        // GC, or the failure is ambiguity/digest mismatch): only the
-                        // full block can finish this, so ask the fetcher for it.
-                        if !registered {
-                            if registry.register_missing_block(claimed_ref).await.is_err() {
-                                return;
-                            }
-                            registered = true;
-                        }
                         // Nothing slot-shaped left to wait for: only the fetched or
                         // replayed full block (own-ref wake) or GC can end this.
                         tokio::select! {
@@ -449,18 +438,22 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
                     match service.handle_send_block(peer, block).await {
                         Ok(()) => break 'recovery RecoveryOutcome::Inflated,
                         Err(error) => {
-                            // Commit-lag admission control is deliberate backpressure:
-                            // the node is too far behind to take more blocks. Holding
-                            // the task open (and fetching the block) would circumvent
-                            // exactly the control that rejected it, and under a lag
-                            // episode that accumulates tens of thousands of parked
-                            // tasks. Release instead; commit sync carries the node
-                            // forward, and the sidecar is advisory.
+                            // Typically commit-lagging admission control. The block is
+                            // still registered for fetching, so keep the task alive to
+                            // deliver the sidecar when another path accepts it — and
+                            // to retry once local state moves. Terminates on
+                            // acceptance, GC, or shutdown like any other wait.
                             debug!(
-                                "Recovered minimal block {} from peer {} was rejected: {}",
+                                "Recovered minimal block {} from peer {} was rejected: {}; \
+                                 awaiting acceptance through the registered fetch",
                                 claimed_ref, peer, error
                             );
-                            break 'recovery RecoveryOutcome::SubmitRejected;
+                            node_metrics
+                                .minimal_block_recoveries
+                                .with_label_values(&["submit_rejected"])
+                                .inc();
+                            // Nothing slot-shaped left to do: wait for the exact block.
+                            reason = FallbackReason::DigestMismatch;
                         }
                     }
                 }
@@ -468,15 +461,6 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
                     reason: next_reason,
                     ..
                 }) => {
-                    // The frontier filled and inflation still reports gaps: the block
-                    // is genuinely outrunning this receiver's streams, so escalate to
-                    // the fetcher (once) and keep waiting on the new frontier.
-                    if !registered {
-                        if registry.register_missing_block(claimed_ref).await.is_err() {
-                            return;
-                        }
-                        registered = true;
-                    }
                     reason = next_reason;
                 }
                 Err(InflateError::Malformed(error)) => {
@@ -709,12 +693,10 @@ mod tests {
         h.spawn(&mut join_set);
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert!(h.service.lock().handle_send_block.is_empty());
-        // Ordinary tip racing must NOT touch the fetcher: registering every park
-        // floods the synchronizer's bounded budget with work the streams resolve
-        // themselves, starving ordinary missing-ancestor sync.
-        assert!(
-            h.registry.registered.lock().is_empty(),
-            "a block waiting on a live frontier must not be registered for fetching"
+        assert_eq!(
+            h.registry.registered.lock().as_slice(),
+            &[h.block.reference()],
+            "claimed ref must be durably registered for fetching"
         );
 
         let frontier: Vec<_> = h
@@ -736,8 +718,6 @@ mod tests {
         assert_eq!(&received[0].1.block, h.block.serialized());
         // The propagation-hint sidecar rides the recovered submission.
         assert_eq!(received[0].1.excluded_ancestors, h.excluded);
-        // Still no fetch: the streams delivered everything.
-        assert!(h.registry.registered.lock().is_empty());
     }
 
     /// Wrong siblings filling every frontier slot complete the barrier but fail the
@@ -820,36 +800,6 @@ mod tests {
         h.receiver_dag.write().accept_block(h.block.clone());
         wait_until(|| !h.service.lock().handle_excluded_ancestors.is_empty()).await;
         assert!(h.service.lock().handle_send_block.is_empty());
-    }
-
-    /// When the frontier can never complete (a required slot crossed GC), the block
-    /// can only arrive as a full block — that is when, and only when, the fetcher is
-    /// asked for it.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_registers_a_fetch_only_when_the_frontier_dies() {
-        let h = harness(Some(3));
-        let mut join_set = tokio::task::JoinSet::new();
-        h.spawn(&mut join_set);
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        assert!(h.registry.registered.lock().is_empty());
-
-        let filled: Vec<_> = h
-            .ancestors
-            .iter()
-            .filter(|b| b.author() != h.peer)
-            .take(2)
-            .cloned()
-            .collect();
-        h.receiver_dag.write().accept_blocks(filled);
-        let leader = BlockRef::new(13, h.peer, BlockDigest::MIN);
-        let commit = TrustedCommit::new_for_test(1, CommitDigest::MIN, 100, leader, vec![leader]);
-        h.receiver_dag.write().add_commit(commit);
-
-        wait_until(|| !h.registry.registered.lock().is_empty()).await;
-        assert_eq!(
-            h.registry.registered.lock().as_slice(),
-            &[h.block.reference()]
-        );
     }
 
     /// GC crossing the CLAIMED block itself makes recovery pointless: no submission,
@@ -950,12 +900,11 @@ mod tests {
         drop(permit);
     }
 
-    /// Commit-lag admission control is deliberate backpressure. A rejected recovery
-    /// must release immediately and must NOT register a fetch: holding the task open
-    /// (and fetching the block) circumvents the very control that rejected it, and
-    /// under a lag episode accumulates tens of thousands of parked tasks.
+    /// A rejected submission (commit-lagging admission control) must NOT end
+    /// recovery: the block stays registered for fetching, and when another path
+    /// accepts it the task still delivers the propagation-hint sidecar.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn recovery_releases_on_submission_rejection_without_fetching() {
+    async fn recovery_survives_submission_rejection_and_delivers_sidecar() {
         let h = harness(None);
         h.service.lock().reject_send_block = true;
         let mut join_set = tokio::task::JoinSet::new();
@@ -974,7 +923,19 @@ mod tests {
                 == 1
         })
         .await;
-        // Terminal: quota released, and no fetch was asked for.
+        // Still parked — not terminated.
+        assert_eq!(
+            h.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_parked
+                .get(),
+            1
+        );
+
+        // The registered fetch later lands the block: sidecar delivered, quota freed.
+        h.receiver_dag.write().accept_block(h.block.clone());
+        wait_until(|| !h.service.lock().handle_excluded_ancestors.is_empty()).await;
         wait_until(|| {
             h.context
                 .metrics
@@ -984,10 +945,6 @@ mod tests {
                 == 0
         })
         .await;
-        assert!(
-            h.registry.registered.lock().is_empty(),
-            "a rejected recovery must not fetch around admission control"
-        );
     }
 
     /// Per-peer admission is isolated and rolls back partial acquisitions; the charge
