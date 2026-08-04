@@ -59,6 +59,9 @@ sui-rpc.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true
+
 [dev-dependencies]
 axum.workspace = true
 anyhow.workspace = true
