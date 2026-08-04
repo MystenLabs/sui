@@ -8,23 +8,31 @@ use fastcrypto::encoding::Encoding;
 use prometheus::Registry;
 use serde::Deserialize;
 use serde_json::json;
+use simulacrum::Simulacrum;
 use sui_indexer_alt_consistent_store::ObjectByOwnerKey;
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_json_rpc_types::Coin;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiObjectResponse;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::FundSource;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
+use sui_types::transaction::Transaction;
 use tempfile::TempDir;
 use test_cluster::addr_balance_test_env::TestEnv;
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
+
+/// 5 SUI gas budget
+const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 
 #[derive(Deserialize)]
 struct CoinsResponse {
@@ -141,61 +149,79 @@ impl FullCluster {
         cursor: Option<String>,
         limit: usize,
     ) -> CoinsResponse {
-        let query = json!({
-            "jsonrpc": "2.0",
-            "method": "suix_getCoins",
-            "params": [owner.to_string(), coin_type, cursor, limit],
-            "id": 1
-        });
-
-        reqwest::Client::new()
-            .post(self.jsonrpc_url().as_str())
-            .json(&query)
-            .send()
-            .await
-            .expect("Request to JSON-RPC server failed")
-            .json()
-            .await
-            .expect("Failed to parse JSON-RPC response")
+        rpc_get_coins(&self.jsonrpc_url(), owner, coin_type, cursor, limit).await
     }
 
     async fn get_object(&self, object_id: &str) -> ObjectResponse {
-        let query = json!({
-            "jsonrpc": "2.0",
-            "method": "sui_getObject",
-            "params": [object_id, { "showContent": true, "showOwner": true, "showType": true }],
-            "id": 1
-        });
-
-        reqwest::Client::new()
-            .post(self.jsonrpc_url().as_str())
-            .json(&query)
-            .send()
-            .await
-            .expect("Request to JSON-RPC server failed")
-            .json()
-            .await
-            .expect("Failed to parse JSON-RPC response")
+        rpc_get_object(&self.jsonrpc_url(), object_id).await
     }
 
     async fn multi_get_objects(&self, object_ids: &[&str]) -> MultiObjectResponse {
-        let query = json!({
-            "jsonrpc": "2.0",
-            "method": "sui_multiGetObjects",
-            "params": [object_ids, { "showContent": true, "showOwner": true, "showType": true }],
-            "id": 1
-        });
-
-        reqwest::Client::new()
-            .post(self.jsonrpc_url().as_str())
-            .json(&query)
-            .send()
-            .await
-            .expect("Request to JSON-RPC server failed")
-            .json()
-            .await
-            .expect("Failed to parse JSON-RPC response")
+        rpc_multi_get_objects(&self.jsonrpc_url(), object_ids).await
     }
+}
+
+async fn rpc_get_coins(
+    url: &url::Url,
+    owner: SuiAddress,
+    coin_type: &str,
+    cursor: Option<String>,
+    limit: usize,
+) -> CoinsResponse {
+    let query = json!({
+        "jsonrpc": "2.0",
+        "method": "suix_getCoins",
+        "params": [owner.to_string(), coin_type, cursor, limit],
+        "id": 1
+    });
+
+    reqwest::Client::new()
+        .post(url.as_str())
+        .json(&query)
+        .send()
+        .await
+        .expect("Request to JSON-RPC server failed")
+        .json()
+        .await
+        .expect("Failed to parse JSON-RPC response")
+}
+
+async fn rpc_get_object(url: &url::Url, object_id: &str) -> ObjectResponse {
+    let query = json!({
+        "jsonrpc": "2.0",
+        "method": "sui_getObject",
+        "params": [object_id, { "showContent": true, "showOwner": true, "showType": true }],
+        "id": 1
+    });
+
+    reqwest::Client::new()
+        .post(url.as_str())
+        .json(&query)
+        .send()
+        .await
+        .expect("Request to JSON-RPC server failed")
+        .json()
+        .await
+        .expect("Failed to parse JSON-RPC response")
+}
+
+async fn rpc_multi_get_objects(url: &url::Url, object_ids: &[&str]) -> MultiObjectResponse {
+    let query = json!({
+        "jsonrpc": "2.0",
+        "method": "sui_multiGetObjects",
+        "params": [object_ids, { "showContent": true, "showOwner": true, "showType": true }],
+        "id": 1
+    });
+
+    reqwest::Client::new()
+        .post(url.as_str())
+        .json(&query)
+        .send()
+        .await
+        .expect("Request to JSON-RPC server failed")
+        .json()
+        .await
+        .expect("Failed to parse JSON-RPC response")
 }
 
 // ---------------------------------------------------------------------------
@@ -366,6 +392,101 @@ async fn test_get_object_ab_coin_ref_agrees_with_get_coins() {
         .expect("Expected object data in multiGetObjects response");
     assert_eq!(data.version, ab_coin.version);
     assert_eq!(data.digest, ab_coin.digest);
+}
+
+/// Address balances in `getCoins` and `getObject` come from live data. To test, pin the
+/// consistent store at checkpoint 1 — before the address balance exists — fund the balance at
+/// checkpoint 2, and call both methods expecting the live amount and identical refs.
+///
+/// Uses a `Simulacrum` (checkpoints are created explicitly) instead of `TestEnv` so the pin is
+/// deterministic.
+#[tokio::test]
+async fn test_ab_coin_resolves_when_consistent_store_is_behind() {
+    // Must be installed before the Simulacrum reads the protocol config.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_coin_reservation_for_testing();
+        cfg
+    });
+
+    let temp_dir = TempDir::new().unwrap();
+    let mut sim = Simulacrum::new();
+    sim.set_data_ingestion_path(temp_dir.path().to_owned());
+
+    let offchain = OffchainCluster::new(
+        ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        OffchainClusterConfig {
+            consistent_indexer_args: IndexerArgs {
+                last_checkpoint: Some(1),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        &Registry::new(),
+    )
+    .await
+    .unwrap();
+
+    let (sender, kp, gas) = sim.funded_account(DEFAULT_GAS_BUDGET * 2).unwrap();
+    let checkpoint = sim.create_checkpoint();
+    assert_eq!(checkpoint.sequence_number, 1);
+
+    // The address balance is created at checkpoint 2, beyond the consistent store's pin.
+    let recipient = SuiAddress::random_for_testing_only();
+    let tx = TestTransactionBuilder::new(sender, gas, sim.reference_gas_price())
+        .with_gas_budget(DEFAULT_GAS_BUDGET)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(42, recipient)])
+        .build();
+    let (fx, _) = sim
+        .execute_transaction(Transaction::from_data_and_signer(tx, vec![&kp]))
+        .unwrap();
+    assert!(fx.status().is_ok(), "send_funds transaction failed");
+    let checkpoint = sim.create_checkpoint();
+
+    // Only the live-side indexer learns about checkpoint 2; the consistent store stops at its
+    // pin and never learns about the address balance.
+    offchain
+        .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(60))
+        .await
+        .expect("Timed out waiting for indexer to sync");
+    offchain
+        .wait_for_consistent_store(1, Duration::from_secs(60))
+        .await
+        .expect("Timed out waiting for consistent store to reach its pin");
+
+    let url = offchain.jsonrpc_url();
+    let gas_type = GAS::type_().to_canonical_string(true);
+
+    let CoinsResponse {
+        result: Page { data: coins, .. },
+    } = rpc_get_coins(&url, recipient, &gas_type, None, 10).await;
+    assert_eq!(
+        coins.len(),
+        1,
+        "Expected the AB coin despite the lagging consistent store"
+    );
+    let ab_coin = &coins[0];
+    assert_eq!(ab_coin.balance, 42);
+
+    let ObjectResponse {
+        result: obj_response,
+    } = rpc_get_object(&url, &ab_coin.coin_object_id.to_string()).await;
+    let data = obj_response
+        .data
+        .as_ref()
+        .expect("Expected object data in getObject response");
+
+    assert_eq!(data.object_id, ab_coin.coin_object_id);
+    assert_eq!(data.version, ab_coin.version);
+    assert_eq!(
+        data.digest, ab_coin.digest,
+        "Both read paths must encode the same live-sourced withdrawal ref"
+    );
 }
 
 /// Fund an address balance and verify that masked AB coin IDs remain unresolved when coin
