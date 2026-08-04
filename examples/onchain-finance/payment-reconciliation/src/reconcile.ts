@@ -1,27 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443' });
+const client = new SuiGrpcClient({
+	baseUrl: 'https://fullnode.mainnet.sui.io:443',
+	network: 'mainnet',
+});
 
 // docs::#extract-payment
 async function extractPaymentDetails(digest: string) {
-	const result = await client.getTransactionBlock({
+	const txResult = await client.core.getTransaction({
 		digest,
-		options: { showBalanceChanges: true, showEffects: true },
+		include: { effects: true, balanceChanges: true },
 	});
 
-	if (result.effects?.status.status !== 'success') {
+	if (txResult.$kind !== 'Transaction') {
 		return { status: 'failed' as const, digest };
 	}
 
-	const payments = (result.balanceChanges ?? [])
+	const payments = (txResult.Transaction.balanceChanges ?? [])
 		.filter((change) => BigInt(change.amount) > 0n)
 		.map((change) => ({
-			recipient: typeof change.owner === 'object' && 'AddressOwner' in change.owner
-				? change.owner.AddressOwner
-				: null,
+			recipient: change.owner,
 			amount: change.amount,
 			coinType: change.coinType,
 		}));
