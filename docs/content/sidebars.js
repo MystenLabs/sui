@@ -384,17 +384,6 @@ export default {
         'onchain-finance/choose-payments-model',
         'onchain-finance/payment-kit',
         'onchain-finance/payment-intents',
-        {
-          type: 'category',
-          label: 'Agentic Payments',
-          link: { type: 'doc', id: 'onchain-finance/agentic-payments/index' },
-          items: [
-            'onchain-finance/agentic-payments/spending-policies',
-            'onchain-finance/agentic-payments/recurring-payments',
-            'onchain-finance/agentic-payments/settlement-verification',
-            'onchain-finance/agentic-payments/production-hardening',
-          ],
-        },
         'onchain-finance/funding-wallets',
       ],
     },
