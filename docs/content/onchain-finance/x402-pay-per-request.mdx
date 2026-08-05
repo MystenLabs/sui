@@ -1,8 +1,8 @@
 ---
 title: x402 pay-per-request on Sui
 description: >-
-  Gate API access behind micropayments using the x402 protocol and the exact
-  payment scheme on Sui.
+  Gate API access behind micropayments using the x402 protocol and the Machine
+  Payments Protocol (MPP) SDK with USDC settlement on Sui.
 keywords:
   - x402
   - pay-per-request
@@ -10,10 +10,12 @@ keywords:
   - micropayments
   - agent payments
   - API monetization
+  - MPP
+  - USDC
 goal:
   description: >-
     Reader can implement an x402 resource server and client that gate API
-    access behind onchain micropayments on Sui
+    access behind onchain USDC micropayments on Sui using the suimpp SDK
   requires:
     - has_frontmatter:
         - title
@@ -36,192 +38,170 @@ builder_paths:
     stage: Patterns
 questions:
   - How do I implement x402 pay-per-request on Sui?
-  - What is the x402 exact payment scheme on Sui?
-  - How do I verify and settle an x402 payment in an Express server?
+  - How do I use the suimpp SDK for machine-to-machine payments on Sui?
+  - How does an AI agent pay for API access with USDC on Sui?
 answer: >-
-  x402 is an open payment protocol that signals price with an HTTP 402 response
-  and the PAYMENT-REQUIRED header. On Sui, the exact scheme has the client sign
-  a complete transaction paying the required amount and send it in the
-  PAYMENT-SIGNATURE header. The resource server verifies the signature by
-  simulating the transaction, does the work, then settles by broadcasting it and
-  reports the result in the PAYMENT-RESPONSE header.
+  x402 is an open payment protocol that uses the HTTP 402 status code to gate
+  API access behind micropayments. The suimpp SDK (@suimpp/mpp + mppx)
+  implements the Machine Payments Protocol (MPP) on Sui with USDC settlement.
+  The server wraps any handler with mppx.charge() to issue 402 challenges and
+  verify payments. The client uses mppx.fetch() as a drop-in fetch replacement
+  that handles 402 challenges, builds USDC transfer transactions, and retries
+  automatically.
 ---
 
-[x402](https://github.com/x402-foundation/x402) is an open payment protocol that uses the HTTP `402 Payment Required` status code to price a request and settle it onchain. This page implements protocol version 2 over the HTTP transport, using the `exact` payment scheme on Sui. Because the protocol is a published standard, a client written against any conformant x402 server works with the server on this page, and this client works against any conformant x402 resource server that accepts Sui.
+The [x402 protocol](https://www.x402.org/) uses the HTTP `402 Payment Required` status code to price API requests and settle them onchain. The [`suimpp`](https://github.com/nicholasgasior/suimpp) SDK implements the Machine Payments Protocol (MPP) on Sui, providing a minimal API that handles 402 challenges, USDC payment construction, transaction verification, and replay prevention out of the box.
 
-Payment happens inside the request-response cycle, with no accounts, API keys, or invoices, which makes it a good fit for agent-to-agent access where one service charges another per call.
+Payment happens inside the request-response cycle with no accounts, API keys, or invoices, making it ideal for agent-to-agent access where one service charges another per call.
 
-## How the exact scheme works on Sui
+## Protocol flow
 
-The `exact` scheme on Sui uses the `0x2::coin::Coin<T>` standard to transfer a specific amount of a coin type from the payer to the resource server. The payer forms and signs a complete transaction. Because any change to the transaction invalidates the signature, the resource server cannot redirect funds anywhere other than the address it advertised.
+When a client requests a paid resource, the server and client negotiate payment through standard HTTP headers:
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Agent
     participant Server
     participant Sui
 
-    Client->>Server: GET /api/resource
-    Server-->>Client: 402 Payment Required<br/>PAYMENT-REQUIRED: PaymentRequired
-    Client->>Client: Select an accepts entry that satisfies policy
-    Client->>Client: Build and sign the payment transaction
-    Client->>Server: GET /api/resource<br/>PAYMENT-SIGNATURE: PaymentPayload
-    Server->>Server: Verify signature over the transaction
-    Server->>Sui: Simulate to confirm the exact payment
-    Server->>Server: Do the work
-    Server->>Sui: Settle: broadcast the signed transaction
-    Server-->>Client: 200 OK<br/>PAYMENT-RESPONSE: SettlementResponse
+    Agent->>Server: POST /api/resource
+    Server-->>Agent: 402 Payment Required (WWW-Authenticate: Payment)
+    Agent->>Sui: Build + sign USDC transfer PTB
+    Sui-->>Agent: Transaction confirmed (digest)
+    Agent->>Agent: Sign grief-protection proof
+    Agent->>Server: Retry with Authorization: Payment header
+    Server->>Sui: Verify transaction (status, amount, recipient, signer)
+    Server-->>Agent: 200 OK + Payment-Receipt
 ```
 
-1. The client requests a resource.
-1. The server responds with HTTP 402 and a base64-encoded `PaymentRequired` object in the `PAYMENT-REQUIRED` header. It lists one or more `accepts` entries, each naming a scheme, a CAIP-2 network such as `sui:mainnet`, an amount in atomic units, an asset (a Sui coin type), a recipient, and a timeout.
-1. The client picks an entry that satisfies its local policy, builds a transaction paying exactly that amount to that recipient, and signs it. It does **not** broadcast the transaction.
-1. The client retries with a base64-encoded `PaymentPayload` in the `PAYMENT-SIGNATURE` header. The scheme payload carries the signature and the base64 BCS transaction.
-1. The server verifies the signature, simulates the transaction to confirm it would succeed and pays the exact amount, does the work, then settles by broadcasting the transaction.
-1. The server returns the resource with a base64-encoded `SettlementResponse` in the `PAYMENT-RESPONSE` header, containing the transaction digest.
+1. The agent requests a resource.
+1. The server responds with HTTP 402 and a `WWW-Authenticate: Payment` header describing the price, recipient, network, and currency.
+1. The agent builds a USDC transfer transaction on Sui, signs it, and generates a grief-protection proof.
+1. The agent retries the request with an `Authorization: Payment` header carrying the signed transaction and proof.
+1. The server verifies the transaction on Sui (status, amount, recipient, signer) and checks for replay.
+1. The server returns the resource with a `Payment-Receipt` header containing the transaction digest.
 
-Settling after the work means the server never charges a client for a request it failed to fulfill, and verification before the work means the server never does unpaid work.
-
-:::info Facilitators
-
-The specification lets a resource server delegate verification and settlement to a facilitator that exposes `/verify` and `/settle` endpoints. This example hosts that logic itself, which is the most straightforward deployment and keeps the trust boundary in one place. Moving to a facilitator changes where `verifyPayment` and `settlePayment` run, not the wire format.
-
-:::
-
-## Protocol types
-
-The core types do not depend on transport or scheme, so they are worth keeping in their own module.
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/x402.ts"
-    mode="code"
-    tag="protocol-types"
-/>
-
-### HTTP transport
-
-The HTTP transport carries all three protocol objects as base64-encoded JSON in headers. Response bodies are a server implementation concern.
-
-| Header | Direction | Contents |
-| --- | --- | --- |
-| `PAYMENT-REQUIRED` | Server to client | `PaymentRequired` |
-| `PAYMENT-SIGNATURE` | Client to server | `PaymentPayload` |
-| `PAYMENT-RESPONSE` | Server to client | `SettlementResponse` |
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/x402.ts"
-    mode="code"
-    tag="http-transport"
-/>
-
-## Server implementation
-
-### Configuration
-
-The recipient address comes from the environment and the server validates it at startup. `normalizeSuiAddress` pads any string to 32 bytes without checking that it is a real address, so an unedited placeholder would otherwise become a valid-looking address that nobody controls.
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
-    mode="code"
-    tag="config"
-/>
-
-### Advertising payment requirements
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
-    mode="code"
-    tag="payment-required"
-/>
-
-### Verification
-
-Verification follows the steps the scheme defines: confirm the network, confirm the signature over the transaction, simulate to confirm the transaction would succeed and has not already executed, and confirm the recipient receives exactly the required amount of the required asset.
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
-    mode="code"
-    tag="verify-payment"
-/>
-
-### Settlement
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
-    mode="code"
-    tag="settle-payment"
-/>
-
-### Replay protection
-
-Sui execution is idempotent by digest: resubmitting a settled transaction returns the original result without moving funds again. An attacker can therefore reuse a captured `PAYMENT-SIGNATURE` header unless the server remembers it, so the server appends settled digests to an fsynced log and never expires them.
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/replay-store.ts"
-    mode="code"
-    tag="replay-store"
-/>
-
-In production, replace the file with a shared database, reserve the digest under a unique constraint, and retain settled digests permanently.
-
-### Wiring it up
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
-    mode="code"
-    tag="app"
-/>
-
-## Client implementation
-
-### Payment policy
-
-The client holds a local policy naming the trusted origin, the expected recipient, the allowed networks and assets, and a maximum amount. Nothing the server advertises is trusted until it passes these checks.
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/client.ts"
-    mode="code"
-    tag="payment-policy"
-/>
-
-### Building the payment
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/client.ts"
-    mode="code"
-    tag="build-payment"
-/>
-
-### Paying and retrying
-
-<ImportContent
-    source="examples/onchain-finance/x402-pay-per-request/src/client.ts"
-    mode="code"
-    tag="fetch-with-payment"
-/>
-
-## Run the example
+## Install
 
 ```sh
-cd examples/onchain-finance/x402-pay-per-request
-npm install
-npm test
+npm install @suimpp/mpp mppx @mysten/sui
 ```
 
-To run the server, set `X402_PAY_TO` to the address that receives payments and `X402_SETTLED_PAYMENTS_PATH` to a durable location. To run the client, set `AGENT_SECRET_KEY` to a `suiprivkey`-encoded key for a funded account.
+## Server setup
+
+The server uses `mppx.charge()` to wrap any request handler. The SDK handles issuing 402 challenges, verifying payment transactions on Sui, and preventing replay attacks.
+
+<ImportContent
+    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
+    mode="code"
+    tag="server-setup"
+/>
+
+Configure the server with:
+- **`realm`**: Your API's domain, included in the 402 challenge.
+- **`currency`**: The payment currency. `USDC` is the canonical stablecoin for MPP on Sui.
+- **`recipient`**: The Sui address that receives payments. Set this through an environment variable.
+- **`network`**: The Sui network to verify transactions against (`mainnet`, `testnet`).
+- **`store`**: A digest store for replay prevention. Use `InMemoryDigestStore` for development; switch to Redis or Postgres in production.
+
+### Charging for a request
+
+Wrap any handler with `mppx.charge()` to gate it behind a payment:
+
+<ImportContent
+    source="examples/onchain-finance/x402-pay-per-request/src/server.ts"
+    mode="code"
+    tag="server-handler"
+/>
+
+The `amount` is denominated in the currency's standard unit (for example, `'0.01'` means 0.01 USDC). The SDK converts it to atomic units, issues 402 challenges to clients that have not paid, verifies the payment transaction on Sui, checks for replay, and passes through to your handler only after confirmed payment.
+
+## Client setup
+
+The client uses `mppx.fetch()` as a drop-in replacement for `fetch()`. When the server responds with 402, the SDK automatically builds a USDC transfer transaction, signs it, and retries the request.
+
+<ImportContent
+    source="examples/onchain-finance/x402-pay-per-request/src/client.ts"
+    mode="code"
+    tag="client-setup"
+/>
+
+### Fetching a paid resource
+
+<ImportContent
+    source="examples/onchain-finance/x402-pay-per-request/src/client.ts"
+    mode="code"
+    tag="client-fetch"
+/>
+
+`mppx.fetch()` returns a standard `Response` object. If the server does not respond with 402, it behaves exactly like `fetch()`. When it encounters a 402 challenge, it handles the entire payment flow transparently: parsing the challenge, building the USDC transfer, signing the transaction, generating the grief-protection proof, and retrying with the `Authorization: Payment` header.
 
 ## Agent integration
 
-For autonomous agents, combine x402 with a funded key kept under [self-custody](/onchain-finance/asset-custody/wallets/self-custody) and an enforceable spending policy. Always set explicit origin, recipient, asset, and amount limits: a policy the same compromised agent can rewrite does not prevent runaway costs.
+For autonomous agents, combine MPP with a funded key kept under [self-custody](/onchain-finance/asset-custody/wallets/self-custody) and an enforceable spending policy. The agent's keypair should have access only to the USDC balance needed for API payments, not the full treasury.
 
-Per-request micropayments pay storage gas for each new coin object sent to the server. [Address balances](/onchain-finance/asset-custody/address-balances/using-address-balances) reduce that cost, and the scheme specification calls out the same optimization as future work.
+Key considerations for agent deployments:
+- **Spending limits**: Configure per-request and per-period caps in the agent's policy layer. The SDK respects the amount advertised in the 402 challenge, but your agent should refuse amounts above its policy threshold.
+- **Key rotation**: Rotate agent keypairs regularly. Because each payment is a standalone transaction, rotating keys does not interrupt in-flight requests.
+- **Monitoring**: Log every payment digest for reconciliation. The `Payment-Receipt` header contains the Sui transaction digest.
+
+## Gasless transactions
+
+The SDK automatically requests the Sui Foundation's gasless tier for canonical USDC transfers. This means agents do not need a SUI balance to pay for gas when making USDC payments -- the gas is sponsored. This reduces the operational burden of keeping agent wallets funded with two tokens.
+
+## Validation
+
+Verify that your server is correctly advertising its payment requirements and responding to the MPP protocol:
+
+```sh
+npx @suimpp/discovery check api.your-service.dev
+```
+
+This command sends a probe request, inspects the 402 response headers, and reports whether your server's challenge is well-formed and discoverable.
+
+## Production considerations
+
+### Digest store
+
+Replace `InMemoryDigestStore` with a persistent store backed by Redis or Postgres. The store must guarantee that each transaction digest is accepted at most once, even across server restarts and horizontal scaling. The SDK provides a store interface you can implement with any backend:
+
+```ts
+import { RedisDigestStore } from '@suimpp/mpp/server';
+
+const mppx = Mppx.create({
+  realm: 'api.example.com',
+  methods: [sui({
+    currency: USDC,
+    recipient: process.env.PAY_TO_ADDRESS!,
+    network: 'mainnet',
+    store: new RedisDigestStore({ url: process.env.REDIS_URL! }),
+  })],
+});
+```
+
+### OpenAPI extension
+
+Advertise payment requirements in your OpenAPI spec using the `x-payment-info` extension so that agent frameworks can discover pricing before making requests:
+
+```yaml
+paths:
+  /api/resource:
+    post:
+      x-payment-info:
+        currency: USDC
+        network: sui:mainnet
+        amount: '0.01'
+```
+
+### Payment reporting
+
+Log settled transaction digests with timestamps, payer addresses, and amounts for financial reconciliation. The `Payment-Receipt` header on each response contains the Sui transaction digest you can use to query full transaction details from a Sui node.
 
 ## Security considerations
 
-- **The signature binds the payment.** The payer signs a complete transaction, so the server can neither change the recipient nor the amount. Verification recovers the signer with `verifyTransactionSignature` and simulates the transaction rather than trusting the `accepted` block, which the client supplies.
-- **Exact amounts.** The scheme requires the recipient balance change to equal the advertised amount, not merely to meet it. Accepting more would let a client claim a large historical overpayment against a later request.
-- **Permanent digest uniqueness.** Reserve the digest before the first `await` and hold it until settlement resolves, so concurrent replays of one payload cannot both reach settlement. Never expire settled digests.
-- **The server broadcasts client-supplied bytes.** Simulation confirms the payment, but the transaction can contain other commands. The payer pays its own gas, and the server is not a general-purpose relay: log settled digests and alert on transactions whose effects extend beyond the expected transfer.
-- **Settlement can fail after the work is done.** If broadcasting fails, the server has served the resource without confirmed payment. Keep the reservation, return `unexpected_settle_error`, and reconcile the digest out of band.
-- **Header size.** A signed transaction is roughly 1 KB base64-encoded and grows with each coin input. Raise the server's `maxHeaderSize` and keep coin selection minimal.
-- **Client policy.** Reject unexpected origins and redirects before signing. Because the client never broadcasts, a rejected payment costs nothing.
+- **Replay prevention**: The digest store ensures each signed transaction is accepted at most once. Without it, an attacker could reuse a captured `Authorization: Payment` header indefinitely, because Sui execution is idempotent by digest.
+- **Grief protection**: The client signs a grief-protection proof binding the payment to the specific request. This prevents a man-in-the-middle from redirecting a captured payment to a different endpoint.
+- **Recipient verification**: The server verifies that the payment transaction sends funds to the expected recipient address. Because the payer signs a complete transaction, the server cannot redirect funds to any address other than what was advertised.
+- **Network confusion**: The SDK verifies the transaction on the configured network. A payment signed for `testnet` is rejected by a server configured for `mainnet`, and vice versa.
+- **Amount precision**: Amounts are specified in standard currency units (for example, `'0.01'` USDC) and converted to atomic units internally. The server verifies the exact amount, not merely a minimum, preventing overpayment replay attacks.
+- **Client policy**: Agents should reject unexpected origins and amounts before signing. Because the client never broadcasts the transaction directly, a rejected payment costs nothing.
