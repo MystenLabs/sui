@@ -248,16 +248,13 @@ mod tests {
     struct EmptySchema;
 
     impl Schema for EmptySchema {
-        type OpenContext = ();
-
-        fn cfs(
-            _: &crate::options::CfOptionsResolver,
-        ) -> (Vec<crate::CfDescriptor>, Self::OpenContext) {
-            (vec![], ())
-        }
-
-        fn open(_: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
-            Ok(Self)
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(path, opts, snapshot_capacity, vec![])?;
+            Ok((db, Self))
         }
     }
 

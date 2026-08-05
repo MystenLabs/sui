@@ -123,21 +123,24 @@ use crate::snapshot::Snapshot;
 /// }
 ///
 /// impl Schema for MySchema {
-///     type OpenContext = ();
-///
-///     fn cfs(
+///     fn open(
+///         path: &std::path::Path,
 ///         opts: &sui_consistent_store::CfOptionsResolver,
-///     ) -> (Vec<sui_consistent_store::CfDescriptor>, Self::OpenContext) {
-///         (
-///             vec![sui_consistent_store::CfDescriptor::new("items", opts.options("items"))],
-///             (),
-///         )
-///     }
-///
-///     fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
-///         Ok(Self {
+///         snapshot_capacity: usize,
+///     ) -> Result<(Db, Self), OpenError> {
+///         let db = Db::open_cfs(
+///             path,
+///             opts,
+///             snapshot_capacity,
+///             vec![sui_consistent_store::CfDescriptor::new(
+///                 "items",
+///                 opts.options("items"),
+///             )],
+///         )?;
+///         let schema = Self {
 ///             items: DbMap::new(db.clone(), "items")?,
-///         })
+///         };
+///         Ok((db, schema))
 ///     }
 /// }
 ///
@@ -718,21 +721,21 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        type OpenContext = ();
-
-        fn cfs(
-            opts: &crate::options::CfOptionsResolver,
-        ) -> (Vec<crate::CfDescriptor>, Self::OpenContext) {
-            (
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(
+                path,
+                opts,
+                snapshot_capacity,
                 vec![crate::CfDescriptor::new("items", opts.options("items"))],
-                (),
-            )
-        }
-
-        fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
-            Ok(Self {
+            )?;
+            let schema = Self {
                 items: DbMap::new(db.clone(), "items")?,
-            })
+            };
+            Ok((db, schema))
         }
     }
 
@@ -1607,21 +1610,21 @@ mod tests {
     }
 
     impl Schema for CompoundSchema {
-        type OpenContext = ();
-
-        fn cfs(
-            opts: &crate::options::CfOptionsResolver,
-        ) -> (Vec<crate::CfDescriptor>, Self::OpenContext) {
-            (
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(
+                path,
+                opts,
+                snapshot_capacity,
                 vec![crate::CfDescriptor::new("rows", opts.options("rows"))],
-                (),
-            )
-        }
-
-        fn open(db: &Db, (): Self::OpenContext) -> Result<Self, OpenError> {
-            Ok(Self {
+            )?;
+            let schema = Self {
                 rows: DbMap::new(db.clone(), "rows")?,
-            })
+            };
+            Ok((db, schema))
         }
     }
 

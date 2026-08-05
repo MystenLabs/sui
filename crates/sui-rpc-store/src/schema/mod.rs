@@ -9,9 +9,9 @@
 //! - `Key` — the key type with `Encode` / `Decode` pinning its
 //!   on-disk layout.
 //! - `Value` — the value type, typically `Protobuf<…>`.
-//! - `options(resolver)` — per-CF `rocksdb::Options`, obtained from
-//!   the [`CfOptionsResolver`] with the CF's merge operator and
-//!   compaction filter (if any) layered on top.
+//! - `options(resolver)` — per-CF `rocksdb::Options`, obtained from the
+//!   [`sui_consistent_store::CfOptionsResolver`] with the CF's merge
+//!   operator and compaction filter (if any) layered on top.
 //!
 //! [`RpcStoreSchema`] aggregates these into the schema passed to
 //! [`sui_consistent_store::Db::open`]. Keys reused across multiple
@@ -39,7 +39,7 @@ pub mod tx_seq_by_digest;
 pub mod type_filter;
 
 use std::collections::BTreeMap;
-
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -155,49 +155,53 @@ pub struct RpcStoreSchema<R: Reader = Db> {
 }
 
 impl Schema for RpcStoreSchema {
-    type OpenContext = Arc<AtomicU64>;
-
-    fn cfs(opts: &CfOptionsResolver) -> (Vec<CfDescriptor>, Arc<AtomicU64>) {
+    fn open(
+        path: &Path,
+        opts: &CfOptionsResolver,
+        snapshot_capacity: usize,
+    ) -> Result<(Db, Self), OpenError> {
         let tx_seq_pruning_floor = Arc::new(AtomicU64::new(0));
-        let cfs = vec![
-            CfDescriptor::new(epochs::NAME, epochs::options(opts)),
-            CfDescriptor::new(checkpoint_summary::NAME, checkpoint_summary::options(opts)),
-            CfDescriptor::new(
-                checkpoint_contents::NAME,
-                checkpoint_contents::options(opts),
-            ),
-            CfDescriptor::new(
-                checkpoint_seq_by_digest::NAME,
-                checkpoint_seq_by_digest::options(opts),
-            ),
-            CfDescriptor::new(transactions::NAME, transactions::options(opts)),
-            CfDescriptor::new(tx_seq_by_digest::NAME, tx_seq_by_digest::options(opts)),
-            CfDescriptor::new(tx_metadata_by_seq::NAME, tx_metadata_by_seq::options(opts)),
-            CfDescriptor::new(effects::NAME, effects::options(opts)),
-            CfDescriptor::new(events::NAME, events::options(opts)),
-            CfDescriptor::new(objects::NAME, objects::options(opts)),
-            CfDescriptor::new(
-                object_version_by_checkpoint::NAME,
-                object_version_by_checkpoint::options(opts),
-            ),
-            CfDescriptor::new(object_by_owner::NAME, object_by_owner::options(opts)),
-            CfDescriptor::new(object_by_type::NAME, object_by_type::options(opts)),
-            CfDescriptor::new(balance::NAME, balance::options(opts)),
-            CfDescriptor::new(package_versions::NAME, package_versions::options(opts)),
-            CfDescriptor::new(
-                transaction_bitmap::NAME,
-                transaction_bitmap::options(opts, tx_seq_pruning_floor.clone()),
-            ),
-            CfDescriptor::new(
-                event_bitmap::NAME,
-                event_bitmap::options(opts, tx_seq_pruning_floor.clone()),
-            ),
-            CfDescriptor::new(pruning_watermark::NAME, pruning_watermark::options(opts)),
-        ];
-        (cfs, tx_seq_pruning_floor)
-    }
+        let db = Db::open_cfs(
+            path,
+            opts,
+            snapshot_capacity,
+            vec![
+                CfDescriptor::new(epochs::NAME, epochs::options(opts)),
+                CfDescriptor::new(checkpoint_summary::NAME, checkpoint_summary::options(opts)),
+                CfDescriptor::new(
+                    checkpoint_contents::NAME,
+                    checkpoint_contents::options(opts),
+                ),
+                CfDescriptor::new(
+                    checkpoint_seq_by_digest::NAME,
+                    checkpoint_seq_by_digest::options(opts),
+                ),
+                CfDescriptor::new(transactions::NAME, transactions::options(opts)),
+                CfDescriptor::new(tx_seq_by_digest::NAME, tx_seq_by_digest::options(opts)),
+                CfDescriptor::new(tx_metadata_by_seq::NAME, tx_metadata_by_seq::options(opts)),
+                CfDescriptor::new(effects::NAME, effects::options(opts)),
+                CfDescriptor::new(events::NAME, events::options(opts)),
+                CfDescriptor::new(objects::NAME, objects::options(opts)),
+                CfDescriptor::new(
+                    object_version_by_checkpoint::NAME,
+                    object_version_by_checkpoint::options(opts),
+                ),
+                CfDescriptor::new(object_by_owner::NAME, object_by_owner::options(opts)),
+                CfDescriptor::new(object_by_type::NAME, object_by_type::options(opts)),
+                CfDescriptor::new(balance::NAME, balance::options(opts)),
+                CfDescriptor::new(package_versions::NAME, package_versions::options(opts)),
+                CfDescriptor::new(
+                    transaction_bitmap::NAME,
+                    transaction_bitmap::options(opts, tx_seq_pruning_floor.clone()),
+                ),
+                CfDescriptor::new(
+                    event_bitmap::NAME,
+                    event_bitmap::options(opts, tx_seq_pruning_floor.clone()),
+                ),
+                CfDescriptor::new(pruning_watermark::NAME, pruning_watermark::options(opts)),
+            ],
+        )?;
 
-    fn open(db: &Db, tx_seq_pruning_floor: Arc<AtomicU64>) -> Result<Self, OpenError> {
         let schema = Self {
             tx_seq_pruning_floor,
             epochs: DbMap::new(db.clone(), epochs::NAME)?,
@@ -231,7 +235,7 @@ impl Schema for RpcStoreSchema {
                 .store(watermarks.tx_seq_lo, Ordering::Relaxed);
         }
 
-        Ok(schema)
+        Ok((db, schema))
     }
 }
 
