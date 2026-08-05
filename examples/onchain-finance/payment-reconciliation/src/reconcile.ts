@@ -10,7 +10,7 @@ const client = new SuiGrpcClient({
 
 // docs::#extract-payment
 async function extractPaymentDetails(digest: string) {
-	const txResult = await client.core.getTransaction({
+	const txResult = await client.getTransaction({
 		digest,
 		include: { effects: true, balanceChanges: true },
 	});
