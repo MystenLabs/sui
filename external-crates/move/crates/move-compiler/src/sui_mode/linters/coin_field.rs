@@ -6,7 +6,6 @@
 
 use crate::{
     diag,
-    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::DatatypeName,
@@ -14,15 +13,7 @@ use crate::{
     typing::{ast as T, visitor::simple_visitor},
 };
 
-use super::{COIN_MOD_NAME, COIN_STRUCT_NAME, LinterDiagnosticCategory, LinterDiagnosticCode};
-
-const COIN_FIELD_DIAG: DiagnosticInfo = custom(
-    crate::diagnostics::codes::DiagnosticOrigin::SuiLint,
-    Severity::Warning,
-    LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::CoinField as u8,
-    "sub-optimal 'sui::coin::Coin' field type",
-);
+use super::{COIN_MOD_NAME, COIN_STRUCT_NAME, SuiLintCode};
 
 simple_visitor!(
     CoinFieldVisitor,
@@ -46,7 +37,7 @@ simple_visitor!(
                 if is_field_coin_type(ftype) {
                     let msg = "Sub-optimal 'sui::coin::Coin' field type. Using \
                         'sui::balance::Balance' instead will be more space efficient";
-                    self.add_diag(diag!(COIN_FIELD_DIAG, (ftype.loc, msg)));
+                    self.add_diag(diag!(SuiLintCode::CoinField.diag_info(), (ftype.loc, msg)));
                 }
             }
         }

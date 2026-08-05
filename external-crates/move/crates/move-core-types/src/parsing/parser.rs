@@ -3,7 +3,7 @@
 
 use crate::parsing::{
     address::{NumericalAddress, ParsedAddress},
-    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType, TypeToken},
+    types::{ParsedDatatype, ParsedFqName, ParsedModuleId, ParsedType, TypeToken},
     values::{ParsableValue, ParsedValue, ValueToken},
 };
 use crate::{
@@ -31,6 +31,23 @@ pub trait Token: Display + Copy + Eq {
     }
 }
 
+impl TryFrom<ValueToken> for TypeToken {
+    type Error = ValueToken;
+
+    fn try_from(token: ValueToken) -> Result<Self, Self::Error> {
+        Ok(match token {
+            ValueToken::Ident => TypeToken::Ident,
+            ValueToken::Number => TypeToken::AddressIdent,
+            ValueToken::ColonColon => TypeToken::ColonColon,
+            ValueToken::LAngle => TypeToken::Lt,
+            ValueToken::RAngle => TypeToken::Gt,
+            ValueToken::Comma => TypeToken::Comma,
+            ValueToken::Whitespace => TypeToken::Whitespace,
+            _ => return Err(token),
+        })
+    }
+}
+
 pub struct Parser<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> {
     count: u64,
     it: Peekable<I>,
@@ -39,6 +56,10 @@ pub struct Parser<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> {
 impl ParsedType {
     pub fn parse(s: &str) -> Result<ParsedType> {
         parse(s, |parser| parser.parse_type())
+    }
+
+    pub fn parse_type_args(s: &str) -> Result<Vec<ParsedType>> {
+        parse::<TypeToken, _>(s, |parser| parser.parse_type_args())
     }
 }
 
@@ -54,13 +75,13 @@ impl ParsedFqName {
     }
 }
 
-impl ParsedStructType {
-    pub fn parse(s: &str) -> Result<ParsedStructType> {
+impl ParsedDatatype {
+    pub fn parse(s: &str) -> Result<ParsedDatatype> {
         let ty = parse(s, |parser| parser.parse_type())
-            .map_err(|e| anyhow!("Invalid struct type: {}. Got error: {}", s, e))?;
+            .map_err(|e| anyhow!("Invalid datatype: {}. Got error: {}", s, e))?;
         match ty {
-            ParsedType::Struct(s) => Ok(s),
-            _ => bail!("Invalid struct type: {}", s),
+            ParsedType::Datatype(s) => Ok(s),
+            _ => bail!("Invalid datatype: {}", s),
         }
     }
 }
@@ -167,20 +188,16 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
         self.parse_type_impl(0)
     }
 
+    pub fn parse_type_args(&mut self) -> Result<Vec<ParsedType>> {
+        self.parse_type_args_impl(0)
+    }
+
     pub fn parse_module_id_impl(
         &mut self,
         tok: TypeToken,
         contents: &'a str,
     ) -> Result<ParsedModuleId> {
-        let tok = match tok {
-            TypeToken::Ident => ValueToken::Ident,
-            TypeToken::AddressIdent => ValueToken::Number,
-            tok => bail!("unexpected token {tok}, expected address"),
-        };
-        let address = parse_address_impl(tok, contents)?;
-        self.advance(TypeToken::ColonColon)?;
-        let name = self.advance(TypeToken::Ident)?.to_owned();
-        Ok(ParsedModuleId { address, name })
+        self.parse_module_id_from_type_token(tok, contents)
     }
 
     pub fn parse_fq_name_impl(
@@ -188,9 +205,51 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
         tok: TypeToken,
         contents: &'a str,
     ) -> Result<ParsedFqName> {
-        let module = self.parse_module_id_impl(tok, contents)?;
-        self.advance(TypeToken::ColonColon)?;
-        let name = self.advance(TypeToken::Ident)?.to_owned();
+        self.parse_fq_name_from_type_token(tok, contents)
+    }
+}
+
+impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I>
+where
+    TypeToken: TryFrom<Tok>,
+{
+    fn advance_type_token(&mut self, expected: TypeToken) -> Result<&'a str> {
+        let (token, contents) = self.advance_any()?;
+        if TypeToken::try_from(token).ok() != Some(expected) {
+            bail!("expected token {expected}, got {token}")
+        }
+        Ok(contents)
+    }
+
+    fn peek_type_token(&mut self) -> Option<TypeToken> {
+        self.peek_tok()
+            .and_then(|token| TypeToken::try_from(token).ok())
+    }
+
+    fn parse_module_id_from_type_token(
+        &mut self,
+        token: TypeToken,
+        contents: &'a str,
+    ) -> Result<ParsedModuleId> {
+        let address_token = match token {
+            TypeToken::Ident => ValueToken::Ident,
+            TypeToken::AddressIdent => ValueToken::Number,
+            token => bail!("unexpected token {token}, expected address"),
+        };
+        let address = parse_address_impl(address_token, contents)?;
+        self.advance_type_token(TypeToken::ColonColon)?;
+        let name = self.advance_type_token(TypeToken::Ident)?.to_owned();
+        Ok(ParsedModuleId { address, name })
+    }
+
+    fn parse_fq_name_from_type_token(
+        &mut self,
+        token: TypeToken,
+        contents: &'a str,
+    ) -> Result<ParsedFqName> {
+        let module = self.parse_module_id_from_type_token(token, contents)?;
+        self.advance_type_token(TypeToken::ColonColon)?;
+        let name = self.advance_type_token(TypeToken::Ident)?.to_owned();
         Ok(ParsedFqName { module, name })
     }
 
@@ -201,7 +260,10 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
             bail!("Type exceeds maximum nesting depth or node count")
         }
 
-        Ok(match self.advance_any()? {
+        let (token, contents) = self.advance_any()?;
+        let type_token = TypeToken::try_from(token)
+            .map_err(|_| anyhow!("unexpected token {token}, expected type"))?;
+        Ok(match (type_token, contents) {
             (TypeToken::Ident, "u8") => ParsedType::U8,
             (TypeToken::Ident, "u16") => ParsedType::U16,
             (TypeToken::Ident, "u32") => ParsedType::U32,
@@ -212,39 +274,47 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
             (TypeToken::Ident, "address") => ParsedType::Address,
             (TypeToken::Ident, "signer") => ParsedType::Signer,
             (TypeToken::Ident, "vector") => {
-                self.advance(TypeToken::Lt)?;
+                self.advance_type_token(TypeToken::Lt)?;
                 let ty = self.parse_type_impl(depth + 1)?;
-                self.advance(TypeToken::Gt)?;
+                self.advance_type_token(TypeToken::Gt)?;
                 ParsedType::Vector(Box::new(ty))
             }
 
-            (tok @ (TypeToken::Ident | TypeToken::AddressIdent), contents) => {
-                let fq_name = self.parse_fq_name_impl(tok, contents)?;
-                let type_args = match self.peek_tok() {
-                    Some(TypeToken::Lt) => {
-                        self.advance(TypeToken::Lt)?;
-                        let type_args = self.parse_list(
-                            |parser| parser.parse_type_impl(depth + 1),
-                            TypeToken::Comma,
-                            TypeToken::Gt,
-                            true,
-                        )?;
-                        self.advance(TypeToken::Gt)?;
-                        if type_args.is_empty() {
-                            bail!("expected at least one type argument")
-                        }
-                        type_args
-                    }
+            (token @ (TypeToken::Ident | TypeToken::AddressIdent), contents) => {
+                let fq_name = self.parse_fq_name_from_type_token(token, contents)?;
+                let type_args = match self.peek_type_token() {
+                    Some(TypeToken::Lt) => self.parse_type_args_impl(depth + 1)?,
                     _ => vec![],
                 };
-                ParsedType::Struct(ParsedStructType { fq_name, type_args })
+                ParsedType::Datatype(ParsedDatatype { fq_name, type_args })
             }
-            (tok, _) => bail!("unexpected token {tok}, expected type"),
+            (token, _) => bail!("unexpected token {token}, expected type"),
         })
+    }
+
+    fn parse_type_args_impl(&mut self, depth: u64) -> Result<Vec<ParsedType>> {
+        self.advance_type_token(TypeToken::Lt)?;
+        let mut type_args = Vec::new();
+        while !matches!(self.peek_type_token(), Some(TypeToken::Gt)) {
+            type_args.push(self.parse_type_impl(depth)?);
+            if matches!(self.peek_type_token(), Some(TypeToken::Gt)) {
+                break;
+            }
+            self.advance_type_token(TypeToken::Comma)?;
+        }
+        self.advance_type_token(TypeToken::Gt)?;
+        if type_args.is_empty() {
+            bail!("expected at least one type argument")
+        }
+        Ok(type_args)
     }
 }
 
 impl<'a, I: Iterator<Item = (ValueToken, &'a str)>> Parser<'a, ValueToken, I> {
+    pub fn parse_type_args(&mut self) -> Result<Vec<ParsedType>> {
+        self.parse_type_args_impl(0)
+    }
+
     pub fn parse_value<Extra: ParsableValue>(&mut self) -> Result<ParsedValue<Extra>> {
         if let Some(extra) = Extra::parse_value(self) {
             return Ok(ParsedValue::Custom(extra?));

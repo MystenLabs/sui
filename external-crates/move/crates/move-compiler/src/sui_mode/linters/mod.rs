@@ -10,7 +10,7 @@ use crate::{
     },
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, LinterDiagnosticCategory},
+    linters::{LintLevel, filters_from_table, lints},
     shared::known_attributes::DiagnosticAttribute,
     typing::visitor::TypingVisitor,
 };
@@ -68,157 +68,102 @@ pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
 pub const VEC_SET_MOD_NAME: &str = "vec_set";
 pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
 
-pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
-pub const SELF_TRANSFER_FILTER_NAME: &str = "self_transfer";
-pub const CUSTOM_STATE_CHANGE_FILTER_NAME: &str = "custom_state_change";
-pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
-pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
-pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
-pub const PUBLIC_RANDOM_FILTER_NAME: &str = "public_random";
-pub const MISSING_KEY_FILTER_NAME: &str = "missing_key";
-pub const FREEZING_CAPABILITY_FILTER_NAME: &str = "freezing_capability";
-pub const PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME: &str = "prefer_mut_tx_context";
-pub const UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME: &str = "public_entry";
-pub const UNCALLABLE_FUNCTION_FILTER_NAME: &str = "uncallable_function";
-pub const UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME: &str = "unused_object_with_fields";
-
 pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-#[repr(u8)]
-pub enum LinterDiagnosticCode {
-    ShareOwned,
-    SelfTransfer,
-    CustomStateChange,
-    CoinField,
-    FreezeWrapped,
-    CollectionEquality,
-    PublicRandom,
-    MissingKey,
-    FreezingCapability,
-    PreferMutableTxContext,
-    UnnecessaryPublicEntry,
-    UncallableFunction,
-    UnusedObjWithFields,
-}
+// Append-only: codes are positional and published (see `lints!`).
+lints!(
+    SuiLintCode,
+    DiagnosticOrigin::SuiLint,
+    SUI_LINT_WARNING_FILTERS,
+    (
+        ShareOwned,
+        Suspicious,
+        "share_owned",
+        "possible owned object share"
+    ),
+    (
+        SelfTransfer,
+        Conventions,
+        "self_transfer",
+        "non-composable transfer to sender"
+    ),
+    (
+        CustomStateChange,
+        Suspicious,
+        "custom_state_change",
+        "potentially unenforceable custom transfer/share/freeze policy"
+    ),
+    (
+        CoinField,
+        Conventions,
+        "coin_field",
+        "sub-optimal 'sui::coin::Coin' field type"
+    ),
+    (
+        FreezeWrapped,
+        Suspicious,
+        "freeze_wrapped",
+        "attempting to freeze wrapped objects"
+    ),
+    (
+        CollectionEquality,
+        Suspicious,
+        "collection_equality",
+        "possibly useless collections compare"
+    ),
+    (
+        PublicRandom,
+        Security,
+        "public_random",
+        "risky use of 'sui::random'"
+    ),
+    (
+        MissingKey,
+        Suspicious,
+        "missing_key",
+        "struct with id but missing key ability"
+    ),
+    (
+        FreezingCapability,
+        Suspicious,
+        "freezing_capability",
+        "freezing potential capability"
+    ),
+    (
+        PreferMutableTxContext,
+        Conventions,
+        "prefer_mut_tx_context",
+        "prefer '&mut TxContext' over '&TxContext'"
+    ),
+    (
+        UnnecessaryPublicEntry,
+        Complexity,
+        "public_entry",
+        "unnecessary `entry` on a `public` function"
+    ),
+    (
+        UncallableFunction,
+        Correctness,
+        "uncallable_function",
+        "it will not be possible to call this function"
+    ),
+    (
+        UnusedObjWithFields,
+        Suspicious,
+        "unused_object_with_fields",
+        "unused object with fields"
+    ),
+);
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
-    let sui = LinterDiagnosticCategory::Sui as u8;
-    let filters = vec![
-        (
-            Symbol::from(crate::diagnostics::filter::FILTER_ALL),
-            vec![DiagnosticsID::all(DiagnosticOrigin::SuiLint)],
-        ),
-        (
-            Symbol::from(SHARE_OWNED_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::ShareOwned as u8,
-            )],
-        ),
-        (
-            Symbol::from(SELF_TRANSFER_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::SelfTransfer as u8,
-            )],
-        ),
-        (
-            Symbol::from(CUSTOM_STATE_CHANGE_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::CustomStateChange as u8,
-            )],
-        ),
-        (
-            Symbol::from(COIN_FIELD_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::CoinField as u8,
-            )],
-        ),
-        (
-            Symbol::from(FREEZE_WRAPPED_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::FreezeWrapped as u8,
-            )],
-        ),
-        (
-            Symbol::from(COLLECTION_EQUALITY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::CollectionEquality as u8,
-            )],
-        ),
-        (
-            Symbol::from(PUBLIC_RANDOM_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::PublicRandom as u8,
-            )],
-        ),
-        (
-            Symbol::from(MISSING_KEY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::MissingKey as u8,
-            )],
-        ),
-        (
-            Symbol::from(FREEZING_CAPABILITY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::FreezingCapability as u8,
-            )],
-        ),
-        (
-            Symbol::from(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::PreferMutableTxContext as u8,
-            )],
-        ),
-        (
-            Symbol::from(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
-            )],
-        ),
-        (
-            Symbol::from(UNCALLABLE_FUNCTION_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::UncallableFunction as u8,
-            )],
-        ),
-        (
-            Symbol::from(UNUSED_OBJECT_WITH_FIELDS_FILTER_NAME),
-            vec![DiagnosticsID::exact(
-                DiagnosticOrigin::SuiLint,
-                sui,
-                LinterDiagnosticCode::UnusedObjWithFields as u8,
-            )],
-        ),
-    ];
-
-    (Some(DiagnosticAttribute::LINT_SYMBOL), filters)
+    (
+        Some(DiagnosticAttribute::LINT_SYMBOL),
+        filters_from_table(SuiLintCode::ORIGIN, SUI_LINT_WARNING_FILTERS),
+    )
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {

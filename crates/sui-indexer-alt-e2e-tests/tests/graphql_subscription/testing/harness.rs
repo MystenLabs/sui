@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::time::Duration;
+use std::time::Instant;
 
 use async_stream::stream;
 use bytes::BytesMut;
@@ -101,6 +103,20 @@ impl SubscriptionTestCluster {
         let mut config = GraphQlConfig::default();
         config.subscription.max_concurrent_resolutions = max_concurrent_resolutions;
         let (cluster, _controller) = Self::new_inner(false, true, config).await;
+        cluster
+    }
+
+    /// Same as `new()`, but caps per-subscriber delivery at `budget` output nodes per second so tests
+    /// can observe the reactive throttle pacing payloads.
+    pub async fn new_with_throttle_budget(budget: u32) -> Self {
+        let (cluster, _controller) = Self::new_inner(false, false, throttle_config(budget)).await;
+        cluster
+    }
+
+    /// Same as `new_with_ledger_history()`, but with a per-subscriber delivery budget so tests can
+    /// observe the throttle pacing the transaction subscription's backfill.
+    pub async fn new_with_ledger_history_and_throttle_budget(budget: u32) -> Self {
+        let (cluster, _controller) = Self::new_inner(false, true, throttle_config(budget)).await;
         cluster
     }
 
@@ -353,6 +369,33 @@ fn parse_sse_events(
             }
         }
     }
+}
+
+/// A GraphQL config that caps per-subscriber delivery at `budget` output nodes per second, leaving
+/// every other setting at its default.
+fn throttle_config(budget: u32) -> GraphQlConfig {
+    let mut config = GraphQlConfig::default();
+    config
+        .subscription
+        .per_subscriber_max_output_nodes_per_second = budget;
+    config
+}
+
+/// Take the next `n` payloads from `stream`, each paired with the elapsed time since this call. With
+/// a ready backlog, the gaps between arrivals reflect the throttle's pacing, not the source's rate.
+pub async fn collect_next_n_arrivals(
+    stream: &mut Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>>,
+    n: usize,
+) -> Vec<(Duration, Value)> {
+    let start = Instant::now();
+    let mut arrivals = Vec::with_capacity(n);
+    for _ in 0..n {
+        let payload = tokio_stream::StreamExt::next(stream)
+            .await
+            .expect("subscription stream ended before n payloads");
+        arrivals.push((start.elapsed(), payload));
+    }
+    arrivals
 }
 
 /// Execute SUI transfers as a soft bundle and return Base58-encoded digests.

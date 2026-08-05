@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
+use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use sui_name_service::NameServiceConfig;
 use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
@@ -121,6 +123,17 @@ pub struct Limits {
     /// keys will result in an error.
     pub max_multi_get_size: u32,
 
+    /// Maximum number of transaction digests forwarded in a single chunked
+    /// request to the underlying ledger gRPC (kv-rpc) reader. A configured value only ever
+    /// lowers this; the backing service enforces the same cap, so a larger value would just
+    /// be rejected.
+    pub max_batch_get_transactions: u32,
+
+    /// Maximum number of object keys forwarded in a single chunked request to
+    /// the underlying ledger gRPC (kv-rpc) reader. Same clamping behavior as
+    /// `max_batch_get_transactions`.
+    pub max_batch_get_objects: u32,
+
     /// Maximum (and default) number of object changes that can be returned in a single page of
     /// `TransactionEffects.objectChanges`.
     pub page_size_override_fx_object_changes: u32,
@@ -179,6 +192,8 @@ pub struct LimitsLayer {
     pub default_page_size: Option<u32>,
     pub max_page_size: Option<u32>,
     pub max_multi_get_size: Option<u32>,
+    pub max_batch_get_transactions: Option<u32>,
+    pub max_batch_get_objects: Option<u32>,
     pub page_size_override_fx_object_changes: Option<u32>,
     pub page_size_override_packages: Option<u32>,
     pub max_type_argument_depth: Option<usize>,
@@ -269,6 +284,14 @@ pub struct SubscriptionConfig {
     /// batch's matches resolve within the concurrency budget and coalesce their content reads into
     /// one `KvLoader` round trip.
     pub max_concurrent_resolutions: usize,
+
+    /// Per-subscriber delivery budget, in output nodes per second. After each payload we compute its
+    /// cost in output-node-equivalents (its actual output nodes, plus a surcharge for query depth)
+    /// and pause `cost / budget` seconds before the next payload, so a heavier payload streams slower
+    /// while the per-second total stays within budget. The up-front `max_output_nodes` estimate
+    /// already rejects a query whose worst case is too large, so this bounds the sustained rate, not
+    /// the peak.
+    pub per_subscriber_max_output_nodes_per_second: u32,
 }
 
 impl Default for SubscriptionConfig {
@@ -280,6 +303,7 @@ impl Default for SubscriptionConfig {
             per_subscriber_scan_max_qps: 500,
             per_subscriber_scan_max_concurrent_fetches: 50,
             max_concurrent_resolutions: 100,
+            per_subscriber_max_output_nodes_per_second: 1_000_000,
         }
     }
 }
@@ -293,6 +317,7 @@ pub struct SubscriptionLayer {
     pub per_subscriber_scan_max_qps: Option<u32>,
     pub per_subscriber_scan_max_concurrent_fetches: Option<usize>,
     pub max_concurrent_resolutions: Option<usize>,
+    pub per_subscriber_max_output_nodes_per_second: Option<u32>,
 }
 
 impl SubscriptionLayer {
@@ -314,6 +339,9 @@ impl SubscriptionLayer {
             max_concurrent_resolutions: self
                 .max_concurrent_resolutions
                 .unwrap_or(base.max_concurrent_resolutions),
+            per_subscriber_max_output_nodes_per_second: self
+                .per_subscriber_max_output_nodes_per_second
+                .unwrap_or(base.per_subscriber_max_output_nodes_per_second),
         }
     }
 }
@@ -480,6 +508,12 @@ impl LimitsLayer {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
             max_multi_get_size: self.max_multi_get_size.unwrap_or(base.max_multi_get_size),
+            max_batch_get_transactions: self
+                .max_batch_get_transactions
+                .unwrap_or(base.max_batch_get_transactions),
+            max_batch_get_objects: self
+                .max_batch_get_objects
+                .unwrap_or(base.max_batch_get_objects),
             page_size_override_fx_object_changes: self
                 .page_size_override_fx_object_changes
                 .unwrap_or(base.page_size_override_fx_object_changes),
@@ -572,6 +606,8 @@ impl From<Limits> for LimitsLayer {
             default_page_size: Some(value.default_page_size),
             max_page_size: Some(value.max_page_size),
             max_multi_get_size: Some(value.max_multi_get_size),
+            max_batch_get_transactions: Some(value.max_batch_get_transactions),
+            max_batch_get_objects: Some(value.max_batch_get_objects),
             page_size_override_fx_object_changes: Some(value.page_size_override_fx_object_changes),
             page_size_override_packages: Some(value.page_size_override_packages),
             max_type_argument_depth: Some(value.max_type_argument_depth),
@@ -627,6 +663,9 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
                 value.per_subscriber_scan_max_concurrent_fetches,
             ),
             max_concurrent_resolutions: Some(value.max_concurrent_resolutions),
+            per_subscriber_max_output_nodes_per_second: Some(
+                value.per_subscriber_max_output_nodes_per_second,
+            ),
         }
     }
 }
@@ -677,6 +716,8 @@ impl Default for Limits {
             default_page_size: 20,
             max_page_size: 50,
             max_multi_get_size: 200,
+            max_batch_get_transactions: MAX_BATCH_GET_TRANSACTIONS as u32,
+            max_batch_get_objects: MAX_BATCH_GET_OBJECTS as u32,
             // A much larger page size than the default, to make it unlikely that users need to
             // fetch a second page.
             page_size_override_fx_object_changes: 1024,

@@ -265,6 +265,11 @@ pub struct CfTuning {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_file_size_mb: Option<u64>,
 
+    /// SST age, in seconds, after which RocksDB may include a file in
+    /// periodic compaction. Zero disables periodic compaction.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub periodic_compaction_seconds: Option<u64>,
+
     /// Write-stall thresholds.
     #[serde(default, skip_serializing_if = "WriteStallConfig::is_empty")]
     pub write_stall: WriteStallConfig,
@@ -288,6 +293,9 @@ impl CfTuning {
                 .memtable_prefix_bloom_ratio
                 .or(base.memtable_prefix_bloom_ratio),
             target_file_size_mb: self.target_file_size_mb.or(base.target_file_size_mb),
+            periodic_compaction_seconds: self
+                .periodic_compaction_seconds
+                .or(base.periodic_compaction_seconds),
             write_stall: self.write_stall.merge_over(&base.write_stall),
         }
     }
@@ -334,6 +342,9 @@ impl CfTuning {
         }
         if let Some(mb) = self.target_file_size_mb {
             opts.set_target_file_size_base(mb << 20);
+        }
+        if let Some(seconds) = self.periodic_compaction_seconds {
+            opts.set_periodic_compaction_seconds(seconds);
         }
 
         self.write_stall.apply(&mut opts);
@@ -574,6 +585,19 @@ mod tests {
     }
 
     #[test]
+    fn periodic_compaction_zero_override_is_preserved() {
+        let base = CfTuning {
+            periodic_compaction_seconds: Some(2_592_000),
+            ..Default::default()
+        };
+        let over = CfTuning {
+            periodic_compaction_seconds: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(over.merge_over(&base).periodic_compaction_seconds, Some(0));
+    }
+
+    #[test]
     fn rocksdb_config_merge_unions_column_families() {
         let mut base = RocksDbConfig::default();
         base.default_cf.write_buffer_size_mb = Some(64);
@@ -719,6 +743,7 @@ mod tests {
             block_size_kb: Some(16),
             memtable_prefix_bloom_ratio: Some(0.02),
             target_file_size_mb: Some(128),
+            periodic_compaction_seconds: Some(2_592_000),
             write_stall: ws(Some(4), Some(512), Some(1024)),
             ..Default::default()
         };

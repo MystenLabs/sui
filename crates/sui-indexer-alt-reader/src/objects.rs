@@ -21,7 +21,6 @@ use crate::bigtable_reader::BigtableReader;
 use crate::error::Error;
 use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
-use crate::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use crate::pg_reader::PgReader;
 
 /// Key for fetching the contents a particular version of an object.
@@ -110,7 +109,7 @@ impl ChunkedLoader<VersionedObjectKey> for LedgerGrpcReader {
     type Error = Error;
 
     fn chunk_size(&self) -> usize {
-        MAX_BATCH_GET_OBJECTS
+        self.max_batch_get_objects()
     }
 
     async fn load_chunk(
@@ -159,7 +158,7 @@ mod tests {
     #[tokio::test]
     async fn load_chunks_oversized_batches() {
         let (reader, mock, server) = mock_reader().await;
-        let limit = MAX_BATCH_GET_OBJECTS;
+        let limit = reader.max_batch_get_objects();
 
         let keys: Vec<VersionedObjectKey> = (0..limit + 50)
             .map(|i| VersionedObjectKey(ObjectID::random(), i as u64))

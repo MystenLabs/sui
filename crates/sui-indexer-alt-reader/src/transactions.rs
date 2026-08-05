@@ -22,7 +22,6 @@ use crate::error::Error;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
-use crate::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use crate::pg_reader::PgReader;
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
@@ -105,7 +104,7 @@ impl ChunkedLoader<TransactionKey> for LedgerGrpcReader {
     type Error = Error;
 
     fn chunk_size(&self) -> usize {
-        MAX_BATCH_GET_TRANSACTIONS
+        self.max_batch_get_transactions()
     }
 
     async fn load_chunk(
@@ -203,7 +202,7 @@ impl ChunkedLoader<TransactionTimestampKey> for LedgerGrpcReader {
     type Error = Error;
 
     fn chunk_size(&self) -> usize {
-        MAX_BATCH_GET_TRANSACTIONS
+        self.max_batch_get_transactions()
     }
 
     async fn load_chunk(
@@ -253,7 +252,7 @@ impl ChunkedLoader<ProtoEffectsKey> for LedgerGrpcReader {
     type Error = Error;
 
     fn chunk_size(&self) -> usize {
-        MAX_BATCH_GET_TRANSACTIONS
+        self.max_batch_get_transactions()
     }
 
     async fn load_chunk(
@@ -306,7 +305,7 @@ mod tests {
     #[tokio::test]
     async fn transaction_load_chunks_oversized_batches() {
         let (reader, mock, server) = mock_reader().await;
-        let limit = MAX_BATCH_GET_TRANSACTIONS;
+        let limit = reader.max_batch_get_transactions();
 
         let keys: Vec<TransactionKey> = (0..limit + 50)
             .map(|_| TransactionKey(TransactionDigest::random()))
@@ -324,7 +323,7 @@ mod tests {
     #[tokio::test]
     async fn transaction_timestamp_load_chunks_oversized_batches() {
         let (reader, mock, server) = mock_reader().await;
-        let limit = MAX_BATCH_GET_TRANSACTIONS;
+        let limit = reader.max_batch_get_transactions();
 
         let keys: Vec<TransactionTimestampKey> = (0..limit + 50)
             .map(|_| TransactionTimestampKey(TransactionDigest::random()))

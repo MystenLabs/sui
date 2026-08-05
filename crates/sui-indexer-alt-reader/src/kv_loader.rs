@@ -41,6 +41,8 @@ use crate::events::TransactionEventsKey;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
+use crate::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
 use crate::transactions::ProtoEffectsKey;
@@ -171,10 +173,17 @@ impl KvArgs {
         ))
     }
 
+    /// `max_batch_get_transactions`/`max_batch_get_objects` may lower
+    /// `LedgerGrpcReader`'s batch-chunking size below `MAX_BATCH_GET_TRANSACTIONS`/
+    /// `MAX_BATCH_GET_OBJECTS`, never raise it above — a larger value would just be
+    /// rejected by the ledger gRPC/KV-RPC service, so it's clamped rather
+    /// than passed through.
     pub async fn ledger_grpc_reader(
         &self,
         prefix: Option<&str>,
         registry: &Registry,
+        max_batch_get_transactions: Option<usize>,
+        max_batch_get_objects: Option<usize>,
     ) -> anyhow::Result<Option<LedgerGrpcReader>> {
         let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
             return Ok(None);
@@ -186,6 +195,12 @@ impl KvArgs {
                 self.ledger_grpc_args(),
                 prefix,
                 registry,
+                max_batch_get_transactions
+                    .unwrap_or(MAX_BATCH_GET_TRANSACTIONS)
+                    .min(MAX_BATCH_GET_TRANSACTIONS),
+                max_batch_get_objects
+                    .unwrap_or(MAX_BATCH_GET_OBJECTS)
+                    .min(MAX_BATCH_GET_OBJECTS),
             )
             .await?,
         ))

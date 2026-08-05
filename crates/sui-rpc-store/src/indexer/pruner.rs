@@ -45,10 +45,10 @@
 //!   versions kept, so the index never points at a pruned version.
 //! - **Ledger-history bitmaps** (`transaction_bitmap`,
 //!   `event_bitmap`) — not deleted directly; advancing the shared
-//!   [`tx_seq_floor`](crate::schema::pruning_watermark::tx_seq_floor)
-//!   lets their compaction filters drop fully-pruned buckets. We
-//!   force a compaction once the floor advances so the eviction is
-//!   prompt rather than waiting for a natural sweep.
+//!   pruning floor lets their compaction filters drop fully-pruned
+//!   buckets. Merge operands can require one covering compaction to
+//!   materialize and a later compaction to filter; the forced catch-up
+//!   pass and periodic compaction provide those sweeps.
 //!
 //! The live-set-bounded indexes (`object_by_owner`, `object_by_type`,
 //! `balance`, `package_versions`) and the tiny `epochs` CF are never
@@ -331,14 +331,12 @@ fn prune_once(
         metrics.chunks_committed.inc();
     }
 
-    // The bitmap CFs' compaction filters only drop fully-pruned
-    // buckets on a compaction sweep; force one once the floor has
-    // reached its retention target so the eviction is prompt. While a
-    // backlog is still draining over multiple ticks we skip the
-    // whole-CF compaction so it does not become the per-tick long
-    // pole; natural background compaction still applies the same
-    // filter opportunistically in the meantime, and the final
-    // catch-up tick forces a prompt sweep.
+    // A bitmap row written as a merge operand may need one covering
+    // compaction to materialize and another to be filtered. Force a
+    // pass after reaching the retention target; the bitmap CFs'
+    // periodic compaction policy supplies subsequent passes. While a
+    // backlog is draining, skip whole-CF compaction so it does not
+    // become the per-tick long pole.
     if cursor.checkpoint_lo >= target_lo {
         db.compact_range_cf(transaction_bitmap::NAME, None, None)
             .context("Compacting transaction_bitmap after prune")?;
@@ -551,7 +549,7 @@ fn retract_object_version_by_checkpoint(
 ///   wrap/unwrap re-creation at or above the floor survives).
 /// - `transaction_bitmap` / `event_bitmap` — evicted by advancing the
 ///   shared `tx_seq` floor so their compaction filters drop fully-pruned
-///   buckets on the next natural background compaction.
+///   buckets during periodic compaction.
 ///
 /// The live cohort, `package_versions`, and the tiny `epochs` CF are
 /// never pruned.
@@ -1091,60 +1089,111 @@ mod tests {
         assert!(current_committed_epoch(&db).unwrap().is_none());
     }
 
-    /// The bitmap eviction path end to end: with the floor advanced
-    /// past a bucket, a forced compaction runs the bucket's
-    /// compaction filter and drops it, while a bucket above the floor
-    /// survives. This is what `prune_once` relies on when it compacts
-    /// the bitmap CFs after a floor advance.
+    /// Production-shaped bitmap reclamation: merge operands survive the
+    /// first covering compaction that materializes them, then expired
+    /// buckets are filtered on the second while retained buckets remain.
     #[test]
-    fn bitmap_buckets_below_floor_are_evicted_by_compaction() {
+    fn merge_written_bitmap_buckets_require_two_compactions_for_reclamation() {
         use std::sync::atomic::Ordering;
 
         use crate::schema::pruning_watermark::tx_seq_floor;
-        use crate::schema::transaction_bitmap;
 
-        // The floor is process-wide; snapshot and restore it so this
-        // test doesn't perturb others sharing the same atomic.
         let baseline = tx_seq_floor().load(Ordering::Relaxed);
         let (_dir, db, schema) = fresh_db();
-        let dim = b"sender:alice".to_vec();
+        let dimension = b"sender:alice".to_vec();
+        let floor = transaction_bitmap::TX_BUCKET_SIZE;
+        let retained_tx_seq = floor + 5;
 
-        // Materialize one bucket fully below the floor (bucket 0) and
-        // one above it (bucket 1). The compaction filter keys off the
-        // bucket id in the key, so the stored bitmap contents are
-        // immaterial here.
-        let mut bitmap0 = roaring::RoaringBitmap::new();
-        bitmap0.insert(transaction_bitmap::bit_of(5));
-        let mut bitmap1 = roaring::RoaringBitmap::new();
-        bitmap1.insert(transaction_bitmap::bit_of(
-            transaction_bitmap::TX_BUCKET_SIZE + 5,
-        ));
-        let (k0, v0) = transaction_bitmap::store_bitmap(dim.clone(), 0, bitmap0);
-        let (k1, v1) = transaction_bitmap::store_bitmap(dim.clone(), 1, bitmap1);
+        let (tx_low_key, tx_low_value) = transaction_bitmap::store_match(dimension.clone(), 5);
+        let (tx_high_key, tx_high_value) =
+            transaction_bitmap::store_match(dimension.clone(), retained_tx_seq);
+        let (event_low_key, event_low_value) = event_bitmap::store_match(dimension.clone(), 5, 0);
+        let (event_high_key, event_high_value) =
+            event_bitmap::store_match(dimension.clone(), retained_tx_seq, 0);
 
         let mut batch = db.batch();
-        batch.put(&schema.transaction_bitmap, &k0, &v0).unwrap();
-        batch.put(&schema.transaction_bitmap, &k1, &v1).unwrap();
+        batch
+            .merge(&schema.transaction_bitmap, &tx_low_key, &tx_low_value)
+            .unwrap();
+        batch
+            .merge(&schema.transaction_bitmap, &tx_high_key, &tx_high_value)
+            .unwrap();
+        batch
+            .merge(&schema.event_bitmap, &event_low_key, &event_low_value)
+            .unwrap();
+        batch
+            .merge(&schema.event_bitmap, &event_high_key, &event_high_value)
+            .unwrap();
         batch.commit().unwrap();
         db.flush().unwrap();
 
-        // Advance the floor to the top of bucket 0, then force a
-        // compaction. Bucket 0's whole range is below the floor, so
-        // its filter returns Remove; bucket 1 straddles above it.
-        schema.set_pruning_floor(transaction_bitmap::TX_BUCKET_SIZE);
+        let (watermark_key, watermark_value) = pruning_watermark::store(&Watermarks {
+            tx_seq_lo: floor,
+            checkpoint_lo: 1,
+        });
+        let mut batch = db.batch();
+        batch
+            .put(&schema.pruning_watermark, &watermark_key, &watermark_value)
+            .unwrap();
+        batch.commit().unwrap();
+        schema.set_pruning_floor(floor);
+
         db.compact_range_cf(transaction_bitmap::NAME, None, None)
             .unwrap();
+        db.compact_range_cf(event_bitmap::NAME, None, None).unwrap();
 
         assert!(
             schema
-                .get_transaction_bitmap(dim.clone(), 0)
+                .get_transaction_bitmap(dimension.clone(), tx_low_key.bucket)
                 .unwrap()
-                .is_none(),
-            "fully-pruned bucket 0 should be evicted by compaction",
+                .is_some()
         );
         assert!(
-            schema.get_transaction_bitmap(dim, 1).unwrap().is_some(),
-            "bucket 1 above the floor must remain",
+            schema
+                .get_transaction_bitmap(dimension.clone(), tx_high_key.bucket)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            schema
+                .get_event_bitmap(dimension.clone(), event_low_key.bucket)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            schema
+                .get_event_bitmap(dimension.clone(), event_high_key.bucket)
+                .unwrap()
+                .is_some()
+        );
+
+        db.compact_range_cf(transaction_bitmap::NAME, None, None)
+            .unwrap();
+        db.compact_range_cf(event_bitmap::NAME, None, None).unwrap();
+
+        assert!(
+            schema
+                .get_transaction_bitmap(dimension.clone(), tx_low_key.bucket)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .get_transaction_bitmap(dimension.clone(), tx_high_key.bucket)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            schema
+                .get_event_bitmap(dimension.clone(), event_low_key.bucket)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .get_event_bitmap(dimension, event_high_key.bucket)
+                .unwrap()
+                .is_some()
         );
 
         tx_seq_floor().store(baseline, Ordering::Relaxed);
