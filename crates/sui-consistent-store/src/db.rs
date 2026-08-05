@@ -59,6 +59,7 @@ use crate::snapshot::Snapshot;
 /// // More background threads for compactions and flushes.
 /// opts.rocksdb.db.parallelism = Some(8);
 /// ```
+#[derive(Clone)]
 pub struct DbOptions {
     /// Tunable RocksDB options applied database-wide and per column
     /// family when the database is opened.

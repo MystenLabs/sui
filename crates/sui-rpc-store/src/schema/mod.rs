@@ -235,14 +235,14 @@ impl SchemaAtSnapshot for RpcStoreSchema {
 /// The tuned [`RocksDbConfig`] this crate ships as its baseline for
 /// the `sui-rpc-store` column families.
 ///
-/// Operators layer their own overrides on top via
-/// [`RocksDbConfig::merge_over`]; anything they leave unset falls back
-/// to these values. The defaults port the production-proven settings
-/// from `typed_store` and bake in a "no write stalls, generous
-/// compaction parallelism" policy: the pending-compaction stall limits
-/// are disabled and the L0 triggers raised so neither the bulk restore
-/// nor steady-state indexing throttles on compaction debt, while the
-/// L0 stop trigger still bounds a runaway backlog.
+/// Bitmap CFs use a 7-day periodic-compaction interval by default.
+///
+/// The defaults port the production-proven settings from `typed_store`
+/// and bake in a "no write stalls, generous compaction parallelism"
+/// policy: the pending-compaction stall limits are disabled and the L0
+/// triggers raised so neither the bulk restore nor steady-state indexing
+/// throttles on compaction debt, while the L0 stop trigger still bounds
+/// a runaway backlog.
 pub fn default_rocksdb_config() -> RocksDbConfig {
     let write_stall = WriteStallConfig {
         soft_pending_compaction_bytes_limit_mb: Some(0),
@@ -261,6 +261,7 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
         bloom_filter_bits: None,
         memtable_prefix_bloom_ratio: Some(0.02),
         target_file_size_mb: Some(128),
+        periodic_compaction_seconds: None,
         write_stall,
     };
 
@@ -277,9 +278,11 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
     }
 
     // Bitmap CFs accumulate large merge-blob values; a bigger memtable
-    // amortizes the merge-and-flush churn.
+    // amortizes the merge-and-flush churn. Periodic compaction ensures
+    // old merge operands are materialized and later filtered.
     let bitmap = CfTuning {
         write_buffer_size_mb: Some(256),
+        periodic_compaction_seconds: Some(7 * 86_400),
         ..Default::default()
     };
     for name in [transaction_bitmap::NAME, event_bitmap::NAME] {
@@ -390,5 +393,22 @@ mod tests {
             cfg.column_family[transaction_bitmap::NAME].write_buffer_size_mb,
             Some(256)
         );
+        assert_eq!(
+            cfg.column_family[transaction_bitmap::NAME].periodic_compaction_seconds,
+            Some(604_800)
+        );
+        assert_eq!(
+            cfg.column_family[event_bitmap::NAME].periodic_compaction_seconds,
+            Some(604_800)
+        );
+        assert_eq!(cfg.default_cf.periodic_compaction_seconds, None);
+        for (name, tuning) in &cfg.column_family {
+            if tuning.periodic_compaction_seconds.is_some() {
+                assert!(
+                    [transaction_bitmap::NAME, event_bitmap::NAME].contains(&name.as_str()),
+                    "periodic compaction unexpectedly configured for {name}",
+                );
+            }
+        }
     }
 }
