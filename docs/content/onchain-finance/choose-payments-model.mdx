@@ -1,10 +1,9 @@
 ---
-title: Choose Your Payments Model
+title: Choose a Payment Model
 description: >-
   Decide between basic transfers, Payment Kit, and custom Move modules for
   your Sui payment integration, with guidance on address balances versus coin
   objects and gas strategies.
-sidebar_label: Choose a Payments Model
 keywords:
   - payments decision guide
   - payment model
@@ -15,6 +14,8 @@ keywords:
   - coin objects
   - gas strategy
   - sponsored transactions
+  - gasless stablecoin transfers
+  - payment intents
 goal:
   description: >-
     Reader can choose the right payment model for their Sui integration based on
@@ -47,81 +48,245 @@ questions:
   - How do I choose a payment model on Sui?
   - What is the difference between basic transfer, Payment Kit, and custom Move payments?
   - Should I use address balances or coin objects for payments?
+  - How do I pay gas for a payment transaction on Sui?
 answer: >-
-  Sui offers three payment models: basic transfers for direct sends, Payment
-  Kit for structured receipts with duplicate prevention, and custom Move modules
-  for full control over spending policies and settlement logic.
+  Sui supports a range of payment models. Common starting points include basic
+  transfers for direct sends, Payment Kit for structured receipts with duplicate
+  prevention, and custom Move modules for full control over spending policies
+  and settlement logic. Each model works with any gas strategy: the sender pays
+  gas, a sponsor pays gas, or the network waives gas for allowlisted stablecoin
+  transfers. These models compose, so an integration can combine them in one
+  transaction.
 ---
 
-Sui offers three payment models. The right choice depends on whether you need receipts, duplicate prevention, or custom spending logic.
+Sui supports a range of payment models, from direct transfers to structured checkout flows built on Payment Kit. The right choice depends on whether you need receipts, duplicate prevention, or custom spending logic. Most integrations start from one of the common models below, and many combine several in a single transaction.
 
-## Decision matrix
-
-| | Basic transfer | Payment Kit | Custom Move |
-|---|---|---|---|
-| **Complexity** | Low | Medium | High |
-| **Best for** | Wallets, P2P sends, treasury moves | Merchant checkout, invoicing, subscriptions | Agent mandates, regulated payments, complex settlement |
-| **Receipts** | None (read from events/effects) | Built-in `PaymentReceipt` objects | You define your own |
-| **Duplicate prevention** | None | Built-in through `PaymentRegistry` | You implement it |
-| **Gas sponsorship** | Yes | Yes | Yes |
-| **Onchain audit trail** | Transfer events only | Receipt objects + events | You define it |
+| | **Basic transfer** | **Payment Kit** |
+|---|---|---|
+| Complexity | Low | Medium |
+| Best for | Wallets, peer-to-peer sends, treasury moves | Merchant checkout, invoicing, subscriptions | 
+| Receipts | None, so read from events or effects | Built-in `PaymentReceipt` objects | 
+| Duplicate prevention | None | Built-in through `PaymentRegistry` | 
+| Gas sponsorship | Yes | Yes |
+| Onchain audit trail | Transfer events only | Receipt objects and events | 
+| Move code to write | None | None | 
 
 ## Basic transfer
 
-Use `transferObjects` or address balance `send_funds` to move coins directly. No onchain receipts or duplicate prevention. This is the best choice when your backend or wallet already tracks payments.
+A basic transfer moves value directly, with no receipt object and no onchain payment record. Read the outcome from transaction effects and events. There are two ways to deliver funds.
 
-Learn more: [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances), [Building PTBs](/develop/transactions/ptbs/building-ptb).
+### Send to an address balance
+
+The address balance functions `balance::send_funds` and `coin::send_funds` deposit value into a canonical per-address balance. Deposits from different senders merge automatically, so the recipient manages no objects. This path also enables [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers).
+
+### Transfer a coin object
+
+Transfer a `Coin<T>` object when the recipient or an integrating contract expects a distinct object, such as a payment that a downstream Move call consumes:
+
+Learn more in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances) and [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb).
 
 ## Payment Kit
 
-Use the [Payment Kit](/onchain-finance/payment-kit) when you need structured receipts and duplicate prevention without writing custom Move. The kit provides `PaymentRegistry` for tracking, `PaymentReceipt` objects as proof of payment, and composite-key deduplication.
+Use [Payment Kit](/onchain-finance/payment-kit) when you need structured receipts and duplicate prevention without writing custom Move. Payment Kit offers 2 processing modes:
 
-Learn more: [Payment Kit Standard](/onchain-finance/payment-kit).
+- **Registry payments:** Process the payment through a `PaymentRegistry`. The registry stores a `PaymentRecord` internally, rejects duplicates, and optionally accumulates funds for later withdrawal. Use this mode when compliance, accounting, or retry safety requires payment history.
 
-## Custom Move module
+- **Ephemeral payments:** Process a one-time payment with no persistent record. The function transfers funds immediately, returns a receipt, and emits an event, at lower gas cost. Use this mode when an external system already tracks payments and duplicates are not a concern.
 
-Write your own Move module when you need onchain spending caps, allowlists, expiry, or settlement logic that the Payment Kit does not cover. This is the right choice for agent spending mandates and regulated payment flows.
+### Process a registry payment
 
-<ImportContent source="examples/onchain-finance/choose-payments-model/sources/payments.move" mode="code" tag="payments" />
+The registry entry point takes a nonce, the expected amount, and the payment coin:
 
-Learn more: [Spending Policies and Mandates](/onchain-finance/agentic-payments/spending-policies).
+```move
+module sui::payment_kit;
 
-## Address balances vs coin objects
+public fun process_registry_payment<T>(
+    registry: &mut PaymentRegistry,
+    nonce: String,
+    payment_amount: u64,
+    coin: Coin<T>,
+    receiver: Option<address>,
+    clock: &Clock,
+    ctx: &mut TxContext
+)
+```
 
-Sui has two ways to hold fungible value:
+The function verifies that the coin value matches `payment_amount`, checks the composite key for a duplicate, records the payment, transfers funds to `receiver` or the registry, returns a `PaymentReceipt`, and emits an event. It aborts with `EDuplicatePayment` when the same key was already processed, and with `EPaymentAmountMismatch` when the coin value differs from the expected amount.
 
-- **Coin objects** (`Coin<T>`): Standalone objects with a unique ID and version. You split, merge, and transfer them explicitly. Familiar to Sui developers; required for most Move module interactions.
+Duplicate prevention relies on a `PaymentKey` derived from the nonce, amount, coin type, and receiver address. Generate the nonce as a UUIDv4 of at most 36 characters, and reuse the same nonce when you retry a payment so the retry cannot double-charge.
 
-- **Address balances** (`Balance<T>`): Aggregated balances attached to an address, not individual objects. You send from them with `balance::send_funds`. More suitable for high-volume transfers and required for [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers).
+### Encode a payment request as a URI
 
-| | Coin objects | Address balances |
-|---|---|---|
-| **Object contention** | Each coin is a separate object; concurrent use requires careful management | No object contention for sends |
-| **Gasless transfers** | Not eligible | Eligible for allowlisted stablecoins |
-| **Move composability** | Full (pass to any function) | Limited (must convert to `Coin` for most Move calls) |
-| **Best for** | General-purpose, Move module interactions | High-volume P2P transfers, stablecoin payments |
+Payment Kit defines a transaction URI format that wallets parse into a ready-to-sign payment. Include the `registry` parameter to route through a registry, or omit it to process an ephemeral payment:
 
-You can convert between them within a single PTB. Use `coin::into_balance` to go from coin to balance, and `coin::from_balance` for the reverse.
+```
+sui:pay?receiver=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    &amount=1000000000
+    &coinType=0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI
+    &nonce=550e8400-e29b-41d4-a716-446655440000
+    &label=Coffee%20Shop
+    &registry=default-payment-registry
+```
 
-:::danger Common payment pitfalls
+Percent-encode every parameter value according to RFC 3986. The `amount` value is the native amount of the coin type, so 1000000000 MIST represents 1 SUI.
 
-- **Integer math only.** SUI has 9 decimals (1 SUI = 1,000,000,000 MIST). Never use floating-point arithmetic on token amounts. Always work in the smallest unit (MIST for SUI) and convert for display only.
-- **Per-coin-type decimals.** Not all tokens use 9 decimals. USDC on Sui has 6 decimals. Always check `CoinMetadata.decimals` for the specific coin type before converting between human-readable and onchain amounts.
-- **Coin selection and merging.** A user might hold multiple `Coin` objects of the same type. If the payment requires more than any single coin holds, merge them first with `tx.mergeCoins()` in your PTB, or use `splitCoins` to extract the exact amount needed.
-- **Gas coin reservation.** If you are paying gas in SUI and also transferring SUI in the same transaction, the gas coin is implicitly used for gas. Use `tx.splitCoins(tx.gas, [amount])` to split the transfer amount from the gas coin rather than selecting a separate SUI coin object, which avoids "insufficient gas" errors.
+:::tip
+
+Verify the receiver, amount, coin type, and package ID against your own expected values rather than trusting client-supplied or URI-supplied data, and confirm payment against onchain receipts and events rather than client state. For broader guidance, see [Security Best Practices](/develop/security/best-practices).
 
 :::
 
+
+## Address balances compared to coin objects
+
+Sui holds fungible value in coin objects and in address balances:
+
+- **Coin objects:** Standalone `Coin<T>` objects, each with a unique ID and version. You split, merge, and transfer them explicitly.
+
+- **Address balances:** Aggregated `Balance<T>` values attached to an address rather than to individual objects. You deposit into them with `balance::send_funds`, and [gasless stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers) require them.
+
+Address balances suit high-volume transfers because they remove coin selection, merging, and object version lookups from the sending path. A transaction that pays gas from an address balance carries no owned object inputs at all, which makes it safe to build offline.
+
+To spend from an address balance, create a withdrawal and redeem it into a `Coin<T>` or a `Balance<T>`:
+
+```tsx title='withdraw.ts'
+const tx = new Transaction();
+
+const [coin] = tx.moveCall({
+	target: '0x2::coin::redeem_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [tx.withdrawal({ amount: 1_000_000_000 })],
+});
+
+tx.transferObjects([coin], '0xRecipientAddress');
+```
+
+:::info
+
+`tx.withdrawal()` creates a `Withdrawal<Balance<T>>` capability that you must redeem before you can use the funds. Call `0x2::coin::redeem_funds()` or `0x2::balance::redeem_funds()` to do this. The `coinWithBalance` intent does this automatically.
+
+:::
+
+Query both sources together, because a recipient can hold value in each:
+
+```tsx title='get-balance.ts'
+const { balance } = await grpcClient.getBalance({
+	owner: '0xMyAddress',
+});
+
+console.log(balance.balance); // total balance as string (coin objects + address balance)
+console.log(balance.coinBalance); // balance from coin objects only
+console.log(balance.addressBalance); // balance from address balance only
+```
+
+All balance values return as strings. Convert with `BigInt(balance.balance)` before you do arithmetic. When you compute balance changes from checkpoint data, process the accumulator events in `TransactionEffects` as well as coin object inputs and outputs, because address balance movement never touches a coin object.
+
+## Common payment pitfalls
+
+These 4 mistakes account for most payment integration bugs:
+
+- **Integer math only:** SUI has 9 decimals (1 SUI = 1,000,000,000 MIST). Never use floating-point arithmetic on token amounts. Always work in the smallest unit, MIST for SUI, and convert for display only.
+- **Per-coin-type decimals:** Not all tokens use 9 decimals. USDC on Sui has 6 decimals. Always check `CoinMetadata.decimals` for the specific coin type before you convert between human-readable and onchain amounts.
+- **Coin selection and merging:** A user might hold several `Coin` objects of the same type. If the payment requires more than any single coin holds, merge them first with `tx.mergeCoins()` in your transaction, or use `tx.splitCoins()` to extract the exact amount you need.
+- **Gas coin reservation:** If you pay gas in SUI and also transfer SUI in the same transaction, the transaction implicitly uses the gas coin for gas. Split the transfer amount from the gas coin rather than selecting a separate SUI coin object, which avoids `insufficient gas` errors.
+
+The following pattern handles both the merge case and the gas coin case:
+
+```tsx title='coin-handling.ts'
+const tx = new Transaction();
+
+// Merge several coins of the same type into the first one, then split the exact amount.
+tx.mergeCoins(primaryCoin, [secondCoin, thirdCoin]);
+const [payment] = tx.splitCoins(primaryCoin, [amount]);
+
+// For SUI, split from the gas coin instead of selecting another SUI object.
+const [suiPayment] = tx.splitCoins(tx.gas, [amount]);
+```
+
 ## Gas strategies
 
-Every payment transaction needs gas. Choose a strategy based on your user experience goals:
+Every payment transaction needs gas, except for qualifying stablecoin transfers. Choose a strategy based on your user experience goals.
 
-- **User pays gas:** The sender pays in SUI. The most basic option to implement, but requires users to hold SUI. See [Gas Fees](/develop/transaction-payment/gas-in-sui).
+### User pays gas
 
-- **Gasless stablecoin transfer:** For allowlisted stablecoins sent through `balance::send_funds`, the network waives gas fees entirely. No SUI needed. See [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers).
+The sender pays in SUI. This option takes the least work to implement, but your users must hold SUI. See [Gas Fees](/develop/transaction-payment/gas-in-sui).
 
-- **Sponsored transaction:** A gas station pays gas on behalf of the sender. Works with any transaction type. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).
+### Gasless stablecoin transfer
 
-## Combining models
+For allowlisted stablecoins sent through `balance::send_funds`, the network waives gas fees entirely, so the sender needs no SUI. Protocol configuration governs the allowlist, which currently includes USDC, USDsui, USDY, FDUSD, AUSD, USDB, and Ethena USDe. A transaction qualifies only when all of the following hold:
 
-All three models compose inside a single [payment intent](/onchain-finance/payment-intents). A PTB can split coins, process a Payment Kit payment, and call your custom Move module in one atomic transaction. Start with the most basic model that meets your requirements and add complexity only when needed.
+- The transaction consists of allowlisted `balance` or `coin` operations, primarily `0x2::balance::send_funds<T>`, on an allowlisted stablecoin type.
+- `gasPayment` is empty and `gasPrice` is 0.
+- The transaction writes no objects, and it consumes or converts all input coins to address balances.
+
+Build the transfer with `SuiGrpcClient`, which detects eligibility during simulation and sets the gas price and budget to 0 for you:
+
+```tsx title='gasless-transfer.ts'
+const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
+
+const tx = new Transaction();
+tx.setSender(senderAddress);
+
+tx.moveCall({
+	target: '0x2::balance::send_funds',
+	typeArguments: [USDC],
+	arguments: [
+		tx.balance({ type: USDC, balance: 1_000_000n }), // 1 USDC
+		tx.pure.address(recipient),
+	],
+});
+
+const result = await client.signAndExecuteTransaction({
+	transaction: tx,
+	signer: keypair,
+});
+```
+
+:::caution
+
+Gasless stablecoin transfers require a minimum transfer of 0.01, and the network deprioritizes them against fee-paying transactions when it is congested. Any other Move call in the same transaction, including a swap, a mint, or a Payment Kit call, disqualifies the transfer and the transaction then requires a normal gas payment.
+
+:::
+
+See [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) for the full allowlist and the JSON-RPC fallback.
+
+### Sponsored transaction
+
+A gas station pays gas on behalf of the sender, which works with any transaction type, including Payment Kit calls and custom Move modules. A sponsored transaction involves 3 roles: the user who wants to transact, the gas station that supplies the gas payment, and the sponsor that funds the gas station. Both the user and the sponsor sign the entire transaction data, including the gas data:
+
+```tsx title='sponsored-payment.ts'
+// 1. User builds the transaction
+const tx = new Transaction();
+tx.setSender(user.toSuiAddress());
+tx.moveCall({ target: '0xPACKAGE::module::function' });
+
+// 2. Sponsor sets gas payment
+tx.setGasOwner(sponsor.toSuiAddress());
+tx.setGasBudget(10_000_000);
+tx.setGasPayment([{ objectId: '0x...', version: '1', digest: '...' }]);
+
+// 3. Build the transaction bytes
+const bytes = await tx.build({ client });
+
+// 4. Both parties sign
+const userSig = await user.signTransaction(bytes);
+const sponsorSig = await sponsor.signTransaction(bytes);
+
+// 5. Submit with both signatures
+const result = await client.executeTransaction({
+  transaction: bytes,
+  signatures: [userSig.signature, sponsorSig.signature],
+});
+```
+
+Sponsoring from a sponsor address balance removes the gas coin entirely. Pass an empty array to `setGasPayment`, which lets the user sign first and the sponsor sign afterward, and removes the risk that a competing transaction locks the gas coin:
+
+```tsx title='sponsored-address-balance.ts'
+const tx = new Transaction();
+tx.setSender(userAddress);
+tx.setGasOwner(sponsorAddress);
+tx.setGasPayment([]); // Empty array = sponsor pays from address balance
+```
+
+Submit dual-signed transactions directly to a full node rather than through the sponsor, so the sponsor cannot delay or withhold them. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) for the full flow and risk considerations.
+
