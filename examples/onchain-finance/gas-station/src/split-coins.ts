@@ -26,6 +26,6 @@ const coins = tx.splitCoins(
 // One TransferObjects command for the whole batch, not one per coin.
 tx.transferObjects(coins, sponsor.toSuiAddress());
 
-const result = await sponsor.signAndExecuteTransaction({ transaction: tx, client });
-await client.waitForTransaction({ result });
+const result = await client.signAndExecuteTransaction({ transaction: tx, signer: sponsor });
+await client.waitForTransaction(result);
 // docs::/#split-coins

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ClientWithCoreApi } from '@mysten/sui/client';
+import type { SuiGrpcClient } from '@mysten/sui/grpc';
 
 // docs::#gas-coin-type
 interface GasCoin {
@@ -24,15 +24,12 @@ class GasCoinPool {
 		this.minBalance = minBalance;
 	}
 
-	async initialize(client: ClientWithCoreApi, sponsorAddress: string) {
+	async initialize(client: SuiGrpcClient, sponsorAddress: string) {
 		// A sponsor pool is deliberately made of many small coins, so the first
 		// page is never the whole pool. Page until the cursor is exhausted.
 		let cursor: string | null = null;
 		do {
-			// TODO(verify): confirm the owned-object listing request/response
-			// field names against the installed core API types.
-			// https://sdk.mystenlabs.com/sui/migrations/sui-2.0/json-rpc-migration
-			const page = await client.core.listOwnedObjects({
+			const page = await client.listOwnedObjects({
 				owner: sponsorAddress,
 				type: '0x2::coin::Coin<0x2::sui::SUI>',
 				cursor,
