@@ -722,8 +722,18 @@ where
             return Ok(());
         }
 
-        // Limit the number of the returned blocks processed.
-        serialized_blocks.truncate(context.parameters.max_blocks_per_sync);
+        // Limit the number of the returned blocks processed. The limit follows the
+        // request shape, mirroring the server's own response sizing: a request that
+        // named explicit refs is live sync and bounded by max_blocks_per_sync, while a
+        // rounds-only request (empty guard) is catch-up — the server sizes those
+        // responses by max_blocks_per_fetch, and truncating them here to the sync
+        // limit would discard blocks already paid for on the wire.
+        let processing_limit = if requested_blocks_guard.block_refs.is_empty() {
+            context.parameters.max_blocks_per_fetch
+        } else {
+            context.parameters.max_blocks_per_sync
+        };
+        serialized_blocks.truncate(processing_limit);
 
         // Verify all the fetched blocks
         let (blocks, voted_blocks) = spawn_blocking({
@@ -1637,7 +1647,7 @@ mod tests {
         },
         storage::mem_store::MemStore,
         synchronizer::{
-            COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
+            BlocksGuard, COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
             InflightBlocksMap, Synchronizer, select_exact_requests, select_peer_batch,
         },
     };
@@ -2789,5 +2799,75 @@ mod tests {
 
         // Check blocks were unlocked
         assert_eq!(inflight_blocks_map.num_of_locked_blocks(), 0);
+    }
+
+    /// A rounds-only response (empty guard — catch-up shape) must be processed up to
+    /// max_blocks_per_fetch, not truncated to max_blocks_per_sync: the server sizes
+    /// those responses by the fetch limit, and a client-side sync-limit truncation
+    /// silently discards blocks already paid for on the wire. This was the difference
+    /// between a 1,000-block repair pipe and a 32-block one.
+    #[tokio::test]
+    async fn test_process_fetched_blocks_rounds_only_uses_fetch_limit() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let (commands_sender, _commands_receiver) =
+            monitored_mpsc::channel("consensus_synchronizer_commands", 1000);
+
+        // More blocks than max_blocks_per_sync, fewer than max_blocks_per_fetch.
+        let block_count = context.parameters.max_blocks_per_sync + 10;
+        let expected_blocks: Vec<_> = (0..block_count)
+            .map(|i| VerifiedBlock::new_for_test(TestBlock::new(30 + i as Round, 1).build()))
+            .collect();
+        assert!(block_count > context.parameters.max_blocks_per_sync);
+        assert!(block_count < context.parameters.max_blocks_per_fetch);
+        let serialized: Vec<_> = expected_blocks
+            .iter()
+            .map(|b| b.serialized().clone())
+            .collect();
+
+        let peer = PeerId::Validator(AuthorityIndex::new_for_test(2));
+        // Rounds-only requests carry no refs, so their guard is empty — the same
+        // signal the server uses to classify the request as catch-up.
+        let blocks_guard = BlocksGuard {
+            map: InflightBlocksMap::new(),
+            block_refs: BTreeSet::new(),
+            peer: peer.clone(),
+        };
+
+        let result = Synchronizer::<
+            NoopBlockVerifier,
+            MockCoreThreadDispatcher,
+            MockNetworkClient,
+            MockNetworkClient,
+        >::process_fetched_blocks(
+            serialized,
+            peer,
+            blocks_guard,
+            core_dispatcher.clone(),
+            block_verifier,
+            transaction_vote_tracker,
+            commit_vote_monitor,
+            context.clone(),
+            commands_sender,
+            round_tracker,
+            "test",
+        )
+        .await;
+        assert!(result.is_ok());
+
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(
+            added_blocks.len(),
+            block_count,
+            "rounds-only responses must not be truncated to max_blocks_per_sync"
+        );
     }
 }
