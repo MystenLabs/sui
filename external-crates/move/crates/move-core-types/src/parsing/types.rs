@@ -36,7 +36,7 @@ pub struct ParsedFqName {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct ParsedStructType {
+pub struct ParsedDatatype {
     pub fq_name: ParsedFqName,
     pub type_args: Vec<ParsedType>,
 }
@@ -53,7 +53,7 @@ pub enum ParsedType {
     Address,
     Signer,
     Vector(Box<ParsedType>),
-    Struct(ParsedStructType),
+    Datatype(ParsedDatatype),
 }
 
 impl Display for TypeToken {
@@ -154,7 +154,7 @@ impl ParsedFqName {
     }
 }
 
-impl ParsedStructType {
+impl ParsedDatatype {
     pub fn into_struct_tag(
         self,
         mapping: &impl Fn(&str) -> Option<AccountAddress>,
@@ -188,7 +188,7 @@ impl ParsedType {
             ParsedType::Address => TypeTag::Address,
             ParsedType::Signer => TypeTag::Signer,
             ParsedType::Vector(inner) => TypeTag::Vector(Box::new(inner.into_type_tag(mapping)?)),
-            ParsedType::Struct(s) => TypeTag::Struct(Box::new(s.into_struct_tag(mapping)?)),
+            ParsedType::Datatype(s) => TypeTag::Struct(Box::new(s.into_struct_tag(mapping)?)),
         })
     }
 }

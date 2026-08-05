@@ -3,7 +3,7 @@
 
 use crate::parsing::{
     address::{NumericalAddress, ParsedAddress},
-    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType, TypeToken},
+    types::{ParsedDatatype, ParsedFqName, ParsedModuleId, ParsedType, TypeToken},
     values::{ParsableValue, ParsedValue, ValueToken},
 };
 use crate::{
@@ -54,13 +54,13 @@ impl ParsedFqName {
     }
 }
 
-impl ParsedStructType {
-    pub fn parse(s: &str) -> Result<ParsedStructType> {
+impl ParsedDatatype {
+    pub fn parse(s: &str) -> Result<ParsedDatatype> {
         let ty = parse(s, |parser| parser.parse_type())
-            .map_err(|e| anyhow!("Invalid struct type: {}. Got error: {}", s, e))?;
+            .map_err(|e| anyhow!("Invalid datatype: {}. Got error: {}", s, e))?;
         match ty {
-            ParsedType::Struct(s) => Ok(s),
-            _ => bail!("Invalid struct type: {}", s),
+            ParsedType::Datatype(s) => Ok(s),
+            _ => bail!("Invalid datatype: {}", s),
         }
     }
 }
@@ -237,7 +237,7 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
                     }
                     _ => vec![],
                 };
-                ParsedType::Struct(ParsedStructType { fq_name, type_args })
+                ParsedType::Datatype(ParsedDatatype { fq_name, type_args })
             }
             (tok, _) => bail!("unexpected token {tok}, expected type"),
         })
