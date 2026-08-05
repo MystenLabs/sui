@@ -135,7 +135,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) handle_send_block_add_blocks_latency: Histogram,
     pub(crate) handle_send_block_block_age: Histogram,
     pub(crate) threshold_clock_round_duration: Histogram,
-    pub(crate) subscription_dispatch_age: Histogram,
     pub(crate) subscription_throttle_delay: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) proposed_block_commit_latency: Histogram,
@@ -230,6 +229,10 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscriber_connection_attempts: IntCounterVec,
     pub(crate) subscribed_to: IntGaugeVec,
     pub(crate) subscribed_by: IntGaugeVec,
+    pub(crate) subscription_lagged_blocks: IntCounterVec,
+    pub(crate) subscription_dispatch_age: HistogramVec,
+    pub(crate) subscription_replay_blocks: HistogramVec,
+    pub(crate) subscription_replay_age: HistogramVec,
     pub(crate) commit_sync_inflight_fetches: IntGauge,
     pub(crate) commit_sync_pending_fetches: IntGauge,
     pub(crate) commit_sync_fetch_commits_handler_uncertified_skipped: IntCounter,
@@ -333,12 +336,6 @@ impl NodeMetrics {
                 "handle_send_block_add_blocks_latency",
                 "The time handle_send_block spends enqueuing a verified block to the Core thread.",
                 FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            ).unwrap(),
-            subscription_dispatch_age: register_histogram_with_registry!(
-                "subscription_dispatch_age",
-                "Block age when the author's per-peer subscription stream task yields it toward the network stack (fan-out dispatch latency).",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             subscription_throttle_delay: register_histogram_with_registry!(
@@ -891,6 +888,35 @@ impl NodeMetrics {
                 "subscribed_by",
                 "Peers subscribing for block streams from this authority.",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            subscription_lagged_blocks: register_int_counter_vec_with_registry!(
+                "subscription_lagged_blocks",
+                "Own blocks dropped from a peer's subscription stream because the peer fell behind \
+                 the broadcast buffer. These are never delivered by subscription and must be fetched.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            subscription_dispatch_age: register_histogram_vec_with_registry!(
+                "subscription_dispatch_age",
+                "Age of an own block, from its creation, when yielded to a peer's live subscription stream",
+                &["authority"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscription_replay_blocks: register_histogram_vec_with_registry!(
+                "subscription_replay_blocks",
+                "Number of cached own blocks replayed to a peer when it (re)subscribes. Live blocks \
+                 cannot be yielded until this replay drains.",
+                &["authority"],
+                NUM_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscription_replay_age: register_histogram_vec_with_registry!(
+                "subscription_replay_age",
+                "Age of an own block, from its creation, when yielded from the (re)subscribe replay",
+                &["authority"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             commit_sync_inflight_fetches: register_int_gauge_with_registry!(

@@ -392,11 +392,8 @@ impl From<ExtendedBlock> for ExtendedSerializedBlock {
                 .0
                 .get_or_init(|| {
                     Bytes::from(
-                        zstd::stream::encode_all(
-                            extended_block.block.serialized().as_ref(),
-                            1,
-                        )
-                        .expect("zstd compression cannot fail on in-memory data"),
+                        zstd::stream::encode_all(extended_block.block.serialized().as_ref(), 1)
+                            .expect("zstd compression cannot fail on in-memory data"),
                     )
                 })
                 .clone()

@@ -470,6 +470,8 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // Otherwise if there is no cached block in the range which the peer requested,
         // and this node has proposed blocks before, at least one block should be sent to the peer
         // to help with liveness.
+        let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+
         let past_proposed_blocks = {
             let dag_state = self.dag_state.read();
 
@@ -487,14 +489,33 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     vec![]
                 };
             }
-            stream::iter(
-                proposed_blocks
-                    .into_iter()
-                    .map(|block| ExtendedSerializedBlock {
-                        block: block.serialized().clone(),
-                        excluded_ancestors: vec![],
-                    }),
-            )
+            // Live blocks cannot be yielded until this replay drains, so its size and the age of
+            // what it carries bound how stale the peer's live stream can become.
+            self.context
+                .metrics
+                .node_metrics
+                .subscription_replay_blocks
+                .with_label_values(&[peer_hostname.as_str()])
+                .observe(proposed_blocks.len() as f64);
+
+            let replay_context = self.context.clone();
+            let replay_hostname = peer_hostname.clone();
+            stream::iter(proposed_blocks.into_iter().map(move |block| {
+                let age_ms = replay_context
+                    .clock
+                    .timestamp_utc_ms()
+                    .saturating_sub(block.timestamp_ms());
+                replay_context
+                    .metrics
+                    .node_metrics
+                    .subscription_replay_age
+                    .with_label_values(&[replay_hostname.as_str()])
+                    .observe(age_ms as f64 / 1000.0);
+                ExtendedSerializedBlock {
+                    block: block.serialized().clone(),
+                    excluded_ancestors: vec![],
+                }
+            }))
         };
 
         // Ok to not batch own proposed blocks, which is < 20/s.
@@ -507,7 +528,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
-        let dispatch_metrics = self.context.clone();
+        let dispatch_context = self.context.clone();
         Ok(Box::pin(past_proposed_blocks.chain(
             broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
@@ -515,17 +536,18 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     "Too many blocks received from broadcast"
                 );
                 for item in &items {
-                    let age_ms = dispatch_metrics
+                    let age_ms = dispatch_context
                         .clock
                         .timestamp_utc_ms()
                         .saturating_sub(item.block.timestamp_ms());
-                    dispatch_metrics
+                    dispatch_context
                         .metrics
                         .node_metrics
                         .subscription_dispatch_age
+                        .with_label_values(&[peer_hostname.as_str()])
                         .observe(age_ms as f64 / 1000.0);
                 }
-                let ser_hist = dispatch_metrics
+                let ser_hist = dispatch_context
                     .metrics
                     .node_metrics
                     .subscription_serialize_latency
@@ -683,6 +705,27 @@ impl SubscriptionCounter {
         }
     }
 
+    /// Records own blocks that were dropped from a peer's subscription stream because the peer
+    /// fell behind the broadcast buffer. These are never delivered by subscription, so the peer
+    /// has to fetch them instead.
+    fn record_lagged(&self, peer: &PeerId, dropped: u64) {
+        let label = match peer {
+            PeerId::Validator(authority) => self
+                .context
+                .committee
+                .authority(*authority)
+                .hostname
+                .clone(),
+            PeerId::Observer(_) => "observer".to_string(),
+        };
+        self.context
+            .metrics
+            .node_metrics
+            .subscription_lagged_blocks
+            .with_label_values(&[label.as_str()])
+            .inc_by(dropped);
+    }
+
     fn decrement(&self, peer: &PeerId) {
         let mut counter = self.counter.lock();
         counter.count = counter.count.saturating_sub(1);
@@ -790,6 +833,11 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                             Err(broadcast::error::TryRecvError::Closed) => break,
                             Err(broadcast::error::TryRecvError::Lagged(n)) => {
                                 warn!("BroadcastStream {:?} lagged by {} messages", self.peer, n);
+                                if let (Some(counter), Some(peer)) =
+                                    (&self.subscription_counter, &self.peer)
+                                {
+                                    counter.record_lagged(peer, n);
+                                }
                                 break;
                             }
                         }
@@ -804,6 +852,9 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     warn!("BroadcastStream {:?} lagged by {} messages", self.peer, n);
+                    if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer) {
+                        counter.record_lagged(peer, n);
+                    }
                     // Re-arm the future and loop to await the next item.
                     self.inner.set(make_recv_future(rx));
                     continue;
@@ -850,7 +901,7 @@ mod tests {
 
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, ExtendedBlock, SignedBlock, TestBlock, VerifiedBlock},
         block_sync_service::BlockSyncService,
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
@@ -1605,6 +1656,128 @@ mod tests {
         assert!(
             matches!(poll_result, Poll::Pending),
             "Should not receive genesis block on subscription stream"
+        );
+    }
+
+    /// A subscriber that is slow to drain its stream falls behind the shared broadcast buffer.
+    /// The blocks it misses are dropped rather than delayed, so they are never delivered by
+    /// subscription and the peer can only recover them by fetching. This is the mechanism by
+    /// which a high-RTT peer converts dissemination into fetch load.
+    #[tokio::test]
+    async fn test_slow_subscriber_drops_blocks_and_is_counted() {
+        const BROADCAST_CAPACITY: usize = 4;
+        const BLOCKS_SENT: u64 = 20;
+
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel(BROADCAST_CAPACITY);
+        let fake_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(fake_client.clone()),
+            Some(fake_client.clone()),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_vote_tracker.clone(),
+            round_tracker.clone(),
+            dag_state.clone(),
+            peers_pool.clone(),
+            false,
+        );
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store.clone(),
+        ));
+
+        // One own proposed block, so the replay branch yields exactly one block and the rest of
+        // the stream exercises the live broadcast path.
+        dag_state
+            .write()
+            .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1, 0).build()));
+
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
+            transaction_vote_tracker,
+            dag_state.clone(),
+            block_sync_service,
+        ));
+
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let peer_hostname = context.committee.authority(peer).hostname.clone();
+
+        // Subscribe past the proposed block, then leave the stream unpolled while blocks are
+        // broadcast -- this is the slow/high-RTT peer.
+        let mut stream = authority_service
+            .handle_subscribe_blocks(peer, 100)
+            .await
+            .unwrap();
+
+        for round in 0..BLOCKS_SENT {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(10 + round as u32, 0).build());
+            tx_block_broadcast
+                .send(ExtendedBlock {
+                    block,
+                    excluded_ancestors: vec![],
+                    compressed_once: Default::default(),
+                })
+                .unwrap();
+        }
+
+        // Drain whatever survived.
+        let mut delivered = 0u64;
+        use futures::poll;
+        use std::task::Poll;
+        loop {
+            match poll!(stream.next()) {
+                Poll::Ready(Some(_)) => delivered += 1,
+                Poll::Ready(None) => break,
+                Poll::Pending => break,
+            }
+        }
+
+        let dropped = context
+            .metrics
+            .node_metrics
+            .subscription_lagged_blocks
+            .with_label_values(&[peer_hostname.as_str()])
+            .get();
+
+        assert!(
+            dropped > 0,
+            "a subscriber that fell behind the {BROADCAST_CAPACITY}-block buffer should have \
+             blocks dropped, but the lagged counter is zero"
+        );
+        // 1 replayed block + at most the buffer's worth of live blocks.
+        assert!(
+            delivered < BLOCKS_SENT,
+            "expected fewer than {BLOCKS_SENT} blocks delivered, got {delivered}"
+        );
+        assert_eq!(
+            dropped + delivered - 1,
+            BLOCKS_SENT,
+            "every broadcast block should be either delivered or counted as dropped \
+             (delivered={delivered} including 1 replayed, dropped={dropped})"
         );
     }
 }

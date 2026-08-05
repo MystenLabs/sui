@@ -195,11 +195,10 @@ impl TransactionConsumer {
         Self {
             tx_receiver,
             priority_tx_receiver,
-            max_transactions_in_block_bytes: block_bytes_cap
-                .map_or(
-                    context.protocol_config.max_transactions_in_block_bytes(),
-                    |cap| cap.min(context.protocol_config.max_transactions_in_block_bytes()),
-                ),
+            max_transactions_in_block_bytes: block_bytes_cap.map_or(
+                context.protocol_config.max_transactions_in_block_bytes(),
+                |cap| cap.min(context.protocol_config.max_transactions_in_block_bytes()),
+            ),
             max_num_transactions_in_block: context.protocol_config.max_num_transactions_in_block(),
             pending_transactions: None,
             block_status_subscribers: Arc::new(Mutex::new(BTreeMap::new())),

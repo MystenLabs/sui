@@ -174,11 +174,11 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             .clone();
         let stamped = stream.map(|b| (std::time::Instant::now(), b));
         let rate_limited_stream = tokio_stream::StreamExt::throttle(stamped, throttle_interval)
-        .map(move |(t0, b)| {
-            throttle_delay_histogram.observe(t0.elapsed().as_secs_f64());
-            b
-        })
-        .boxed();
+            .map(move |(t0, b)| {
+                throttle_delay_histogram.observe(t0.elapsed().as_secs_f64());
+                b
+            })
+            .boxed();
         Ok(rate_limited_stream)
     }
 
@@ -1440,7 +1440,6 @@ impl ResponseHandler for MetricsResponseCallback {
         MetricsResponseCallback::on_error(self, err)
     }
 }
-
 
 // Test knob (CONSENSUS_COMPRESS_ONCE): payloads are pre-compressed once by the
 // sender; receivers detect the zstd frame magic and decompress. When active,
