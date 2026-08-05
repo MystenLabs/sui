@@ -77,6 +77,9 @@ sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { workspace = true, optional = true }
+
 [dev-dependencies]
 bytes.workspace = true
 insta.workspace = true
@@ -88,4 +91,6 @@ tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber.workspace = true
 
 [features]
+default = ["jemalloc"]
+jemalloc = ["tikv-jemallocator"]
 staging = []

@@ -15414,6 +15414,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
+ "tikv-jemallocator",
  "tokio",
  "tokio-stream",
  "toml 0.7.4",
