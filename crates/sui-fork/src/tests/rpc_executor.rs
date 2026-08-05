@@ -68,6 +68,9 @@ struct TestHarness {
     checkpoint_receiver: tokio::sync::broadcast::Receiver<Arc<Checkpoint>>,
     temp: tempfile::TempDir,
     _gql_server: MockServer,
+    // Held to keep the embedded indexer's tasks alive (dropping the Service
+    // stops them).
+    _indexer_service: sui_futures::service::Service,
 }
 
 impl TestHarness {
@@ -131,11 +134,10 @@ impl TestHarness {
         let gas_object = Self::find_gas_coin(&config, sender);
         let registry = Registry::new();
         let (checkpoint_sender, checkpoint_receiver) = tokio::sync::broadcast::channel(4);
-        let context = Arc::new(
-            Context::new(sim, services, checkpoint_sender, &registry)
-                .await
-                .expect("service-backed context should initialize"),
-        );
+        let (context, indexer_service) = Context::new(sim, services, checkpoint_sender, &registry)
+            .await
+            .expect("service-backed context should initialize");
+        let context = Arc::new(context);
         let executor = ForkedTransactionExecutor::new(context.clone());
 
         Self {
@@ -148,6 +150,7 @@ impl TestHarness {
             checkpoint_receiver,
             temp,
             _gql_server: gql_server,
+            _indexer_service: indexer_service,
         }
     }
 

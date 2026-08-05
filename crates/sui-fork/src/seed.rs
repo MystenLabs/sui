@@ -28,11 +28,11 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
+use crate::store::ForkStore;
 
 /// Objects fetched per GraphQL query when querying for seed objects. The load commits as one batch
 /// regardless, and this only bounds the size of an individual query.

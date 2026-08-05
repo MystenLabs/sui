@@ -1,32 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::path::PathBuf;
-
-use anyhow::Context;
 use anyhow::Result;
+use anyhow::anyhow;
 use clap::CommandFactory;
 use clap::FromArgMatches;
 use clap::Parser;
 use clap::Subcommand;
+use prometheus::Registry;
 use reqwest::Url;
 use serde::Serialize;
+use sui_futures::service::Error as ServiceError;
 use tracing::info;
-
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::SuiAddress;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
+use crate::DEFAULT_RPC_ADDR;
+use crate::ForkArgs;
+use crate::ForkNode;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
-use crate::GraphQLClient;
-use crate::Node;
-use crate::seed::SeedInput;
-
-/// Default bind address for the RPC server.
-pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
 
 #[derive(Parser)]
 #[command(name = "sui-fork", about = "Fork and interact with a Sui network")]
@@ -43,34 +36,8 @@ pub struct Cli {
 enum Command {
     /// Start a forked Sui network
     Start {
-        /// Network to fork from: mainnet, testnet, devnet, or a custom GraphQL URL
-        #[arg(long, default_value = "mainnet")]
-        network: Node,
-
-        /// Checkpoint sequence number to fork at (defaults to latest)
-        #[arg(long)]
-        checkpoint: Option<u64>,
-
-        /// Optional directory where to store the fork data. If none is provided, a default
-        /// directory is used based on `XDG_DATA_HOME` or `HOME` env variables (APPData on Windows)
-        #[arg(long)]
-        data_dir: Option<PathBuf>,
-
-        /// Address whose owned objects should be recorded in the seed manifest
-        ///
-        /// This can be specified multiple times to seed multiple addresses
-        #[arg(long = "address")]
-        addresses: Vec<SuiAddress>,
-
-        /// Object ID to fetch and seed if it is owned by an address
-        ///
-        /// This can be specified multiple times to seed multiple objects
-        #[arg(long = "object")]
-        object_ids: Vec<ObjectID>,
-
-        /// Address to bind the RPC server to.
-        #[arg(long, default_value = DEFAULT_RPC_ADDR)]
-        rpc_addr: SocketAddr,
+        #[command(flatten)]
+        args: ForkArgs,
     },
 
     /// Advance the network clock by a given duration
@@ -143,28 +110,7 @@ impl Cli {
 
     pub async fn execute(self, version: &'static str) -> Result<()> {
         match self.command {
-            Command::Start {
-                network,
-                checkpoint,
-                data_dir,
-                addresses,
-                object_ids,
-                rpc_addr,
-            } => {
-                cmd_start(
-                    network,
-                    checkpoint,
-                    data_dir,
-                    SeedInput {
-                        addresses: addresses.into_iter().collect(),
-                        object_ids: object_ids.into_iter().collect(),
-                    },
-                    rpc_addr,
-                    self.json_output,
-                    version,
-                )
-                .await
-            }
+            Command::Start { args } => cmd_start(args, self.json_output, version).await,
             Command::AdvanceClock {
                 rpc_addr,
                 duration_ms,
@@ -188,70 +134,37 @@ fn print_output<T: Serialize + std::fmt::Display>(value: &T, json_output: bool) 
     }
 }
 
-async fn cmd_start(
-    node: Node,
-    checkpoint: Option<u64>,
-    data_dir: Option<PathBuf>,
-    seed_input: SeedInput,
-    rpc_addr: SocketAddr,
-    json_output: bool,
-    version: &'static str,
-) -> Result<()> {
-    let network_name = node.network_name();
-
-    let resolved_start = crate::startup::resolve_start_checkpoint_from_local(
-        &node,
-        checkpoint,
-        data_dir.as_deref(),
-    )?;
-    let checkpoint = match resolved_start.checkpoint {
-        Some(cp) => cp,
-        None => GraphQLClient::new(node.clone(), version)?
-            .get_latest_checkpoint_sequence_number()
-            .await?
-            .with_context(|| format!("failed to get latest checkpoint for {}", network_name))?,
-    };
-
-    let (context, subscription_handle) =
-        crate::startup::initialize(node, checkpoint, version, data_dir, seed_input).await?;
-    let current_checkpoint = {
-        let sim = context.simulacrum().read().await;
-        sim.store()
-            .get_highest_verified_checkpoint()?
-            .map(|checkpoint| checkpoint.data().sequence_number)
-            .unwrap_or(checkpoint)
-    };
+async fn cmd_start(args: ForkArgs, json_output: bool, version: &'static str) -> Result<()> {
+    let registry = Registry::new();
+    let fork = ForkNode::start(args, version, &registry).await?;
 
     let output = StartOutput {
-        network: network_name.clone(),
-        checkpoint,
-        rpc_addr: rpc_addr.to_string(),
-        current_checkpoint,
-        resuming: resolved_start.resuming,
+        network: fork.network_name().to_owned(),
+        checkpoint: fork.forked_at_checkpoint(),
+        rpc_addr: fork.rpc_address().to_string(),
+        current_checkpoint: fork.starting_checkpoint(),
+        resuming: fork.resumed(),
     };
     print_output(&output, json_output);
 
-    if resolved_start.resuming {
+    if output.resuming {
         info!(
             "Resuming forked network from {}; forked at checkpoint {}, current checkpoint {} (rpc on {})",
-            network_name, checkpoint, current_checkpoint, rpc_addr,
+            output.network, output.checkpoint, output.current_checkpoint, output.rpc_addr,
         );
     } else {
         info!(
             "Starting forked network from {} at checkpoint {} (rpc on {})",
-            network_name, checkpoint, rpc_addr,
+            output.network, output.checkpoint, output.rpc_addr,
         );
     }
 
-    let handle = tokio::spawn(crate::startup::run(
-        context,
-        subscription_handle,
-        rpc_addr,
-        version,
-    ));
-    handle.await??;
-
-    Ok(())
+    match fork.into_service().main().await {
+        // SIGINT/SIGTERM followed by a clean wind-down is the intended exit.
+        Err(ServiceError::Terminated) => Ok(()),
+        Ok(()) => Err(anyhow!("forked network tasks exited unexpectedly")),
+        Err(e) => Err(e.into()),
+    }
 }
 
 async fn cmd_advance_clock(

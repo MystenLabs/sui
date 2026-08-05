@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use prometheus::Registry;
@@ -9,28 +10,22 @@ use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
+use tracing::info;
 
 use simulacrum::Simulacrum;
+use simulacrum::SimulatorStore as _;
+use sui_futures::service::Service;
+use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::full_checkpoint_content::Checkpoint;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait as _;
 
+use crate::fork::ClockAdvanced;
+use crate::fork::CreatedCheckpoint;
+use crate::fork::ForkStatus;
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
 
 type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
-
-/// Metadata for a checkpoint created by the forked network.
-///
-/// Callers only need these fields for RPC responses and finality metadata, and the checkpoint
-/// itself is re-read from the store by the indexer.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct CreatedCheckpointMetadata {
-    /// Sequence number of the created checkpoint.
-    pub(crate) sequence_number: CheckpointSequenceNumber,
-
-    /// Timestamp of the created checkpoint, in milliseconds.
-    pub(crate) timestamp_ms: u64,
-}
 
 /// Shared context for the forked network, holding the simulacrum and the service manager running
 /// the embedded indexer.
@@ -41,7 +36,8 @@ pub struct Context {
 }
 
 impl Context {
-    /// Build a `Context` whose Simulacrum is backed by a started [`ServiceManager`].
+    /// Build a `Context` whose Simulacrum is backed by a started [`ServiceManager`], returning the
+    /// embedded indexer as a [`Service`] the caller must keep alive (dropping it stops indexing).
     ///
     /// Starts the embedded `sui-rpc-store` indexer over `checkpoint_sender` before returning, so
     /// committed local checkpoints get indexed for RPC reads. The indexer's broadcast pipeline owns
@@ -52,16 +48,19 @@ impl Context {
         mut services: ServiceManager,
         checkpoint_sender: broadcast::Sender<Arc<Checkpoint>>,
         registry: &Registry,
-    ) -> Result<Self> {
+    ) -> Result<(Self, Service)> {
         let simulacrum = Arc::new(RwLock::new(simulacrum));
-        services
+        let indexer_service = services
             .start_indexer(simulacrum.clone(), checkpoint_sender, registry)
             .await?;
-        Ok(Self {
-            simulacrum,
-            services,
-            checkpoint_publication_lock: Mutex::new(()),
-        })
+        Ok((
+            Self {
+                simulacrum,
+                services,
+                checkpoint_publication_lock: Mutex::new(()),
+            },
+            indexer_service,
+        ))
     }
 
     pub(crate) fn simulacrum(&self) -> &Arc<RwLock<ForkedSimulacrum>> {
@@ -75,11 +74,68 @@ impl Context {
         &self.services
     }
 
-    /// Resolve when the embedded rpc-store indexer stops. The server loop uses this as a liveness
-    /// watchdog, so an indexer failure surfaces immediately instead of as a publication timeout on
-    /// the next executed transaction.
-    pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
-        self.services.indexer_stopped().await
+    /// Advance the fork's clock by `duration` and seal the resulting clock transaction into a
+    /// checkpoint. Both the forking gRPC service and the in-process handle delegate here, so the
+    /// two surfaces share one contract.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the indexer cannot index the checkpoint before publishing.
+    pub(crate) async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
+        let ((tx_digest, timestamp_ms), checkpoint) = self
+            .run_with_new_checkpoint(|sim| {
+                let effects = sim.advance_clock(duration);
+                let tx_digest = *effects.transaction_digest();
+                let timestamp_ms = sim.store().get_clock().timestamp_ms;
+                (tx_digest, timestamp_ms)
+            })
+            .await;
+
+        info!(
+            %tx_digest,
+            duration_ms = duration.as_millis() as u64,
+            timestamp_ms,
+            checkpoint_sequence_number = checkpoint.sequence_number,
+            "clock advanced"
+        );
+
+        ClockAdvanced {
+            tx_digest,
+            timestamp_ms,
+            checkpoint,
+        }
+    }
+
+    /// Seal all pending transactions into a new checkpoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the indexer cannot index the checkpoint before publishing.
+    pub(crate) async fn create_checkpoint(&self) -> CreatedCheckpoint {
+        let ((), checkpoint) = self.run_with_new_checkpoint(|_| ()).await;
+
+        info!(
+            checkpoint_sequence_number = checkpoint.sequence_number,
+            timestamp_ms = checkpoint.timestamp_ms,
+            "checkpoint created"
+        );
+
+        checkpoint
+    }
+
+    /// The fork's current epoch, checkpoint tip, clock, and fork point.
+    pub(crate) async fn status(&self) -> ForkStatus {
+        let sim = self.simulacrum.read().await;
+        ForkStatus {
+            epoch: sim.epoch_start_state().epoch(),
+            checkpoint_sequence_number: sim
+                .store()
+                .get_highest_checkpint()
+                .map(|cp| cp.data().sequence_number)
+                .unwrap_or(0),
+            timestamp_ms: sim.store().get_clock().timestamp_ms,
+            forked_at_checkpoint: sim.store().forked_at_checkpoint(),
+        }
     }
 
     /// Execute `operation`, create a checkpoint afterward, and publish that checkpoint to
@@ -91,10 +147,7 @@ impl Context {
     /// # Panics
     ///
     /// Panics if the indexer cannot index the checkpoint before publishing.
-    pub(crate) async fn run_with_new_checkpoint<T, F>(
-        &self,
-        operation: F,
-    ) -> (T, CreatedCheckpointMetadata)
+    pub(crate) async fn run_with_new_checkpoint<T, F>(&self, operation: F) -> (T, CreatedCheckpoint)
     where
         T: Send,
         F: FnOnce(&mut ForkedSimulacrum) -> T + Send,
@@ -114,7 +167,7 @@ impl Context {
     pub(crate) async fn try_run_with_new_checkpoint<T, E, F>(
         &self,
         operation: F,
-    ) -> std::result::Result<(T, CreatedCheckpointMetadata), E>
+    ) -> std::result::Result<(T, CreatedCheckpoint), E>
     where
         T: Send,
         E: Send,
@@ -124,7 +177,7 @@ impl Context {
         let (output, metadata) = {
             let mut sim = self.simulacrum.write().await;
             let output = operation(&mut sim)?;
-            let metadata = Self::create_checkpoint(&mut sim);
+            let metadata = Self::seal_checkpoint(&mut sim);
             (output, metadata)
         };
 
@@ -146,9 +199,9 @@ impl Context {
         Ok((output, metadata))
     }
 
-    fn create_checkpoint(sim: &mut ForkedSimulacrum) -> CreatedCheckpointMetadata {
+    fn seal_checkpoint(sim: &mut ForkedSimulacrum) -> CreatedCheckpoint {
         let verified = sim.create_checkpoint();
-        CreatedCheckpointMetadata {
+        CreatedCheckpoint {
             sequence_number: verified.data().sequence_number,
             timestamp_ms: verified.data().timestamp_ms,
         }

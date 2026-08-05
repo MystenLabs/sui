@@ -76,3 +76,15 @@ impl FromStr for Node {
         }
     }
 }
+
+/// Round-trips through [`FromStr`], so clap can render defaults from it.
+impl std::fmt::Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Node::Mainnet => f.write_str("mainnet"),
+            Node::Testnet => f.write_str("testnet"),
+            Node::Devnet => f.write_str("devnet"),
+            Node::Custom(url) => f.write_str(url),
+        }
+    }
+}

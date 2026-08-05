@@ -1,10 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Building blocks for the experimental `sui-fork` tool.
+//! A fork node: a local Sui network that starts from the state of a live
+//! network at a chosen checkpoint and executes transactions locally from
+//! there.
+//!
+//! State the fork has written itself lives in a stock `sui-rpc-store` RocksDB
+//! kept current by an embedded indexer; state inherited from the forked-from
+//! chain is fetched lazily over GraphQL pinned at the fork checkpoint and
+//! cached into the same database. Execution runs through `simulacrum` in
+//! lock-step: nothing advances until a transaction is executed or an admin
+//! operation advances the clock or seals a checkpoint. The fork serves the
+//! standard `sui-rpc-api` gRPC surface plus a forking admin service
+//! (advance-clock, advance-checkpoint, status). The design is argued in this
+//! crate's `design/` directory.
+//!
+//! There are two ways in. Programs embed a fork through [`ForkNode::start`],
+//! which takes [`ForkArgs`], a version string, and a metrics registry, and
+//! returns a running [`ForkNode`]. The `sui-fork` binary wraps the same entry
+//! point behind [`cli::Cli`], whose client subcommands drive a running fork
+//! over the forking service ([`ForkingServiceClient`]).
 
 pub mod cli;
 pub(crate) mod context;
+mod fork;
 mod gql;
 pub(crate) mod ingestion;
 pub(crate) mod local_store;
@@ -16,20 +35,25 @@ pub(crate) mod remote;
 mod rpc;
 pub(crate) mod seed;
 pub(crate) mod services;
-pub mod startup;
-pub mod store;
+mod startup;
+pub(crate) mod store;
 #[cfg(test)]
 #[path = "tests/support.rs"]
 mod test_support;
 
-pub use gql::GraphQLClient;
+pub use fork::ClockAdvanced;
+pub use fork::CreatedCheckpoint;
+pub use fork::DEFAULT_RPC_ADDR;
+pub use fork::ForkArgs;
+pub use fork::ForkNode;
+pub use fork::ForkStatus;
 pub use node::Node;
 pub use proto::forking::AdvanceCheckpointRequest;
 pub use proto::forking::AdvanceClockRequest;
 pub use proto::forking::GetStatusRequest;
 pub use proto::forking::forking_service_client::ForkingServiceClient;
-pub use seed::SeedInput;
-pub use store::ForkStore;
+
+pub(crate) use gql::GraphQLClient;
 
 use anyhow::Error;
 use anyhow::Result;
