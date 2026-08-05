@@ -81,9 +81,12 @@ jobs:
       - name: Update framework/${{ inputs.network }} branch
         if: ${{ inputs.network == 'devnet' }}
         shell: bash
+        env:
+          SUI_COMMIT: ${SUI_COMMIT}
+          NETWORK: ${NETWORK}
         run: |
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
-          echo "{\"sha\": \"${{ inputs.sui_commit }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/framework/${{ inputs.network }} \
+          echo "{\"sha\": \"${SUI_COMMIT}\", \"force\": true}" | gh api -X PATCH "/repos/MystenLabs/sui/git/refs/heads/framework/${NETWORK}" \
             --header "Accept: application/vnd.github+json" --input -
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
