@@ -7,12 +7,13 @@ use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::base_types::VersionDigest;
+use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
@@ -31,6 +32,7 @@ use sui_types::transaction::{GasData, TransactionKind};
 use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
@@ -43,6 +45,19 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
 pub(crate) mod invariants;
 use invariants::InvariantChecker;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemObjectVersionRequirements {
+    // Runtime will load this object at the exact version during execution.
+    // If it is not yet available, execution will block wait until it is.
+    // This is used during normal on-chain execution.
+    Exact(SystemObjectVersions),
+    // Runtime can use whatever the latest version of the object is upon read request.
+    // This means that it is theoretically possible that the runtime may read different versions
+    // of the same object during execution, if the version of an object moved mid-execution.
+    // This should only be used in dev modes such as dry-run / simulate and etc.
+    Latest,
+}
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -96,6 +111,14 @@ pub struct TemporaryStore<'backing> {
     /// (SUI conservation, balance-accumulator authorization, object ownership). See
     /// [`invariants::InvariantChecker`].
     invariants: InvariantChecker,
+
+    /// Versions of system objects this transaction may implicitly read during execution.
+    system_object_versions: SystemObjectVersionRequirements,
+
+    /// System objects implicitly read during execution, keyed by object ID, with the version (and its
+    /// digest) at which they were read.
+    /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
+    loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -108,7 +131,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
-        _system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersionRequirements,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -151,6 +174,37 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
             invariants: InvariantChecker::new(),
+            system_object_versions,
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
+        }
+    }
+
+    /// Checks that the system object `object_id` is available at the version this transaction
+    /// requires, and in exact-version mode records the read so it can be emitted into effects
+    /// and reproduced on replay.
+    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Object {
+        match self.system_object_versions {
+            SystemObjectVersionRequirements::Exact(versions) => {
+                let object = self
+                    .store
+                    // If this transaction needs to read a implicit system object,
+                    // the version must be assigned from consensus.
+                    .load_implicitly_read_system_object(
+                        object_id,
+                        versions.get(object_id).unwrap(),
+                    );
+                // Record the read at `required_version` (which is what the transaction depends
+                // on and reads) so it can be emitted into effects as a read-only consensus object and
+                // reproduced on replay.
+                self.loaded_system_objects
+                    .borrow_mut()
+                    .insert(*object_id, (object.version(), object.digest()));
+                object
+            }
+            SystemObjectVersionRequirements::Latest => self
+                .store
+                .get_object(object_id)
+                .unwrap_or_else(|| panic!("system object {object_id} does not exist")),
         }
     }
 
@@ -433,10 +487,12 @@ impl<'backing> TemporaryStore<'backing> {
         let lamport_version = self.lamport_timestamp;
         // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
         let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
+        let loaded_system_objects = self.loaded_system_objects.borrow().clone();
         let unchanged_consensus_objects = TransactionEffectsV2::compute_unchanged_consensus_objects(
             shared_object_refs,
             loaded_per_epoch_config_objects,
             &object_changes,
+            loaded_system_objects,
         );
         let inner = self.into_inner(accumulator_running_max_withdraws);
 
