@@ -173,9 +173,14 @@ impl SuiFlavor {
 
     /// The endpoints that may serve the chain `env_id`, in the order they should be tried:
     /// configured environments whose cached chain ID matches, then configured environments whose
-    /// chain has never been cached (their identity is verified when they are queried), and finally
-    /// the default public endpoints of the well-known networks. Within each group the active
-    /// environment comes first. Environments cached as a *different* chain are never candidates.
+    /// chain has never been cached (their identity is verified when they are queried). Within each
+    /// group the active environment comes first. Environments cached as a *different* chain are
+    /// never candidates.
+    ///
+    /// Only configured environments are considered. A default configuration already contains the
+    /// public endpoints for the well-known networks, so falling back to them would only serve
+    /// someone who deliberately removed one - at the cost of contacting a host the user never
+    /// named, which is the wrong default for a build command.
     fn candidate_envs(
         envs: &[SuiEnv],
         active_env: Option<&str>,
@@ -193,20 +198,10 @@ impl SuiFlavor {
         let cached_matches = ordered.iter().filter(|env| serves_chain(env));
         let unknown_identity = ordered.iter().filter(|env| env.chain_id.is_none());
 
-        let mut candidates: Vec<SuiEnv> = cached_matches
+        cached_matches
             .chain(unknown_identity)
             .map(|env| (*env).clone())
-            .collect();
-
-        for default_env in [SuiEnv::testnet(), SuiEnv::mainnet()] {
-            if serves_chain(&default_env)
-                && !candidates.iter().any(|env| env.rpc == default_env.rpc)
-            {
-                candidates.push(default_env);
-            }
-        }
-
-        candidates
+            .collect()
     }
 
     /// Query the protocol version from `env`'s endpoint, first verifying that the endpoint really
@@ -463,10 +458,8 @@ mod tests {
         ];
 
         let candidates = SuiFlavor::candidate_envs(&envs, Some("testnet"), &testnet_id);
-        // active env first, then config order; the mainnet env is not a candidate; the default
-        // public testnet endpoint is the last resort
-        assert_eq!(aliases(&candidates), ["testnet", "testnet-alt", "testnet"]);
-        assert_eq!(candidates[2].rpc, SuiEnv::testnet().rpc);
+        // active env first, then config order; the mainnet env is not a candidate
+        assert_eq!(aliases(&candidates), ["testnet", "testnet-alt"]);
     }
 
     #[test]
@@ -479,20 +472,22 @@ mod tests {
 
         let candidates = SuiFlavor::candidate_envs(&envs, Some("uncached"), &testnet_id);
         // a cached match beats the active-but-unknown-identity env
-        assert_eq!(
-            aliases(&candidates),
-            ["testnet", "uncached", SuiEnv::testnet().alias.as_str()]
-        );
+        assert_eq!(aliases(&candidates), ["testnet", "uncached"]);
     }
 
+    /// The public endpoint of a well-known network is a candidate when the user has it configured
+    /// (as a default configuration does), and only then.
     #[test]
-    fn default_public_endpoint_deduplicated_by_url() {
+    fn public_endpoint_is_a_candidate_only_when_configured() {
         let mainnet_id = mainnet_environment().id;
-        let default_mainnet = SuiEnv::mainnet();
-        let envs = [env("my-mainnet", &default_mainnet.rpc, Some(&mainnet_id))];
+        let configured = [env("mainnet", &SuiEnv::mainnet().rpc, Some(&mainnet_id))];
+        assert_eq!(
+            aliases(&SuiFlavor::candidate_envs(&configured, None, &mainnet_id)),
+            ["mainnet"]
+        );
 
-        let candidates = SuiFlavor::candidate_envs(&envs, None, &mainnet_id);
-        assert_eq!(aliases(&candidates), ["my-mainnet"]);
+        let removed = [env("localnet", "http://localhost:9000", Some("6674f21e"))];
+        assert!(SuiFlavor::candidate_envs(&removed, None, &mainnet_id).is_empty());
     }
 
     #[test]
@@ -504,7 +499,6 @@ mod tests {
         ];
 
         let candidates = SuiFlavor::candidate_envs(&envs, None, &"6674f21e".to_string());
-        // no default public endpoint serves this chain
         assert_eq!(aliases(&candidates), ["localnet", "uncached"]);
     }
 
