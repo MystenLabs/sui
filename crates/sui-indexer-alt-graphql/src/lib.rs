@@ -317,7 +317,9 @@ pub async fn start_rpc(
     pg_pipelines: Vec<String>,
     registry: &Registry,
 ) -> anyhow::Result<Service> {
-    let rpc = RpcService::new(args, version, schema(), registry);
+    let schema = schema()
+        .subscription_resolution_concurrency(config.subscription.max_concurrent_resolutions);
+    let rpc = RpcService::new(args, version, schema, registry);
     let metrics = rpc.metrics();
 
     // Create gRPC full node client wrapper. If left unconfigured, the client will not be stored in

@@ -16,6 +16,7 @@ use sui_indexer_alt_graphql::CTransaction;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::SuiAddress;
+use test_cluster::TestCluster;
 use tokio_stream::StreamExt;
 
 use super::testing::SubscriptionTestCluster;
@@ -126,6 +127,16 @@ async fn collect_nodes(
         }
     }
     expected.iter().map(|d| by_digest[d].clone()).collect()
+}
+
+/// Execute `n` matching SUI transfers in soft bundles of four (one bundle per checkpoint) and return
+/// their digests.
+async fn execute_n_transfers(validator: &mut TestCluster, n: usize) -> BTreeSet<String> {
+    let mut digests = BTreeSet::new();
+    while digests.len() < n {
+        digests.extend(transfer_coins(validator, &[100, 200, 300, 400]).await);
+    }
+    digests
 }
 
 /// Take the next `n` payloads and return their transaction digests in arrival order.
@@ -598,6 +609,84 @@ async fn test_transaction_subscription_recovers_from_upstream_disconnect() {
     assert_eq!(
         received, expected,
         "recovery did not deliver the missed transactions in order"
+    );
+}
+
+#[tokio::test]
+async fn test_transaction_subscription_backfill_spans_scan_pages() {
+    // The one knob sets both the resolution window and the scan page; this test cares only that the
+    // scan page is 2, so the eight matches below cannot fit in a single page and the scan must chain.
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history_and_concurrency(2).await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    let resume_from = cluster.validator_checkpoint_tip();
+    let expected = execute_n_transfers(&mut cluster.validator, 8).await;
+    // Advance so the matches are delivered by the backfill scan, not live.
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                cursor
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+
+    // All eight arrive exactly once, in cursor order across the page seams.
+    collect_matches(&mut stream, &expected).await;
+}
+
+#[tokio::test]
+async fn test_transaction_subscription_concurrency_coalesces_content_reads() {
+    // Deliver the same backfill at a given resolution window; return its content `BatchGetTransactions`
+    // round trips and how many matches were delivered. Serial (window 1) is the no-coalescing baseline.
+    async fn content_reads_with_concurrency(concurrency: usize) -> (u64, u64) {
+        let mut cluster =
+            SubscriptionTestCluster::new_with_ledger_history_and_concurrency(concurrency).await;
+        let sender = cluster.validator.wallet.active_address().unwrap();
+        let resume_from = cluster.validator_checkpoint_tip();
+        let expected = execute_n_transfers(&mut cluster.validator, 40).await;
+        tokio::time::sleep(BACKFILL_SETTLE).await;
+
+        // `effectsJson` renders effects through the ledger service per payload, a
+        // `BatchGetTransactions` read the scan does not prefetch, so each resolution hits the
+        // `KvLoader` that coalesces across a window.
+        let query = format!(
+            r#"subscription($sender: SuiAddress!) {{
+                transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{
+                    cursor
+                    node {{ digest effects {{ effectsJson }} }}
+                }}
+            }}"#,
+        );
+        let before = cluster.ledger_grpc_call_count("BatchGetTransactions");
+        let mut stream = cluster
+            .subscribe_with_variables(&query, sender_var(sender))
+            .await;
+        collect_matches(&mut stream, &expected).await;
+        let reads = cluster.ledger_grpc_call_count("BatchGetTransactions") - before;
+        (reads, expected.len() as u64)
+    }
+
+    let (serial, total) = content_reads_with_concurrency(1).await;
+    // 100 is the production default window, well above the batch, so every payload resolves in one
+    // pass and its reads coalesce.
+    let (concurrent, _) = content_reads_with_concurrency(10).await;
+
+    // Serial (window 1) does one read per delivered payload: the no-coalescing baseline.
+    assert!(
+        serial >= total,
+        "serial baseline should be one read per transaction: {serial} reads for {total} txs"
+    );
+    // Concurrency coalesces reads, so it falls below that baseline. Only the direction is asserted;
+    // the exact count is timing-dependent and has no deterministic formula here.
+    assert!(
+        concurrent < serial,
+        "concurrency did not coalesce content reads: concurrent={concurrent} serial={serial}"
     );
 }
 
