@@ -312,6 +312,9 @@ impl CommitObserver {
         for commit in committed {
             self.report_commit_metrics(commit);
         }
+        // Only the legacy path batches multiple subdags per call. The v3 path
+        // handles one commit at a time, so this metric would always observe 1
+        // and is intentionally not reported there.
         self.context
             .metrics
             .node_metrics
