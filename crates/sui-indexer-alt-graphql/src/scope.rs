@@ -325,6 +325,12 @@ impl Scope {
         self.checkpoint_viewed_at
     }
 
+    /// True in the execution context: a freshly executed or simulated transaction, whose data
+    /// lives only in the in-memory payload rather than the index.
+    pub(crate) fn is_executed(&self) -> bool {
+        matches!(self.data_source, DataSource::Executed { .. })
+    }
+
     /// Root parent object version for dynamic fields.
     /// Returns `Some(v)` only if the root bound is version-based.
     pub(crate) fn root_version(&self) -> Option<u64> {
