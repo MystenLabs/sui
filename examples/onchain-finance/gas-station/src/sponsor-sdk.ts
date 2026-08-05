@@ -33,7 +33,7 @@ const sponsor = createSponsor({
 // signAndExecuteTransaction returns a discriminated union with three outcomes.
 const result = await sponsor.signAndExecuteTransaction({
 	transaction: txBytes,
-	signature: userSignature,
+	userSignature,
 });
 
 if (result.$kind === 'Rejected') {
