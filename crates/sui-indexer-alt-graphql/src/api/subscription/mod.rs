@@ -38,9 +38,6 @@ mod transactions;
 use transactions::ResumeFrom;
 use transactions::transactions_stream;
 
-/// How many matching transactions a backfill scans per page.
-const SCAN_PAGE_SIZE: usize = 100;
-
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
     #[error("At most one of `after` or `afterCheckpoint` can be specified")]
@@ -149,8 +146,12 @@ impl Subscription {
         let resolver_limits = limits.package_resolver();
         let filter = filter.unwrap_or_default();
 
-        // How many matching transactions the backfill scans per page.
-        let scan_page_size = SCAN_PAGE_SIZE;
+        // Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs
+        // the previous page's cursor), so feeding one window of `n` concurrent resolutions takes
+        // ceil(n / page) scans: a page much smaller than the concurrency makes scanning the
+        // bottleneck, a much larger one just holds a bigger page in memory. Matching them is roughly
+        // one scan per resolution window.
+        let scan_page_size = config.max_concurrent_resolutions;
 
         // Pin the handoff once the scan comes within half the live buffer of the tip, leaving room
         // for checkpoints that arrive during the handoff so the receiver does not lag.

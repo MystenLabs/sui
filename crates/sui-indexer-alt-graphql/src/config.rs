@@ -260,6 +260,15 @@ pub struct SubscriptionConfig {
     /// Increasing this value keeps the QPS cap saturated under higher-latency kv-rpc, at
     /// the cost of more per-subscriber memory held.
     pub per_subscriber_scan_max_concurrent_fetches: usize,
+
+    /// Maximum payloads a subscription resolves concurrently. Applies to every subscription type;
+    /// a higher value resolves more payloads at once, at the cost of more in-flight work per
+    /// subscriber.
+    ///
+    /// It also bounds a subscription backfill's scan page: a page is kept at or below this, so a
+    /// batch's matches resolve within the concurrency budget and coalesce their content reads into
+    /// one `KvLoader` round trip.
+    pub max_concurrent_resolutions: usize,
 }
 
 impl Default for SubscriptionConfig {
@@ -270,6 +279,7 @@ impl Default for SubscriptionConfig {
             gap_recovery_chunk_size: 50,
             per_subscriber_scan_max_qps: 500,
             per_subscriber_scan_max_concurrent_fetches: 50,
+            max_concurrent_resolutions: 100,
         }
     }
 }
@@ -282,6 +292,7 @@ pub struct SubscriptionLayer {
     pub gap_recovery_chunk_size: Option<usize>,
     pub per_subscriber_scan_max_qps: Option<u32>,
     pub per_subscriber_scan_max_concurrent_fetches: Option<usize>,
+    pub max_concurrent_resolutions: Option<usize>,
 }
 
 impl SubscriptionLayer {
@@ -300,6 +311,9 @@ impl SubscriptionLayer {
             per_subscriber_scan_max_concurrent_fetches: self
                 .per_subscriber_scan_max_concurrent_fetches
                 .unwrap_or(base.per_subscriber_scan_max_concurrent_fetches),
+            max_concurrent_resolutions: self
+                .max_concurrent_resolutions
+                .unwrap_or(base.max_concurrent_resolutions),
         }
     }
 }
@@ -612,6 +626,7 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
             per_subscriber_scan_max_concurrent_fetches: Some(
                 value.per_subscriber_scan_max_concurrent_fetches,
             ),
+            max_concurrent_resolutions: Some(value.max_concurrent_resolutions),
         }
     }
 }
