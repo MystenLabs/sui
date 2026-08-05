@@ -82,8 +82,8 @@ jobs:
         if: ${{ inputs.network == 'devnet' }}
         shell: bash
         env:
-          SUI_COMMIT: ${SUI_COMMIT}
-          NETWORK: ${NETWORK}
+          SUI_COMMIT: ${{ inputs.sui_commit }}
+          NETWORK: ${{ inputs.network }}
         run: |
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
           echo "{\"sha\": \"${SUI_COMMIT}\", \"force\": true}" | gh api -X PATCH "/repos/MystenLabs/sui/git/refs/heads/framework/${NETWORK}" \
