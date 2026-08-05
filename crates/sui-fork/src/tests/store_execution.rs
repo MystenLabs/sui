@@ -113,14 +113,14 @@ fn find_gas_coin(config: &NetworkConfig, owner: SuiAddress) -> Object {
         .clone()
 }
 
-fn test_data_store() -> (tempfile::TempDir, ForkStore) {
+fn data_store() -> (tempfile::TempDir, ForkStore) {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let services = open_test_services(temp.path(), 0);
     let store = ForkStore::new_for_testing(temp.path().to_path_buf(), services.local_store());
     (temp, store)
 }
 
-fn test_data_store_with_remote(
+fn data_store_with_remote(
     root: &Path,
     gql_url: String,
     forked_at_checkpoint: CheckpointSequenceNumber,
@@ -242,7 +242,7 @@ async fn test_current_object_read_saves_into_rpc_store_when_attached() {
         .mount(&server)
         .await;
 
-    let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, services) = data_store_with_remote(temp.path(), server.uri(), checkpoint);
 
     let read = ForkStore::get_object(&store, &object_id)
         .expect("current object read should not error")
@@ -266,7 +266,7 @@ async fn test_current_object_read_saves_into_rpc_store_when_attached() {
 
 #[test]
 fn test_rpc_store_tombstone_blocks_remote_current_fallback() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, mut store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
@@ -304,7 +304,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let checkpoint = 42;
     let (store, _services) =
-        test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
+        data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
     let reader = store.local_store().reader().clone();
 
     let seeded_owner = SuiAddress::random_for_testing_only();
@@ -386,7 +386,7 @@ async fn test_seed_load_survives_restart_without_remote() {
     };
 
     {
-        let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+        let (store, services) = data_store_with_remote(temp.path(), server.uri(), checkpoint);
         load_seed_objects(&store, &manifest).expect("seed load should hydrate from the remote");
 
         let reader = store.local_store().reader().clone();
@@ -408,7 +408,7 @@ async fn test_seed_load_survives_restart_without_remote() {
     // re-fetching (which would fail here) or re-merging the balance (which
     // would silently double it).
     let (store, _services) =
-        test_data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
+        data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), checkpoint);
     load_seed_objects(&store, &manifest).expect("a resumed seed load must not touch the remote");
 
     let reader = store.local_store().reader().clone();
@@ -433,7 +433,7 @@ async fn test_seed_load_survives_restart_without_remote() {
 /// seeded child is reachable as a dynamic field without any read-time scan.
 #[test]
 fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let parent = ObjectID::random();
     let child_id = ObjectID::random();
     let child = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
@@ -455,7 +455,7 @@ fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
 /// index, which `ObjectByType::restore` populates during the seed load.
 #[test]
 fn test_rpc_get_coin_info_reads_seeded_type_index() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let coin_type = GAS::type_();
     let metadata_id = ObjectID::random();
     let metadata_object = Object::coin_metadata_for_testing(
@@ -515,7 +515,7 @@ async fn test_rpc_latest_read_ignores_stale_cached_history() {
         .mount(&server)
         .await;
 
-    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), checkpoint);
     store
         .local_store()
         .save_object_version_only(&stale)
@@ -666,7 +666,7 @@ async fn test_transfer_sui_executes_and_persists() {
 
 #[test]
 fn test_owned_objects_reads_seeded_index() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
@@ -685,7 +685,7 @@ fn test_owned_objects_reads_seeded_index() {
 
 #[test]
 fn test_owned_objects_tracks_consensus_address_owner_writes() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(
@@ -716,7 +716,7 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
 
 #[test]
 fn test_read_child_object_uses_highest_local_version_within_bound() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let parent = ObjectID::random();
     let child_id = ObjectID::random();
     let child_v5 = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
@@ -763,7 +763,7 @@ async fn test_read_child_object_falls_back_to_remote_root_version() {
         .mount(&server)
         .await;
 
-    let (store, _services) = test_data_store_with_remote(temp.path(), server.uri(), checkpoint);
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), checkpoint);
     let read = sui_types::storage::RuntimeObjectResolver::read_child_object(
         &store,
         &parent,
@@ -782,7 +782,7 @@ async fn test_read_child_object_falls_back_to_remote_root_version() {
 
 #[test]
 fn test_read_child_object_rejects_wrong_owner_after_bounded_lookup() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let parent = ObjectID::random();
     let other_parent = ObjectID::random();
     let child_id = ObjectID::random();
@@ -813,7 +813,7 @@ fn test_read_child_object_rejects_wrong_owner_after_bounded_lookup() {
 
 #[test]
 fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, mut store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
@@ -854,7 +854,7 @@ fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() 
 
 #[test]
 fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, mut store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
@@ -896,7 +896,7 @@ fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
 
 #[test]
 fn test_unwrapped_write_clears_wrapped_latest() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, mut store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -928,7 +928,7 @@ fn test_unwrapped_write_clears_wrapped_latest() {
 
 #[test]
 fn test_terminal_deleted_latest_prevents_reindexing_written_object() {
-    let (_temp, mut store) = test_data_store();
+    let (_temp, mut store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
@@ -1021,7 +1021,7 @@ fn test_removed_objects_from_effects_maps_to_tombstones() {
 
 #[test]
 fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let other_owner = SuiAddress::random_for_testing_only();
     let first_id = ObjectID::random();
@@ -1073,7 +1073,7 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
 
 #[test]
 fn test_cloned_store_shares_owned_object_snapshot_guard() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
     let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
@@ -1104,7 +1104,7 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
 /// found" and be durably committed as a wrong result.
 #[tokio::test]
 async fn test_read_child_object_propagates_store_errors() {
-    let (_temp, store) = test_data_store();
+    let (_temp, store) = data_store();
     let parent = ObjectID::random();
     let child = ObjectID::random();
 
