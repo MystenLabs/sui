@@ -22,10 +22,9 @@ function assertNotPaused() {
 assertNotPaused();
 
 const tx = new Transaction();
-const [payment] = tx.splitCoins(tx.gas, [amount]);
-tx.transferObjects([payment], recipient);
+tx.transferObjects([tx.coin({ balance: amount })], recipient);
 
-const result = await client.core.signAndExecuteTransaction({
+const result = await client.signAndExecuteTransaction({
     transaction: tx,
     signer,
     include: { effects: true },
@@ -47,8 +46,8 @@ interface IdempotencyStore {
     markSucceeded(key: string, digest: string): Promise<void>;
 }
 
-// Returns the transaction if it landed onchain, or null if the network has never seen it.
-// Throws if it landed but aborted, because that is a real failure, not an unknown outcome.
+// A FailedTransaction IS onchain (sender was charged gas, tx has effects).
+// This function returns the successful tx, throws on abort, or returns null if never seen.
 async function reconcileDigest(coreClient: ClientWithCoreApi, digest: string) {
     try {
         const onchain = await coreClient.core.getTransaction({
@@ -108,7 +107,7 @@ async function safeExecute(
     }
 
     try {
-        const execResult = await coreClient.core.executeTransaction({
+        const execResult = await coreClient.core.executeTransaction({ // .core is correct here: coreClient is ClientWithCoreApi
             transaction: bytes,
             signatures: [signature],
             include: { effects: true },
@@ -122,8 +121,8 @@ async function safeExecute(
             throw new Error('Node returned an unexpected transaction digest');
         }
 
-        await db.markSucceeded(key, digest);
         await coreClient.core.waitForTransaction({ digest });
+        await db.markSucceeded(key, digest);
 
         return execResult.Transaction;
     } catch (error) {
@@ -177,7 +176,7 @@ async function executeWithBreaker(transaction: Transaction) {
     }
 
     try {
-        const breakerResult = await client.core.signAndExecuteTransaction({
+        const breakerResult = await client.signAndExecuteTransaction({
             transaction,
             signer,
             include: { effects: true },

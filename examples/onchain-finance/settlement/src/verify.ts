@@ -14,7 +14,7 @@ declare const digest: string;
 
 // docs::#wait-for-finality
 // Submit the transaction
-const submitResult = await client.core.signAndExecuteTransaction({
+const submitResult = await client.signAndExecuteTransaction({
     transaction: tx,
     signer: agentKeypair,
     include: { effects: true },
@@ -23,7 +23,7 @@ const submitResult = await client.core.signAndExecuteTransaction({
 const submitted = submitResult.Transaction ?? submitResult.FailedTransaction;
 
 // Wait for the transaction to be indexed, then fetch the data needed for verification
-const confirmed = await client.core.waitForTransaction({
+const confirmed = await client.waitForTransaction({
     digest: submitted.digest,
     include: { effects: true, events: true, balanceChanges: true },
 });
@@ -145,11 +145,11 @@ if (!isValidSuiAddress(recipientAddress)) {
 
 // docs::#handle-timeout
 try {
-    await client.core.waitForTransaction({ digest, timeout: 30_000 });
+    await client.waitForTransaction({ digest, timeout: 30_000 });
 } catch (timeoutError) {
     // Check whether the transaction eventually settled
     try {
-        const settled = await client.core.getTransaction({
+        const settled = await client.getTransaction({
             digest,
             include: { effects: true },
         });
@@ -171,13 +171,11 @@ const amount = 5_000_000n;
 
 const settleTx = new Transaction();
 
-const [coin] = settleTx.splitCoins(settleTx.gas, [amount]);
-
 // Pay and get proof (hot potato)
 const [proof] = settleTx.moveCall({
     target: `${PACKAGE_ID}::settlement::pay_and_prove`,
     typeArguments: ['0x2::sui::SUI'],
-    arguments: [coin, settleTx.pure.address(recipient), settleTx.pure.u64(amount)],
+    arguments: [settleTx.coin({ balance: amount }), settleTx.pure.address(recipient), settleTx.pure.u64(amount)],
 });
 
 // Consume the proof (mandatory, hot potato)

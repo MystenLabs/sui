@@ -40,7 +40,7 @@ const [ownerCap] = createTx.moveCall({
 // Transfer the MandateOwnerCap to the owner (required, it has no `drop`)
 createTx.transferObjects([ownerCap], ownerKeypair.toSuiAddress());
 
-const createResult = await client.core.signAndExecuteTransaction({
+const createResult = await client.signAndExecuteTransaction({
     transaction: createTx,
     signer: ownerKeypair,
     include: { effects: true },
@@ -55,20 +55,18 @@ if (createResult.$kind === 'FailedTransaction') {
 const spendTx = new Transaction();
 spendTx.setSender(agentKeypair.toSuiAddress());
 
-const [paymentCoin] = spendTx.splitCoins(spendTx.gas, [amount]);
-
 spendTx.moveCall({
     target: `${PACKAGE_ID}::spending_mandate::execute_spend`,
     typeArguments: ['0x2::sui::SUI'],
     arguments: [
         spendTx.object(mandateObjectId), // SpendingMandate
-        paymentCoin, // Coin to send
+        spendTx.coin({ balance: amount }), // Coin to send
         spendTx.pure.address(recipient), // Must be in allowlist
         spendTx.object('0x6'), // Clock
     ],
 });
 
-const spendResult = await client.core.signAndExecuteTransaction({
+const spendResult = await client.signAndExecuteTransaction({
     transaction: spendTx,
     signer: agentKeypair,
     include: { effects: true },
@@ -90,7 +88,7 @@ revokeTx.moveCall({
     ],
 });
 
-const revokeResult = await client.core.signAndExecuteTransaction({
+const revokeResult = await client.signAndExecuteTransaction({
     transaction: revokeTx,
     signer: ownerKeypair,
     include: { effects: true },

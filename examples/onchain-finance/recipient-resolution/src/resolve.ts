@@ -28,7 +28,7 @@ async function resolveRecipient(name: string): Promise<string> {
 // docs::#reverse-resolve
 // Reverse resolution is available on the Core API, so it works on any client.
 async function reverseResolve(address: string): Promise<string | null> {
-    const { name } = await client.core.defaultNameServiceName({ address });
+    const { name } = await client.defaultNameServiceName({ address });
     return name ?? null;
 }
 // docs::/#reverse-resolve
@@ -38,10 +38,9 @@ async function payByName(name: string, amountMist: bigint, keypair: Ed25519Keypa
     const recipient = await resolveRecipient(name);
 
     const tx = new Transaction();
-    const [coin] = tx.splitCoins(tx.gas, [amountMist]);
-    tx.transferObjects([coin], recipient);
+    tx.transferObjects([tx.coin({ balance: amountMist })], recipient);
 
-    const result = await client.core.signAndExecuteTransaction({
+    const result = await client.signAndExecuteTransaction({
         transaction: tx,
         signer: keypair,
         include: { effects: true },

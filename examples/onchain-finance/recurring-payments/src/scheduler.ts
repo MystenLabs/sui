@@ -25,20 +25,18 @@ async function executeRecurringPayment(
 
     // execute_spend takes the Coin to send, not an amount. Keep this call in sync
     // with the create/spend example in the spending-policies page.
-    const [paymentCoin] = tx.splitCoins(tx.gas, [amountMist]);
-
     tx.moveCall({
         target: `${PACKAGE_ID}::spending_mandate::execute_spend`,
         typeArguments: ['0x2::sui::SUI'],
         arguments: [
             tx.object(mandateId), // SpendingMandate
-            paymentCoin, // Coin to send
+            tx.coin({ balance: amountMist }), // Coin to send
             tx.pure.address(recipientAddress), // Must be in allowlist
             tx.object('0x6'), // Clock
         ],
     });
 
-    const result = await client.core.signAndExecuteTransaction({
+    const result = await client.signAndExecuteTransaction({
         transaction: tx,
         signer: agentKeypair,
         include: { effects: true },
