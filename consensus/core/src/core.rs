@@ -883,8 +883,12 @@ impl CoreSignals {
         // Blocks buffered in broadcast channel should be roughly equal to thosed cached in dag state,
         // since the underlying blocks are ref counted so a lower buffer here will not reduce memory
         // usage significantly.
+        // Deliberately shallower than `dag_state_cached_rounds`: a subscriber that falls out of
+        // this buffer must still find its missed blocks in the DagState cache, so the buffer has
+        // to run out first. Sizing the two equally makes a dropped block an uncached one, leaving
+        // the subscriber no recourse but to fetch.
         let (tx_block_broadcast, rx_block_broadcast) = broadcast::channel::<ExtendedBlock>(
-            context.parameters.dag_state_cached_rounds as usize,
+            (context.parameters.dag_state_cached_rounds as usize / 4).max(1),
         );
         let (tx_accepted_block_broadcast, rx_accepted_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(

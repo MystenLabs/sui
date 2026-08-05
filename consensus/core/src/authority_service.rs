@@ -540,7 +540,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // one round means the intervening blocks were dropped for this subscriber.
         let mut last_yielded_round: Round = replay_high_round;
         Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(move |items| {
+            broadcasted_blocks.flat_map(move |(items, lagged)| {
                 debug_assert!(
                     items.len() <= MAX_BLOCKS_PER_POLL,
                     "Too many blocks received from broadcast"
@@ -548,10 +548,10 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 let mut to_send: Vec<ExtendedBlock> = Vec::with_capacity(items.len());
                 for item in items {
                     let round = item.block.round();
-                    if last_yielded_round > 0 && round > last_yielded_round + 1 {
-                        // This subscriber fell behind the broadcast buffer. Rather than leave a
-                        // hole for it to discover and fetch, replay the missed own blocks from
-                        // the DagState cache, which is sized to the same depth as the buffer.
+                    // Repair only on an actual buffer drop. A round gap alone is not evidence of
+                    // one: a validator skips rounds it does not propose in, so most gaps have no
+                    // missing block behind them.
+                    if lagged > 0 && last_yielded_round > 0 && round > last_yielded_round + 1 {
                         let missed = catchup_dag_state.read().get_cached_blocks_in_range(
                             own_index,
                             last_yielded_round + 1,
@@ -815,6 +815,9 @@ pub(crate) struct BroadcastStream<T> {
     >,
     // Maximum number of items to return per poll.
     max_items_per_poll: usize,
+    // Blocks dropped for this subscriber since the last yield, reported by the broadcast channel.
+    // Carried out with the next batch so the caller can repair the gap.
+    pending_lag: u64,
     // Counts total subscriptions / active BroadcastStreams.
     subscription_counter: Option<Arc<SubscriptionCounter>>,
 }
@@ -832,6 +835,7 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             peer: Some(peer),
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             max_items_per_poll,
+            pending_lag: 0,
             subscription_counter: Some(subscription_counter),
         }
     }
@@ -843,13 +847,14 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             peer: None,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             max_items_per_poll,
+            pending_lag: 0,
             subscription_counter: None,
         }
     }
 }
 
 impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
-    type Item = Vec<T>;
+    type Item = (Vec<T>, u64);
 
     fn poll_next(
         mut self: Pin<&mut Self>,
@@ -876,13 +881,15 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                                 {
                                     counter.record_lagged(peer, n);
                                 }
+                                self.pending_lag = self.pending_lag.saturating_add(n);
                                 break;
                             }
                         }
                     }
 
                     self.inner.set(make_recv_future(rx));
-                    return task::Poll::Ready(Some(items));
+                    let lagged = std::mem::take(&mut self.pending_lag);
+                    return task::Poll::Ready(Some((items, lagged)));
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     info!("BroadcastStream {:?} closed", self.peer);
@@ -893,6 +900,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                     if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer) {
                         counter.record_lagged(peer, n);
                     }
+                    self.pending_lag = self.pending_lag.saturating_add(n);
                     // Re-arm the future and loop to await the next item.
                     self.inner.set(make_recv_future(rx));
                     continue;
