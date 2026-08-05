@@ -297,7 +297,7 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
     let _permit = permit;
     let parked_at = std::time::Instant::now();
     let node_metrics = &context.metrics.node_metrics;
-    let (accepted_slots, accepted_refs, mut gc_round) = {
+    let (accepted_slots, accepted_refs, mut gc_round, parked_at_round) = {
         let Some(dag_state) = dag_state.upgrade() else {
             return;
         };
@@ -306,6 +306,7 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
             dag_state.accepted_slot_notifier(),
             dag_state.accepted_ref_notifier(),
             dag_state.gc_round_receiver(),
+            dag_state.highest_accepted_round(),
         )
     };
 
@@ -491,10 +492,35 @@ pub(crate) async fn recover_minimal_block<S: ValidatorNetworkService>(
             .await;
     }
 
+    // Residency is recorded for EVERY outcome, not just the inflated one. Restricting
+    // it to inflations hides exactly the tail that matters: a block that sat parked
+    // until GC crossed it ends `obsolete`, so the longest waits were the ones missing
+    // from the histogram.
+    //
+    // Rounds, not just seconds, because the round-normalised figure is what predicts
+    // stability. A fleet-wide 0.63 rounds of residency stayed healthy while 2.18
+    // dipped and 11.38 collapsed, across round periods differing by 3x — the wall
+    // clock alone does not separate those.
+    let residency = parked_at.elapsed().as_secs_f64();
+    node_metrics
+        .minimal_block_park_residency
+        .with_label_values(&[outcome.label()])
+        .observe(residency);
+    let residency_rounds = dag_state
+        .upgrade()
+        .map(|dag_state| {
+            let now_round = dag_state.read().highest_accepted_round();
+            now_round.saturating_sub(parked_at_round)
+        })
+        .unwrap_or(0);
+    node_metrics
+        .minimal_block_park_residency_rounds
+        .with_label_values(&[outcome.label()])
+        .observe(residency_rounds as f64);
     if let RecoveryOutcome::Inflated = outcome {
         node_metrics
             .minimal_block_recovery_latency
-            .observe(parked_at.elapsed().as_secs_f64());
+            .observe(residency);
     }
     node_metrics
         .minimal_block_recoveries

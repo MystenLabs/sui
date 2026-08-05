@@ -1074,6 +1074,23 @@ where
             2 * MAX_PERIODIC_SYNC_PEERS * self.context.parameters.max_blocks_per_fetch;
         let exact_budget = pass_capacity / 2;
         let exact_selected = select_exact_requests(&pending_exact, exact_budget);
+        // How far the selection falls short of the newest registered request. Zero
+        // means every recently parked block has its fetch in flight; a positive value
+        // is the count of rounds whose parked blocks are waiting on nothing.
+        let selection_lag = match (
+            pending_exact.last().map(|block_ref| block_ref.round),
+            exact_selected.last().map(|block_ref| block_ref.round),
+        ) {
+            (Some(newest_pending), Some(newest_selected)) => {
+                newest_pending.saturating_sub(newest_selected)
+            }
+            _ => 0,
+        };
+        self.context
+            .metrics
+            .node_metrics
+            .synchronizer_exact_selection_lag_rounds
+            .set(selection_lag as i64);
         let mut ordered_blocks = Vec::with_capacity(exact_selected.len() + missing_blocks.len());
         ordered_blocks.extend(exact_selected.iter().copied());
         ordered_blocks.extend(
