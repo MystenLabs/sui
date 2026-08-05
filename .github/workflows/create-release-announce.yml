@@ -75,7 +75,8 @@ jobs:
           echo "sui_release_version=${sui_release_version}" >> $GITHUB_ENV
 
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
-          echo "{\"sha\": \"${SUI_COMMIT}\", \"force\": true}" | gh api -X PATCH "/repos/MystenLabs/sui/git/refs/heads/${NETWORK}" \
+          # Build the JSON payload with jq so input values are properly escaped.
+          jq -n --arg sha "$SUI_COMMIT" '{sha: $sha, force: true}' | gh api -X PATCH "/repos/MystenLabs/sui/git/refs/heads/${NETWORK}" \
             --header "Accept: application/vnd.github+json" --input -
 
       - name: Update framework/${{ inputs.network }} branch
@@ -86,7 +87,7 @@ jobs:
           NETWORK: ${{ inputs.network }}
         run: |
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
-          echo "{\"sha\": \"${SUI_COMMIT}\", \"force\": true}" | gh api -X PATCH "/repos/MystenLabs/sui/git/refs/heads/framework/${NETWORK}" \
+          jq -n --arg sha "$SUI_COMMIT" '{sha: $sha, force: true}' | gh api -X PATCH "/repos/MystenLabs/sui/git/refs/heads/framework/${NETWORK}" \
             --header "Accept: application/vnd.github+json" --input -
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
@@ -101,7 +102,7 @@ jobs:
           echo "release_tag=${release_tag}" >> $GITHUB_ENV
           echo "new_tag=${release_tag}" >> "$GITHUB_OUTPUT"
 
-          echo "{\"ref\": \"refs/tags/${release_tag}\", \"sha\": \"${SUI_COMMIT}\"}" | \
+          jq -n --arg ref "refs/tags/${release_tag}" --arg sha "$SUI_COMMIT" '{ref: $ref, sha: $sha}' | \
             gh api -X POST /repos/MystenLabs/sui/git/refs \
               --header "Accept: application/vnd.github+json" --input -
 
