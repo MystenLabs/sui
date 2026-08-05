@@ -70,14 +70,24 @@
 //! }
 //!
 //! impl Schema for MySchema {
-//!     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<sui_consistent_store::CfDescriptor> {
-//!         vec![sui_consistent_store::CfDescriptor::new("items", opts.options("items"))]
-//!     }
-//!
-//!     fn open(db: &Db) -> Result<Self, OpenError> {
-//!         Ok(Self {
+//!     fn open(
+//!         path: &std::path::Path,
+//!         opts: &sui_consistent_store::CfOptionsResolver,
+//!         snapshot_capacity: usize,
+//!     ) -> Result<(Db, Self), OpenError> {
+//!         let db = Db::open_cfs(
+//!             path,
+//!             opts,
+//!             snapshot_capacity,
+//!             vec![sui_consistent_store::CfDescriptor::new(
+//!                 "items",
+//!                 opts.options("items"),
+//!             )],
+//!         )?;
+//!         let schema = Self {
 //!             items: DbMap::new(db.clone(), "items")?,
-//!         })
+//!         };
+//!         Ok((db, schema))
 //!     }
 //! }
 //!
@@ -259,14 +269,21 @@ mod tests {
     }
 
     impl Schema for TestSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<crate::CfDescriptor> {
-            vec![crate::CfDescriptor::new("items", opts.options("items"))]
-        }
-
-        fn open(db: &Db) -> Result<Self, OpenError> {
-            Ok(Self {
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(
+                path,
+                opts,
+                snapshot_capacity,
+                vec![crate::CfDescriptor::new("items", opts.options("items"))],
+            )?;
+            let schema = Self {
                 items: DbMap::new(db.clone(), "items")?,
-            })
+            };
+            Ok((db, schema))
         }
     }
 

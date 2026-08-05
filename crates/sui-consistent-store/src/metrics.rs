@@ -22,11 +22,13 @@
 //! struct EmptySchema;
 //!
 //! impl Schema for EmptySchema {
-//!     fn cfs(_: &sui_consistent_store::CfOptionsResolver) -> Vec<sui_consistent_store::CfDescriptor> {
-//!         vec![]
-//!     }
-//!     fn open(_: &Db) -> Result<Self, sui_consistent_store::error::OpenError> {
-//!         Ok(Self)
+//!     fn open(
+//!         path: &std::path::Path,
+//!         opts: &sui_consistent_store::CfOptionsResolver,
+//!         snapshot_capacity: usize,
+//!     ) -> Result<(Db, Self), sui_consistent_store::error::OpenError> {
+//!         let db = Db::open_cfs(path, opts, snapshot_capacity, vec![])?;
+//!         Ok((db, Self))
 //!     }
 //! }
 //!
@@ -398,15 +400,21 @@ mod tests {
     struct TwoCfSchema;
 
     impl Schema for TwoCfSchema {
-        fn cfs(opts: &crate::options::CfOptionsResolver) -> Vec<CfDescriptor> {
-            vec![
-                CfDescriptor::new("alpha", opts.options("alpha")),
-                CfDescriptor::new("beta", opts.options("beta")),
-            ]
-        }
-
-        fn open(_: &Db) -> Result<Self, OpenError> {
-            Ok(Self)
+        fn open(
+            path: &std::path::Path,
+            opts: &crate::CfOptionsResolver,
+            snapshot_capacity: usize,
+        ) -> Result<(Db, Self), OpenError> {
+            let db = Db::open_cfs(
+                path,
+                opts,
+                snapshot_capacity,
+                vec![
+                    CfDescriptor::new("alpha", opts.options("alpha")),
+                    CfDescriptor::new("beta", opts.options("beta")),
+                ],
+            )?;
+            Ok((db, Self))
         }
     }
 

@@ -170,6 +170,13 @@ async fn open_db(
     }
 }
 
+fn clear_rpc_store(db: &Db, schema: &RpcStoreSchema) -> anyhow::Result<()> {
+    db.clear_all()
+        .context("clearing the out-of-range embedded rpc-store")?;
+    schema.set_pruning_floor(0);
+    Ok(())
+}
+
 /// What the startup orchestration does with the on-disk rpc-store.
 ///
 /// The action chosen at startup is retained on [`EmbeddedRpcStore`] and
@@ -402,8 +409,7 @@ impl EmbeddedRpcStore {
             }
             Bootstrap::Restore { clear } => {
                 if clear {
-                    db.clear_all()
-                        .context("clearing the out-of-range embedded rpc-store")?;
+                    clear_rpc_store(&db, &schema)?;
                 }
                 // A synced node enabling the embedded store for the
                 // first time (or recovering an out-of-range one):
@@ -804,6 +810,8 @@ fn seed_history(
 
 #[cfg(test)]
 mod tests {
+    use sui_rpc_store::schema::pruning_watermark;
+
     use super::*;
 
     /// A [`StoreState`] with neither a mid-run restore nor a pending
@@ -866,6 +874,57 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn clear_rpc_store_resets_the_bitmap_floor() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) =
+            Db::open::<RpcStoreSchema>(dir.path(), db_options(None).unwrap()).unwrap();
+        let floor = transaction_bitmap::TX_BUCKET_SIZE;
+        let (watermark_key, watermark_value) =
+            pruning_watermark::store(&pruning_watermark::Watermarks {
+                tx_seq_lo: floor,
+                checkpoint_lo: 1,
+            });
+        let mut batch = db.batch();
+        batch
+            .put(&schema.pruning_watermark, &watermark_key, &watermark_value)
+            .unwrap();
+        batch.commit().unwrap();
+        schema.set_pruning_floor(floor);
+
+        clear_rpc_store(&db, &schema).unwrap();
+        assert!(schema.get_pruning_watermarks().unwrap().is_none());
+
+        let dimension = b"after-clear".to_vec();
+        let (tx_key, tx_value) = transaction_bitmap::store_match(dimension.clone(), 5);
+        let (event_key, event_value) = event_bitmap::store_match(dimension.clone(), 5, 0);
+        let mut batch = db.batch();
+        batch
+            .put(&schema.transaction_bitmap, &tx_key, &tx_value)
+            .unwrap();
+        batch
+            .put(&schema.event_bitmap, &event_key, &event_value)
+            .unwrap();
+        batch.commit().unwrap();
+        db.flush().unwrap();
+        db.compact_range_cf(transaction_bitmap::NAME, None, None)
+            .unwrap();
+        db.compact_range_cf(event_bitmap::NAME, None, None).unwrap();
+
+        assert!(
+            schema
+                .get_transaction_bitmap(dimension.clone(), tx_key.bucket)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            schema
+                .get_event_bitmap(dimension, event_key.bucket)
+                .unwrap()
+                .is_some()
+        );
     }
 
     // `L = 0` (nothing pruned): an unseeded history cohort backfills

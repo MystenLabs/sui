@@ -4,28 +4,16 @@
 //! `()` → `PruningWatermarks`.
 //!
 //! Singleton row that holds the lowest still-available `tx_seq`
-//! and `checkpoint_seq`. Drives the bitmap CFs' compaction
-//! filters and feeds `available_range` requests.
+//! and `checkpoint_seq`. It is the durable authority for the
+//! bitmap CFs' compaction filters and feeds `available_range`
+//! requests.
 //!
-//! The bitmap CFs need to know the current `tx_seq` floor at
-//! compaction time, which runs in a RocksDB background thread
-//! without access to the schema. The pattern used here:
-//!
-//! 1. A process-wide `Arc<AtomicU64>` ([`tx_seq_floor`]) holds the
-//!    current floor.
-//! 2. Bitmap CF [`options`](super::transaction_bitmap::options)
-//!    install compaction filters that clone the `Arc` and read the
-//!    atomic on every key they consider.
-//! 3. Indexer pipelines that advance pruning call
-//!    [`super::RpcStoreSchema::set_pruning_floor`] after their batch
-//!    commits, so the on-disk row and the atomic agree.
-//! 4. On startup callers run
-//!    [`super::RpcStoreSchema::refresh_pruning_atomics`] once to load the
-//!    persisted floor into the atomic.
+//! Each open RPC-store schema owns an `Arc<AtomicU64>` whose clones
+//! are captured by that database's bitmap compaction filters. Schema
+//! construction loads the persisted `tx_seq` floor into the atomic.
+//! Pruning and restore paths commit the singleton row before
+//! publishing its value to the matching database-local atomic.
 
-use std::sync::Arc;
-use std::sync::OnceLock;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use sui_consistent_store::Protobuf;
@@ -71,17 +59,6 @@ pub fn store(watermarks: &Watermarks) -> (Key, Value) {
     )
 }
 
-/// Process-wide `tx_seq` pruning floor used by the bitmap CFs'
-/// compaction filters. Lazily allocated on first access.
-///
-/// The atomic carries the *exclusive* floor: every `tx_seq <
-/// floor` is considered pruned. Bitmap buckets that fit entirely
-/// below the floor become removable on the next compaction sweep.
-pub fn tx_seq_floor() -> &'static Arc<AtomicU64> {
-    static FLOOR: OnceLock<Arc<AtomicU64>> = OnceLock::new();
-    FLOOR.get_or_init(|| Arc::new(AtomicU64::new(0)))
-}
-
 impl<R: Reader> super::RpcStoreSchema<R> {
     /// Read the persisted pruning watermarks from disk.
     pub fn get_pruning_watermarks(&self) -> Result<Option<Watermarks>, Error> {
@@ -94,32 +71,24 @@ impl<R: Reader> super::RpcStoreSchema<R> {
             checkpoint_lo: stored.checkpoint_lo,
         }))
     }
+}
 
-    /// Update the `tx_seq` floor used by the bitmap CFs'
+impl super::RpcStoreSchema {
+    /// Publish the `tx_seq` floor used by this database's bitmap
     /// compaction filters.
     ///
-    /// Callers that advance pruning should:
-    ///
-    /// 1. Stage a write to the `pruning_watermark` CF via
-    ///    [`store`].
-    /// 2. Commit the batch so the new watermarks are durable.
-    /// 3. Call this method with the new `tx_seq_lo` so the
-    ///    in-memory floor matches what's on disk.
+    /// Callers publish only a committed `tx_seq_lo`, or zero
+    /// immediately after durably clearing the persisted watermark.
+    /// Restores may intentionally install a lower committed floor
+    /// before history backfill writes begin.
     pub fn set_pruning_floor(&self, tx_seq_lo: u64) {
-        tx_seq_floor().store(tx_seq_lo, Ordering::Relaxed);
+        self.tx_seq_pruning_floor
+            .store(tx_seq_lo, Ordering::Relaxed);
     }
 
-    /// Load the persisted pruning watermarks from disk into the
-    /// in-memory bitmap floor.
-    ///
-    /// Call once on startup so the bitmap compaction filters see
-    /// the persisted floor instead of starting at zero (where
-    /// they'd prune nothing).
-    pub fn refresh_pruning_atomics(&self) -> Result<(), Error> {
-        if let Some(watermarks) = self.get_pruning_watermarks()? {
-            self.set_pruning_floor(watermarks.tx_seq_lo);
-        }
-        Ok(())
+    #[cfg(test)]
+    pub(crate) fn current_pruning_floor(&self) -> u64 {
+        self.tx_seq_pruning_floor.load(Ordering::Relaxed)
     }
 }
 
@@ -130,77 +99,130 @@ mod tests {
 
     use super::*;
     use crate::RpcStoreSchema;
+    use crate::schema::event_bitmap;
+    use crate::schema::transaction_bitmap;
 
-    fn fresh_db() -> (tempfile::TempDir, sui_consistent_store::Db, RpcStoreSchema) {
+    fn fresh_db() -> (tempfile::TempDir, Db, RpcStoreSchema) {
         let dir = tempfile::tempdir().unwrap();
         let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
         (dir, db, schema)
     }
 
+    fn put_materialized_bucket_zero(db: &Db, schema: &RpcStoreSchema, dimension: &[u8]) {
+        let (tx_key, tx_value) = transaction_bitmap::store_match(dimension.to_vec(), 5);
+        let (event_key, event_value) = event_bitmap::store_match(dimension.to_vec(), 5, 0);
+        let mut batch = db.batch();
+        batch
+            .put(&schema.transaction_bitmap, &tx_key, &tx_value)
+            .unwrap();
+        batch
+            .put(&schema.event_bitmap, &event_key, &event_value)
+            .unwrap();
+        batch.commit().unwrap();
+        db.flush().unwrap();
+    }
+
     #[test]
-    fn get_returns_none_when_empty() {
+    fn fresh_empty_db_starts_with_zero_pruning_floor() {
         let (_dir, _db, schema) = fresh_db();
         assert!(schema.get_pruning_watermarks().unwrap().is_none());
+        assert_eq!(schema.current_pruning_floor(), 0);
     }
 
     #[test]
-    fn store_then_get_round_trips() {
-        let (_dir, db, schema) = fresh_db();
-        let watermarks = Watermarks {
-            tx_seq_lo: 1_000,
-            checkpoint_lo: 50,
-        };
-
-        let (k, v) = store(&watermarks);
-        let mut batch = db.batch();
-        batch.put(&schema.pruning_watermark, &k, &v).unwrap();
-        batch.commit().unwrap();
-
-        let read = schema
-            .get_pruning_watermarks()
-            .unwrap()
-            .expect("watermarks present");
-        assert_eq!(read, watermarks);
-    }
-
-    #[test]
-    fn set_pruning_floor_updates_atomic() {
-        // Take a baseline so this test isn't affected by ordering
-        // against other tests sharing the process-wide atomic.
-        let baseline = tx_seq_floor().load(Ordering::Relaxed);
-        let (_dir, _db, schema) = fresh_db();
-        let target = baseline.wrapping_add(12_345);
-        schema.set_pruning_floor(target);
-        assert_eq!(tx_seq_floor().load(Ordering::Relaxed), target);
-        // Restore the floor so we don't leak state across tests.
-        tx_seq_floor().store(baseline, Ordering::Relaxed);
-    }
-
-    #[test]
-    fn refresh_pulls_disk_watermarks_into_atomic() {
-        let baseline = tx_seq_floor().load(Ordering::Relaxed);
-        let (_dir, db, schema) = fresh_db();
-        let target = baseline.wrapping_add(67_890);
-
-        let (k, v) = store(&Watermarks {
-            tx_seq_lo: target,
-            checkpoint_lo: 0,
+    fn reopen_loads_persisted_pruning_floor() {
+        let dir = tempfile::tempdir().unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let floor = transaction_bitmap::TX_BUCKET_SIZE;
+        let (watermark_key, watermark_value) = store(&Watermarks {
+            tx_seq_lo: floor,
+            checkpoint_lo: 1,
         });
         let mut batch = db.batch();
-        batch.put(&schema.pruning_watermark, &k, &v).unwrap();
+        batch
+            .put(&schema.pruning_watermark, &watermark_key, &watermark_value)
+            .unwrap();
         batch.commit().unwrap();
+        put_materialized_bucket_zero(&db, &schema, b"reopen");
+        assert_eq!(schema.current_pruning_floor(), 0);
 
-        schema.refresh_pruning_atomics().unwrap();
-        assert_eq!(tx_seq_floor().load(Ordering::Relaxed), target);
-        tx_seq_floor().store(baseline, Ordering::Relaxed);
+        drop(schema);
+        drop(db);
+
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        assert_eq!(schema.current_pruning_floor(), floor);
+        db.compact_range_cf(transaction_bitmap::NAME, None, None)
+            .unwrap();
+        db.compact_range_cf(event_bitmap::NAME, None, None).unwrap();
+        assert!(
+            schema
+                .get_transaction_bitmap(b"reopen".to_vec(), 0)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema
+                .get_event_bitmap(b"reopen".to_vec(), 0)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
-    fn refresh_is_a_no_op_when_disk_is_empty() {
-        let baseline = tx_seq_floor().load(Ordering::Relaxed);
-        let (_dir, _db, schema) = fresh_db();
-        // No write — refresh should not touch the atomic.
-        schema.refresh_pruning_atomics().unwrap();
-        assert_eq!(tx_seq_floor().load(Ordering::Relaxed), baseline);
+    fn bitmap_pruning_floors_are_isolated_per_database() {
+        let (_dir_a, db_a, schema_a) = fresh_db();
+        let (_dir_b, db_b, schema_b) = fresh_db();
+        let floor = transaction_bitmap::TX_BUCKET_SIZE;
+
+        let (watermark_key, watermark_value) = store(&Watermarks {
+            tx_seq_lo: floor,
+            checkpoint_lo: 1,
+        });
+        let mut batch = db_a.batch();
+        batch
+            .put(
+                &schema_a.pruning_watermark,
+                &watermark_key,
+                &watermark_value,
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        schema_a.set_pruning_floor(floor);
+
+        put_materialized_bucket_zero(&db_a, &schema_a, b"isolated");
+        put_materialized_bucket_zero(&db_b, &schema_b, b"isolated");
+
+        for db in [&db_a, &db_b] {
+            db.compact_range_cf(transaction_bitmap::NAME, None, None)
+                .unwrap();
+            db.compact_range_cf(event_bitmap::NAME, None, None).unwrap();
+        }
+
+        assert!(
+            schema_a
+                .get_transaction_bitmap(b"isolated".to_vec(), 0)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema_a
+                .get_event_bitmap(b"isolated".to_vec(), 0)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            schema_b
+                .get_transaction_bitmap(b"isolated".to_vec(), 0)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            schema_b
+                .get_event_bitmap(b"isolated".to_vec(), 0)
+                .unwrap()
+                .is_some()
+        );
+        assert!(schema_b.get_pruning_watermarks().unwrap().is_none());
+        assert_eq!(schema_b.current_pruning_floor(), 0);
     }
 }
