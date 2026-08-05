@@ -223,7 +223,9 @@ struct Subscriber {
     guard: SubscriptionLifecycleGuard,
     /// Checkpoints processed since this subscriber last received any frame.
     checkpoints_since_frame: u32,
-    /// Whether a filtered subscriber still needs its initial progress frame.
+    /// Whether this subscriber still needs its initial progress frame. Enabled
+    /// for every transaction and event subscriber and filtered checkpoint
+    /// subscribers.
     needs_start_frame: bool,
     /// Anchor keys this subscriber registered (one per term), for O(terms)
     /// removal.
@@ -287,7 +289,10 @@ impl SubscriptionMatcher {
             }
         }
 
-        let needs_start_frame = spec.query.is_some();
+        let needs_start_frame = match spec.kind {
+            SubscriptionKind::Checkpoints => spec.query.is_some(),
+            SubscriptionKind::Transactions | SubscriptionKind::Events => true,
+        };
 
         self.subs.insert(
             id,
@@ -335,13 +340,14 @@ impl SubscriptionMatcher {
         }
     }
 
-    /// Match `checkpoint` against every subscription and deliver one
-    /// [`SubscriptionUpdate`] per subscriber that either matched or is due a
-    /// progress frame after `interval` checkpoints without one. Subscribers
-    /// whose channel is full or closed are dropped; returns how many departed
-    /// this way. `keys` holds the checkpoint's pre-extracted dimension keys
-    /// (see [`extract_checkpoint_keys`]); a key space must be present
-    /// whenever this matcher holds a filtered subscriber in that space.
+    /// Match `checkpoint` against every subscription. A subscriber may receive
+    /// its one-time start progress frame before a match from the same
+    /// checkpoint; otherwise it receives a matching payload or a progress frame
+    /// after `interval` checkpoints without one. Subscribers whose channel is
+    /// full or closed are dropped; returns how many departed this way. `keys`
+    /// holds the checkpoint's pre-extracted dimension keys (see
+    /// [`extract_checkpoint_keys`]); a key space must be present whenever this
+    /// matcher holds a filtered subscriber in that space.
     pub(crate) fn dispatch_with_keys(
         &mut self,
         checkpoint: &Arc<Checkpoint>,
@@ -687,6 +693,21 @@ mod tests {
         event_filter_to_query(&filter, 16).unwrap()
     }
 
+    fn test_event(package: AccountAddress, name: &str) -> Event {
+        Event {
+            package_id: ObjectID::from(package),
+            transaction_module: Identifier::new("emitter").unwrap(),
+            sender: addr(0),
+            type_: StructTag {
+                address: package,
+                module: Identifier::new("mod_t").unwrap(),
+                name: Identifier::new(name).unwrap(),
+                type_params: vec![],
+            },
+            contents: vec![],
+        }
+    }
+
     fn subscribe(
         matcher: &mut SubscriptionMatcher,
         kind: SubscriptionKind,
@@ -883,28 +904,19 @@ mod tests {
     fn event_filters_match_per_event() {
         let package = AccountAddress::random();
         let package_str = ObjectID::from(package).to_canonical_string(true);
-        let event = |name: &str| Event {
-            package_id: ObjectID::from(package),
-            transaction_module: Identifier::new("emitter").unwrap(),
-            sender: addr(0),
-            type_: StructTag {
-                address: package,
-                module: Identifier::new("mod_t").unwrap(),
-                name: Identifier::new(name).unwrap(),
-                type_params: vec![],
-            },
-            contents: vec![],
-        };
         let type_a = format!("{package_str}::mod_t::EventA");
 
         let mut builder = TestCheckpointBuilder::new(1);
         builder = builder
             .start_transaction(0)
-            .with_events(vec![event("EventA"), event("EventB")])
+            .with_events(vec![
+                test_event(package, "EventA"),
+                test_event(package, "EventB"),
+            ])
             .finish_transaction();
         builder = builder
             .start_transaction(1)
-            .with_events(vec![event("EventA")])
+            .with_events(vec![test_event(package, "EventA")])
             .finish_transaction();
         let checkpoint = Arc::new(builder.build_checkpoint());
 
@@ -962,13 +974,84 @@ mod tests {
     }
 
     #[test]
-    fn unfiltered_subscriber_starts_with_match_without_tick() {
+    fn unfiltered_transaction_subscriber_starts_with_progress_tick_once() {
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
         let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, None, &metrics);
-        let checkpoint = checkpoint(7, &[0]);
+        let entry_checkpoint = checkpoint(7, &[0]);
+
+        dispatch(&mut matcher, &entry_checkpoint, NO_TICK);
+
+        recv_start_tick(&mut receiver, &entry_checkpoint);
+        assert!(matches!(
+            recv_matches(&mut receiver),
+            SubscriptionMatches::AllTransactions
+        ));
+        assert!(receiver.try_recv().is_err());
+
+        dispatch(&mut matcher, &checkpoint(8, &[0]), NO_TICK);
+
+        assert!(matches!(
+            recv_matches(&mut receiver),
+            SubscriptionMatches::AllTransactions
+        ));
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn unfiltered_event_subscriber_starts_with_progress_tick_before_match() {
+        let package = AccountAddress::random();
+        let mut builder = TestCheckpointBuilder::new(7);
+        builder = builder
+            .start_transaction(0)
+            .with_events(vec![test_event(package, "EventA")])
+            .finish_transaction();
+        let checkpoint = Arc::new(builder.build_checkpoint());
+
+        let mut matcher = SubscriptionMatcher::default();
+        let metrics = metrics();
+        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Events, None, &metrics);
 
         dispatch(&mut matcher, &checkpoint, NO_TICK);
+
+        recv_start_tick(&mut receiver, &checkpoint);
+        assert!(matches!(
+            recv_matches(&mut receiver),
+            SubscriptionMatches::AllEvents
+        ));
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn unfiltered_checkpoint_subscriber_starts_with_match_without_tick() {
+        let mut matcher = SubscriptionMatcher::default();
+        let metrics = metrics();
+        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Checkpoints, None, &metrics);
+
+        dispatch(&mut matcher, &checkpoint(7, &[0]), NO_TICK);
+
+        assert!(matches!(
+            recv_matches(&mut receiver),
+            SubscriptionMatches::Checkpoint
+        ));
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn genesis_does_not_emit_or_defer_start_tick() {
+        let mut matcher = SubscriptionMatcher::default();
+        let metrics = metrics();
+        let mut receiver = subscribe(&mut matcher, SubscriptionKind::Transactions, None, &metrics);
+
+        dispatch(&mut matcher, &checkpoint(0, &[0]), NO_TICK);
+
+        assert!(matches!(
+            recv_matches(&mut receiver),
+            SubscriptionMatches::AllTransactions
+        ));
+        assert!(receiver.try_recv().is_err());
+
+        dispatch(&mut matcher, &checkpoint(1, &[0]), NO_TICK);
 
         assert!(matches!(
             recv_matches(&mut receiver),

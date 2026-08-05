@@ -366,12 +366,13 @@ impl EffectsContents {
     }
 
     /// The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
-    async fn effects_json(&self) -> Option<Result<Json, RpcError>> {
+    async fn effects_json(&self, ctx: &Context<'_>) -> Option<Result<Json, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
             async {
-                let mut proto_effects = content.proto_effects()?;
+                let kv_loader: &KvLoader = ctx.data()?;
+                let mut proto_effects = content.proto_effects(kv_loader).await?;
                 // Clear the bcs field as effectsJson is intended to provide a full structured output
                 proto_effects.bcs = None;
                 let json_value = serde_json::to_value(&proto_effects)

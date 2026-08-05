@@ -162,7 +162,7 @@ JSON-RPC accepts a positional array of arguments. gRPC uses typed protobuf messa
 
 ### WebSocket subscriptions are replaced by gRPC streaming
 
-JSON-RPC offered WebSocket subscriptions for events and transactions, which have been deprecated since mid-2024. Sui does not carry those forward. Use `SubscriptionService` over gRPC server streaming instead: `SubscribeEvents` with an `EventFilter` replaces `sui_subscribeEvent`, `SubscribeTransactions` with a `TransactionFilter` replaces `sui_subscribeTransaction`, and `SubscribeCheckpoints` delivers entire checkpoints. All 3 support server-side filtering. Subscriptions always begin at the current tip of the chain; they do not support resumption from a prior point. To avoid gaps, open the subscription first, note the first progress marker (`cursor` for checkpoints, `Watermark` for transactions and events), then backfill with the corresponding `LedgerService` list API (`ListEvents`, `ListTransactions`, or `ListCheckpoints`) up to that point. Once the backfill is complete, begin consuming from the already-open subscription. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
+JSON-RPC offered WebSocket subscriptions for events and transactions, which have been deprecated since mid-2024. Sui does not carry those forward. Use `SubscriptionService` over gRPC server streaming instead: `SubscribeEvents` with an `EventFilter` replaces `sui_subscribeEvent`, `SubscribeTransactions` with a `TransactionFilter` replaces `sui_subscribeTransaction`, and `SubscribeCheckpoints` delivers entire checkpoints. All 3 support server-side filtering. Subscriptions begin at the current tip and do not support resumption. To avoid gaps, open the subscription and immediately drain live frames into durable, bounded storage while a separate worker backfills with the corresponding `LedgerService` list API (`ListEvents`, `ListTransactions`, or `ListCheckpoints`). Do not leave the subscription unread during backfill. Process the durable live spool after backfill reaches the subscription boundary, and restart from the last durably processed cursor if the spool fills or the stream ends. See [Subscriptions for streaming data](/develop/accessing-data/grpc/what-is-grpc#subscriptions-for-streaming-data).
 
 ### Public load balancer URLs are not production endpoints
 
@@ -184,9 +184,28 @@ GraphQL and gRPC expose richer typing for objects and coins than JSON-RPC. A few
 
 JSON-RPC cursors are opaque strings. GraphQL passes cursors through the `after` (or `before`) field on a connection, with the page size in `first` (or `last`). gRPC paging uses fields on the typed request and response messages. Do not try to reuse a JSON-RPC `nextCursor` value in a GraphQL or gRPC request. Fetch a fresh cursor from the new API and persist it as the resume point.
 
+### Negative filters (MatchNone) work differently
+
+JSON-RPC object queries supported `MatchAll`, `MatchAny`, and `MatchNone` filter combinators to include or exclude results by type.
+
+- **gRPC** transaction and event filters support negation through the `negated` field on each literal. Set `negated: true` on a literal to exclude matching items. For example, to match all transactions except those from a specific sender, use `{ negated: true, predicate: { oneofKind: 'sender', sender: { address: '0x...' } } }`. Negated literals combine with other literals in the same term using AND logic.
+- **GraphQL** uses flat filter fields (`type`, `sender`, `emittingModule`) without boolean combinators or negation. Use multiple queries or client-side filtering for exclusion patterns.
+
 ### Retention windows
 
 A full node retains a configurable window of recent data and prunes older history. Your application sees this as "not found" responses. For long-running queries, replays, or audits, plan to fall back to the [Archival Service](/develop/accessing-data/archival-store) for data outside the full node's retention.
+
+### Ecosystem tools use different migration paths
+
+Not all tools in the Sui ecosystem require manual migration:
+
+- **Sui CLI**: No changes needed. The CLI already uses gRPC internally. The `rpc` field in `~/.sui/sui_config/client.yaml` points at the same `fullnode.*.sui.io:443` URLs, which serve both JSON-RPC and gRPC.
+
+- **dApp Kit**: The currently published `@mysten/dapp-kit` client factory requires `SuiJsonRpcClient` and does not accept `SuiGrpcClient`. Continue using its JSON-RPC client until a dApp Kit release explicitly adds transport-agnostic client support; do not substitute `SuiGrpcClient` in `createClient`.
+
+- **Kiosk SDK** (`@mysten/kiosk`): Continue using a supported JSON-RPC or GraphQL client for Kiosk object and event queries. The currently published Kiosk SDK does not accept `SuiGrpcClient`; migrate only after a Kiosk release explicitly adds gRPC support.
+
+- **Walrus site-builder**: The site-builder manages its own Sui connection through `sites-config.yaml`. Check the [Walrus documentation](https://docs.wal.app/) for gRPC migration status, as the transport is controlled by the Walrus team.
 
 ## Examples for high-traffic paths
 
@@ -352,3 +371,28 @@ For real-time checkpoint streaming, use gRPC `SubscriptionService.SubscribeCheck
 
 </TabItem>
 </Tabs>
+
+### Sign and execute (end-to-end)
+
+Replace `signAndExecuteTransactionBlock` with the gRPC equivalent. The SDK handles gas coin selection, gas budget estimation, signing, and execution in a single call.
+
+<Tabs groupId="transport">
+<TabItem value="json-rpc" label="JSON-RPC (deprecated)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#sign-and-execute-a-transaction-end-to-end@json-rpc}
+
+</TabItem>
+<TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
+
+{@include ./grpc/grpc-migration-cookbook.mdx#sign-and-execute-a-transaction-end-to-end@grpc-sdk}
+
+</TabItem>
+</Tabs>
+
+For manual gas resolution (sponsored transactions, custom gas coin selection), see [Manual gas resolution](/develop/accessing-data/grpc/grpc-migration-cookbook#manual-gas-resolution).
+
+### Validator APY
+
+JSON-RPC provided `suix_getValidatorsApy`. Neither gRPC nor GraphQL has a direct APY field. Validator APY is derived from staking pool exchange rate history stored in dynamic fields on each validator's system-state object. The legacy method used a compounding calculation across up to 30 epoch samples with outlier filtering.
+
+To compute APY after migration, query the validator set and each validator's exchange rate history, then apply a compounding formula client-side. See the [GraphQL migration cookbook](/develop/accessing-data/graphql/graphql-migration-cookbook#get-validator-apy) for the query pattern and [issue #23832](https://github.com/MystenLabs/sui/issues/23832) for the recommended computation.

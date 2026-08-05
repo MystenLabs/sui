@@ -120,6 +120,23 @@ clang \
 cmake
 ```
 
+### gRPC quickstart checklist {#grpc-quickstart}
+
+Follow these steps to enable indexed gRPC functionality on a full node. The gRPC listener and core methods are available without indexing, but historical list queries require the indexes.
+
+1. Add `rpc.enable-indexing: true` to `fullnode.yaml` (see config below).
+2. In the same configuration update, optionally configure the [ledger history list APIs](#ledger-history-configuration) and [retention window](#gRPC-retention).
+3. If you no longer need legacy JSON-RPC indexing, set `enable-index-processing: false` (see [Disable legacy JSON-RPC indexing](#disable-legacy-json-rpc-indexing)).
+4. Restart the node. The initial gRPC index build takes time depending on your hardware; the node might not serve other traffic during this phase.
+5. Verify connectivity and query the historical range required by your clients. `end_checkpoint` is exclusive. Paginate past any `ITEM_LIMIT` responses and confirm that the stream terminates with `CHECKPOINT_BOUND`. Compare the latest checkpoint returned by `GetCheckpoint` with the node's `last_executed_checkpoint` metric before cutover:
+    ```sh
+    $ grpcurl -plaintext <YOUR_NODE>:9000 sui.rpc.v2.LedgerService/GetCheckpoint
+    $ grpcurl -plaintext -d '{
+        "start_checkpoint": "<FIRST_REQUIRED_CHECKPOINT>",
+        "end_checkpoint": "<LAST_REQUIRED_CHECKPOINT_PLUS_ONE>"
+      }' <YOUR_NODE>:9000 sui.rpc.v2.LedgerService/ListTransactions
+    ```
+
 ### Considerations to enable gRPC
 
 You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. See [Sui's data serving roadmap](/develop/accessing-data/data-serving) for guidance on the overall transition plan.
@@ -195,6 +212,8 @@ rpc:
 
 :::
 
+#### Disable legacy JSON-RPC indexing {#disable-legacy-json-rpc-indexing}
+
 You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
 ```sh
@@ -202,6 +221,8 @@ You can reclaim the storage used by legacy JSON-RPC indexing after all your clie
 enable-index-processing: false
 
 ```
+
+#### Retention window {#gRPC-retention}
 
 You can configure the retention window for the gRPC index on your full node by adding the following to its `fullnode.yaml` configuration:
 
@@ -215,12 +236,73 @@ authority-store-pruning-config:
 
 Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
 
+### Network ports {#network-ports}
+
+A Sui full node uses the following ports by default:
+
+| Port | Protocol | Service | Expose publicly? |
+|------|----------|---------|------------------|
+| `9000` | TCP | gRPC and JSON-RPC API | Yes (through TLS proxy on port 443) |
+| `8084` | UDP | P2P (state sync and peer discovery) | Yes (required for peering) |
+| `9184` | TCP | Prometheus metrics | No (binds to `0.0.0.0` by default; restrict in production) |
+| `1337` | TCP | Admin interface | No (binds to `localhost` by default) |
+| `8080` | TCP | Internal validator network | No (validators only) |
+
+:::caution
+
+The default `fullnode.yaml` template binds the metrics port to `0.0.0.0:9184`, which makes it reachable from any network interface. In production, restrict it to localhost:
+
+```yaml
+metrics-address: "127.0.0.1:9184"
+```
+
+:::
+
+### Firewall configuration {#firewall}
+
+Allow only the ports your node needs and block everything else:
+
+- **Inbound:** Allow `8084/UDP` (P2P) from the internet. If serving API traffic, allow `443/TCP` (TLS proxy) or `9000/TCP` (direct, not recommended for production).
+- **Outbound:** Allow all outbound traffic so the node can reach peers and archive endpoints.
+- **Block:** `9184` (metrics) and `1337` (admin) should never be reachable from untrusted networks. Bind metrics to `127.0.0.1` as shown above, and use a firewall rule to block external access to both ports.
+
+### TLS termination {#tls}
+
+Do not expose plain HTTP (port 9000) to the public internet. Use a reverse proxy (nginx, Envoy, or a cloud load balancer) to terminate TLS on port 443 and forward traffic to the node on a private interface. The proxy must support HTTP/2 for gRPC clients.
+
+The node also supports native TLS through the `rpc.https-address` and `rpc.tls` configuration options, but proxy-based termination is easier to manage operationally (certificate rotation, rate limiting, access logs).
+
+### Readiness check {#readiness}
+
+After starting a full node, verify it is healthy before serving traffic:
+
+1. **Check sync progress.** Compare your node's latest checkpoint against a trusted endpoint. A growing gap indicates the node is still catching up.
+
+    ```sh
+    # Your node's sync position
+    $ curl -s http://localhost:9184/metrics | grep highest_synced_checkpoint
+
+    # Compare against a public endpoint
+    $ grpcurl fullnode.mainnet.sui.io:443 sui.rpc.v2.LedgerService/GetCheckpoint \
+        | grep sequenceNumber
+    ```
+
+2. **Verify chain identity.** Check that the node reports the correct `chain_identifier` in its `uptime` metric:
+
+    ```sh
+    $ curl -s http://localhost:9184/metrics | grep uptime
+    ```
+
+3. **Confirm checkpoint execution.** Verify that `last_executed_checkpoint` advances over time.
+
+A node that syncs checkpoints, executes them, and reports the correct chain identifier is ready to serve read traffic. You do not need to execute a test transaction unless the node is expected to submit transactions for clients.
+
 :::tip
 
 When you expose a full node endpoint publicly, harden it before you serve traffic:
 
-- **Enable TLS.** Terminate TLS for the RPC server (`https-address` and `tls` in the `rpc` config block) or at a proxy in front of the node.
-- **Restrict with a firewall.** Allow only the ports you intend to serve, and block everything else at the host and network level.
+- **Enable TLS.** Terminate TLS at a proxy or configure `rpc.https-address` and `rpc.tls`.
+- **Restrict with a firewall.** Follow the [firewall guidance](#firewall) above.
 - **Apply rate limits.** Put a rate limit in front of the public endpoint to protect against abuse and resource-exhaustion attacks.
 - **Keep admin interfaces private.** Bind the admin API (port 1337 by default) to `127.0.0.1` and never expose it to untrusted networks.
 - **Enable monitoring.** Configure [metrics monitoring](/operators/full-node/monitoring) so you can detect lag, abuse, or failures quickly.
