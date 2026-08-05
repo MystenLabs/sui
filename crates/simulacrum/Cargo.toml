@@ -13,6 +13,7 @@ workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 fastcrypto.workspace = true
+nonempty.workspace = true
 move-binary-format.workspace = true
 prost.workspace = true
 zstd.workspace = true
