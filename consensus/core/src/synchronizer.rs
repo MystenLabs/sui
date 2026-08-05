@@ -8,7 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round, TransactionIndex};
+use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use futures::{StreamExt as _, stream::FuturesUnordered};
 use itertools::Itertools as _;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
@@ -59,31 +59,67 @@ const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 /// How long commit must be stalled before periodic sync kicks in as fallback.
 const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Fraction of the exact-request budget reserved for the oldest refs, so a node
-/// genuinely catching up still repairs its history instead of only chasing the tip.
-const EXACT_OLDEST_SHARE: usize = 4;
-
-/// Chooses which registered exact requests to fetch in one scheduler pass.
+/// Chooses which registered exact requests to fetch in one scheduler pass, closest
+/// to `local_round` (this node's highest accepted round) first.
 ///
-/// `pending` is ordered by `BlockRef`, which sorts on round first, so a plain
-/// prefix takes the OLDEST rounds. That is the wrong end once the set outgrows the
-/// budget: the refs that unblock current frontiers are the newest, and a ref that
-/// is never selected keeps its parked block waiting until GC no matter how many
-/// passes run — the prefix does not rotate. Selecting oldest-first cost a 125-node
-/// testnet ~95% of its registered refs at a 68K backlog, and took the median parked
-/// block from 4 missing frontier slots to 32.
+/// `pending` is ordered by `BlockRef`, which sorts on round first, so any fixed end
+/// of it is the wrong answer for half the fleet. Neither extreme works alone:
 ///
-/// Most of the budget therefore goes to the newest refs, with a reserved share for
-/// the oldest so a lagging node still makes backward progress rather than starving
-/// the history it needs to commit.
-fn select_exact_requests(pending: &BTreeSet<BlockRef>, budget: usize) -> Vec<BlockRef> {
+/// - Taking the OLDEST prefix starves a node at the tip. Its parked blocks wait on
+///   recent refs, the prefix does not rotate between passes, and a ref above the cut
+///   is never fetched at all. A 125-node testnet with a 68K backlog left ~95% of its
+///   registered refs unfetched this way, and the median parked block went from 4
+///   missing frontier slots to 32.
+/// - Taking the NEWEST end strands a node that has fallen behind. Its whole budget
+///   goes to blocks at the fleet tip whose ancestors it does not have, so they arrive
+///   and immediately suspend, unblocking nothing. One validator ~500 rounds back
+///   fetched 51 blocks/s into 35K suspended blocks and never closed the gap; on
+///   builds that fetched oldest-first the same node ran AHEAD of the fleet median.
+///
+/// What both cases actually want is the refs adjacent to their OWN frontier: for a
+/// node at the tip those are the newest refs, and for a node that is behind they are
+/// the old ones. Ordering by distance from `local_round` expresses that directly, so
+/// one rule serves both without needing to classify the node first.
+fn select_exact_requests(
+    pending: &BTreeSet<BlockRef>,
+    budget: usize,
+    local_round: Round,
+) -> Vec<BlockRef> {
     if pending.len() <= budget {
         return pending.iter().copied().collect();
     }
-    let oldest_budget = budget / EXACT_OLDEST_SHARE;
-    let newest_budget = budget - oldest_budget;
-    let mut selected: Vec<BlockRef> = pending.iter().rev().copied().take(newest_budget).collect();
-    selected.extend(pending.iter().copied().take(oldest_budget));
+    // Walk outward from local_round in both directions. Refs at or above it are the
+    // frontier this node is trying to cross; refs below it are gaps behind that
+    // frontier, which still block ancestry repair. Interleaving keeps either side
+    // from consuming the whole budget.
+    let mut above =
+        pending.range(BlockRef::new(local_round, AuthorityIndex::ZERO, BlockDigest::MIN)..);
+    let mut below = pending
+        .range(..BlockRef::new(local_round, AuthorityIndex::ZERO, BlockDigest::MIN))
+        .rev();
+    let mut selected = Vec::with_capacity(budget);
+    while selected.len() < budget {
+        let took_above = match above.next() {
+            Some(block_ref) => {
+                selected.push(*block_ref);
+                true
+            }
+            None => false,
+        };
+        if selected.len() == budget {
+            break;
+        }
+        let took_below = match below.next() {
+            Some(block_ref) => {
+                selected.push(*block_ref);
+                true
+            }
+            None => false,
+        };
+        if !took_above && !took_below {
+            break;
+        }
+    }
     // Restore ascending order: fetch requests are batched per authority downstream,
     // and lowest-round-first within a batch is what lets ancestry repair progress.
     selected.sort_unstable();
@@ -1073,7 +1109,11 @@ where
         let pass_capacity =
             2 * MAX_PERIODIC_SYNC_PEERS * self.context.parameters.max_blocks_per_fetch;
         let exact_budget = pass_capacity / 2;
-        let exact_selected = select_exact_requests(&pending_exact, exact_budget);
+        // Selection is relative to THIS node's frontier, not the fleet's: a node that
+        // has fallen behind needs the refs just above its own accepted round, and
+        // fetching the fleet's newest instead only produces blocks that suspend.
+        let local_round = dag_state.read().highest_accepted_round();
+        let exact_selected = select_exact_requests(&pending_exact, exact_budget, local_round);
         // How far the selection falls short of the newest registered request. Zero
         // means every recently parked block has its fetch in flight; a positive value
         // is the count of rounds whose parked blocks are waiting on nothing.
@@ -1420,31 +1460,16 @@ where
                 break;
             };
             let peer_name = peer.hostname(&context);
-            // Take round-robin across this peer's authorities, preserving each
-            // authority's own order — registered exact requests first, then its
-            // lowest-round ordinary ancestors. Re-sorting the whole batch instead
-            // would truncate to the globally lowest rounds, which discards the
-            // exact requests selected for their recency and lets one lagging
-            // authority consume the entire per-peer budget. Each authority still
-            // gets its oldest blocks fetched first, so ancestry repair progresses.
-            let mut cursors: Vec<_> = batch.iter().map(|refs| refs.iter()).collect();
-            let mut block_refs = BTreeSet::new();
-            'fill: loop {
-                let mut progressed = false;
-                for cursor in &mut cursors {
-                    let Some(block_ref) = cursor.next() else {
-                        continue;
-                    };
-                    progressed = true;
-                    block_refs.insert(*block_ref);
-                    if block_refs.len() >= context.parameters.max_blocks_per_fetch {
-                        break 'fill;
-                    }
-                }
-                if !progressed {
-                    break;
-                }
-            }
+            // Fetch from the lowest round missing blocks to ensure progress.
+            // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
+            let block_refs = batch
+                .iter()
+                .flatten()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(context.parameters.max_blocks_per_fetch)
+                .collect::<BTreeSet<_>>();
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
             if let Some(blocks_guard) =
@@ -1577,24 +1602,18 @@ mod tests {
         transaction_vote_tracker::TransactionVoteTracker,
     };
 
-    /// A parked minimal block is unblocked by fetching the ref it waits on, so a
-    /// backlog larger than one pass's budget must not permanently exclude the newest
-    /// refs — those are the ones holding up current frontiers, and a ref that is
-    /// never selected waits until GC no matter how many passes run.
-    ///
-    /// Shape taken from a 125-node testnet incident: ~12,000 registered refs spread
-    /// over a GC window of 60 rounds, against a production budget of 3,000.
-    #[tokio::test]
-    async fn exact_request_selection_reaches_recent_rounds() {
-        const AUTHORITIES: u32 = 131;
-        const GC_DEPTH: u32 = 60;
-        const TIP: u32 = 1_000;
-        // Production budget: 2 * MAX_PERIODIC_SYNC_PEERS * max_blocks_per_fetch / 2.
-        const BUDGET: usize = 3_000;
+    const SELECT_AUTHORITIES: u32 = 131;
+    const SELECT_GC_DEPTH: u32 = 60;
+    const SELECT_TIP: Round = 1_000;
+    /// Production budget: 2 * MAX_PERIODIC_SYNC_PEERS * max_blocks_per_fetch / 2.
+    const SELECT_BUDGET: usize = 3_000;
 
+    /// A backlog spanning the GC window, larger than one pass's budget — the shape a
+    /// 125-node testnet reached at 12K-68K registered refs.
+    fn backlog_spanning_gc_window() -> BTreeSet<BlockRef> {
         let mut pending = BTreeSet::new();
-        for round in (TIP - GC_DEPTH)..=TIP {
-            for authority in 0..AUTHORITIES {
+        for round in (SELECT_TIP - SELECT_GC_DEPTH)..=SELECT_TIP {
+            for authority in 0..SELECT_AUTHORITIES {
                 pending.insert(BlockRef::new(
                     round,
                     AuthorityIndex::new_for_test(authority),
@@ -1602,49 +1621,69 @@ mod tests {
                 ));
             }
         }
-        assert!(
-            pending.len() > BUDGET,
-            "test must exercise a backlog larger than the budget: {} refs vs budget {BUDGET}",
-            pending.len()
-        );
+        assert!(pending.len() > SELECT_BUDGET);
+        pending
+    }
 
-        let selected = select_exact_requests(&pending, BUDGET);
-        assert_eq!(selected.len(), BUDGET, "the whole budget must be spent");
-        let highest_selected = selected
-            .iter()
-            .map(|block_ref| block_ref.round)
-            .max()
-            .expect("selection must not be empty");
-        let rounds_behind_tip = TIP - highest_selected;
+    /// A node AT the tip is unblocked by the newest refs: its parked blocks wait on
+    /// current frontiers. An oldest-first prefix never reaches them, and the prefix
+    /// does not rotate between passes, so those refs are fetched by no pass at all.
+    #[tokio::test]
+    async fn exact_request_selection_reaches_recent_rounds_at_tip() {
+        let pending = backlog_spanning_gc_window();
+        let selected = select_exact_requests(&pending, SELECT_BUDGET, SELECT_TIP);
 
-        // The newest rounds are what current frontiers wait on. Reaching them is
-        // what keeps park residency bounded; an oldest-first prefix never does,
-        // because the prefix does not rotate between passes.
-        assert!(
-            rounds_behind_tip <= 5,
-            "exact-request selection never reaches recent rounds: highest selected round is \
-             {highest_selected}, {rounds_behind_tip} rounds behind the tip of {TIP}. Refs \
-             registered above that round are not fetched by any pass and their parked blocks \
-             wait until GC."
-        );
-
-        // A node that is genuinely behind still has to repair its oldest history,
-        // so newest-first must not consume the entire budget.
-        let lowest_selected = selected
-            .iter()
-            .map(|block_ref| block_ref.round)
-            .min()
-            .expect("selection must not be empty");
         assert_eq!(
-            lowest_selected,
-            TIP - GC_DEPTH,
-            "selection abandoned the oldest refs: a lagging node must keep repairing history"
+            selected.len(),
+            SELECT_BUDGET,
+            "the whole budget must be spent"
         );
-
-        // Selection is handed to per-authority batching, which relies on ascending order.
+        let highest = selected.iter().map(|r| r.round).max().unwrap();
+        assert!(
+            SELECT_TIP - highest <= 5,
+            "selection never reaches recent rounds: highest selected is {highest}, {} rounds \
+             behind the tip of {SELECT_TIP}; refs above it are fetched by no pass and their \
+             parked blocks wait until GC",
+            SELECT_TIP - highest
+        );
         assert!(
             selected.windows(2).all(|w| w[0] < w[1]),
-            "selection must be sorted and free of duplicates"
+            "selection must be sorted and free of duplicates for per-authority batching"
+        );
+    }
+
+    /// A node that has fallen BEHIND is unblocked by the refs just above its own
+    /// accepted round, not the fleet's newest — blocks at the fleet tip arrive with
+    /// ancestors it does not have and immediately suspend, unblocking nothing.
+    ///
+    /// Regression for a testnet validator that sat ~500 rounds back fetching 51
+    /// blocks/s into 35K suspended blocks and never closed the gap, while on builds
+    /// that selected oldest-first it ran ahead of the fleet median.
+    #[tokio::test]
+    async fn exact_request_selection_serves_a_lagging_node_its_own_frontier() {
+        let pending = backlog_spanning_gc_window();
+        // 500 rounds behind puts the local frontier below every registered ref.
+        let local_round = SELECT_TIP - 500;
+        let selected = select_exact_requests(&pending, SELECT_BUDGET, local_round);
+
+        assert_eq!(
+            selected.len(),
+            SELECT_BUDGET,
+            "the whole budget must be spent"
+        );
+        let lowest = selected.iter().map(|r| r.round).min().unwrap();
+        assert_eq!(
+            lowest,
+            SELECT_TIP - SELECT_GC_DEPTH,
+            "a lagging node must be served the oldest refs first — those are the ones \
+             adjacent to its own frontier, and the only ones whose ancestors it can have"
+        );
+        // The whole budget must go to its frontier, not be split with the fleet tip.
+        let highest = selected.iter().map(|r| r.round).max().unwrap();
+        assert!(
+            highest < SELECT_TIP,
+            "a lagging node spent budget on fleet-tip refs (up to {highest}); those arrive \
+             with missing ancestors and suspend without unblocking anything"
         );
     }
 
