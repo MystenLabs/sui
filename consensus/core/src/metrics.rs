@@ -671,7 +671,7 @@ impl NodeMetrics {
                 "minimal_block_park_residency_rounds",
                 "Local accepted rounds elapsed while a minimal block stayed parked, by terminal outcome. Round-normalised residency is what predicts stability: healthy fleets sit under one round, collapsing ones above ten",
                 &["outcome"],
-                vec![0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0, 34.0, 55.0, 89.0],
+                vec![0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0, 34.0, 55.0, 89.0, 144.0, 233.0],
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(
