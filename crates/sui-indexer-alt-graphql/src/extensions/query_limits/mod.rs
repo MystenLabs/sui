@@ -42,12 +42,13 @@ mod visitor;
 pub(crate) struct QueryDepth(Arc<AtomicU32>);
 
 impl QueryDepth {
-    pub(crate) fn set(&self, depth: u32) {
-        self.0.store(depth, Ordering::Relaxed);
-    }
-
     pub(crate) fn get(&self) -> u32 {
         self.0.load(Ordering::Relaxed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(depth: u32) -> Self {
+        Self(Arc::new(AtomicU32::new(depth)))
     }
 }
 
@@ -211,8 +212,8 @@ impl Extension for QueryLimitsCheckerExt {
 
         // Stash the validated depth so the subscription handler can add its depth surcharge to each
         // payload's throttle cost.
-        if let Some(depth) = ctx.data_opt::<QueryDepth>() {
-            depth.set(input.depth);
+        if let Some(QueryDepth(depth)) = ctx.data_opt() {
+            depth.store(input.depth, Ordering::Relaxed);
         }
 
         if let Some(ShowUsage(_)) = ctx.data_opt() {

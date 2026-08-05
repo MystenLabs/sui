@@ -190,8 +190,7 @@ mod tests {
     async fn wrap_includes_depth_surcharge() {
         // 4-node payloads at query depth 3 each cost 4 + 3 * 2 = 10, so at 20 nodes/sec the gap
         // between deliveries is 10 / 20 = 0.5s.
-        let query_depth = QueryDepth::default();
-        query_depth.set(3);
+        let query_depth = QueryDepth::new_for_test(3);
         let payload = value!({ "a": 1, "b": 2, "c": 3 }); // 4 output nodes
         let responses = vec![Response::new(payload.clone()), Response::new(payload)];
         let mut paced =
