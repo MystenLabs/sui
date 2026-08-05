@@ -9,7 +9,7 @@ const client = new SuiGrpcClient({
 	baseUrl: 'https://fullnode.mainnet.sui.io:443',
 	network: 'mainnet',
 });
-const adminKeypair = new Ed25519Keypair();
+const adminKeypair = Ed25519Keypair.fromSecretKey(process.env.ADMIN_SECRET_KEY!);
 const denyCapId = '0xDENY_CAP_ID';
 
 // docs::#batch-screening

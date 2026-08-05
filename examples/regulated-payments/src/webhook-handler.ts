@@ -34,7 +34,7 @@ async function handleProviderWebhook(req: Request): Promise<Response> {
 
 	// Step 2: Verify onchain state.
 	const txDigest = payload.transactionDigest;
-	const txResult = await suiClient.core.getTransaction({
+	const txResult = await suiClient.getTransaction({
 		digest: txDigest,
 		include: { effects: true },
 	});
@@ -45,7 +45,7 @@ async function handleProviderWebhook(req: Request): Promise<Response> {
 	}
 
 	// Verify the recipient received at least the expected amount.
-	const { balance } = await suiClient.core.getBalance({
+	const { balance } = await suiClient.getBalance({
 		owner: payload.recipientAddress,
 		coinType: payload.coinType,
 	});

@@ -9,7 +9,7 @@ const client = new SuiGrpcClient({
 	baseUrl: 'https://fullnode.mainnet.sui.io:443',
 	network: 'mainnet',
 });
-const userKeypair = new Ed25519Keypair();
+const userKeypair = Ed25519Keypair.fromSecretKey(process.env.USER_SECRET_KEY!);
 const providerCollectionAddress = '0xPROVIDER_COLLECTION';
 const withdrawalAmount = 1_000_000_000n;
 

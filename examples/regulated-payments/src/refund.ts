@@ -9,7 +9,7 @@ const client = new SuiGrpcClient({
 	baseUrl: 'https://fullnode.mainnet.sui.io:443',
 	network: 'mainnet',
 });
-const treasuryKeypair = new Ed25519Keypair();
+const treasuryKeypair = Ed25519Keypair.fromSecretKey(process.env.TREASURY_SECRET_KEY!);
 const coinType = '0x2::sui::SUI';
 const refundAmount = 500_000_000n;
 const userAddress = '0xUSER_ADDRESS';
