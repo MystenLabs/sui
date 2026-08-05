@@ -4,15 +4,27 @@
 import type express from 'express';
 
 // Placeholder types for the agent sponsorship example
-declare function verifyApiKey(apiKey: string): Promise<{ address: string; dailyGasBudget: number } | null>;
+declare function verifyApiKey(
+	apiKey: string,
+): Promise<{ address: string; dailyGasBudget: number } | null>;
 declare function getAgentDailySpend(address: string): Promise<number>;
-declare function sponsorTransaction(txBytes: string, sender: string): Promise<{
-    txBytes: string;
-    sponsorSignature: string;
-    sponsorAddress: string;
-    gasCoinId: string;
-    digest: string;
+declare function sponsorTransaction(
+	txBytes: string,
+	sender: string,
+): Promise<{
+	txBytes: string;
+	sponsorSignature: string;
+	sponsorAddress: string;
+	gasCoinId: string;
+	digest: string;
 }>;
+
+class ValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'ValidationError';
+	}
+}
 
 // Keep in sync with GAS_BUDGET in server.ts.
 const GAS_BUDGET = 10_000_000;
@@ -41,9 +53,13 @@ async function handleAgentSponsor(req: express.Request, res: express.Response) {
 	try {
 		res.json(await sponsorTransaction(txBytes, agent.address));
 	} catch (error) {
-		res.status(400).json({ error: (error as Error).message });
+		if (error instanceof ValidationError) {
+			res.status(400).json({ error: error.message });
+		} else {
+			res.status(500).json({ error: 'Internal server error' });
+		}
 	}
 }
 // docs::/#agent-sponsor
 
-export { handleAgentSponsor };
+export { handleAgentSponsor, ValidationError };
