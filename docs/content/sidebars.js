@@ -382,8 +382,6 @@ export default {
       link: { type: 'doc', id: 'onchain-finance/payments' },
       items: [
         'onchain-finance/choose-payments-model',
-        'onchain-finance/recipient-resolution',
-        'onchain-finance/payment-security',
         'onchain-finance/payment-kit',
         'onchain-finance/payment-intents',
         {
@@ -791,7 +789,6 @@ suiStackSidebar: [
 		label: 'Validators',
 		link: { type: 'doc', id: 'operators/validator/index', },
 		items: [
-      'operators/validator/validator-setup',
       'operators/validator/validator-config',
       'operators/validator/validator-tasks',
       'operators/validator/node-tools',
