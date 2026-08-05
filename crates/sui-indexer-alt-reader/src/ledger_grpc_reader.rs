@@ -54,15 +54,17 @@ pub struct CheckpointedTransaction {
 pub struct LedgerGrpcReader {
     client: Client,
     timeout: Option<Duration>,
+    max_batch_get_transactions: usize,
+    max_batch_get_objects: usize,
 }
 
 /// Maximum number of transaction digests `LedgerGrpcReader` will put in a single
 /// `BatchGetTransactions` call, matching the ledger gRPC/KV-RPC service's own hard cap.
-pub(crate) const MAX_BATCH_GET_TRANSACTIONS: usize = 200;
+pub const MAX_BATCH_GET_TRANSACTIONS: usize = 200;
 
 /// Maximum number of object keys `LedgerGrpcReader` will put in a single `BatchGetObjects`
 /// call, matching the ledger gRPC/KV-RPC service's own hard cap.
-pub(crate) const MAX_BATCH_GET_OBJECTS: usize = 1000;
+pub const MAX_BATCH_GET_OBJECTS: usize = 1000;
 
 /// Implemented by `LedgerGrpcReader` for each key type whose `Loader::load` needs to stay under
 /// the ledger service's batch-size limit — `DataLoader`'s own `max_batch_size` is only a dispatch
@@ -159,6 +161,8 @@ impl LedgerGrpcReader {
         args: LedgerGrpcArgs,
         prefix: Option<&str>,
         registry: &Registry,
+        max_batch_get_transactions: usize,
+        max_batch_get_objects: usize,
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
         let mut client = Client::new(uri)?
@@ -172,11 +176,24 @@ impl LedgerGrpcReader {
             client = client.with_response_headers_timeout(timeout);
         }
 
-        Ok(Self { client, timeout })
+        Ok(Self {
+            client,
+            timeout,
+            max_batch_get_transactions,
+            max_batch_get_objects,
+        })
     }
 
     pub(crate) fn as_data_loader(&self) -> DataLoader<Self> {
         DataLoader::new(self.clone(), tokio::spawn)
+    }
+
+    pub(crate) fn max_batch_get_transactions(&self) -> usize {
+        self.max_batch_get_transactions
+    }
+
+    pub(crate) fn max_batch_get_objects(&self) -> usize {
+        self.max_batch_get_objects
     }
 
     pub async fn checkpoint_watermark(&self) -> anyhow::Result<CheckpointSummary> {
@@ -343,6 +360,8 @@ pub(crate) mod test_support {
 
     use super::LedgerGrpcArgs;
     use super::LedgerGrpcReader;
+    use super::MAX_BATCH_GET_OBJECTS;
+    use super::MAX_BATCH_GET_TRANSACTIONS;
 
     /// Starts a [`MockLedgerServer`] and constructs a [`LedgerGrpcReader`]
     /// pointed at it. Shared by every loader's chunking test.
@@ -354,6 +373,8 @@ pub(crate) mod test_support {
             LedgerGrpcArgs::default(),
             None,
             &Registry::new(),
+            MAX_BATCH_GET_TRANSACTIONS,
+            MAX_BATCH_GET_OBJECTS,
         )
         .await
         .expect("construct LedgerGrpcReader");
