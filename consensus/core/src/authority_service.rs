@@ -471,6 +471,9 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // and this node has proposed blocks before, at least one block should be sent to the peer
         // to help with liveness.
         let peer_hostname = self.context.committee.authority(peer).hostname.clone();
+        // Highest own round handed to this peer by the replay below; seeds gap detection on the
+        // live branch so a hole between the replay and the first live block is also repaired.
+        let mut replay_high_round: Round = 0;
 
         let past_proposed_blocks = {
             let dag_state = self.dag_state.read();
@@ -497,6 +500,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 .subscription_replay_blocks
                 .with_label_values(&[peer_hostname.as_str()])
                 .observe(proposed_blocks.len() as f64);
+            replay_high_round = proposed_blocks.iter().map(|b| b.round()).max().unwrap_or(0);
 
             let replay_context = self.context.clone();
             let replay_hostname = peer_hostname.clone();
@@ -529,13 +533,47 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         let dispatch_context = self.context.clone();
+        let catchup_dag_state = self.dag_state.clone();
+        let own_index = self.context.own_index;
+        // Round of the last own block handed to this peer, so a gap left by broadcast lag can be
+        // detected and repaired from cache. Own blocks are one per round, so any jump of more than
+        // one round means the intervening blocks were dropped for this subscriber.
+        let mut last_yielded_round: Round = replay_high_round;
         Ok(Box::pin(past_proposed_blocks.chain(
             broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
                     items.len() <= MAX_BLOCKS_PER_POLL,
                     "Too many blocks received from broadcast"
                 );
-                for item in &items {
+                let mut to_send: Vec<ExtendedBlock> = Vec::with_capacity(items.len());
+                for item in items {
+                    let round = item.block.round();
+                    if last_yielded_round > 0 && round > last_yielded_round + 1 {
+                        // This subscriber fell behind the broadcast buffer. Rather than leave a
+                        // hole for it to discover and fetch, replay the missed own blocks from
+                        // the DagState cache, which is sized to the same depth as the buffer.
+                        let missed = catchup_dag_state.read().get_cached_blocks_in_range(
+                            own_index,
+                            last_yielded_round + 1,
+                            round,
+                            usize::MAX,
+                        );
+                        dispatch_context
+                            .metrics
+                            .node_metrics
+                            .subscription_catchup_blocks
+                            .with_label_values(&[peer_hostname.as_str()])
+                            .inc_by(missed.len() as u64);
+                        to_send.extend(missed.into_iter().map(|block| ExtendedBlock {
+                            block,
+                            excluded_ancestors: vec![],
+                            compressed_once: Default::default(),
+                        }));
+                    }
+                    last_yielded_round = round;
+                    to_send.push(item);
+                }
+                for item in &to_send {
                     let age_ms = dispatch_context
                         .clock
                         .timestamp_utc_ms()
@@ -552,7 +590,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .node_metrics
                     .subscription_serialize_latency
                     .clone();
-                stream::iter(items.into_iter().map(move |b| {
+                stream::iter(to_send.into_iter().map(move |b| {
                     let t = std::time::Instant::now();
                     let s = ExtendedSerializedBlock::from(b);
                     ser_hist.observe(t.elapsed().as_secs_f64());
@@ -1733,8 +1771,11 @@ mod tests {
             .await
             .unwrap();
 
+        // Blocks are proposed while the subscription is already live: each is added to DagState
+        // (as Core does) and broadcast, so the cache holds what the buffer drops.
         for round in 0..BLOCKS_SENT {
             let block = VerifiedBlock::new_for_test(TestBlock::new(10 + round as u32, 0).build());
+            dag_state.write().accept_block(block.clone());
             tx_block_broadcast
                 .send(ExtendedBlock {
                     block,
@@ -1763,21 +1804,29 @@ mod tests {
             .with_label_values(&[peer_hostname.as_str()])
             .get();
 
+        let repaired = context
+            .metrics
+            .node_metrics
+            .subscription_catchup_blocks
+            .with_label_values(&[peer_hostname.as_str()])
+            .get();
+
         assert!(
             dropped > 0,
             "a subscriber that fell behind the {BROADCAST_CAPACITY}-block buffer should have \
              blocks dropped, but the lagged counter is zero"
         );
-        // 1 replayed block + at most the buffer's worth of live blocks.
+        // The gap left by the broadcast buffer is repaired from cache, so the peer still receives
+        // every block despite the drop -- it does not have to discover the hole and fetch.
         assert!(
-            delivered < BLOCKS_SENT,
-            "expected fewer than {BLOCKS_SENT} blocks delivered, got {delivered}"
+            repaired > 0,
+            "dropped blocks should be replayed from cache, but the catch-up counter is zero"
         );
         assert_eq!(
-            dropped + delivered - 1,
+            delivered - 1,
             BLOCKS_SENT,
-            "every broadcast block should be either delivered or counted as dropped \
-             (delivered={delivered} including 1 replayed, dropped={dropped})"
+            "every broadcast block should reach the peer, via live delivery or gap repair \
+             (delivered={delivered} including 1 replayed, dropped={dropped}, repaired={repaired})"
         );
     }
 }
