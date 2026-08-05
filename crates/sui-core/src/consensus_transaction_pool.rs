@@ -351,7 +351,16 @@ impl ConsensusTransactionPool {
             }
             .into());
         }
-        let (serialized, total_bytes, keys) = self.serialize_and_validate(transactions)?;
+        // Size limits cannot be relaxed for system transactions: peers enforce the
+        // same limits on every transaction in a received block, and an over-budget
+        // entry at the head of the FIFO system lane would wedge the lane.
+        let (serialized, total_bytes, keys) = match self.serialize_and_validate(transactions) {
+            Ok(validated) => validated,
+            Err(error) => {
+                debug_fatal!("system transaction failed validation: {error}");
+                return Err(error);
+            }
+        };
         let entry = PoolEntry {
             transactions: serialized,
             total_bytes,
@@ -1476,6 +1485,17 @@ mod tests {
                 .to_string()
                 .contains("bundle size")
         );
+    }
+
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    #[should_panic(expected = "system transaction failed size validation")]
+    async fn oversized_system_transaction_is_an_invariant_violation() {
+        let serialized_len = u64::try_from(bcs::to_bytes(&transaction()).unwrap().len()).unwrap();
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_consensus_max_transaction_size_bytes_for_testing(serialized_len - 1);
+        let (_state, pool) = test_state_and_pool_with_protocol_config(10, config).await;
+        let _ = pool.submit(pool.epoch(), &[transaction()]);
     }
 
     #[tokio::test]
