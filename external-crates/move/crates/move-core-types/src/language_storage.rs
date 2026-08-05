@@ -6,7 +6,7 @@ use crate::{
     account_address::AccountAddress,
     gas_algebra::{AbstractMemorySize, BOX_ABSTRACT_SIZE, ENUM_BASE_ABSTRACT_SIZE},
     identifier::{IdentStr, Identifier},
-    parsing::types::{ParsedModuleId, ParsedStructType, ParsedType},
+    parsing::types::{ParsedDatatype, ParsedModuleId, ParsedType},
 };
 
 use move_proc_macros::test_variant_order;
@@ -291,7 +291,7 @@ impl FromStr for StructTag {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ParsedStructType::parse(s)?.into_struct_tag(&|_| None)
+        ParsedDatatype::parse(s)?.into_struct_tag(&|_| None)
     }
 }
 
