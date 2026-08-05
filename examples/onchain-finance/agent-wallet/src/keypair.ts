@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
 
-const client = new SuiJsonRpcClient({
-  url: getJsonRpcFullnodeUrl("testnet"),
+const client = new SuiGrpcClient({
+  baseUrl: "https://fullnode.testnet.sui.io:443",
   network: "testnet",
 });
 
