@@ -92,7 +92,7 @@ impl Context {
                 .bigtable_reader("indexer-alt-jsonrpc".to_owned(), registry)
                 .await?,
             kv_args
-                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry)
+                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
                 .await?,
             pg_loader.clone(),
         );
