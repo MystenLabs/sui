@@ -59,6 +59,47 @@ const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 /// How long commit must be stalled before periodic sync kicks in as fallback.
 const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Chooses the refs one peer is actually asked for, from that peer's authority batch.
+///
+/// This is the stage where selection becomes a wire request, and it is lossy: the
+/// batch is capped at `budget`. Sorting the whole batch and truncating — the obvious
+/// implementation — silently discards whichever refs sort late, so the exact requests
+/// the scheduler just chose can fail to be requested at all. They then stay pending
+/// and consume selector budget again on every later pass while their parked blocks
+/// keep waiting, which makes the scheduler's choice purely nominal.
+///
+/// Exact requests therefore get a reserved half of the budget rather than relying on
+/// position in a vector that a sort will discard. Both classes are spent
+/// lowest-round-first within their share, preserving the ancestry-repair ordering the
+/// ordinary path depends on.
+fn select_peer_batch(
+    batch: &[Vec<BlockRef>],
+    exact_refs: &BTreeSet<BlockRef>,
+    budget: usize,
+) -> BTreeSet<BlockRef> {
+    let mut selected: BTreeSet<BlockRef> = batch
+        .iter()
+        .flatten()
+        .filter(|block_ref| exact_refs.contains(block_ref))
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(budget / 2)
+        .collect();
+    let remaining = budget.saturating_sub(selected.len());
+    selected.extend(
+        batch
+            .iter()
+            .flatten()
+            .filter(|block_ref| !exact_refs.contains(block_ref))
+            .copied()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(remaining),
+    );
+    selected
+}
+
 /// Chooses which registered exact requests to fetch in one scheduler pass, closest
 /// to `local_round` (this node's highest accepted round) first.
 ///
@@ -1131,6 +1172,9 @@ where
             .node_metrics
             .synchronizer_exact_selection_lag_rounds
             .set(selection_lag as i64);
+        // Carried into per-peer batching, which cannot recover the classification from
+        // ordering alone: it groups by authority and rebuilds each batch as a sorted set.
+        let exact_selected_set: BTreeSet<BlockRef> = exact_selected.iter().copied().collect();
         let mut ordered_blocks = Vec::with_capacity(exact_selected.len() + missing_blocks.len());
         ordered_blocks.extend(exact_selected.iter().copied());
         ordered_blocks.extend(
@@ -1174,6 +1218,7 @@ where
                         blocks_to_fetch.clone(),
                         network_client,
                         missing_blocks,
+                        exact_selected_set,
                         dag_state,
                         peers_pool,
                     )
@@ -1379,6 +1424,11 @@ where
         network_client: Arc<SynchronizerClient<VC, OC>>,
         // Ordered: registered exact requests first, so truncation cannot starve them.
         missing_blocks: Vec<BlockRef>,
+        // The subset of `missing_blocks` that are registered exact requests. Ordering
+        // alone does not survive per-peer batching — that groups by authority and
+        // rebuilds each batch as a sorted set — so the classification is carried down
+        // explicitly and re-applied there.
+        exact_refs: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
@@ -1462,14 +1512,9 @@ where
             let peer_name = peer.hostname(&context);
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
-            let block_refs = batch
-                .iter()
-                .flatten()
-                .cloned()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .take(context.parameters.max_blocks_per_fetch)
-                .collect::<BTreeSet<_>>();
+            //
+            let block_refs =
+                select_peer_batch(batch, &exact_refs, context.parameters.max_blocks_per_fetch);
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
             if let Some(blocks_guard) =
@@ -1593,7 +1638,7 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::{
             COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
-            InflightBlocksMap, Synchronizer, select_exact_requests,
+            InflightBlocksMap, Synchronizer, select_exact_requests, select_peer_batch,
         },
     };
     use crate::{
@@ -1684,6 +1729,73 @@ mod tests {
             highest < SELECT_TIP,
             "a lagging node spent budget on fleet-tip refs (up to {highest}); those arrive \
              with missing ancestors and suspend without unblocking anything"
+        );
+    }
+
+    /// Selection only matters if the selected refs actually reach the wire. Per-peer
+    /// batching caps the request, and sorting the batch before truncating drops
+    /// whichever refs sort late — so exact requests chosen for a node's recovery can
+    /// be silently discarded, stay pending, and consume selector budget every pass
+    /// while their parked blocks wait.
+    ///
+    /// Covers the node states that differ here: a lagging node whose exact refs sort
+    /// ABOVE its ordinary ancestors (the case that would lose them), and a tip node
+    /// with a large ordinary backlog.
+    #[tokio::test]
+    async fn peer_batch_requests_the_exact_refs_that_were_selected() {
+        const PER_PEER_BUDGET: usize = 1_000;
+
+        // A lagging node: ordinary missing ancestors sit at low rounds, while the
+        // exact refs it needs sit above them. Ascending truncation would take the
+        // ordinary ones first and drop every exact ref.
+        let ordinary: Vec<BlockRef> = (0..PER_PEER_BUDGET as u32)
+            .map(|i| BlockRef::new(100 + i, AuthorityIndex::new_for_test(0), BlockDigest::MIN))
+            .collect();
+        let exact: Vec<BlockRef> = (0..200u32)
+            .map(|i| BlockRef::new(5_000 + i, AuthorityIndex::new_for_test(1), BlockDigest::MIN))
+            .collect();
+        let exact_set: BTreeSet<BlockRef> = exact.iter().copied().collect();
+        let batch = vec![ordinary.clone(), exact.clone()];
+
+        let selected = select_peer_batch(&batch, &exact_set, PER_PEER_BUDGET);
+
+        assert!(
+            selected.len() <= PER_PEER_BUDGET,
+            "per-peer budget exceeded: {}",
+            selected.len()
+        );
+        let exact_requested = exact.iter().filter(|r| selected.contains(r)).count();
+        assert_eq!(
+            exact_requested,
+            exact.len(),
+            "only {exact_requested} of {} selected exact refs were actually requested; the rest \
+             are dropped by truncation and their parked blocks keep waiting",
+            exact.len()
+        );
+        // Ordinary repair must still get the rest of the budget, lowest-round first.
+        let ordinary_requested = ordinary.iter().filter(|r| selected.contains(r)).count();
+        assert!(
+            ordinary_requested >= PER_PEER_BUDGET / 2,
+            "ordinary ancestry repair was starved: only {ordinary_requested} refs requested"
+        );
+        assert!(
+            selected.contains(&ordinary[0]),
+            "ordinary refs must still be served lowest-round first"
+        );
+
+        // A tip node with a huge ordinary backlog and few exact refs must not have its
+        // exact share stolen, and must not waste the reserved half when it is unused.
+        let few_exact: BTreeSet<BlockRef> = exact.iter().take(3).copied().collect();
+        let selected = select_peer_batch(&batch, &few_exact, PER_PEER_BUDGET);
+        assert_eq!(
+            selected.len(),
+            PER_PEER_BUDGET,
+            "budget must be fully spent"
+        );
+        assert_eq!(
+            few_exact.iter().filter(|r| selected.contains(r)).count(),
+            few_exact.len(),
+            "a small exact set must always be requested in full"
         );
     }
 
