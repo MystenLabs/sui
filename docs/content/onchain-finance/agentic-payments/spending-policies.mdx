@@ -1,0 +1,117 @@
+---
+title: Spending Policies and Mandates
+description: >-
+  Implement onchain spending caps, recipient allowlists, expiry, and revocation
+  for autonomous agents using a custom Move module on Sui.
+sidebar_label: Spending Policies
+keywords:
+  - spending mandate
+  - spending cap
+  - agent delegation
+  - allowlist
+  - revocation
+  - expiry
+  - spending policy
+  - agent authorization
+  - capability pattern
+goal:
+  description: >-
+    Reader can implement onchain spending policies for agents using a custom
+    Move module with caps, allowlists, and expiry
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Spending policies
+    stage: Authorization
+questions:
+  - How do I limit what an agent can spend on Sui?
+  - How do I implement spending caps for autonomous agents on Sui?
+  - How do I revoke an agent's spending authority on Sui?
+answer: >-
+  Sui does not ship a built-in spending delegation module. You implement
+  spending mandates as custom Move objects that define per-transaction limits,
+  total caps, recipient allowlists, and time-based expiry, enforced onchain so
+  the agent cannot exceed its bounds even if compromised.
+---
+
+An agent that can sign transactions needs guardrails. A spending mandate is an onchain capability object that limits how an agent may spend coins it already controls or receives in a transaction. The mandate defines per-transaction limits, total spend limits, allowed recipients, and expiry. The Move module enforces those bounds, so even a compromised backend cannot spend outside the mandate.
+
+A spending mandate is not an ERC-20-style allowance over the owner's wallet. It does not let the agent pull coins from the owner's address. The agent must present both the mandate object and the payment coin in the PTB. If you need owner-funded delegated spending, use an escrow or vault design where funds are deposited into an object controlled by the mandate.
+
+## Why a custom module
+
+Sui does not ship a built-in spending delegation module. The [closed-loop Token](/onchain-finance/closed-loop-token/spending) system enforces policies on `Token` types, but most payment agents work with `Coin<SUI>` or `Coin<USDC>` (standard coins that are not subject to `TokenPolicy` rules).
+
+In Sui's object model, delegation works differently than ERC-20 allowances. Instead of granting a spender permission over your account balance, you create a capability object (a `SpendingMandate`), optionally fund the agent separately, and transfer the mandate to the agent. The agent presents this object when executing payments. The Move module validates the mandate's constraints before allowing the transfer.
+
+## Move module
+
+The following module implements a spending mandate with agent binding, per-transaction limits, a total spending cap, a recipient allowlist, and time-based expiry.
+
+<ImportContent source="examples/onchain-finance/spending-policies/sources/spending_mandate.move" mode="code" tag="spending_mandate" />
+
+## Creating a mandate (owner side)
+
+The owner creates the mandate and receives a `MandateOwnerCap` for later administration. The function automatically transfers the mandate to the agent's address.
+
+## Executing a spend (agent side)
+
+The agent owns the `SpendingMandate` object. To execute a spend, the agent builds a PTB that passes the mandate, the payment coin, the recipient, and the `Clock` object to `execute_spend`.
+
+The payment coin must be an input the agent can use in the transaction. The mandate does not withdraw from the owner's wallet. It only validates that this spend is within the mandate's bounds.
+
+## Expiry and revocation
+
+Use expiry for automatic shutdown and revocation for owner-triggered shutdown.
+:::tip Emergency kill-switch
+
+For an emergency stop that does not require agent cooperation, use a shared `AdminConfig` object with a paused flag. The `execute_spend` function checks this shared object before processing. This gives the owner an independent onchain kill-switch even if the agent will not present the mandate object.
+
+:::
+### Time-based expiry
+
+The mandate includes an `expires_at_ms` timestamp. The `execute_spend` function checks `clock.timestamp_ms() < expires_at_ms` before every spend. Once the mandate expires, the agent can no longer use it. The owner does not need to take any action.
+
+### Owner-initiated revocation
+
+To revoke a mandate before it expires, the owner calls `revoke_mandate` with the `MandateOwnerCap` and the `SpendingMandate` object. Because the agent owns the mandate object, the agent must make that object available in the PTB. In practice, this means the owner asks the agent to co-sign a transaction that destroys the mandate.
+
+If the agent is unresponsive or compromised, the owner cannot forcibly retrieve this address-owned mandate object. The mandate will still expire at `expires_at_ms`, so use short expiry windows for higher-risk agents.
+
+
+### Renewing a mandate
+
+To renew a mandate, create a new mandate with a fresh expiry. To increase the total cap on the existing mandate, the owner calls `update_cap` with the `MandateOwnerCap` and the current `SpendingMandate` object.
+
+Because the agent owns the mandate object, updating the cap also requires the mandate object to be included in the PTB. There is no `extend_expiry` function by design. Creating a new mandate with a fresh expiry forces the owner to consciously re-authorize the agent.
+
+## Comparison with TokenPolicy
+
+| | **`SpendingMandate` (custom)** | **TokenPolicy (framework)** |
+|---|---|---|
+| Asset type | Any `Coin<T>` | `Token<T>` only (closed-loop) |
+| Enforcement | Your Move module | Framework `token` module |
+| Scope | Per-agent delegation | Per-token-type rules |
+| Use case | Bounded agent spending for coins the agent can present | Loyalty points, in-game currency |
+| Configurable rules | You define them | Pluggable rule witnesses |
+
+Use `SpendingMandate` when your agent transacts with standard coins (SUI, USDC). Use `TokenPolicy` when you control the token type and want framework-level rule enforcement. See [Closed-Loop Token Spending](/onchain-finance/closed-loop-token/spending) for details.
+
+## Testing the mandate
+
+<ImportContent source="examples/onchain-finance/spending-policies/sources/snippet_1.move" mode="code" tag="mandate-tests" />

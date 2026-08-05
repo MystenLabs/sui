@@ -1,0 +1,166 @@
+---
+title: Spot Trading Workflow
+sidebar_label: Spot Trading Workflow
+description: >-
+  Hands-on DeepBook spot walkthrough on Sui Testnet: create a BalanceManager,
+  deposit, place a limit order, read status and fills, fill your own order,
+  cancel, and withdraw, with real transactions to observe at each step.
+keywords:
+  - deepbook workflow
+  - spot trading
+  - balance manager
+  - limit order
+  - self matching
+  - testnet
+  - deepbook sdk
+goal:
+  description: >-
+    Reader completes a full DeepBook spot order lifecycle on Testnet and
+    observes the onchain result of each step.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I place a limit order on DeepBook with the SDK?
+  - How do I read DeepBook order status and fills?
+  - How do I cancel a DeepBook order and withdraw?
+  - What does the self-matching option do?
+answer: >-
+  Create and share a BalanceManager, deposit assets, then place a limit order
+  with placeLimitOrder. Read status with accountOpenOrders and getOrder, and
+  fills through the manager's settled balances. Cancel with cancelOrder and
+  withdraw with withdrawAllFromManager. The SDK allows self-matching by default,
+  so a taker order can fill your own resting maker order.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Run a spot trading workflow
+    stage: DeFi SDK
+---
+
+Run a complete DeepBook spot order lifecycle on Sui Testnet with real transactions: create a `BalanceManager`, deposit, place a resting limit order, read its status, cancel it, then place a maker order and fill it with your own taker order, and withdraw. Each onchain step lists what to observe, so the page doubles as a verification checklist.
+
+It uses the `DEEP_SUI` pool, which you can fund by finishing the [Fees and Funding](/onchain-finance/deepbook/deepbookv3/fees-and-funding) flow (Testnet SUI plus DEEP). The samples live in the `examples/deepbook-spot` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`, and reference pools and coins by SDK key rather than hardcoding onchain IDs.
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] A current CLI: run `suiup update sui`, then `sui --version` to confirm it (a stale CLI causes version-skew errors).
+- [x] Testnet SUI and DEEP on your address, from [Fees and Funding](/onchain-finance/deepbook/deepbookv3/fees-and-funding#obtain-testnet-deep-usdc-and-sui).
+- [x] The SDK installed: `npm install @mysten/deepbook-v3 @mysten/sui`.
+</TabItem>
+</Tabs>
+
+## Set up the client
+
+The client references pools and coins by SDK key. Read-only calls work without a manager; trading needs one.
+
+<ImportContent source="examples/deepbook-spot/src/client.ts" mode="code" tag="client" />
+
+## Set up a `BalanceManager`
+
+Create one `BalanceManager` and reuse it across runs. It holds your deposited balances and is the account every order trades from. Creating a new manager each run leaves orphaned shared objects and confuses any step that lists your managers, so reuse an existing manager and create only when you have none.
+
+Discover a manager the indexer knows for your address:
+
+<ImportContent source="examples/deepbook-spot/src/manager.ts" mode="code" tag="find-manager" />
+
+If that returns nothing (you have never created one, or the indexer has not caught up), create and share one, then save the returned object ID so later runs reuse it:
+
+<ImportContent source="examples/deepbook-spot/src/create-manager.ts" mode="code" tag="create-manager" />
+
+**Observe:** on creation, the effects contain a created shared object whose type ends in `BalanceManager`. Read its object ID from the effects, save it, and pass it to the client as a named manager.
+
+## Deposit assets
+
+Deposit the asset you plan to trade. This workflow sells DEEP, so deposit DEEP.
+
+<ImportContent source="examples/deepbook-spot/src/deposit.ts" mode="code" tag="deposit" />
+
+Size the amount to your wallet balance. `depositIntoManager` sources coins with `coinWithBalance`, which fails at build time if you request more than you hold:
+
+<ImportContent source="examples/deepbook-spot/src/deposit.ts" mode="code" tag="sized-deposit" />
+
+**Observe:** `checkManagerBalance('MANAGER_1', 'DEEP')` returns the deposited amount. Top up only when the manager holds less than the run needs, so re-runs do not keep depositing.
+
+:::info
+
+`DEEP_SUI` is a whitelisted pool, so it charges no trading fee and deducts no DEEP. The `payWithDeep` flag has no effect here. On a fee-paying pool, the pool deducts DEEP from your manager on each fill, sized by its floating DEEP price, so keep DEEP in the manager. See [How the DEEP fee is sized](/onchain-finance/deepbook/deepbookv3/fees-and-funding#how-the-deep-fee-is-sized) and [Pay fees in DEEP or the input token](/onchain-finance/deepbook/deepbookv3/fees-and-funding#pay-fees-in-deep-or-the-input-token).
+
+:::
+
+## Place a limit order
+
+Place a resting maker ask. `POST_ONLY` guarantees the order rests instead of taking: if it would cross the book, the pool does not place it, so you never pay a taker fee by accident. Price and quantity must respect the pool's tick size and lot size (`DEEP_SUI`: tick `0.00001`, lot `1`, minimum size `10` DEEP). The `clientOrderId` is your own tag for the order: the SDK types it as a string, but the contract encodes it as `u64`, so pass a numeric string such as a timestamp, not a label like `order-1`.
+
+<ImportContent source="examples/deepbook-spot/src/place-order.ts" mode="code" tag="place-maker" />
+
+**Observe:** the transaction emits an `OrderPlaced` event, and the order rests on the book.
+
+## Read status and fills
+
+Read the manager's open orders and account state. Open orders list resting order IDs, `getOrder` returns each order's `quantity` and `filled_quantity`, and `account` returns settled and locked balances. A fill moves funds into settled balances until you withdraw them.
+
+<ImportContent source="examples/deepbook-spot/src/read-orders.ts" mode="code" tag="read-orders" />
+
+**Observe:** the order appears in `openOrderIds` with `filled_quantity` 0, because it rests unfilled.
+
+## Cancel the order
+
+Cancel the resting order by its ID. Cancelling returns the order's locked funds to the manager's settled balances.
+
+<ImportContent source="examples/deepbook-spot/src/cancel-order.ts" mode="code" tag="cancel" />
+
+**Observe:** the transaction emits an `OrderCanceled` event, and the order no longer appears in `accountOpenOrders`.
+
+## Fill your own order
+
+To watch a fill settle, place a fresh maker ask, then place a taker bid that crosses it. Because both orders belong to the same manager, this is a self-trade.
+
+:::caution
+
+The SDK defaults `selfMatchingOption` to `SELF_MATCHING_ALLOWED`, so a taker order fills your own resting maker orders with no warning. To refuse trading against yourself, pass `CANCEL_TAKER` (abort the taker) or `CANCEL_MAKER` (cancel the resting maker). This step sets `SELF_MATCHING_ALLOWED` on purpose to fill the maker order you just placed.
+
+:::
+
+<ImportContent source="examples/deepbook-spot/src/place-order.ts" mode="code" tag="place-taker" />
+
+**Observe:** after the taker order, the maker order leaves `accountOpenOrders` because it filled fully, and the account's `taker_volume` and `maker_volume` both increase by the traded quantity. Because this is a self-trade at one price, the settled balances net to about zero (you sold and bought the same amount), so the fill shows up in the volumes rather than the balances.
+
+## Withdraw
+
+Funds you deposit or earn live in the manager, a shared object, until you withdraw them. Withdraw the settled balances back to your wallet.
+
+<ImportContent source="examples/deepbook-spot/src/withdraw.ts" mode="code" tag="withdraw-spot" />
+
+**Observe:** your wallet balance increases and the manager's balance for that coin returns to 0.
+
+### Find stranded funds
+
+If a later deposit fails for insufficient funds even though you funded the key, the funds are usually sitting in another manager, not lost, because each manager is a shared object that keeps what you deposit. List the managers you have created (persist each ID when you create it, or scan your creation transactions with `suix_queryTransactionBlocks` filtered by `FromAddress`) and check their balances:
+
+<ImportContent source="examples/deepbook-spot/src/manager.ts" mode="code" tag="report-managers" />
+
+Withdraw each non-empty manager with `withdrawAllFromManager`, then reuse one manager going forward so funds stop fragmenting across orphans.
+
+## Troubleshooting
+
+For environment and funding failures (faucet rate limits, stale RPC URL, CLI version skew, gas-budget sizing, waiting for finality, empty-book zero-fill), see the [Fees and Funding troubleshooting](/onchain-finance/deepbook/deepbookv3/fees-and-funding#troubleshooting). Order-specific points:
+
+- **Order below minimum or off-tick:** an order smaller than the pool's minimum size, or priced off its tick size, is rejected. Read the pool's `minSize`, `lotSize`, and `tickSize` with `poolBookParams` and round to them.
+- **`POST_ONLY` returns nothing:** a `POST_ONLY` order that would cross the book is not placed, and returns no order rather than aborting. Price it away from the opposite side of the book.
+- **A taker order filled your own resting order:** the SDK allows self-matching by default. Set `selfMatchingOption` to `CANCEL_TAKER` or `CANCEL_MAKER` if that is not what you want.
+- **`Insufficient balance of <coin> ... Required X, Available Y`:** the friendly build-time error from `coinWithBalance` when a deposit or swap requests more of a coin than the wallet holds. Size the amount to your balance. Contrast it with `InsufficientCoinBalance`, the raw simulation error you get when the amounts plus the gas budget together exceed your balance.
+- **Every run mints a new manager:** you are not reusing an existing `BalanceManager`. Discover or persist the ID and create only when absent, as in [Set up a BalanceManager](#set-up-a-balancemanager).
+- **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.

@@ -1,0 +1,125 @@
+---
+title: Address Balances
+description: >-
+  Address balances introduce a canonical balance system for fungible assets tied
+  to Sui addresses, replacing coin-selection complexity with a single per-address
+  accumulator value.
+keywords:
+  - address balances
+  - accumulator
+  - coin objects
+  - funds withdrawal
+  - balance transfer
+  - gas payment
+  - SIP-58
+  - fungible assets
+  - settlement
+goal:
+  description: >-
+    Reader understands the accumulator model, how address balances differ from
+    coin objects, and when to use each
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 200
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Address balances
+    stage: Wallets & Funding
+questions:
+  - What are address balances on Sui?
+  - How does the accumulator model work on Sui?
+  - What is the difference between coin objects and address balances?
+  - How does gas payment work with address balances?
+  - What is SIP-58?
+  - When should I use coin objects vs address balances?
+answer: >-
+  Address balances introduce a canonical balance system for fungible assets tied
+  to Sui addresses. The accumulator model maintains one value per (address,
+  coin type) pair, eliminating coin selection and enabling stateless transaction
+  construction.
+---
+
+Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.
+
+For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
+
+## How address balances work
+
+Previously, Sui computed balances by summing the values of all `Coin<T>` objects owned by an address. Transferring funds required selecting specific coin objects, merging them if necessary, splitting the desired amount, and handling the remainder. This created complexity for wallets and applications and caused contention when multiple transactions competed for the same coin objects.
+
+With address balances, each address has at most one **accumulator value** for each coin type `T`. The accumulator is not an object you own. It is a per-address value maintained by the protocol:
+
+- **Deposits** merge automatically into the accumulator. Sending funds to an address increases its balance without creating new objects.
+- **Withdrawals** split from the accumulator. You specify an amount to withdraw and the protocol deducts it, without needing to know about specific objects.
+- **No coin selection** is required. Transaction construction is stateless: you do not need to query which coin objects an address owns.
+
+The total fungible balance of an address for coin type `T` is:
+
+> **total balance = sum of all `Coin<T>` objects + address balance value**
+
+`Coin<T>` and address balances coexist. Existing coins remain functional and can still be transferred with `transfer::public_transfer`. You can also [convert existing coins to address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#converting-existing-coins-to-address-balances).
+
+## Coin objects vs address balances
+
+| | Coin objects | Address balances |
+|---|---|---|
+| **Model** | Discrete objects, each with a unique ID and value | Single accumulator value per (address, coin type) |
+| **Transaction construction** | Must query owned objects, select coins, merge/split | Stateless: specify an amount, no queries needed |
+| **Concurrency** | Contention when multiple transactions use the same coin | No contention: each transaction operates on the accumulator independently |
+| **Deposits** | Create new `Coin<T>` objects at the recipient address | Merge automatically into the existing balance |
+| **DeFi compatibility** | Accepted by Move functions that take `Coin<T>` parameters | Withdraw to a `Coin<T>` first, then pass to Move functions |
+| **Gas payment** | Select SUI coin objects with `setGasPayment` | Pay directly from SUI address balance with no coin selection |
+| **Wrapping** | Can be wrapped inside other objects | Cannot be wrapped (not an object) |
+
+## Gas payment from address balances
+
+SUI address balances can pay for gas directly, removing the need for coin selection entirely. When you pay gas from an address balance:
+
+- The transaction includes a `ValidDuring` expiration field that restricts it to a range of epochs, preventing stale transactions from executing.
+- A **nonce** field ensures each gas payment is unique, preventing replay.
+- No `Coin<SUI>` objects need to be provided. The protocol deducts gas from the address balance automatically.
+
+This is especially useful for [sponsored transactions](/develop/transaction-payment/sponsor-txn), where the sponsor can pay gas from their address balance without coordinating coin objects.
+
+For implementation details, see [Paying for gas from address balances](/onchain-finance/asset-custody/address-balances/using-address-balances#paying-for-gas-from-address-balances).
+
+## Settlement
+
+Accumulator operations are not applied to individual objects in real time. Instead, the protocol records them as **accumulator events** in `TransactionEffects`:
+
+- A `Merge` event records a deposit (value added to the accumulator).
+- A `Split` event records a withdrawal (value removed from the accumulator).
+
+The protocol periodically reconciles these events through **settlement transactions** that update the canonical accumulator values. Settlement uses a Merkle Mountain Range (MMR) data structure to efficiently batch and verify accumulated changes across checkpoints.
+
+From a developer's perspective, settlement is transparent. You interact with address balances through the SDK and CLI, and the protocol handles reconciliation automatically. The `derive_balance_changes` algorithm in the SDK computes the net effect of a transaction by combining object-level changes with accumulator events.
+
+For the formal specification of the settlement mechanism, see [SIP-58](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
+
+## When to use which
+
+**Use address balances when:**
+- Sending basic transfers (peer-to-peer payments, payroll, distributions).
+- Paying for gas without coin selection complexity.
+- Building sponsored transactions where the sponsor pays from their balance.
+- Constructing transactions without querying onchain state first.
+
+**Keep coin objects when:**
+- Calling Move functions that accept `Coin<T>` parameters (DeFi protocols, AMMs, lending).
+- Wrapping coins inside other objects (escrow, vesting schedules).
+- Needing precise control over which specific coin objects are used in a transaction.
+
+In practice, most applications can use address balances for transfers and gas payment while keeping coin objects for DeFi interactions. You can freely convert between the two: deposit coins into address balances with `coin::send_funds` or `balance::send_funds`, or withdraw from address balances into coin objects with `tx.withdrawal()` and `coin::redeem_funds`.
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />

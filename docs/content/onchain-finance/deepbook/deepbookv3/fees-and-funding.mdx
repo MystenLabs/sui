@@ -1,0 +1,138 @@
+---
+title: DeepBook Fees and Funding
+sidebar_label: Fees and Funding
+description: >-
+  How DeepBook trading fees work and how to fund a BalanceManager with DEEP:
+  paying fees in DEEP or the input token, the floating DEEP price, maker, taker,
+  and staking fees, and obtaining Testnet DEEP, USDC, and SUI.
+keywords:
+  - deepbook fees
+  - deep token
+  - pay_with_deep
+  - trading fees
+  - balance manager
+  - staking
+  - testnet deep
+  - deepbook funding
+goal:
+  description: >-
+    Reader understands how DeepBook charges and sizes fees, and can fund a
+    BalanceManager with DEEP on Testnet.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - Do DeepBook orders require DEEP tokens?
+  - How is the DEEP trading fee calculated?
+  - How do I fund a BalanceManager with DEEP?
+  - Where do I get Testnet DEEP and USDC?
+  - How does staking DEEP reduce trading fees?
+answer: >-
+  DeepBook charges trading fees in DEEP by default, or in the input token at a
+  25% higher rate. The DEEP amount floats with an onchain price, so read it
+  with the SDK rather than hardcoding it. Fund a BalanceManager by depositing
+  DEEP. There is no Testnet DEEP faucet: request DEEP from the token-request
+  form, or swap faucet SUI for DEEP when the DEEP_SUI book has liquidity.
+builder_paths:
+  - path_id: defi-deepbook
+    path_name: DeFi / DeepBook
+    step: Fund a BalanceManager
+    stage: DeFi Primitives
+---
+
+DEEP pays DeepBook trading fees. Before placing fee-paying orders, you fund a [`BalanceManager`](/onchain-finance/deepbook/deepbookv3/contract-information/balance-manager) with DEEP, and optionally stake DEEP to reduce your fees. You can also pay fees with the input token instead of DEEP.
+
+The TypeScript samples on this page live in the `examples/deepbook-spot` package and type-check with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`. They reference pools and coins by SDK key (for example `DEEP_SUI`, `SUI_DBUSDC`, `DEEP`) rather than hardcoding onchain IDs. See the [DeepBookV3 SDK constants](/onchain-finance/deepbook/deepbookv3-sdk#keys) for the key-to-ID mapping and [Contract Information](/onchain-finance/deepbook/deepbookv3/contract-information) for the canonical IDs.
+
+## Pay fees in DEEP or the input token
+
+You choose the fee asset per order with the `pay_with_deep` flag (the SDK's `payWithDeep`, default `true`):
+
+- **DEEP (default):** the pool prices the fee in DEEP from its onchain DEEP price.
+- **Input token:** the pool charges the fee in the asset you trade, at **25% more** than the DEEP-denominated fee (equivalently, DEEP is about 20% cheaper). This penalty is the `FEE_PENALTY_MULTIPLIER` constant.
+
+Both paths work for orders and swaps. In `pool.move`, `place_order_int` selects `get_order_deep_price` when `pay_with_deep` is true and `empty_deep_price` otherwise, with no assertion forcing either. One older note in the reference (`place_limit_order` says `pay_with_deep` must be true) predates input-token fees, which shipped in package version 2; treat `payWithDeep` as a free choice.
+
+:::info
+
+Paying in DEEP requires the pool to have a DEEP price point. Established pools have one. A brand-new [permissionless pool](/onchain-finance/deepbook/deepbookv3/contract-information/permissionless-pool) can only charge input-token fees until an operator adds a price point from a reference pool. Input-token fees always work.
+
+:::
+
+## How the DEEP fee is sized
+
+The DEEP fee is not a fixed number. Each pool stores a `DeepPrice` object holding up to 100 recent conversion-rate points between the pool's asset and DEEP, sourced from a whitelisted DEEP/USDC or DEEP/SUI reference pool. The pool divides the cumulative rate by the number of points to get `deep_per_asset`, then multiplies by your trade size. See [Design](/onchain-finance/deepbook/deepbookv3/design#pool) for the vault and pricing model.
+
+Because this rate floats, read the DEEP a trade needs at execution time rather than hardcoding it. The SDK's `getQuantityOut` returns the DEEP required alongside the output amounts:
+
+<ImportContent source="examples/deepbook-spot/src/read-deep-required.ts" mode="code" tag="deep-required" />
+
+## Maker, taker, and staking fees
+
+Maker fee, taker fee, and the stake requirement are per-pool governance parameters (`TradeParams`), not constants. Governance can change them, so read them onchain instead of hardcoding:
+
+<ImportContent source="examples/deepbook-spot/src/read-fees.ts" mode="code" tag="read-fees" />
+
+[Design](/onchain-finance/deepbook/deepbookv3/design) lists the fee bounds for volatile, stable, and whitelisted pools. Staking DEEP reduces your taker fee: when your active stake and your volume in DEEP both meet the pool's stake requirement, the pool halves your taker fee.
+
+<ImportContent source="packages/deepbook/sources/state/trade_params.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="taker_fee_for_user" noComments />
+
+Staking also earns maker rebates. See [Staking and Governance](/onchain-finance/deepbook/deepbookv3/contract-information/staking-governance) for staking, rebates, and proposals.
+
+## Fund a `BalanceManager` with DEEP
+
+Deposit DEEP into your BalanceManager so orders can pay fees from it. The same DEEP balance is what you stake for the fee discount. Every sample on this page shares the client setup:
+
+<ImportContent source="examples/deepbook-spot/src/client.ts" mode="code" tag="client" />
+
+<ImportContent source="examples/deepbook-spot/src/fund-with-deep.ts" mode="code" tag="fund-deep" />
+
+Sign and execute the returned transaction with your keypair. See [BalanceManager](/onchain-finance/deepbook/deepbookv3-sdk/balance-manager) for creating and sharing a manager.
+
+## Obtain Testnet DEEP, USDC, and SUI
+
+There is no Testnet DEEP faucet, by design: the DEEP token's treasury cap is locked in a shared `ProtectedTreasury` whose only public supply function is `burn`, and the test coins transfer their treasury caps to the deployer at publish. Nobody can mint DEEP or the test coins. Get DEEP one of two ways:
+
+- **Token-request form (reliable):** the [DeepBook Testnet token request form](https://tally.so/r/Xx102L) grants DEEP and quote assets such as DBUSDC directly. Use it as the default, and always for quote assets.
+- **Swap SUI for DEEP (when the book has liquidity):** on the whitelisted `DEEP_SUI` pool, faucet SUI converts to DEEP with no BalanceManager. The Testnet `DEEP_SUI` book is thin and intermittent, so treat this as a convenience, not a guarantee.
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] A current CLI, updated with `suiup update`: version skew between your CLI and the network produces confusing failures. Confirm the client and server API versions match with `sui --version`. See [Install Sui](/references/cli/client).
+- [x] An active environment on a current Testnet RPC: check with `sui client active-env` and `sui client envs`, because a stale or wrong RPC URL reads empty balances and rejects transactions. See [Sui environment setup](/references/contribute/sui-environment).
+</TabItem>
+</Tabs>
+
+##### Step 1: Get Testnet SUI
+
+Find your address with `sui client active-address`, then check your balance with `sui client gas` before requesting anything. Faucets are rate-limited per address and IP, so request only when the balance is actually empty. Request Testnet SUI from a [Sui faucet](/getting-started/onboarding/get-coins), which lists the browser, Discord, and cURL routes. If the primary faucet rate-limits you, use one of those fallback routes.
+
+##### Step 2: Get DEEP
+
+Request DEEP, and any quote assets, from the [token-request form](https://tally.so/r/Xx102L). This route is reliable and does not depend on book state.
+
+If the `DEEP_SUI` book has liquidity, you can instead swap faucet SUI for DEEP with no BalanceManager, which avoids a chicken-and-egg where you would need DEEP to buy DEEP. Check the quote first with `getQuantityOut`: if it returns fewer DEEP than the pool's minimum size (10 DEEP), the book is too thin, so use the form. Set a nonzero `minOut` so a book that empties reverts instead of returning your SUI unfilled:
+
+<ImportContent source="examples/deepbook-spot/src/bootstrap-swap.ts" mode="code" tag="bootstrap-swap" />
+
+##### Step 3: Deposit DEEP
+
+Deposit the DEEP into your BalanceManager with the [funding step above](#fund-a-balancemanager-with-deep). You can now place fee-paying orders.
+
+### Troubleshooting
+
+- `InsufficientCoinBalance`: the transaction spends more of a coin than you hold after gas. The swap draws SUI from the same balance that pays gas, so size it below your SUI balance minus a gas budget, or fund more SUI. The SDK also reserves a default gas budget when you do not set one, so leave room for it or call `setGasBudget` explicitly and size the swap around it.
+- `version unavailable for consumption`: you built a transaction from stale state before a previous one finalized. Wait for finality (the SDK's `waitForTransaction`) before building the next transaction. Do not blindly retry a rejected transaction, because it can leave the gas coin equivocation-locked.
+- **Swap succeeds but you receive zero DEEP:** the book was empty and `minOut` was 0, so the pool returned your SUI unfilled. Set a nonzero `minOut` from `getQuantityOut` so an empty book reverts, and check the quote before swapping.

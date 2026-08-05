@@ -1,0 +1,96 @@
+---
+title: Fungible Tokens
+description: Choose between Sui's Coin Standard and Currency Standard for creating fungible tokens.
+keywords:
+  - fungible tokens
+  - coin standard
+  - currency standard
+  - coin registry
+  - create token
+  - mint tokens
+  - decision tree
+  - coin vs currency
+goal:
+  description: Reader can choose the right fungible token standard for their use case
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - min_words: 100
+      label: Needs more reference content
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - Should I use Coin Standard or Currency Standard on Sui?
+  - What is the difference between Coin and Currency on Sui?
+  - Which fungible token standard should I choose?
+  - How do I create a fungible token on Sui?
+answer: >-
+  Sui offers two fungible token standards: the Coin Standard and the Currency
+  Standard. The Currency Standard is recommended for new projects. This page
+  compares both and helps you choose.
+---
+
+Sui provides two standards for creating fungible tokens. Both produce `Coin<T>` objects that are fully interoperable with wallets, DeFi protocols, and address balances. The difference is in how you create, configure, and manage the token's metadata and supply.
+
+## Coin standard vs currency standard
+
+| Feature | Coin Standard | Currency Standard |
+|---------|--------------|-------------------|
+| Creation function | `coin::create_currency` | `coin_registry::new_currency` or `new_currency_with_otw` |
+| Metadata storage | Standalone `CoinMetadata` object | Centralized in `CoinRegistry` at `0xc` |
+| Supply models | Uncontrolled only | Fixed, burn-only, or uncontrolled |
+| Regulatory support | `create_regulated_currency_v2` | `make_regulated()` during initialization |
+| Metadata updates | Requires `TreasuryCap` | Dedicated `MetadataCap` (can be frozen or deleted) |
+| RPC discovery | Requires knowing `CoinMetadata` object ID | Queryable from the central registry |
+| Status | Active | **Recommended for new projects** |
+
+## Choosing a standard
+
+Use the following guidance to pick the right standard for your project:
+
+:::tip Recommended: Currency Standard
+
+For new tokens, use the [Currency Standard](/onchain-finance/fungible-tokens/currency). It provides richer supply controls, centralized metadata discovery, and a dedicated `MetadataCap` for metadata management.
+
+:::
+
+### Creating a new token
+
+- **Most projects:** Use `coin_registry::new_currency`. You can call this at any time after publishing your package. See [Create Fungible Tokens: Currency Standard](/onchain-finance/fungible-tokens/create-a-fungible-token).
+
+- **Need a One-Time Witness proof:** Use `coin_registry::new_currency_with_otw` in your module's `init` function. This requires a two-step publish-then-finalize process.
+
+- **Need the legacy Coin Standard:** Use `coin::create_currency` in your module's `init` function. See [Create Fungible Tokens: Coin Standard](/onchain-finance/fungible-tokens/create-a-fungible-token-coin).
+
+### Configuring supply
+
+Only the Currency Standard supports supply model configuration:
+
+- **Fixed supply:** Mint the total supply during initialization, then call `make_supply_fixed` to lock the `TreasuryCap` inside the `Currency`. No further minting or burning is possible.
+- **Burn-only (deflationary):** Mint the initial supply, then call `make_supply_burn_only` to prevent future minting while still allowing burns.
+- **Uncontrolled:** The default. The `TreasuryCap` holder can mint and burn freely.
+
+### Adding regulatory controls
+
+Both standards support regulated tokens with deny-list capabilities. The Currency Standard simplifies this with `make_regulated(allow_global_pause, ctx)` during initialization, which returns a `DenyCapV2` for managing the deny list. See [Regulated Tokens](/onchain-finance/fungible-tokens/regulated-tokens) for deny-list management.
+
+### Migrating an existing token
+
+If you have an existing Coin Standard token, the Currency Standard provides migration functions to register your coin in the `CoinRegistry` while preserving its existing `CoinMetadata` object ID. See the [Currency Standard reference](/onchain-finance/fungible-tokens/currency) for migration details.
+
+## Example patterns
+
+These guides show common token configurations in action:
+
+- [Fixed-supply token](/onchain-finance/examples-patterns/fixed-supply): Mint a capped supply at creation and freeze it permanently.
+- [In-game currency](/onchain-finance/examples-patterns/in-game-currency): Mintable game tokens with admin controls.
+- [Loyalty tokens](/onchain-finance/examples-patterns/loyalty-tokens): Non-transferable reward points using the Closed-Loop Token standard.
+- [Regulated tokens](/onchain-finance/fungible-tokens/regulated-tokens): Tokens with deny-list and global pause capabilities.
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />
