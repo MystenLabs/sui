@@ -152,7 +152,16 @@ impl BlockSyncService {
                     let dag_state = self.dag_state.read();
                     for (index, _authority) in self.context.committee.authorities() {
                         let last_block = dag_state.get_last_block_for_authority(index);
-                        limit_rounds.insert(index, last_block.round());
+                        // limit_round is an exclusive scan bound. In the refs-carrying
+                        // branch below the boundary block is already in the response
+                        // via the refs lookup, so excluding it avoids a duplicate —
+                        // but here the boundary is this server's own latest block,
+                        // which is in the response nowhere else. Set the bound one
+                        // past it: for a receiver whose one gap IS the peer's newest
+                        // block (the common shape when a block races its ancestors),
+                        // an exclusive bound would make that block unfetchable until
+                        // the author proposes again.
+                        limit_rounds.insert(index, last_block.round().saturating_add(1));
                     }
                 } else {
                     for block_ref in &block_refs {

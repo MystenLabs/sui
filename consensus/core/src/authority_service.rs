@@ -1364,6 +1364,41 @@ mod tests {
         for b in &missing_block_refs {
             assert!(blocks.contains_key(b));
         }
+
+        // WHEN: a refs-empty request from a receiver whose ONLY gap is the server's
+        // latest block per authority — the shape a block-racing-its-ancestors gap
+        // takes. The catch-up scan bound is exclusive in the refs-carrying branch
+        // (the boundary block is already in the response there); here it must not
+        // be, or the latest block is unfetchable until its author proposes again.
+        let last_round = NUM_ROUNDS as Round;
+        let highest_accepted_rounds: Vec<Round> = vec![last_round - 1; NUM_AUTHORITIES];
+        let results = authority_service
+            .handle_fetch_blocks(
+                AuthorityIndex::new_for_test(0),
+                vec![],
+                highest_accepted_rounds,
+                false,
+            )
+            .await
+            .unwrap();
+
+        // THEN: every authority's latest block is returned.
+        let blocks: BTreeMap<BlockRef, VerifiedBlock> = results
+            .iter()
+            .map(|b| {
+                let signed = bcs::from_bytes(b).unwrap();
+                let block = VerifiedBlock::new_verified(signed, b.clone());
+                (block.reference(), block)
+            })
+            .collect();
+        assert_eq!(
+            blocks.len(),
+            NUM_AUTHORITIES,
+            "the server's latest block per authority must be fetchable"
+        );
+        for block_ref in blocks.keys() {
+            assert_eq!(block_ref.round, last_round);
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
