@@ -471,10 +471,6 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // and this node has proposed blocks before, at least one block should be sent to the peer
         // to help with liveness.
         let peer_hostname = self.context.committee.authority(peer).hostname.clone();
-        // Highest own round handed to this peer by the replay below; seeds gap detection on the
-        // live branch so a hole between the replay and the first live block is also repaired.
-        let mut replay_high_round: Round = 0;
-
         let past_proposed_blocks = {
             let dag_state = self.dag_state.read();
 
@@ -500,7 +496,6 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 .subscription_replay_blocks
                 .with_label_values(&[peer_hostname.as_str()])
                 .observe(proposed_blocks.len() as f64);
-            replay_high_round = proposed_blocks.iter().map(|b| b.round()).max().unwrap_or(0);
 
             let replay_context = self.context.clone();
             let replay_hostname = peer_hostname.clone();
@@ -533,47 +528,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         let dispatch_context = self.context.clone();
-        let catchup_dag_state = self.dag_state.clone();
-        let own_index = self.context.own_index;
-        // Round of the last own block handed to this peer, so a gap left by broadcast lag can be
-        // detected and repaired from cache. Own blocks are one per round, so any jump of more than
-        // one round means the intervening blocks were dropped for this subscriber.
-        let mut last_yielded_round: Round = replay_high_round;
         Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.flat_map(move |(items, lagged)| {
+            broadcasted_blocks.flat_map(move |items| {
                 debug_assert!(
                     items.len() <= MAX_BLOCKS_PER_POLL,
                     "Too many blocks received from broadcast"
                 );
-                let mut to_send: Vec<ExtendedBlock> = Vec::with_capacity(items.len());
-                for item in items {
-                    let round = item.block.round();
-                    // Repair only on an actual buffer drop. A round gap alone is not evidence of
-                    // one: a validator skips rounds it does not propose in, so most gaps have no
-                    // missing block behind them.
-                    if lagged > 0 && last_yielded_round > 0 && round > last_yielded_round + 1 {
-                        let missed = catchup_dag_state.read().get_cached_blocks_in_range(
-                            own_index,
-                            last_yielded_round + 1,
-                            round,
-                            usize::MAX,
-                        );
-                        dispatch_context
-                            .metrics
-                            .node_metrics
-                            .subscription_catchup_blocks
-                            .with_label_values(&[peer_hostname.as_str()])
-                            .inc_by(missed.len() as u64);
-                        to_send.extend(missed.into_iter().map(|block| ExtendedBlock {
-                            block,
-                            excluded_ancestors: vec![],
-                            compressed_once: Default::default(),
-                        }));
-                    }
-                    last_yielded_round = round;
-                    to_send.push(item);
-                }
-                for item in &to_send {
+                for item in &items {
                     let age_ms = dispatch_context
                         .clock
                         .timestamp_utc_ms()
@@ -590,7 +551,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .node_metrics
                     .subscription_serialize_latency
                     .clone();
-                stream::iter(to_send.into_iter().map(move |b| {
+                stream::iter(items.into_iter().map(move |b| {
                     let t = std::time::Instant::now();
                     let s = ExtendedSerializedBlock::from(b);
                     ser_hist.observe(t.elapsed().as_secs_f64());
@@ -815,9 +776,6 @@ pub(crate) struct BroadcastStream<T> {
     >,
     // Maximum number of items to return per poll.
     max_items_per_poll: usize,
-    // Blocks dropped for this subscriber since the last yield, reported by the broadcast channel.
-    // Carried out with the next batch so the caller can repair the gap.
-    pending_lag: u64,
     // Counts total subscriptions / active BroadcastStreams.
     subscription_counter: Option<Arc<SubscriptionCounter>>,
 }
@@ -835,7 +793,6 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             peer: Some(peer),
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             max_items_per_poll,
-            pending_lag: 0,
             subscription_counter: Some(subscription_counter),
         }
     }
@@ -847,14 +804,13 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
             peer: None,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
             max_items_per_poll,
-            pending_lag: 0,
             subscription_counter: None,
         }
     }
 }
 
 impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
-    type Item = (Vec<T>, u64);
+    type Item = Vec<T>;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
@@ -881,15 +837,13 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                                 {
                                     counter.record_lagged(peer, n);
                                 }
-                                self.pending_lag = self.pending_lag.saturating_add(n);
                                 break;
                             }
                         }
                     }
 
                     self.inner.set(make_recv_future(rx));
-                    let lagged = std::mem::take(&mut self.pending_lag);
-                    return task::Poll::Ready(Some((items, lagged)));
+                    return task::Poll::Ready(Some(items));
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     info!("BroadcastStream {:?} closed", self.peer);
@@ -900,7 +854,6 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
                     if let (Some(counter), Some(peer)) = (&self.subscription_counter, &self.peer) {
                         counter.record_lagged(peer, n);
                     }
-                    self.pending_lag = self.pending_lag.saturating_add(n);
                     // Re-arm the future and loop to await the next item.
                     self.inner.set(make_recv_future(rx));
                     continue;
@@ -1779,11 +1732,8 @@ mod tests {
             .await
             .unwrap();
 
-        // Blocks are proposed while the subscription is already live: each is added to DagState
-        // (as Core does) and broadcast, so the cache holds what the buffer drops.
         for round in 0..BLOCKS_SENT {
             let block = VerifiedBlock::new_for_test(TestBlock::new(10 + round as u32, 0).build());
-            dag_state.write().accept_block(block.clone());
             tx_block_broadcast
                 .send(ExtendedBlock {
                     block,
@@ -1812,29 +1762,21 @@ mod tests {
             .with_label_values(&[peer_hostname.as_str()])
             .get();
 
-        let repaired = context
-            .metrics
-            .node_metrics
-            .subscription_catchup_blocks
-            .with_label_values(&[peer_hostname.as_str()])
-            .get();
-
         assert!(
             dropped > 0,
             "a subscriber that fell behind the {BROADCAST_CAPACITY}-block buffer should have \
              blocks dropped, but the lagged counter is zero"
         );
-        // The gap left by the broadcast buffer is repaired from cache, so the peer still receives
-        // every block despite the drop -- it does not have to discover the hole and fetch.
+        // Dropped blocks are not delivered by subscription at all: the peer has to fetch them.
         assert!(
-            repaired > 0,
-            "dropped blocks should be replayed from cache, but the catch-up counter is zero"
+            delivered < BLOCKS_SENT,
+            "expected fewer than {BLOCKS_SENT} blocks delivered, got {delivered}"
         );
         assert_eq!(
-            delivered - 1,
+            dropped + delivered - 1,
             BLOCKS_SENT,
-            "every broadcast block should reach the peer, via live delivery or gap repair \
-             (delivered={delivered} including 1 replayed, dropped={dropped}, repaired={repaired})"
+            "every broadcast block should be either delivered or counted as dropped \
+             (delivered={delivered} including 1 replayed, dropped={dropped})"
         );
     }
 }

@@ -230,7 +230,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscribed_to: IntGaugeVec,
     pub(crate) subscribed_by: IntGaugeVec,
     pub(crate) subscription_lagged_blocks: IntCounterVec,
-    pub(crate) subscription_catchup_blocks: IntCounterVec,
     pub(crate) subscription_dispatch_age: HistogramVec,
     pub(crate) subscription_replay_blocks: HistogramVec,
     pub(crate) subscription_replay_age: HistogramVec,
@@ -895,13 +894,6 @@ impl NodeMetrics {
                 "subscription_lagged_blocks",
                 "Own blocks dropped from a peer's subscription stream because the peer fell behind \
                  the broadcast buffer. These are never delivered by subscription and must be fetched.",
-                &["authority"],
-                registry,
-            ).unwrap(),
-            subscription_catchup_blocks: register_int_counter_vec_with_registry!(
-                "subscription_catchup_blocks",
-                "Own blocks replayed from cache into a peer's live stream to repair a gap left by \
-                 broadcast lag, instead of leaving the peer to discover and fetch them.",
                 &["authority"],
                 registry,
             ).unwrap(),

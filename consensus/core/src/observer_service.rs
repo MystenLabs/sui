@@ -270,7 +270,7 @@ impl ObserverNetworkService for ObserverService {
             MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         )
-        .map(|(blocks, _lagged)| ObserverStreamItem {
+        .map(|blocks| ObserverStreamItem {
             blocks: blocks
                 .into_iter()
                 .map(|block| block.serialized().clone())
@@ -287,7 +287,7 @@ impl ObserverNetworkService for ObserverService {
                 handler.subscribe_randomness_signatures(),
                 MAX_SIGNATURES_PER_POLL,
             )
-            .map(|(sigs, _lagged)| ObserverStreamItem {
+            .map(|sigs| ObserverStreamItem {
                 blocks: vec![],
                 auxiliary_data: AuxiliaryData {
                     randomness_signatures: sigs,
