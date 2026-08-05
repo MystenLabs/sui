@@ -31,6 +31,7 @@ mod leader_timeout;
 mod linearizer;
 mod metrics;
 mod minimal_block;
+mod minimal_block_parking;
 mod minimal_block_receive;
 mod network;
 mod observer_service;
