@@ -1,7 +1,7 @@
 //# init --edition 2024.alpha
 
 //# publish
-module 0x42::m {
+#[allow(always_errors)] module 0x42::m {
     const LARGE: u16 = 0xFFFF;
 
     public fun t(cond: bool): u16 {
