@@ -11,6 +11,7 @@ use sui_types::{
     base_types::AuthorityName,
     error::ErrorCategory,
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
+    transaction::TransactionDataAPI as _,
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -65,10 +66,20 @@ impl TransactionSubmitter {
     {
         let start_time = Instant::now();
 
-        // Limit the amplification factor to [1.=committee size].
-        let amplification_factor = amplification_factor
-            .max(1)
-            .min(authority_aggregator.committee.num_members() as u64);
+        // Only the validators the transaction names may propose it, so submitting anywhere else
+        // would be wasted; a set naming another epoch's committee is ignored, exactly as the
+        // validators ignore it.
+        let allowed_proposers = request.transaction.as_ref().and_then(|tx| {
+            tx.transaction_data()
+                .expiration()
+                .allowed_proposers(authority_aggregator.committee.epoch())
+        });
+
+        // Limit the amplification factor to [1..=number of validators we may submit to].
+        let max_targets = allowed_proposers
+            .map(|allowed| allowed.proposers.len() as u64)
+            .unwrap_or(authority_aggregator.committee.num_members() as u64);
+        let amplification_factor = amplification_factor.max(1).min(max_targets);
         self.metrics
             .submit_amplification_factor
             .observe(amplification_factor as f64);
@@ -78,6 +89,7 @@ impl TransactionSubmitter {
             client_monitor,
             options.allowed_validators.clone(),
             options.blocked_validators.clone(),
+            allowed_proposers,
         );
 
         let ping_label = if request.ping_type.is_some() {

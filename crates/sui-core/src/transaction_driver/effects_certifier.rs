@@ -113,7 +113,9 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, vec![], vec![]);
+        // Effects can be read from any validator, so proposer restrictions do not apply here.
+        let mut retrier =
+            RequestRetrier::new(authority_aggregator, client_monitor, vec![], vec![], None);
         let ping_type = get_ping_type(&tx_digest);
 
         // Channel for wait_for_acknowledgments to notify which validators have acked.
