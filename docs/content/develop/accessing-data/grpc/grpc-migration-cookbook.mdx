@@ -129,7 +129,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const { object } = await client.core.getObject({
+const { object } = await client.getObject({
   objectId: '0xOBJECT_ID',
   include: { content: true },
 });
@@ -182,7 +182,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const { objects } = await client.core.getObjects({
+const { objects } = await client.getObjects({
   objectIds: ['0xOBJECT_A', '0xOBJECT_B', '0xOBJECT_C'],
   include: { content: true },
 });
@@ -243,7 +243,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const result = await client.core.getTransaction({
+const result = await client.getTransaction({
   digest: 'J4NvV5iQZQFm1xKPYv9ffDCCPW6cZ4yFKsCqFUiDX5L4',
   include: { effects: true, events: true },
 });
@@ -399,7 +399,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const result = await client.core.getTransaction({
+const result = await client.getTransaction({
   digest: '8NB8sXb4m9PJhCyLB7eVH4onqQWoFFzVUrqPoYUhcQe2',
   include: { events: true },
 });
@@ -583,7 +583,7 @@ while (true) {
 ```ts
 const { responses } = client.subscriptionService.subscribeCheckpoints({
   readMask: {
-    paths: ['sequenceNumber', 'digest', 'summary'],
+    paths: ['sequence_number', 'digest', 'summary'],
   },
 });
 
@@ -677,7 +677,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-// Use the proto client directly. No Core API wrapper exists for checkpoint lookups.
+// Use the proto client directly. The SDK has no high-level wrapper for checkpoint lookups.
 const { response } = await client.ledgerService.getCheckpoint({
   checkpointId: {
     oneofKind: 'sequenceNumber',
@@ -742,7 +742,7 @@ $ curl -X POST <FULL_NODE_URL> \
 
 ```ts
 // Single coin type
-const { balance } = await client.core.getBalance({
+const { balance } = await client.getBalance({
   owner: '<ADDRESS>',
   coinType: '0x2::sui::SUI',
 });
@@ -751,7 +751,7 @@ console.log('Coin balance:', balance.coinBalance);
 console.log('Address balance:', balance.addressBalance);
 
 // All coin types
-const { balances } = await client.core.listBalances({
+const { balances } = await client.listBalances({
   owner: '<ADDRESS>',
 });
 for (const b of balances) {
@@ -807,7 +807,7 @@ $ curl -X POST <FULL_NODE_URL> \
 
 ```ts
 // List SUI coin objects
-const page = await client.core.listOwnedObjects({
+const page = await client.listOwnedObjects({
   owner: '<ADDRESS>',
   type: '0x2::coin::Coin<0x2::sui::SUI>',
   limit: 50,
@@ -819,7 +819,7 @@ for (const obj of page.objects) {
 
 // Paginate with the cursor from the previous response
 if (page.hasNextPage) {
-  const nextPage = await client.core.listOwnedObjects({
+  const nextPage = await client.listOwnedObjects({
     owner: '<ADDRESS>',
     type: '0x2::coin::Coin<0x2::sui::SUI>',
     limit: 50,
@@ -869,7 +869,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const page = await client.core.listDynamicFields({
+const page = await client.listDynamicFields({
   parentId: '0xPARENT_OBJECT_ID',
   limit: 50,
 });
@@ -929,7 +929,7 @@ const bytes = await tx.build({ client });
 const { signature } = await keypair.signTransaction(bytes);
 
 // Execute
-const result = await client.core.executeTransaction({
+const result = await client.executeTransaction({
   transaction: bytes,
   signatures: [signature],
   include: { effects: true },
@@ -1022,7 +1022,7 @@ For sponsored transactions or when you need to select specific gas coins, set ga
 
 ```ts
 // Get the current reference gas price
-const { referenceGasPrice } = await client.core.getReferenceGasPrice();
+const { referenceGasPrice } = await client.getReferenceGasPrice();
 
 const tx = new Transaction();
 tx.setSender(keypair.toSuiAddress());
@@ -1044,7 +1044,7 @@ tx.transferObjects([coin], '<RECIPIENT_ADDRESS>');
 const bytes = await tx.build({ client });
 const { signature } = await keypair.signTransaction(bytes);
 
-const result = await client.core.executeTransaction({
+const result = await client.executeTransaction({
   transaction: bytes,
   signatures: [signature],
   include: { effects: true },
@@ -1075,7 +1075,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const result = await client.core.simulateTransaction({
+const result = await client.simulateTransaction({
   transaction: txBytes,
   include: { effects: true, events: true },
 });
@@ -1111,7 +1111,7 @@ $ curl -X POST <FULL_NODE_URL> \
 <TabItem value="grpc-sdk" label="gRPC (TypeScript SDK)">
 
 ```ts
-const { referenceGasPrice } = await client.core.getReferenceGasPrice();
+const { referenceGasPrice } = await client.getReferenceGasPrice();
 console.log('Reference gas price:', referenceGasPrice);
 ```
 
@@ -1211,7 +1211,7 @@ async function consumeSubscription() {
   for (;;) {
     try {
       const { responses } = client.subscriptionService.subscribeCheckpoints({
-        readMask: { paths: ['sequenceNumber', 'transactions'] },
+        readMask: { paths: ['sequence_number', 'transactions'] },
       });
 
       for await (const response of responses) {
@@ -1262,12 +1262,12 @@ Implement `backfillCheckpoints` with `ListCheckpoints`, treating its end checkpo
 Use the cursor from each response to request the next page:
 
 ```ts
-import type { SuiClientTypes } from '@mysten/sui';
+import type { SuiClientTypes } from '@mysten/sui/client';
 
 let cursor: string | null = null;
 
 do {
-  const page: SuiClientTypes.ListOwnedObjectsResponse = await client.core.listOwnedObjects({
+  const page: SuiClientTypes.ListOwnedObjectsResponse = await client.listOwnedObjects({
     owner: '<ADDRESS>',
     limit: 50,
     cursor,
@@ -1299,26 +1299,24 @@ const archive = new SuiGrpcClient({
 });
 
 async function getTransaction(digest: string) {
-  const result = await fullNode.core.getTransaction({
-    digest,
-    include: { effects: true },
-  });
+  try {
+    return await fullNode.getTransaction({
+      digest,
+      include: { effects: true },
+    });
+  } catch (err) {
+    // A missing transaction surfaces as a thrown NOT_FOUND error, not as a
+    // result value. Rethrow anything else.
+    if ((err as { code?: string }).code !== 'NOT_FOUND') {
+      throw err;
+    }
 
-  if (result.$kind === 'Transaction') {
-    return result.Transaction;
+    // Data was pruned, so fall back to the Archival Store.
+    return await archive.getTransaction({
+      digest,
+      include: { effects: true },
+    });
   }
-
-  // Data was pruned, so fall back to the Archival Store.
-  const archiveResult = await archive.core.getTransaction({
-    digest,
-    include: { effects: true },
-  });
-
-  if (archiveResult.$kind === 'Transaction') {
-    return archiveResult.Transaction;
-  }
-
-  throw new Error(`Transaction ${digest} not found in full node or archive`);
 }
 ```
 
