@@ -491,7 +491,9 @@ impl PendingReconstructions {
                 self.held_bytes -= evicted_sidecar.iter().map(Vec::len).sum::<usize>();
             }
         }
-        if bytes > MAX_HELD_SIDECAR_BYTES {
+        // Channel-borne bytes cannot be evicted; when they saturate the cap the new
+        // sidecar is dropped rather than admitted over it.
+        if self.held_bytes + self.channel_held_bytes + bytes > MAX_HELD_SIDECAR_BYTES {
             return;
         }
         self.held_bytes += bytes;
