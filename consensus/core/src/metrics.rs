@@ -181,6 +181,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_blocks_received: IntCounterVec,
     pub(crate) minimal_block_inflate_drop: IntCounterVec,
     pub(crate) minimal_block_park_residency_rounds: HistogramVec,
+    pub(crate) minimal_block_dead_slot_staleness: HistogramVec,
+    pub(crate) minimal_block_window_overshoot: Histogram,
     pub(crate) minimal_block_recovery_parked: IntGauge,
     pub(crate) minimal_block_recovery_parked_bytes: IntGauge,
     pub(crate) minimal_block_recovery_outcomes: IntCounterVec,
@@ -624,6 +626,19 @@ impl NodeMetrics {
                 "Local accepted rounds elapsed while a minimal block stayed parked, by terminal outcome. Round-normalised residency is what predicts stability: healthy fleets sit under one round, collapsing ones above ten",
                 &["outcome"],
                 vec![0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0, 34.0, 55.0, 89.0, 144.0, 233.0],
+                registry,
+            ).unwrap(),
+            minimal_block_dead_slot_staleness: register_histogram_vec_with_registry!(
+                "minimal_block_dead_slot_staleness",
+                "Rounds below the receiver's GC of the deadest frontier slot on a dead-frontier refusal, by where it was detected. Direct evidence for WHICH references produce unfillable slots: staleness clustered above gc_depth means sender omission reached past the receiver's resolvable horizon",
+                &["origin"],
+                vec![1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 240.0, 480.0, 960.0],
+                registry,
+            ).unwrap(),
+            minimal_block_window_overshoot: register_histogram_with_registry!(
+                "minimal_block_window_overshoot",
+                "Rounds past the admission window top of an outside-window refusal. The lag distribution of the streams being refused: mass beyond the window width means admission is narrower than the fleet's real spread",
+                vec![1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 240.0, 480.0, 960.0],
                 registry,
             ).unwrap(),
             subscribe_blocks_response_bytes: register_int_counter_vec_with_registry!(

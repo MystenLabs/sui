@@ -387,6 +387,20 @@ impl PendingReconstructions {
             .collect();
         for block_ref in &frontier_dead {
             let entry = self.remove_entry(block_ref).expect("entry exists");
+            if let Some(deadest) = entry
+                .missing
+                .iter()
+                .filter(|slot| slot.round <= gc_round)
+                .map(|slot| gc_round - slot.round)
+                .max()
+            {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .minimal_block_dead_slot_staleness
+                    .with_label_values(&["gc"])
+                    .observe(deadest as f64);
+            }
             self.hold_sidecar(*block_ref, entry.peer, entry.excluded_ancestors.clone());
             self.observe_residency(&entry, "frontier_dead", local_round);
         }
