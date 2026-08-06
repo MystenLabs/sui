@@ -52,27 +52,26 @@ Multiple third-party providers offer Sui on-ramp integration with varying asset 
 
 The following table summarizes providers with live Sui on-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
 
-| Provider | Type | Supported assets | Documentation |
+| **Provider** | **Type** | **Supported assets** | **Documentation** |
 |---|---|---|---|
-| [Banxa](https://docs.banxa.com/) | Direct | SUI, USDC | [Banxa docs](https://docs.banxa.com/) |
-| [Unlimit](https://partners-sandbox.gatefi.com/) | Direct | Contact provider | [Unlimit docs](https://partners-sandbox.gatefi.com/) |
-| [Bridge.xyz](https://bridge.xyz) | Direct | USDSui | [Bridge docs](https://bridge.xyz) |
-| [Stripe](https://docs.stripe.com/crypto/onramp) | Direct | SUI, USDSui | [Stripe crypto on-ramp docs](https://docs.stripe.com/crypto/onramp) |
-| [Coinbase](https://docs.cdp.coinbase.com/) | Direct | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/) |
-| [Alchemy Pay](https://alchemypay.org/) | Direct | SUI, USDC, CETUS, AUSD, SCA, NAVX, XUI | [Alchemy Pay docs](https://alchemypay.org/) |
-| [OnRamp.money](https://onramp.money/) | Direct | SUI, USDC, WAL | [OnRamp.money docs](https://onramp.money/) |
-| [CoinVoyage](https://www.coinvoyage.io/) | Direct | Sui Dollar, SUI | [CoinVoyage docs](https://www.coinvoyage.io/) |
-| [Bungee/Socket.Tech](https://docs.bungee.exchange/) | Direct | Sui Dollar, SUI, DEEP, WAL | [Bungee docs](https://docs.bungee.exchange/) |
-| [Onramper](https://docs.onramper.com/) | Aggregator | SUI, USDC | [Onramper docs](https://docs.onramper.com/) |
-| [Meld](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) | Aggregator | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
-
-## Direct providers and aggregators
+| [Banxa](https://banxa.com/) | Direct | SUI, USDC | [Banxa docs](https://docs.banxa.com/products/hosted-checkout/docs/reference/supported-cryptocurrencies-and-blockchains) |
+| [Bridge.xyz](https://bridge.xyz) | Direct | USDSui | [Bridge docs](https://apidocs.bridge.xyz/platform/issuance/designing-your-stablecoin#supported-chains) |
+| [Stripe](https://stripe.com/) | Direct | SUI, USDSui | [Stripe crypto on-ramp docs](https://docs.stripe.com/crypto/onramp) |
+| [Coinbase](https://coinbase.com/) | Direct | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview) |
+| [Alchemy Pay](https://alchemypay.org/) | Direct | AUSD, SUI, USD | [Alchemy Pay docs](https://alchemypay.readme.io/docs/api-integration-3) |
+| [OnRamp.money](https://onramp.money/) | Direct | SUI, USDC, WAL | [OnRamp.money docs](https://onramp.money/supported-token/) |
+| [CoinVoyage](https://www.coinvoyage.io/) | Direct | Sui Dollar | [CoinVoyage docs](https://docs.coinvoyage.io/sdk/paykit-headless#sui-payment-signatures) |
+| [Onramper](https://onramper.com/) | Aggregator | SUI | [Onramper docs](https://docs.onramper.com/docs/network-support) |
+| [Meld](https://www.meld.io) | Aggregator | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
 
 On-ramp providers fall into 2 categories:
 
 - **Direct providers:** Banxa, Unlimit, Bridge.xyz, Stripe, Coinbase, Alchemy Pay, OnRamp.money, CoinVoyage, and Bungee connect directly to payment rails and process transactions themselves. You integrate their SDK or API and manage the provider relationship.
+
 - **Aggregators:** Onramper and Meld route transactions through multiple underlying providers (for example, Onramper routes through Kraken, Topper, Banxa, and MoonPay for Sui on-ramps). Aggregators simplify integration because a single SDK covers multiple providers and regions.
 
 :::info
 
 Aggregators like Meld and Onramper route transactions through multiple underlying providers. This broadens regional and asset coverage but means your actual payment experience depends on which sub-provider handles a given transaction.
+
+:::
