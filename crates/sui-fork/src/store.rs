@@ -1093,8 +1093,7 @@ impl RpcStateReader for ForkStore {
         })
     }
 
-    /// Index reads go straight to the stock reader — the fork adds no policy on
-    /// top of them, only the bound described on [`Self::stock_reader`].
+    /// Index reads go straight to the stock reader.
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
         Some(self.stock_reader())
     }
