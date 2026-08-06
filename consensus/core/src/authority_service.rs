@@ -1362,6 +1362,31 @@ mod tests {
             assert!(blocks.contains_key(b));
         }
 
+        // WHEN: a refs-only request larger than the live-sync limit — the exact
+        // lane's shape. Refs-only must be served under the catch-up limit; the
+        // live-sync cap applies only when rounds ride along.
+        let many_refs: Vec<BlockRef> = all_blocks
+            .iter()
+            .filter(|b| b.reference().round <= 10)
+            .map(|b| b.reference())
+            .take(40)
+            .collect();
+        assert!(many_refs.len() > 32);
+        let results = authority_service
+            .handle_fetch_blocks(
+                AuthorityIndex::new_for_test(0),
+                many_refs.clone(),
+                vec![],
+                false,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            results.len(),
+            many_refs.len(),
+            "a refs-only request must not be truncated to the live-sync limit"
+        );
+
         // WHEN: a refs-empty request from a receiver whose ONLY gap is the server's
         // latest block per authority — the shape a block-racing-its-ancestors gap
         // takes. The catch-up scan bound is exclusive in the refs-carrying branch
