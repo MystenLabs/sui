@@ -37,9 +37,9 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
-use crate::gql::GraphQLClient;
 use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
+use crate::remote::RemoteSource;
 
 /// Objects hydrated per remote round-trip. The load commits as one batch
 /// regardless; this only bounds the size of an individual GraphQL query.
@@ -194,28 +194,17 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
     store.local_store().restore_seed_objects(&objects)
 }
 
-/// Returns the lowest checkpoint at which the remote can still enumerate
-/// object ownership.
-///
-/// The remote only retains ownership enumeration for a recent window of checkpoints
-/// (`serviceConfig.availableRange` for owned object data it's roughly the last hour on the hosted
-/// GraphQL endpoints). Fork checkpoints below this bound cannot be address-seeded.
-fn lowest_enumerable_checkpoint(gql: &GraphQLClient) -> Result<CheckpointSequenceNumber, Error> {
-    gql.get_lowest_available_checkpoint_objects()
-}
-
 async fn resolve_address_seed(
-    gql: &GraphQLClient,
+    remote: &RemoteSource,
     address: SuiAddress,
-    checkpoint: CheckpointSequenceNumber,
 ) -> Result<Vec<SeedEntry>, Error> {
-    let mut entries: Vec<SeedEntry> = gql
-        .get_address_owned_objects_at_checkpoint(address, checkpoint)
+    let mut entries: Vec<SeedEntry> = remote
+        .address_owned_objects_at_fork(address)
         .await?
         .into_iter()
         .map(SeedEntry::from)
         .collect();
-    entries.extend(resolve_address_balance_seed(gql, address, checkpoint).await?);
+    entries.extend(resolve_address_balance_seed(remote, address).await?);
     Ok(entries)
 }
 
@@ -234,12 +223,12 @@ async fn resolve_address_seed(
 /// `Balance` restore pipeline picks it up through its accumulator-root arm
 /// without this crate writing a balance row itself.
 async fn resolve_address_balance_seed(
-    gql: &GraphQLClient,
+    remote: &RemoteSource,
     address: SuiAddress,
-    checkpoint: CheckpointSequenceNumber,
 ) -> Result<Vec<SeedEntry>, Error> {
-    let coin_types = gql
-        .get_address_balance_coin_types_at_checkpoint(address, checkpoint)
+    let checkpoint = remote.forked_at_checkpoint();
+    let coin_types = remote
+        .address_balance_coin_types_at_fork(address)
         .await
         .with_context(|| format!("failed to resolve address balances for {address}"))?;
     if coin_types.is_empty() {
@@ -256,8 +245,8 @@ async fn resolve_address_balance_seed(
         }
     }
 
-    let refs = gql
-        .get_object_refs_at_checkpoint(&field_ids, checkpoint)
+    let refs = remote
+        .object_refs_at_fork(&field_ids)
         .await
         .with_context(|| format!("failed to resolve accumulator fields for {address}"))?;
 
@@ -291,17 +280,15 @@ fn accumulator_field_id(address: SuiAddress, coin_type: &str) -> Result<ObjectID
 
 /// Resolve the requested object ids against the remote source at the fork checkpoint.
 async fn resolve_object_seeds(
-    gql: &GraphQLClient,
-    checkpoint: CheckpointSequenceNumber,
+    remote: &RemoteSource,
     object_ids: &[ObjectID],
 ) -> Result<Vec<SeedEntry>, Error> {
     if object_ids.is_empty() {
         return Ok(Vec::new());
     }
 
-    let objects = gql
-        .get_object_seed_metadata_at_checkpoint(object_ids, checkpoint)
-        .await?;
+    let checkpoint = remote.forked_at_checkpoint();
+    let objects = remote.object_seed_metadata_at_fork(object_ids).await?;
     let mut entries = Vec::new();
 
     for (object_id, object) in object_ids.iter().zip_eq(objects) {
@@ -339,7 +326,7 @@ async fn resolve_seeds(
     let addresses: Vec<SuiAddress> = if input.addresses.is_empty() {
         Vec::new()
     } else {
-        let lowest_available = lowest_enumerable_checkpoint(store.gql())?;
+        let lowest_available = store.remote().lowest_available_checkpoint_objects()?;
         if checkpoint < lowest_available {
             warn!(
                 addresses = ?input.addresses,
@@ -356,7 +343,7 @@ async fn resolve_seeds(
         }
     };
     for address in addresses.iter().copied() {
-        let address_entries = resolve_address_seed(store.gql(), address, checkpoint).await?;
+        let address_entries = resolve_address_seed(store.remote(), address).await?;
         if address_entries.is_empty() {
             warn!(%address, checkpoint, "address seed resolved no owned objects");
         }
@@ -371,7 +358,7 @@ async fn resolve_seeds(
         .copied()
         .filter(|object_id| !entries.contains_key(object_id))
         .collect();
-    for entry in resolve_object_seeds(store.gql(), checkpoint, &remaining_object_ids).await? {
+    for entry in resolve_object_seeds(store.remote(), &remaining_object_ids).await? {
         entries.insert(entry.object_ref.0, entry);
     }
 

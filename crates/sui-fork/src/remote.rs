@@ -14,8 +14,10 @@ use anyhow::anyhow;
 use anyhow::bail;
 use itertools::Itertools as _;
 
+use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -30,6 +32,8 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::VersionQuery;
+use crate::gql::AddressOwnedObject;
+use crate::gql::ObjectSeedMetadata;
 use tracing::debug;
 
 /// Read access to the forked-from chain, pinned at the fork checkpoint.
@@ -47,10 +51,58 @@ impl RemoteSource {
         }
     }
 
-    /// The underlying GraphQL client, for callers with their own query needs
-    /// (seed resolution runs its own checkpoint-scoped queries).
-    pub(crate) fn gql(&self) -> &GraphQLClient {
-        &self.gql
+    /// The chain the forked-from endpoint serves, derived from its configured
+    /// node identity.
+    pub(crate) fn chain(&self) -> Chain {
+        self.gql.chain()
+    }
+
+    /// The checkpoint every query here is pinned at.
+    pub(crate) fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.forked_at_checkpoint
+    }
+
+    /// Objects owned by `address` at the fork checkpoint, from the remote's
+    /// checkpoint-scoped ownership enumeration.
+    pub(crate) async fn address_owned_objects_at_fork(
+        &self,
+        address: SuiAddress,
+    ) -> anyhow::Result<Vec<AddressOwnedObject>> {
+        self.gql
+            .get_address_owned_objects_at_checkpoint(address, self.forked_at_checkpoint)
+            .await
+    }
+
+    /// Coin types for which `address` holds an accumulator balance at the fork
+    /// checkpoint.
+    pub(crate) async fn address_balance_coin_types_at_fork(
+        &self,
+        address: SuiAddress,
+    ) -> anyhow::Result<Vec<String>> {
+        self.gql
+            .get_address_balance_coin_types_at_checkpoint(address, self.forked_at_checkpoint)
+            .await
+    }
+
+    /// Object references at the fork checkpoint without an owner check, for
+    /// ids the fork derived rather than the user named.
+    pub(crate) async fn object_refs_at_fork(
+        &self,
+        object_ids: &[ObjectID],
+    ) -> anyhow::Result<Vec<Option<ObjectRef>>> {
+        self.gql
+            .get_object_refs_at_checkpoint(object_ids, self.forked_at_checkpoint)
+            .await
+    }
+
+    /// Lightweight metadata for explicit object seeds at the fork checkpoint.
+    pub(crate) async fn object_seed_metadata_at_fork(
+        &self,
+        object_ids: &[ObjectID],
+    ) -> anyhow::Result<Vec<ObjectSeedMetadata>> {
+        self.gql
+            .get_object_seed_metadata_at_checkpoint(object_ids, self.forked_at_checkpoint)
+            .await
     }
 
     /// Fetch an object at its latest version at the fork checkpoint.
@@ -203,6 +255,11 @@ impl RemoteSource {
     }
 
     /// Lowest checkpoint for which the remote retains object data.
+    ///
+    /// The remote only keeps object-ownership enumeration for a recent window
+    /// of checkpoints (`serviceConfig.availableRange`, roughly the last hour
+    /// on the hosted GraphQL endpoints); fork checkpoints below this bound
+    /// cannot be address-seeded.
     pub(crate) fn lowest_available_checkpoint_objects(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {

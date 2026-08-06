@@ -121,7 +121,7 @@ impl ForkStore {
 
     /// Return the chain (mainnet/testnet/devnet/unknown) this store is connected to.
     pub fn chain(&self) -> Chain {
-        self.inner.remote.gql().chain()
+        self.inner.remote.chain()
     }
 
     fn write_local_snapshot(&self) -> anyhow::Result<RwLockWriteGuard<'_, ()>> {
@@ -131,8 +131,12 @@ impl ForkStore {
             .map_err(|_| anyhow!("local snapshot lock poisoned"))
     }
 
-    pub(crate) fn gql(&self) -> &GraphQLClient {
-        self.inner.remote.gql()
+    /// Checkpoint-pinned read access to the forked-from chain, for callers
+    /// that run their own remote queries (seed resolution). Handing out the
+    /// policy type rather than the raw GraphQL client keeps every reachable
+    /// query pinned at the fork checkpoint by construction.
+    pub(crate) fn remote(&self) -> &RemoteSource {
+        &self.inner.remote
     }
 
     pub(crate) fn metadata(&self) -> &MetadataStore {
