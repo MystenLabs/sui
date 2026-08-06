@@ -16,6 +16,7 @@ use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::body_partial_json;
+use wiremock::matchers::body_string_contains;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
@@ -538,6 +539,52 @@ async fn test_rpc_latest_read_ignores_stale_cached_history() {
             .unwrap(),
         Some((SequenceNumber::from_u64(9), Status::Live(current))),
     );
+}
+
+async fn mock_available_range(server: &MockServer, first_sequence_number: u64) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_string_contains("availableRange"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "serviceConfig": {
+                    "availableRange": {
+                        "first": { "sequenceNumber": first_sequence_number }
+                    }
+                }
+            }
+        })))
+        .mount(server)
+        .await;
+}
+
+/// A remote whose retention window has passed the fork point must not make
+/// the fork report its own locally held range as unavailable.
+#[tokio::test]
+async fn test_availability_floor_is_clamped_at_the_fork_checkpoint() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    mock_available_range(&server, 5000).await;
+
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), 100);
+    assert_eq!(store.get_lowest_available_checkpoint().unwrap(), 100);
+    assert_eq!(
+        store.get_lowest_available_checkpoint_objects().unwrap(),
+        100
+    );
+}
+
+/// A remote floor below the fork point passes through unchanged, so pre-fork
+/// availability keeps tracking the remote's retention window.
+#[tokio::test]
+async fn test_availability_floor_below_the_fork_passes_through() {
+    let temp = tempfile::tempdir().expect("failed to create tempdir");
+    let server = MockServer::start().await;
+    mock_available_range(&server, 10).await;
+
+    let (store, _services) = data_store_with_remote(temp.path(), server.uri(), 100);
+    assert_eq!(store.get_lowest_available_checkpoint().unwrap(), 10);
+    assert_eq!(store.get_lowest_available_checkpoint_objects().unwrap(), 10);
 }
 
 #[tokio::test]

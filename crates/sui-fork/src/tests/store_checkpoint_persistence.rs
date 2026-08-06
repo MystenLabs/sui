@@ -306,7 +306,7 @@ async fn remote_checkpoint_fetch_saves_into_rpc_store() {
         .expect("checkpoint should be read from rpc store");
     assert_eq!(fallback_checkpoint.data(), checkpoint.data());
     assert!(
-        ForkStore::get_checkpoint_by_digest(&fallback_store, checkpoint.digest())
+        ForkStore::get_checkpoint_by_digest_from_local_store(&fallback_store, checkpoint.digest())
             .expect("rpc-store digest lookup should succeed")
             .is_some(),
         "checkpoint digest should be read from rpc store",

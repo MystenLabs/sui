@@ -182,10 +182,9 @@ impl ForkStore {
             .map(|(_, contents)| contents))
     }
 
-    /// Look up a checkpoint summary by its digest. RPC-store only: the
-    /// GraphQL checkpoint query is keyed by sequence number, so there is no
-    /// remote fallback for digest lookups.
-    pub(crate) fn get_checkpoint_by_digest(
+    /// Look up a checkpoint summary by its digest. RPC-store only as the GraphQL checkpoint query
+    /// is keyed by sequence number, so there is no remote fallback for digest lookups.
+    pub(crate) fn get_checkpoint_by_digest_from_local_store(
         &self,
         digest: &CheckpointDigest,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
@@ -221,20 +220,37 @@ impl ForkStore {
         }
     }
 
-    /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
-    /// which both checkpoint and transaction data are available.
+    /// The lowest checkpoint for which checkpoint and transaction data are
+    /// available.
+    ///
+    /// The remote's floor governs only pre-fork data, which is fetched lazily
+    /// and decays with the remote's retention window. Data from the fork
+    /// checkpoint onward is local and permanent, so the floor is clamped
+    /// there: a remote whose retention window has passed the fork point would
+    /// otherwise push the floor above the local tip, and the RPC layer, which
+    /// treats this value as a hard serving gate, would refuse checkpoints the
+    /// fork itself produced and still holds.
     pub(crate) fn get_lowest_available_checkpoint(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.inner.remote.lowest_available_checkpoint()
+        Ok(self
+            .inner
+            .remote
+            .lowest_available_checkpoint()?
+            .min(self.forked_at_checkpoint()))
     }
 
-    /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
-    /// which object data is available.
+    /// The lowest checkpoint for which object data is available, clamped at
+    /// the fork checkpoint for the same reason as
+    /// [`Self::get_lowest_available_checkpoint`].
     pub(crate) fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.inner.remote.lowest_available_checkpoint_objects()
+        Ok(self
+            .inner
+            .remote
+            .lowest_available_checkpoint_objects()?
+            .min(self.forked_at_checkpoint()))
     }
 
     fn fetch_and_save_checkpoint(
@@ -730,7 +746,7 @@ impl SimulatorStore for ForkStore {
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        ForkStore::get_checkpoint_by_digest(self, digest)
+        ForkStore::get_checkpoint_by_digest_from_local_store(self, digest)
             .ok()
             .flatten()
     }
@@ -962,7 +978,7 @@ impl ReadStore for ForkStore {
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
         optional_store_read(
             "checkpoint digest lookup",
-            ForkStore::get_checkpoint_by_digest(self, digest),
+            ForkStore::get_checkpoint_by_digest_from_local_store(self, digest),
         )
     }
 
