@@ -581,6 +581,11 @@ impl EffectsContents {
             });
         }
 
+        // Execution context is not backed by the index yet.
+        if self.scope.is_executed() {
+            return Ok(self.clone());
+        }
+
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
             .load_one_transaction(digest)
