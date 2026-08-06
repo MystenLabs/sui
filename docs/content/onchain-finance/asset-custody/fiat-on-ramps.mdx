@@ -52,12 +52,6 @@ The following table summarizes providers with live Sui on-ramp integration as of
 
 On-ramp providers fall into 2 categories:
 
-- **Direct providers:** Banxa, Unlimit, Bridge.xyz, Stripe, Coinbase, Alchemy Pay, OnRamp.money, CoinVoyage, and Bungee connect directly to payment rails and process transactions themselves. You integrate their SDK or API and manage the provider relationship.
+- **Direct providers:** Connect directly to payment rails and process transactions themselves. You integrate their SDK or API and manage the provider relationship.
 
-- **Aggregators:** Onramper and Meld route transactions through multiple underlying providers (for example, Onramper routes through Kraken, Topper, Banxa, and MoonPay for Sui on-ramps). Aggregators simplify integration because a single SDK covers multiple providers and regions.
-
-:::info
-
-Aggregators like Meld and Onramper route transactions through multiple underlying providers. This broadens regional and asset coverage but means your actual payment experience depends on which sub-provider handles a given transaction.
-
-:::
+- **Aggregators:** Route transactions through multiple underlying providers. Aggregators simplify integration because a single SDK covers multiple providers and regions. This broadens regional and asset coverage but means your actual payment experience depends on which sub-provider handles a given transaction.
