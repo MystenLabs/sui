@@ -336,6 +336,7 @@ export default {
               'onchain-finance/asset-custody/wallets/suilink',
             ],
           },
+          'onchain-finance/asset-custody/address-aliases',
         ],
       },
       {
@@ -375,6 +376,17 @@ export default {
           'onchain-finance/tokenized-assets/create-nft',
         ],
       },
+    {
+      type: 'category',
+      label: 'Payments',
+      link: { type: 'doc', id: 'onchain-finance/payments' },
+      items: [
+        'onchain-finance/choose-payments-model',
+        'onchain-finance/payment-kit',
+        'onchain-finance/payment-intents',
+        'onchain-finance/funding-wallets',
+      ],
+    },
       {
         type: 'category',
         label: 'Example Asset Patterns',
@@ -548,8 +560,6 @@ export default {
         'onchain-finance/kiosk/kiosk-apps',
       ],
     },
-    'onchain-finance/payment-kit',
-	'onchain-finance/payment-intents',
   ],
 
 suiStackSidebar: [
