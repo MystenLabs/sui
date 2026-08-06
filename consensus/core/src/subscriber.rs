@@ -245,7 +245,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .set(1);
 
             'stream: loop {
-                match timeout(SUBSCRIPTION_TIMEOUT, blocks.next()).await {
+                // Split the subscriber's time between waiting on the network and doing work.
+                // If waiting dominates, delivery is bounded upstream (sender or wire); if
+                // processing dominates, the receiver is the bottleneck.
+                let wait_timer = std::time::Instant::now();
+                let next = timeout(SUBSCRIPTION_TIMEOUT, blocks.next()).await;
+                context
+                    .metrics
+                    .node_metrics
+                    .subscriber_stream_wait
+                    .with_label_values(&[peer_hostname])
+                    .observe(wait_timer.elapsed().as_secs_f64());
+                match next {
                     Ok(Some(block)) => {
                         context
                             .metrics
@@ -256,7 +267,14 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
+                        let process_timer = std::time::Instant::now();
                         let result = authority_service.handle_send_block(peer, block).await;
+                        context
+                            .metrics
+                            .node_metrics
+                            .subscriber_process_time
+                            .with_label_values(&[peer_hostname])
+                            .observe(process_timer.elapsed().as_secs_f64());
                         if let Err(e) = result {
                             match e {
                                 ConsensusError::BlockRejected { block_ref, reason } => {

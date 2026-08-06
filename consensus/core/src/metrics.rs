@@ -230,6 +230,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscribed_to: IntGaugeVec,
     pub(crate) subscribed_by: IntGaugeVec,
     pub(crate) subscription_lagged_blocks: IntCounterVec,
+    pub(crate) subscriber_stream_wait: HistogramVec,
+    pub(crate) subscriber_process_time: HistogramVec,
     pub(crate) subscription_dispatch_age: HistogramVec,
     pub(crate) subscription_replay_blocks: HistogramVec,
     pub(crate) subscription_replay_age: HistogramVec,
@@ -895,6 +897,21 @@ impl NodeMetrics {
                 "Own blocks dropped from a peer's subscription stream because the peer fell behind \
                  the broadcast buffer. These are never delivered by subscription and must be fetched.",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            subscriber_stream_wait: register_histogram_vec_with_registry!(
+                "subscriber_stream_wait",
+                "Time the subscriber task spends awaiting the next block from a peer's stream. \
+                 Dominant when delivery is bounded upstream rather than at the receiver.",
+                &["authority"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            subscriber_process_time: register_histogram_vec_with_registry!(
+                "subscriber_process_time",
+                "Time the subscriber task spends inside handle_send_block for one received block.",
+                &["authority"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             subscription_dispatch_age: register_histogram_vec_with_registry!(
