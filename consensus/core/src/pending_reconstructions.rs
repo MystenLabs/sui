@@ -62,7 +62,7 @@ fn max_pending_entries(context: &Context) -> usize {
 /// Per-peer resident-byte quota. Honest steady state per peer is a few hundred KB
 /// (park rate × residency × payload); this is ~16× that, and it bounds the damage a
 /// single author can do by stuffing its own window with maximum-size claims.
-const MAX_PARKED_BYTES_PER_PEER: usize = 4 << 20;
+pub(crate) const MAX_PARKED_BYTES_PER_PEER: usize = 4 << 20;
 
 /// Node-wide resident-byte cap across all peers — the backstop that keeps worst-case
 /// aggregate memory two orders of magnitude below what per-peer quotas alone permit.
@@ -278,12 +278,30 @@ impl PendingReconstructions {
     ) -> Option<AdmitRefusal> {
         let window_top = local_round.saturating_add(window_width(&self.context));
         if claimed_ref.round <= gc_round || claimed_ref.round > window_top {
+            if claimed_ref.round > window_top {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .minimal_block_window_overshoot
+                    .observe((claimed_ref.round - window_top) as f64);
+            }
             return Some(AdmitRefusal::OutsideWindow);
         }
         if self.pending.len() + self.in_flight >= max_pending_entries(&self.context) {
             return Some(AdmitRefusal::TotalBytes);
         }
-        if missing.iter().any(|slot| slot.round <= gc_round) {
+        if let Some(deadest) = missing
+            .iter()
+            .filter(|slot| slot.round <= gc_round)
+            .map(|slot| gc_round - slot.round)
+            .max()
+        {
+            self.context
+                .metrics
+                .node_metrics
+                .minimal_block_dead_slot_staleness
+                .with_label_values(&["admission"])
+                .observe(deadest as f64);
             return Some(AdmitRefusal::DeadFrontierSlot);
         }
         if self.occupancy.contains_key(&Slot::from(*claimed_ref)) {
