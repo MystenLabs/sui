@@ -210,25 +210,27 @@ and nothing fetches them at read time. See storage.md § "Known gaps".
 
 ## Writes
 
-Everything canonical is written synchronously — the executor needs read-your-writes and
-the indexer re-reads sealed rows — while everything derived is left to the embedded
-indexer. An object row and the index entry making it current commit in one batch, so
-neither can outlive the other. Removals still stage before writes within one diff: both
-target the same checkpoint-pinned key, so the later put is what decides whether a
+Everything canonical commits at the seal, in one batch — object rows, tombstones,
+checkpoint-pinned versions, summary, contents, and every transaction's data, effects, and
+events — while everything derived is left to the embedded indexer. Until the seal, an
+executed transaction's object diff lives only in `PendingCheckpointBuffer`, which doubles
+as a read overlay: the executor gets read-your-writes for the next transaction's inputs
+from the staged diffs, consulted before the rpc-store on every current, exact-version, and
+bounded object read. Removals still stage before writes within one diff: both target the
+same checkpoint-pinned key, so the later put is what decides whether a
 wrapped-then-recreated object lands live. Terminal deletes are held out of that rule
 deliberately — an object created and deleted by the same result stages no checkpoint-pinned
-put at all, so it survives as history without ever having been current. A failed persist
-panics: the `SimulatorStore` surface cannot return errors, and executing past one would
-diverge memory from disk.
+put at all, so it survives as history without ever having been current. The overlay mirrors
+exactly these rules, because it must answer what the rows will say once committed. A failed
+stage or seal panics: the `SimulatorStore` surface cannot return errors, and executing past
+one would diverge memory from disk.
 
 ```mermaid
 flowchart TD
-    tx[Simulacrum executes a transaction] --> stage["stage tx, effects, events in<br/>PendingCheckpointBuffer (memory)"]
-    stage --> diff[apply the object diff under the local snapshot lock]
-    diff --> removals[stage removals before writes]
-    removals --> rows["commit object rows, tombstones, and<br/>checkpoint-pinned versions in one batch"]
-    rows --> seal["create_checkpoint seals:<br/>summary, contents, every staged tx row"]
-    seal --> clear[drop the staged entries]
+    tx[Simulacrum executes a transaction] --> stage["stage tx, effects, events, and the object diff<br/>in PendingCheckpointBuffer (memory)"]
+    stage --> overlay["later reads in the same checkpoint resolve<br/>overlay-first against the staged diffs"]
+    overlay --> seal["create_checkpoint seals one atomic batch:<br/>object rows, tombstones, pinned versions<br/>(removals before writes), summary, contents,<br/>every staged tx row"]
+    seal --> clear[drop the staged entries and the overlay]
     clear --> ingest[embedded Indexer ingests the sealed checkpoint]
     ingest --> derived["every pipeline commits: the derived indexes —<br/>owner, type, balance, package versions, epochs,<br/>bitmaps — and the broadcast to subscribers,<br/>each staging its own watermark as it goes"]
     derived --> wm["the executing call returns once the minimum<br/>watermark across all of them reaches<br/>this checkpoint"]
@@ -236,12 +238,11 @@ flowchart TD
 
 Two things the seal step flattens. `create_checkpoint` is not purely a sealing operation:
 under accumulators it first executes the settlement transactions and the barrier transaction,
-each of which re-enters staging and commits its own object diff, so the top of this flow runs
-again before the summary is built. And the seal is three batches rather than one — summary
-and contents together, then each staged transaction separately — so a crash partway through
-can leave a checkpoint holding only some of its transactions. Since the pending buffer is
-memory-only, the staged remainder is gone with it; storage.md § "Known gaps" treats that as
-the main outstanding gap.
+each of which re-enters staging and adds its own object diff, so the top of this flow runs
+again before the summary is built. And the batch is genuinely one batch: a crash anywhere
+before its commit leaves no trace of the checkpoint. The pending buffer is memory-only, so
+the staged work vanishes with the process and a restart resumes from the previous tip —
+never on top of objects whose checkpoint does not exist.
 
 Publication is not a step after indexing but a pipeline within it. The broadcast to
 subscribers is registered as an indexer pipeline like any other, and it stages its watermark

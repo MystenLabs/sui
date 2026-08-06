@@ -300,7 +300,7 @@ impl ServiceManager {
     ///
     /// Two of the enabled pipelines are load-bearing in ways that are easy to
     /// miss. `package_versions` is the *only* writer for a package published
-    /// after the fork point: `apply_local_object_diff` never stages a
+    /// after the fork point: `stage_local_object_diff` never stages a
     /// package-version row, so disabling it would silently lose them. `balance`
     /// accumulates through a merge operator, so it must stay disjoint — the
     /// fork writes pre-fork balances during the seed load, the indexer writes
@@ -501,7 +501,7 @@ mod tests {
     /// value rather than being idempotent. Disabling one the fork does *not*
     /// write loses those rows outright: `package_versions` is the only writer
     /// for a package published after the fork point, since
-    /// `apply_local_object_diff` never stages a package-version row.
+    /// `stage_local_object_diff` never stages a package-version row.
     ///
     /// Neither failure shows up as a test error elsewhere, so the split is
     /// pinned here.

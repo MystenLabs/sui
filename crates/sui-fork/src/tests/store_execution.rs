@@ -738,6 +738,36 @@ fn test_read_child_object_uses_highest_local_version_within_bound() {
     assert_eq!(child, child_v5);
 }
 
+/// Bounded child reads must see versions the in-flight checkpoint staged but
+/// has not yet sealed, or execution of a later transaction in the same
+/// checkpoint would resolve dynamic fields against pre-checkpoint state.
+#[test]
+fn test_read_child_object_sees_staged_versions_within_bound() {
+    let (_temp, mut store) = data_store();
+    let parent = ObjectID::random();
+    let child_id = ObjectID::random();
+    let child_v5 = make_gas_object(child_id, 5, Owner::ObjectOwner(parent.into()));
+    let child_v7 = make_gas_object(child_id, 7, Owner::ObjectOwner(parent.into()));
+
+    store.update_objects(BTreeMap::from([(child_id, child_v5.clone())]), vec![]);
+    store.update_objects(BTreeMap::from([(child_id, child_v7.clone())]), vec![]);
+
+    // Both bounds resolve from the overlay alone — the dummy remote would
+    // surface as an error if either read fell through.
+    assert_eq!(
+        store
+            .read_child_object_fallible(&parent, &child_id, SequenceNumber::from_u64(6))
+            .expect("bounded read between staged versions should not error"),
+        Some(child_v5),
+    );
+    assert_eq!(
+        store
+            .read_child_object_fallible(&parent, &child_id, SequenceNumber::from_u64(7))
+            .expect("bounded read at the staged tip should not error"),
+        Some(child_v7),
+    );
+}
+
 #[tokio::test]
 async fn test_read_child_object_falls_back_to_remote_root_version() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");

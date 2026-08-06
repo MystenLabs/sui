@@ -49,6 +49,8 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
 
+use crate::pending::ObjectDiff;
+use crate::pending::StagedTransaction;
 use crate::services::FORK_INDEXER_PIPELINES;
 
 /// Synthetic pipeline key recording that the one-shot seed load committed.
@@ -174,12 +176,31 @@ impl LocalStore {
         batch.commit().context("failed to save object version")
     }
 
-    /// Writes a checkpoint summary, contents, and digest-to-sequence index.
+    /// Writes a checkpoint summary, contents, and digest-to-sequence index in
+    /// its own batch.
+    ///
+    /// This is the eager path for checkpoints that are remote truth — pre-fork
+    /// rows fetched from the forked-from chain and the fork-point checkpoint
+    /// persisted at startup. Locally sealed checkpoints go through
+    /// [`Self::seal_checkpoint`] instead, which stages the same rows into the
+    /// seal's atomic batch.
+    pub(crate) fn save_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: &CheckpointContents,
+    ) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        self.stage_checkpoint(&mut batch, checkpoint, contents)?;
+        batch.commit().context("failed to persist checkpoint")
+    }
+
+    /// Stages a checkpoint summary, contents, and digest-to-sequence index.
     ///
     /// The supplied contents must match the content digest recorded in the
     /// checkpoint summary.
-    pub(crate) fn save_checkpoint(
+    fn stage_checkpoint(
         &self,
+        batch: &mut sui_consistent_store::Batch,
         checkpoint: &VerifiedCheckpoint,
         contents: &CheckpointContents,
     ) -> anyhow::Result<()> {
@@ -190,7 +211,6 @@ impl LocalStore {
         );
 
         let sequence = checkpoint.data().sequence_number;
-        let mut batch = self.db.batch();
         batch.put(
             &self.schema.checkpoint_summary,
             &U64Be(sequence),
@@ -206,16 +226,43 @@ impl LocalStore {
             &checkpoint_seq_by_digest::Key(*checkpoint.digest()),
             &U64Varint(sequence),
         )?;
-        batch.commit().context("failed to persist checkpoint")
+        Ok(())
     }
 
-    /// Writes transaction, effects, events, and transaction metadata rows.
+    /// Writes transaction, effects, events, and transaction metadata rows in
+    /// their own batch.
+    ///
+    /// Like [`Self::save_checkpoint`], this is the eager path for pre-fork
+    /// transactions fetched from the forked-from chain; locally executed
+    /// transactions are staged into the seal batch by [`Self::seal_checkpoint`].
+    pub(crate) fn save_transaction(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: &CheckpointContents,
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
+        transaction_events: &TransactionEvents,
+    ) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        self.stage_transaction(
+            &mut batch,
+            checkpoint,
+            contents,
+            transaction,
+            transaction_effects,
+            transaction_events,
+        )?;
+        batch.commit().context("failed to persist transaction")
+    }
+
+    /// Stages transaction, effects, events, and transaction metadata rows.
     ///
     /// The transaction must be present in `contents`, and the effects must
     /// correspond to the same transaction digest. The caller is responsible for
     /// persisting the containing checkpoint when that is required by readers.
-    pub(crate) fn save_transaction(
+    fn stage_transaction(
         &self,
+        batch: &mut sui_consistent_store::Batch,
         checkpoint: &VerifiedCheckpoint,
         contents: &CheckpointContents,
         transaction: &VerifiedTransaction,
@@ -260,7 +307,6 @@ impl LocalStore {
             timestamp_ms: checkpoint.data().timestamp_ms,
         };
 
-        let mut batch = self.db.batch();
         batch.put(
             &self.schema.tx_seq_by_digest,
             &tx_seq_by_digest::Key(digest),
@@ -286,7 +332,7 @@ impl LocalStore {
             &U64Be(tx_seq),
             &tx_metadata_by_seq::store(&metadata),
         )?;
-        batch.commit().context("failed to persist transaction")
+        Ok(())
     }
 
     /// Looks up checkpoint contents by their content digest.
@@ -326,12 +372,14 @@ impl LocalStore {
 
     /// The checkpoint that in-flight local execution is producing.
     ///
-    /// Object-version rows written during execution have to be keyed by the
-    /// checkpoint that will contain them, but that checkpoint is not sealed —
-    /// and so not persisted — until execution finishes. It is always one past
-    /// the highest persisted checkpoint: sealing is serialized by the
+    /// This is the upper bound for currency reads over the checkpoint-pinned
+    /// version index: persisted rows only ever sit at or below the highest
+    /// sealed checkpoint, so bounding here includes all of them. It is always
+    /// one past the highest persisted checkpoint: sealing is serialized by the
     /// publication lock so only one checkpoint is ever in flight, and the fork
-    /// produces nothing at or below the checkpoint it diverged at.
+    /// produces nothing at or below the checkpoint it diverged at. The seal
+    /// keys each staged diff at the sealed checkpoint's own sequence number,
+    /// which equals this value at the moment of sealing.
     fn executing_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
         let highest = self
             .highest_checkpoint_sequence()?
@@ -460,28 +508,35 @@ impl LocalStore {
         self.stage_restored_object_version(batch, object)
     }
 
-    /// Applies local execution object writes and removals to the raw `objects`
-    /// CF and the checkpoint-pinned version index.
+    /// Stages local execution object writes and removals into the raw
+    /// `objects` CF and the checkpoint-pinned version index, keyed at
+    /// `checkpoint` — the sealed checkpoint that contains them.
     ///
-    /// Write-path contract: local execution synchronously writes only
-    /// *canonical* data — object version rows, tombstones, and their
-    /// checkpoint-pinned versions here, and checkpoint/transaction/effects/events rows at
-    /// seal time — because the executor needs read-your-writes for its next
-    /// inputs and the embedded indexer ingests each sealed checkpoint from
-    /// these very rows. All *derived* indexes (owner, type, package-version,
-    /// balance, bitmaps) are written by the indexer alone, and checkpoint
-    /// publication blocks on `ServiceManager::wait_for_indexed_checkpoint`, so
-    /// RPC reads issued after an execution returns always see fully indexed
-    /// state. The one-shot seed load still writes derived indexes
-    /// synchronously, because the indexer only processes post-fork checkpoints
-    /// and so never sees the pre-fork state the seed establishes.
+    /// Write-path contract: local execution persists nothing until seal.
+    /// Canonical data — object version rows, tombstones, their
+    /// checkpoint-pinned versions, and checkpoint/transaction/effects/events
+    /// rows — commits in [`Self::seal_checkpoint`]'s single batch, so a crash
+    /// leaves either the whole checkpoint or none of it. Until then the
+    /// executor's read-your-writes come from the pending overlay
+    /// (`PendingCheckpointBuffer`), which mirrors these rows. All *derived*
+    /// indexes (owner, type, package-version, balance, bitmaps) are written by
+    /// the indexer alone from the sealed rows, and checkpoint publication
+    /// blocks on `ServiceManager::wait_for_indexed_checkpoint`, so RPC reads
+    /// issued after an execution returns always see fully indexed state. The
+    /// one-shot seed load still writes derived indexes synchronously, because
+    /// the indexer only processes post-fork checkpoints and so never sees the
+    /// pre-fork state the seed establishes.
     ///
     /// When the same result both removes and writes an object (e.g. wrapped
     /// then written again), the write wins and the object stays current; an
     /// object created and terminally deleted in the same result is kept only
-    /// as a historical row.
-    pub(crate) fn apply_local_object_diff(
+    /// as a historical row. `PendingCheckpointBuffer::record_object_diff`
+    /// mirrors these rules — the overlay must answer exactly what these rows
+    /// will say once committed.
+    pub(crate) fn stage_local_object_diff(
         &self,
+        batch: &mut sui_consistent_store::Batch,
+        checkpoint: CheckpointSequenceNumber,
         written_objects: &BTreeMap<ObjectID, Object>,
         removed_objects: &[ObjectRemoval],
     ) -> anyhow::Result<()> {
@@ -491,9 +546,6 @@ impl LocalStore {
                 (removed.kind == TombstoneKind::Deleted).then_some(removed.object_id)
             })
             .collect();
-
-        let checkpoint = self.executing_checkpoint()?;
-        let mut batch = self.db.batch();
 
         // Removals stage before writes so that an object removed and rewritten
         // in the same result ends up live: both write the same
@@ -508,7 +560,7 @@ impl LocalStore {
                 &objects::tombstone(removed.kind),
             )?;
             self.stage_object_version_at_checkpoint(
-                &mut batch,
+                batch,
                 removed.object_id,
                 checkpoint,
                 removed.version,
@@ -516,10 +568,10 @@ impl LocalStore {
         }
 
         for object in written_objects.values() {
-            self.stage_object_version(&mut batch, object)?;
+            self.stage_object_version(batch, object)?;
             if !terminal_deleted.contains(&object.id()) {
                 self.stage_object_version_at_checkpoint(
-                    &mut batch,
+                    batch,
                     object.id(),
                     checkpoint,
                     object.version(),
@@ -527,10 +579,44 @@ impl LocalStore {
             }
         }
 
+        Ok(())
+    }
+
+    /// Seals one locally produced checkpoint atomically: every staged object
+    /// diff, the checkpoint summary and contents, and every staged transaction
+    /// commit in a single batch.
+    ///
+    /// This is the fork's only durability point for locally executed state.
+    /// Committing everything together is what makes a crash recoverable
+    /// without inspection: either the checkpoint exists with all of its rows,
+    /// or nothing was written and a restart resumes from the previous tip with
+    /// only in-memory loss.
+    pub(crate) fn seal_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        contents: &CheckpointContents,
+        diffs: &[ObjectDiff],
+        transactions: &[StagedTransaction],
+    ) -> anyhow::Result<()> {
+        let sequence = checkpoint.data().sequence_number;
+        let mut batch = self.db.batch();
+        for diff in diffs {
+            self.stage_local_object_diff(&mut batch, sequence, &diff.written, &diff.removed)?;
+        }
+        self.stage_checkpoint(&mut batch, checkpoint, contents)?;
+        for transaction in transactions {
+            self.stage_transaction(
+                &mut batch,
+                checkpoint,
+                contents,
+                &transaction.transaction,
+                &transaction.effects,
+                &transaction.events,
+            )?;
+        }
         batch
             .commit()
-            .context("failed to apply local object diff")?;
-        Ok(())
+            .with_context(|| format!("failed to seal checkpoint {sequence}"))
     }
 
     /// Reads the raw schema status row for one object version.
@@ -670,6 +756,22 @@ mod tests {
         .into()
     }
 
+    /// Stage-and-commit shorthand standing in for the production seal: one
+    /// diff, one batch, keyed at the executing checkpoint — which is exactly
+    /// the sealed checkpoint's sequence number at the moment a real seal runs.
+    fn apply_diff(
+        store: &LocalStore,
+        written: &BTreeMap<ObjectID, Object>,
+        removed: &[ObjectRemoval],
+    ) {
+        let checkpoint = store.executing_checkpoint().unwrap();
+        let mut batch = store.db.batch();
+        store
+            .stage_local_object_diff(&mut batch, checkpoint, written, removed)
+            .unwrap();
+        batch.commit().unwrap();
+    }
+
     #[test]
     fn saved_object_version_does_not_create_current_state() {
         let (_dir, store) = fresh_store();
@@ -747,18 +849,16 @@ mod tests {
         assert_eq!(rows, vec![TEST_FORK_CHECKPOINT]);
     }
 
-    /// Locally executed changes are keyed by the checkpoint producing them,
-    /// which is derived rather than passed in. Getting that wrong is silent:
-    /// the row still resolves, just at the wrong point in history.
+    /// Locally executed changes are keyed by the checkpoint sealing them.
+    /// Getting that wrong is silent: the row still resolves, just at the wrong
+    /// point in history.
     #[test]
     fn local_execution_is_recorded_at_the_executing_checkpoint() {
         let (_dir, store) = fresh_store();
         let id = ObjectID::random();
         let object = make_object(id, 1, Owner::Immutable);
 
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, object)]), &[])
-            .unwrap();
+        apply_diff(&store, &BTreeMap::from([(id, object)]), &[]);
 
         let rows: Vec<_> = store
             .schema
@@ -796,19 +896,16 @@ mod tests {
         let owner = SuiAddress::random_for_testing_only();
         let base = make_object(id, 1, Owner::AddressOwner(owner));
 
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, base.clone())]), &[])
-            .unwrap();
-        store
-            .apply_local_object_diff(
-                &BTreeMap::new(),
-                &[ObjectRemoval {
-                    object_id: id,
-                    version: SequenceNumber::from_u64(2),
-                    kind: TombstoneKind::Deleted,
-                }],
-            )
-            .unwrap();
+        apply_diff(&store, &BTreeMap::from([(id, base.clone())]), &[]);
+        apply_diff(
+            &store,
+            &BTreeMap::new(),
+            &[ObjectRemoval {
+                object_id: id,
+                version: SequenceNumber::from_u64(2),
+                kind: TombstoneKind::Deleted,
+            }],
+        );
         store.save_live_object_if_current(&base).unwrap();
 
         assert_eq!(
@@ -960,16 +1057,15 @@ mod tests {
         let id = ObjectID::random();
         let object = make_object(id, 3, Owner::Immutable);
 
-        store
-            .apply_local_object_diff(
-                &BTreeMap::from([(id, object.clone())]),
-                &[ObjectRemoval {
-                    object_id: id,
-                    version: SequenceNumber::from_u64(2),
-                    kind: TombstoneKind::Deleted,
-                }],
-            )
-            .unwrap();
+        apply_diff(
+            &store,
+            &BTreeMap::from([(id, object.clone())]),
+            &[ObjectRemoval {
+                object_id: id,
+                version: SequenceNumber::from_u64(2),
+                kind: TombstoneKind::Deleted,
+            }],
+        );
 
         assert_eq!(
             store.get_latest_object_status(id).unwrap(),
@@ -992,16 +1088,15 @@ mod tests {
         let id = ObjectID::random();
         let object = make_object(id, 3, Owner::Immutable);
 
-        store
-            .apply_local_object_diff(
-                &BTreeMap::from([(id, object.clone())]),
-                &[ObjectRemoval {
-                    object_id: id,
-                    version: SequenceNumber::from_u64(2),
-                    kind: TombstoneKind::Wrapped,
-                }],
-            )
-            .unwrap();
+        apply_diff(
+            &store,
+            &BTreeMap::from([(id, object.clone())]),
+            &[ObjectRemoval {
+                object_id: id,
+                version: SequenceNumber::from_u64(2),
+                kind: TombstoneKind::Wrapped,
+            }],
+        );
 
         assert_eq!(
             store.get_latest_object_status(id).unwrap(),
@@ -1018,12 +1113,8 @@ mod tests {
         let object = make_object(id, 1, Owner::AddressOwner(owner));
         let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
 
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, object)]), &[])
-            .unwrap();
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, transferred.clone())]), &[])
-            .unwrap();
+        apply_diff(&store, &BTreeMap::from([(id, object)]), &[]);
+        apply_diff(&store, &BTreeMap::from([(id, transferred.clone())]), &[]);
 
         // Canonical state is current immediately...
         assert_eq!(
@@ -1074,9 +1165,7 @@ mod tests {
         let transferred = make_object(id, 2, Owner::AddressOwner(recipient));
 
         store.restore_seed_objects(&[seeded]).unwrap();
-        store
-            .apply_local_object_diff(&BTreeMap::from([(id, transferred.clone())]), &[])
-            .unwrap();
+        apply_diff(&store, &BTreeMap::from([(id, transferred.clone())]), &[]);
 
         assert_eq!(
             store.get_latest_object_status(id).unwrap(),

@@ -127,6 +127,111 @@ async fn mount_checkpoint_mock(
         .await;
 }
 
+fn make_gas_object(id: ObjectID, version: u64) -> Object {
+    use sui_types::object::Data;
+    use sui_types::object::MoveObject;
+    use sui_types::object::ObjectInner;
+    use sui_types::object::Owner;
+
+    let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
+    ObjectInner {
+        owner: Owner::Immutable,
+        data: Data::Move(move_obj),
+        previous_transaction: sui_types::digests::TransactionDigest::genesis_marker(),
+        storage_rebate: 0,
+    }
+    .into()
+}
+
+/// A crash between execution and seal must leave no durable trace: staged
+/// object diffs live only in memory, so a restart resumes from the previous
+/// tip instead of on top of state whose creating transaction was never
+/// recorded.
+#[test]
+fn unsealed_execution_leaves_no_durable_state_across_reopen() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let object_id = ObjectID::random();
+
+    {
+        let (mut store, _services) = test_data_store(temp.path());
+        let object = make_gas_object(object_id, 1);
+        store.update_objects(BTreeMap::from([(object_id, object.clone())]), vec![]);
+
+        // The overlay serves the staged write...
+        assert_eq!(
+            ForkStore::get_object(&store, &object_id).expect("staged read should not error"),
+            Some(object),
+        );
+        // ...but nothing is durable before the seal.
+        assert_eq!(
+            store
+                .local_store()
+                .get_latest_object_status(object_id)
+                .unwrap(),
+            None,
+        );
+        // Simulated crash: drop the store with the checkpoint unsealed.
+    }
+
+    let (store, _services) = test_data_store(temp.path());
+    assert_eq!(
+        store
+            .local_store()
+            .get_latest_object_status(object_id)
+            .unwrap(),
+        None,
+        "an unsealed diff must not survive a restart",
+    );
+    assert_eq!(
+        store.local_store().highest_checkpoint_sequence().unwrap(),
+        None,
+        "no checkpoint may exist for the crashed execution",
+    );
+}
+
+/// The seal is the only durability point: object rows, their pinned versions,
+/// and the checkpoint commit in one batch, staged diffs replay in arrival
+/// order, and the overlay drains once the rows are durable.
+#[test]
+fn seal_persists_staged_object_diffs_atomically_with_the_checkpoint() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (mut store, _services) = test_data_store(temp.path());
+    let object_id = ObjectID::random();
+    let v1 = make_gas_object(object_id, 1);
+    let v2 = make_gas_object(object_id, 2);
+
+    store.update_objects(BTreeMap::from([(object_id, v1.clone())]), vec![]);
+    store.update_objects(BTreeMap::from([(object_id, v2.clone())]), vec![]);
+
+    let (checkpoint, contents) = build_checkpoint(1);
+    store.insert_checkpoint(checkpoint);
+    store.insert_checkpoint_contents(contents);
+
+    let local = store.local_store();
+    assert_eq!(
+        local.get_latest_object_status(object_id).unwrap(),
+        Some((SequenceNumber::from_u64(2), Status::Live(v2))),
+        "the later staged diff wins currency after the seal",
+    );
+    assert_eq!(
+        local
+            .get_object_status_at_version(object_id, SequenceNumber::from_u64(1))
+            .unwrap(),
+        Some(Status::Live(v1)),
+        "earlier staged versions persist as history",
+    );
+    assert_eq!(local.highest_checkpoint_sequence().unwrap(), Some(1));
+    assert!(
+        store
+            .inner
+            .pending
+            .staged_object_diffs()
+            .unwrap()
+            .is_empty(),
+        "the seal must drain the staged diffs",
+    );
+}
+
 #[test]
 fn insert_checkpoint_pair_saves_both_to_rpc_store() {
     let temp = tempfile::tempdir().expect("tempdir");

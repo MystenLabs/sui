@@ -81,14 +81,20 @@ each object row and the live-state row covering it commit in a single batch.
 
 ## Executing and indexing
 
-Everything canonical is written synchronously and everything derived is left to the indexer.
-Simulacrum inserts the pieces of an in-flight checkpoint as it executes. These pieces are staged in
-`PendingCheckpointBuffer` until the seal writes them out atomically to the DBs. Each
-executed transaction writes its object version rows, tombstones, and checkpoint-pinned
-version rows before execution proceeds, and sealing writes the checkpoint summary, contents, and every
-transaction's data, effects, and events. The executor needs
-read-your-writes for the next transaction's inputs, and the indexer ingests each sealed
-checkpoint by reading it back out of the same rows.
+Everything canonical commits at the seal and everything derived is left to the indexer.
+Simulacrum inserts the pieces of an in-flight checkpoint as it executes, and all of them —
+transactions, effects, events, and each transaction's object diff — are staged in
+`PendingCheckpointBuffer` until the seal writes them out in one atomic batch: object version
+rows, tombstones, checkpoint-pinned version rows, the checkpoint summary and contents, and
+every transaction's data, effects, and events. Nothing about a checkpoint is durable before
+that commit, so a crash at any point loses only memory and a restart resumes from the
+previous tip. The executor still gets read-your-writes for the next transaction's inputs,
+but from the buffer rather than the store: the staged diffs double as a read overlay that
+current, exact-version, and bounded object reads consult before the rpc-store. The overlay
+wins whenever it has an entry, which is sound because a staged version always outranks
+every persisted version of the same object — local execution Lamport-bumps past the live
+version, and remote fetches are pinned at or below the fork checkpoint. The indexer ingests
+each sealed checkpoint by reading it back out of the committed rows.
 
 The derived indexes (owner, type, package-version, balance, bitmaps) are written for
 local checkpoints by the embedded indexer alone, which runs every stock pipeline starting
@@ -314,11 +320,9 @@ to the current schemas in `sui-rpc-store`, it seems reasonable to use the same c
 
 ## Known gaps
 
-The pending checkpoint buffer is memory only, so a crash mid-publication loses the
-unsealed checkpoint and its transactions, while the object rows and version-index entries
-that checkpoint had already written persist. On restart the fork resumes producing the
-same checkpoint number, so those orphaned rows still fall within a live-state read's bound
-and are served as though the checkpoint had sealed. This is the main known gap.
+Fork directories written before the seal became a single batch may hold orphaned object
+rows from a crash mid-publication — rows a checkpoint wrote whose seal never landed.
+Nothing sweeps those on open; the atomic seal only guarantees that no new ones appear.
 
 Type layout resolution reaches under the object policy rather than composing over it. It
 loads the packages a type references straight from stored rows, so a pre-fork type whose

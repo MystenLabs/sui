@@ -268,6 +268,11 @@ impl ForkStore {
     ) -> anyhow::Result<Option<Object>> {
         let local_store = self.local_store();
         let sequence = SequenceNumber::from_u64(version);
+        match self.inner.pending.object_at_version(*object_id, sequence)? {
+            Some(Status::Live(object)) => return Ok(Some(object)),
+            Some(Status::Tombstone(_)) => return Ok(None),
+            None => {}
+        }
         match local_store.get_object_status_at_version(*object_id, sequence)? {
             Some(Status::Live(object)) => return Ok(Some(object)),
             Some(Status::Tombstone(_)) => return Ok(None),
@@ -305,6 +310,17 @@ impl ForkStore {
         version_bound: SequenceNumber,
     ) -> anyhow::Result<Option<Object>> {
         let local_store = self.local_store();
+        // A staged version always outranks every persisted version of the same
+        // object, so a hit within the bound is the answer.
+        match self
+            .inner
+            .pending
+            .object_at_or_before(*object_id, version_bound)?
+        {
+            Some((_, Status::Live(object))) => return Ok(Some(object)),
+            Some((_, Status::Tombstone(_))) => return Ok(None),
+            None => {}
+        }
         match local_store.get_object_at_or_before(*object_id, version_bound)? {
             Some((_, Status::Live(object))) => return Ok(Some(object)),
             Some((_, Status::Tombstone(_))) => return Ok(None),
@@ -322,9 +338,19 @@ impl ForkStore {
         Ok(object)
     }
 
-    /// Local-first lookup for the latest known version of an object. Falls back to a remote
-    /// `AtCheckpoint(forked_at_checkpoint)` query and persists the result in the RPC store.
+    /// Overlay-first, then local, lookup for the latest known version of an object. Falls back
+    /// to a remote `AtCheckpoint(forked_at_checkpoint)` query and persists the result in the
+    /// RPC store.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
+        // The in-flight checkpoint's writes live only in the pending overlay
+        // until seal. A pending tombstone must block the remote fallback,
+        // exactly like a persisted tombstone row would.
+        match self.inner.pending.latest_object(*object_id)? {
+            Some((_, Status::Live(object))) => return Ok(Some(object)),
+            Some((_, Status::Tombstone(_))) => return Ok(None),
+            None => {}
+        }
+
         info!("Fetching latest object from local store: {object_id}",);
         let local_store = self.local_store();
         match local_store.get_latest_object_status(*object_id)? {
@@ -463,8 +489,12 @@ impl ForkStore {
         Ok(Some(info))
     }
 
-    /// Persist local object writes and current-state removals, then update the address-owned
-    /// index from the same diff.
+    /// Stage local object writes and current-state removals for the in-flight
+    /// checkpoint.
+    ///
+    /// Nothing is persisted here: the diff is buffered — and served to reads
+    /// through the pending overlay — until the checkpoint seals, which commits
+    /// objects, checkpoint, and transactions in one atomic batch.
     fn apply_object_updates(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
@@ -474,8 +504,9 @@ impl ForkStore {
             .write_local_snapshot()
             .context("failed to lock local snapshot for object update")?;
 
-        self.local_store()
-            .apply_local_object_diff(&written_objects, &removed_objects)
+        self.inner
+            .pending
+            .record_object_diff(written_objects, removed_objects)
     }
 
     /// Construct a `ForkStore` for tests, backed by an explicit local root and a fake (unused)
@@ -538,9 +569,9 @@ impl ForkStore {
     }
 
     /// Seal the staged checkpoint matching `contents` into the rpc-store:
-    /// summary and contents first, then every staged transaction it references,
-    /// and finally drop the staged entries. Idempotent when the contents are
-    /// already persisted.
+    /// every staged object diff, the summary and contents, and every staged
+    /// transaction commit in one atomic batch, and the staged entries are
+    /// dropped afterwards. Idempotent when the contents are already persisted.
     fn save_pending_checkpoint_contents(
         &self,
         contents: &CheckpointContents,
@@ -554,21 +585,12 @@ impl ForkStore {
         }
 
         let checkpoint = self.inner.pending.checkpoint_for_contents(contents)?;
-        local_store.save_checkpoint(&checkpoint, contents)?;
-
         let staged = self
             .inner
             .pending
             .staged_transactions_for(&checkpoint, contents)?;
-        for transaction in &staged {
-            local_store.save_transaction(
-                &checkpoint,
-                contents,
-                &transaction.transaction,
-                &transaction.effects,
-                &transaction.events,
-            )?;
-        }
+        let diffs = self.inner.pending.staged_object_diffs()?;
+        local_store.seal_checkpoint(&checkpoint, contents, &diffs, &staged)?;
 
         self.inner.pending.clear_sealed(
             &checkpoint,
@@ -822,7 +844,7 @@ impl SimulatorStore for ForkStore {
         self.insert_transaction_effects(effects);
         self.insert_events(&tx_digest, events);
         if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
-            panic!("failed to persist transaction object updates for {tx_digest}: {err:?}");
+            panic!("failed to stage transaction object updates for {tx_digest}: {err:?}");
         }
     }
 
@@ -846,6 +868,11 @@ impl SimulatorStore for ForkStore {
         }
     }
 
+    /// Stages the diff for the in-flight checkpoint like every other object
+    /// write; it becomes durable when that checkpoint seals. Callers must
+    /// therefore be inside a checkpoint cycle — in production only
+    /// `init_with_genesis` calls this, and the fork never runs that path
+    /// (`insert_committee` is unimplemented on this store).
     fn update_objects(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
@@ -860,7 +887,7 @@ impl SimulatorStore for ForkStore {
             })
             .collect();
         if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
-            panic!("failed to persist object updates: {err:?}");
+            panic!("failed to stage object updates: {err:?}");
         }
     }
 
