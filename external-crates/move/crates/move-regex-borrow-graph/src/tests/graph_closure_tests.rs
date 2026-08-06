@@ -1268,21 +1268,20 @@ proptest! {
 // Canonicalization hazards
 // -------------------------------------------------------------------------------------------------
 
-/// `Graph::canonicalize` collects into a `BTreeMap<Ref, Node>`. A remapping that sends two
-/// distinct references to the same canonical id therefore drops one node from `Graph::nodes`
-/// while leaving it, and its edges, in the underlying `GraphMap`. Only a `debug_assert_eq!` on
-/// the node counts catches it. In a release build the duplicate weight makes `borrowed_by` and
-/// `borrows_from` overwrite one entry with the other and lose edges.
+/// A remapping that sends two distinct references to the same canonical id would collapse them
+/// into one entry in `Graph::nodes` while both nodes, and their edges, stayed in the `GraphMap`,
+/// and `borrowed_by` and `borrows_from` would then lose edges. `canonicalize` rejects it by name
+/// before touching anything, so a release build gets an `InvariantViolation` rather than a graph
+/// that quietly drops edges.
 ///
 /// The one production caller, `regex_reference_safety::AbstractState::canonicalize`, builds an
-/// injective map of `local_root -> 0` and `local i -> i + 1`, so this is unreachable today. The
-/// test starts failing if that debug assertion ever goes away.
+/// injective map of `local_root -> 0` and `local i -> i + 1`, so this never fires in practice.
 #[test]
-#[should_panic]
-fn canonicalize_with_non_injective_remapping_collapses_nodes() {
+#[should_panic(expected = "remapping is not injective")]
+fn canonicalize_rejects_a_non_injective_remapping() {
     let (mut graph, refs) = Graph::<(), char>::new(4, [(0, (), true), (1, (), true)]).unwrap();
     let remapping = BTreeMap::from([(refs[&0], 0u32), (refs[&1], 0u32)]);
-    graph.canonicalize(&remapping).unwrap();
+    let _ = graph.canonicalize(&remapping);
 }
 
 /// The `canonicalize -> refresh -> canonicalize` cycle a block boundary performs must not change
