@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::EpochId;
+use crate::base_types::{EpochId, ObjectID};
+use crate::dynamic_field::get_dynamic_field_from_store;
+use crate::storage::ObjectStore;
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, id::UID};
 
@@ -85,6 +89,38 @@ pub fn is_setting(tag: &StructTag) -> bool {
         && module.as_ident_str() == CONFIG_MODULE_NAME
         && name.as_ident_str() == SETTING_STRUCT_NAME
         && type_params.len() == 1
+}
+
+/// Reads a `Config` from a dynamic field of `parent_id`.
+///
+/// Missing or invalid dynamic fields return `None`.
+pub fn get_config_from_store<K>(
+    object_store: &dyn ObjectStore,
+    parent_id: ObjectID,
+    key: &K,
+) -> Option<Config>
+where
+    K: Clone + MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+{
+    get_dynamic_field_from_store(object_store, parent_id, key).ok()
+}
+
+/// Reads a setting from `config`, returning the value applicable to `cur_epoch`.
+///
+/// Missing or invalid dynamic fields return `None`.
+pub fn read_config_setting<K, V>(
+    object_store: &dyn ObjectStore,
+    config: &Config,
+    setting_name: K,
+    cur_epoch: Option<EpochId>,
+) -> Option<V>
+where
+    K: Clone + MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    V: Clone + Serialize + DeserializeOwned,
+{
+    let setting: Setting<V> =
+        get_dynamic_field_from_store(object_store, *config.id.object_id(), &setting_name).ok()?;
+    setting.read_value(cur_epoch).cloned()
 }
 
 impl<V> Setting<V> {
