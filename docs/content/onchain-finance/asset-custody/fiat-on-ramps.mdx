@@ -15,7 +15,6 @@ keywords:
 goal:
   description: >-
     Reader can choose and integrate a fiat on-ramp provider for their Sui app
-    based on asset support, regional coverage, and payment methods
   requires:
     - has_frontmatter:
         - title
@@ -28,25 +27,12 @@ goal:
       label: Needs answer summary for AI citation
 questions:
   - What fiat on-ramp providers support Sui?
-  - How do I accept fiat payments in a Sui app?
-  - Which on-ramp providers support USDC on Sui?
-  - What regions do Sui on-ramp providers cover?
 answer: >-
   Multiple third-party providers offer fiat on-ramp integration with Sui,
-  including Banxa, Stripe, Coinbase, Meld, and Onramper. Provider availability
-  varies by region, supported assets, and payment methods.
+  including Banxa, Stripe, Coinbase, Meld, and Onramper.
 ---
 
-<Tabs className="tabsHeadingCentered--small">
-<TabItem value="prereq" label="Prerequisites">
-- [x] A [Sui wallet](/develop/get-started/connect) configured for the target network
-- [x] Familiarity with the assets you want to support (SUI, USDC, WAL, and others)
-</TabItem>
-</Tabs>
-
 Fiat on-ramp providers accept traditional currency payments (credit cards, bank transfers, mobile wallets) and deliver Sui-native tokens to a user's wallet address. You embed an on-ramp provider into your app so users can purchase Sui assets without leaving your interface.
-
-Multiple third-party providers offer Sui on-ramp integration with varying asset support, regional coverage, and payment methods. You choose providers based on the regions you serve, the assets your users need, and the payment methods your audience prefers.
 
 ## Provider comparison
 
