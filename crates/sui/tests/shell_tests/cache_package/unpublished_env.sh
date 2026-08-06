@@ -1,0 +1,7 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Run `cache-package` against an env that the dep's manifest declares but for
+# which no publication is recorded in Published.toml; should succeed and return
+# the package info with no address fields.
+sui move --client.config $CONFIG cache-package unpublished_env unpublished "{ local="\"$(pwd -W 2>/dev/null || pwd)/a\"" }"

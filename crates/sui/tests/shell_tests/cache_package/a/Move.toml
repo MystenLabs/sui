@@ -1,2 +1,7 @@
 [package]
 name = "a"
+implicit-dependencies = false
+
+[environments]
+custom_env = "c057011d"
+unpublished_env = "unpublished"
