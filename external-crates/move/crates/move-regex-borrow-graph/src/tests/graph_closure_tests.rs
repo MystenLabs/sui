@@ -1,27 +1,24 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Concrete-model soundness tests for the borrow graph.
+//! Tests the borrow graph against a concrete model of memory.
 //!
 //! The other test modules check algebraic identities of `Regex`, or check a single graph
 //! extension against the relations that existed just before it. These tests instead carry a
-//! *concrete* model alongside the abstract graph: every live reference is assigned an actual
-//! memory location (a tree root plus a path), and every operation updates both.
+//! concrete model alongside the abstract graph. Every live reference is given an actual memory
+//! location, a disjoint tree root plus a path within it, and every operation updates both.
 //!
-//! The property under test is the closure/completeness claim the bytecode verifier relies on:
+//! The property under test is the closure claim the bytecode verifier relies on. For every pair
+//! of live references `x` and `y` where the concrete state has `loc(y) = loc(x) ++ w`, the direct
+//! edge `x --> y` must contain a regex matching `w`. `is_writable`, `are_transferrable` and
+//! `is_local_borrowed` all consult only the direct successors from `borrowed_by`, so if this ever
+//! fails they silently miss a hazard.
 //!
-//! > For every pair of live references `x`, `y` such that in the concrete state
-//! > `loc(y) = loc(x) ++ w`, the *direct* edge `x --> y` must contain a regex matching `w`.
-//!
-//! `is_writable`, `are_transferrable` and `is_local_borrowed` all look only at direct
-//! successors (`borrowed_by`), so if this ever fails they silently miss a hazard.
-//!
-//! The generated histories are restricted to states the verifier can actually reach:
-//! * a `&mut` is only ever derived from a `&mut`;
-//! * a call is only performed when `are_transferrable` holds for its arguments (mirroring
-//!   `regex_reference_safety::abstract_state`);
-//! * a mutable call result is an extension of a mutable argument, and is disjoint from every
-//!   other result of the same call (this is what the callee's `Ret` check enforces).
+//! The generated histories are restricted to the states the verifier can actually reach. A `&mut`
+//! is only ever derived from a `&mut`. A call is only performed when `are_transferrable` holds
+//! for its arguments, mirroring `regex_reference_safety::abstract_state`. A mutable call result
+//! extends a mutable argument and is disjoint from every other result of the same call, which is
+//! what the callee's `Ret` check enforces.
 
 use crate::{
     collections::{Graph, Path},
@@ -35,7 +32,7 @@ use std::collections::{BTreeMap, BTreeSet};
 type G = Graph<(), char>;
 
 const ALPHABET: [char; 2] = ['a', 'b'];
-// Paths used as witnesses when comparing two graphs edge-language to edge-language.
+// The longest word `witness_paths` generates. Differences deeper than this go unseen.
 const WITNESS_LEN: usize = 4;
 const GRAPH_CAPACITY: usize = 64;
 
@@ -43,32 +40,35 @@ const GRAPH_CAPACITY: usize = 64;
 // Concrete locations
 // -------------------------------------------------------------------------------------------------
 
-/// A concrete memory location: which disjoint tree, and the path within it.
+/// A concrete memory location. A disjoint tree root, and the path within it.
+///
+/// This assumes distinct labels name disjoint memory. That holds for locals and struct fields,
+/// but not for enum variant fields, where `VariantField(E, One, 0)` and `VariantField(E, Two, 0)`
+/// are distinct labels over the same bytes. The overlap is a modelling choice in
+/// `regex_reference_safety` rather than anything the graph can see, so it is covered by the
+/// transactional test `reference_safety/enum_type_confusion_attempts.mvir`.
 #[derive(Clone, PartialEq, Eq, Debug)]
-struct Cloc {
+struct ConcreteLocation {
     root: usize,
     path: Vec<char>,
 }
 
-impl Cloc {
-    /// `Some(w)` when `self ++ w == other`.
-    fn suffix_to(&self, other: &Cloc) -> Option<Vec<char>> {
-        if self.root != other.root || other.path.len() < self.path.len() {
+impl ConcreteLocation {
+    /// `Some(w)` when `prefix ++ w == self`.
+    fn strip_prefix(&self, prefix: &ConcreteLocation) -> Option<&[char]> {
+        if self.root != prefix.root {
             return None;
         }
-        if other.path[..self.path.len()] != self.path[..] {
-            return None;
-        }
-        Some(other.path[self.path.len()..].to_vec())
+        self.path.strip_prefix(&prefix.path[..])
     }
 
-    /// True when one location is a prefix of the other, i.e. the two overlap in memory.
-    fn overlaps(&self, other: &Cloc) -> bool {
-        self.suffix_to(other).is_some() || other.suffix_to(self).is_some()
+    /// Returns true when one location is a prefix of the other, i.e. the two overlap in memory.
+    fn overlaps(&self, other: &ConcreteLocation) -> bool {
+        self.strip_prefix(other).is_some() || other.strip_prefix(self).is_some()
     }
 
-    fn extended(&self, suffix: &[char]) -> Cloc {
-        Cloc {
+    fn extended(&self, suffix: &[char]) -> ConcreteLocation {
+        ConcreteLocation {
             root: self.root,
             path: self.path.iter().chain(suffix).copied().collect(),
         }
@@ -91,29 +91,34 @@ fn regex_matches(r: &Regex<char>, w: &[char]) -> bool {
     }
 }
 
+/// A subset of all possible words in the language of ALPHABET. Each word is at most WITNESS_LEN
+/// characters long. Used to compare two regexes by the words they match.
 fn witness_paths() -> Vec<Vec<char>> {
-    let mut paths = vec![vec![]];
-    let mut frontier = vec![vec![]];
-    for _ in 0..WITNESS_LEN {
-        let mut next = vec![];
-        for path in &frontier {
-            for label in ALPHABET {
-                let mut extended = path.clone();
-                extended.push(label);
-                paths.push(extended.clone());
-                next.push(extended);
-            }
-        }
-        frontier = next;
-    }
-    paths
+    // Each generation is every word one character longer than the previous generation's.
+    std::iter::successors(Some(vec![vec![]]), |boundary| {
+        let next = boundary
+            .iter()
+            .flat_map(|word| {
+                ALPHABET.map(|c| {
+                    let mut longer = word.clone();
+                    longer.push(c);
+                    longer
+                })
+            })
+            .collect();
+        Some(next)
+    })
+    .take(WITNESS_LEN + 1)
+    .flatten()
+    .collect()
 }
 
 // -------------------------------------------------------------------------------------------------
 // Verifier predicates, mirrored
 // -------------------------------------------------------------------------------------------------
 
-// Mirrors `regex_reference_safety::abstract_state::AbstractState::is_writable`.
+/// The Ref is writable if it has no non-epsilon extensions.
+/// Mirrors `regex_reference_safety::abstract_state::AbstractState::is_writable`.
 fn is_writable(graph: &G, r: Ref) -> bool {
     graph.is_mutable(r).unwrap()
         && graph
@@ -123,7 +128,12 @@ fn is_writable(graph: &G, r: Ref) -> bool {
             .all(|paths| paths.iter().all(|path| path.is_epsilon()))
 }
 
-// Mirrors `regex_reference_safety::abstract_state::AbstractState::are_transferrable`.
+/// "Transferrable"  refers to the set of references leaving their current scope. That is either as
+/// a return values or arguments to a function call.
+/// Pessimistically, we assume that any mutable reference will be written to on all possible
+/// extensions. As such, any mutable reference that is transferred cannot have any non-epsilon
+/// extensions and cannot be reachable from any other reference that is also being transferred.
+/// Mirrors `regex_reference_safety::abstract_state::AbstractState::are_transferrable`.
 fn are_transferrable(graph: &G, refs: &BTreeSet<Ref>) -> bool {
     let mut_refs = refs
         .iter()
@@ -153,31 +163,46 @@ fn are_transferrable(graph: &G, refs: &BTreeSet<Ref>) -> bool {
 // Concrete model
 // -------------------------------------------------------------------------------------------------
 
-/// The completeness check, factored out so a single graph can be checked against more than one
-/// concrete state (which is what a joined graph has to satisfy).
-fn check_complete_with(graph: &G, refs: &[Ref], locs: &[Cloc]) -> Result<(), String> {
-    assert_eq!(refs.len(), locs.len());
-    for i in 0..refs.len() {
-        let borrowed = graph.borrowed_by(refs[i], &mut DummyMeter).unwrap();
-        for j in 0..refs.len() {
-            if i == j {
+/// The model tracks mutability independently of the graph.
+/// This checks that both agree.
+fn check_mutability_agrees(graph: &G, live: &[LiveRef]) -> Result<(), String> {
+    for x in live {
+        let in_graph = graph.is_mutable(x.r).unwrap();
+        if in_graph != x.is_mut {
+            return Err(format!(
+                "{} is_mut = {} in the model but {} in the graph",
+                x.r, x.is_mut, in_graph
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Checks that the graph is complete against the concrete model.
+/// Every concrete location for each reference must be covered in the graph.
+fn check_complete(graph: &G, live: &[LiveRef]) -> Result<(), String> {
+    check_mutability_agrees(graph, live)?;
+    for x in live {
+        let borrowed = graph.borrowed_by(x.r, &mut DummyMeter).unwrap();
+        for y in live {
+            if x.r == y.r {
                 continue;
             }
-            let Some(w) = locs[i].suffix_to(&locs[j]) else {
+            let Some(w) = y.loc.strip_prefix(&x.loc) else {
                 continue;
             };
             let covered = borrowed
-                .get(&refs[j])
-                .is_some_and(|paths| paths.iter().any(|p| path_matches(p, &w)));
+                .get(&y.r)
+                .is_some_and(|paths| paths.iter().any(|p| path_matches(p, w)));
             if !covered {
                 return Err(format!(
                     "missing edge {} --{:?}--> {} (locs {:?} / {:?}); borrowed_by({}) = {:?}",
-                    refs[i],
+                    x.r,
                     w,
-                    refs[j],
-                    locs[i],
-                    locs[j],
-                    refs[i],
+                    y.r,
+                    x.loc,
+                    y.loc,
+                    x.r,
                     borrowed
                         .iter()
                         .map(|(r, ps)| (
@@ -194,11 +219,17 @@ fn check_complete_with(graph: &G, refs: &[Ref], locs: &[Cloc]) -> Result<(), Str
     Ok(())
 }
 
+/// A live reference, paired with the mutability and concrete location the model tracks for it.
+#[derive(Clone, Debug)]
+struct LiveRef {
+    r: Ref,
+    is_mut: bool,
+    loc: ConcreteLocation,
+}
+
 struct Model {
     graph: G,
-    refs: Vec<Ref>,
-    locs: Vec<Cloc>,
-    muts: Vec<bool>,
+    live: Vec<LiveRef>,
     next_root: usize,
 }
 
@@ -208,33 +239,24 @@ impl Model {
             .expect("empty graph");
         Model {
             graph,
-            refs: vec![],
-            locs: vec![],
-            muts: vec![],
+            live: vec![],
             next_root: 0,
         }
     }
 
     fn len(&self) -> usize {
-        self.refs.len()
+        self.live.len()
     }
 
-    fn record(&mut self, r: Ref, loc: Cloc, is_mut: bool) {
-        self.refs.push(r);
-        self.locs.push(loc);
-        self.muts.push(is_mut);
-    }
-
-    fn forget(&mut self, idx: usize) {
-        self.refs.remove(idx);
-        self.locs.remove(idx);
-        self.muts.remove(idx);
+    fn record(&mut self, r: Ref, is_mut: bool, loc: ConcreteLocation) {
+        self.live.push(LiveRef { r, is_mut, loc });
     }
 
     fn release(&mut self, idx: usize) {
-        let r = self.refs[idx];
-        self.graph.release(r, &mut DummyMeter).unwrap();
-        self.forget(idx);
+        self.graph
+            .release(self.live[idx].r, &mut DummyMeter)
+            .unwrap();
+        self.live.remove(idx);
     }
 
     fn new_root(&mut self, is_mut: bool) {
@@ -244,39 +266,38 @@ impl Model {
             .unwrap();
         let root = self.next_root;
         self.next_root += 1;
-        self.record(r, Cloc { root, path: vec![] }, is_mut);
+        self.record(r, is_mut, ConcreteLocation { root, path: vec![] });
     }
 
     fn alias(&mut self, base: usize, is_mut: bool) {
-        // A `&mut` is only ever produced from a `&mut` (`CopyLoc`); `FreezeRef` goes the other way.
-        let is_mut = is_mut && self.muts[base];
+        let is_mut = is_mut && self.live[base].is_mut;
         let r = self
             .graph
             .extend_by_epsilon(
                 (),
-                std::iter::once(self.refs[base]),
+                std::iter::once(self.live[base].r),
                 is_mut,
                 &mut DummyMeter,
             )
             .unwrap();
-        let loc = self.locs[base].clone();
-        self.record(r, loc, is_mut);
+        let loc = self.live[base].loc.clone();
+        self.record(r, is_mut, loc);
     }
 
     fn field(&mut self, base: usize, label: char, is_mut: bool) {
-        let is_mut = is_mut && self.muts[base];
+        let is_mut = is_mut && self.live[base].is_mut;
         let r = self
             .graph
             .extend_by_label(
                 (),
-                std::iter::once(self.refs[base]),
+                std::iter::once(self.live[base].r),
                 is_mut,
                 label,
                 &mut DummyMeter,
             )
             .unwrap();
-        let loc = self.locs[base].extended(&[label]);
-        self.record(r, loc, is_mut);
+        let loc = self.live[base].loc.extended(&[label]);
+        self.record(r, is_mut, loc);
     }
 
     /// Returns false when the call is not performed (the verifier would have rejected it, or
@@ -287,7 +308,7 @@ impl Model {
         }
         let arg_refs = arg_idxs
             .iter()
-            .map(|&i| self.refs[i])
+            .map(|&i| self.live[i].r)
             .collect::<BTreeSet<_>>();
         if !are_transferrable(&self.graph, &arg_refs) {
             return false;
@@ -295,20 +316,20 @@ impl Model {
         let mut_arg_idxs = arg_idxs
             .iter()
             .copied()
-            .filter(|&i| self.muts[i])
+            .filter(|&i| self.live[i].is_mut)
             .collect::<Vec<_>>();
         let arg_idx_vec = arg_idxs.iter().copied().collect::<Vec<_>>();
 
         // Pick concrete locations for the results, dropping any result that would violate the
         // disjointness the callee's `Ret` check guarantees.
-        let mut kept: Vec<(bool, Cloc)> = vec![];
+        let mut kept: Vec<(bool, ConcreteLocation)> = vec![];
         for (want_mut, src_choice, suffix) in results {
             let (is_mut, src) = if *want_mut && !mut_arg_idxs.is_empty() {
                 (true, mut_arg_idxs[src_choice % mut_arg_idxs.len()])
             } else {
                 (false, arg_idx_vec[src_choice % arg_idx_vec.len()])
             };
-            let loc = self.locs[src].extended(suffix);
+            let loc = self.live[src].loc.extended(suffix);
             let disjoint_enough = kept
                 .iter()
                 .all(|(other_mut, other_loc)| !(is_mut || *other_mut) || !loc.overlaps(other_loc));
@@ -324,7 +345,7 @@ impl Model {
             .unwrap();
         assert_eq!(new_refs.len(), kept.len());
         for (r, (is_mut, loc)) in new_refs.into_iter().zip(kept) {
-            self.record(r, loc, is_mut);
+            self.record(r, is_mut, loc);
         }
         // `AbstractState::call` releases the argument references after the call.
         for idx in arg_idxs.iter().rev() {
@@ -333,30 +354,26 @@ impl Model {
         true
     }
 
-    /// THE property: every concrete containment between two live references is covered by a
-    /// direct edge.
+    /// Every concrete containment between two live references must be covered by a direct edge.
     fn check_complete(&self) -> Result<(), String> {
-        check_complete_with(&self.graph, &self.refs, &self.locs)
+        check_complete(&self.graph, &self.live)
     }
 
-    /// A corollary of `check_complete` that is worth failing separately: a reference with a
-    /// strictly-inside live reference must not be writable.
+    /// A corollary of `check_complete`, checked on its own so a failure points at the right rule.
+    /// A reference must not be writable while another reference lives strictly inside it.
     fn check_writability(&self) -> Result<(), String> {
-        for i in 0..self.len() {
-            if !self.muts[i] || !is_writable(&self.graph, self.refs[i]) {
+        for x in &self.live {
+            if !x.is_mut || !is_writable(&self.graph, x.r) {
                 continue;
             }
-            for j in 0..self.len() {
-                if i == j {
+            for y in &self.live {
+                if x.r == y.r {
                     continue;
                 }
-                if self.locs[i]
-                    .suffix_to(&self.locs[j])
-                    .is_some_and(|w| !w.is_empty())
-                {
+                if y.loc.strip_prefix(&x.loc).is_some_and(|w| !w.is_empty()) {
                     return Err(format!(
                         "{} is writable but {} lives strictly inside it ({:?} / {:?})",
-                        self.refs[i], self.refs[j], self.locs[i], self.locs[j]
+                        x.r, y.r, x.loc, y.loc
                     ));
                 }
             }
@@ -553,17 +570,17 @@ proptest! {
         victim in any::<u8>(),
     ) {
         let mut model = run_history(&ops);
-        // An early return rather than `prop_assume!`, so raising the case count does not trip
-        // proptest's global-reject limit.
+        // An early return rather than `prop_assume!`. Raising the case count would otherwise
+        // trip proptest's global-reject limit.
         if model.len() < 2 {
             return Ok(());
         }
         let victim = victim as usize % model.len();
-        let victim_ref = model.refs[victim];
+        let victim_ref = model.live[victim].r;
         let survivors = model
-            .refs
+            .live
             .iter()
-            .copied()
+            .map(|l| l.r)
             .filter(|r| *r != victim_ref)
             .collect::<Vec<_>>();
         let before = relation(&model.graph, &survivors);
@@ -583,11 +600,10 @@ proptest! {
         }
     }
 
-    /// Every relation reachable in two hops must be covered by one direct edge. The abstract
-    /// dot-star edges a call installs between its immutable results are deliberately excluded:
-    /// they are a "we do not know how these two overlap" marker rather than a claim that any
-    /// concrete two-hop path exists (`graph_is_complete_against_the_concrete_model` is the
-    /// property that actually pins down soundness for calls).
+    /// Every relation reachable in two hops must be covered by one direct edge. Calls are
+    /// excluded. The dot-star edges a call installs between its immutable results only mark that
+    /// we do not know how the two overlap, and do not claim any concrete two-hop path exists.
+    /// `graph_is_complete_against_the_concrete_model` is what pins down soundness for calls.
     #[test]
     fn label_and_epsilon_graphs_are_transitively_closed(
         ops in prop::collection::vec(
@@ -602,7 +618,7 @@ proptest! {
         ),
     ) {
         let model = run_history(&ops);
-        let refs = model.refs.clone();
+        let refs = model.live.iter().map(|l| l.r).collect::<Vec<_>>();
         let rel = relation(&model.graph, &refs);
         for &x in &refs {
             for &z in &refs {
@@ -637,13 +653,13 @@ proptest! {
 fn canonicalize_to(model: &mut Model, keep: &[Ref]) -> Vec<Ref> {
     let keep_set = keep.iter().copied().collect::<BTreeSet<_>>();
     let doomed = model
-        .refs
+        .live
         .iter()
-        .copied()
+        .map(|l| l.r)
         .filter(|r| !keep_set.contains(r))
         .collect::<Vec<_>>();
     for r in doomed {
-        let idx = model.refs.iter().position(|x| *x == r).unwrap();
+        let idx = model.live.iter().position(|l| l.r == r).unwrap();
         model.release(idx);
     }
     let remapping = keep
@@ -656,8 +672,8 @@ fn canonicalize_to(model: &mut Model, keep: &[Ref]) -> Vec<Ref> {
         .map(|r| r.canonicalize(&remapping).unwrap())
         .collect::<Vec<_>>();
     model.graph.canonicalize(&remapping).unwrap();
-    for r in model.refs.iter_mut() {
-        *r = r.canonicalize(&remapping).unwrap();
+    for l in model.live.iter_mut() {
+        l.r = l.r.canonicalize(&remapping).unwrap();
     }
     canonical
 }
@@ -676,14 +692,12 @@ proptest! {
         if base.len() < 2 {
             return Ok(());
         }
-        let keep = base.refs.clone();
+        let keep = base.live.iter().map(|l| l.r).collect::<Vec<_>>();
 
         let build = |extra: &[RawOp]| {
             let mut model = Model {
                 graph: base.graph.clone(),
-                refs: base.refs.clone(),
-                locs: base.locs.clone(),
-                muts: base.muts.clone(),
+                live: base.live.clone(),
                 next_root: base.next_root,
             };
             for op in extra {
@@ -757,8 +771,8 @@ fn show(r: &Regex<char>) -> String {
     s
 }
 
-/// `Regex::extend` has no example table in its doc comment, unlike the two `remove_prefix`
-/// functions. These are the cases the comment describes in prose, including the short-circuit.
+/// Unlike the two `remove_prefix` functions, `Regex::extend` has no example table in its doc
+/// comment. These are the cases that comment describes in prose, including the short-circuit.
 #[test]
 fn regex_extend_table() {
     let cases: &[(&str, bool, Extension<char>, &str)] = &[
@@ -769,7 +783,7 @@ fn regex_extend_table() {
         ("a", false, Extension::Label('b'), "ab"),
         ("a", false, Extension::DotStar, "a.*"),
         ("ab", false, Extension::Label('c'), "abc"),
-        // The short-circuit: once the regex ends in dot-star, extensions are dropped.
+        // Once the regex ends in dot-star the extension is dropped.
         ("", true, Extension::Epsilon, ".*"),
         ("", true, Extension::Label('a'), ".*"),
         ("", true, Extension::DotStar, ".*"),
@@ -789,8 +803,8 @@ fn regex_extend_table() {
     }
 }
 
-/// The short-circuit drops labels, so it must only ever *widen* the language. `p.*` extended by
-/// `l` denotes `p.*l`, and the implementation returns `p.*`, which contains it.
+/// Dropping labels must only ever widen the language. `p.*` extended by `l` denotes `p.*l`, and
+/// the implementation returns `p.*`, which contains it.
 #[test]
 fn regex_extend_short_circuit_only_widens() {
     let witnesses = witness_paths();
@@ -816,10 +830,9 @@ fn regex_extend_short_circuit_only_widens() {
     }
 }
 
-/// `Walk::next` is a no-op once the walk is sitting on a dot-star, so the `Extension::DotStar`
-/// arm of `Regex::remove_prefix` would loop forever without its `ends_in_dot_star` early return.
-/// This pins that behavior; if the early return is ever removed, this test hangs rather than
-/// silently changing the answer.
+/// `Walk::next` is a no-op once the walk sits on a dot-star, so the `Extension::DotStar` arm of
+/// `Regex::remove_prefix` would loop forever without its `ends_in_dot_star` early return. If that
+/// early return is ever removed this test hangs rather than quietly changing the answer.
 #[test]
 fn remove_dot_star_prefix_from_dot_star_regex_terminates() {
     for (labels, expected) in [("", ".*"), ("a", ".*"), ("abc", ".*")] {
@@ -831,10 +844,10 @@ fn remove_dot_star_prefix_from_dot_star_regex_terminates() {
 }
 
 /// Both `remove_prefix` implementations return the empty set on their `debug_assert!(false)`
-/// arms. The empty set means "no relation", i.e. an *under*-approximation, so those arms must be
-/// unreachable. Every reachable input shape either produces a non-empty answer or is one of the
-/// genuinely-no-prefix cases enumerated in the doc comments. This exhaustively checks the shapes
-/// that reach the walk.
+/// arms. An empty set means no relation at all, which is an under-approximation, so those arms
+/// must be unreachable. Every reachable input either produces a non-empty answer or is one of the
+/// genuinely-no-prefix cases enumerated in the doc comments. This walks every shape that can
+/// reach the walk.
 #[test]
 fn remove_prefix_never_returns_empty_except_for_label_mismatch() {
     let regexes = [
@@ -903,10 +916,10 @@ fn remove_prefix_never_returns_empty_except_for_label_mismatch() {
 // -------------------------------------------------------------------------------------------------
 
 /// A call whose immutable results may overlap each other installs dot-star edges in both
-/// directions between them. That makes the *abstract* relation non-transitive (following
-/// `n1 --.*--> n2 --.*--> n1` yields dot-star, while the self edge is epsilon). It is only sound
-/// because no concrete state has both `n2` strictly inside `n1` and `n1` strictly inside `n2`.
-/// This test pins the shape so a future change to `extend_by_dot_star_for_call` is visible.
+/// directions between them. That leaves the abstract relation non-transitive, since following
+/// `n1 --.*--> n2 --.*--> n1` yields dot-star while the self edge is epsilon. It is sound only
+/// because no concrete state has `n2` strictly inside `n1` and `n1` strictly inside `n2` at once.
+/// Pinned here so a change to `extend_by_dot_star_for_call` is visible.
 #[test]
 fn immutable_call_results_form_an_abstract_dot_star_cycle() {
     let (mut graph, sources) = Graph::<(), char>::new(4, [(0, (), true)]).unwrap();
@@ -927,12 +940,12 @@ fn immutable_call_results_form_an_abstract_dot_star_cycle() {
     assert!(n2_succ[&n1].iter().any(|p| p.is_dot_star()));
     // ... but the self relation stays epsilon-only, so the abstract relation is not closed.
     assert!(!n1_succ.contains_key(&n1));
-    // Neither result is writable-relevant here (both are immutable), but the parent is not
+    // Both results are immutable so writability does not apply to them, but the parent is not
     // writable, since the results may be strictly inside it.
     assert!(!is_writable(&graph, root));
 }
 
-/// The mutable half of the same operation: mutable results get edges only from mutable sources,
+/// The mutable half of the same operation. Mutable results get edges only from mutable sources,
 /// and no edges at all to or from any other result of the same call.
 #[test]
 fn mutable_call_results_are_isolated_from_other_results() {
@@ -970,7 +983,7 @@ fn mutable_call_results_are_isolated_from_other_results() {
 }
 
 /// A dot-star edge above a labelled edge must collapse into a single dot-star edge when the
-/// intermediate reference is released; nothing may be lost.
+/// intermediate reference is released. Nothing may be lost.
 #[test]
 fn release_of_dot_star_middle_keeps_the_deep_relation() {
     let (mut graph, sources) = Graph::<(), char>::new(4, [(0, (), true)]).unwrap();
@@ -999,11 +1012,11 @@ fn release_of_dot_star_middle_keeps_the_deep_relation() {
 // Joined graphs must stay complete for BOTH concrete states
 // -------------------------------------------------------------------------------------------------
 
-/// One step applied to both branches. The *shape* (alias vs field) and the mutability are shared
-/// so the two branches end up with the same reference set and the same mutabilities -- a
-/// requirement of `Graph::join`. The base and the label are chosen independently, so the same
-/// canonical reference ends up at a different concrete location on each branch, which is exactly
-/// what happens at a real control-flow merge.
+/// One step applied to both branches. The shape, alias or field, and the mutability are shared,
+/// so both branches end up with the same reference set and the same mutabilities--`Graph::join`
+/// requires that. The base and the label are chosen independently, so the same canonical
+/// reference lands at a different concrete location on each branch, which is what happens at a
+/// real control-flow merge.
 #[derive(Clone, Debug)]
 struct TwinOp {
     is_field: bool,
@@ -1037,9 +1050,7 @@ fn arb_twin_op() -> impl Strategy<Value = TwinOp> {
 
 struct Branch {
     graph: G,
-    refs: Vec<Ref>,
-    locs: Vec<Cloc>,
-    muts: Vec<bool>,
+    live: Vec<LiveRef>,
 }
 
 impl Branch {
@@ -1051,23 +1062,25 @@ impl Branch {
             .unwrap();
         Branch {
             graph,
-            refs: vec![root],
-            locs: vec![Cloc {
-                root: 0,
-                path: vec![],
+            live: vec![LiveRef {
+                r: root,
+                is_mut: true,
+                loc: ConcreteLocation {
+                    root: 0,
+                    path: vec![],
+                },
             }],
-            muts: vec![true],
         }
     }
 
     fn step(&mut self, is_field: bool, is_mut: bool, base_choice: u8, label_choice: u8) {
         // A `&mut` needs a `&mut` base; there is always at least the root.
         let candidates = if is_mut {
-            (0..self.refs.len())
-                .filter(|&i| self.muts[i])
+            (0..self.live.len())
+                .filter(|&i| self.live[i].is_mut)
                 .collect::<Vec<_>>()
         } else {
-            (0..self.refs.len()).collect::<Vec<_>>()
+            (0..self.live.len()).collect::<Vec<_>>()
         };
         let base = candidates[base_choice as usize % candidates.len()];
         let label = ALPHABET[label_choice as usize % ALPHABET.len()];
@@ -1076,54 +1089,68 @@ impl Branch {
                 self.graph
                     .extend_by_label(
                         (),
-                        std::iter::once(self.refs[base]),
+                        std::iter::once(self.live[base].r),
                         is_mut,
                         label,
                         &mut DummyMeter,
                     )
                     .unwrap(),
-                self.locs[base].extended(&[label]),
+                self.live[base].loc.extended(&[label]),
             )
         } else {
             (
                 self.graph
                     .extend_by_epsilon(
                         (),
-                        std::iter::once(self.refs[base]),
+                        std::iter::once(self.live[base].r),
                         is_mut,
                         &mut DummyMeter,
                     )
                     .unwrap(),
-                self.locs[base].clone(),
+                self.live[base].loc.clone(),
             )
         };
-        self.refs.push(new_ref);
-        self.locs.push(loc);
-        self.muts.push(is_mut);
+        self.live.push(LiveRef {
+            r: new_ref,
+            is_mut,
+            loc,
+        });
     }
 
     fn canonicalize(&mut self) {
         let remapping = self
-            .refs
+            .live
             .iter()
             .enumerate()
-            .map(|(i, r)| (*r, i as u32))
+            .map(|(i, l)| (l.r, i as u32))
             .collect::<BTreeMap<_, _>>();
-        self.refs = self
-            .refs
-            .iter()
-            .map(|r| r.canonicalize(&remapping).unwrap())
-            .collect();
+        for l in self.live.iter_mut() {
+            l.r = l.r.canonicalize(&remapping).unwrap();
+        }
         self.graph.canonicalize(&remapping).unwrap();
+    }
+
+    /// The same references and mutabilities, moved onto a different concrete state. Lets a
+    /// joined graph be checked against the other branch's locations.
+    fn relocated(&self, locs: &[ConcreteLocation]) -> Vec<LiveRef> {
+        self.live
+            .iter()
+            .zip(locs)
+            .map(|(l, loc)| LiveRef {
+                r: l.r,
+                is_mut: l.is_mut,
+                loc: loc.clone(),
+            })
+            .collect()
     }
 }
 
 proptest! {
     #![proptest_config(ProptestConfig { cases: 384, ..ProptestConfig::default() })]
 
-    /// After a join the graph describes a *set* of concrete states, one per incoming branch. It
-    /// must remain complete for every one of them, and must stay complete after the block
-    /// continues to extend it. This is the loop / if-else fixpoint soundness argument.
+    /// After a join the graph describes one concrete state per incoming branch. It must stay
+    /// complete for every one of them, and must stay complete as the block goes on extending it.
+    /// This is the loop and if-else fixpoint soundness argument.
     #[test]
     fn joined_graph_is_complete_for_every_branch(
         twins in prop::collection::vec(arb_twin_op(), 0..=7),
@@ -1141,74 +1168,74 @@ proptest! {
         }
         left.canonicalize();
         right.canonicalize();
-        prop_assert_eq!(&left.refs, &right.refs);
-        prop_assert_eq!(&left.muts, &right.muts);
+        let signature = |b: &Branch| b.live.iter().map(|l| (l.r, l.is_mut)).collect::<Vec<_>>();
+        prop_assert_eq!(signature(&left), signature(&right));
 
         // Each branch on its own must be complete for its own concrete state.
         prop_assert!(
-            check_complete_with(&left.graph, &left.refs, &left.locs).is_ok(),
+            check_complete(&left.graph, &left.live).is_ok(),
             "{}",
-            check_complete_with(&left.graph, &left.refs, &left.locs).unwrap_err()
+            check_complete(&left.graph, &left.live).unwrap_err()
         );
 
         left.graph.join(&right.graph, &mut DummyMeter).unwrap();
 
-        // The joined graph must be complete for both.
-        for (which, locs) in [("left", &left.locs), ("right", &right.locs)] {
-            let res = check_complete_with(&left.graph, &left.refs, locs);
+        // The joined graph must be complete for both. `right.live` holds the same reference
+        // sequence carrying the other branch's locations.
+        for (which, live) in [("left", &left.live), ("right", &right.live)] {
+            let res = check_complete(&left.graph, live);
             prop_assert!(res.is_ok(), "after join, {} state: {}", which, res.unwrap_err());
         }
 
-        // Continue the block. Both concrete states evolve; the single joined graph must track
+        // Continue the block. Both concrete states evolve and the one joined graph must track
         // both. Mutabilities are shared so the two states stay comparable.
         let mut joined = Branch {
             graph: left.graph,
-            refs: left.refs.clone(),
-            locs: left.locs.clone(),
-            muts: left.muts.clone(),
+            live: left.live.clone(),
         };
-        let mut shadow_locs = right.locs.clone();
+        let mut shadow_locs = right.live.iter().map(|l| l.loc.clone()).collect::<Vec<_>>();
         joined.graph.refresh_refs().unwrap();
-        joined.refs = joined.refs.iter().map(|r| r.refresh().unwrap()).collect();
+        for l in joined.live.iter_mut() {
+            l.r = l.r.refresh().unwrap();
+        }
 
         for t in &after {
             let candidates = if t.is_mut {
-                (0..joined.refs.len()).filter(|&i| joined.muts[i]).collect::<Vec<_>>()
+                (0..joined.live.len()).filter(|&i| joined.live[i].is_mut).collect::<Vec<_>>()
             } else {
-                (0..joined.refs.len()).collect::<Vec<_>>()
+                (0..joined.live.len()).collect::<Vec<_>>()
             };
             let base = candidates[t.base_a as usize % candidates.len()];
             let label = ALPHABET[t.label_a as usize % ALPHABET.len()];
             let new_ref = if t.is_field {
                 joined.graph
-                    .extend_by_label((), std::iter::once(joined.refs[base]), t.is_mut, label, &mut DummyMeter)
+                    .extend_by_label((), std::iter::once(joined.live[base].r), t.is_mut, label, &mut DummyMeter)
                     .unwrap()
             } else {
                 joined.graph
-                    .extend_by_epsilon((), std::iter::once(joined.refs[base]), t.is_mut, &mut DummyMeter)
+                    .extend_by_epsilon((), std::iter::once(joined.live[base].r), t.is_mut, &mut DummyMeter)
                     .unwrap()
             };
-            joined.refs.push(new_ref);
-            joined.muts.push(t.is_mut);
-            if t.is_field {
-                joined.locs.push(joined.locs[base].extended(&[label]));
-                shadow_locs.push(shadow_locs[base].extended(&[label]));
+            let (loc, shadow_loc) = if t.is_field {
+                (joined.live[base].loc.extended(&[label]), shadow_locs[base].extended(&[label]))
             } else {
-                joined.locs.push(joined.locs[base].clone());
-                shadow_locs.push(shadow_locs[base].clone());
-            }
-            for (which, locs) in [("left", &joined.locs), ("right", &shadow_locs)] {
-                let res = check_complete_with(&joined.graph, &joined.refs, locs);
+                (joined.live[base].loc.clone(), shadow_locs[base].clone())
+            };
+            joined.live.push(LiveRef { r: new_ref, is_mut: t.is_mut, loc });
+            shadow_locs.push(shadow_loc);
+            let shadow = joined.relocated(&shadow_locs);
+            for (which, live) in [("left", &joined.live), ("right", &shadow)] {
+                let res = check_complete(&joined.graph, live);
                 prop_assert!(res.is_ok(), "after join+extend, {} state: {}", which, res.unwrap_err());
             }
         }
 
         // Finally a one-argument call. The callee can return a reference at a different concrete
-        // offset on each branch; the single dot-star edge has to cover both.
-        let arg = call_arg as usize % joined.refs.len();
-        let arg_set = BTreeSet::from([joined.refs[arg]]);
+        // offset on each branch, and the one dot-star edge has to cover both.
+        let arg = call_arg as usize % joined.live.len();
+        let arg_set = BTreeSet::from([joined.live[arg].r]);
         if are_transferrable(&joined.graph, &arg_set) {
-            let is_mut = call_mut && joined.muts[arg];
+            let is_mut = call_mut && joined.live[arg].is_mut;
             let suffix_a = call_suffix_a
                 .iter()
                 .map(|s| ALPHABET[*s as usize % ALPHABET.len()])
@@ -1221,18 +1248,16 @@ proptest! {
                 .graph
                 .extend_by_dot_star_for_call((), &arg_set, vec![is_mut], &mut DummyMeter)
                 .unwrap()[0];
-            joined.refs.push(result);
-            joined.muts.push(is_mut);
-            joined.locs.push(joined.locs[arg].extended(&suffix_a));
+            let loc = joined.live[arg].loc.extended(&suffix_a);
+            joined.live.push(LiveRef { r: result, is_mut, loc });
             shadow_locs.push(shadow_locs[arg].extended(&suffix_b));
             // `call` releases the argument.
-            joined.graph.release(joined.refs[arg], &mut DummyMeter).unwrap();
-            joined.refs.remove(arg);
-            joined.muts.remove(arg);
-            joined.locs.remove(arg);
+            joined.graph.release(joined.live[arg].r, &mut DummyMeter).unwrap();
+            joined.live.remove(arg);
             shadow_locs.remove(arg);
-            for (which, locs) in [("left", &joined.locs), ("right", &shadow_locs)] {
-                let res = check_complete_with(&joined.graph, &joined.refs, locs);
+            let shadow = joined.relocated(&shadow_locs);
+            for (which, live) in [("left", &joined.live), ("right", &shadow)] {
+                let res = check_complete(&joined.graph, live);
                 prop_assert!(res.is_ok(), "after join+call, {} state: {}", which, res.unwrap_err());
             }
         }
@@ -1243,15 +1268,15 @@ proptest! {
 // Canonicalization hazards
 // -------------------------------------------------------------------------------------------------
 
-/// `Graph::canonicalize` collects into a `BTreeMap<Ref, Node>`, so a remapping that sends two
-/// distinct references to the same canonical id silently drops one node from `Graph::nodes`
-/// while leaving it (and its edges) in the underlying `GraphMap`. Only a `debug_assert_eq!` on
-/// the node counts catches it; in a release build the duplicate weight makes
-/// `borrowed_by`/`borrows_from` overwrite one entry with the other and silently lose edges.
+/// `Graph::canonicalize` collects into a `BTreeMap<Ref, Node>`. A remapping that sends two
+/// distinct references to the same canonical id therefore drops one node from `Graph::nodes`
+/// while leaving it, and its edges, in the underlying `GraphMap`. Only a `debug_assert_eq!` on
+/// the node counts catches it. In a release build the duplicate weight makes `borrowed_by` and
+/// `borrows_from` overwrite one entry with the other and lose edges.
 ///
-/// The only production caller (`regex_reference_safety::AbstractState::canonicalize`) builds an
-/// injective map (`local_root -> 0`, `local i -> i + 1`), so this is currently unreachable. This
-/// test pins the hazard: if the debug assertion ever goes away, it starts failing.
+/// The one production caller, `regex_reference_safety::AbstractState::canonicalize`, builds an
+/// injective map of `local_root -> 0` and `local i -> i + 1`, so this is unreachable today. The
+/// test starts failing if that debug assertion ever goes away.
 #[test]
 #[should_panic]
 fn canonicalize_with_non_injective_remapping_collapses_nodes() {
@@ -1271,14 +1296,17 @@ fn canonicalize_refresh_cycle_preserves_every_relation() {
     branch.step(true, false, 0, 1); // imm root.b
     branch.canonicalize();
 
-    let before = relation(&branch.graph, &branch.refs);
+    let refs = |b: &Branch| b.live.iter().map(|l| l.r).collect::<Vec<_>>();
+    let before = relation(&branch.graph, &refs(&branch));
     branch.graph.refresh_refs().unwrap();
-    branch.refs = branch.refs.iter().map(|r| r.refresh().unwrap()).collect();
+    for l in branch.live.iter_mut() {
+        l.r = l.r.refresh().unwrap();
+    }
     branch.canonicalize();
-    let after = relation(&branch.graph, &branch.refs);
+    let after = relation(&branch.graph, &refs(&branch));
 
-    for &x in &branch.refs {
-        for &y in &branch.refs {
+    for &x in &refs(&branch) {
+        for &y in &refs(&branch) {
             assert_eq!(
                 matched(&before, x, y),
                 matched(&after, x, y),
@@ -1297,16 +1325,16 @@ fn canonicalize_refresh_cycle_preserves_every_relation() {
 proptest! {
     #![proptest_config(ProptestConfig { cases: 512, ..ProptestConfig::default() })]
 
-    /// `determine_all_new_edges` derives `new --> x` only from the *outgoing* edges of a source.
+    /// `determine_all_new_edges` derives `new --> x` only from the outgoing edges of a source.
     /// So for every reference `x` that concretely aliases a source, the graph must hold the edge
-    /// in the source-to-`x` direction as well, not just `x`-to-source. This is the specific
-    /// consequence of completeness that the edge-derivation rules depend on; it is checked here
-    /// on its own so a regression points straight at the rule that broke.
+    /// in the source-to-`x` direction as well, not just `x`-to-source. The edge-derivation rules
+    /// depend on exactly this consequence of completeness, so it is checked on its own and a
+    /// regression points straight at the rule that broke.
     ///
-    /// Note this is a claim about *concretely* aliasing references. It is deliberately not the
-    /// stronger claim that a path matching the empty word implies a reverse edge: a dot-star
-    /// edge matches the empty word without asserting an alias, and `Path::is_epsilon()` (which
-    /// is what `is_writable`/`are_transferrable` consult) treats dot-star as a strict extension.
+    /// Note this is a claim about concretely aliasing references. It is deliberately not the
+    /// stronger claim that a path matching the empty word implies a reverse edge. A dot-star edge
+    /// matches the empty word without asserting an alias, and `Path::is_epsilon()`, which is what
+    /// `is_writable` and `are_transferrable` consult, treats dot-star as a strict extension.
     #[test]
     fn concrete_aliases_have_edges_in_both_directions(
         ops in prop::collection::vec(arb_raw_op(), 0..=14),
@@ -1314,20 +1342,20 @@ proptest! {
         let model = run_history(&ops);
         for i in 0..model.len() {
             for j in 0..model.len() {
-                if i == j || model.locs[i] != model.locs[j] {
+                if i == j || model.live[i].loc != model.live[j].loc {
                     continue;
                 }
                 for (from, to) in [(i, j), (j, i)] {
-                    let succ = model.graph.borrowed_by(model.refs[from], &mut DummyMeter).unwrap();
+                    let succ = model.graph.borrowed_by(model.live[from].r, &mut DummyMeter).unwrap();
                     prop_assert!(
-                        succ.get(&model.refs[to])
+                        succ.get(&model.live[to].r)
                             .is_some_and(|ps| ps.iter().any(|p| p.labels.is_empty())),
                         "aliases {} and {} (both at {:?}) have no {} --> {} edge",
-                        model.refs[i],
-                        model.refs[j],
-                        model.locs[i],
-                        model.refs[from],
-                        model.refs[to],
+                        model.live[i].r,
+                        model.live[j].r,
+                        model.live[i].loc,
+                        model.live[from].r,
+                        model.live[to].r,
                     );
                 }
             }
@@ -1340,7 +1368,7 @@ proptest! {
     #[test]
     fn self_edges_stay_epsilon_only(ops in prop::collection::vec(arb_raw_op(), 0..=14)) {
         let model = run_history(&ops);
-        for &x in &model.refs {
+        for x in model.live.iter().map(|l| l.r) {
             let succ = model.graph.borrowed_by(x, &mut DummyMeter).unwrap();
             prop_assert!(!succ.contains_key(&x), "{} has a non-trivial self edge", x);
             for (_, paths) in &succ {
@@ -1350,11 +1378,11 @@ proptest! {
     }
 }
 
-/// `extend_by_dot_star_for_call` ties a mutable result only to the *mutable* sources. With no
-/// mutable source at all it produces a reference with no incoming edges whatsoever, i.e. one the
-/// graph believes is unrelated to everything -- writing through it, or through anything else,
-/// is then unconstrained. The bytecode verifier never asks for this (a callee cannot manufacture
-/// a `&mut` from an `&`), but nothing in this crate rules it out, so the shape is pinned here.
+/// `extend_by_dot_star_for_call` ties a mutable result only to the mutable sources. Given no
+/// mutable source at all it produces a reference with no incoming edges, one the graph believes
+/// is unrelated to everything, and writing through it or through anything else is then
+/// unconstrained. The bytecode verifier never asks for this, since a callee cannot manufacture a
+/// `&mut` from an `&`, but nothing in this crate rules it out, so the shape is pinned here.
 #[test]
 fn mutable_result_without_a_mutable_source_is_unconstrained() {
     let (mut graph, sources) = Graph::<(), char>::new(4, [(0, (), false)]).unwrap();
@@ -1405,10 +1433,10 @@ fn call_with_no_reference_arguments_produces_unconstrained_results() {
 // Precision losses that are conservative, pinned so a regression is visible
 // -------------------------------------------------------------------------------------------------
 
-/// The reference a call returns is recorded as `arg --.*--> result`, and dot-star is *not*
-/// `Path::is_epsilon()`. So an alias of the argument that survives the call is reported as being
-/// strictly borrowed even when the result is concretely the very same location. That is the
-/// conservative direction (fewer writes allowed), but it costs expressivity, so pin it.
+/// The reference a call returns is recorded as `arg --.*--> result`, and dot-star is not
+/// `Path::is_epsilon()`. So an alias of the argument that survives the call is reported as
+/// strictly borrowed even when the result is concretely the very same location. That errs in the
+/// conservative direction and allows fewer writes, but it costs expressivity, so pin it.
 #[test]
 fn call_results_are_never_recognised_as_epsilon_aliases() {
     let (mut graph, sources) = Graph::<(), char>::new(4, [(0, (), true)]).unwrap();
@@ -1425,14 +1453,14 @@ fn call_results_are_never_recognised_as_epsilon_aliases() {
     let to_result = &succ[&result];
     assert!(to_result.iter().all(|p| !p.is_epsilon()));
     assert!(to_result.iter().any(|p| p.is_dot_star()));
-    // The dot-star language does contain the empty word, so `result` may concretely be `alias`,
-    // yet `alias` is reported as not writable.
+    // The dot-star language contains the empty word, so `result` may concretely be `alias`, yet
+    // `alias` is still reported as not writable.
     assert!(!is_writable(&graph, alias));
 }
 
 /// `Regex::extend` short-circuits on dot-star, so `x --.*--> y` extended by a label stays `.*`
-/// rather than becoming `.*f`. The result over-approximates (it now also matches the empty word),
-/// which is why `x --> z` below carries both `.*` and the exact `a`.
+/// rather than becoming `.*f`. The result over-approximates, since it now also matches the empty
+/// word, which is why `x --> z` below carries both `.*` and the exact `a`.
 #[test]
 fn dot_star_edge_extended_by_a_label_stays_dot_star() {
     let (mut graph, sources) = Graph::<(), char>::new(6, [(0, (), true)]).unwrap();
@@ -1466,13 +1494,13 @@ fn dot_star_edge_extended_by_a_label_stays_dot_star() {
 // The assumption `extend_by_dot_star_for_call` takes entirely on trust
 // -------------------------------------------------------------------------------------------------
 
-/// `extend_by_dot_star_for_call` installs **no** edge between a mutable result and any other
+/// `extend_by_dot_star_for_call` installs no edge at all between a mutable result and any other
 /// result of the same call. Nothing in this crate checks that, so the graph is complete only
-/// because the *callee's* `Ret` check (`are_transferrable`) refuses to return a `&mut` that
+/// because the callee's own `Ret` check, `are_transferrable`, refuses to return a `&mut` that
 /// overlaps any other returned reference.
 ///
-/// This test exhibits the exact state that would exist if that guarantee were ever weakened:
-/// a mutable result `m` at `root.a` and an immutable result `i` at `root.a.b`, with no edge
+/// This test exhibits the state that would exist if that guarantee were ever weakened. A mutable
+/// result `m` sits at `root.a` and an immutable result `i` at `root.a.b`, with no edge
 /// between them, so `m` is reported writable while `i` lives strictly inside it. Randomised
 /// search over the concrete model finds this within a handful of histories once the
 /// disjointness constraint is dropped.
@@ -1492,17 +1520,25 @@ fn overlapping_call_results_would_break_completeness() {
     graph.release(root, &mut DummyMeter).unwrap();
 
     // Pretend the callee returned `&mut root.a` and `&root.a.b`.
-    let locs = [
-        Cloc {
-            root: 0,
-            path: vec!['a'],
+    let live = [
+        LiveRef {
+            r: m,
+            is_mut: true,
+            loc: ConcreteLocation {
+                root: 0,
+                path: vec!['a'],
+            },
         },
-        Cloc {
-            root: 0,
-            path: vec!['a', 'b'],
+        LiveRef {
+            r: i,
+            is_mut: false,
+            loc: ConcreteLocation {
+                root: 0,
+                path: vec!['a', 'b'],
+            },
         },
     ];
-    let err = check_complete_with(&graph, &[m, i], &locs)
+    let err = check_complete(&graph, &live)
         .expect_err("a mut result overlapping another result must not be representable");
     assert!(err.contains("missing edge"), "{err}");
     // ... and the practical consequence: the write through `m` is allowed.
@@ -1582,9 +1618,9 @@ fn graph_map_never_issues_a_colliding_node_index() {
     }
 }
 
-/// `minimize()` really does lower `next`, so the raw `id` is reused. Pin that the generation is
-/// what keeps the indices apart -- if the generation bump were dropped, this would start
-/// returning equal indices and every stale `NodeIndex` in the verifier would alias a live node.
+/// `minimize()` really does lower `next`, so the raw `id` is reused. The generation is what keeps
+/// the indices apart. Drop the generation bump and this starts returning equal indices, and every
+/// stale `NodeIndex` in the verifier would alias a live node.
 #[test]
 fn minimize_reuses_ids_but_not_indices() {
     use crate::graph_map::GraphMap;
