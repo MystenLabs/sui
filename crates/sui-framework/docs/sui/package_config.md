@@ -10,12 +10,10 @@ PackageConfig
   └── PackageMetadataKey(original package ID)
         └── Config<PackageConfigCap>
               └── VersionForbiddenKey(package version number)
-                    └── Setting<u64> flags
+                    └── Setting<u64> value
 ```
-Each version has an independent <code>Setting</code> containg a flag. The flag word's high eight bits
-(<code>63..56</code>) are a schema version, and its low 56 bits are schema-specific policy flags.
-Schema version zero uses bit zero to mark the version forbidden. Readers treat unsupported
-schema versions as forbidden, and mutation APIs reject them.
+Each version has an independent <code>Setting</code>: <code>1</code> means the version is forbidden and <code>0</code> means it
+is allowed.
 
 
 -  [Struct `PackageConfig`](#sui_package_config_PackageConfig)
@@ -23,18 +21,19 @@ schema versions as forbidden, and mutation APIs reject them.
 -  [Struct `PackageMetadataKey`](#sui_package_config_PackageMetadataKey)
 -  [Struct `VersionForbiddenKey`](#sui_package_config_VersionForbiddenKey)
 -  [Constants](#@Constants_0)
+-  [Function `forbid_version`](#sui_package_config_forbid_version)
+-  [Function `forbid_version_range`](#sui_package_config_forbid_version_range)
+-  [Function `is_version_forbidden_for_next_epoch`](#sui_package_config_is_version_forbidden_for_next_epoch)
 -  [Function `create`](#sui_package_config_create)
 -  [Function `add_per_package_config`](#sui_package_config_add_per_package_config)
 -  [Function `borrow_per_package_config_mut`](#sui_package_config_borrow_per_package_config_mut)
 -  [Function `borrow_per_package_config`](#sui_package_config_borrow_per_package_config)
 -  [Function `per_package_metadata_exists`](#sui_package_config_per_package_metadata_exists)
--  [Macro function `per_package_config_entry`](#sui_package_config_per_package_config_entry)
--  [Function `is_supported_bitset_version`](#sui_package_config_is_supported_bitset_version)
 -  [Function `is_version_forbidden`](#sui_package_config_is_version_forbidden)
+-  [Function `cap_package_info`](#sui_package_config_cap_package_info)
+-  [Function `assert_historical_version`](#sui_package_config_assert_historical_version)
 -  [Function `forbid_version_impl`](#sui_package_config_forbid_version_impl)
--  [Function `forbid_version`](#sui_package_config_forbid_version)
--  [Function `forbid_version_range`](#sui_package_config_forbid_version_range)
--  [Function `is_version_forbidden_for_next_epoch`](#sui_package_config_is_version_forbidden_for_next_epoch)
+-  [Macro function `per_package_config_entry`](#sui_package_config_per_package_config_entry)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -141,7 +140,7 @@ Dynamic object field key used to store a <code>Config</code> for an original pac
 
 ## Struct `VersionForbiddenKey`
 
-Setting key used to store forbid-list flags for one package version.
+Setting key used to store the forbid-list value for one package version.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a> <b>has</b> <b>copy</b>, drop, store
@@ -199,35 +198,116 @@ The start of a version range is greater than its end.
 
 
 
-<a name="sui_package_config_EUnsupportedBitsetVersion"></a>
-
-The forbid-list bitset schema version is not supported by this implementation.
-
-
-<pre><code><b>const</b> <a href="../sui/package_config.md#sui_package_config_EUnsupportedBitsetVersion">EUnsupportedBitsetVersion</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="sui_package_config_BITSET_VERSION_SHIFT"></a>
-
-The high eight bits identify the bitset schema version.
-
-
-<pre><code><b>const</b> <a href="../sui/package_config.md#sui_package_config_BITSET_VERSION_SHIFT">BITSET_VERSION_SHIFT</a>: u8 = 56;
-</code></pre>
-
-
-
 <a name="sui_package_config_VERSION_FORBIDDEN"></a>
 
-Schema version zero's bit indicating that the package version is forbidden.
+Value indicating that a package version is forbidden.
 
 
 <pre><code><b>const</b> <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>: u64 = 1;
 </code></pre>
 
 
+
+<a name="sui_package_config_forbid_version"></a>
+
+## Function `forbid_version`
+
+Forbid a historical version of the package controlled by <code>cap</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, version: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    cap: &UpgradeCap,
+    version: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> (original_id, current_version) = <a href="../sui/package_config.md#sui_package_config_cap_package_info">cap_package_info</a>(cap);
+    <a href="../sui/package_config.md#sui_package_config_assert_historical_version">assert_historical_version</a>(version, current_version);
+    <a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>, original_id, version, ctx);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_forbid_version_range"></a>
+
+## Function `forbid_version_range`
+
+Forbid all historical versions in the inclusive range <code>[start, end]</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, start: u64, end: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    cap: &UpgradeCap,
+    start: u64,
+    end: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(start &lt;= end, <a href="../sui/package_config.md#sui_package_config_EInvalidVersionRange">EInvalidVersionRange</a>);
+    <b>let</b> (original_id, current_version) = <a href="../sui/package_config.md#sui_package_config_cap_package_info">cap_package_info</a>(cap);
+    // Only need to check the end of the range since start &lt;= end checked above.
+    <a href="../sui/package_config.md#sui_package_config_assert_historical_version">assert_historical_version</a>(end, current_version);
+    start.range_do_eq!(end, |version| {
+        <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(original_id, version, ctx);
+    });
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_is_version_forbidden_for_next_epoch"></a>
+
+## Function `is_version_forbidden_for_next_epoch`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden_for_next_epoch">is_version_forbidden_for_next_epoch</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, version: u64): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden_for_next_epoch">is_version_forbidden_for_next_epoch</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    original_id: ID,
+    version: u64,
+): bool {
+    <b>if</b> (!<a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_metadata_exists">per_package_metadata_exists</a>(original_id)) <b>return</b> <b>false</b>;
+    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_borrow_per_package_config">borrow_per_package_config</a>(original_id);
+    <b>let</b> value = <a href="../sui/config.md#sui_config">config</a>.read_setting_for_next_epoch&lt;_, _, u64&gt;(<a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a>(version));
+    <b>if</b> (value.is_none()) <b>return</b> <b>false</b>;
+    <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(value.destroy_some())
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="sui_package_config_create"></a>
 
@@ -367,71 +447,13 @@ Schema version zero's bit indicating that the package version is forbidden.
 
 </details>
 
-<a name="sui_package_config_per_package_config_entry"></a>
-
-## Macro function `per_package_config_entry`
-
-
-
-<pre><code><b>macro</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_per_package_config_entry">per_package_config_entry</a>($<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, $original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, $ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;<a href="../sui/package_config.md#sui_package_config_PackageConfigCap">sui::package_config::PackageConfigCap</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>macro</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_per_package_config_entry">per_package_config_entry</a>(
-    $<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    $original_id: ID,
-    $ctx: &<b>mut</b> TxContext,
-): &<b>mut</b> Config&lt;<a href="../sui/package_config.md#sui_package_config_PackageConfigCap">PackageConfigCap</a>&gt; {
-    <b>let</b> <a href="../sui/package_config.md#sui_package_config">package_config</a> = $<a href="../sui/package_config.md#sui_package_config">package_config</a>;
-    <b>let</b> original_id = $original_id;
-    <b>let</b> ctx = $ctx;
-    <b>if</b> (!<a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_metadata_exists">per_package_metadata_exists</a>(original_id)) {
-        <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_add_per_package_config">add_per_package_config</a>(original_id, ctx);
-    };
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_borrow_per_package_config_mut">borrow_per_package_config_mut</a>(original_id)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_package_config_is_supported_bitset_version"></a>
-
-## Function `is_supported_bitset_version`
-
-
-
-<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_supported_bitset_version">is_supported_bitset_version</a>(flags: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_supported_bitset_version">is_supported_bitset_version</a>(flags: u64): bool {
-    (flags &gt;&gt; <a href="../sui/package_config.md#sui_package_config_BITSET_VERSION_SHIFT">BITSET_VERSION_SHIFT</a>) == 0
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_package_config_is_version_forbidden"></a>
 
 ## Function `is_version_forbidden`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(flags: u64): bool
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(value: u64): bool
 </code></pre>
 
 
@@ -440,8 +462,56 @@ Schema version zero's bit indicating that the package version is forbidden.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(flags: u64): bool {
-    !<a href="../sui/package_config.md#sui_package_config_is_supported_bitset_version">is_supported_bitset_version</a>(flags) || (flags & <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>) != 0
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(value: u64): bool {
+    value == <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_cap_package_info"></a>
+
+## Function `cap_package_info`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_cap_package_info">cap_package_info</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): (<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_cap_package_info">cap_package_info</a>(cap: &UpgradeCap): (ID, u64) {
+    (<a href="../sui/package.md#sui_package_original_package_id">package::original_package_id</a>(cap), <a href="../sui/package.md#sui_package_version">package::version</a>(cap))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_assert_historical_version"></a>
+
+## Function `assert_historical_version`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_assert_historical_version">assert_historical_version</a>(version: u64, current_version: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_assert_historical_version">assert_historical_version</a>(version: u64, current_version: u64) {
+    <b>assert</b>!(version &gt; 0 && version &lt; current_version, <a href="../sui/package_config.md#sui_package_config_EInvalidVersion">EInvalidVersion</a>);
 }
 </code></pre>
 
@@ -474,12 +544,8 @@ Schema version zero's bit indicating that the package version is forbidden.
     <a href="../sui/config.md#sui_config">config</a>.update!(
         &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfigCap">PackageConfigCap</a>(),
         <a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a>(version),
-        |_package_config, _cap, _ctx| 0,
-        |old_value, flags| {
-            <b>if</b> (old_value.is_some()) *flags = old_value.destroy_some();
-            <b>assert</b>!(<a href="../sui/package_config.md#sui_package_config_is_supported_bitset_version">is_supported_bitset_version</a>(*flags), <a href="../sui/package_config.md#sui_package_config_EUnsupportedBitsetVersion">EUnsupportedBitsetVersion</a>);
-            *flags = *flags | <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>;
-        },
+        |_package_config, _cap, _ctx| <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>,
+        |_old_value, value| *value = <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>,
         ctx,
     );
 }
@@ -489,14 +555,13 @@ Schema version zero's bit indicating that the package version is forbidden.
 
 </details>
 
-<a name="sui_package_config_forbid_version"></a>
+<a name="sui_package_config_per_package_config_entry"></a>
 
-## Function `forbid_version`
-
-Forbid a historical version of the package controlled by <code>cap</code>.
+## Macro function `per_package_config_entry`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, version: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_per_package_config_entry">per_package_config_entry</a>($<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, $original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, $ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): &<b>mut</b> <a href="../sui/config.md#sui_config_Config">sui::config::Config</a>&lt;<a href="../sui/package_config.md#sui_package_config_PackageConfigCap">sui::package_config::PackageConfigCap</a>&gt;
 </code></pre>
 
 
@@ -505,81 +570,18 @@ Forbid a historical version of the package controlled by <code>cap</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    cap: &UpgradeCap,
-    version: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>let</b> current_version = <a href="../sui/package.md#sui_package_version">package::version</a>(cap);
-    <b>assert</b>!(version &gt; 0 && version &lt; current_version, <a href="../sui/package_config.md#sui_package_config_EInvalidVersion">EInvalidVersion</a>);
-    <a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>, <a href="../sui/package.md#sui_package_original_package_id">package::original_package_id</a>(cap), version, ctx);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_package_config_forbid_version_range"></a>
-
-## Function `forbid_version_range`
-
-Forbid all historical versions in the inclusive range <code>[start, end]</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, start: u64, end: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    cap: &UpgradeCap,
-    start: u64,
-    end: u64,
-    ctx: &<b>mut</b> TxContext,
-) {
-    <b>assert</b>!(start &lt;= end, <a href="../sui/package_config.md#sui_package_config_EInvalidVersionRange">EInvalidVersionRange</a>);
-    start.range_do_eq!(end, |version| {
-        <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(cap, version, ctx);
-    });
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_package_config_is_version_forbidden_for_next_epoch"></a>
-
-## Function `is_version_forbidden_for_next_epoch`
-
-
-
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden_for_next_epoch">is_version_forbidden_for_next_epoch</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, version: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_version_forbidden_for_next_epoch">is_version_forbidden_for_next_epoch</a>(
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    original_id: ID,
-    version: u64,
-): bool {
-    <b>if</b> (!<a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_metadata_exists">per_package_metadata_exists</a>(original_id)) <b>return</b> <b>false</b>;
-    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_borrow_per_package_config">borrow_per_package_config</a>(original_id);
-    <b>let</b> flags = <a href="../sui/config.md#sui_config">config</a>.read_setting_for_next_epoch&lt;_, _, u64&gt;(<a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a>(version));
-    <b>if</b> (flags.is_none()) <b>return</b> <b>false</b>;
-    <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(flags.destroy_some())
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_per_package_config_entry">per_package_config_entry</a>(
+    $<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    $original_id: ID,
+    $ctx: &<b>mut</b> TxContext,
+): &<b>mut</b> Config&lt;<a href="../sui/package_config.md#sui_package_config_PackageConfigCap">PackageConfigCap</a>&gt; {
+    <b>let</b> <a href="../sui/package_config.md#sui_package_config">package_config</a> = $<a href="../sui/package_config.md#sui_package_config">package_config</a>;
+    <b>let</b> original_id = $original_id;
+    <b>let</b> ctx = $ctx;
+    <b>if</b> (!<a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_metadata_exists">per_package_metadata_exists</a>(original_id)) {
+        <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_add_per_package_config">add_per_package_config</a>(original_id, ctx);
+    };
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_borrow_per_package_config_mut">borrow_per_package_config_mut</a>(original_id)
 }
 </code></pre>
 

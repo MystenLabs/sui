@@ -72,20 +72,6 @@ fun test_forbid_version_range_is_inclusive() {
     end(config, scenario);
 }
 
-#[test, expected_failure(abort_code = sui::package_config::EUnsupportedBitsetVersion)]
-fun test_forbid_unknown_bitset_version_fails() {
-    let mut scenario = ts::begin(SENDER);
-    let mut config = new_config(&mut scenario);
-    config.set_version_flags_for_testing(
-        PACKAGE_A.to_id(),
-        1u64,
-        1u64 << 56,
-        scenario.ctx(),
-    );
-    config.forbid_version_for_testing(PACKAGE_A.to_id(), CURRENT_VERSION, 1u64, scenario.ctx());
-    end(config, scenario);
-}
-
 #[test, expected_failure(abort_code = sui::package_config::EInvalidVersion)]
 fun test_forbid_zero_version_fails() {
     let mut scenario = ts::begin(SENDER);

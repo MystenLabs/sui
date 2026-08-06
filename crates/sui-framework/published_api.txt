@@ -3187,6 +3187,15 @@ PackageMetadataKey
 VersionForbiddenKey
 	public struct
 	0x2::package_config
+forbid_version
+	public fun
+	0x2::package_config
+forbid_version_range
+	public fun
+	0x2::package_config
+is_version_forbidden_for_next_epoch
+	public(package) fun
+	0x2::package_config
 create
 	fun
 	0x2::package_config
@@ -3202,23 +3211,17 @@ borrow_per_package_config
 per_package_metadata_exists
 	fun
 	0x2::package_config
-is_supported_bitset_version
+is_version_forbidden
 	fun
 	0x2::package_config
-is_version_forbidden
+cap_package_info
+	fun
+	0x2::package_config
+assert_historical_version
 	fun
 	0x2::package_config
 forbid_version_impl
 	fun
-	0x2::package_config
-forbid_version
-	public fun
-	0x2::package_config
-forbid_version_range
-	public fun
-	0x2::package_config
-is_version_forbidden_for_next_epoch
-	public(package) fun
 	0x2::package_config
 Party
 	public struct
