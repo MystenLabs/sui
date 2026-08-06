@@ -453,6 +453,7 @@ object_store = { version = "0.13.0", features = [
   "http",
 ] }
 once_cell = "1.18.0"
+oneshot = { version = "0.2.1", features = ["std"] }
 ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "57.3"
