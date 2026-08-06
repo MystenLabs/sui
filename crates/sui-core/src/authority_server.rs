@@ -66,6 +66,7 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
 use crate::admission_queue::{AdmissionQueueContext, AdmissionQueueManager};
+use crate::consensus_transaction_pool::TransactionPoolContext;
 use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
@@ -403,14 +404,24 @@ impl ValidatorServiceMetrics {
 }
 
 /// Where `handle_submit_transaction` routes a request.
-enum AdmissionQueueSubmitMode {
+#[derive(Clone, Copy)]
+enum UserSubmissionMode {
     /// Admit via the gas-price priority queue.
     Queue,
+    /// Admit via the consensus-polled transaction pool.
+    Pool,
     /// Submit directly to consensus, bypassing the queue — used when the queue
     /// is turned off by config, temporarily disabled by failover, or for a ping
     /// request. Individual txs are rejected when consensus is saturated
     /// (pre-queue behavior).
     Direct,
+}
+
+#[derive(Clone)]
+pub enum UserSubmissionPath {
+    Direct,
+    AdmissionQueue(AdmissionQueueContext),
+    Pool(Arc<TransactionPoolContext>),
 }
 
 #[derive(Clone)]
@@ -421,7 +432,7 @@ pub struct ValidatorService {
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
     gasless_limiter: GaslessRateLimiter,
-    admission_queue: Option<AdmissionQueueContext>,
+    user_submission_path: UserSubmissionPath,
     /// Digests submitted within the last `recent_submission_window` (value: when recorded), to
     /// drop duplicate resubmissions before they reach consensus.
     recently_submitted: Cache<TransactionDigest, Instant>,
@@ -441,7 +452,7 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         validator_metrics: Arc<ValidatorServiceMetrics>,
         client_id_source: Option<ClientIdSource>,
-        admission_queue: Option<AdmissionQueueContext>,
+        user_submission_path: UserSubmissionPath,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
         let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
@@ -453,7 +464,7 @@ impl ValidatorService {
             traffic_controller,
             client_id_source,
             gasless_limiter,
-            admission_queue,
+            user_submission_path,
             recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
             recent_submission_window,
             inflight_transactions: Arc::new(Mutex::new(HashSet::new())),
@@ -482,7 +493,8 @@ impl ValidatorService {
             consensus_adapter.clone(),
             slot_freed_notify,
         ));
-        let admission_queue = Some(AdmissionQueueContext::spawn(manager, epoch_store));
+        let user_submission_path =
+            UserSubmissionPath::AdmissionQueue(AdmissionQueueContext::spawn(manager, epoch_store));
         let recent_submission_window = state.config.recent_submission_dedup_window();
         Self {
             state,
@@ -491,7 +503,7 @@ impl ValidatorService {
             traffic_controller: None,
             client_id_source: None,
             gasless_limiter,
-            admission_queue,
+            user_submission_path,
             recently_submitted: Self::new_recently_submitted_cache(recent_submission_window),
             recent_submission_window,
             inflight_transactions: Arc::new(Mutex::new(HashSet::new())),
@@ -616,7 +628,7 @@ impl ValidatorService {
             traffic_controller: _,
             client_id_source,
             gasless_limiter: _,
-            admission_queue: _,
+            user_submission_path: _,
             recently_submitted: _,
             recent_submission_window: _,
             inflight_transactions: _,
@@ -863,7 +875,8 @@ impl ValidatorService {
 
             // Use the pre-queue per-tx consensus overload reject on the direct
             // submission path (queue off, failover, or ping).
-            if matches!(submit_mode, AdmissionQueueSubmitMode::Direct)
+            if matches!(submit_mode, UserSubmissionMode::Direct)
+                && !matches!(&self.user_submission_path, UserSubmissionPath::Pool(_))
                 && let Err(error) = self.consensus_adapter.check_consensus_overload()
             {
                 state.update_overload_metrics("consensus");
@@ -1329,7 +1342,7 @@ impl ValidatorService {
         // any other error fails the whole request, after all groups have settled.
         // Soft bundles submit as a single group; individual transactions submit one group each.
         let group_results = match submit_mode {
-            AdmissionQueueSubmitMode::Direct => {
+            UserSubmissionMode::Direct => {
                 let futures = tx_groups.into_iter().map(|txns| {
                     debug!(
                         "handle_submit_transaction: submitting consensus transactions ({}): {}",
@@ -1344,12 +1357,15 @@ impl ValidatorService {
                 });
                 future::join_all(futures).await
             }
-            AdmissionQueueSubmitMode::Queue => {
-                let aq = self
-                    .admission_queue
-                    .as_ref()
-                    .expect("Queue mode implies admission_queue is Some")
-                    .load();
+            UserSubmissionMode::Queue => {
+                let UserSubmissionPath::AdmissionQueue(context) = &self.user_submission_path else {
+                    debug_fatal!("queue mode requires an admission queue");
+                    return Err(SuiErrorKind::GenericAuthorityError {
+                        error: "queue mode requires an admission queue".to_string(),
+                    }
+                    .into());
+                };
+                let aq = context.load();
                 let mut receivers = Vec::with_capacity(tx_groups.len());
                 for txns in tx_groups {
                     let gas_price = Self::extract_gas_price(&txns);
@@ -1369,6 +1385,63 @@ impl ValidatorService {
                         Err(_) => Err(SuiError::from(
                             SuiErrorKind::TooManyTransactionsPendingConsensus,
                         )),
+                    }
+                }))
+                .await
+            }
+            UserSubmissionMode::Pool => {
+                let UserSubmissionPath::Pool(context) = &self.user_submission_path else {
+                    debug_fatal!("pool mode requires a transaction pool");
+                    return Err(SuiErrorKind::GenericAuthorityError {
+                        error: "pool mode requires a transaction pool".to_string(),
+                    }
+                    .into());
+                };
+                {
+                    let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+                    if !reconfiguration_lock.should_accept_user_certs() {
+                        return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+                    }
+                }
+
+                let mut receivers = Vec::with_capacity(tx_groups.len());
+                for txns in tx_groups {
+                    // Gas-price-based DoS accounting, mirroring the recording in
+                    // ConsensusAdapter::submit_and_wait_inner, which pull-mode user
+                    // transactions bypass. Paying k * RGP allows a transaction to appear
+                    // up to k times in consensus output; beyond that, the consensus
+                    // handler's increment_submission_count charges spam weight against
+                    // the client addresses recorded here.
+                    for transaction in &txns {
+                        if let Some(transaction) = transaction.kind.as_user_transaction() {
+                            let amplification_factor =
+                                (transaction.data().transaction_data().gas_price()
+                                    / epoch_store.reference_gas_price().max(1))
+                                .max(1);
+                            epoch_store.submitted_transaction_cache.record_submitted_tx(
+                                transaction.digest(),
+                                amplification_factor as u32,
+                                submitter_client_addr,
+                            );
+                        }
+                    }
+                    let gas_price = Self::extract_gas_price(&txns);
+                    let result = context
+                        .try_insert(epoch_store.epoch(), gas_price, txns)
+                        .await;
+                    if let Ok((_, false)) = &result {
+                        // Duplicate of an in-flight submission; flag the request as spam. The
+                        // per-tx result is still Submitted, so this is tracked separately.
+                        duplicate_at_admission = true;
+                    }
+                    receivers.push(result.map(|(receiver, _)| receiver));
+                }
+                future::join_all(receivers.into_iter().map(|receiver| async move {
+                    match receiver {
+                        Ok(receiver) => receiver.await.unwrap_or_else(|_| {
+                            Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into())
+                        }),
+                        Err(error) => Err(error),
                     }
                 }))
                 .await
@@ -1514,24 +1587,26 @@ impl ValidatorService {
             .unwrap_or(0)
     }
 
-    fn classify_submit_mode(&self, is_ping_request: bool) -> AdmissionQueueSubmitMode {
-        let Some(aq) = &self.admission_queue else {
-            return AdmissionQueueSubmitMode::Direct;
-        };
-
+    fn classify_submit_mode(&self, is_ping_request: bool) -> UserSubmissionMode {
         // Ping requests carry no transactions and must not wait behind queued
         // work; submit them directly to consensus.
         if is_ping_request {
-            return AdmissionQueueSubmitMode::Direct;
+            return UserSubmissionMode::Direct;
         }
 
-        // If the queue actor is stuck, fall back to direct submission with the
-        // pre-queue saturation reject until it resumes making progress.
-        if aq.load().failover_tripped() {
-            return AdmissionQueueSubmitMode::Direct;
+        match &self.user_submission_path {
+            UserSubmissionPath::Direct => UserSubmissionMode::Direct,
+            UserSubmissionPath::Pool(_) => UserSubmissionMode::Pool,
+            UserSubmissionPath::AdmissionQueue(context) => {
+                // If the queue actor is stuck, fall back to direct submission with the
+                // pre-queue saturation reject until it resumes making progress.
+                if context.load().failover_tripped() {
+                    UserSubmissionMode::Direct
+                } else {
+                    UserSubmissionMode::Queue
+                }
+            }
         }
-
-        AdmissionQueueSubmitMode::Queue
     }
 
     async fn collect_effects_data(

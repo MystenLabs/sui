@@ -5,10 +5,12 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
 use prometheus::{
-    Histogram, IntCounter, IntGauge, Registry, register_histogram_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry,
+    Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::net::IpAddr;
@@ -33,6 +35,46 @@ pub struct QueueEntry {
     pub enqueue_time: Instant,
 }
 
+/// What `PriorityAdmissionQueue::pop_batch_while` does with an examined entry.
+pub enum PopAction {
+    /// Pop the entry into the included partition.
+    Include,
+    /// Pop the entry into the excluded partition.
+    Exclude,
+    /// Leave the entry queued and stop iterating.
+    Stop,
+}
+
+pub trait AdmissionQueueEntry {
+    fn gas_price(&self) -> u64;
+    fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey>;
+    fn notify_evicted(self, min_gas_price: u64);
+    fn notify_rejected(self, min_gas_price: u64);
+}
+
+impl AdmissionQueueEntry for QueueEntry {
+    fn gas_price(&self) -> u64 {
+        self.gas_price
+    }
+
+    fn transaction_keys(&self) -> impl Iterator<Item = ConsensusTransactionKey> {
+        self.transactions.iter().map(ConsensusTransaction::key)
+    }
+
+    fn notify_evicted(self, min_gas_price: u64) {
+        let _ = self
+            .position_sender
+            .send(Err(tonic::Status::from(SuiError::from(
+                SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price },
+            ))));
+    }
+
+    fn notify_rejected(self, _min_gas_price: u64) {
+        // Nothing to do here in push mode. The rejected caller receives the
+        // outbid error via the insert result instead.
+    }
+}
+
 impl QueueEntry {
     #[cfg(test)]
     pub fn new_for_test(
@@ -51,11 +93,22 @@ impl QueueEntry {
 
 /// Prometheus metrics for the admission queue.
 pub struct AdmissionQueueMetrics {
+    // Pull mode intentionally reuses these admission metrics for its user lane because
+    // both modes implement the same admission policy and are mutually exclusive on a
+    // validator. This preserves dashboard continuity when switching modes.
     pub queue_depth: IntGauge,
     pub queue_wait_latency: Histogram,
     pub evictions: IntCounter,
     pub rejections: IntCounter,
     pub duplicate_inserts: IntCounter,
+
+    pub pool_depth: IntGaugeVec,
+    pub pool_bytes: IntGaugeVec,
+    pub pool_taken_per_proposal: Histogram,
+    pub pool_requeued_on_dropped_ack: IntCounter,
+    pub pool_gc_notified: IntCounter,
+    pub pool_waiting_inserts: IntGauge,
+    pub pool_already_processed: IntCounterVec,
 }
 
 impl AdmissionQueueMetrics {
@@ -92,6 +145,52 @@ impl AdmissionQueueMetrics {
                 registry,
             )
             .unwrap(),
+            pool_depth: register_int_gauge_vec_with_registry!(
+                "consensus_transaction_pool_depth",
+                "Current number of entries in each consensus transaction pool lane",
+                &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_bytes: register_int_gauge_vec_with_registry!(
+                "consensus_transaction_pool_bytes",
+                "Current serialized transaction bytes in each consensus transaction pool lane",
+                &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_taken_per_proposal: register_histogram_with_registry!(
+                "consensus_transaction_pool_taken_per_proposal",
+                "Transactions taken from the consensus transaction pool per proposal",
+                COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            pool_requeued_on_dropped_ack: register_int_counter_with_registry!(
+                "consensus_transaction_pool_requeued_on_dropped_ack",
+                "Entries requeued because a proposal acknowledgement was dropped",
+                registry,
+            )
+            .unwrap(),
+            pool_gc_notified: register_int_counter_with_registry!(
+                "consensus_transaction_pool_gc_notified",
+                "Block-status subscribers notified that their block was garbage collected",
+                registry,
+            )
+            .unwrap(),
+            pool_waiting_inserts: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_waiting_inserts",
+                "Pool submissions waiting for the matching epoch pool to become available",
+                registry,
+            )
+            .unwrap(),
+            pool_already_processed: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_already_processed",
+                "User submissions not proposed because they were already processed elsewhere, by the stage that detected it and the path that processed them",
+                &["stage", "method"],
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -103,16 +202,16 @@ impl AdmissionQueueMetrics {
 /// Bounded priority queue that orders transactions by gas price. Uses a BTreeMap
 /// for efficient access at both ends: lowest gas price (for eviction) and highest
 /// gas price (for draining to consensus). Entries at the same gas price are FIFO.
-pub struct PriorityAdmissionQueue {
+pub struct PriorityAdmissionQueue<E: AdmissionQueueEntry> {
     capacity: usize,
-    map: BTreeMap<u64, VecDeque<QueueEntry>>,
+    map: BTreeMap<u64, VecDeque<E>>,
     /// Number of queue entries per transaction key, for duplicate detection.
     queued_keys: HashMap<ConsensusTransactionKey, u32>,
     total_len: usize,
     metrics: Arc<AdmissionQueueMetrics>,
 }
 
-impl PriorityAdmissionQueue {
+impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
     pub fn new(capacity: usize, metrics: Arc<AdmissionQueueMetrics>) -> Self {
         Self {
             capacity,
@@ -134,38 +233,30 @@ impl PriorityAdmissionQueue {
     /// On success, returns `Ok(true)` or `Ok(false)` to indicate whether the
     /// value was newly inserted. Returns `Err` if the queue was full and the
     /// tx's gas price was not high enough to evict an existing entry.
-    pub fn insert(&mut self, entry: QueueEntry) -> SuiResult<bool> {
-        let keys: Vec<_> = entry.transactions.iter().map(|t| t.key()).collect();
+    pub fn insert(&mut self, entry: E) -> SuiResult<bool> {
+        let keys: Vec<_> = entry.transaction_keys().collect();
         let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
         if !newly_inserted {
             self.metrics.duplicate_inserts.inc();
         }
 
         if self.total_len < self.capacity {
-            self.push_entry(entry, keys);
-            self.metrics.queue_depth.set(self.total_len as i64);
+            self.push_entry(entry, keys, false);
             return Ok(newly_inserted);
         }
 
         let min_price = self.min_gas_price().unwrap();
-        if entry.gas_price > min_price {
-            let evicter_price = entry.gas_price;
+        if entry.gas_price() > min_price {
+            let evicter_price = entry.gas_price();
             let evicted = self.evict_lowest();
-            self.push_entry(entry, keys);
+            self.push_entry(entry, keys, false);
             self.metrics.evictions.inc();
-            // Signal the evicted entry's caller so `position_rx.await` returns
-            // a distinct outbid error rather than a generic RecvError.
-            let _ = evicted
-                .position_sender
-                .send(Err(tonic::Status::from(SuiError::from(
-                    SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
-                        min_gas_price: evicter_price,
-                    },
-                ))));
+            evicted.notify_evicted(evicter_price);
             return Ok(newly_inserted);
         }
 
         self.metrics.rejections.inc();
+        entry.notify_rejected(min_price);
         Err(
             SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
                 min_gas_price: min_price,
@@ -176,49 +267,82 @@ impl PriorityAdmissionQueue {
 
     /// Pop up to `count` entries, highest gas price first.
     /// Within the same gas price, entries are returned in FIFO order.
-    pub fn pop_batch(&mut self, count: usize) -> Vec<QueueEntry> {
-        let mut remaining = count.min(self.total_len);
-        let mut entries = Vec::with_capacity(remaining);
-        while remaining > 0 {
-            let Some(mut last) = self.map.last_entry() else {
-                break;
-            };
-            let deque = last.get_mut();
-            if deque.len() <= remaining {
-                // Drain the entire price level at once.
-                remaining -= deque.len();
-                self.total_len -= deque.len();
-                entries.extend(last.remove());
+    pub fn pop_batch(&mut self, count: usize) -> Vec<E> {
+        let mut remaining = count;
+        self.pop_batch_while(|_| {
+            if remaining == 0 {
+                PopAction::Stop
             } else {
-                // Partial drain from this price level.
-                self.total_len -= remaining;
-                entries.extend(deque.drain(..remaining));
-                remaining = 0;
+                remaining -= 1;
+                PopAction::Include
             }
+        })
+        .0
+    }
+
+    pub fn into_entries(mut self) -> Vec<E> {
+        let len = self.len();
+        self.pop_batch(len)
+    }
+
+    /// Pop entries highest gas price first (FIFO within a price level) until
+    /// `action` returns `Stop` or the queue is empty. The entry that stopped
+    /// iteration stays queued. Popped entries are returned partitioned into
+    /// those the callback chose to `Include` and those to `Exclude`.
+    pub fn pop_batch_while(
+        &mut self,
+        mut action: impl FnMut(&mut E) -> PopAction,
+    ) -> (Vec<E>, Vec<E>) {
+        let mut included = Vec::new();
+        let mut excluded = Vec::new();
+        'levels: while let Some(mut last) = self.map.last_entry() {
+            let deque = last.get_mut();
+            while let Some(entry) = deque.front_mut() {
+                let action = action(entry);
+                if matches!(action, PopAction::Stop) {
+                    break 'levels;
+                }
+                let entry = deque.pop_front().expect("front entry must exist");
+                self.total_len -= 1;
+                match action {
+                    PopAction::Include => included.push(entry),
+                    PopAction::Exclude => excluded.push(entry),
+                    PopAction::Stop => unreachable!("Stop breaks out above"),
+                }
+            }
+            last.remove();
         }
-        for entry in &entries {
+        for entry in included.iter().chain(&excluded) {
             self.remove_keys(entry);
         }
         self.metrics.queue_depth.set(self.total_len as i64);
-        entries
+        (included, excluded)
     }
 
     pub fn is_empty(&self) -> bool {
         self.total_len == 0
     }
 
-    fn push_entry(&mut self, entry: QueueEntry, keys: Vec<ConsensusTransactionKey>) {
+    pub fn reinsert_front(&mut self, entry: E) {
+        let keys: Vec<_> = entry.transaction_keys().collect();
+        self.push_entry(entry, keys, true);
+    }
+
+    fn push_entry(&mut self, entry: E, keys: Vec<ConsensusTransactionKey>, front: bool) {
         for key in keys {
             *self.queued_keys.entry(key).or_insert(0) += 1;
         }
-        self.map
-            .entry(entry.gas_price)
-            .or_default()
-            .push_back(entry);
+        let level = self.map.entry(entry.gas_price()).or_default();
+        if front {
+            level.push_front(entry);
+        } else {
+            level.push_back(entry);
+        }
         self.total_len += 1;
+        self.metrics.queue_depth.set(self.total_len as i64);
     }
 
-    fn evict_lowest(&mut self) -> QueueEntry {
+    fn evict_lowest(&mut self) -> E {
         let evicted = {
             let mut first = self
                 .map
@@ -236,9 +360,8 @@ impl PriorityAdmissionQueue {
         evicted
     }
 
-    fn remove_keys(&mut self, entry: &QueueEntry) {
-        for tx in &entry.transactions {
-            let key = tx.key();
+    fn remove_keys(&mut self, entry: &E) {
+        for key in entry.transaction_keys() {
             let std::collections::hash_map::Entry::Occupied(mut slot) = self.queued_keys.entry(key)
             else {
                 debug_fatal!("remove_keys on absent key");
@@ -435,7 +558,7 @@ impl AdmissionQueueContext {
 /// to consensus as capacity becomes available.
 struct AdmissionQueueEventLoop {
     receiver: mpsc::Receiver<InsertCommand>,
-    queue: PriorityAdmissionQueue,
+    queue: PriorityAdmissionQueue<QueueEntry>,
     consensus_adapter: Arc<ConsensusAdapter>,
     slot_freed_notify: Arc<tokio::sync::Notify>,
     epoch_store: Arc<AuthorityPerEpochStore>,
@@ -580,7 +703,7 @@ mod tests {
         (QueueEntry::new_for_test(gas_price, tx), rx)
     }
 
-    fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue {
+    fn build_queue(capacity: usize, gas_prices: &[u64]) -> PriorityAdmissionQueue<QueueEntry> {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(capacity, metrics);
         for &gp in gas_prices {
@@ -594,6 +717,31 @@ mod tests {
     fn test_insert_within_capacity() {
         let q = build_queue(3, &[100, 200, 50]);
         assert_eq!(q.len(), 3);
+    }
+
+    #[test]
+    fn test_pop_batch_while_partitions_and_stops() {
+        let mut q = build_queue(10, &[100, 200, 200, 50, 75]);
+
+        let (included, excluded) = q.pop_batch_while(|entry| match entry.gas_price {
+            price if price < 80 => PopAction::Stop,
+            price if price < 150 => PopAction::Exclude,
+            _ => PopAction::Include,
+        });
+        assert_eq!(
+            included.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 200]
+        );
+        assert_eq!(
+            excluded.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![100]
+        );
+        // The entry that stopped iteration stays queued, as does everything behind it.
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.min_gas_price(), Some(50));
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(rest.len(), 2);
+        assert!(q.is_empty());
     }
 
     #[test]
@@ -790,6 +938,33 @@ mod tests {
         q.insert(filler2).unwrap();
 
         let (entry3, _rx3) = make_dup_entry(500, tx);
+        assert!(q.insert(entry3).unwrap());
+    }
+
+    #[test]
+    fn test_duplicate_key_counter_restored_on_reinsert_front() {
+        use sui_types::base_types::AuthorityName;
+
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(10, metrics);
+
+        let tx = ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO);
+
+        let (entry1, _rx1) = make_dup_entry(100, tx.clone());
+        q.insert(entry1).unwrap();
+
+        // Popping removes the key; reinserting the popped entry (the dropped-proposal
+        // requeue path) must restore it, so a copy of `tx` is flagged as a duplicate.
+        let popped = q.pop_batch(1).pop().unwrap();
+        q.reinsert_front(popped);
+        assert_eq!(q.len(), 1);
+        let (entry2, _rx2) = make_dup_entry(100, tx.clone());
+        assert!(!q.insert(entry2).unwrap());
+
+        // Draining everything zeroes the counter and the same tx is fresh again.
+        let _ = q.pop_batch(q.len());
+        assert!(q.is_empty());
+        let (entry3, _rx3) = make_dup_entry(100, tx);
         assert!(q.insert(entry3).unwrap());
     }
 
