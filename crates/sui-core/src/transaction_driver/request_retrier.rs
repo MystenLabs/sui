@@ -4,6 +4,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use sui_types::base_types::AuthorityName;
+use sui_types::transaction::AllowedProposers;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -32,6 +33,10 @@ pub(crate) const SELECT_LATENCY_DELTA: f64 = 0.02;
 /// When a `blocked_validators` is provided, the validators in the list cannot be used to submit the transaction to.
 /// When the blocked validator list is empty, no restrictions are applied.
 ///
+/// When `allowed_proposers` is provided, only those validators are used. Unlike the lists above,
+/// this comes from the transaction itself: proposal by anyone else is byzantine behavior and would
+/// invalidate the whole block, so submitting elsewhere can only waste the attempt.
+///
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
     ranked_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
@@ -45,11 +50,20 @@ impl<A: Clone> RequestRetrier<A> {
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         allowed_validators: Vec<String>,
         blocked_validators: Vec<String>,
+        allowed_proposers: Option<&AllowedProposers>,
     ) -> Self {
         let ranked_validators = client_monitor
             .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA);
         let ranked_clients = ranked_validators
             .into_iter()
+            .filter(|name| {
+                allowed_proposers.is_none_or(|allowed| {
+                    auth_agg
+                        .committee
+                        .authority_index(name)
+                        .is_some_and(|index| allowed.proposers.contains(&index))
+                })
+            })
             .map(|name| (name, auth_agg.get_display_name(&name)))
             .filter(|(_name, display_name)| {
                 allowed_validators.is_empty() || allowed_validators.contains(display_name)
@@ -170,7 +184,7 @@ mod tests {
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
         let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![]);
+        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None);
 
         for name in auth_agg.committee.names() {
             retrier.next_target().unwrap();
@@ -213,7 +227,7 @@ mod tests {
             ];
 
             let retrier =
-                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![]);
+                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![], None);
 
             // Should only have 1 remaining client (the known validator)
             assert_eq!(retrier.ranked_clients.len(), 1);
@@ -228,7 +242,7 @@ mod tests {
             ];
 
             let retrier =
-                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![]);
+                RequestRetrier::new(&auth_agg, &client_monitor, allowed_validators, vec![], None);
 
             // Should have no remaining clients since none of the allowed validators exist
             assert_eq!(retrier.ranked_clients.len(), 0);
@@ -255,8 +269,13 @@ mod tests {
         // Only the last validator will be picked up.
         let allowed_validator = auth_agg.committee.names().nth(3).unwrap();
 
-        let mut retrier =
-            RequestRetrier::new(&auth_agg, &client_monitor, vec![], blocked_display_names);
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            blocked_display_names,
+            None,
+        );
 
         // The last validator will be picked up.
         assert_eq!(retrier.next_target().unwrap().0, *allowed_validator);
@@ -272,7 +291,7 @@ mod tests {
         // Add retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![]);
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None);
 
             // 25% stake.
             retrier
@@ -308,7 +327,7 @@ mod tests {
         // Add mix of retriable and non-retriable errors.
         {
             let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
-            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![]);
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], None);
 
             // 25% stake retriable error.
             retrier
@@ -344,5 +363,47 @@ mod tests {
             // The aggregated error is non-retriable.
             assert!(!aggregated_error.is_submission_retriable());
         }
+    }
+
+    /// Only the validators a transaction names may propose it; submitting anywhere else can only
+    /// waste the attempt, so those targets are dropped before any request is made.
+    #[tokio::test]
+    async fn test_allowed_proposers() {
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let committee = &auth_agg.committee;
+
+        let allowed = AllowedProposers {
+            epoch: committee.epoch(),
+            proposers: nonempty::nonempty![1, 3],
+        };
+        let retrier =
+            RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], Some(&allowed));
+
+        assert_eq!(retrier.ranked_clients.len(), 2);
+        for (name, _) in &retrier.ranked_clients {
+            let index = committee.authority_index(name).unwrap();
+            assert!(
+                allowed.proposers.contains(&index),
+                "picked validator at index {index}, which the transaction does not allow"
+            );
+        }
+    }
+
+    /// An index outside the committee names no one, leaving nowhere to submit rather than
+    /// silently falling back to every validator.
+    #[tokio::test]
+    async fn test_allowed_proposers_outside_committee() {
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+
+        let allowed = AllowedProposers {
+            epoch: auth_agg.committee.epoch(),
+            proposers: nonempty::nonempty![99],
+        };
+        let retrier =
+            RequestRetrier::new(&auth_agg, &client_monitor, vec![], vec![], Some(&allowed));
+
+        assert_eq!(retrier.ranked_clients.len(), 0);
     }
 }
