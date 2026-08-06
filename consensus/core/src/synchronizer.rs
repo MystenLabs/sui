@@ -57,7 +57,7 @@ const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 
 /// Bound on the exact-fetch lane. Sized for its two feeders — reconstruction
-/// failures (ambiguity/digest mismatch: measured zero in production) and dead
+/// failures (ambiguity or digest mismatch, both rare in practice) and dead
 /// frontier slots — with two orders of magnitude of headroom over observation.
 const MAX_PENDING_EXACT_REQUESTS: usize = 128;
 
@@ -2708,7 +2708,7 @@ mod tests {
     /// A rounds-only response (empty guard — catch-up shape) must be processed up to
     /// max_blocks_per_fetch, not truncated to max_blocks_per_sync: the server sizes
     /// those responses by the fetch limit, and a client-side sync-limit truncation
-    /// silently discards blocks already paid for on the wire. This was the difference
+    /// silently discards blocks already paid for on the wire — the difference
     /// between a 1,000-block repair pipe and a 32-block one.
     #[tokio::test]
     async fn test_process_fetched_blocks_rounds_only_uses_fetch_limit() {
