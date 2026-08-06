@@ -131,6 +131,15 @@ pub(crate) struct ReadyEntry {
     pub(crate) charge: usize,
 }
 
+/// Accounting a channel-borne sidecar still holds until the worker delivers it.
+#[derive(Clone, Copy)]
+pub(crate) enum SidecarCharge {
+    /// A superseded entry's full byte charge (payload + sidecar), peer-attributed.
+    Entry(AuthorityIndex, usize),
+    /// Held-sidecar bytes, counted against the held cap until delivery.
+    Held(usize),
+}
+
 /// Shared handle DagState uses to drive pending_reconstructions from its acceptance and GC
 /// choke points. The effects channel is unbounded and drained by the
 /// reconstruction worker; sends never block under the DagState write guard.
@@ -147,8 +156,10 @@ pub(crate) struct AcceptanceEffects {
     /// Entries whose last missing slot filled: dispatch to the reconstruction worker.
     pub(crate) ready: Vec<ReadyEntry>,
     /// Sidecars whose anchor block just got accepted through another path: deliver
-    /// through `handle_excluded_ancestors` (the anchor precondition now holds).
-    pub(crate) deliverable_sidecars: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>)>,
+    /// through `handle_excluded_ancestors` (the anchor precondition now holds). Each
+    /// carries the accounting it still holds; the worker releases it after delivery,
+    /// so channel-borne bytes stay inside the same caps as resident ones.
+    pub(crate) deliverable_sidecars: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>, SidecarCharge)>,
     /// Entries whose frontier died at GC: only the exact-fetch lane can finish them.
     pub(crate) frontier_dead: Vec<BlockRef>,
 }
@@ -178,6 +189,9 @@ pub(crate) struct PendingReconstructions {
     held_sidecars: BTreeMap<BlockRef, (AuthorityIndex, Vec<Vec<u8>>)>,
     held_order: Vec<BlockRef>,
     held_bytes: usize,
+    /// Held-sidecar bytes moved into the effects channel and not yet delivered;
+    /// counted against the held cap so accept/refill cycles cannot grow the queue.
+    channel_held_bytes: usize,
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
     /// Entries dispatched to the worker and not yet terminal; counted against the
@@ -197,6 +211,7 @@ impl PendingReconstructions {
             held_sidecars: BTreeMap::new(),
             held_order: Vec::new(),
             held_bytes: 0,
+            channel_held_bytes: 0,
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
             in_flight: 0,
@@ -322,18 +337,27 @@ impl PendingReconstructions {
             // The accepted block may itself be a parked claim (arrived via fetch,
             // replay, or commit sync first): the parked copy is superseded, and its
             // sidecar becomes deliverable now that the anchor is accepted.
-            if let Some(entry) = self.remove_entry(block_ref) {
+            if let Some(entry) = self.remove_entry_keeping_charge(block_ref) {
+                self.in_flight += 1;
                 self.observe_residency(&entry, "superseded", block_ref.round);
                 effects.deliverable_sidecars.push((
                     entry.peer,
                     *block_ref,
                     entry.excluded_ancestors,
+                    SidecarCharge::Entry(entry.peer, entry.charge),
                 ));
             }
             if let Some((peer, sidecar)) = self.held_sidecars.remove(block_ref) {
-                effects
-                    .deliverable_sidecars
-                    .push((peer, *block_ref, sidecar));
+                let bytes: usize = sidecar.iter().map(Vec::len).sum();
+                self.held_bytes -= bytes;
+                self.channel_held_bytes += bytes;
+                self.held_order.retain(|r| r != block_ref);
+                effects.deliverable_sidecars.push((
+                    peer,
+                    *block_ref,
+                    sidecar,
+                    SidecarCharge::Held(bytes),
+                ));
             }
 
             let slot = Slot::from(*block_ref);
@@ -435,6 +459,11 @@ impl PendingReconstructions {
         Some(entry)
     }
 
+    /// Terminal release for a delivered channel-borne sidecar's held bytes.
+    pub(crate) fn release_held(&mut self, bytes: usize) {
+        self.channel_held_bytes = self.channel_held_bytes.saturating_sub(bytes);
+    }
+
     /// Terminal release for a dispatched reconstruction, whatever its outcome.
     pub(crate) fn release(&mut self, peer: AuthorityIndex, charge: usize) {
         self.per_peer_bytes[peer] -= charge;
@@ -455,7 +484,7 @@ impl PendingReconstructions {
         let bytes: usize = sidecar.iter().map(Vec::len).sum();
         while !self.held_order.is_empty()
             && (self.held_order.len() >= MAX_HELD_SIDECARS
-                || self.held_bytes + bytes > MAX_HELD_SIDECAR_BYTES)
+                || self.held_bytes + self.channel_held_bytes + bytes > MAX_HELD_SIDECAR_BYTES)
         {
             let evicted = self.held_order.remove(0);
             if let Some((_, evicted_sidecar)) = self.held_sidecars.remove(&evicted) {
@@ -580,13 +609,21 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     mut effects: tokio::sync::mpsc::UnboundedReceiver<AcceptanceEffects>,
 ) {
     while let Some(batch) = effects.recv().await {
-        for (peer, anchor, sidecar) in batch.deliverable_sidecars {
-            let Some(service) = service.upgrade() else {
-                return;
-            };
-            let _ = service
-                .handle_excluded_ancestors(peer, anchor, sidecar)
-                .await;
+        for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
+            {
+                let Some(service) = service.upgrade() else {
+                    return;
+                };
+                let _ = service
+                    .handle_excluded_ancestors(peer, anchor, sidecar)
+                    .await;
+            }
+            match charge {
+                SidecarCharge::Entry(peer, charge) => {
+                    pending_reconstructions.lock().release(peer, charge)
+                }
+                SidecarCharge::Held(bytes) => pending_reconstructions.lock().release_held(bytes),
+            }
         }
         for block_ref in batch.frontier_dead {
             if registry.register_missing_block(block_ref).await.is_err() {

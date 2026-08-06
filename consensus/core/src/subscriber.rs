@@ -541,26 +541,43 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         // Close the read-then-admit race: any slot
                                         // accepted between the frontier read and the
                                         // admit would never re-fire the hook.
-                                        let filled: Vec<_> = {
+                                        let (filled, gc_now): (Vec<_>, _) = {
                                             let Some(dag_state) = dag_state.upgrade() else {
                                                 return;
                                             };
                                             let guard = dag_state.read();
-                                            missing_snapshot
-                                                .iter()
-                                                .flat_map(|slot| {
-                                                    guard
-                                                        .get_uncommitted_blocks_at_slot(*slot)
-                                                        .into_iter()
-                                                        .map(|b| b.reference())
-                                                        .take(1)
-                                                })
-                                                .collect()
+                                            (
+                                                missing_snapshot
+                                                    .iter()
+                                                    .flat_map(|slot| {
+                                                        guard
+                                                            .get_uncommitted_blocks_at_slot(*slot)
+                                                            .into_iter()
+                                                            .map(|b| b.reference())
+                                                            .take(1)
+                                                    })
+                                                    .collect(),
+                                                guard.gc_round(),
+                                            )
                                         };
                                         if !filled.is_empty() {
                                             let effects = pending_reconstructions
                                                 .lock()
                                                 .recheck_filled_slots(&filled);
+                                            if !effects.is_empty() {
+                                                let _ = effects_tx.send(effects);
+                                            }
+                                        }
+                                        // GC advancing between the snapshot and the
+                                        // insert would miss this entry too: replay
+                                        // the sweep so a dead frontier escalates
+                                        // instead of waiting on a hook that already
+                                        // fired.
+                                        if gc_now > gc_round {
+                                            let mut effects =
+                                                crate::pending_reconstructions::AcceptanceEffects::default();
+                                            effects.frontier_dead =
+                                                pending_reconstructions.lock().on_gc(gc_now, tip);
                                             if !effects.is_empty() {
                                                 let _ = effects_tx.send(effects);
                                             }
@@ -1134,12 +1151,12 @@ mod test {
         );
     }
 
-    /// A claim beyond the admission window (frontier + gc_depth) is refused without
-    /// parking anything and WITHOUT resetting the stream: refusal is admission
-    /// control, not flow control, and the block reaches the receiver later through
-    /// commit sync or its children's explicit digests.
+    /// A claim past the admission window top means the RECEIVER is behind the
+    /// stream. That refusal has no other guaranteed recovery — the live stream keeps
+    /// the connection healthy so no timeout fires, and refused claims carry no
+    /// commit votes — so it resets the subscription for full-form replay.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn far_future_claim_is_refused_without_reset() {
+    async fn far_behind_refusal_resets_for_full_replay() {
         // Claimed round 2001 vs receiver frontier 1499: far past frontier + gc_depth.
         let s = minimal_wire_scenario(2, 2000, 1);
         let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
@@ -1170,7 +1187,7 @@ mod test {
                 >= 1
         })
         .await;
-        // Nothing parked, and no stream reset: one subscribe call only.
+        // Nothing parked, and the stream reset for full replay.
         assert_eq!(
             context
                 .metrics
@@ -1179,7 +1196,7 @@ mod test {
                 .get(),
             0
         );
-        assert_eq!(*network_client.subscribe_calls.lock(), 1);
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
     }
 
     /// A parked minimal block must credit the round tracker's RECEIVED vector at
