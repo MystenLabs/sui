@@ -46,7 +46,6 @@ const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Malformed minimal encodings tolerated per subscription session before the stream is
 /// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
-const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 
 /// Floor delay before reconnecting after a reset this node initiated for cause
 /// (quota overflow, recovery horizon, malformed threshold). The regular backoff can
@@ -434,7 +433,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 .with_label_values(&[peer_hostname])
                 .set(1);
 
-            let mut malformed_blocks: u32 = 0;
             'stream: loop {
                 // Bound waiting for the next block: a subscription that stops
                 // progressing without a transport error is abandoned and retried.
@@ -636,21 +634,18 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             }
                             Ok(InflateOutcome::Block(block)) => block,
                             Err(e) => {
-                                // A peer repeatedly sending malformed encodings gets its
-                                // stream reset; escalating reconnect backoff is the
-                                // penalty. Individual failures are visible through
-                                // minimal_block_inflate_drop{authority,reason}.
+                                // The stream is authenticated and reliable, so a
+                                // malformed encoding is a peer fault, not noise:
+                                // reset immediately, with escalating reconnect
+                                // backoff as the penalty.
                                 if matches!(e, ConsensusError::MalformedMinimalBlock(_)) {
-                                    malformed_blocks += 1;
-                                    if malformed_blocks > MAX_MALFORMED_PER_SUBSCRIPTION {
-                                        info!(
-                                            "Too many malformed minimal blocks from peer {} {}; resetting subscription",
-                                            peer, peer_hostname
-                                        );
-                                        sleep(caused_reset_delay(context.own_index, peer, retries))
-                                            .await;
-                                        continue 'subscription;
-                                    }
+                                    info!(
+                                        "Malformed minimal block from peer {} {}; resetting subscription",
+                                        peer, peer_hostname
+                                    );
+                                    sleep(caused_reset_delay(context.own_index, peer, retries))
+                                        .await;
+                                    continue 'subscription;
                                 }
                                 continue 'stream;
                             }
@@ -1106,29 +1101,20 @@ mod test {
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
     }
 
-    /// Malformed-minimal boundaries: an oversized payload counts as malformed, and
-    /// the fourth malformed envelope in a session resets the stream.
+    /// A malformed minimal envelope — oversized payloads included — resets the
+    /// stream immediately: the transport is authenticated and reliable, so a bad
+    /// frame is a peer fault, not noise.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn malformed_minimal_threshold_resets_stream() {
+    async fn malformed_minimal_resets_stream() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let peer = context.committee.to_authority_index(2).unwrap();
         let oversize = (context.protocol_config.max_transactions_in_block_bytes() as usize) * 2 + 1;
-        let mut wire = Vec::new();
-        // Three garbage payloads + one oversized: all four count as malformed, and
-        // the fourth crosses the threshold.
-        for _ in 0..3 {
-            wire.push(ExtendedSerializedBlock {
-                block: Bytes::new(),
-                minimal: Some(Bytes::from_static(b"\xff\xfe\xfd garbage")),
-                excluded_ancestors: vec![],
-            });
-        }
-        wire.push(ExtendedSerializedBlock {
+        let wire = vec![ExtendedSerializedBlock {
             block: Bytes::new(),
             minimal: Some(Bytes::from(vec![0u8; oversize])),
             excluded_ancestors: vec![],
-        });
+        }];
         let mut client = FixedStreamClient::new(wire);
         // Quiet stream after the reset, so the malformed count stays at one pass.
         client.blocks_after_reset = Some(vec![]);
@@ -1154,7 +1140,7 @@ mod test {
                 .minimal_block_inflate_drop
                 .with_label_values(&[peer_hostname, "malformed"])
                 .get(),
-            4
+            1
         );
     }
 
