@@ -52,7 +52,7 @@ const MAX_MALFORMED_PER_SUBSCRIPTION: u32 = 3;
 /// (quota overflow, recovery horizon, malformed threshold). The regular backoff can
 /// be cleared by any admitted block, so a peer interleaving valid blocks with
 /// reset-triggering ones could otherwise force immediate reconnects in an unbounded
-/// loop. Jittered per (node, peer, attempt): the v4 incident showed a fixed delay
+/// loop. Jittered per (node, peer, attempt): a fixed delay
 /// synchronizes resets across every subscription into committee-wide thrash.
 const CAUSED_RESET_DELAY_FLOOR_MS: u64 = 700;
 const CAUSED_RESET_DELAY_JITTER_MS: u64 = 600;
@@ -523,7 +523,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // yet were genuinely received — upstream credits the
                                 // equivalent full-block receipts, and withholding the
                                 // credit starves the author's received-quorum until
-                                // the propagation gate silences it (the v4 latch).
+                                // the propagation gate silences it — and a silenced
+                                // node stops proposing, so its credit never recovers.
                                 // Only rounds past the admission window top go
                                 // uncredited: those are the unbackable claims the
                                 // monotonic tracker must not advertise.

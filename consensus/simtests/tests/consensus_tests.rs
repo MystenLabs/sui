@@ -137,11 +137,10 @@ mod consensus_tests {
         );
     }
 
-    /// Incident-class regression (v4 private-testnet, 2026-08-01): a cohort of
+    /// A cohort of
     /// validators that starts behind the fleet under sustained transaction load must
-    /// bootstrap into full participation WITHOUT the v4 pathologies: quota-overflow
-    /// stream-reset storms (v4: 860 resets/s fleet-wide) and unbounded parked
-    /// backlogs draining only through GC (v4: 310K parked, mass-obsolete collapse).
+    /// bootstrap into full participation without the known pathologies: stream-reset
+    /// storms and unbounded pending backlogs that drain only through GC.
     /// Asserted per node from its metrics registry, plus commit catch-up and
     /// early-cohort authorship from commit contents.
     ///
@@ -195,7 +194,7 @@ mod consensus_tests {
             authorities.push(node);
         }
 
-        // Sustained load for the whole run: the v4 incident only manifested once
+        // Sustained load for the whole run: the failure class only manifests once
         // block sizes grew under transaction traffic.
         let transaction_clients_clone = transaction_clients.clone();
         let _handle = tokio::spawn(async move {
@@ -242,7 +241,7 @@ mod consensus_tests {
 
         // Drain the late node's committed subdags: it must have caught up AND the
         // recent window must contain blocks authored by EVERY authority — the late
-        // cohort included. (In the v4 failure mode this assertion fails: the late
+        // cohort included. (In the failure mode this assertion guards, the late
         // cohort commits and accepts at fleet rate but authors nothing.)
         let mut receiver = late_receiver.unwrap();
         let mut subdags = Vec::new();
@@ -255,7 +254,7 @@ mod consensus_tests {
             subdags.len()
         );
 
-        // v5's incident guarantees, per late node: no quota-overflow reset storm
+        // Per late node: no quota-overflow reset storm
         // (quota hits are attack indicators, never bootstrap flow control) and the
         // parked backlog drains through recovery instead of pinning until GC.
         fn metric_sum(registry: &Registry, name: &str, label_value: Option<&str>) -> f64 {
@@ -305,7 +304,7 @@ mod consensus_tests {
                  accepted_round={}",
                 metric_sum(&registry, "highest_accepted_round", None),
             );
-            // The v4 incident's signature: a caught-up node that has gone silent.
+            // The failure signature: a caught-up node that has gone silent.
             assert!(
                 proposed > 0.0,
                 "late node {offset} proposed nothing after catching up"
@@ -314,7 +313,7 @@ mod consensus_tests {
                 delay <= f64::from(default_parameters().propagation_delay_stop_proposal_threshold),
                 "late node {offset} is gated by propagation delay {delay} after catch-up"
             );
-            // Byte/count quota pressure is the v4 reset-storm class and must never
+            // Byte-quota pressure is the reset-storm class and must never
             // fire for an honest bootstrap. Horizon resets are the designed
             // extreme-behind escape and are only reported.
             for label in ["peer_bytes", "peer_count"] {
