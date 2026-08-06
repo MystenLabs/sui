@@ -32,26 +32,26 @@ answer: >-
   including Banxa, Stripe, Coinbase, Meld, and Onramper.
 ---
 
-Fiat on-ramp providers accept traditional currency payments (credit cards, bank transfers, mobile wallets) and deliver Sui-native tokens to a user's wallet address. You embed an on-ramp provider into your app so users can purchase Sui assets without leaving your interface.
-
-## Provider comparison
+Fiat on-ramp providers enable you to buy Sui-native tokens (SUI, WAL, DEEP, and others) using fiat currency from a user's bank account, card, or payment method. Embedding an on-ramp provider into your app allows users to convert their Sui assets to traditional currency without leaving your interface. Verify current provider capabilities before integrating.
 
 The following table summarizes providers with live Sui on-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
 
-| **Provider** | **Type** | **Supported assets** | **Documentation** |
+| **Provider** | **Supported assets** | **Documentation** |
 |---|---|---|---|
-| [Banxa](https://banxa.com/) | Direct | SUI, USDC | [Banxa docs](https://docs.banxa.com/products/hosted-checkout/docs/reference/supported-cryptocurrencies-and-blockchains) |
-| [Bridge.xyz](https://bridge.xyz) | Direct | USDSui | [Bridge docs](https://apidocs.bridge.xyz/platform/issuance/designing-your-stablecoin#supported-chains) |
-| [Stripe](https://stripe.com/) | Direct | SUI, USDSui | [Stripe crypto on-ramp docs](https://docs.stripe.com/crypto/onramp) |
-| [Coinbase](https://coinbase.com/) | Direct | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview) |
-| [Alchemy Pay](https://alchemypay.org/) | Direct | AUSD, SUI, USD | [Alchemy Pay docs](https://alchemypay.readme.io/docs/api-integration-3) |
-| [OnRamp.money](https://onramp.money/) | Direct | SUI, USDC, WAL | [OnRamp.money docs](https://onramp.money/supported-token/) |
-| [CoinVoyage](https://www.coinvoyage.io/) | Direct | Sui Dollar | [CoinVoyage docs](https://docs.coinvoyage.io/sdk/paykit-headless#sui-payment-signatures) |
-| [Onramper](https://onramper.com/) | Aggregator | SUI | [Onramper docs](https://docs.onramper.com/docs/network-support) |
-| [Meld](https://www.meld.io) | Aggregator | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
+| [Banxa](https://banxa.com/) | SUI, USDC | [Banxa docs](https://docs.banxa.com/products/hosted-checkout/docs/reference/supported-cryptocurrencies-and-blockchains) |
+| [Bridge.xyz](https://bridge.xyz) | USDSui | [Bridge docs](https://apidocs.bridge.xyz/platform/issuance/designing-your-stablecoin#supported-chains) |
+| [Stripe](https://stripe.com/) | SUI, USDSui | [Stripe crypto on-ramp docs](https://docs.stripe.com/crypto/onramp) |
+| [Coinbase](https://coinbase.com/) | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview) |
+| [Alchemy Pay](https://alchemypay.org/) | AUSD, SUI, USD | [Alchemy Pay docs](https://alchemypay.readme.io/docs/api-integration-3) |
+| [OnRamp.money](https://onramp.money/) | SUI, USDC, WAL | [OnRamp.money docs](https://onramp.money/supported-token/) |
+| [CoinVoyage](https://www.coinvoyage.io/) | Sui Dollar | [CoinVoyage docs](https://docs.coinvoyage.io/sdk/paykit-headless#sui-payment-signatures) |
+| [Onramper](https://onramper.com/) | SUI | [Onramper docs](https://docs.onramper.com/docs/network-support) |
+| [Meld](https://www.meld.io) | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
 
-On-ramp providers fall into 2 categories:
+See [Fiat Off-Ramps](/onchain-finance/asset-custody/fiat-off-ramps) for the full off-ramp provider list.
 
-- **Direct providers:** Connect directly to payment rails and process transactions themselves. You integrate their SDK or API and manage the provider relationship.
+:::info
 
-- **Aggregators:** Route transactions through multiple underlying providers. Aggregators simplify integration because a single SDK covers multiple providers and regions. This broadens regional and asset coverage but means your actual payment experience depends on which sub-provider handles a given transaction.
+On-ramp coverage is evolving. Provider asset support and regional availability change frequently. Confirm current capabilities with your chosen provider before launching an integration.
+
+:::
