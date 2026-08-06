@@ -596,11 +596,20 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         // commit votes to trigger commit sync. Reset
                                         // for full-form replay — the jitter prevents a
                                         // committee-wide reconnect storm.
-                                        if matches!(
+                                        let receiver_behind = matches!(
                                             refusal,
                                             crate::pending_reconstructions::AdmitRefusal::OutsideWindow
-                                        ) && block_ref.round > credit_top
-                                        {
+                                        ) && block_ref.round > credit_top;
+                                        // Byte-cap refusals get the same escape: any
+                                        // refusal that drops a live block needs the
+                                        // replay path, and "the cap only binds under
+                                        // attack" proved false at bootstrap.
+                                        let cap_bound = matches!(
+                                            refusal,
+                                            crate::pending_reconstructions::AdmitRefusal::PeerBytes
+                                                | crate::pending_reconstructions::AdmitRefusal::TotalBytes
+                                        );
+                                        if receiver_behind || cap_bound {
                                             info!(
                                                 "Minimal block {} from {} {} is past the                                                  admission window; resetting subscription                                                  for full replay",
                                                 block_ref, peer, peer_hostname
