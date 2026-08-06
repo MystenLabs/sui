@@ -973,6 +973,42 @@ fn add_type_input_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &Ty
     }
 }
 
+/// The transaction-wide package resolution produced by unified linkage analysis.
+///
+/// `resolved_packages` contains every package version needed to establish a consistent linkage,
+/// including packages used only in type arguments. `execution_original_ids` contains only packages
+/// whose code executes.
+///
+/// For example, consider a PTB and its package linkage:
+///
+/// ```text
+/// PTB command: app_v3::router::swap<asset_v2::token::T>()
+///
+/// app_v3   --links to--> {math_v5}
+/// asset_v2 --type argument only--> {}
+/// ```
+///
+/// The resulting unified linkage information is conceptually:
+///
+/// ```text
+/// execution_original_ids = { app, math }
+/// resolved_packages = {
+///     app   => (app_v3, 3),
+///     math  => (math_v5, 5),
+///     asset => (asset_v2, 2),
+/// }
+/// ```
+///
+/// A policy should not reject this transaction solely because `asset_v2` is forbidden: its entry is
+/// needed to resolve the type argument, but its code does not participate in execution.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UnifiedLinkageInformation {
+    /// Original package IDs whose code executes in the programmable transaction.
+    pub execution_original_ids: BTreeSet<ObjectID>,
+    /// Original package ID to its resolved package ID and version.
+    pub resolved_packages: BTreeMap<ObjectID, (ObjectID, u64)>,
+}
+
 /// A series of commands where the results of one command can be used in future
 /// commands
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]

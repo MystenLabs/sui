@@ -3,16 +3,13 @@
 
 // $GENERATED_MESSAGE
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
-
-use move_core_types::account_address::AccountAddress;
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    error::SuiResult, metrics::BytecodeVerifierMetrics, storage::BackingPackageStore,
-    transaction::ProgrammableTransaction,
+    error::SuiResult,
+    metrics::BytecodeVerifierMetrics,
+    storage::BackingPackageStore,
+    transaction::{ProgrammableTransaction, UnifiedLinkageInformation},
 };
 
 pub use executor::Executor;
@@ -20,13 +17,6 @@ pub use verifier::Verifier;
 
 pub mod executor;
 pub mod verifier;
-
-pub type UnificationInformation = (
-    // OriginalId
-    BTreeSet<AccountAddress>,
-    // OriginalId => (VersionId, version)
-    BTreeMap<AccountAddress, (AccountAddress, u64)>,
-);
 
 // $MOD_CUTS
 
@@ -62,9 +52,9 @@ pub fn collect_unification_information_for_signing(
     protocol_config: &ProtocolConfig,
     pt: &ProgrammableTransaction,
     package_store: &dyn BackingPackageStore,
-) -> SuiResult<UnificationInformation> {
+) -> SuiResult<UnifiedLinkageInformation> {
     if !protocol_config.enable_unified_linkage() {
-        return Ok((BTreeSet::new(), BTreeMap::new()));
+        return Ok(UnifiedLinkageInformation::default());
     }
 
     let version = protocol_config.execution_version_as_option().unwrap_or(0);

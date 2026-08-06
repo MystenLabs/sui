@@ -22,7 +22,9 @@ use sui_types::{
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
-    transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
+    transaction::{
+        CheckedInputObjects, ProgrammableTransaction, TransactionKind, UnifiedLinkageInformation,
+    },
 };
 
 use move_bytecode_verifier_meter::Meter;
@@ -37,7 +39,7 @@ use sui_move_natives_latest::all_natives;
 use sui_types::storage::{BackingPackageStore, BackingStore};
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
-use crate::{UnificationInformation, executor, verifier};
+use crate::{executor, verifier};
 use sui_adapter_latest::execution_mode;
 
 pub(crate) struct Executor(Arc<MoveRuntime>);
@@ -66,7 +68,7 @@ pub(crate) fn collect_unification_information_for_signing(
     protocol_config: &ProtocolConfig,
     pt: &ProgrammableTransaction,
     package_store: &dyn BackingPackageStore,
-) -> SuiResult<UnificationInformation> {
+) -> SuiResult<UnifiedLinkageInformation> {
     sui_adapter_latest::static_programmable_transactions::linkage::collect_unification_information_for_signing(
         protocol_config,
         pt,

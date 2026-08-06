@@ -5,7 +5,11 @@ use crate::data_store::{PackageMetadata, PackageStore};
 use move_binary_format::{CompiledModule, binary_config::BinaryConfig};
 use move_core_types::identifier::IdentStr;
 use move_vm_runtime::shared::types::{OriginalId, VersionId};
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, btree_map::Entry},
+    rc::Rc,
+};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -41,21 +45,21 @@ impl<'a> BackingPackageMetadataStore<'a> {
         &self,
         package_id: &ObjectID,
     ) -> SuiResult<Option<Rc<BackingPackageMetadata>>> {
-        if let Some(package) = self.packages.borrow().get(package_id) {
-            return Ok(Some(package.clone()));
+        let mut packages = self.packages.borrow_mut();
+        match packages.entry(*package_id) {
+            Entry::Occupied(entry) => Ok(Some(entry.get().clone())),
+            Entry::Vacant(entry) => {
+                let Some(package_object) = self.backing.get_package_object(package_id)? else {
+                    return Ok(None);
+                };
+                let package = Rc::new(BackingPackageMetadata::new(
+                    package_object.into_move_package(),
+                    self.binary_config.clone(),
+                )?);
+                entry.insert(package.clone());
+                Ok(Some(package))
+            }
         }
-
-        let Some(package_object) = self.backing.get_package_object(package_id)? else {
-            return Ok(None);
-        };
-        let package = Rc::new(BackingPackageMetadata::new(
-            package_object.into_move_package(),
-            self.binary_config.clone(),
-        )?);
-        self.packages
-            .borrow_mut()
-            .insert(*package_id, package.clone());
-        Ok(Some(package))
     }
 
     pub(crate) fn deserialize_modules(
