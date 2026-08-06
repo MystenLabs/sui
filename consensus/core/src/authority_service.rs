@@ -524,16 +524,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     })
                     .flatten();
                 let mut serialized = ExtendedSerializedBlock::from(extended_block);
-                if let Some(minimal) = &minimal {
-                    let node_metrics = &context.metrics.node_metrics;
-                    node_metrics
+                if minimal.is_some() {
+                    context
+                        .metrics
+                        .node_metrics
                         .minimal_blocks_sent
                         .with_label_values(&[peer_hostname.as_str()])
                         .inc();
-                    node_metrics
-                        .minimal_blocks_sent_bytes_saved
-                        .with_label_values(&[peer_hostname.as_str()])
-                        .inc_by(serialized.block.len().saturating_sub(minimal.len()) as u64);
                 }
                 serialized.minimal = minimal;
                 serialized

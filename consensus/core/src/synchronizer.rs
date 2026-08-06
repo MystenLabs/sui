@@ -1103,11 +1103,6 @@ where
             });
         }
         let pending_exact = self.pending_exact_requests.clone();
-        self.context
-            .metrics
-            .node_metrics
-            .synchronizer_pending_exact_requests
-            .set(pending_exact.len() as i64);
 
         // If commit is lagging and commit sync is making progress, skip periodic sync.
         // Commit syncer fetches certified commits with all necessary causal history.

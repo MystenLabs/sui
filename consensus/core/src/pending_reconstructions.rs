@@ -124,7 +124,6 @@ pub(crate) struct ReadyEntry {
     pub(crate) minimal: Bytes,
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
     pub(crate) peer: AuthorityIndex,
-    pub(crate) parked_at_round: Round,
     /// Byte charge carried until the worker reaches a terminal state, so queued and
     /// in-flight reconstructions stay inside the admission caps and a lagging worker
     /// backpressures admission instead of letting the effects queue grow unbounded.
@@ -217,14 +216,6 @@ impl PendingReconstructions {
             in_flight: 0,
             slot_floor: Arc::new(RwLock::new(vec![Round::MAX; committee_size])),
         }
-    }
-
-    /// Closes the read-then-admit race: slots read as missing before admission may
-    /// have been accepted in between, and duplicate acceptance never re-fires the
-    /// hook. Called by the admitter right after a successful admit with the refs of
-    /// any of the entry's missing slots that are now filled.
-    pub(crate) fn recheck_filled_slots(&mut self, filled: &[BlockRef]) -> AcceptanceEffects {
-        self.on_blocks_accepted(filled)
     }
 
     pub(crate) fn slot_floor(&self) -> PendingSlotFloor {
@@ -380,7 +371,6 @@ impl PendingReconstructions {
                         minimal: entry.minimal,
                         excluded_ancestors: entry.excluded_ancestors,
                         peer: entry.peer,
-                        parked_at_round: entry.parked_at_round,
                         charge: entry.charge,
                     });
                 }
@@ -703,7 +693,7 @@ async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
                     entry.claimed_ref
                 );
                 metrics
-                    .minimal_block_quota_drops
+                    .minimal_block_recovery_outcomes
                     .with_label_values(&["reconstruction_rejected"])
                     .inc();
             }
@@ -713,7 +703,7 @@ async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
             // (equivocation) or ambiguity exceeded the search budget: only the exact
             // block can finish this.
             metrics
-                .minimal_block_quota_drops
+                .minimal_block_recovery_outcomes
                 .with_label_values(&["reinflation_failed"])
                 .inc();
             if registry
@@ -735,7 +725,7 @@ async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
                 entry.claimed_ref
             );
             metrics
-                .minimal_block_quota_drops
+                .minimal_block_recovery_outcomes
                 .with_label_values(&["malformed_at_reconstruction"])
                 .inc();
         }
