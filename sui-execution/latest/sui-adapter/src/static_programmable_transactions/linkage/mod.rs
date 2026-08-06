@@ -21,21 +21,19 @@ use crate::{
         loading::ast as loading,
     },
 };
-use move_vm_runtime::shared::types::{OriginalId, VersionId};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     error::{ExecutionError, SuiResult},
     storage::BackingPackageStore,
-    transaction::ProgrammableTransaction,
+    transaction::{ProgrammableTransaction, UnifiedLinkageInformation},
 };
 
-#[allow(clippy::type_complexity)]
 pub fn collect_unification_information_for_signing(
     protocol_config: &ProtocolConfig,
     pt: &ProgrammableTransaction,
     backing_package_store: &dyn BackingPackageStore,
-) -> SuiResult<(BTreeSet<OriginalId>, BTreeMap<OriginalId, (VersionId, u64)>)> {
+) -> SuiResult<UnifiedLinkageInformation> {
     let backing_package_metadata_store =
         BackingPackageMetadataStore::new(protocol_config, backing_package_store);
     let facts = linkage_facts_from_programmable_transaction(pt, &backing_package_metadata_store)?;
@@ -52,19 +50,16 @@ pub fn collect_unification_information_for_signing(
     )
     .map_err(sui_types::error::SuiError::from)?;
 
-    Ok((
-        execution_original_ids.into_iter().map(Into::into).collect(),
-        linkage
+    Ok(UnifiedLinkageInformation {
+        execution_original_ids,
+        resolved_packages: linkage
             .resolution_table
             .iter()
             .map(|(original_id, resolution)| {
-                (
-                    (*original_id).into(),
-                    (resolution.object_id().into(), resolution.version()),
-                )
+                (*original_id, (resolution.object_id(), resolution.version()))
             })
             .collect(),
-    ))
+    })
 }
 
 /// Refine the transaction's per-call linkages into a single, unified linkage for the whole

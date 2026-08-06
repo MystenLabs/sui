@@ -501,8 +501,6 @@ def generate_lib(output_file: TextIO):
                     "latest::collect_unification_information_for_signing(\n"
                     f"{spc}    protocol_config, pt, package_store,\n"
                     f"{spc}),"
-                    if cut == "latest"
-                    else "Ok((BTreeSet::new(), BTreeMap::new())),"
                 )
                 for (version, feature, cut) in cuts
             )

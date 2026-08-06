@@ -16,6 +16,13 @@ use crate::data_store::backing_package_metadata_store::{
 use super::facts::{LinkageCommandFacts, LinkageFacts, ModuleInitFacts};
 use sui_verifier::INIT_FN_NAME;
 
+// Signing-time linkage analysis starts from the signed, non-"loaded" PTB rather than execution's
+// loaded transaction representation. The `LinkageCommandFacts` retain only the linkage-relevant
+// information from those "raw" commands, so the same unification algorithm can run before
+// execution and be shared across both.
+//
+// `single_linkage::loaded_command` derives equivalent `LinkageCommandFacts` after execution-time
+// loading/over the the loaded PTB structure.
 pub(crate) fn linkage_facts_from_programmable_transaction(
     pt: &ProgrammableTransaction,
     package_store: &BackingPackageMetadataStore<'_>,
