@@ -64,15 +64,11 @@ const MAX_PARKED_BYTES_PER_PEER: usize = 4 << 20;
 /// aggregate memory two orders of magnitude below what per-peer quotas alone permit.
 const MAX_PARKED_BYTES_TOTAL: usize = 128 << 20;
 
-/// Held sidecars for blocks that were NOT parked (refused admission or terminal
-/// without acceptance). Propagation hints must survive the block's own refusal; they
-/// are delivered when the block is later accepted through any path. Bounded per
-/// entry by the receive path's sidecar size cap, and in count here.
-const MAX_HELD_SIDECARS: usize = 8192;
-
-/// Byte bound on held sidecars, enforced with the entry bound: entries alone do not
-/// bound memory when each sidecar can be transport-message sized.
-const MAX_HELD_SIDECAR_BYTES: usize = 8 << 20;
+/// Sidecars held for blocks that were not parked (refused admission or terminal
+/// without acceptance). Propagation hints survive the block's refusal and are
+/// delivered when it is accepted through any path. Charged against the same
+/// per-peer and aggregate byte caps as pending entries, released on delivery
+/// or GC through the same path.
 
 pub(crate) struct PendingMinimal {
     pub(crate) minimal: Bytes,
@@ -130,15 +126,6 @@ pub(crate) struct ReadyEntry {
     pub(crate) charge: usize,
 }
 
-/// Accounting a channel-borne sidecar still holds until the worker delivers it.
-#[derive(Clone, Copy)]
-pub(crate) enum SidecarCharge {
-    /// A superseded entry's full byte charge (payload + sidecar), peer-attributed.
-    Entry(AuthorityIndex, usize),
-    /// Held-sidecar bytes, counted against the held cap until delivery.
-    Held(usize),
-}
-
 /// Shared handle DagState uses to drive pending_reconstructions from its acceptance and GC
 /// choke points. The effects channel is unbounded and drained by the
 /// reconstruction worker; sends never block under the DagState write guard.
@@ -158,7 +145,7 @@ pub(crate) struct AcceptanceEffects {
     /// through `handle_excluded_ancestors` (the anchor precondition now holds). Each
     /// carries the accounting it still holds; the worker releases it after delivery,
     /// so channel-borne bytes stay inside the same caps as resident ones.
-    pub(crate) deliverable_sidecars: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>, SidecarCharge)>,
+    pub(crate) deliverable_sidecars: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>, usize)>,
     /// Entries whose frontier died at GC: only the exact-fetch lane can finish them.
     pub(crate) frontier_dead: Vec<BlockRef>,
 }
@@ -186,11 +173,7 @@ pub(crate) struct PendingReconstructions {
     occupancy: BTreeMap<Slot, BlockRef>,
     /// Sidecars held for refused / terminal-without-acceptance blocks, FIFO-bounded.
     held_sidecars: BTreeMap<BlockRef, (AuthorityIndex, Vec<Vec<u8>>)>,
-    held_order: Vec<BlockRef>,
-    held_bytes: usize,
-    /// Held-sidecar bytes moved into the effects channel and not yet delivered;
-    /// counted against the held cap so accept/refill cycles cannot grow the queue.
-    channel_held_bytes: usize,
+
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
     /// Entries dispatched to the worker and not yet terminal; counted against the
@@ -208,9 +191,7 @@ impl PendingReconstructions {
             missing_slots: BTreeMap::new(),
             occupancy: BTreeMap::new(),
             held_sidecars: BTreeMap::new(),
-            held_order: Vec::new(),
-            held_bytes: 0,
-            channel_held_bytes: 0,
+
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
             in_flight: 0,
@@ -335,20 +316,15 @@ impl PendingReconstructions {
                     entry.peer,
                     *block_ref,
                     entry.excluded_ancestors,
-                    SidecarCharge::Entry(entry.peer, entry.charge),
+                    entry.charge,
                 ));
             }
             if let Some((peer, sidecar)) = self.held_sidecars.remove(block_ref) {
                 let bytes: usize = sidecar.iter().map(Vec::len).sum();
-                self.held_bytes -= bytes;
-                self.channel_held_bytes += bytes;
-                self.held_order.retain(|r| r != block_ref);
-                effects.deliverable_sidecars.push((
-                    peer,
-                    *block_ref,
-                    sidecar,
-                    SidecarCharge::Held(bytes),
-                ));
+                self.in_flight += 1;
+                effects
+                    .deliverable_sidecars
+                    .push((peer, *block_ref, sidecar, bytes));
             }
 
             let slot = Slot::from(*block_ref);
@@ -410,14 +386,19 @@ impl PendingReconstructions {
             self.hold_sidecar(*block_ref, entry.peer, entry.excluded_ancestors.clone());
             self.observe_residency(&entry, "frontier_dead", local_round);
         }
-        self.held_sidecars.retain(|r, (_, sidecar)| {
-            let keep = r.round > gc_round;
-            if !keep {
-                self.held_bytes -= sidecar.iter().map(Vec::len).sum::<usize>();
+        let swept: Vec<BlockRef> = self
+            .held_sidecars
+            .keys()
+            .filter(|r| r.round <= gc_round)
+            .copied()
+            .collect();
+        for block_ref in swept {
+            if let Some((peer, sidecar)) = self.held_sidecars.remove(&block_ref) {
+                let bytes: usize = sidecar.iter().map(Vec::len).sum();
+                self.per_peer_bytes[peer] -= bytes;
+                self.total_bytes -= bytes;
             }
-            keep
-        });
-        self.held_order.retain(|r| r.round > gc_round);
+        }
         if !obsolete.is_empty() || !frontier_dead.is_empty() {
             self.rebuild_slot_floor();
             self.update_gauges();
@@ -449,11 +430,6 @@ impl PendingReconstructions {
         Some(entry)
     }
 
-    /// Terminal release for a delivered channel-borne sidecar's held bytes.
-    pub(crate) fn release_held(&mut self, bytes: usize) {
-        self.channel_held_bytes = self.channel_held_bytes.saturating_sub(bytes);
-    }
-
     /// Terminal release for a dispatched reconstruction, whatever its outcome.
     pub(crate) fn release(&mut self, peer: AuthorityIndex, charge: usize) {
         self.per_peer_bytes[peer] -= charge;
@@ -472,23 +448,24 @@ impl PendingReconstructions {
             return;
         }
         let bytes: usize = sidecar.iter().map(Vec::len).sum();
-        while !self.held_order.is_empty()
-            && (self.held_order.len() >= MAX_HELD_SIDECARS
-                || self.held_bytes + self.channel_held_bytes + bytes > MAX_HELD_SIDECAR_BYTES)
+        // Same caps as pending entries: hints are peer-attributed resident bytes.
+        // Refusal is explicit — a dropped hint is an observable event, not a silent
+        // eviction — and only cap pressure (which resets the stream for full
+        // replay, re-delivering the hints) can cause it.
+        if self.per_peer_bytes[peer] + bytes > MAX_PARKED_BYTES_PER_PEER
+            || self.total_bytes + bytes > MAX_PARKED_BYTES_TOTAL
         {
-            let evicted = self.held_order.remove(0);
-            if let Some((_, evicted_sidecar)) = self.held_sidecars.remove(&evicted) {
-                self.held_bytes -= evicted_sidecar.iter().map(Vec::len).sum::<usize>();
-            }
-        }
-        // Channel-borne bytes cannot be evicted; when they saturate the cap the new
-        // sidecar is dropped rather than admitted over it.
-        if self.held_bytes + self.channel_held_bytes + bytes > MAX_HELD_SIDECAR_BYTES {
+            self.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["sidecar_dropped"])
+                .inc();
             return;
         }
-        self.held_bytes += bytes;
+        self.per_peer_bytes[peer] += bytes;
+        self.total_bytes += bytes;
         self.held_sidecars.insert(block_ref, (peer, sidecar));
-        self.held_order.push(block_ref);
     }
 
     fn rebuild_slot_floor(&self) {
@@ -617,14 +594,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                         let Some(service) = service.upgrade() else { return };
                         let _ = service.handle_excluded_ancestors(peer, anchor, sidecar).await;
                     }
-                    match charge {
-                        SidecarCharge::Entry(peer, charge) => {
-                            pending_reconstructions.lock().release(peer, charge)
-                        }
-                        SidecarCharge::Held(bytes) => {
-                            pending_reconstructions.lock().release_held(bytes)
-                        }
-                    }
+                    pending_reconstructions.lock().release(peer, charge);
                 }
                 for block_ref in batch.frontier_dead {
                     if registry.register_missing_block(block_ref).await.is_err() {
@@ -909,10 +879,40 @@ mod tests {
             11,
         );
         assert_eq!(refusal, Err(AdmitRefusal::PeerBytes));
-        // The refused claim's sidecar is held, and delivered on acceptance.
-        let effects = p.on_blocks_accepted(&[r(11, 1, 2)]);
+        // Under cap pressure the hint cannot be held either: it is dropped with an
+        // explicit outcome (the accompanying stream reset re-delivers it in full
+        // form), never evicted silently.
+        assert!(
+            p.on_blocks_accepted(&[r(11, 1, 2)])
+                .deliverable_sidecars
+                .is_empty()
+        );
+
+        // Below the caps, a refused claim's sidecar IS held and delivered on
+        // acceptance, charged like any other resident bytes until the worker
+        // releases it.
+        let other = r(12, 2, 1);
+        admit(&mut p, other, vec![slot(11, 3)]).unwrap();
+        let refusal = p.try_admit(
+            r(12, 2, 9),
+            Bytes::from(vec![0u8; 64]),
+            vec![vec![9u8; 8]],
+            other.author,
+            vec![slot(11, 3)],
+            0,
+            12,
+        );
+        assert_eq!(refusal, Err(AdmitRefusal::SlotOccupied));
+        let effects = p.on_blocks_accepted(&[r(12, 2, 9)]);
         assert_eq!(effects.deliverable_sidecars.len(), 1);
-        assert_eq!(effects.deliverable_sidecars[0].2, vec![vec![7u8; 8]]);
+        assert_eq!(effects.deliverable_sidecars[0].2, vec![vec![9u8; 8]]);
+        let (peer, _, _, charge) = (
+            effects.deliverable_sidecars[0].0,
+            (),
+            (),
+            effects.deliverable_sidecars[0].3,
+        );
+        p.release(peer, charge);
 
         // An entry whose frontier slot crosses GC is reported for the exact lane.
         admit(&mut p, r(30, 2, 1), vec![slot(20, 3)]).unwrap();
