@@ -68,7 +68,7 @@ enum InflateOutcome {
     Block(ExtendedSerializedBlock),
     /// A minimal block that local state cannot inflate right now. It is dropped from
     /// the stream and recovered by a per-block task that waits on the missing slot
-    /// (see `minimal_block_receive`).
+    /// (see `pending_reconstructions`).
     Dropped {
         block_ref: BlockRef,
         reason: FallbackReason,
