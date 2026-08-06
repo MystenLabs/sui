@@ -165,9 +165,6 @@ impl ServiceManager {
         )
         .with_context(|| format!("failed to open rpc store at {}", db_path.display()))?;
         let schema = Arc::new(schema);
-        schema
-            .refresh_pruning_atomics()
-            .context("failed to refresh rpc store pruning watermarks")?;
 
         Self::seed_chain_identifier(&db, metadata.chain_identifier)?;
 
