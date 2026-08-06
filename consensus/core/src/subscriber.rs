@@ -502,17 +502,25 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     gc_round,
                                     tip,
                                 );
+                                // Received credit fires for every claim that is not
+                                // FAR-FUTURE, refused or not. A recovering author's
+                                // low-round blocks are refused here (below peers' GC)
+                                // yet were genuinely received — upstream credits the
+                                // equivalent full-block receipts, and withholding the
+                                // credit starves the author's received-quorum until
+                                // the propagation gate silences it (the v4 latch).
+                                // Only rounds past the admission window top go
+                                // uncredited: those are the unbackable claims the
+                                // monotonic tracker must not advertise.
+                                let credit_top =
+                                    tip.saturating_add(context.protocol_config.gc_depth());
+                                if block_ref.round <= credit_top {
+                                    round_tracker
+                                        .write()
+                                        .update_received_claim(block_ref.author, block_ref.round);
+                                }
                                 match admitted {
                                     Ok(()) => {
-                                        // Admission-time received credit: arrival-
-                                        // equivalent timing for honest traffic, and
-                                        // never granted to refused claims. Fires only
-                                        // for the received vector; acceptance evidence
-                                        // still requires verification.
-                                        round_tracker.write().update_received_claim(
-                                            block_ref.author,
-                                            block_ref.round,
-                                        );
                                         retries = 0;
                                         backoff.reset();
                                     }
