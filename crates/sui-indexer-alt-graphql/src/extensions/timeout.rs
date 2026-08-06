@@ -17,8 +17,7 @@ use async_graphql::extensions::NextExecute;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::parser::types::ExecutableDocument;
 use async_graphql::parser::types::OperationType;
-use timeout_tracing::CaptureSpanTrace;
-use timeout_tracing::timeout;
+use sui_futures::timeout_trace::timeout;
 use tracing::warn;
 
 use crate::error::request_timeout;
@@ -103,7 +102,7 @@ impl Extension for TimeoutExt {
             self.config.query
         };
 
-        timeout(limit, CaptureSpanTrace, next.run(ctx, operation_name))
+        timeout(limit, next.run(ctx, operation_name))
             .await
             .unwrap_or_else(|e| {
                 let kind = if is_mutation { "Mutation" } else { "Query" };
@@ -249,6 +248,41 @@ mod tests {
            1: async_graphql::graphql::execute
            2: async_graphql::graphql::request
          request_id=ffffffff-ffff-ffff-ffff-ffffffffffff kind=Mutation
+        ")
+    }
+
+    /// Queries resolve their root fields concurrently, so all three pending fields should be
+    /// captured as separate traces when the timeout fires -- unlike
+    /// [test_mutation_additive_timeout], which only ever has one field in flight at a time.
+    #[tokio::test]
+    async fn test_query_concurrent_timeout() {
+        let timeout = Duration::from_millis(200);
+        let event = test_timeout_fail(
+            timeout,
+            Duration::ZERO,
+            timeout * 2,
+            "query { a:op b:op c:op }",
+            "Query",
+        )
+        .await;
+        assert_snapshot!(event, @r"
+        [WARN] Request timed out: timeout elapsed at:
+        trace 0:
+           0: async_graphql::graphql::field
+                   with path: a, parent_type: Root, return_type: Boolean!
+           1: async_graphql::graphql::execute
+           2: async_graphql::graphql::request
+        trace 1:
+           0: async_graphql::graphql::field
+                   with path: b, parent_type: Root, return_type: Boolean!
+           1: async_graphql::graphql::execute
+           2: async_graphql::graphql::request
+        trace 2:
+           0: async_graphql::graphql::field
+                   with path: c, parent_type: Root, return_type: Boolean!
+           1: async_graphql::graphql::execute
+           2: async_graphql::graphql::request
+         request_id=ffffffff-ffff-ffff-ffff-ffffffffffff kind=Query
         ")
     }
 
