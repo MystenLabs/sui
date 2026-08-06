@@ -70,6 +70,10 @@ const MAX_PARKED_BYTES_TOTAL: usize = 128 << 20;
 /// entry by the receive path's sidecar size cap, and in count here.
 const MAX_HELD_SIDECARS: usize = 8192;
 
+/// Byte bound on held sidecars, enforced with the entry bound: entries alone do not
+/// bound memory when each sidecar can be transport-message sized.
+const MAX_HELD_SIDECAR_BYTES: usize = 8 << 20;
+
 pub(crate) struct PendingMinimal {
     pub(crate) minimal: Bytes,
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
@@ -121,6 +125,10 @@ pub(crate) struct ReadyEntry {
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
     pub(crate) peer: AuthorityIndex,
     pub(crate) parked_at_round: Round,
+    /// Byte charge carried until the worker reaches a terminal state, so queued and
+    /// in-flight reconstructions stay inside the admission caps and a lagging worker
+    /// backpressures admission instead of letting the effects queue grow unbounded.
+    pub(crate) charge: usize,
 }
 
 /// Shared handle DagState uses to drive pending_reconstructions from its acceptance and GC
@@ -169,8 +177,12 @@ pub(crate) struct PendingReconstructions {
     /// Sidecars held for refused / terminal-without-acceptance blocks, FIFO-bounded.
     held_sidecars: BTreeMap<BlockRef, (AuthorityIndex, Vec<Vec<u8>>)>,
     held_order: Vec<BlockRef>,
+    held_bytes: usize,
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
+    /// Entries dispatched to the worker and not yet terminal; counted against the
+    /// entry cap alongside `pending`.
+    in_flight: usize,
     slot_floor: PendingSlotFloor,
 }
 
@@ -184,10 +196,20 @@ impl PendingReconstructions {
             occupancy: BTreeMap::new(),
             held_sidecars: BTreeMap::new(),
             held_order: Vec::new(),
+            held_bytes: 0,
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
+            in_flight: 0,
             slot_floor: Arc::new(RwLock::new(vec![Round::MAX; committee_size])),
         }
+    }
+
+    /// Closes the read-then-admit race: slots read as missing before admission may
+    /// have been accepted in between, and duplicate acceptance never re-fires the
+    /// hook. Called by the admitter right after a successful admit with the refs of
+    /// any of the entry's missing slots that are now filled.
+    pub(crate) fn recheck_filled_slots(&mut self, filled: &[BlockRef]) -> AcceptanceEffects {
+        self.on_blocks_accepted(filled)
     }
 
     pub(crate) fn slot_floor(&self) -> PendingSlotFloor {
@@ -267,7 +289,7 @@ impl PendingReconstructions {
         if claimed_ref.round <= gc_round || claimed_ref.round > window_top {
             return Some(AdmitRefusal::OutsideWindow);
         }
-        if self.pending.len() >= max_pending_entries(&self.context) {
+        if self.pending.len() + self.in_flight >= max_pending_entries(&self.context) {
             return Some(AdmitRefusal::TotalBytes);
         }
         if missing.iter().any(|slot| slot.round <= gc_round) {
@@ -324,7 +346,10 @@ impl PendingReconstructions {
                 };
                 entry.missing.remove(&slot);
                 if entry.missing.is_empty() {
-                    let entry = self.remove_entry(&dependent).expect("entry exists");
+                    let entry = self
+                        .remove_entry_keeping_charge(&dependent)
+                        .expect("entry exists");
+                    self.in_flight += 1;
                     self.observe_residency(&entry, "reconstructing", block_ref.round);
                     effects.ready.push(ReadyEntry {
                         claimed_ref: dependent,
@@ -332,6 +357,7 @@ impl PendingReconstructions {
                         excluded_ancestors: entry.excluded_ancestors,
                         peer: entry.peer,
                         parked_at_round: entry.parked_at_round,
+                        charge: entry.charge,
                     });
                 }
             }
@@ -370,7 +396,13 @@ impl PendingReconstructions {
             self.hold_sidecar(*block_ref, entry.peer, entry.excluded_ancestors.clone());
             self.observe_residency(&entry, "frontier_dead", local_round);
         }
-        self.held_sidecars.retain(|r, _| r.round > gc_round);
+        self.held_sidecars.retain(|r, (_, sidecar)| {
+            let keep = r.round > gc_round;
+            if !keep {
+                self.held_bytes -= sidecar.iter().map(Vec::len).sum::<usize>();
+            }
+            keep
+        });
         self.held_order.retain(|r| r.round > gc_round);
         if !obsolete.is_empty() || !frontier_dead.is_empty() {
             self.rebuild_slot_floor();
@@ -379,7 +411,17 @@ impl PendingReconstructions {
         frontier_dead
     }
 
+    /// Removes an entry and releases its byte charge immediately (terminal here).
     fn remove_entry(&mut self, block_ref: &BlockRef) -> Option<PendingMinimal> {
+        let entry = self.remove_entry_keeping_charge(block_ref)?;
+        self.per_peer_bytes[entry.peer] -= entry.charge;
+        self.total_bytes -= entry.charge;
+        Some(entry)
+    }
+
+    /// Removes an entry from every index but keeps its byte charge: used when the
+    /// bytes live on in a queued/in-flight reconstruction. `release` pairs with it.
+    fn remove_entry_keeping_charge(&mut self, block_ref: &BlockRef) -> Option<PendingMinimal> {
         let entry = self.pending.remove(block_ref)?;
         for slot in &entry.missing {
             if let Some(dependents) = self.missing_slots.get_mut(slot) {
@@ -390,9 +432,15 @@ impl PendingReconstructions {
             }
         }
         self.occupancy.remove(&Slot::from(*block_ref));
-        self.per_peer_bytes[entry.peer] -= entry.charge;
-        self.total_bytes -= entry.charge;
         Some(entry)
+    }
+
+    /// Terminal release for a dispatched reconstruction, whatever its outcome.
+    pub(crate) fn release(&mut self, peer: AuthorityIndex, charge: usize) {
+        self.per_peer_bytes[peer] -= charge;
+        self.total_bytes -= charge;
+        self.in_flight = self.in_flight.saturating_sub(1);
+        self.update_gauges();
     }
 
     pub(crate) fn hold_sidecar(
@@ -404,10 +452,20 @@ impl PendingReconstructions {
         if sidecar.is_empty() || self.held_sidecars.contains_key(&block_ref) {
             return;
         }
-        if self.held_order.len() >= MAX_HELD_SIDECARS {
+        let bytes: usize = sidecar.iter().map(Vec::len).sum();
+        while !self.held_order.is_empty()
+            && (self.held_order.len() >= MAX_HELD_SIDECARS
+                || self.held_bytes + bytes > MAX_HELD_SIDECAR_BYTES)
+        {
             let evicted = self.held_order.remove(0);
-            self.held_sidecars.remove(&evicted);
+            if let Some((_, evicted_sidecar)) = self.held_sidecars.remove(&evicted) {
+                self.held_bytes -= evicted_sidecar.iter().map(Vec::len).sum::<usize>();
+            }
         }
+        if bytes > MAX_HELD_SIDECAR_BYTES {
+            return;
+        }
+        self.held_bytes += bytes;
         self.held_sidecars.insert(block_ref, (peer, sidecar));
         self.held_order.push(block_ref);
     }
@@ -462,13 +520,17 @@ impl PendingReconstructions {
             }
         }
         assert_eq!(self.occupancy.len(), self.pending.len());
-        let total: usize = self.pending.values().map(|e| e.charge).sum();
-        assert_eq!(total, self.total_bytes, "byte accounting drifted");
-        let mut per_peer = vec![0usize; self.per_peer_bytes.len()];
-        for entry in self.pending.values() {
-            per_peer[entry.peer] += entry.charge;
+        // Charges are held for dispatched entries too; exact reconciliation is only
+        // possible when nothing is in flight.
+        if self.in_flight == 0 {
+            let total: usize = self.pending.values().map(|e| e.charge).sum();
+            assert_eq!(total, self.total_bytes, "byte accounting drifted");
+            let mut per_peer = vec![0usize; self.per_peer_bytes.len()];
+            for entry in self.pending.values() {
+                per_peer[entry.peer] += entry.charge;
+            }
+            assert_eq!(per_peer, self.per_peer_bytes);
         }
-        assert_eq!(per_peer, self.per_peer_bytes);
     }
 }
 
@@ -532,6 +594,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
             }
         }
         for entry in batch.ready {
+            let (peer, charge) = (entry.peer, entry.charge);
             let inflated = {
                 let Some(dag_state) = dag_state.upgrade() else {
                     return;
@@ -585,6 +648,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                     );
                 }
                 Err(crate::minimal_block::InflateError::Malformed(error)) => {
+                    // fallthrough to shared release below
                     // Structurally validated at receipt, so this indicates a peer
                     // fault surfaced late; drop with a metric.
                     tracing::debug!(
@@ -597,6 +661,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                         .inc();
                 }
             }
+            pending_reconstructions.lock().release(peer, charge);
         }
     }
 }
@@ -662,18 +727,22 @@ mod tests {
         let effects = p.on_blocks_accepted(&[r(9, 2, 8)]);
         assert!(effects.ready.is_empty());
 
-        // Second slot fills: P ready, exactly once.
+        // Second slot fills: P ready, exactly once. Its charge is held until the
+        // worker reaches a terminal state.
         let effects = p.on_blocks_accepted(&[r(9, 3, 9)]);
         assert_eq!(effects.ready.len(), 1);
         assert_eq!(effects.ready[0].claimed_ref, p_ref);
+        assert!(p.total_bytes > 0, "in-flight charge must stay accounted");
+        p.release(effects.ready[0].peer, effects.ready[0].charge);
         p.assert_invariants();
 
         // P's reconstructed block is accepted: Q cascades.
         let effects = p.on_blocks_accepted(&[p_ref]);
         assert_eq!(effects.ready.len(), 1);
         assert_eq!(effects.ready[0].claimed_ref, q_ref);
+        p.release(effects.ready[0].peer, effects.ready[0].charge);
         p.assert_invariants();
-        assert_eq!(p.total_bytes, 0, "all charges returned");
+        assert_eq!(p.total_bytes, 0, "all charges returned after release");
     }
 
     /// Window edges are exact, dead frontier slots refuse with their own reason,

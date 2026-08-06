@@ -521,7 +521,26 @@ where
                             // by measurement. A full lane drops the registration —
                             // commit sync or the block's children recover it — and
                             // bounds every later pass instead of feeding a backlog.
-                            if self.pending_exact_requests.len() < MAX_PENDING_EXACT_REQUESTS {
+                            // Round validation and a per-author share keep the lane
+                            // honest: a far-future fabricated ref would never be
+                            // pruned (GC cannot reach it), and without the share one
+                            // author's claims could occupy every slot.
+                            let frontier = self.dag_state.read().highest_accepted_round();
+                            let round_ok = block_ref.round
+                                <= frontier
+                                    .saturating_add(self.context.protocol_config.gc_depth());
+                            let author_share = MAX_PENDING_EXACT_REQUESTS
+                                / self.context.committee.size().max(1)
+                                + 1;
+                            let author_count = self
+                                .pending_exact_requests
+                                .iter()
+                                .filter(|r| r.author == block_ref.author)
+                                .count();
+                            if round_ok
+                                && author_count < author_share
+                                && self.pending_exact_requests.len() < MAX_PENDING_EXACT_REQUESTS
+                            {
                                 self.pending_exact_requests.insert(block_ref);
                             } else {
                                 self.context
