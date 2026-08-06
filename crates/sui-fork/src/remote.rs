@@ -3,11 +3,10 @@
 
 //! Checkpoint-pinned GraphQL queries.
 //!
-//! [`RemoteSource`] owns every GraphQL round-trip the store makes and the
-//! fork's remote-read policy: object queries are pinned at the fork
-//! checkpoint, and checkpoint/transaction lookups refuse to return anything
-//! finalized after the fork point, so upstream activity that happened after
-//! the fork cannot leak into a fork that has already diverged.
+//! [`RemoteSource`] owns every GraphQL round-trip the store makes and the fork's remote-read
+//! policy. Object queries are pinned at the fork checkpoint, and checkpoint and transaction
+//! lookups refuse to return anything finalized after the fork point, so upstream activity that
+//! happened after the fork cannot leak into a fork that has already diverged.
 
 use anyhow::Context as _;
 use anyhow::anyhow;
@@ -51,18 +50,18 @@ impl RemoteSource {
         }
     }
 
-    /// The chain the forked-from endpoint serves, derived from its configured
-    /// node identity.
+    /// Return the chain the forked-from endpoint serves, derived from its configured node
+    /// identity.
     pub(crate) fn chain(&self) -> Chain {
         self.gql.chain()
     }
 
-    /// The checkpoint every query here is pinned at.
+    /// Return the checkpoint every query here is pinned at.
     pub(crate) fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
         self.forked_at_checkpoint
     }
 
-    /// Objects owned by `address` at the fork checkpoint, from the remote's
+    /// Fetch the objects owned by `address` at the fork checkpoint, from the remote's
     /// checkpoint-scoped ownership enumeration.
     pub(crate) async fn address_owned_objects_at_fork(
         &self,
@@ -73,7 +72,7 @@ impl RemoteSource {
             .await
     }
 
-    /// Coin types for which `address` holds an accumulator balance at the fork
+    /// Fetch the coin types for which `address` holds an accumulator balance at the fork
     /// checkpoint.
     pub(crate) async fn address_balance_coin_types_at_fork(
         &self,
@@ -84,8 +83,8 @@ impl RemoteSource {
             .await
     }
 
-    /// Object references at the fork checkpoint without an owner check, for
-    /// ids the fork derived rather than the user named.
+    /// Fetch object references at the fork checkpoint without an owner check, for ids the fork
+    /// derived rather than the user named.
     pub(crate) async fn object_refs_at_fork(
         &self,
         object_ids: &[ObjectID],
@@ -95,7 +94,7 @@ impl RemoteSource {
             .await
     }
 
-    /// Lightweight metadata for explicit object seeds at the fork checkpoint.
+    /// Fetch lightweight metadata for explicit object seeds at the fork checkpoint.
     pub(crate) async fn object_seed_metadata_at_fork(
         &self,
         object_ids: &[ObjectID],
@@ -192,8 +191,8 @@ impl RemoteSource {
 
     /// Fetch events for a transaction.
     ///
-    /// This is only called by [`fetch_and_save_transaction`] and its bounded by the fork checkpoint
-    /// in that call.
+    /// Only `fetch_and_save_transaction` calls this, and the fork-checkpoint bound is enforced in
+    /// that call.
     pub(crate) fn transaction_events(
         &self,
         digest: &TransactionDigest,
@@ -204,8 +203,8 @@ impl RemoteSource {
             .ok_or_else(|| anyhow!("transaction {digest} events not found on remote"))
     }
 
-    /// Fetch exact `(id, version)` objects at the fork checkpoint, validating
-    /// that every response matches the requested reference.
+    /// Fetch exact `(id, version)` objects at the fork checkpoint, validating that every response
+    /// matches the requested reference.
     pub(crate) fn fetch_objects_by_obj_refs(
         &self,
         object_refs: &[ObjectRef],
@@ -249,17 +248,16 @@ impl RemoteSource {
         Ok(fetched)
     }
 
-    /// Lowest checkpoint for which the remote retains checkpoint and transaction data.
+    /// Fetch the lowest checkpoint for which the remote retains checkpoint and transaction data.
     pub(crate) fn lowest_available_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
         self.gql.get_lowest_available_checkpoint()
     }
 
-    /// Lowest checkpoint for which the remote retains object data.
+    /// Fetch the lowest checkpoint for which the remote retains object data.
     ///
-    /// The remote only keeps object-ownership enumeration for a recent window
-    /// of checkpoints (`serviceConfig.availableRange`, roughly the last hour
-    /// on the hosted GraphQL endpoints); fork checkpoints below this bound
-    /// cannot be address-seeded.
+    /// The remote only keeps object-ownership enumeration for a recent window of checkpoints
+    /// (`serviceConfig.availableRange`, roughly the last hour on the hosted GraphQL endpoints), so
+    /// fork checkpoints below this bound cannot be address-seeded.
     pub(crate) fn lowest_available_checkpoint_objects(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {

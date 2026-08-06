@@ -66,18 +66,17 @@ use crate::pending::PendingCheckpointBuffer;
 use crate::remote::RemoteSource;
 use tracing::info;
 
-/// The fork's state store: reads check `LocalStore` first and fall back to
-/// `RemoteSource` (pinned at the fork checkpoint), persisting fetched
-/// pre-fork data back into the local store. The metadata sidecar keeps fork
-/// metadata and the immutable seed manifest.
+/// The fork's state store. Reads check `LocalStore` first and fall back to `RemoteSource` (pinned
+/// at the fork checkpoint), persisting fetched pre-fork data back into the local store, while the
+/// metadata sidecar keeps fork metadata and the immutable seed manifest.
 ///
 /// Cloned stores share the same inner state and local snapshot guard, so RPC readers and the local
 /// executor serialize their writes against each other.
 ///
 /// Implements [`SimulatorStore`] so it can be passed directly into
-/// [`simulacrum::Simulacrum::new_from_custom_state`], and the upstream RPC
-/// storage traits (`ReadStore`, `RpcStateReader`, `RpcIndexes`) so the same
-/// store backs the `sui-rpc-api` `RpcService`.
+/// [`simulacrum::Simulacrum::new_from_custom_state`], and the upstream RPC storage traits
+/// (`ReadStore`, `RpcStateReader`, `RpcIndexes`) so the same store backs the `sui-rpc-api`
+/// `RpcService`.
 #[derive(Clone)]
 pub struct ForkStore {
     inner: Arc<ForkStoreInner>,
@@ -85,12 +84,12 @@ pub struct ForkStore {
 
 struct ForkStoreInner {
     forked_at_checkpoint: CheckpointSequenceNumber,
-    /// Checkpoint-pinned GraphQL access to the forked-from chain; owns all
-    /// pre/post-fork remote-read policy.
+    /// Checkpoint-pinned GraphQL access to the forked-from chain, owning all pre-fork and
+    /// post-fork remote-read policy.
     remote: RemoteSource,
     metadata: MetadataStore,
     local_store: LocalStore,
-    /// Staging for the in-flight checkpoint; see [`PendingCheckpointBuffer`].
+    /// Staging for the in-flight checkpoint. See [`PendingCheckpointBuffer`].
     pending: PendingCheckpointBuffer,
     /// Serializes local object writes across cloned stores.
     local_snapshot_lock: Arc<RwLock<()>>,
@@ -131,10 +130,11 @@ impl ForkStore {
             .map_err(|_| anyhow!("local snapshot lock poisoned"))
     }
 
-    /// Checkpoint-pinned read access to the forked-from chain, for callers
-    /// that run their own remote queries (seed resolution). Handing out the
-    /// policy type rather than the raw GraphQL client keeps every reachable
-    /// query pinned at the fork checkpoint by construction.
+    /// Return checkpoint-pinned read access to the forked-from chain, for callers that run their
+    /// own remote queries (seed resolution).
+    ///
+    /// Handing out the policy type rather than the raw GraphQL client keeps every reachable query
+    /// pinned at the fork checkpoint by construction.
     pub(crate) fn remote(&self) -> &RemoteSource {
         &self.inner.remote
     }
@@ -147,9 +147,10 @@ impl ForkStore {
         &self.inner.local_store
     }
 
-    /// Get a checkpoint summary by sequence number. The RPC store is the
-    /// durable history store; pre-fork misses are fetched from GraphQL and
-    /// persisted there.
+    /// Get a checkpoint summary by sequence number.
+    ///
+    /// The RPC store is the durable history store, and pre-fork misses are fetched from GraphQL
+    /// and persisted there.
     pub(crate) fn get_checkpoint_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
@@ -164,8 +165,8 @@ impl ForkStore {
             .map(|(checkpoint, _)| checkpoint))
     }
 
-    /// Get checkpoint contents by sequence number, with the same rpc-store
-    /// remote-fallback policy as [`Self::get_checkpoint_by_sequence_number`].
+    /// Get checkpoint contents by sequence number, with the same rpc-store remote-fallback policy
+    /// as [`Self::get_checkpoint_by_sequence_number`].
     pub(crate) fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
@@ -182,8 +183,8 @@ impl ForkStore {
             .map(|(_, contents)| contents))
     }
 
-    /// Look up a checkpoint summary by its digest. RPC-store only as the GraphQL checkpoint query
-    /// is keyed by sequence number, so there is no remote fallback for digest lookups.
+    /// Look up a checkpoint summary by its digest from the RPC store alone, because the GraphQL
+    /// checkpoint query is keyed by sequence number and offers no remote fallback for digests.
     pub(crate) fn get_checkpoint_by_digest_from_local_store(
         &self,
         digest: &CheckpointDigest,
@@ -203,12 +204,11 @@ impl ForkStore {
         self.local_store().get_checkpoint_contents_by_digest(digest)
     }
 
-    /// Return the highest checkpoint summary persisted in the RPC store. This never
-    /// consults the remote endpoint — the local executor is the source of
-    /// truth for "latest" in a forked network.
+    /// Return the highest checkpoint summary persisted in the RPC store.
     ///
-    /// Only a `Missing` read maps to `Ok(None)`; other storage errors
-    /// propagate so a store failure cannot masquerade as "no checkpoint yet".
+    /// The remote endpoint is never consulted, because the local executor is the source of truth
+    /// for "latest" in a forked network. Only a `Missing` read maps to `Ok(None)`, and other
+    /// storage errors propagate so a store failure cannot masquerade as "no checkpoint yet".
     pub(crate) fn get_highest_verified_checkpoint(
         &self,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
@@ -220,16 +220,14 @@ impl ForkStore {
         }
     }
 
-    /// The lowest checkpoint for which checkpoint and transaction data are
-    /// available.
+    /// Return the lowest checkpoint for which checkpoint and transaction data are available.
     ///
-    /// The remote's floor governs only pre-fork data, which is fetched lazily
-    /// and decays with the remote's retention window. Data from the fork
-    /// checkpoint onward is local and permanent, so the floor is clamped
-    /// there: a remote whose retention window has passed the fork point would
-    /// otherwise push the floor above the local tip, and the RPC layer, which
-    /// treats this value as a hard serving gate, would refuse checkpoints the
-    /// fork itself produced and still holds.
+    /// The remote's floor governs only pre-fork data, which is fetched lazily and decays with the
+    /// remote's retention window, while data from the fork checkpoint onward is local and
+    /// permanent, so the floor is clamped there. Without the clamp, a remote whose retention
+    /// window has passed the fork point would push the floor above the local tip, and the RPC
+    /// layer, which treats this value as a hard serving gate, would refuse checkpoints the fork
+    /// itself produced and still holds.
     pub(crate) fn get_lowest_available_checkpoint(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
@@ -240,9 +238,8 @@ impl ForkStore {
             .min(self.forked_at_checkpoint()))
     }
 
-    /// The lowest checkpoint for which object data is available, clamped at
-    /// the fork checkpoint for the same reason as
-    /// [`Self::get_lowest_available_checkpoint`].
+    /// Return the lowest checkpoint for which object data is available, clamped at the fork
+    /// checkpoint for the same reason as [`Self::get_lowest_available_checkpoint`].
     pub(crate) fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
@@ -272,15 +269,15 @@ impl ForkStore {
         self.local_store().save_checkpoint(checkpoint, contents)
     }
 
-    /// Get the latest known object. If not found locally, fetch the object at the forked checkpoint
-    /// from remote GraphQL and persist it for future use.
+    /// Get the latest known object, fetching it at the forked checkpoint from remote GraphQL and
+    /// persisting it for future use when it is not found locally.
     pub(crate) fn get_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         self.get_latest_object(object_id)
     }
 
-    /// Get the object at the specified version. It first tries local saved state and falls
-    /// back to a checkpoint-scoped remote query. Successfully fetched objects are persisted
-    /// locally before being returned.
+    /// Get the object at the specified version, trying local saved state first and falling back to
+    /// a checkpoint-scoped remote query. Successfully fetched objects are persisted locally before
+    /// being returned.
     pub(crate) fn get_object_at_version(
         &self,
         object_id: &ObjectID,
@@ -309,21 +306,18 @@ impl ForkStore {
 
     /// Get the latest object version at or below the given root version.
     ///
-    /// TODO(fork): this trusts the highest *local* row at or below the bound,
-    /// which is only the true highest-≤-bound if the local history is complete
-    /// below the bound. A sparse cache polluted by an exact-historical-version
-    /// read (e.g. an RPC client fetching an old dynamic-field version) can hold
-    /// a lower live row than the chain's true highest-≤-bound; that stale row
-    /// then wins here without the remote ever being consulted. Reachable from
-    /// `read_child_object` on both the RPC and the executor paths, so it can
-    /// skew execution, not just reads. Candidate fix (undecided): short-circuit
-    /// only on an authoritative current version at or below the bound, or on a
-    /// tombstone; otherwise query the remote `RootVersion(bound)` and take the
-    /// max-version of the remote result and the local candidate. Optionally let
-    /// executor-driven bounds (always the parent's current root version, which
-    /// Lamport-dominates the child) claim currency on fetch so each child pays
-    /// the remote round-trip once. Tracked in
-    /// design/storage.md § "Known gaps".
+    /// TODO(fork): this trusts the highest local row at or below the bound, which is only the true
+    /// highest when the local history is complete below the bound. A sparse cache polluted by an
+    /// exact-historical-version read (e.g. an RPC client fetching an old dynamic-field version)
+    /// can hold a lower live row than the chain's true highest at the bound, and that stale row
+    /// then wins here without the remote ever being consulted. Reachable from `read_child_object`
+    /// on both the RPC and the executor paths, so it can skew execution as well as reads.
+    /// Candidate fix (undecided): short-circuit only on an authoritative current version at or
+    /// below the bound, or on a tombstone, and otherwise query the remote `RootVersion(bound)` and
+    /// take the max-version of the remote result and the local candidate. Optionally let
+    /// executor-driven bounds (always the parent's current root version, which Lamport-dominates
+    /// the child) claim currency on fetch so each child pays the remote round-trip once. Tracked
+    /// in design/storage.md § "Known gaps".
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
@@ -358,9 +352,8 @@ impl ForkStore {
         Ok(object)
     }
 
-    /// Overlay-first, then local, lookup for the latest known version of an object. Falls back
-    /// to a remote `AtCheckpoint(forked_at_checkpoint)` query and persists the result in the
-    /// RPC store.
+    /// Look up the latest known version of an object, overlay first, then the local store, then a
+    /// remote `AtCheckpoint(forked_at_checkpoint)` query whose result persists in the RPC store.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         // The in-flight checkpoint's writes live only in the pending overlay
         // until seal. A pending tombstone must block the remote fallback,
@@ -422,8 +415,8 @@ impl ForkStore {
         ))
     }
 
-    /// Get a signed transaction by digest from the RPC store. Pre-fork misses
-    /// are fetched from GraphQL and persisted there.
+    /// Get a signed transaction by digest from the RPC store, fetching pre-fork misses from
+    /// GraphQL and persisting them there.
     pub(crate) fn get_transaction(
         &self,
         digest: &TransactionDigest,
@@ -451,8 +444,8 @@ impl ForkStore {
             .map(|info| info.checkpoint))
     }
 
-    /// Get transaction effects by digest, with the same RPC-store remote-fallback
-    /// policy as [`Self::get_transaction`].
+    /// Get transaction effects by digest, with the same RPC-store remote-fallback policy as
+    /// [`Self::get_transaction`].
     pub(crate) fn get_transaction_effects(
         &self,
         digest: &TransactionDigest,
@@ -509,12 +502,11 @@ impl ForkStore {
         Ok(Some(info))
     }
 
-    /// Stage local object writes and current-state removals for the in-flight
-    /// checkpoint.
+    /// Stage local object writes and current-state removals for the in-flight checkpoint.
     ///
-    /// Nothing is persisted here: the diff is buffered — and served to reads
-    /// through the pending overlay — until the checkpoint seals, which commits
-    /// objects, checkpoint, and transactions in one atomic batch.
+    /// Nothing is persisted here. The diff is buffered, and served to reads through the pending
+    /// overlay, until the checkpoint seals, which commits objects, checkpoint, and transactions in
+    /// one atomic batch.
     fn apply_object_updates(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
@@ -572,13 +564,12 @@ impl ForkStore {
             .map_err(|e| StorageError::custom(e.to_string()))
     }
 
-    /// Fetch the objects behind a batch of seed references from the forked-from
-    /// chain, pinned at the fork checkpoint.
+    /// Fetch the objects behind a batch of seed references from the forked-from chain, pinned at
+    /// the fork checkpoint.
     ///
-    /// Every reference names an exact `(id, version)`, so this is an immutable
-    /// key: the remote either has that version or the manifest is describing a
-    /// chain this fork did not come from, which [`RemoteSource::objects_at_fork`]
-    /// rejects.
+    /// Every reference names an exact `(id, version)`, so this is an immutable key. The remote
+    /// either has that version, or the manifest is describing a chain this fork did not come from,
+    /// which [`RemoteSource::fetch_objects_by_obj_refs`] rejects.
     pub(crate) fn fetch_seed_objects(
         &self,
         object_refs: &[ObjectRef],
@@ -588,10 +579,9 @@ impl ForkStore {
             .fetch_objects_by_obj_refs(object_refs, "seed objects")
     }
 
-    /// Seal the staged checkpoint matching `contents` into the rpc-store:
-    /// every staged object diff, the summary and contents, and every staged
-    /// transaction commit in one atomic batch, and the staged entries are
-    /// dropped afterwards. Idempotent when the contents are already persisted.
+    /// Seal the staged checkpoint matching `contents` into the rpc-store, committing every staged
+    /// object diff, the summary and contents, and every staged transaction in one atomic batch and
+    /// dropping the staged entries afterwards. Idempotent when the contents are already persisted.
     fn save_pending_checkpoint_contents(
         &self,
         contents: &CheckpointContents,
@@ -619,26 +609,24 @@ impl ForkStore {
     }
 }
 
-/// RPC-side helpers; the RPC storage trait impls below are the only callers.
+/// RPC-side helpers, called only by the RPC storage trait impls below.
 impl ForkStore {
-    /// The stock reader over the fork's local `sui-rpc-store`, for reads the
-    /// fork has no policy for.
+    /// Return the stock reader over the fork's local `sui-rpc-store`, for reads the fork has no
+    /// policy for.
     ///
-    /// This is also what [`RpcStateReader::indexes`] hands out, which makes
-    /// every index read *seed-bounded*: owner, dynamic-field, type, and balance
-    /// lookups answer from the local index alone, which holds the seed set
-    /// loaded at fork creation plus whatever local execution has produced
-    /// since. An owner, parent, or type outside the seed set reads as empty
-    /// rather than being resolved against the forked-from chain — the
-    /// checkpoint-pinned enumeration that would answer it belongs to fork
-    /// creation and is not re-runnable at read time.
+    /// This is also what [`RpcStateReader::indexes`] hands out, which makes every index read
+    /// seed-bounded. Owner, dynamic-field, type, and balance lookups resolve from the local index
+    /// alone, which holds the seed set loaded at fork creation plus whatever local execution has
+    /// produced since, and an owner, parent, or type outside the seed set reads as empty rather
+    /// than being resolved against the forked-from chain, because the checkpoint-pinned
+    /// enumeration that could resolve it belongs to fork creation and cannot be re-run at read
+    /// time.
     fn stock_reader(&self) -> &RpcStoreReader {
         self.local_store().reader()
     }
 
-    /// Chain identifier for the forked network: known networks use their
-    /// fixed identifiers; custom networks derive one from the fork checkpoint
-    /// digest.
+    /// Return the chain identifier for the forked network. Known networks use their fixed
+    /// identifiers, and custom networks derive one from the fork checkpoint digest.
     fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
         let id = match self.chain() {
             Chain::Mainnet => get_mainnet_chain_identifier(),
@@ -663,9 +651,9 @@ impl ForkStore {
 // SimulatorStore super-traits
 // ============================================================================
 
-/// Object reads delegate to the inherent `ForkStore::get_object` / `get_object_at_version`,
-/// which provide local-first lookups with remote fallback. The trait signature cannot
-/// propagate errors, so failures are logged before being surfaced as `None`.
+/// Object reads delegate to the inherent `ForkStore::get_object` / `get_object_at_version`, which
+/// provide local-first lookups with remote fallback. The trait signature cannot propagate errors,
+/// so failures are logged before being surfaced as `None`.
 impl ObjectStore for ForkStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.get_object(object_id).unwrap_or_else(|err| {
@@ -699,9 +687,9 @@ impl ParentSync for ForkStore {
     }
 }
 
-/// Both methods go through the fallible helpers: a store or remote failure
-/// must surface as an error rather than read as "object not found", which
-/// execution would otherwise durably commit as a wrong result.
+/// Both methods go through the fallible helpers, because a store or remote failure must surface as
+/// an error rather than read as "object not found", which execution would otherwise durably commit
+/// as a wrong result.
 impl RuntimeObjectResolver for ForkStore {
     fn read_child_object(
         &self,
@@ -731,10 +719,9 @@ impl RuntimeObjectResolver for ForkStore {
 // SimulatorStore
 // ============================================================================
 
-/// Write methods are fail-stop: the trait cannot surface errors, and executing
-/// past a failed persist would silently diverge the executor's in-memory view
-/// from durable fork state. Crashing is strictly safer than continuing on top
-/// of unpersisted state.
+/// Write methods are fail-stop, because the trait cannot surface errors, and executing past a
+/// failed persist would silently diverge the executor's in-memory view from durable fork state.
+/// Crashing is strictly safer than continuing on top of unpersisted state.
 impl SimulatorStore for ForkStore {
     fn get_checkpoint_by_sequence_number(
         &self,
@@ -888,10 +875,9 @@ impl SimulatorStore for ForkStore {
         }
     }
 
-    /// Stages the diff for the in-flight checkpoint like every other object
-    /// write; it becomes durable when that checkpoint seals. Callers must
-    /// therefore be inside a checkpoint cycle — in production only
-    /// `init_with_genesis` calls this, and the fork never runs that path
+    /// Stage the diff for the in-flight checkpoint like every other object write, so it becomes
+    /// durable when that checkpoint seals. Callers must therefore be inside a checkpoint cycle. In
+    /// production only `init_with_genesis` calls this, and the fork never runs that path
     /// (`insert_committee` is unimplemented on this store).
     fn update_objects(
         &mut self,
@@ -936,26 +922,26 @@ impl SimulatorStore for ForkStore {
 // impl above).
 
 impl ReadStore for ForkStore {
-    /// Reads committee information from committed `sui-rpc-store` data.
+    /// Read committee information from committed `sui-rpc-store` data.
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
         self.stock_reader().get_committee(epoch)
     }
 
-    /// Reads the latest checkpoint from the local rpc-store. This never
-    /// consults the remote endpoint -- the local executor is the source of
-    /// truth for "latest" in a forked network.
+    /// Read the latest checkpoint from the local rpc-store. The remote endpoint is never
+    /// consulted, because the local executor is the source of truth for "latest" in a forked
+    /// network.
     fn get_latest_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
         ForkStore::get_highest_verified_checkpoint(self)
             .map_err(to_storage_error)?
             .ok_or_else(|| StorageError::missing("no checkpoint persisted yet"))
     }
 
-    /// Reads the highest verified checkpoint: the fork's local tip.
+    /// Read the highest verified checkpoint, which is the fork's local tip.
     fn get_highest_verified_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
         self.get_latest_checkpoint()
     }
 
-    /// Reads the highest synced checkpoint: also the fork's local tip.
+    /// Read the highest synced checkpoint, which is also the fork's local tip.
     fn get_highest_synced_checkpoint(&self) -> StorageResult<VerifiedCheckpoint> {
         ForkStore::get_highest_verified_checkpoint(self)
             .map_err(to_storage_error)?
@@ -966,15 +952,14 @@ impl ReadStore for ForkStore {
             })
     }
 
-    /// Returns the remote chain's lowest available checkpoint.
-    ///
-    /// This value is not derived from the fork's local store.
+    /// Return the fork's availability floor, which is the remote chain's lowest available
+    /// checkpoint clamped at the fork checkpoint.
     fn get_lowest_available_checkpoint(&self) -> StorageResult<CheckpointSequenceNumber> {
         ForkStore::get_lowest_available_checkpoint(self).map_err(to_storage_error)
     }
 
-    /// Reads a checkpoint summary by checkpoint digest; rpc-store only (the
-    /// GraphQL checkpoint query is keyed by sequence number).
+    /// Read a checkpoint summary by checkpoint digest from the rpc-store alone, because the
+    /// GraphQL checkpoint query is keyed by sequence number and offers no digest lookup.
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
         optional_store_read(
             "checkpoint digest lookup",
@@ -982,8 +967,8 @@ impl ReadStore for ForkStore {
         )
     }
 
-    /// Reads a checkpoint summary by sequence number, persisting pre-fork
-    /// rows fetched from the remote.
+    /// Read a checkpoint summary by sequence number, persisting pre-fork rows fetched from the
+    /// remote.
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -994,7 +979,7 @@ impl ReadStore for ForkStore {
         )
     }
 
-    /// Reads checkpoint contents by content digest.
+    /// Read checkpoint contents by content digest.
     fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -1005,8 +990,8 @@ impl ReadStore for ForkStore {
         )
     }
 
-    /// Reads checkpoint contents by sequence number, with the same remote
-    /// fallback as the summary read.
+    /// Read checkpoint contents by sequence number, with the same remote fallback as the summary
+    /// read.
     fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -1017,8 +1002,7 @@ impl ReadStore for ForkStore {
         )
     }
 
-    /// Reads a transaction by digest, persisting pre-fork rows fetched from
-    /// the remote.
+    /// Read a transaction by digest, persisting pre-fork rows fetched from the remote.
     fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
         optional_store_read(
             "transaction lookup",
@@ -1027,8 +1011,7 @@ impl ReadStore for ForkStore {
         .map(Arc::new)
     }
 
-    /// Reads transaction effects by digest, with the same remote fallback as
-    /// the transaction read.
+    /// Read transaction effects by digest, with the same remote fallback as the transaction read.
     fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
         optional_store_read(
             "transaction effects lookup",
@@ -1036,15 +1019,15 @@ impl ReadStore for ForkStore {
         )
     }
 
-    /// Reads transaction events from the rpc-store only. Events are saved
-    /// with their transaction rows and the fork keeps no separate copy, so a
-    /// fork-side fallback would just repeat the same lookup.
+    /// Read transaction events from the rpc-store alone. Events are saved with their transaction
+    /// rows and the fork keeps no separate copy, so a fork-side fallback would just repeat the
+    /// same lookup.
     fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.stock_reader().get_events(event_digest)
     }
 
-    /// Reads unchanged runtime-loaded objects from committed `sui-rpc-store`
-    /// data only; the fork does not synthesize this execution cache.
+    /// Read unchanged runtime-loaded objects from committed `sui-rpc-store` data alone, because
+    /// the fork does not synthesize this execution cache.
     fn get_unchanged_loaded_runtime_objects(
         &self,
         digest: &TransactionDigest,
@@ -1053,7 +1036,7 @@ impl ReadStore for ForkStore {
             .get_unchanged_loaded_runtime_objects(digest)
     }
 
-    /// Reads the checkpoint sequence that finalized a transaction.
+    /// Read the checkpoint sequence that finalized a transaction.
     fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -1064,9 +1047,9 @@ impl ReadStore for ForkStore {
         )
     }
 
-    /// Reads full checkpoint contents from committed `sui-rpc-store` data
-    /// only; the fork exposes checkpoint summaries and contents, not full
-    /// checkpoint payloads.
+    /// Read full checkpoint contents from committed `sui-rpc-store` data alone, because the fork
+    /// stores checkpoint summaries and contents and never assembles full checkpoint payloads
+    /// itself.
     fn get_full_checkpoint_contents(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -1078,15 +1061,15 @@ impl ReadStore for ForkStore {
 }
 
 impl RpcStateReader for ForkStore {
-    /// Returns the lowest checkpoint with object data on the remote chain;
-    /// availability metadata, not fork-local state.
+    /// Return the fork's object-availability floor, which is the remote chain's lowest checkpoint
+    /// with object data clamped at the fork checkpoint.
     fn get_lowest_available_checkpoint_objects(&self) -> StorageResult<CheckpointSequenceNumber> {
         ForkStore::get_lowest_available_checkpoint_objects(self).map_err(to_storage_error)
     }
 
-    /// Genuinely hybrid: the stock read serves the framework `chain_ids`
-    /// table seeded at open, while the fallback derives the identifier from
-    /// the fork checkpoint for custom networks.
+    /// A genuinely hybrid read. The stock side serves the framework `chain_ids` table seeded at
+    /// open, while the fallback derives the identifier from the fork checkpoint for custom
+    /// networks.
     fn get_chain_identifier(&self) -> StorageResult<ChainIdentifier> {
         fallback_on_missing(self.stock_reader().get_chain_identifier(), || {
             self.chain_identifier()
@@ -1098,7 +1081,7 @@ impl RpcStateReader for ForkStore {
         Some(self.stock_reader())
     }
 
-    /// Reads a struct layout from `sui-rpc-store`.
+    /// Read a struct layout from `sui-rpc-store`.
     fn get_struct_layout_with_overlay(
         &self,
         struct_tag: &StructTag,
@@ -1115,8 +1098,8 @@ fn to_storage_error(err: anyhow::Error) -> StorageError {
 
 /// Validate that a child object loaded for `parent` is actually owned by it.
 ///
-/// Shared by the fallible child read (RPC path) and the `RuntimeObjectResolver`
-/// impl (execution path), which differ only in how lookup errors surface.
+/// Shared by the fallible child read (RPC path) and the `RuntimeObjectResolver` impl (execution
+/// path), which differ only in how lookup errors surface.
 fn check_child_object_owner(
     parent: &ObjectID,
     child: &ObjectID,
@@ -1133,7 +1116,8 @@ fn check_child_object_owner(
     Ok(child_object)
 }
 
-/// Received-object checks: owner and exact version; mismatches surface as `None`.
+/// Check that a received object has the expected owner and exact version, surfacing any mismatch
+/// as `None`.
 fn check_received_object(
     owner: &ObjectID,
     receive_object_at_version: SequenceNumber,
@@ -1148,7 +1132,7 @@ fn check_received_object(
     Some(object)
 }
 
-/// Converts effect removals into object tombstones for the RPC store.
+/// Convert effect removals into object tombstones for the RPC store.
 fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<ObjectRemoval> {
     effects
         .deleted()
@@ -1181,8 +1165,7 @@ fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<ObjectRemov
         .collect()
 }
 
-/// Runs the fork-policy fallback only when the stock rpc-store read reports
-/// missing data.
+/// Run the fork-policy fallback only when the stock rpc-store read reports missing data.
 fn fallback_on_missing<T>(
     result: StorageResult<T>,
     fallback: impl FnOnce() -> StorageResult<T>,
@@ -1194,10 +1177,10 @@ fn fallback_on_missing<T>(
     }
 }
 
-/// Converts a fallible fork-policy read into an optional trait response.
+/// Convert a fallible fork-policy read into an optional trait response.
 ///
-/// The storage traits using this helper return `Option`, so store errors are
-/// logged and treated as absent data.
+/// The storage traits using this helper return `Option`, so store errors are logged and treated
+/// as absent data.
 fn optional_store_read<T>(context: &'static str, result: anyhow::Result<Option<T>>) -> Option<T> {
     match result {
         Ok(value) => value,

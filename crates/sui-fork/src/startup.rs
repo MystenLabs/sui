@@ -55,9 +55,9 @@ pub(crate) struct ResolvedStartCheckpoint {
 
 /// Resolve the fork checkpoint from local state when possible.
 ///
-/// Explicit data directories can be inspected directly before the remote
-/// GraphQL client asks for latest. Default roots cannot be inspected without a
-/// checkpoint because their path contains the checkpoint.
+/// Explicit data directories can be inspected directly before the remote GraphQL client asks for
+/// latest. Default roots cannot be inspected without a checkpoint because their path contains the
+/// checkpoint.
 pub(crate) fn resolve_start_checkpoint_from_local(
     node: &Node,
     requested_checkpoint: Option<CheckpointSequenceNumber>,
@@ -102,11 +102,10 @@ pub(crate) fn resolve_start_checkpoint_from_local(
     })
 }
 
-/// Initialize a forked network by fetching the fork checkpoint from the remote
-/// endpoint when needed, applying seed metadata, and starting a local Simulacrum
-/// instance from the highest checkpoint already persisted locally. Also builds
-/// the checkpoint subscription broker; the returned handle must be passed to
-/// [`run`] so the gRPC server exposes the streaming RPC.
+/// Initialize a forked network by fetching the fork checkpoint from the remote endpoint when
+/// needed, applying seed metadata, and starting a local Simulacrum instance from the highest
+/// checkpoint already persisted locally. Also builds the checkpoint subscription broker, whose
+/// returned handle must be passed to [`run`] so the gRPC server exposes the streaming RPC.
 ///
 /// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
 /// used. See the `[MetadataStore]` docs for details.
@@ -212,20 +211,18 @@ fn fork_chain_identifier(chain: Chain, checkpoint: &VerifiedCheckpoint) -> Chain
     }
 }
 
-/// Return the checkpoint the Simulacrum should build on: the highest locally
-/// persisted checkpoint. On a fresh fork this is the fork-point checkpoint
-/// (persisted before this is called); on a resumed fork it is the local tip,
-/// so the next sealed checkpoint gets the correct sequence number and
-/// previous-digest chain instead of colliding with an already-persisted one.
+/// Return the checkpoint the Simulacrum should build on, which is the highest locally persisted
+/// checkpoint. On a fresh fork this is the fork-point checkpoint, persisted before this is called.
+/// On a resumed fork it is the local tip, so the next sealed checkpoint gets the correct sequence
+/// number and previous-digest chain instead of colliding with an already-persisted one.
 pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckpoint> {
     store
         .get_highest_verified_checkpoint()?
         .ok_or_else(|| anyhow!("no local checkpoint available to resume from"))
 }
 
-/// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to
-/// `rpc_addr`, backed by the `ForkStore`'s RPC trait impls, then blocks on
-/// Ctrl+C.
+/// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to `rpc_addr`, backed by
+/// the `ForkStore`'s RPC trait impls, then blocks on Ctrl+C.
 pub async fn run(
     context: Context,
     subscription_handle: SubscriptionServiceHandle,

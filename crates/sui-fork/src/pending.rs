@@ -3,26 +3,24 @@
 
 //! In-memory staging for the checkpoint currently being sealed.
 //!
-//! Simulacrum hands the store a checkpoint summary, then its transactions,
-//! effects, events, and object diffs piecemeal through the `SimulatorStore`
-//! insert methods, and finally the checkpoint contents. This buffer holds
-//! those pieces until the contents arrive, so the caller can persist the
-//! whole checkpoint into the rpc-store as one atomic batch.
+//! Simulacrum hands the store a checkpoint summary, then its transactions, effects, events, and
+//! object diffs piecemeal through the `SimulatorStore` insert methods, and finally the checkpoint
+//! contents. This buffer holds those pieces until the contents arrive, so the caller can persist
+//! the whole checkpoint into the rpc-store as one atomic batch.
 //!
-//! Object diffs are the exception to "reads never consult this buffer":
-//! execution resolves the next transaction's inputs (and the settlement and
-//! barrier system transactions sealed with the checkpoint) through the store,
-//! so the staged diffs double as a read overlay over the rpc-store until the
-//! seal commits them. Overlay versions always outrank persisted ones — local
-//! execution Lamport-bumps past every live version, and remote fetches are
-//! pinned at or below the fork checkpoint — so "overlay first, else store" is
-//! exact. Checkpoint, transaction, effects, and event entries stay write-only:
-//! sealing completes synchronously inside the checkpoint publication path, so
-//! by the time an execution returns, its rows are already in the rpc-store.
+//! Object diffs are the one staged entry reads consult. Execution resolves the next transaction's
+//! inputs (and the settlement and barrier system transactions sealed with the checkpoint) through
+//! the store, so the staged diffs double as a read overlay over the rpc-store until the seal
+//! commits them. Overlay versions always outrank persisted ones, because local execution
+//! Lamport-bumps past every live version while remote fetches are pinned at or below the fork
+//! checkpoint, so a read takes the overlay's entry when one exists and falls through to the store
+//! otherwise. Checkpoint, transaction, effects, and event entries stay write-only, since sealing
+//! completes synchronously inside the checkpoint publication path, so by the time an execution
+//! returns, its rows are already in the rpc-store.
 //!
-//! Nothing here is persisted: staged entries that have not been sealed are
-//! lost on process restart, which is the crash-safety contract — a checkpoint
-//! either commits whole at seal time or leaves no trace.
+//! Nothing here is persisted. Staged entries that have not been sealed are lost on process
+//! restart, which is the crash-safety contract, because a checkpoint either commits whole at seal
+//! time or leaves no trace.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -68,25 +66,27 @@ pub(crate) struct ObjectDiff {
     pub(crate) removed: Vec<ObjectRemoval>,
 }
 
-/// Staged object diffs plus the merged views the read overlay answers from.
+/// Staged object diffs plus the merged views the read overlay serves.
 ///
-/// The views mirror the rows `LocalStore::stage_local_object_diff` will write
-/// at seal: `current` is what the checkpoint-pinned version row would say per
-/// object, `versions` is what the raw object rows would say per version. They
-/// are maintained on record rather than derived on read so overlay lookups
-/// stay O(log n) on the execution hot path.
+/// The views mirror the rows `LocalStore::stage_local_object_diff` will write at seal, and they
+/// are maintained on record rather than derived on read so overlay lookups stay O(log n) on the
+/// execution hot path.
 #[derive(Default)]
 struct PendingObjects {
     /// Diffs in arrival order, replayed verbatim into the seal batch.
     diffs: Vec<ObjectDiff>,
+
+    /// What the checkpoint-pinned version row would say per object once sealed.
     current: BTreeMap<ObjectID, (SequenceNumber, Status)>,
+
+    /// What the raw object rows would say per version once sealed.
     versions: BTreeMap<ObjectID, BTreeMap<SequenceNumber, Status>>,
 }
 
 /// Staging buffer for the in-flight checkpoint and its transactions.
 ///
-/// `RwLock` provides the interior mutability needed behind the shared
-/// `Arc<ForkStoreInner>` that every cloned `ForkStore` holds.
+/// `RwLock` provides the interior mutability needed behind the shared `Arc<ForkStoreInner>` that
+/// every cloned `ForkStore` holds.
 #[derive(Default)]
 pub(crate) struct PendingCheckpointBuffer {
     checkpoint: RwLock<Option<VerifiedCheckpoint>>,
@@ -150,10 +150,9 @@ impl PendingCheckpointBuffer {
 
     /// Stage one execution result's object writes and removals.
     ///
-    /// The merged views mirror the row-level semantics of
-    /// `LocalStore::stage_local_object_diff`: removals apply before writes so
-    /// an object removed and rewritten in the same result ends up live, and an
-    /// object created and terminally deleted in the same result keeps only its
+    /// The merged views mirror the row-level semantics of `LocalStore::stage_local_object_diff`.
+    /// Removals apply before writes so an object removed and rewritten in the same result ends up
+    /// live, and an object created and terminally deleted in the same result keeps only its
     /// historical version row.
     pub(crate) fn record_object_diff(
         &self,
@@ -202,8 +201,7 @@ impl PendingCheckpointBuffer {
         Ok(())
     }
 
-    /// The staged current state for an object, if the in-flight checkpoint
-    /// touched it.
+    /// Return the staged current state for an object, if the in-flight checkpoint touched it.
     pub(crate) fn latest_object(
         &self,
         id: ObjectID,
@@ -216,8 +214,7 @@ impl PendingCheckpointBuffer {
         Ok(pending.current.get(&id).cloned())
     }
 
-    /// The staged status at one exact version, if the in-flight checkpoint
-    /// wrote it.
+    /// Return the staged status at one exact version, if the in-flight checkpoint wrote it.
     pub(crate) fn object_at_version(
         &self,
         id: ObjectID,
@@ -235,11 +232,10 @@ impl PendingCheckpointBuffer {
             .cloned())
     }
 
-    /// The highest staged version at or below `upper_bound`, if any.
+    /// Return the highest staged version at or below `upper_bound`, if any.
     ///
-    /// Staged versions always outrank persisted ones for the same object, so a
-    /// hit here is the bounded read's answer; only a miss falls through to the
-    /// store.
+    /// Staged versions always outrank persisted ones for the same object, so callers take a hit
+    /// here as the bounded read's result and fall through to the store only on a miss.
     pub(crate) fn object_at_or_before(
         &self,
         id: ObjectID,
@@ -258,7 +254,7 @@ impl PendingCheckpointBuffer {
         }))
     }
 
-    /// Clone out every staged object diff, in arrival order, for the seal.
+    /// Clone every staged object diff, in arrival order, for the seal.
     pub(crate) fn staged_object_diffs(&self) -> anyhow::Result<Vec<ObjectDiff>> {
         let pending = self
             .objects
@@ -268,8 +264,8 @@ impl PendingCheckpointBuffer {
         Ok(pending.diffs.clone())
     }
 
-    /// Return the staged checkpoint matching `contents`, validating that the
-    /// contents digest is the one the checkpoint committed to.
+    /// Return the staged checkpoint matching `contents`, validating that the contents digest is
+    /// the one the checkpoint committed to.
     pub(crate) fn checkpoint_for_contents(
         &self,
         contents: &CheckpointContents,
@@ -296,9 +292,9 @@ impl PendingCheckpointBuffer {
         Ok(checkpoint.clone())
     }
 
-    /// Clone out every staged transaction referenced by `contents`, in
-    /// checkpoint order. Entries stay staged until [`Self::clear_sealed`]
-    /// confirms they were durably saved.
+    /// Clone every staged transaction referenced by `contents`, in checkpoint order.
+    ///
+    /// Entries stay staged until [`Self::clear_sealed`] confirms they were durably saved.
     pub(crate) fn staged_transactions_for(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -341,7 +337,7 @@ impl PendingCheckpointBuffer {
         Ok(staged)
     }
 
-    /// Drop the staged entries for a checkpoint whose rows were durably saved.
+    /// Drop every staged entry for a checkpoint whose rows were durably saved.
     pub(crate) fn clear_sealed(
         &self,
         checkpoint: &VerifiedCheckpoint,

@@ -28,27 +28,27 @@ use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use crate::gql::queries;
 
-/// Worker threads for [`gql_runtime`]. GraphQL calls are I/O-bound and issued one at a
-/// time from a blocking caller, so this only has to cover hyper's connection dispatch
-/// tasks running concurrently with the request being awaited.
+/// Worker threads for [`gql_runtime`]. GraphQL calls are I/O-bound and issued one at a time from a
+/// blocking caller, so this only has to cover hyper's connection dispatch tasks running
+/// concurrently with the request being awaited.
 const GQL_RUNTIME_WORKER_THREADS: usize = 2;
 
 /// The runtime every GraphQL request runs on, for the life of the process.
 ///
-/// The storage traits this crate implements are synchronous, so each GraphQL call has to
-/// block somewhere. Building a runtime per call — the obvious way to do that — silently
-/// corrupts connection reuse: hyper spawns a per-connection dispatch task onto whichever
-/// runtime is current when the connection opens, so dropping that runtime kills the task
-/// while the connection itself stays in the shared [`reqwest::Client`]'s idle pool. The
-/// next call to draw that connection fails with `dispatch task is gone: runtime dropped
-/// the dispatch task`, which surfaces during execution as a `STORAGE_ERROR` and an
-/// invariant violation. It is intermittent by construction, because it depends on the
-/// pool handing back a connection whose runtime has died.
+/// The storage traits this crate implements are synchronous, so each GraphQL call has to block
+/// somewhere. Building a runtime per call, the obvious way to do that, silently corrupts
+/// connection reuse, because hyper spawns a per-connection dispatch task onto whichever runtime is
+/// current when the connection opens, so dropping that runtime kills the task while the connection
+/// itself stays in the shared [`reqwest::Client`]'s idle pool. The next call to draw that
+/// connection fails with `dispatch task is gone: runtime dropped the dispatch task`, which
+/// surfaces during execution as a `STORAGE_ERROR` and an invariant violation. It is intermittent
+/// by construction, because it depends on the pool handing back a connection whose runtime has
+/// died.
 ///
-/// A single process-lifetime runtime keeps those dispatch tasks alive as long as the
-/// connections they serve. It is parked on its own thread and deliberately never dropped:
-/// dropping a runtime from inside an async context panics, which is what would happen if
-/// the last handle were released on a worker thread.
+/// A single process-lifetime runtime keeps those dispatch tasks alive as long as the connections
+/// they serve. It is parked on its own thread and deliberately never dropped, because dropping a
+/// runtime from inside an async context panics, which is what would happen if the last handle were
+/// released on a worker thread.
 fn gql_runtime() -> &'static tokio::runtime::Handle {
     static HANDLE: std::sync::OnceLock<tokio::runtime::Handle> = std::sync::OnceLock::new();
     HANDLE.get_or_init(|| {

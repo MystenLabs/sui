@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Adapter-level integration tests for `ForkedTransactionExecutor`: runs
+//! Adapter-level integration tests for `ForkedTransactionExecutor`. They run
 //! `ExecuteTransactionRequestV3` requests through the same entry point the gRPC
-//! `TransactionExecutionService` uses, and asserts the forked Simulacrum
-//! produced matching effects — including error paths. The gRPC socket is
-//! intentionally not exercised here.
+//! `TransactionExecutionService` uses, and assert the forked Simulacrum produced matching effects,
+//! including on error paths. The gRPC socket is deliberately left unexercised here.
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
@@ -418,11 +417,10 @@ async fn test_rpc_reads_serve_indexed_post_fork_data_from_rpc_store() {
     }
 }
 
-/// The embedded indexer is the sole writer of derived indexes (owner, type,
-/// balance, package) for local checkpoints, and checkpoint publication blocks
-/// until it has indexed the sealed checkpoint. After an execution returns,
-/// owner and balance lookups must therefore already serve the transfer
-/// through the stock rpc-store reader.
+/// The embedded indexer is the sole writer of derived indexes (owner, type, balance, package) for
+/// local checkpoints, and checkpoint publication blocks until it has indexed the sealed
+/// checkpoint. After an execution returns, owner and balance lookups must therefore already serve
+/// the transfer through the stock rpc-store reader.
 #[tokio::test]
 async fn test_indexer_populates_derived_indexes_for_local_execution() {
     let mut harness = TestHarness::new().await;

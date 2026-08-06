@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Checkpoint persistence tests for [`crate::store::ForkStore`]. Lives under
-//! `src/tests/` but is a child of the `store` module via a `#[path]` wiring
-//! in `store.rs`, so it retains `super::*` access to `pub(crate)` items.
+//! Checkpoint persistence tests for [`crate::store::ForkStore`]. The file lives under `src/tests/`
+//! but is a child of the `store` module via a `#[path]` wiring in `store.rs`, so it retains
+//! `super::*` access to `pub(crate)` items.
 
 use std::num::NonZeroUsize;
 use std::path::Path;
@@ -143,10 +143,9 @@ fn make_gas_object(id: ObjectID, version: u64) -> Object {
     .into()
 }
 
-/// A crash between execution and seal must leave no durable trace: staged
-/// object diffs live only in memory, so a restart resumes from the previous
-/// tip instead of on top of state whose creating transaction was never
-/// recorded.
+/// A crash between execution and seal must leave no durable trace, because staged object diffs
+/// live only in memory, so a restart resumes from the previous tip instead of on top of state
+/// whose creating transaction was never recorded.
 #[test]
 fn unsealed_execution_leaves_no_durable_state_across_reopen() {
     let temp = tempfile::tempdir().expect("tempdir");
@@ -189,9 +188,9 @@ fn unsealed_execution_leaves_no_durable_state_across_reopen() {
     );
 }
 
-/// The seal is the only durability point: object rows, their pinned versions,
-/// and the checkpoint commit in one batch, staged diffs replay in arrival
-/// order, and the overlay drains once the rows are durable.
+/// The seal is the only durability point. Object rows, their pinned versions, and the checkpoint
+/// commit in one batch, staged diffs replay in arrival order, and the overlay drains once the rows
+/// are durable.
 #[test]
 fn seal_persists_staged_object_diffs_atomically_with_the_checkpoint() {
     let temp = tempfile::tempdir().expect("tempdir");

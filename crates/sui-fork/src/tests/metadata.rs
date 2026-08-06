@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for [`crate::metadata::MetadataStore`]. Wired via
-//! `#[path]` in `metadata.rs`, so `super::*` resolves into that module.
+//! Unit tests for [`crate::metadata::MetadataStore`]. Wired via `#[path]` in `metadata.rs`, so
+//! `super::*` resolves into that module.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;

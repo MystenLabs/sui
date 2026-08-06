@@ -46,10 +46,10 @@ use sui_types::transaction::VerifiedTransaction;
 // Read traits
 // ============================================================================
 
-/// Signed transaction envelope paired with its execution effects and the checkpoint
-/// it was finalized in. The checkpoint is used by [`crate::store::ForkStore`] as a
-/// pre-fork guard: remote results whose `checkpoint > forked_at_checkpoint` must not
-/// leak into a fork that has already diverged from the upstream chain.
+/// Signed transaction envelope paired with its execution effects and the checkpoint it was
+/// finalized in. The checkpoint is used by [`crate::store::ForkStore`] as a pre-fork guard,
+/// because remote results whose `checkpoint > forked_at_checkpoint` must not leak into a fork that
+/// has already diverged from the upstream chain.
 #[derive(Clone, Debug)]
 pub(crate) struct TransactionInfo {
     pub(crate) transaction: VerifiedTransaction,
@@ -67,22 +67,23 @@ pub(crate) trait TransactionRead {
     ) -> Result<Option<TransactionInfo>, Error>;
 }
 
-/// Query for an object.
-/// Specifies an `ObjectID` and the "rule" to retrieve it.
+/// Query for an object, specifying an `ObjectID` and the rule to retrieve it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ObjectKey {
     pub(crate) object_id: ObjectID,
     pub(crate) version_query: VersionQuery,
 }
 
-/// Query options for an object.
-/// `RootVersion` request an object at a given version at most (<=)
-/// `AtCheckpoint` request an object at a given checkpoint. Useful for an unknown version.
-/// `VersionAtCheckpoint` requests an exact version, but only if it existed by the given checkpoint.
+/// Version rule for an object query.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum VersionQuery {
+    /// Request the highest version of the object at or below the given version.
     RootVersion(u64),
+
+    /// Request the object as of the given checkpoint. Useful when the version is unknown.
     AtCheckpoint(u64),
+
+    /// Request an exact version, but only if it existed by the given checkpoint.
     VersionAtCheckpoint { version: u64, checkpoint: u64 },
 }
 

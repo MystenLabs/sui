@@ -3,18 +3,16 @@
 
 //! Fork manifest and seed resolution for seed-bounded index reads.
 //!
-//! Seeding happens once, at fork creation, in two steps. Resolution enumerates
-//! the requested addresses and objects against GraphQL pinned at the fork
-//! checkpoint and records the resulting object references in an immutable
-//! manifest; that enumeration is the part that must be complete and must happen
-//! while the question is still answerable, because nothing the fork does
-//! afterwards reconstructs it. The load then hydrates those references and
-//! hands them to `sui-rpc-store`'s `Restore` pipelines, which is where the
-//! fork's whole pre-fork derived-index surface comes from.
+//! Seeding happens once, at fork creation, in two steps. Resolution enumerates the requested
+//! addresses and objects against GraphQL pinned at the fork checkpoint and records the resulting
+//! object references in an immutable manifest, and that enumeration is the part that must be
+//! complete and must happen while the enumeration is still possible, because nothing the fork does
+//! afterwards reconstructs it. The load then hydrates those references and hands them to
+//! `sui-rpc-store`'s `Restore` pipelines, which is where the fork's whole pre-fork derived-index
+//! surface comes from.
 //!
-//! Everything downstream is bounded by that: an owner, parent, or type outside
-//! the seed set is not indexed, and reads for it answer empty rather than
-//! reaching for the remote at read time.
+//! Everything downstream is bounded by that. An owner, parent, or type outside the seed set is not
+//! indexed, and reads for it come back empty rather than reaching for the remote at read time.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -41,8 +39,8 @@ use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
 
-/// Objects hydrated per remote round-trip. The load commits as one batch
-/// regardless; this only bounds the size of an individual GraphQL query.
+/// Objects hydrated per remote round-trip. The load commits as one batch regardless, and this only
+/// bounds the size of an individual GraphQL query.
 const HYDRATE_CHUNK: usize = 50;
 
 /// CLI seed input before it has been resolved against the upstream chain.
@@ -65,9 +63,9 @@ pub(crate) struct SeedEntry {
 pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
-    /// Addresses that were fully enumerated to produce this manifest. Nothing
-    /// reads this; it is a record for whoever inspects the fork directory of
-    /// which addresses the seeding used.
+    /// Addresses that were fully enumerated to produce this manifest. Nothing reads the list, and
+    /// it exists as a record for whoever inspects the fork directory of which addresses the
+    /// seeding used.
     #[serde(default)]
     pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
@@ -164,17 +162,15 @@ pub(crate) async fn prepare_seed_manifest(
     Ok(manifest)
 }
 
-/// Load every manifest entry into the rpc-store with its full derived-index
-/// surface, once, before the fork executes anything.
+/// Load every manifest entry into the rpc-store with its full derived-index surface, once, before
+/// the fork executes anything.
 ///
-/// The manifest holds object references, not objects. This function will fetch each object by its
-/// version and id, and then pass them to be restored into the local store (RocksDB) to reconstruct
-/// the owned object indexes and other various derived indexes.
-///
-/// Runs at most once per fork directory. `Balance` accumulates through a merge
-/// operator, so a second pass would double-count every seeded coin. The load
-/// commits its own completion marker atomically with the rows to make that
-/// unrepeatable rather than merely unlikely.
+/// The manifest holds object references rather than objects, so each entry is fetched by id and
+/// version and handed to the restore pipelines, which rebuild the owned-object index and the rest
+/// of the derived surface. The load runs at most once per fork directory, because `Balance`
+/// accumulates through a merge operator and a second pass would double-count every seeded coin,
+/// and it commits its own completion marker atomically with the rows to make that unrepeatable
+/// rather than merely unlikely.
 pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> Result<(), Error> {
     if store.local_store().seed_load_complete()? {
         return Ok(());
@@ -210,18 +206,17 @@ async fn resolve_address_seed(
 
 /// Resolve the accumulator balance fields belonging to `address`.
 ///
-/// An address balance is not an object the address owns but a dynamic field
-/// under the accumulator root, so the owned-object enumeration above never
-/// surfaces it, and seeding an address without this would establish its coins
-/// while silently leaving its balance at zero. Local execution does maintain address balances, so a
-/// withdrawal would then apply a delta to a baseline that was never seeded.
+/// An address balance lives in a dynamic field under the accumulator root rather than in an object
+/// the address owns, so the owned-object enumeration above never surfaces it, and seeding an
+/// address without this step would establish its coins while silently leaving its balance at zero.
+/// Local execution does maintain address balances, so a withdrawal would then apply a delta to a
+/// baseline that was never seeded.
 ///
-/// The field's id is derivable from `(address, coin type)`, so the only thing
-/// that has to come from the remote is which coin types to derive for, which is
-/// the one part nothing local can know. Each derived id is then resolved like
-/// any other object reference and seeded as an ordinary object, so the stock
-/// `Balance` restore pipeline picks it up through its accumulator-root arm
-/// without this crate writing a balance row itself.
+/// The field's id is derivable from `(address, coin type)`, so the only thing that has to come
+/// from the remote is which coin types to derive for, which is the one part nothing local can
+/// know. Each derived id is then resolved like any other object reference and seeded as an
+/// ordinary object, so the stock `Balance` restore pipeline picks it up through its
+/// accumulator-root arm without this crate writing a balance row itself.
 async fn resolve_address_balance_seed(
     remote: &RemoteSource,
     address: SuiAddress,
@@ -267,10 +262,10 @@ async fn resolve_address_balance_seed(
     Ok(entries)
 }
 
-/// Object id of the accumulator field holding `address`'s balance of `coin_type`.
+/// Derive the object id of the accumulator field holding `address`'s balance of `coin_type`.
 ///
-/// `coin_type` arrives as the inner type (`0x2::sui::SUI`); the accumulator keys
-/// on the wrapped `0x2::balance::Balance<T>`.
+/// `coin_type` arrives as the inner type (`0x2::sui::SUI`), while the accumulator keys its fields
+/// on the wrapped `0x2::balance::Balance<T>`, so the id is derived from the wrapped form.
 fn accumulator_field_id(address: SuiAddress, coin_type: &str) -> Result<ObjectID, Error> {
     let inner: TypeTag = coin_type
         .parse()

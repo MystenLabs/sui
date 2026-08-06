@@ -1,6 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Fork-aware access to the embedded `sui-rpc-store`.
+//!
+//! Local execution persists nothing until a checkpoint seals. Execution stages transactions,
+//! effects, events, and object diffs in memory, and [`LocalStore::seal_checkpoint`] commits every
+//! canonical row (object versions, tombstones, checkpoint-pinned versions, checkpoint summary and
+//! contents, and transaction data) in one atomic batch, so a crash leaves either the whole
+//! checkpoint or none of it. Derived indexes (owner, type, package-version, balance, bitmaps) are
+//! written by the embedded indexer alone from the sealed rows, and checkpoint publication blocks
+//! until it catches up, so RPC reads issued after an execution returns see fully indexed state.
+//!
+//! The one-shot seed load is the exception. It runs at fork creation, before anything executes,
+//! and writes the raw rows and the whole derived-index surface synchronously, because the indexer
+//! only processes post-fork checkpoints and never sees the pre-fork state the seed establishes.
+//! Remote-truth writes (pre-fork checkpoints and transactions fetched on demand) also commit
+//! eagerly in their own batches, since they mirror data another chain already finalized.
+
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::sync::Arc;
@@ -55,19 +71,17 @@ use crate::services::FORK_INDEXER_PIPELINES;
 
 /// Synthetic pipeline key recording that the one-shot seed load committed.
 ///
-/// It lives in the framework's `__restore` column family, which is the right
-/// shape for the claim — "this bulk-load finished at this checkpoint" — and is
-/// the only framework CF nothing reads by iteration: `restore_in_progress`
-/// walks the named pipeline cohorts, and the indexer reads per-pipeline keys,
-/// so a synthetic key here is invisible to both. The `__watermark` CF would
-/// not do, because the pruner takes a minimum over every row it holds.
+/// It lives in the framework's `__restore` column family, which matches the claim being recorded
+/// ("this bulk-load finished at this checkpoint") and is the only framework CF nothing reads by
+/// iteration. `restore_in_progress` walks the named pipeline cohorts and the indexer reads
+/// per-pipeline keys, so a synthetic key here is invisible to both. The `__watermark` CF would not
+/// do, because the pruner takes a minimum over every row it holds.
 const SEED_RESTORE_PIPELINE: &str = "sui_fork_seed";
 
 /// Fork-aware access to the embedded `sui-rpc-store`.
 ///
-/// This type owns no remote-fetch policy. It writes and reads local
-/// `sui-rpc-store` rows in the shapes needed by fork-specific reads and local
-/// execution.
+/// This type owns no remote-fetch policy. It writes and reads local `sui-rpc-store` rows in the
+/// shapes needed by fork-specific reads and local execution.
 #[derive(Clone)]
 pub(crate) struct LocalStore {
     db: Db,
@@ -75,9 +89,9 @@ pub(crate) struct LocalStore {
     reader: RpcStoreReader,
     /// The checkpoint this fork diverged at.
     ///
-    /// Pre-fork objects are materialized lazily from a remote query pinned here,
-    /// so each one is live *as of this checkpoint*. It is also the floor for the
-    /// checkpoint numbering of locally executed checkpoints.
+    /// Pre-fork objects are materialized lazily from a remote query pinned here, so each one is
+    /// live as of this checkpoint. It is also the floor for the checkpoint numbering of locally
+    /// executed checkpoints.
     forked_at_checkpoint: CheckpointSequenceNumber,
 }
 
@@ -90,8 +104,8 @@ pub(crate) struct ObjectRemoval {
 }
 
 impl LocalStore {
-    /// Creates a fork store handle over an already-open `sui-rpc-store` DB and
-    /// schema, anchored at the checkpoint the fork diverged at.
+    /// Create a fork store handle over an already-open `sui-rpc-store` DB and schema, anchored at
+    /// the checkpoint the fork diverged at.
     pub(crate) fn new(
         db: Db,
         schema: Arc<RpcStoreSchema>,
@@ -111,25 +125,20 @@ impl LocalStore {
         }
     }
 
-    /// Returns the cached reader for the local store.
     pub(crate) fn reader(&self) -> &RpcStoreReader {
         &self.reader
     }
 
-    /// Returns the current authoritative local state for an object.
+    /// Return the current authoritative local state for an object.
     ///
-    /// Resolved from the checkpoint-pinned version index, bounded at the
-    /// checkpoint the fork is currently producing. A row there is the fork's
-    /// authority: it was written either by local execution, or by a pre-fork
-    /// materialization that resolved the object as of the fork checkpoint.
-    /// Absence means the fork has no knowledge of the object at all, and the
-    /// caller should consult GraphQL.
-    ///
-    /// The raw `objects` rows cannot answer this. They are sparse — arbitrary
-    /// historical versions are cached on demand — so the greatest row present
-    /// is not necessarily current, and a scan finding nothing cannot separate
-    /// "removed" from "never cached". Reading the version index bounded rather
-    /// than unbounded keeps that same sparseness from mattering here.
+    /// The state resolves from the checkpoint-pinned version index, bounded at the checkpoint the
+    /// fork is currently producing. A row there is the fork's authority, because it was written
+    /// either by local execution or by a pre-fork materialization that resolved the object as of
+    /// the fork checkpoint, and absence means the fork has no knowledge of the object at all, so
+    /// the caller should consult GraphQL. The raw `objects` rows cannot resolve an object's
+    /// current state, because they are sparse from caching arbitrary historical versions on
+    /// demand, so the greatest row present is not necessarily current, and a scan that finds
+    /// nothing cannot separate "removed" from "never cached".
     pub(crate) fn get_latest_object_status(
         &self,
         id: ObjectID,
@@ -141,7 +150,7 @@ impl LocalStore {
         Ok(self.status_at(id, version)?.map(|status| (version, status)))
     }
 
-    /// Returns the local object status at one exact version.
+    /// Return the local object status at one exact version.
     pub(crate) fn get_object_status_at_version(
         &self,
         id: ObjectID,
@@ -150,10 +159,10 @@ impl LocalStore {
         self.status_at(id, version)
     }
 
-    /// Returns the highest local object status at or before `upper_bound`.
+    /// Return the highest local object status at or before `upper_bound`.
     ///
-    /// This is used for bounded historical reads, including child-object reads
-    /// that must not cross the requested root version.
+    /// Bounded historical reads use this, including child-object reads that must not cross the
+    /// requested root version.
     pub(crate) fn get_object_at_or_before(
         &self,
         id: ObjectID,
@@ -162,28 +171,24 @@ impl LocalStore {
         self.highest_status_at_or_before(id, upper_bound)
     }
 
-    /// Saves an object version without changing current live state or indexes.
+    /// Save an object version without changing current live state or indexes.
     ///
-    /// Use this for exact-version and bounded historical reads. The caller must
-    /// choose a live-object write method when the object should become current.
-    /// Deliberately writes no checkpoint-pinned version row. The caller asked
-    /// for one specific version, which is evidence about a point in history and
-    /// none at all about what is live — recording it would let an older version
-    /// win a currency read. See [`Self::get_latest_object_status`].
+    /// Use this for exact-version and bounded historical reads, and choose a live-object write
+    /// method when the object should become current. No checkpoint-pinned version row is written,
+    /// because the caller asked for one specific version, which is evidence about a point in
+    /// history and none at all about what is live, and recording it would let an older version win
+    /// a currency read. See [`Self::get_latest_object_status`].
     pub(crate) fn save_object_version_only(&self, object: &Object) -> anyhow::Result<()> {
         let mut batch = self.db.batch();
         self.stage_object_version(&mut batch, object)?;
         batch.commit().context("failed to save object version")
     }
 
-    /// Writes a checkpoint summary, contents, and digest-to-sequence index in
-    /// its own batch.
+    /// Write a checkpoint summary, contents, and digest-to-sequence index in its own batch.
     ///
-    /// This is the eager path for checkpoints that are remote truth — pre-fork
-    /// rows fetched from the forked-from chain and the fork-point checkpoint
-    /// persisted at startup. Locally sealed checkpoints go through
-    /// [`Self::seal_checkpoint`] instead, which stages the same rows into the
-    /// seal's atomic batch.
+    /// This is the eager path for checkpoints that are remote truth, meaning pre-fork rows fetched
+    /// from the forked-from chain and the fork-point checkpoint persisted at startup. Locally
+    /// sealed checkpoints go through [`Self::seal_checkpoint`] instead.
     pub(crate) fn save_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -194,10 +199,9 @@ impl LocalStore {
         batch.commit().context("failed to persist checkpoint")
     }
 
-    /// Stages a checkpoint summary, contents, and digest-to-sequence index.
+    /// Stage a checkpoint summary, contents, and digest-to-sequence index.
     ///
-    /// The supplied contents must match the content digest recorded in the
-    /// checkpoint summary.
+    /// The supplied contents must match the content digest recorded in the checkpoint summary.
     fn stage_checkpoint(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -229,12 +233,11 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Writes transaction, effects, events, and transaction metadata rows in
-    /// their own batch.
+    /// Write transaction, effects, events, and transaction metadata rows in their own batch.
     ///
-    /// Like [`Self::save_checkpoint`], this is the eager path for pre-fork
-    /// transactions fetched from the forked-from chain; locally executed
-    /// transactions are staged into the seal batch by [`Self::seal_checkpoint`].
+    /// Like [`Self::save_checkpoint`], this is the eager path for pre-fork transactions fetched
+    /// from the forked-from chain. Locally executed transactions are staged into the seal batch by
+    /// [`Self::seal_checkpoint`].
     pub(crate) fn save_transaction(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -255,11 +258,11 @@ impl LocalStore {
         batch.commit().context("failed to persist transaction")
     }
 
-    /// Stages transaction, effects, events, and transaction metadata rows.
+    /// Stage transaction, effects, events, and transaction metadata rows.
     ///
-    /// The transaction must be present in `contents`, and the effects must
-    /// correspond to the same transaction digest. The caller is responsible for
-    /// persisting the containing checkpoint when that is required by readers.
+    /// The transaction must be present in `contents`, and the effects must correspond to the same
+    /// transaction digest. The caller is responsible for persisting the containing checkpoint when
+    /// readers require it.
     fn stage_transaction(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -335,10 +338,10 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Looks up checkpoint contents by their content digest.
+    /// Look up checkpoint contents by their content digest.
     ///
-    /// `sui-rpc-store` indexes checkpoint summaries by checkpoint digest, so
-    /// content-digest lookup scans local checkpoint summaries.
+    /// `sui-rpc-store` indexes checkpoint summaries by checkpoint digest, so a content-digest
+    /// lookup scans local checkpoint summaries.
     pub(crate) fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -359,7 +362,7 @@ impl LocalStore {
         Ok(None)
     }
 
-    /// Returns the highest checkpoint sequence persisted in the local store.
+    /// Return the highest checkpoint sequence persisted in the local store.
     pub(crate) fn highest_checkpoint_sequence(
         &self,
     ) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
@@ -370,16 +373,15 @@ impl LocalStore {
         Ok(Some(sequence))
     }
 
-    /// The checkpoint that in-flight local execution is producing.
+    /// Return the checkpoint that in-flight local execution is producing.
     ///
-    /// This is the upper bound for currency reads over the checkpoint-pinned
-    /// version index: persisted rows only ever sit at or below the highest
-    /// sealed checkpoint, so bounding here includes all of them. It is always
-    /// one past the highest persisted checkpoint: sealing is serialized by the
-    /// publication lock so only one checkpoint is ever in flight, and the fork
-    /// produces nothing at or below the checkpoint it diverged at. The seal
-    /// keys each staged diff at the sealed checkpoint's own sequence number,
-    /// which equals this value at the moment of sealing.
+    /// This is the upper bound for currency reads over the checkpoint-pinned version index, and it
+    /// covers every persisted row, since those only ever sit at or below the highest sealed
+    /// checkpoint. It is always one past the highest persisted checkpoint, because sealing is
+    /// serialized by the publication lock so only one checkpoint is ever in flight, and the fork
+    /// produces nothing at or below the checkpoint it diverged at. The seal keys each staged diff
+    /// at the sealed checkpoint's own sequence number, which equals this value at the moment of
+    /// sealing.
     fn executing_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
         let highest = self
             .highest_checkpoint_sequence()?
@@ -388,11 +390,10 @@ impl LocalStore {
         Ok(highest + 1)
     }
 
-    /// Saves an object fetched from the remote chain as current local state if allowed.
+    /// Save an object fetched from the remote chain as current local state if allowed.
     ///
-    /// This records the object row and only claims currency for it when the local
-    /// store has no newer live version and no tombstone. It does not populate
-    /// owner, type, or balance indexes.
+    /// The object row is always written, and currency is claimed only when the local store has no
+    /// newer live version and no tombstone. Owner, type, and balance indexes stay untouched.
     pub(crate) fn save_live_object_if_current(&self, object: &Object) -> anyhow::Result<()> {
         let update_live_pointer = match self.get_latest_object_status(object.id())? {
             None => true,
@@ -412,12 +413,12 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Whether the one-shot seed load has already committed.
+    /// Report whether the one-shot seed load has already committed.
     ///
-    /// The seed load must run exactly once over the lifetime of a fork
-    /// directory: `Balance` writes through a merge operator, so replaying it
-    /// would double-count every seeded coin. This marker is written inside the
-    /// load's own batch, so it is set if and only if that batch landed.
+    /// The seed load must run exactly once over the lifetime of a fork directory, because
+    /// `Balance` writes through a merge operator and replaying it would double-count every seeded
+    /// coin. The marker is written inside the load's own batch, so it is set if and only if that
+    /// batch landed.
     pub(crate) fn seed_load_complete(&self) -> anyhow::Result<bool> {
         let state = FrameworkSchema::new(self.db.clone())
             .restore
@@ -427,20 +428,16 @@ impl LocalStore {
             .is_some_and(|state| matches!(state.state, Some(restore_state::State::Complete(_)))))
     }
 
-    /// Bulk-loads the fork's seed objects and every index `sui-rpc-store`
-    /// derives from them, in one atomic batch.
+    /// Bulk-load the fork's seed objects and every index `sui-rpc-store` derives from them, in one
+    /// atomic batch.
     ///
-    /// This is the fork's whole pre-fork index surface. The enumerations that
-    /// produced `objects` are checkpoint-pinned and cannot be re-run once the
-    /// fork has diverged, so the load happens once, at fork creation, before
-    /// anything has executed. That ordering is what lets it write blind: there
-    /// is no existing live state to reconcile against, no stale index rows to
-    /// retract, and no balance contribution to reverse.
-    ///
-    /// Atomicity is the idempotence guard. Committing the completion marker
-    /// with the rows means a crash either leaves the fork with the whole seed
-    /// set or with none of it, and a restart can tell which without inspecting
-    /// the rows themselves.
+    /// This is the fork's whole pre-fork index surface. The enumerations that produced `objects`
+    /// are checkpoint-pinned and cannot be re-run once the fork has diverged, so the load happens
+    /// once, at fork creation, before anything has executed, and that ordering is what lets it
+    /// write blind, with no existing live state to reconcile against, no stale index rows to
+    /// retract, and no balance contribution to reverse. Committing the completion marker in the
+    /// same batch makes the load unrepeatable, since a crash either leaves the fork with the whole
+    /// seed set or with none of it, and a restart can tell which without inspecting the rows.
     pub(crate) fn restore_seed_objects(&self, objects: &[Object]) -> anyhow::Result<()> {
         anyhow::ensure!(
             !self.seed_load_complete()?,
@@ -487,13 +484,13 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Stages every row `sui-rpc-store` derives from one live object: the raw
-    /// object version, the owner, type, balance and package-version indexes,
-    /// and the checkpoint-pinned live-state row at the fork point.
+    /// Stage every row `sui-rpc-store` derives from one live object, covering the raw object
+    /// version, the owner, type, balance and package-version indexes, and the checkpoint-pinned
+    /// live-state row at the fork point.
     ///
-    /// This is the same pipeline set a snapshot restore registers, which is the
-    /// point — the derived-index surface comes from the stock `Restore` impls
-    /// rather than from anything this crate maintains itself.
+    /// This is deliberately the same pipeline set a snapshot restore registers, so the
+    /// derived-index surface comes from the stock `Restore` impls rather than from anything this
+    /// crate maintains itself.
     fn stage_restored_object(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -508,31 +505,15 @@ impl LocalStore {
         self.stage_restored_object_version(batch, object)
     }
 
-    /// Stages local execution object writes and removals into the raw
-    /// `objects` CF and the checkpoint-pinned version index, keyed at
-    /// `checkpoint` — the sealed checkpoint that contains them.
+    /// Stage local execution object writes and removals into the raw `objects` CF and the
+    /// checkpoint-pinned version index, keyed at `checkpoint`, the sealed checkpoint that contains
+    /// them.
     ///
-    /// Write-path contract: local execution persists nothing until seal.
-    /// Canonical data — object version rows, tombstones, their
-    /// checkpoint-pinned versions, and checkpoint/transaction/effects/events
-    /// rows — commits in [`Self::seal_checkpoint`]'s single batch, so a crash
-    /// leaves either the whole checkpoint or none of it. Until then the
-    /// executor's read-your-writes come from the pending overlay
-    /// (`PendingCheckpointBuffer`), which mirrors these rows. All *derived*
-    /// indexes (owner, type, package-version, balance, bitmaps) are written by
-    /// the indexer alone from the sealed rows, and checkpoint publication
-    /// blocks on `ServiceManager::wait_for_indexed_checkpoint`, so RPC reads
-    /// issued after an execution returns always see fully indexed state. The
-    /// one-shot seed load still writes derived indexes synchronously, because
-    /// the indexer only processes post-fork checkpoints and so never sees the
-    /// pre-fork state the seed establishes.
-    ///
-    /// When the same result both removes and writes an object (e.g. wrapped
-    /// then written again), the write wins and the object stays current; an
-    /// object created and terminally deleted in the same result is kept only
-    /// as a historical row. `PendingCheckpointBuffer::record_object_diff`
-    /// mirrors these rules — the overlay must answer exactly what these rows
-    /// will say once committed.
+    /// When the same result both removes and writes an object (e.g. wrapped then written again),
+    /// the write wins and the object stays current, while an object created and terminally deleted
+    /// in the same result is kept only as a historical row.
+    /// `PendingCheckpointBuffer::record_object_diff` follows the same rules, so overlay reads
+    /// match what these rows will say once committed.
     pub(crate) fn stage_local_object_diff(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -582,15 +563,13 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Seals one locally produced checkpoint atomically: every staged object
-    /// diff, the checkpoint summary and contents, and every staged transaction
-    /// commit in a single batch.
+    /// Seal one locally produced checkpoint atomically, committing every staged object diff, the
+    /// checkpoint summary and contents, and every staged transaction in a single batch.
     ///
-    /// This is the fork's only durability point for locally executed state.
-    /// Committing everything together is what makes a crash recoverable
-    /// without inspection: either the checkpoint exists with all of its rows,
-    /// or nothing was written and a restart resumes from the previous tip with
-    /// only in-memory loss.
+    /// This is the fork's only durability point for locally executed state. Committing everything
+    /// together makes a crash recoverable without inspection, because either the checkpoint exists
+    /// with all of its rows, or nothing was written and a restart resumes from the previous tip
+    /// with only in-memory loss.
     pub(crate) fn seal_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -619,14 +598,14 @@ impl LocalStore {
             .with_context(|| format!("failed to seal checkpoint {sequence}"))
     }
 
-    /// Reads the raw schema status row for one object version.
+    /// Read the raw schema status row for one object version.
     fn status_at(&self, id: ObjectID, version: SequenceNumber) -> anyhow::Result<Option<Status>> {
         self.schema
             .get_object_status_by_key(id, version)
             .map_err(Into::into)
     }
 
-    /// Reads the highest raw status row for an object at or below `upper_bound`.
+    /// Read the highest raw status row for an object at or below `upper_bound`.
     fn highest_status_at_or_before(
         &self,
         id: ObjectID,
@@ -656,7 +635,7 @@ impl LocalStore {
         Ok(Some((key.version, status)))
     }
 
-    /// Stages the object-version row using `sui-rpc-store`'s restore helper.
+    /// Stage the object-version row using `sui-rpc-store`'s restore helper.
     fn stage_object_version(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -665,12 +644,12 @@ impl LocalStore {
         Objects.restore(self.schema.as_ref(), object, batch)
     }
 
-    /// Stages the checkpoint-pinned row recording that `id` ended `checkpoint`
-    /// at `version`, which may be a live version or a tombstone version.
+    /// Stage the checkpoint-pinned row recording that `id` ended `checkpoint` at `version`, which
+    /// may be a live version or a tombstone version.
     ///
-    /// Only locally executed checkpoints may be keyed this way: the row asserts
-    /// that nothing changed the object between `checkpoint` and the next row,
-    /// which holds for the post-fork range because the fork executed all of it.
+    /// Only locally executed checkpoints may be keyed this way. The row asserts that nothing
+    /// changed the object between `checkpoint` and the next row, which holds for the post-fork
+    /// range because the fork executed all of it.
     fn stage_object_version_at_checkpoint(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -683,14 +662,13 @@ impl LocalStore {
         Ok(())
     }
 
-    /// Stages the restore-floor row asserting that the object's version is its
-    /// live version as of the fork checkpoint.
+    /// Stage the restore-floor row asserting that the object's version is its live version as of
+    /// the fork checkpoint.
     ///
-    /// This is the shape a live-set restore writes at its anchor, and it carries
-    /// the same meaning here: the object predates everything the fork executed.
-    /// Callers must have resolved the object from a remote query pinned at the
-    /// fork checkpoint — an exact-version fetch of some older version proves
-    /// nothing about what is live and must not be recorded.
+    /// This is the shape a live-set restore writes at its anchor, and it asserts the same thing
+    /// here, that the object predates everything the fork executed. Callers must have resolved the
+    /// object from a remote query pinned at the fork checkpoint, because an exact-version fetch of
+    /// some older version proves nothing about what is live and must not be recorded.
     fn stage_restored_object_version(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -703,7 +681,6 @@ impl LocalStore {
         )
     }
 
-    /// Stages the package-version lookup row for a Move package.
     fn stage_package_version(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -730,8 +707,8 @@ mod tests {
 
     use super::*;
 
-    /// Non-zero so that rows written at the fork checkpoint are distinguishable
-    /// from the `(id, 0)` synthetic floor the indexer writes.
+    /// Non-zero so that rows written at the fork checkpoint are distinguishable from the `(id, 0)`
+    /// synthetic floor the indexer writes.
     const TEST_FORK_CHECKPOINT: CheckpointSequenceNumber = 100;
 
     fn fresh_store() -> (tempfile::TempDir, LocalStore) {
@@ -756,9 +733,9 @@ mod tests {
         .into()
     }
 
-    /// Stage-and-commit shorthand standing in for the production seal: one
-    /// diff, one batch, keyed at the executing checkpoint — which is exactly
-    /// the sealed checkpoint's sequence number at the moment a real seal runs.
+    /// Stage-and-commit shorthand standing in for the production seal. It stages a single diff
+    /// into a single batch keyed at the executing checkpoint, which is exactly the sealed
+    /// checkpoint's sequence number at the moment a real seal runs.
     fn apply_diff(
         store: &LocalStore,
         written: &BTreeMap<ObjectID, Object>,
@@ -795,15 +772,14 @@ mod tests {
         );
     }
 
-    /// A version-keyed fetch is evidence about one point in history and says
-    /// nothing about what is live, so it must not disturb authority already
-    /// established for the object. Recording such a fetch in the version index
-    /// — at the fork checkpoint, or at the checkpoint the version was created
-    /// in — would make this read resolve to the older version.
+    /// A version-keyed fetch is evidence about one point in history and says nothing about what is
+    /// live, so it must not disturb authority already established for the object. Recording such a
+    /// fetch in the version index, whether at the fork checkpoint or at the checkpoint the version
+    /// was created in, would make this read resolve to the older version.
     ///
-    /// This is the case system packages make reachable: an upgraded user
-    /// package lives under a fresh object id, but `0x2` and friends carry every
-    /// version they have ever had under one id.
+    /// System packages are what make the scenario reachable, since an upgraded user package lives
+    /// under a fresh object id while `0x2` and friends carry every version they have ever had
+    /// under one id.
     #[test]
     fn exact_version_fetch_does_not_displace_established_currency() {
         let (_dir, store) = fresh_store();
@@ -828,10 +804,9 @@ mod tests {
         );
     }
 
-    /// Pre-fork materialization claims currency *as of the fork checkpoint*, so
-    /// its row belongs at that checkpoint and nowhere else: a row above it
-    /// would outrank locally executed checkpoints, and one below would lose to
-    /// the indexer's synthetic floors.
+    /// Pre-fork materialization claims currency as of the fork checkpoint, so its row belongs at
+    /// that checkpoint and nowhere else. A row above it would outrank locally executed
+    /// checkpoints, and one below would lose to the indexer's synthetic floors.
     #[test]
     fn pre_fork_materialization_is_recorded_at_the_fork_checkpoint() {
         let (_dir, store) = fresh_store();
@@ -849,9 +824,8 @@ mod tests {
         assert_eq!(rows, vec![TEST_FORK_CHECKPOINT]);
     }
 
-    /// Locally executed changes are keyed by the checkpoint sealing them.
-    /// Getting that wrong is silent: the row still resolves, just at the wrong
-    /// point in history.
+    /// Locally executed changes are keyed by the checkpoint sealing them. Getting that wrong is
+    /// silent, because the row still resolves, just at the wrong point in history.
     #[test]
     fn local_execution_is_recorded_at_the_executing_checkpoint() {
         let (_dir, store) = fresh_store();
@@ -923,9 +897,8 @@ mod tests {
         );
     }
 
-    /// The point of routing the seed load through the stock `Restore` impls:
-    /// one call has to produce the whole derived-index surface, not just the
-    /// raw object row.
+    /// Routing the seed load through the stock `Restore` impls means one call produces the whole
+    /// derived-index surface together with the raw object row.
     #[test]
     fn seed_load_writes_every_derived_index() {
         let (_dir, store) = fresh_store();
@@ -981,9 +954,9 @@ mod tests {
         assert_eq!(rows, vec![TEST_FORK_CHECKPOINT]);
     }
 
-    /// `Balance` accumulates through a merge operator, so a replayed seed load
-    /// would silently double every seeded coin. The completion marker commits
-    /// with the rows precisely so that a second attempt cannot get that far.
+    /// `Balance` accumulates through a merge operator, so a replayed seed load would silently
+    /// double every seeded coin. The completion marker commits with the rows precisely so that a
+    /// second attempt cannot get that far.
     #[test]
     fn seed_load_refuses_to_run_twice() {
         let (_dir, store) = fresh_store();
@@ -1010,8 +983,8 @@ mod tests {
         );
     }
 
-    /// The marker lives in the database, not in a JSON sidecar, so that it
-    /// commits atomically with the rows it describes and survives reopen.
+    /// The marker lives in the database rather than in a JSON sidecar, so that it commits
+    /// atomically with the rows it describes and survives reopen.
     #[test]
     fn seed_load_marker_survives_reopen() {
         let (dir, store) = fresh_store();
@@ -1021,13 +994,13 @@ mod tests {
         assert!(reopen_store(&dir).seed_load_complete().unwrap());
     }
 
-    /// The seed load is a restore, and a restore without watermarks leaves
-    /// every reader unable to say through which checkpoint the indexes hold.
+    /// The seed load is a restore, and a restore without watermarks leaves every reader unable to
+    /// say through which checkpoint the indexes hold.
     ///
-    /// `min_committed` reports `None` if any pipeline in the reader's set lacks
-    /// a watermark, and the RPC layer turns that into "rpc index is empty" for
-    /// every ledger read. So a fork must answer with its own checkpoint from
-    /// the moment the seed commits, before the embedded indexer has run at all.
+    /// `min_committed` reports `None` if any pipeline in the reader's set lacks a watermark, and
+    /// the RPC layer turns that into "rpc index is empty" for every ledger read. So a fork must
+    /// report its own checkpoint as the indexed tip from the moment the seed commits, before the
+    /// embedded indexer has run at all.
     #[test]
     fn seed_load_reports_the_fork_checkpoint_as_the_indexed_tip() {
         let (_dir, store) = fresh_store();
@@ -1150,11 +1123,10 @@ mod tests {
         );
     }
 
-    /// The seed load writes blind — no reconciliation against existing state —
-    /// which is only safe because it runs before the fork executes anything.
-    /// What keeps a seeded object from outliving its own history afterwards is
-    /// the checkpoint ordering: the seed's floor row sits at the fork
-    /// checkpoint, so the first locally executed checkpoint outranks it.
+    /// The seed load writes blind, with no reconciliation against existing state, which is only
+    /// safe because it runs before the fork executes anything. What keeps a seeded object from
+    /// outliving its own history afterwards is the checkpoint ordering, since the seed's floor row
+    /// sits at the fork checkpoint and the first locally executed checkpoint outranks it.
     #[test]
     fn local_execution_supersedes_a_seeded_object() {
         let (_dir, store) = fresh_store();

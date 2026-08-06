@@ -3,9 +3,8 @@
 
 //! Network node configuration for Sui data stores.
 //!
-//! Defines the [`Node`] enum for specifying which Sui network to connect to
-//! (mainnet, testnet, devnet, or custom) and provides URL resolution for both
-//! GraphQL and gRPC endpoints.
+//! Defines the [`Node`] enum for specifying which Sui network to connect to (mainnet, testnet,
+//! devnet, or custom) and provides URL resolution for both GraphQL and gRPC endpoints.
 
 use std::str::FromStr;
 

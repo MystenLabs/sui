@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end execution tests: build a `Simulacrum<OsRng, ForkStore>` over a
-//! tempdir-backed fork store, execute transactions, and assert the resulting
-//! state is saved. Wired via `#[cfg(test)] #[path]` in
-//! `store.rs`, so `super::*` resolves into the `store` module.
+//! End-to-end execution tests. They build a `Simulacrum<OsRng, ForkStore>` over a tempdir-backed
+//! fork store, execute transactions, and assert the resulting state is saved. Wired via
+//! `#[cfg(test)] #[path]` in `store.rs`, so `super::*` resolves into the `store` module.
 
 use std::num::NonZeroUsize;
 use std::path::Path;
@@ -55,13 +54,12 @@ use crate::seed::load_seed_objects;
 use crate::services::ServiceManager;
 
 /// Build a `Simulacrum<OsRng, ForkStore>` from a fresh genesis NetworkConfig.
-/// The ForkStore's local metadata and RPC store live in the returned tempdir;
-/// its remote endpoint is fake and never called. Genesis objects are populated
-/// directly via `update_objects` to avoid touching the `init_with_genesis`
-/// checkpoint/committee paths (which are still `todo!()`).
 ///
-/// Returns the simulacrum, the underlying NetworkConfig (so tests can find
-/// genesis objects and account keys), and the tempdir guarding the local store.
+/// The ForkStore's local metadata and RPC store live in the returned tempdir, and its remote
+/// endpoint is fake and never called. Genesis objects are populated directly via `update_objects`
+/// to avoid touching the `init_with_genesis` checkpoint and committee paths (which are still
+/// `todo!()`). Returns the simulacrum, the underlying NetworkConfig (so tests can find genesis
+/// objects and account keys), and the tempdir guarding the local store.
 async fn test_simulacrum() -> (
     Simulacrum<OsRng, ForkStore>,
     NetworkConfig,
@@ -301,12 +299,12 @@ fn test_rpc_store_tombstone_blocks_remote_current_fallback() {
     );
 }
 
-/// Index reads are answered from the seed load and local execution alone.
+/// Index reads resolve from the seed load and local execution alone.
 ///
-/// An owner, parent, or coin type outside the seed set reads as empty — the
-/// checkpoint-pinned enumeration that could answer it belongs to fork creation
-/// and is not re-runnable at read time. The endpoint here is deliberately
-/// unreachable, so these calls only succeed because no remote scan is attempted.
+/// An owner, parent, or coin type outside the seed set reads as empty, because the
+/// checkpoint-pinned enumeration that could resolve it belongs to fork creation and cannot be
+/// re-run at read time. The endpoint here is deliberately unreachable, so these calls only succeed
+/// because no remote scan is attempted.
 #[tokio::test]
 async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
