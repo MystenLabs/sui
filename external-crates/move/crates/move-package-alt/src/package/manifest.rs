@@ -77,6 +77,12 @@ pub enum ManifestErrorKind {
     OnChainReplacementWithoutAddress { name: PackageName },
 
     #[error(
+        "On-chain dependency `{name}` cannot specify `use-environment`. On-chain packages \
+         use a fixed environment."
+    )]
+    OnChainWithUseEnvironment { name: PackageName },
+
+    #[error(
         "On-chain dependency `{name}` requires an address. Add a `[dep-replacements]` entry \
          with `on-chain = \"0x...\"`."
     )]

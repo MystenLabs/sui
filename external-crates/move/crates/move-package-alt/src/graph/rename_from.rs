@@ -76,6 +76,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
         for edge in self.inner.edges(self.root_index) {
             let dep = &edge.weight();
 
+            // On-chain packages have synthetic names, so skip the rename check
+            if dep.pinned().is_on_chain() {
+                continue;
+            }
+
             let target_pkg = self.inner[edge.target()].clone();
             let local_dep_name = dep.name().to_string();
             let actual_dep_name = target_pkg.name().to_string();
