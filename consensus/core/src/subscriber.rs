@@ -523,8 +523,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // Only rounds past the admission window top go
                                 // uncredited: those are the unbackable claims the
                                 // monotonic tracker must not advertise.
-                                let credit_top =
-                                    tip.saturating_add(context.protocol_config.gc_depth());
+                                // Mirrors the admission window top exactly, so the
+                                // credit and refusal boundaries cannot drift apart.
+                                let credit_top = tip.saturating_add(
+                                    (context.parameters.dag_state_cached_rounds as Round)
+                                        .max(2 * context.protocol_config.gc_depth()),
+                                );
                                 if block_ref.round <= credit_top {
                                     round_tracker
                                         .write()

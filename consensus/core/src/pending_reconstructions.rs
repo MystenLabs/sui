@@ -38,14 +38,18 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{block::Slot, context::Context};
 
 /// Admission window: above `gc_round` (below it the claim is already obsolete) and
-/// at most one GC depth above the LOCAL accept frontier. Anchoring the top to the
-/// frontier rather than to `gc_round` matters at bootstrap and under commit lag,
-/// where the frontier runs arbitrarily far ahead of GC and a gc-anchored top would
-/// refuse every live block. The frontier anchor alone does not bound the entry
-/// count when commits stall (the frontier keeps moving while GC does not), so an
-/// explicit entry cap supplies the bound the window no longer proves.
+/// at most the DAG cache depth above the LOCAL accept frontier. The frontier anchor
+/// matters at bootstrap and under commit lag, where the frontier runs arbitrarily
+/// far ahead of GC and a gc-anchored top would refuse every live block. The width
+/// matters for persistently lagging receivers: a fleet reliably carries nodes
+/// hundreds of rounds behind, and a window narrower than that lag turns their whole
+/// live stream into refusal/reset churn, where parking quietly costs a few KB per
+/// block until commit sync supersedes it. The cache depth is the natural top —
+/// beyond it the receiver could not resolve the claim's ancestors anyway — and the
+/// entry and byte caps supply the bounds the window itself does not prove.
 fn window_width(context: &Context) -> Round {
-    context.protocol_config.gc_depth()
+    (context.parameters.dag_state_cached_rounds as Round)
+        .max(2 * context.protocol_config.gc_depth())
 }
 
 /// Hard cap on resident entries: four GC windows of one-per-slot occupancy. Honest
