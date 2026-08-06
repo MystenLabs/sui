@@ -143,6 +143,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
+    pub(crate) block_proposal_leader_missing_count: IntCounterVec,
     pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
@@ -153,6 +154,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) priority_submission_backpressure: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
+    pub(crate) core_certified_commits_processed: IntCounterVec,
     pub(crate) handler_received_block_missing_ancestors: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
@@ -203,6 +205,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) leader_schedule_normalized_scores: GaugeVec,
     pub(crate) leader_schedule_last_num_leaders: IntGauge,
     pub(crate) leader_schedule_average_num_leaders: Gauge,
+    pub(crate) leader_schedule_allowed_leader_count: IntCounterVec,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -372,6 +375,12 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            block_proposal_leader_missing_count: register_int_counter_vec_with_registry!(
+                "block_proposal_leader_missing_count",
+                "Per-leader count of proposals where the leader's slot was expected but absent in the local DAG at proposal time (force-true / timeout path).",
+                &["authority"],
+                registry,
+            ).unwrap(),
             block_timestamp_drift_ms: register_int_counter_vec_with_registry!(
                 "block_timestamp_drift_ms",
                 "The clock drift time between a received block and the current node's time.",
@@ -426,6 +435,12 @@ impl NodeMetrics {
                 "core_skipped_proposals",
                 "Number of proposals skipped in the Core, per reason",
                 &["reason"],
+                registry,
+            ).unwrap(),
+            core_certified_commits_processed: register_int_counter_vec_with_registry!(
+                "core_certified_commits_processed",
+                "Number of certified commits processed by the Core",
+                &["result"],
                 registry,
             ).unwrap(),
             handler_received_block_missing_ancestors: register_int_counter_vec_with_registry!(
@@ -591,7 +606,7 @@ impl NodeMetrics {
             ).unwrap(),
             committed_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
-                "Total number of (direct or indirect) committed leaders per authority",
+                "Total number of decided leaders per authority. The `commit_type` label is `\"{decision}-{status}\"`: decision is direct/indirect/certified; status is commit/skip. Note `certified-skip` does not occur — certified commits carry only committed leader-round blocks.",
                 &["authority", "commit_type"],
                 registry,
             ).unwrap(),
@@ -709,6 +724,12 @@ impl NodeMetrics {
             leader_schedule_average_num_leaders: register_gauge_with_registry!(
                 "leader_schedule_average_num_leaders",
                 "LeaderScheduleV3 moving average of the number of leaders per commit across the scoring window",
+                registry,
+            ).unwrap(),
+            leader_schedule_allowed_leader_count: register_int_counter_vec_with_registry!(
+                "leader_schedule_allowed_leader_count",
+                "LeaderScheduleV3 per-authority count of times the authority is included in the `allowed_leaders` set computed after a commit (one increment per commit per included authority).",
+                &["authority"],
                 registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(
