@@ -13,6 +13,7 @@ mod flavor;
 mod graph;
 mod logging;
 mod package;
+pub mod stubs;
 
 pub mod git;
 pub mod schema;
