@@ -14,8 +14,8 @@ use std::{
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use itertools::Itertools as _;
-use mysten_common::{ZipDebugEqIteratorExt, sync::notify_read::NotifyRead};
-use tokio::{sync::watch, time::Instant};
+use mysten_common::ZipDebugEqIteratorExt;
+use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
 
 use crate::{
@@ -27,6 +27,7 @@ use crate::{
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
+    pending_reconstructions::{AcceptanceEffects, ReconstructionHook},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
     threshold_clock::ThresholdClock,
@@ -115,16 +116,10 @@ pub struct DagState {
     // Notified under the DagState write lock, after the slot is readable via
     // `get_uncommitted_blocks_at_slot`, so waiters can register-then-recheck
     // without missing an acceptance.
-    accepted_slots: Arc<NotifyRead<Slot, ()>>,
-
-    // Wakes waiters registered on an exact block reference on its first acceptance.
-    // Separate from the slot notifier so a waiter for one specific block is not
-    // woken by every equivocating sibling accepted into the same slot.
-    accepted_refs: Arc<NotifyRead<BlockRef, ()>>,
-
-    // Publishes GC round advancement, as a terminal wake for slot waiters whose
-    // slot can no longer be filled.
-    gc_round_sender: watch::Sender<Round>,
+    /// Parking hook: consulted on every acceptance and GC advance so parked
+    /// minimal blocks are unblocked by the same choke point that unblocks
+    /// suspended full blocks. None on observers and before wiring.
+    reconstruction_hook: Option<ReconstructionHook>,
 }
 
 impl DagState {
@@ -203,11 +198,8 @@ impl DagState {
             store: store.clone(),
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
-            accepted_slots: Arc::new(NotifyRead::new()),
-            accepted_refs: Arc::new(NotifyRead::new()),
-            gc_round_sender: watch::channel(0).0,
+            reconstruction_hook: None,
         };
-        state.publish_gc_round();
 
         let mut recovered_blocks = Vec::new();
         for (authority_index, _) in context.committee.authorities() {
@@ -368,10 +360,19 @@ impl DagState {
             .with_label_values(&[source])
             .inc();
 
-        // Must stay last: waiters that observed an empty slot before this point are
-        // woken only here, and the duplicate early-return above must not re-notify.
-        self.accepted_refs.notify(&block_ref, &());
-        self.accepted_slots.notify(&Slot::from(block_ref), &());
+        // Must stay last: the pending_reconstructions index may hand out entries for reconstruction
+        // the moment their final slot fills, and by this point the block is readable
+        // by the reconstruction worker. The duplicate early-return above must not
+        // re-fire the hook.
+        if let Some(hook) = &self.reconstruction_hook {
+            let effects = hook
+                .pending_reconstructions
+                .lock()
+                .on_blocks_accepted(&[block_ref]);
+            if !effects.is_empty() {
+                let _ = hook.effects.send(effects);
+            }
+        }
     }
 
     /// Updates internal metadata for a block.
@@ -1112,9 +1113,21 @@ impl DagState {
         self.pending_commit_votes.push_back(commit.reference());
         self.commits_to_write.push(commit);
 
-        // After `last_commit` is set, the advanced GC round is observable by readers,
-        // so it is safe to wake slot waiters that need to give up on GC'ed slots.
-        self.publish_gc_round();
+        // After `last_commit` is set, the advanced GC round is observable by
+        // readers, so parked entries below it can be swept: obsolete claims drop,
+        // and entries whose frontier died route to the exact-fetch lane.
+        if let Some(hook) = &self.reconstruction_hook {
+            let gc_round = self.gc_round();
+            let local_round = self.highest_accepted_round();
+            let mut effects = AcceptanceEffects::default();
+            effects.frontier_dead = hook
+                .pending_reconstructions
+                .lock()
+                .on_gc(gc_round, local_round);
+            if !effects.is_empty() {
+                let _ = hook.effects.send(effects);
+            }
+        }
     }
 
     /// Recovers commits to write from storage, at startup.
@@ -1229,29 +1242,10 @@ impl DagState {
         commit_round.saturating_sub(self.context.protocol_config.gc_depth())
     }
 
-    /// Notifier waking registrants of a slot when a block is first accepted into it.
-    /// Used by minimal-block recovery to wait for missing ancestor slots.
-    pub(crate) fn accepted_slot_notifier(&self) -> Arc<NotifyRead<Slot, ()>> {
-        self.accepted_slots.clone()
-    }
-
-    /// Notifier waking registrants of one exact block reference on its acceptance.
-    /// Used by minimal-block recovery to detect that the very block it is trying to
-    /// reconstruct arrived through another path (typically full-form replay).
-    pub(crate) fn accepted_ref_notifier(&self) -> Arc<NotifyRead<BlockRef, ()>> {
-        self.accepted_refs.clone()
-    }
-
-    /// Watches GC round advancement; slot waiters use this as a terminal wake.
-    pub(crate) fn gc_round_receiver(&self) -> watch::Receiver<Round> {
-        self.gc_round_sender.subscribe()
-    }
-
-    fn publish_gc_round(&self) {
-        let gc_round = self.gc_round();
-        if *self.gc_round_sender.borrow() != gc_round {
-            self.gc_round_sender.send_replace(gc_round);
-        }
+    /// Wires the minimal-block pending_reconstructions hook; called once at startup on
+    /// validators. Observers never set it.
+    pub(crate) fn set_reconstruction_hook(&mut self, hook: ReconstructionHook) {
+        self.reconstruction_hook = Some(hook);
     }
 
     /// Flushes unpersisted blocks, commits and commit info to storage.
@@ -1446,7 +1440,6 @@ impl DagState {
     pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
         self.last_commit = Some(commit);
         // Keep the GC watch consistent with production `add_commit` behavior.
-        self.publish_gc_round();
     }
 }
 

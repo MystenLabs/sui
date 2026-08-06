@@ -13,7 +13,7 @@ use futures::StreamExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::{Mutex, RwLock};
 use tokio::{
-    task::{JoinHandle, JoinSet},
+    task::JoinHandle,
     time::{sleep, timeout},
 };
 use tracing::{debug, error, info};
@@ -24,18 +24,15 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    minimal_block::max_minimal_size,
     minimal_block::{FallbackReason, InflateError},
-    minimal_block_receive::{
-        MissingBlockRegistry, RecoveryQuotas, admission_charge, max_minimal_size,
-        recover_minimal_block,
-    },
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
+    pending_reconstructions::{
+        MissingBlockRegistry, PendingReconstructions, ReconstructionHook, run_reconstruction_worker,
+    },
     round_tracker::RoundTracker,
     task::{join_and_propagate_panic, reap_finished_task},
 };
-
-#[cfg(test)]
-use crate::minimal_block_receive::RecoveryLimits;
 
 /// Bounds both establishing a subscription and waiting for the next block on it, so the
 /// subscription is abandoned and retried when either makes no progress for this long. A healthy
@@ -92,12 +89,13 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
     block_inflater: Arc<BlockInflater>,
-    recovery_quotas: Arc<RecoveryQuotas>,
+    pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
     missing_block_registry: Arc<dyn MissingBlockRegistry>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    reconstruction_worker: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
@@ -109,31 +107,57 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
     ) -> Self {
+        let pending_reconstructions =
+            Arc::new(Mutex::new(PendingReconstructions::new(context.clone())));
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
         let block_inflater = Arc::new(BlockInflater::new(context.clone()));
-        let recovery_quotas = RecoveryQuotas::new(context.clone());
+
+        // Wire the acceptance/GC hooks and start the reconstruction worker. The
+        // subscriber is the receive side's owner, constructed once per validator,
+        // so the hook is registered here rather than threading a constructor
+        // parameter through Core.
+        missing_block_registry
+            .install_pending_slot_floor(pending_reconstructions.lock().slot_floor());
+        let (effects_tx, effects_rx) = tokio::sync::mpsc::unbounded_channel();
+        dag_state
+            .write()
+            .set_reconstruction_hook(ReconstructionHook {
+                pending_reconstructions: pending_reconstructions.clone(),
+                effects: effects_tx,
+            });
+        // spawn_monitored_task! wraps its body in an async-move coroutine, so the
+        // captures are prepared outside it.
+        let worker_context = context.clone();
+        let worker_inflater = block_inflater.clone();
+        let worker_dag_state = Arc::downgrade(&dag_state);
+        let worker_registry = missing_block_registry.clone();
+        let worker_service = Arc::downgrade(&authority_service);
+        let worker_pending = pending_reconstructions.clone();
+        let reconstruction_worker = spawn_monitored_task!(run_reconstruction_worker(
+            worker_context,
+            worker_inflater,
+            worker_dag_state,
+            worker_registry,
+            worker_service,
+            worker_pending,
+            effects_rx,
+        ));
+
         Self {
             context,
             network_client,
             authority_service,
             dag_state,
             block_inflater,
-            recovery_quotas,
+            pending_reconstructions,
             missing_block_registry,
             round_tracker,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
+            reconstruction_worker: Mutex::new(Some(reconstruction_worker)),
         }
-    }
-
-    /// Replaces the recovery quotas with test-controlled limits. Must be called before
-    /// any subscribe(): running tasks keep permits from the quotas they started with.
-    #[cfg(test)]
-    pub(crate) fn with_recovery_limits(mut self, limits: RecoveryLimits) -> Self {
-        self.recovery_quotas = RecoveryQuotas::with_limits(self.context.clone(), limits);
-        self
     }
 
     pub(crate) fn subscribe(&self, peer: AuthorityIndex) {
@@ -148,7 +172,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let authority_service = Arc::downgrade(&self.authority_service);
         let dag_state = Arc::downgrade(&self.dag_state);
         let block_inflater = self.block_inflater.clone();
-        let recovery_quotas = self.recovery_quotas.clone();
+        let pending_reconstructions = self.pending_reconstructions.clone();
         let missing_block_registry = self.missing_block_registry.clone();
         let round_tracker = self.round_tracker.clone();
 
@@ -160,7 +184,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             authority_service,
             dag_state,
             block_inflater,
-            recovery_quotas,
+            pending_reconstructions,
             missing_block_registry,
             round_tracker,
             peer,
@@ -175,10 +199,10 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             }
         }
 
+        if let Some(worker) = self.reconstruction_worker.lock().take() {
+            worker.abort();
+        }
         // All retired subscriptions have already been aborted by unsubscribe_locked().
-        // Awaiting them drops each subscription loop's JoinSet, which aborts every
-        // recovery task; the aborted tasks release their permits (and correct the
-        // parked gauges) as the runtime drops them.
         let subscriptions = std::mem::take(&mut *self.retired_subscriptions.lock());
         for subscription in subscriptions {
             join_and_propagate_panic(subscription).await;
@@ -283,7 +307,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         authority_service: Weak<S>,
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
-        recovery_quotas: Arc<RecoveryQuotas>,
+        pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         peer: AuthorityIndex,
@@ -295,11 +319,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             Duration::from_millis(100),
             Duration::from_secs(10),
         );
-
-        // Owned by the subscription LOOP, not one stream instance: recovery tasks
-        // survive stream resets and reconnects, and are aborted (releasing quota
-        // permits and slot registrations) only when the whole loop is dropped.
-        let mut recoveries: JoinSet<()> = JoinSet::new();
 
         let peer_hostname = &context.committee.authority(peer).hostname;
         let mut retries: i64 = 0;
@@ -403,24 +422,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
             let mut malformed_blocks: u32 = 0;
             'stream: loop {
-                // Reap completed recovery tasks even while the stream is idle — a
-                // parked task's panic must surface like any other consensus task's,
-                // not sit unobserved until the next block arrives. (The simulator's
-                // patched tokio has no try_join_next; select over join_next covers
-                // both needs.)
-                let next = tokio::select! {
-                    result = recoveries.join_next(), if !recoveries.is_empty() => {
-                        if let Some(Err(error)) = result
-                            && error.is_panic()
-                        {
-                            std::panic::resume_unwind(error.into_panic());
-                        }
-                        continue 'stream;
-                    }
-                    // Bound waiting for the next block: a subscription that stops
-                    // progressing without a transport error is abandoned and retried.
-                    next = timeout(SUBSCRIPTION_TIMEOUT, blocks.next()) => next,
-                };
+                // Bound waiting for the next block: a subscription that stops
+                // progressing without a transport error is abandoned and retried.
+                let next = timeout(SUBSCRIPTION_TIMEOUT, blocks.next()).await;
                 match next {
                     Ok(Some(block)) => {
                         context
@@ -432,7 +436,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(service) = authority_service.upgrade() else {
                             return;
                         };
-                        let (outcome, tip) = {
+                        let (outcome, gc_round, tip) = {
                             let Some(dag_state) = dag_state.upgrade() else {
                                 return;
                             };
@@ -451,114 +455,85 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     block,
                                     &guard,
                                 ),
+                                guard.gc_round(),
                                 guard.highest_accepted_round(),
                             )
                         };
                         let block = match outcome {
-                            // Dropped from the stream and owned by a recovery task.
+                            // Dropped from the stream: admission decides whether it
+                            // parks in the slot index. Ambiguity and digest mismatch
+                            // have no slot frontier to wait on — only the exact block
+                            // resolves them — so they go straight to the fetch lane.
                             Ok(InflateOutcome::Dropped {
                                 block_ref,
                                 reason,
                                 minimal,
                                 excluded_ancestors,
                             }) => {
-                                // Receipt-time received credit: the claim is
-                                // structurally valid and author-authenticated, and a
-                                // parked block must not distort the propagation-delay
-                                // signal for the park's duration. Received vector
-                                // only; before the horizon/quota branches so refused
-                                // admissions still count as received.
-                                round_tracker
-                                    .write()
-                                    .update_received_claim(block_ref.author, block_ref.round);
-                                // Spawn-eligibility horizon: an admitted wait is
-                                // GC-bounded only if the claimed round is one the
-                                // local DAG can plausibly reach — a fabricated
-                                // far-future round would pin its quota until GC
-                                // crosses it, indefinitely. Beyond the horizon the
-                                // stream resets instead: for an honest sender this
-                                // means the receiver is deeply behind and full-form
-                                // replay is strictly the better path; for a Byzantine
-                                // sender it wastes only its own stream.
-                                let horizon = tip.saturating_add(
-                                    context.parameters.dag_state_cached_rounds as Round,
-                                );
-                                if block_ref.round > horizon {
-                                    context
-                                        .metrics
-                                        .node_metrics
-                                        .minimal_block_quota_drops
-                                        .with_label_values(&["round_horizon"])
-                                        .inc();
-                                    info!(
-                                        "Minimal block {} from peer {} {} claims a round \
-                                         beyond the recovery horizon ({}); resetting \
-                                         subscription for full replay",
-                                        block_ref, peer, peer_hostname, horizon
-                                    );
-                                    sleep(caused_reset_delay(context.own_index, peer, retries))
-                                        .await;
-                                    continue 'subscription;
-                                }
-                                let frontier_len = match &reason {
-                                    FallbackReason::MissingAncestors(slots) => slots.len(),
-                                    _ => 0,
-                                };
-                                let charge = admission_charge(
-                                    minimal.len(),
-                                    excluded_ancestors.iter().map(|a| a.len()).sum(),
-                                    frontier_len,
-                                );
-                                match recovery_quotas.try_acquire(peer, charge) {
-                                    // The stream itself is healthy — it delivered a
-                                    // well-formed block — so the reconnect backoff
-                                    // resets as for an accepted block. The reset must
-                                    // NOT happen on the quota-overflow arm below: a
-                                    // recurring overflow reconnects in a loop, and
-                                    // only the escalating backoff paces it.
-                                    Ok(permit) => {
-                                        retries = 0;
-                                        backoff.reset();
-                                        recoveries.spawn(recover_minimal_block(
-                                            context.clone(),
-                                            block_inflater.clone(),
-                                            dag_state.clone(),
-                                            missing_block_registry.clone(),
-                                            authority_service.clone(),
-                                            peer,
+                                let node_metrics = &context.metrics.node_metrics;
+                                let missing = match reason {
+                                    FallbackReason::MissingAncestors(slots) => slots,
+                                    FallbackReason::AmbiguousSlot(_)
+                                    | FallbackReason::DigestMismatch => {
+                                        if missing_block_registry
+                                            .register_missing_block(block_ref)
+                                            .await
+                                            .is_err()
+                                        {
+                                            return;
+                                        }
+                                        pending_reconstructions.lock().hold_sidecar(
                                             block_ref,
-                                            reason,
-                                            minimal,
+                                            peer,
                                             excluded_ancestors,
-                                            permit,
-                                        ));
+                                        );
                                         continue 'stream;
                                     }
-                                    Err(limit) => {
-                                        context
-                                            .metrics
-                                            .node_metrics
-                                            .minimal_block_quota_drops
-                                            .with_label_values(&[limit.label()])
-                                            .inc();
-                                        // The dropped bytes must not be stranded: only
-                                        // a reconnect re-delivers them (as full-form
-                                        // replay, which bypasses these quotas), and a
-                                        // natural reconnect may never come. Existing
-                                        // recovery tasks survive the reset — the
-                                        // JoinSet belongs to the loop, not the stream.
-                                        info!(
-                                            "Recovery quota ({}) exhausted for peer {} {}; \
-                                             resetting subscription for full replay",
-                                            limit.label(),
-                                            peer,
-                                            peer_hostname
+                                };
+                                node_metrics
+                                    .minimal_block_park_missing_slots
+                                    .observe(missing.len() as f64);
+                                let admitted = pending_reconstructions.lock().try_admit(
+                                    block_ref,
+                                    minimal,
+                                    excluded_ancestors,
+                                    peer,
+                                    missing,
+                                    gc_round,
+                                    tip,
+                                );
+                                match admitted {
+                                    Ok(()) => {
+                                        // Admission-time received credit: arrival-
+                                        // equivalent timing for honest traffic, and
+                                        // never granted to refused claims. Fires only
+                                        // for the received vector; acceptance evidence
+                                        // still requires verification.
+                                        round_tracker.write().update_received_claim(
+                                            block_ref.author,
+                                            block_ref.round,
                                         );
-                                        sleep(caused_reset_delay(context.own_index, peer, retries))
-                                            .await;
-                                        continue 'subscription;
+                                        retries = 0;
+                                        backoff.reset();
+                                    }
+                                    Err(refusal) => {
+                                        node_metrics
+                                            .minimal_block_quota_drops
+                                            .with_label_values(&[refusal.metric_label()])
+                                            .inc();
+                                        if matches!(
+                                            refusal,
+                                            crate::pending_reconstructions::AdmitRefusal::DeadFrontierSlot
+                                        ) && missing_block_registry
+                                            .register_missing_block(block_ref)
+                                            .await
+                                            .is_err()
+                                        {
+                                            return;
+                                        }
                                     }
                                 }
+                                continue 'stream;
                             }
                             Ok(InflateOutcome::Block(block)) => block,
                             Err(e) => {
@@ -935,7 +910,7 @@ mod test {
     struct NoopRegistry;
 
     #[async_trait]
-    impl crate::minimal_block_receive::MissingBlockRegistry for NoopRegistry {
+    impl crate::pending_reconstructions::MissingBlockRegistry for NoopRegistry {
         async fn register_missing_block(
             &self,
             _block_ref: BlockRef,
@@ -947,7 +922,7 @@ mod test {
     fn test_subscriber_deps(
         context: &Arc<Context>,
     ) -> (
-        Arc<dyn crate::minimal_block_receive::MissingBlockRegistry>,
+        Arc<dyn crate::pending_reconstructions::MissingBlockRegistry>,
         Arc<RwLock<RoundTracker>>,
     ) {
         (
@@ -1032,120 +1007,6 @@ mod test {
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
     }
 
-    /// A quota overflow drops the block with its limit label and resets the stream so
-    /// full replay redelivers it. Per-limit attribution across the three bounds is
-    /// pinned at the unit level by quota_isolation_across_peers_and_rollback.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn quota_overflow_resets_stream_for_full_replay() {
-        let s = minimal_wire_scenario(2, 2, 1);
-        let mut client = FixedStreamClient::new(s.wire.clone());
-        // Post-reset the sender replays full form (production behavior); without
-        // this the same minimal re-overflows on every reconnect, and only the
-        // escalating backoff — not a quiet stream — would pace the loop.
-        client.blocks_after_reset = Some(vec![ExtendedSerializedBlock {
-            block: s.blocks[0].serialized().clone(),
-            minimal: None,
-            excluded_ancestors: vec![],
-        }]);
-        let network_client = Arc::new(client);
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = empty_receiver_dag(&s.context);
-        let (registry, tracker) = test_subscriber_deps(&s.context);
-        let subscriber = Subscriber::new(
-            s.context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag,
-            registry,
-            tracker,
-        )
-        .with_recovery_limits(RecoveryLimits {
-            peer_bytes: 8,
-            ..RecoveryLimits::default()
-        });
-        subscriber.subscribe(s.peer);
-
-        let context = s.context.clone();
-        wait_until(|| {
-            context
-                .metrics
-                .node_metrics
-                .minimal_block_quota_drops
-                .with_label_values(&["peer_bytes"])
-                .get()
-                >= 1
-        })
-        .await;
-        // The caused-reset floor must actually pace the reconnect: paused time makes
-        // the elapsed virtual duration deterministic.
-        let dropped_at = tokio::time::Instant::now();
-        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
-        assert!(
-            dropped_at.elapsed() >= Duration::from_millis(CAUSED_RESET_DELAY_FLOOR_MS),
-            "reconnect after a caused reset must wait out the floor delay"
-        );
-        // Nothing was admitted, so nothing is parked; the replayed full form arrives.
-        assert_eq!(
-            context
-                .metrics
-                .node_metrics
-                .minimal_block_recovery_parked
-                .get(),
-            0
-        );
-        wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
-    }
-
-    /// A quota-overflow stream reset must not cancel recovery tasks already parked:
-    /// the JoinSet belongs to the subscription loop, not one stream instance.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn reconnect_does_not_cancel_existing_recovery_tasks() {
-        let s = minimal_wire_scenario(2, 2, 3);
-        let mut client = FixedStreamClient::new(s.wire.clone());
-        // The reset replays only the overflowed third block in full form.
-        client.blocks_after_reset = Some(vec![ExtendedSerializedBlock {
-            block: s.blocks[2].serialized().clone(),
-            minimal: None,
-            excluded_ancestors: vec![],
-        }]);
-        let network_client = Arc::new(client);
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = empty_receiver_dag(&s.context);
-        let (registry, tracker) = test_subscriber_deps(&s.context);
-        let subscriber = Subscriber::new(
-            s.context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag.clone(),
-            registry,
-            tracker,
-        )
-        .with_recovery_limits(RecoveryLimits {
-            peer_count: 2,
-            ..RecoveryLimits::default()
-        });
-        subscriber.subscribe(s.peer);
-
-        // Two blocks park, the third overflows and resets; its full form arrives.
-        wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
-        let node_metrics = &s.context.metrics.node_metrics;
-        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 2);
-        assert!(*network_client.subscribe_calls.lock() >= 2);
-
-        // The tasks parked before the reset still complete after it.
-        receiver_dag.write().accept_blocks(s.ancestors.clone());
-        wait_until(|| authority_service.lock().handle_send_block.len() >= 3).await;
-        let received = authority_service.lock().handle_send_block.clone();
-        for block in &s.blocks {
-            assert!(
-                received.iter().any(|(_, b)| b.block == *block.serialized()),
-                "parked task should survive the reconnect"
-            );
-        }
-        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 0).await;
-        assert!(network_client.fetch_calls.lock().is_empty());
-    }
-
     /// Malformed-minimal boundaries: an oversized payload counts as malformed, and
     /// the fourth malformed envelope in a session resets the stream.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1198,19 +1059,15 @@ mod test {
         );
     }
 
-    /// A minimal block claiming a round beyond the recovery horizon must not park —
-    /// its wait would not be GC-bounded — and resets the stream for full replay.
+    /// A claim beyond the admission window (frontier + gc_depth) is refused without
+    /// parking anything and WITHOUT resetting the stream: refusal is admission
+    /// control, not flow control, and the block reaches the receiver later through
+    /// commit sync or its children's explicit digests.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn far_future_claim_resets_instead_of_parking() {
-        // Claimed round 2001 vs receiver tip 1499: beyond 1499 + 500 cached rounds.
+    async fn far_future_claim_is_refused_without_reset() {
+        // Claimed round 2001 vs receiver frontier 1499: far past frontier + gc_depth.
         let s = minimal_wire_scenario(2, 2000, 1);
-        let mut client = FixedStreamClient::new(s.wire.clone());
-        client.blocks_after_reset = Some(vec![ExtendedSerializedBlock {
-            block: s.blocks[0].serialized().clone(),
-            minimal: None,
-            excluded_ancestors: vec![],
-        }]);
-        let network_client = Arc::new(client);
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
         receiver_dag
@@ -1233,13 +1090,12 @@ mod test {
                 .metrics
                 .node_metrics
                 .minimal_block_quota_drops
-                .with_label_values(&["round_horizon"])
+                .with_label_values(&["outside_window"])
                 .get()
                 >= 1
         })
         .await;
-        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
-        // Nothing parked; the block arrived full via the replayed stream instead.
+        // Nothing parked, and no stream reset: one subscribe call only.
         assert_eq!(
             context
                 .metrics
@@ -1248,11 +1104,11 @@ mod test {
                 .get(),
             0
         );
-        wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
     }
 
     /// A parked minimal block must credit the round tracker's RECEIVED vector at
-    /// receipt — before quota/horizon decisions — so parking cannot distort the
+    /// receipt — before quota/horizon decisions — so pending_reconstructions cannot distort the
     /// propagation-delay signal for the park's duration. Accepted rows must not move.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn parked_block_credits_received_round_at_receipt() {
