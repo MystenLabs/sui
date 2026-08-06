@@ -359,11 +359,15 @@ async fn test_has_ab_no_coins() {
         gas_payment
     );
 
-    // Verify expiration is set (ValidDuring for pure AB payment)
+    // Verify an epoch-scoped expiration is set for pure AB payment. Simulate returns `Validity`
+    // when it can also name the transaction's proposers, and `ValidDuring` otherwise.
     let expiration = response.transaction.transaction.expiration();
     assert!(
-        matches!(expiration, TransactionExpiration::ValidDuring { .. }),
-        "Expected ValidDuring expiration for pure AB payment, got: {:?}",
+        matches!(
+            expiration,
+            TransactionExpiration::ValidDuring { .. } | TransactionExpiration::Validity { .. }
+        ),
+        "Expected ValidDuring or Validity expiration for pure AB payment, got: {:?}",
         expiration
     );
 
@@ -753,9 +757,9 @@ async fn test_ab_only_budget_exceeds_half_balance() {
     assert!(
         matches!(
             response.transaction.transaction.expiration(),
-            TransactionExpiration::ValidDuring { .. }
+            TransactionExpiration::ValidDuring { .. } | TransactionExpiration::Validity { .. }
         ),
-        "Expected ValidDuring expiration for pure AB payment, got: {:?}",
+        "Expected ValidDuring or Validity expiration for pure AB payment, got: {:?}",
         response.transaction.transaction.expiration()
     );
 
