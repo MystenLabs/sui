@@ -1,0 +1,141 @@
+---
+title: Fiat On-Ramps
+description: >-
+  Accept fiat payments and deliver Sui-native tokens to user wallets using
+  third-party on-ramp providers integrated with the Sui network.
+keywords:
+  - fiat
+  - on-ramp
+  - payments
+  - stablecoins
+  - USDC
+  - SUI
+  - wallet integration
+  - credit card
+goal:
+  description: >-
+    Reader can choose and integrate a fiat on-ramp provider for their Sui app
+    based on asset support, regional coverage, and payment methods
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What fiat on-ramp providers support Sui?
+  - How do I accept fiat payments in a Sui app?
+  - Which on-ramp providers support USDC on Sui?
+  - What regions do Sui on-ramp providers cover?
+answer: >-
+  Multiple third-party providers offer fiat on-ramp integration with Sui,
+  including Banxa, Stripe, Coinbase, Meld, and Onramper. Provider availability
+  varies by region, supported assets, and payment methods.
+---
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] A [Sui wallet](/develop/get-started/connect) configured for the target network
+- [x] Familiarity with the assets you want to support (SUI, USDC, WAL, and others)
+</TabItem>
+</Tabs>
+
+Fiat on-ramp providers accept traditional currency payments (credit cards, bank transfers, mobile wallets) and deliver Sui-native tokens to a user's wallet address. You embed an on-ramp provider into your app so users can purchase Sui assets without leaving your interface.
+
+Multiple third-party providers offer Sui on-ramp integration with varying asset support, regional coverage, and payment methods. You choose providers based on the regions you serve, the assets your users need, and the payment methods your audience prefers.
+
+## Provider comparison
+
+The following table summarizes providers with live Sui on-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
+
+| Provider | Type | Supported assets | Documentation |
+|---|---|---|---|
+| [Banxa](https://docs.banxa.com/) | Direct | SUI, USDC | [Banxa docs](https://docs.banxa.com/) |
+| [Unlimit](https://partners-sandbox.gatefi.com/) | Direct | Contact provider | [Unlimit docs](https://partners-sandbox.gatefi.com/) |
+| [Bridge.xyz](https://bridge.xyz) | Direct | USDSui | [Bridge docs](https://bridge.xyz) |
+| [Stripe](https://docs.stripe.com/crypto/onramp) | Direct | SUI, USDSui | [Stripe crypto on-ramp docs](https://docs.stripe.com/crypto/onramp) |
+| [Coinbase](https://docs.cdp.coinbase.com/) | Direct | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/) |
+| [Alchemy Pay](https://alchemypay.org/) | Direct | SUI, USDC, CETUS, AUSD, SCA, NAVX, XUI | [Alchemy Pay docs](https://alchemypay.org/) |
+| [OnRamp.money](https://onramp.money/) | Direct | SUI, USDC, WAL | [OnRamp.money docs](https://onramp.money/) |
+| [CoinVoyage](https://www.coinvoyage.io/) | Direct | Sui Dollar, SUI | [CoinVoyage docs](https://www.coinvoyage.io/) |
+| [Bungee/Socket.Tech](https://docs.bungee.exchange/) | Direct | Sui Dollar, SUI, DEEP, WAL | [Bungee docs](https://docs.bungee.exchange/) |
+| [Onramper](https://docs.onramper.com/) | Aggregator | SUI, USDC | [Onramper docs](https://docs.onramper.com/) |
+| [Meld](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) | Aggregator | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
+
+## Direct providers and aggregators
+
+On-ramp providers fall into 2 categories:
+
+- **Direct providers:** Banxa, Unlimit, Bridge.xyz, Stripe, Coinbase, Alchemy Pay, OnRamp.money, CoinVoyage, and Bungee connect directly to payment rails and process transactions themselves. You integrate their SDK or API and manage the provider relationship.
+- **Aggregators:** Onramper and Meld route transactions through multiple underlying providers (for example, Onramper routes through Kraken, Topper, Banxa, and MoonPay for Sui on-ramps). Aggregators simplify integration because a single SDK covers multiple providers and regions.
+
+:::info
+
+Aggregators like Meld and Onramper route transactions through multiple underlying providers. This broadens regional and asset coverage but means your actual payment experience depends on which sub-provider handles a given transaction.
+
+:::
+
+## Regional coverage
+
+Provider availability varies by region due to regulatory requirements, payment rail availability, and provider licensing.
+
+### Americas
+
+| Region | Providers |
+|---|---|
+| United States | Banxa, Meld, Onramper, Bridge.xyz, Stripe |
+| Brazil | Unlimit, Meld |
+| Mexico | Unlimit |
+| Colombia | Unlimit |
+
+### Europe
+
+| Region | Providers |
+|---|---|
+| EU countries | Unlimit, Meld, Onramper, Banxa |
+| United Kingdom | Banxa, Meld (card, Apple Pay) |
+
+### Asia-Pacific
+
+| Region | Providers |
+|---|---|
+| Singapore | Meld, Onramper/MoonPay |
+| Indonesia | Meld (card), Onramper/MoonPay |
+| Japan | Meld (card, Apple Pay) |
+| India | Meld (card) |
+| Hong Kong | Meld (card, Apple Pay, Google Pay) |
+| Korea | No coverage |
+
+:::caution
+
+Bridge.xyz issued stablecoins are not available for users in the European Economic Area (EEA) due to regulatory restrictions. Verify provider-specific regional limitations before integrating.
+
+:::
+
+## Choosing a provider
+
+Select an on-ramp provider based on 4 criteria:
+
+1. **Regional coverage:** Match the provider's supported countries to where your users are located.
+2. **Asset support:** Verify that the provider supports the specific Sui assets your app uses (SUI, USDC, WAL, DEEP, and others). Asset support changes frequently, so confirm with the provider before launching.
+3. **Payment methods:** Consider which fiat payment methods your users prefer (cards, bank transfers, mobile wallets). Coverage varies by region.
+4. **Integration complexity:** Direct provider integrations give you more control but require managing multiple relationships for broad coverage. Aggregators offer a single integration point across multiple providers and regions.
+
+:::tip
+
+If you need both broad regional coverage and multiple payment methods, consider integrating an aggregator (Meld or Onramper) alongside a direct provider that covers your primary market. This approach gives you fallback coverage without the complexity of managing many individual provider integrations.
+
+:::
+
+## Security considerations
+
+When you integrate a fiat on-ramp into your app, follow these practices:
+
+- **Verify transaction intent before signing.** Display clear, human-readable descriptions of what each ramp transaction does before the user approves it. Avoid blind signing of opaque transaction bytes ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+- **Validate provider package IDs.** If a ramp provider uses onchain smart contracts, verify their package addresses at runtime. Do not trust contract addresses based on names alone ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+- **Separate keys by network.** Use different wallet addresses for Testnet and Mainnet ramp integrations. Never reuse Testnet keys for production transactions ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+- **Validate callback data.** If the provider sends webhook callbacks or delivery confirmations, verify signatures and check data freshness before updating your app state. Define explicit failure behavior for missing, stale, or malformed callback data ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).

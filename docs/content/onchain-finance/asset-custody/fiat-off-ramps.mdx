@@ -1,0 +1,154 @@
+---
+title: Fiat Off-Ramps
+description: >-
+  Convert Sui-native tokens to fiat currency using third-party off-ramp
+  providers integrated with the Sui network.
+keywords:
+  - fiat
+  - off-ramp
+  - payments
+  - stablecoins
+  - USDC
+  - SUI
+  - bank transfer
+  - cash out
+goal:
+  description: >-
+    Reader can choose and integrate a fiat off-ramp provider for their Sui app
+    based on asset support, regional coverage, and payment methods
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What fiat off-ramp providers support Sui?
+  - How do I convert SUI tokens to fiat currency?
+  - Which off-ramp providers support USDC on Sui?
+  - What regions do Sui off-ramp providers cover?
+  - What are the sell limits for off-ramping SUI?
+answer: >-
+  Several third-party providers offer fiat off-ramp integration with Sui,
+  including Banxa, Coinbase, Unlimit, Meld, and Onramper. Off-ramp coverage
+  is more limited than on-ramp coverage, especially for USDC and in
+  Asia-Pacific regions.
+---
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] A [Sui wallet](/develop/get-started/connect) configured for the target network
+- [x] Familiarity with the assets you want to support (SUI, USDC, WAL, and others)
+</TabItem>
+</Tabs>
+
+Fiat off-ramp providers accept Sui-native tokens and send fiat currency to a user's bank account, card, or payment method. You embed an off-ramp provider into your app so users can convert their Sui assets to traditional currency without leaving your interface.
+
+Off-ramp coverage on Sui is more limited than on-ramp coverage. Fewer providers support Sui off-ramps, regional availability is narrower, and certain assets (notably USDC) have minimal off-ramp support. Verify current provider capabilities before integrating.
+
+## Provider comparison
+
+The following table summarizes providers with live Sui off-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
+
+| Provider | Type | Supported assets | Documentation |
+|---|---|---|---|
+| [Banxa](https://docs.banxa.com/) | Direct | SUI | [Banxa docs](https://docs.banxa.com/) |
+| [Unlimit](https://partners-sandbox.gatefi.com/) | Direct | Contact provider | [Unlimit docs](https://partners-sandbox.gatefi.com/) |
+| [Bridge.xyz](https://bridge.xyz) | Direct | USDSui | [Bridge docs](https://bridge.xyz) |
+| [Coinbase](https://docs.cdp.coinbase.com/) | Direct | SUI, USDC, WAL, DEEP | [Coinbase CDP docs](https://docs.cdp.coinbase.com/) |
+| [Alchemy Pay](https://alchemypay.org/) | Direct | AUSD, SUI, USD | [Alchemy Pay docs](https://alchemypay.org/) |
+| [CoinVoyage](https://www.coinvoyage.io/) | Direct | Sui Dollar | [CoinVoyage docs](https://www.coinvoyage.io/) |
+| [Bungee/Socket.Tech](https://docs.bungee.exchange/) | Direct | SUI | [Bungee docs](https://docs.bungee.exchange/) |
+| [Onramper](https://docs.onramper.com/) | Aggregator | SUI | [Onramper docs](https://docs.onramper.com/) |
+| [Meld](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) | Aggregator | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
+
+Providers that offer on-ramp only (no Sui off-ramp support): Stripe, OnRamp.money. See [Fiat On-Ramps](/onchain-finance/asset-custody/fiat-on-ramps) for the full on-ramp provider list.
+
+## Payment methods
+
+The following fiat payment methods are available for Sui off-ramps:
+
+| Provider | Payment method | Fiat currency | Regions |
+|---|---|---|---|
+| Banxa | ACH bank transfer | USD | United States |
+| Unlimit | PIX | BRL | Brazil |
+| Unlimit | SEPA transfer | EUR | 29 EU and EEA countries |
+| Unlimit | SPEI | MXN | Mexico |
+| Unlimit | TRANSFIYA | COP | Colombia |
+| Onramper/MoonPay | ACH, PayPal, Venmo | USD | United States |
+| Onramper/MoonPay | PayPal, card | EUR | EU countries |
+| Onramper/MoonPay | Card | Various | Singapore, Indonesia, Brazil |
+| Meld | Card payout | GBP | United Kingdom |
+
+## Regional coverage
+
+Off-ramp provider availability varies by region. Several regions that have on-ramp coverage lack off-ramp support entirely.
+
+### Americas
+
+| Region | Providers | Payment methods |
+|---|---|---|
+| United States | Banxa, Onramper/MoonPay | ACH, PayPal, Venmo, card |
+| Brazil | Unlimit, Onramper/MoonPay | PIX, card |
+| Mexico | Unlimit | SPEI |
+| Colombia | Unlimit | TRANSFIYA |
+
+### Europe
+
+| Region | Providers | Payment methods |
+|---|---|---|
+| EU countries | Unlimit, Onramper/MoonPay | SEPA, PayPal, card |
+| United Kingdom | Meld | Card payout |
+
+### Asia-Pacific
+
+| Region | Providers | Payment methods |
+|---|---|---|
+| Singapore | Onramper/MoonPay | Card |
+| Indonesia | Onramper/MoonPay | Card |
+| Japan | None | No off-ramp available |
+| India | None | No off-ramp available |
+| Hong Kong | None | No off-ramp available |
+| Korea | None | No off-ramp available |
+
+:::caution
+
+Bridge.xyz issued stablecoins are not available for users in the European Economic Area (EEA) due to regulatory restrictions. Verify provider-specific regional limitations before integrating.
+
+:::
+
+## Asset limitations
+
+When you choose off-ramp providers, be aware of the following limitations:
+
+- **USDC off-ramp on Sui:** USDC off-ramp coverage on Sui is limited. The Onramper audit (January 2026) found zero working USDC off-ramp quotes across 28 tested countries. Meld lists USDC as supported through its aggregated providers, but verify current availability before relying on it. If your users need to off-ramp USDC, confirm provider support directly.
+- **SUI sell limits:** Off-ramp providers that use MoonPay as the underlying provider enforce sell limits (approximately 14 SUI minimum and 250 SUI maximum per transaction).
+- **KYC requirements:** All off-ramp flows require Know Your Customer (KYC) verification. Factor this into your user experience design because first-time users need to complete identity verification before they can convert assets to fiat.
+
+:::info
+
+Off-ramp coverage is evolving. Provider asset support and regional availability change frequently. Confirm current capabilities with your chosen provider before launching an integration.
+
+:::
+
+## Choosing a provider
+
+Select an off-ramp provider based on 4 criteria:
+
+1. **Regional coverage:** Match the provider's supported countries and payment methods to where your users are located. Off-ramp regional coverage is significantly narrower than on-ramp coverage, especially in Asia-Pacific.
+2. **Asset support:** Verify that the provider supports off-ramping the specific Sui assets your users hold. SUI has the broadest off-ramp support. USDC off-ramp support is limited.
+3. **Payment methods:** Users in different regions expect different payout methods (bank transfer, card, PayPal, PIX). Match the provider's methods to your users' expectations.
+4. **Sell limits and KYC:** Understand the per-transaction limits and KYC requirements each provider enforces. These affect how much your users can convert and how quickly they can complete their first transaction.
+
+## Security considerations
+
+When you integrate a fiat off-ramp into your app, follow these practices:
+
+- **Verify transaction intent before signing.** Display clear, human-readable descriptions of what each off-ramp transaction does before the user approves it. Show the asset amount, destination fiat currency, and payout method. Avoid blind signing of opaque transaction bytes ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+- **Validate provider package IDs.** If a ramp provider uses onchain smart contracts for settlement, verify their package addresses at runtime. Do not trust contract addresses based on names alone ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+- **Separate keys by network.** Use different wallet addresses for Testnet and Mainnet off-ramp integrations. Never reuse Testnet keys for production transactions ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+- **Validate settlement confirmations.** Verify signatures and check data freshness on all webhook callbacks and settlement confirmations before updating your app state. Define explicit failure behavior for missing, stale, or malformed confirmation data ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
