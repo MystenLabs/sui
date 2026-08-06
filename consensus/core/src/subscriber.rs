@@ -504,9 +504,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         continue 'stream;
                                     }
                                 };
-                                node_metrics
-                                    .minimal_block_park_missing_slots
-                                    .observe(missing.len() as f64);
                                 let missing_snapshot = missing.clone();
                                 let admitted = pending_reconstructions.lock().try_admit(
                                     block_ref,
@@ -564,7 +561,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         if !filled.is_empty() {
                                             let effects = pending_reconstructions
                                                 .lock()
-                                                .recheck_filled_slots(&filled);
+                                                .on_blocks_accepted(&filled);
                                             if !effects.is_empty() {
                                                 let _ = effects_tx.send(effects);
                                             }
@@ -586,7 +583,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     }
                                     Err(refusal) => {
                                         node_metrics
-                                            .minimal_block_quota_drops
+                                            .minimal_block_recovery_outcomes
                                             .with_label_values(&[refusal.metric_label()])
                                             .inc();
                                         // A refusal because the RECEIVER is behind the
@@ -1191,7 +1188,7 @@ mod test {
             context
                 .metrics
                 .node_metrics
-                .minimal_block_quota_drops
+                .minimal_block_recovery_outcomes
                 .with_label_values(&["outside_window"])
                 .get()
                 >= 1
