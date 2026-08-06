@@ -513,21 +513,8 @@ impl ConsensusAdapter {
 
         let mut guard = InflightDropGuard::acquire(&self, tx_type, transactions.len() as u64);
 
-        // Builds the error reported to a position-waiting caller (mfp) when the
-        // transaction is already being processed and we therefore skip (re)submission.
-        // The caller surfaces this as a retriable error so the client waits for
-        // effects / retries instead of receiving a meaningless consensus position.
-        let make_processing_error = |method: ProcessedMethod| -> SuiError {
-            let digest = transactions
-                .iter()
-                .find_map(|t| t.kind.as_user_transaction().map(|tx| *tx.digest()))
-                .unwrap_or_default();
-            SuiErrorKind::TransactionProcessing {
-                digest,
-                status: format!("processed via {}", method.method_name()),
-            }
-            .into()
-        };
+        let make_processing_error =
+            |method: ProcessedMethod| -> SuiError { processing_error(&transaction_keys, method) };
 
         // Skip submission if the tx is already processed via consensus output or
         // checkpoint state sync.
@@ -1180,8 +1167,30 @@ impl Drop for InflightDropGuard<'_> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum ProcessedMethod {
+/// The error reported to a position-waiting caller (mfp) when the transaction is
+/// already being processed and (re)submission is therefore skipped. The caller
+/// surfaces this as a retriable error so the client waits for effects / retries
+/// instead of receiving a meaningless consensus position. Shared with the pull-based
+/// transaction pool, which skips the same submissions at proposal time.
+pub(crate) fn processing_error<'a>(
+    keys: impl IntoIterator<Item = &'a SequencedConsensusTransactionKey>,
+    method: ProcessedMethod,
+) -> SuiError {
+    let digest = keys
+        .into_iter()
+        .find_map(SequencedConsensusTransactionKey::user_transaction_digest)
+        .unwrap_or_default();
+    SuiErrorKind::TransactionProcessing {
+        digest,
+        status: format!("processed via {}", method.method_name()),
+    }
+    .into()
+}
+
+/// Variant order is reporting priority: when a group is processed through several
+/// paths, the greatest variant is reported, so checkpoint execution dominates.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ProcessedMethod {
     ConsensusMessageProcessed,
     ConsensusStatusReceived,
     ConsensusStatusExpired,
@@ -1198,7 +1207,7 @@ impl ProcessedMethod {
         }
     }
 
-    fn metric_label(self) -> &'static str {
+    pub(crate) fn metric_label(self) -> &'static str {
         match self {
             ProcessedMethod::ConsensusMessageProcessed => "consensus_message",
             ProcessedMethod::ConsensusStatusReceived => "consensus_status",

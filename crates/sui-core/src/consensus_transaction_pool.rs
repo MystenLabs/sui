@@ -17,15 +17,22 @@
 //! consensus start, publishes it through the process-lifetime
 //! [`TransactionPoolContext`], and closes it before stopping consensus.
 
-use crate::admission_queue::{AdmissionQueueEntry, AdmissionQueueMetrics, PriorityAdmissionQueue};
+use crate::admission_queue::{
+    AdmissionQueueEntry, AdmissionQueueMetrics, PopAction, PriorityAdmissionQueue,
+};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient};
+use crate::consensus_adapter::{
+    BlockStatusReceiver, ConsensusClient, ProcessedMethod, processing_error,
+};
+use crate::consensus_handler::SequencedConsensusTransactionKey;
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
     BlockRef, NUM_RESERVED_TRANSACTION_INDICES, PING_TRANSACTION_INDEX, Round, TransactionIndex,
 };
+use itertools::Itertools;
 use mysten_common::debug_fatal;
+use mysten_common::sync::notify_read::OwnedRegistration;
 use parking_lot::Mutex;
 use prometheus::IntGauge;
 use std::collections::{BTreeMap, VecDeque};
@@ -33,7 +40,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
 use sui_types::base_types::EpochId;
+use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
 };
@@ -153,6 +162,43 @@ impl Drop for PendingAck {
     }
 }
 
+/// Watches one queued transaction key for the two ways it can become processed
+/// without this validator proposing it: consensus output from a block another
+/// validator proposed, and execution through a state-synced checkpoint.
+struct ProcessedWatch {
+    consensus: OwnedRegistration<SequencedConsensusTransactionKey, ()>,
+    checkpoint: Option<OwnedRegistration<TransactionDigest, CheckpointSequenceNumber>>,
+    /// Saves results of `try_recv` on the fields above.
+    observed: Option<ProcessedMethod>,
+}
+
+impl ProcessedWatch {
+    fn register(epoch_store: &Arc<AuthorityPerEpochStore>, key: ConsensusTransactionKey) -> Self {
+        let key = SequencedConsensusTransactionKey::External(key);
+        Self {
+            checkpoint: key
+                .user_transaction_digest()
+                .map(|digest| epoch_store.register_executed_in_checkpoint_notify(&digest)),
+            consensus: epoch_store.register_consensus_message_processed_notify(&key),
+            observed: None,
+        }
+    }
+
+    /// Return the path through which the key was observed as processed, if any.
+    fn check_processed(&mut self) -> Option<ProcessedMethod> {
+        if self.observed.is_none() {
+            if self.consensus.try_recv().is_ok() {
+                self.observed = Some(ProcessedMethod::ConsensusMessageProcessed);
+            } else if let Some(checkpoint) = &mut self.checkpoint
+                && checkpoint.try_recv().is_ok()
+            {
+                self.observed = Some(ProcessedMethod::CheckpointExecuted);
+            }
+        }
+        self.observed
+    }
+}
+
 /// One queued submission. Multiple transactions form a soft bundle, which is
 /// included in a block atomically or not at all.
 struct PoolEntry {
@@ -161,6 +207,20 @@ struct PoolEntry {
     gas_price: u64,
     ack: PendingAck,
     metrics: Arc<AdmissionQueueMetrics>,
+    /// Empty for system and ping submissions: the `ConsensusAdapter` already
+    /// checks those before they reach the pool.
+    processed: Vec<ProcessedWatch>,
+}
+
+/// `Some` once every watch has observed processing. Bundles are proposed
+/// atomically, so a partially processed one is still proposed in full.
+fn all_processed(watches: &mut [ProcessedWatch]) -> Option<ProcessedMethod> {
+    let mut result: Option<ProcessedMethod> = None;
+    for watch in watches {
+        let observed = watch.check_processed()?;
+        result = result.max(Some(observed));
+    }
+    result
 }
 
 impl AdmissionQueueEntry for PoolEntry {
@@ -288,7 +348,28 @@ impl ConsensusTransactionPool {
         gas_price: u64,
         transactions: Vec<ConsensusTransaction>,
     ) -> SuiResult<(PositionReceiver, bool)> {
-        let (transactions, total_bytes, keys) = self.serialize_and_validate(&transactions)?;
+        // Check whether the transactions were already processed by consensus or
+        // checkpoint execution.
+        let keys = transactions
+            .iter()
+            .map(ConsensusTransaction::key)
+            .collect::<Vec<_>>();
+        let mut processed = keys
+            .iter()
+            .map(|key| ProcessedWatch::register(&self.epoch_store, key.clone()))
+            .collect::<Vec<_>>();
+        if let Some(method) = self.check_already_processed(&mut processed)? {
+            self.metrics
+                .pool_already_processed
+                .with_label_values(&["insert", method.metric_label()])
+                .inc();
+            return Err(processing_error(
+                processed.iter().map(|watch| watch.consensus.key()),
+                method,
+            ));
+        }
+
+        let (transactions, total_bytes) = self.serialize_and_validate(&transactions)?;
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
             transactions,
@@ -296,6 +377,7 @@ impl ConsensusTransactionPool {
             gas_price,
             ack: PendingAck::new(EntryAck::Positions(sender), keys),
             metrics: self.metrics.clone(),
+            processed,
         };
 
         let mut inner = self.inner.lock();
@@ -354,7 +436,7 @@ impl ConsensusTransactionPool {
         // Size limits cannot be relaxed for system transactions: peers enforce the
         // same limits on every transaction in a received block, and an over-budget
         // entry at the head of the FIFO system lane would wedge the lane.
-        let (serialized, total_bytes, keys) = match self.serialize_and_validate(transactions) {
+        let (serialized, total_bytes) = match self.serialize_and_validate(transactions) {
             Ok(validated) => validated,
             Err(error) => {
                 debug_fatal!("system transaction failed validation: {error}");
@@ -365,8 +447,12 @@ impl ConsensusTransactionPool {
             transactions: serialized,
             total_bytes,
             gas_price: 0,
-            ack: PendingAck::new(EntryAck::Inclusion(sender), keys),
+            ack: PendingAck::new(
+                EntryAck::Inclusion(sender),
+                transactions.iter().map(ConsensusTransaction::key).collect(),
+            ),
             metrics: self.metrics.clone(),
+            processed: Vec::new(),
         };
 
         {
@@ -397,6 +483,44 @@ impl ConsensusTransactionPool {
             }
         }
         Ok(receiver)
+    }
+
+    fn check_already_processed(
+        &self,
+        watches: &mut [ProcessedWatch],
+    ) -> SuiResult<Option<ProcessedMethod>> {
+        // Check for tx already processed by consensus.
+        let consensus_processed = self.epoch_store.check_consensus_messages_processed(
+            watches.iter().map(|watch| watch.consensus.key().clone()),
+        )?;
+        for (watch, consensus_processed) in watches.iter_mut().zip_eq(consensus_processed) {
+            if consensus_processed {
+                watch.observed = Some(ProcessedMethod::ConsensusMessageProcessed);
+            }
+        }
+
+        // Check for tx processed by checkpoint execution.
+        let (unobserved, digests): (Vec<_>, Vec<_>) = watches
+            .iter_mut()
+            .filter_map(|watch| {
+                if watch.observed.is_some() {
+                    return None;
+                }
+                let digest = *watch.checkpoint.as_ref()?.key();
+                Some((watch, digest))
+            })
+            .unzip();
+        if !digests.is_empty() {
+            let executed = self
+                .epoch_store
+                .multi_get_transaction_checkpoint(&digests)?;
+            for (watch, executed) in unobserved.into_iter().zip_eq(executed) {
+                if executed.is_some() {
+                    watch.observed = Some(ProcessedMethod::CheckpointExecuted);
+                }
+            }
+        }
+        Ok(all_processed(watches))
     }
 
     fn check_epoch_and_open_locked<'a>(
@@ -431,7 +555,7 @@ impl ConsensusTransactionPool {
     fn serialize_and_validate(
         &self,
         transactions: &[ConsensusTransaction],
-    ) -> SuiResult<(Vec<Transaction>, usize, Vec<ConsensusTransactionKey>)> {
+    ) -> SuiResult<(Vec<Transaction>, usize)> {
         let protocol_config = self.epoch_store.protocol_config();
         let bundle_count = u64::try_from(transactions.len()).expect("bundle count fits into u64");
         if bundle_count > protocol_config.max_num_transactions_in_block() {
@@ -445,7 +569,6 @@ impl ConsensusTransactionPool {
 
         let mut total_bytes = 0usize;
         let mut serialized = Vec::with_capacity(transactions.len());
-        let mut keys = Vec::with_capacity(transactions.len());
         for transaction in transactions {
             let bytes =
                 bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
@@ -467,10 +590,9 @@ impl ConsensusTransactionPool {
                     ),
                 ));
             }
-            keys.push(transaction.key());
             serialized.push(Transaction::new(bytes));
         }
-        Ok((serialized, total_bytes, keys))
+        Ok((serialized, total_bytes))
     }
 
     /// Permanently shuts the pool down, called before stopping the consensus
@@ -478,13 +600,16 @@ impl ConsensusTransactionPool {
     /// so the RPC retry loop resubmits them in the next epoch; system and ping acks
     /// are dropped, which their submitters treat as consensus shutdown. Idempotent.
     pub fn close(&self) {
-        let mut inner = self.inner.lock();
-        let mut pool = match std::mem::replace(&mut *inner, Inner::Closed) {
-            Inner::Open(pool) => pool,
-            Inner::Closed => return,
+        let mut pool = {
+            let mut inner = self.inner.lock();
+            match std::mem::replace(&mut *inner, Inner::Closed) {
+                Inner::Open(pool) => pool,
+                Inner::Closed => return,
+            }
         };
 
-        self.close_user_lane_locked(&mut pool);
+        // The teardown below runs on the extracted pool with the mutex released.
+        self.resolve_flushed_user_entries(pool.user.close());
         for entry in pool.system {
             entry.ack.drop_deliberately("pool closed");
         }
@@ -503,11 +628,11 @@ impl ConsensusTransactionPool {
         self.metrics.pool_depth.with_label_values(&["ping"]).set(0);
     }
 
-    /// Flushes the user lane once user certs close at epoch end, resolving queued
-    /// entries with the retriable halted error instead of proposing them after
-    /// EndOfPublish, where the consensus handler would drop them.
-    fn close_user_lane_locked(&self, pool: &mut Pool) {
-        for entry in pool.user.close() {
+    /// Resolves user entries flushed by `UserLane::close` with the retriable halted
+    /// error, so they retry in the next epoch. Dropping the entries deregisters
+    /// their processed watches — call with the pool mutex released.
+    fn resolve_flushed_user_entries(&self, entries: Vec<PoolEntry>) {
+        for entry in entries {
             self.decrement_lane_metrics("user", &entry);
             entry
                 .ack
@@ -526,6 +651,14 @@ impl ConsensusTransactionPool {
     #[cfg(test)]
     pub fn queue_depth(&self, lane: &str) -> i64 {
         self.metrics.pool_depth.with_label_values(&[lane]).get()
+    }
+
+    #[cfg(test)]
+    pub fn already_processed_count(&self, stage: &str, method: &str) -> u64 {
+        self.metrics
+            .pool_already_processed
+            .with_label_values(&[stage, method])
+            .get()
     }
 }
 
@@ -569,8 +702,10 @@ impl TakenTransactionsGuard {
         // Transactions occupy the block in exactly the order take() returned them,
         // so indices are assigned contiguously across entries in that order.
         let mut next_index = 0usize;
+        let mut watches_to_drop = Vec::with_capacity(entries.len());
         for taken in entries {
-            let entry = taken.entry;
+            let mut entry = taken.entry;
+            watches_to_drop.push(std::mem::take(&mut entry.processed));
             let start = next_index;
             next_index += entry.transactions.len();
             let indices = (start..next_index)
@@ -597,6 +732,8 @@ impl TakenTransactionsGuard {
                 &mut pool.block_status_subscribers,
             );
         }
+        drop(inner);
+        drop(watches_to_drop); // drop after mutex release
     }
 
     // The pool closed while these entries were out with the proposer: resolve user
@@ -714,10 +851,14 @@ impl TransactionPool for ConsensusTransactionPool {
                 );
             }
         };
-        if !should_accept_user_certs {
-            self.close_user_lane_locked(pool);
-        }
+        let flushed = if !should_accept_user_certs {
+            pool.user.close()
+        } else {
+            Vec::new()
+        };
         if disabled {
+            drop(inner);
+            self.resolve_flushed_user_entries(flushed); // resolve after mutex release
             return (
                 Vec::new(),
                 Box::new(|_| {}),
@@ -753,35 +894,57 @@ impl TransactionPool for ConsensusTransactionPool {
             });
         }
 
+        let mut already_processed = Vec::new();
         if !user_take_disabled
             && matches!(limit_reached, LimitReached::AllTransactionsIncluded)
             && let UserLane::Open(user) = &mut pool.user
         {
-            // The predicate tracks the running totals; the append loop below must not
-            // re-run the limit accounting, only record what was popped.
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
-            let popped = user.pop_batch_while(|entry| {
+            let popped;
+            (popped, already_processed) = user.pop_batch_while(|entry| {
+                // An already-processed entry is excluded without consuming block budget.
+                if all_processed(&mut entry.processed).is_some() {
+                    return PopAction::Exclude;
+                }
                 match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
                     Some(limit) => {
                         limit_reached = limit;
-                        false
+                        PopAction::Stop
                     }
                     None => {
                         pending_count += entry.transactions.len();
                         pending_bytes += entry.total_bytes;
-                        true
+                        PopAction::Include
                     }
                 }
             });
             for entry in popped {
-                transactions.extend(entry.transactions.iter().cloned());
                 self.decrement_lane_metrics("user", &entry);
+                transactions.extend(entry.transactions.iter().cloned());
                 entries.push(TakenEntry {
                     lane: TakenLane::User,
                     entry,
                 });
             }
+        }
+        drop(inner);
+
+        // Resolve flushed/processed items outside the mutex.
+        self.resolve_flushed_user_entries(flushed);
+        for mut entry in already_processed {
+            self.decrement_lane_metrics("user", &entry);
+            let method = all_processed(&mut entry.processed)
+                .expect("excluded entries are already processed");
+            self.metrics
+                .pool_already_processed
+                .with_label_values(&["proposal", method.metric_label()])
+                .inc();
+            let error = processing_error(
+                entry.processed.iter().map(|watch| watch.consensus.key()),
+                method,
+            );
+            entry.ack.resolve_error(error);
         }
 
         self.metrics
@@ -1096,6 +1259,16 @@ mod tests {
         BlockRef::new(round, AuthorityIndex::new_for_test(0), BlockDigest::MIN)
     }
 
+    fn consensus_key(transaction: &ConsensusTransaction) -> SequencedConsensusTransactionKey {
+        SequencedConsensusTransactionKey::External(transaction.key())
+    }
+
+    fn digest_of(transaction: &ConsensusTransaction) -> TransactionDigest {
+        consensus_key(transaction)
+            .user_transaction_digest()
+            .expect("expected a user transaction key")
+    }
+
     #[cfg(debug_assertions)]
     #[tokio::test]
     #[should_panic(expected = "dropped without resolution")]
@@ -1123,6 +1296,7 @@ mod tests {
                 vec![consensus_transaction.key()],
             ),
             metrics,
+            processed: Vec::new(),
         };
         let UserLane::Open(user) = &mut lane else {
             unreachable!("new user lane must be open");
@@ -1489,13 +1663,201 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[tokio::test]
-    #[should_panic(expected = "system transaction failed size validation")]
+    #[should_panic(expected = "system transaction failed validation")]
     async fn oversized_system_transaction_is_an_invariant_violation() {
         let serialized_len = u64::try_from(bcs::to_bytes(&transaction()).unwrap().len()).unwrap();
         let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
         config.set_consensus_max_transaction_size_bytes_for_testing(serialized_len - 1);
         let (_state, pool) = test_state_and_pool_with_protocol_config(10, config).await;
         let _ = pool.submit(pool.epoch(), &[transaction()]);
+    }
+
+    #[tokio::test]
+    async fn take_skips_already_processed_entries_without_shrinking_the_block() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let epoch_store = state.epoch_store_for_testing();
+
+        // Both bid highest, so they head the pop order and would consume the whole
+        // budget below if they were not skipped — one observed through consensus
+        // output, one through checkpoint execution.
+        let processed = user_transaction();
+        let (processed_consensus, _) = pool
+            .try_insert(epoch, 100, vec![processed.clone()])
+            .unwrap();
+        let executed = user_transaction();
+        let (processed_checkpoint, _) = pool.try_insert(epoch, 90, vec![executed.clone()]).unwrap();
+        let live = (0..3)
+            .map(|_| {
+                pool.try_insert(epoch, 10, vec![user_transaction()])
+                    .unwrap()
+                    .0
+            })
+            .collect::<Vec<_>>();
+
+        epoch_store.process_notifications(std::iter::once(&consensus_key(&processed)));
+        epoch_store
+            .insert_finalized_transactions(&[digest_of(&executed)], 1)
+            .unwrap();
+
+        let (transactions, ack, limit) = pool.take(3, usize::MAX);
+        assert_eq!(transactions.len(), 3);
+        assert_eq!(limit, LimitReached::AllTransactionsIncluded);
+        assert_eq!(pool.queue_depth("user"), 0);
+        assert_eq!(
+            pool.already_processed_count("proposal", "consensus_message"),
+            1
+        );
+        assert_eq!(
+            pool.already_processed_count("proposal", "checkpoint_execution"),
+            1
+        );
+        for receiver in [processed_consensus, processed_checkpoint] {
+            assert!(matches!(
+                receiver.await.unwrap().unwrap_err().as_inner(),
+                SuiErrorKind::TransactionProcessing { .. }
+            ));
+        }
+
+        ack(block(1));
+        for receiver in live {
+            assert_eq!(receiver.await.unwrap().unwrap().len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn bundles_are_skipped_only_when_every_transaction_is_already_processed() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let epoch_store = state.epoch_store_for_testing();
+
+        let first = user_transaction();
+        let second = user_transaction();
+        let (receiver, _) = pool
+            .try_insert(epoch, 10, vec![first.clone(), second.clone()])
+            .unwrap();
+
+        epoch_store.process_notifications(std::iter::once(&consensus_key(&first)));
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(
+            pool.already_processed_count("proposal", "consensus_message"),
+            0
+        );
+        // Requeue instead of acknowledging: the next proposal must still remember that
+        // `first` was observed as processed, since its notification is delivered once.
+        drop(ack);
+
+        epoch_store.process_notifications(std::iter::once(&consensus_key(&second)));
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty());
+        assert_eq!(
+            pool.already_processed_count("proposal", "consensus_message"),
+            1
+        );
+        assert!(matches!(
+            receiver.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::TransactionProcessing { .. }
+        ));
+        drop(ack);
+    }
+
+    #[tokio::test]
+    async fn insert_rejects_already_processed_transactions() {
+        let (state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let epoch_store = state.epoch_store_for_testing();
+
+        // An already-processed insert must fail before the ack is armed — a regression detonates
+        // the drop bomb and panics this test.
+        let via_consensus = user_transaction();
+        epoch_store.test_insert_user_signature(digest_of(&via_consensus), vec![]);
+        assert!(matches!(
+            pool.try_insert(epoch, 10, vec![via_consensus])
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionProcessing { .. }
+        ));
+        assert_eq!(
+            pool.already_processed_count("insert", "consensus_message"),
+            1
+        );
+
+        let via_checkpoint = user_transaction();
+        epoch_store
+            .insert_finalized_transactions(&[digest_of(&via_checkpoint)], 1)
+            .unwrap();
+        assert!(matches!(
+            pool.try_insert(epoch, 10, vec![via_checkpoint])
+                .unwrap_err()
+                .as_inner(),
+            SuiErrorKind::TransactionProcessing { .. }
+        ));
+        assert_eq!(
+            pool.already_processed_count("insert", "checkpoint_execution"),
+            1
+        );
+
+        assert_eq!(pool.queue_depth("user"), 0);
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert!(transactions.is_empty());
+        drop(ack);
+    }
+
+    #[tokio::test]
+    async fn departing_entries_deregister_their_processed_watches() {
+        let (state, pool) = test_state_and_pool(1).await;
+        let epoch = pool.epoch();
+        let epoch_store = state.epoch_store_for_testing();
+        // Each user key registers with both the consensus and the checkpoint registry.
+        let baseline = epoch_store.num_pending_processed_notifications();
+
+        let evicted_tx = user_transaction();
+        let (evicted, _) = pool
+            .try_insert(epoch, 10, vec![evicted_tx.clone()])
+            .unwrap();
+        assert_eq!(
+            epoch_store.num_pending_processed_notifications(),
+            baseline + 2
+        );
+
+        let taken_tx = user_transaction();
+        let (taken, _) = pool.try_insert(epoch, 20, vec![taken_tx.clone()]).unwrap();
+        assert!(matches!(
+            evicted.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
+        ));
+        assert_eq!(
+            epoch_store.num_pending_processed_notifications(),
+            baseline + 2
+        );
+
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        ack(block(1));
+        taken.await.unwrap().unwrap();
+        assert_eq!(epoch_store.num_pending_processed_notifications(), baseline);
+
+        let closed_tx = user_transaction();
+        let (closed, _) = pool.try_insert(epoch, 10, vec![closed_tx.clone()]).unwrap();
+        assert_eq!(
+            epoch_store.num_pending_processed_notifications(),
+            baseline + 2
+        );
+        pool.close();
+        assert!(matches!(
+            closed.await.unwrap().unwrap_err().as_inner(),
+            SuiErrorKind::ValidatorHaltedAtEpochEnd
+        ));
+        assert_eq!(epoch_store.num_pending_processed_notifications(), baseline);
+
+        for transaction in [&evicted_tx, &taken_tx, &closed_tx] {
+            epoch_store.process_notifications(std::iter::once(&consensus_key(transaction)));
+            epoch_store
+                .insert_finalized_transactions(&[digest_of(transaction)], 1)
+                .unwrap();
+        }
+        assert_eq!(epoch_store.num_pending_processed_notifications(), baseline);
     }
 
     #[tokio::test]

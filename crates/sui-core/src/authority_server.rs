@@ -1426,20 +1426,23 @@ impl ValidatorService {
                         }
                     }
                     let gas_price = Self::extract_gas_price(&txns);
-                    let (receiver, newly_inserted) = context
+                    let result = context
                         .try_insert(epoch_store.epoch(), gas_price, txns)
-                        .await?;
-                    if !newly_inserted {
+                        .await;
+                    if let Ok((_, false)) = &result {
                         // Duplicate of an in-flight submission; flag the request as spam. The
                         // per-tx result is still Submitted, so this is tracked separately.
                         duplicate_at_admission = true;
                     }
-                    receivers.push(receiver);
+                    receivers.push(result.map(|(receiver, _)| receiver));
                 }
                 future::join_all(receivers.into_iter().map(|receiver| async move {
-                    receiver.await.unwrap_or_else(|_| {
-                        Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into())
-                    })
+                    match receiver {
+                        Ok(receiver) => receiver.await.unwrap_or_else(|_| {
+                            Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into())
+                        }),
+                        Err(error) => Err(error),
+                    }
                 }))
                 .await
             }

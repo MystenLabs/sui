@@ -7,7 +7,8 @@ use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
 use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
 use prometheus::{
-    Histogram, IntCounter, IntGauge, IntGaugeVec, Registry, register_histogram_with_registry,
+    Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry,
 };
@@ -32,6 +33,16 @@ pub struct QueueEntry {
     pub position_sender: oneshot::Sender<Result<Vec<ConsensusPosition>, tonic::Status>>,
     pub submitter_client_addr: Option<IpAddr>,
     pub enqueue_time: Instant,
+}
+
+/// What `PriorityAdmissionQueue::pop_batch_while` does with an examined entry.
+pub enum PopAction {
+    /// Pop the entry into the included partition.
+    Include,
+    /// Pop the entry into the excluded partition.
+    Exclude,
+    /// Leave the entry queued and stop iterating.
+    Stop,
 }
 
 pub trait AdmissionQueueEntry {
@@ -97,6 +108,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_requeued_on_dropped_ack: IntCounter,
     pub pool_gc_notified: IntCounter,
     pub pool_waiting_inserts: IntGauge,
+    pub pool_already_processed: IntCounterVec,
 }
 
 impl AdmissionQueueMetrics {
@@ -169,6 +181,13 @@ impl AdmissionQueueMetrics {
             pool_waiting_inserts: register_int_gauge_with_registry!(
                 "consensus_transaction_pool_waiting_inserts",
                 "Pool submissions waiting for the matching epoch pool to become available",
+                registry,
+            )
+            .unwrap(),
+            pool_already_processed: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_already_processed",
+                "User submissions not proposed because they were already processed elsewhere, by the stage that detected it and the path that processed them",
+                &["stage", "method"],
                 registry,
             )
             .unwrap(),
@@ -252,12 +271,13 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         let mut remaining = count;
         self.pop_batch_while(|_| {
             if remaining == 0 {
-                false
+                PopAction::Stop
             } else {
                 remaining -= 1;
-                true
+                PopAction::Include
             }
         })
+        .0
     }
 
     pub fn into_entries(mut self) -> Vec<E> {
@@ -265,27 +285,38 @@ impl<E: AdmissionQueueEntry> PriorityAdmissionQueue<E> {
         self.pop_batch(len)
     }
 
-    /// Pop entries highest gas price first (FIFO within a price level) while `pred`
-    /// accepts them. The first rejected entry stays queued and iteration stops.
-    pub fn pop_batch_while(&mut self, mut pred: impl FnMut(&E) -> bool) -> Vec<E> {
-        let mut entries = Vec::new();
+    /// Pop entries highest gas price first (FIFO within a price level) until
+    /// `action` returns `Stop` or the queue is empty. The entry that stopped
+    /// iteration stays queued. Popped entries are returned partitioned into
+    /// those the callback chose to `Include` and those to `Exclude`.
+    pub fn pop_batch_while(
+        &mut self,
+        mut action: impl FnMut(&mut E) -> PopAction,
+    ) -> (Vec<E>, Vec<E>) {
+        let mut included = Vec::new();
+        let mut excluded = Vec::new();
         'levels: while let Some(mut last) = self.map.last_entry() {
             let deque = last.get_mut();
-            while let Some(entry) = deque.front() {
-                if !pred(entry) {
+            while let Some(entry) = deque.front_mut() {
+                let action = action(entry);
+                if matches!(action, PopAction::Stop) {
                     break 'levels;
                 }
                 let entry = deque.pop_front().expect("front entry must exist");
                 self.total_len -= 1;
-                entries.push(entry);
+                match action {
+                    PopAction::Include => included.push(entry),
+                    PopAction::Exclude => excluded.push(entry),
+                    PopAction::Stop => unreachable!("Stop breaks out above"),
+                }
             }
             last.remove();
         }
-        for entry in &entries {
+        for entry in included.iter().chain(&excluded) {
             self.remove_keys(entry);
         }
         self.metrics.queue_depth.set(self.total_len as i64);
-        entries
+        (included, excluded)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -689,19 +720,27 @@ mod tests {
     }
 
     #[test]
-    fn test_pop_batch_while_stops_at_first_rejected_entry() {
-        let mut q = build_queue(10, &[100, 200, 200, 50]);
+    fn test_pop_batch_while_partitions_and_stops() {
+        let mut q = build_queue(10, &[100, 200, 200, 50, 75]);
 
-        let popped = q.pop_batch_while(|entry| entry.gas_price > 60);
+        let (included, excluded) = q.pop_batch_while(|entry| match entry.gas_price {
+            price if price < 80 => PopAction::Stop,
+            price if price < 150 => PopAction::Exclude,
+            _ => PopAction::Include,
+        });
         assert_eq!(
-            popped.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
-            vec![200, 200, 100]
+            included.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![200, 200]
         );
-        // The rejected entry stays queued and remains poppable.
-        assert_eq!(q.len(), 1);
+        assert_eq!(
+            excluded.iter().map(|e| e.gas_price).collect::<Vec<_>>(),
+            vec![100]
+        );
+        // The entry that stopped iteration stays queued, as does everything behind it.
+        assert_eq!(q.len(), 2);
         assert_eq!(q.min_gas_price(), Some(50));
-        let rest = q.pop_batch_while(|_| true);
-        assert_eq!(rest.len(), 1);
+        let (rest, _) = q.pop_batch_while(|_| PopAction::Include);
+        assert_eq!(rest.len(), 2);
         assert!(q.is_empty());
     }
 

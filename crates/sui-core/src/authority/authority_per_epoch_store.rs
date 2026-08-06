@@ -22,7 +22,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
-use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::sync::notify_read::{NotifyRead, OwnedRegistration};
 use mysten_common::{debug_fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
@@ -332,11 +332,11 @@ pub struct AuthorityPerEpochStore {
 
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
-    consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
+    consensus_notify_read: Arc<NotifyRead<SequencedConsensusTransactionKey, ()>>,
 
     // Subscribers will get notified when a transaction is executed via checkpoint execution.
     executed_transactions_to_checkpoint_notify_read:
-        NotifyRead<TransactionDigest, CheckpointSequenceNumber>,
+        Arc<NotifyRead<TransactionDigest, CheckpointSequenceNumber>>,
 
     /// Batch verifier for certificates - also caches certificates and tx sigs that are known to have
     /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
@@ -1027,8 +1027,8 @@ impl AuthorityPerEpochStore {
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_token,
             epoch_alive: tokio::sync::RwLock::new(true),
-            consensus_notify_read: NotifyRead::new(),
-            executed_transactions_to_checkpoint_notify_read: NotifyRead::new(),
+            consensus_notify_read: Arc::new(NotifyRead::new()),
+            executed_transactions_to_checkpoint_notify_read: Arc::new(NotifyRead::new()),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
@@ -2419,6 +2419,29 @@ impl AuthorityPerEpochStore {
 
         join_all(unprocessed_keys_registrations).await;
         Ok(())
+    }
+
+    pub(crate) fn register_consensus_message_processed_notify(
+        &self,
+        key: &SequencedConsensusTransactionKey,
+    ) -> OwnedRegistration<SequencedConsensusTransactionKey, ()> {
+        self.consensus_notify_read.register_one_owned(key)
+    }
+
+    pub(crate) fn register_executed_in_checkpoint_notify(
+        &self,
+        digest: &TransactionDigest,
+    ) -> OwnedRegistration<TransactionDigest, CheckpointSequenceNumber> {
+        self.executed_transactions_to_checkpoint_notify_read
+            .register_one_owned(digest)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn num_pending_processed_notifications(&self) -> usize {
+        self.consensus_notify_read.num_pending()
+            + self
+                .executed_transactions_to_checkpoint_notify_read
+                .num_pending()
     }
 
     /// Get notified when transactions get executed as part of a checkpoint execution.

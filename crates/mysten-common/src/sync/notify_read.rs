@@ -12,7 +12,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
+use std::ops::Deref;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::task::{Context, Poll};
@@ -88,29 +90,32 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
         rem
     }
 
-    pub fn register_one(&self, key: &K) -> Registration<'_, K, V> {
+    pub fn register_one(&self, key: &K) -> Registration<&NotifyRead<K, V>, K, V> {
+        self.register_with(key, self)
+    }
+
+    /// Like [`NotifyRead::register_one`], but the returned registration holds the
+    /// registry by `Arc` instead of borrowing it, so it can be stored in long-lived
+    /// structures.
+    pub fn register_one_owned(self: &Arc<Self>, key: &K) -> OwnedRegistration<K, V> {
+        self.register_with(key, self.clone())
+    }
+
+    fn register_with<R>(&self, key: &K, this: R) -> Registration<R, K, V>
+    where
+        R: Deref<Target = NotifyRead<K, V>>,
+    {
         self.count_pending.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
         self.register(key, sender);
         Registration {
-            this: self,
+            this,
             registration: Some((key.clone(), receiver)),
         }
     }
 
-    pub fn register_all(&self, keys: &[K]) -> Vec<Registration<'_, K, V>> {
-        self.count_pending.fetch_add(keys.len(), Ordering::Relaxed);
-        let mut registrations = vec![];
-        for key in keys.iter() {
-            let (sender, receiver) = oneshot::channel();
-            self.register(key, sender);
-            let registration = Registration {
-                this: self,
-                registration: Some((key.clone(), receiver)),
-            };
-            registrations.push(registration);
-        }
-        registrations
+    pub fn register_all(&self, keys: &[K]) -> Vec<Registration<&NotifyRead<K, V>, K, V>> {
+        keys.iter().map(|key| self.register_one(key)).collect()
     }
 
     fn register(&self, key: &K, sender: oneshot::Sender<V>) {
@@ -238,12 +243,44 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
 
 /// Registration resolves to the value but also provides safe cancellation
 /// When Registration is dropped before it is resolved, we de-register from the pending list
-pub struct Registration<'a, K: Eq + Hash + Clone, V: Clone> {
-    this: &'a NotifyRead<K, V>,
+///
+/// Generic over how it holds the registry: borrowed for the await-in-place pattern,
+/// or by `Arc` ([`OwnedRegistration`]) so it can be stored in long-lived structures.
+pub struct Registration<R, K: Eq + Hash + Clone, V: Clone>
+where
+    R: Deref<Target = NotifyRead<K, V>>,
+{
+    this: R,
     registration: Option<(K, oneshot::Receiver<V>)>,
 }
 
-impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration<'_, K, V> {
+pub type OwnedRegistration<K, V> = Registration<Arc<NotifyRead<K, V>>, K, V>;
+
+impl<R, K: Eq + Hash + Clone, V: Clone> Registration<R, K, V>
+where
+    R: Deref<Target = NotifyRead<K, V>>,
+{
+    pub fn key(&self) -> &K {
+        &self
+            .registration
+            .as_ref()
+            .expect("registration is only taken on drop")
+            .0
+    }
+
+    pub fn try_recv(&mut self) -> Result<V, oneshot::error::TryRecvError> {
+        self.registration
+            .as_mut()
+            .expect("registration is only taken on drop")
+            .1
+            .try_recv()
+    }
+}
+
+impl<R, K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration<R, K, V>
+where
+    R: Deref<Target = NotifyRead<K, V>> + Unpin,
+{
     type Output = V;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -261,7 +298,10 @@ impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> Future for Registration<'_,
     }
 }
 
-impl<K: Eq + Hash + Clone, V: Clone> Drop for Registration<'_, K, V> {
+impl<R, K: Eq + Hash + Clone, V: Clone> Drop for Registration<R, K, V>
+where
+    R: Deref<Target = NotifyRead<K, V>>,
+{
     fn drop(&mut self) {
         if let Some((key, receiver)) = self.registration.take() {
             mem::drop(receiver);
@@ -296,6 +336,34 @@ mod tests {
         assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
         assert_eq!(reads, vec![1, 2]);
         // ensure cleanup is done correctly
+        for pending in &notify_read.pending {
+            assert!(pending.lock().is_empty());
+        }
+    }
+
+    #[tokio::test]
+    pub async fn test_register_one_owned() {
+        let notify_read = Arc::new(NotifyRead::<u64, u64>::new());
+
+        let mut fired = notify_read.register_one_owned(&1);
+        let dropped = notify_read.register_one_owned(&2);
+        assert_eq!(2, notify_read.num_pending());
+        assert_eq!(&1, fired.key());
+        assert_eq!(Err(oneshot::error::TryRecvError::Empty), fired.try_recv());
+
+        // A notified value is observable via try_recv without the registration ever
+        // being polled as a future, which is what lets an owner test readiness
+        // synchronously.
+        notify_read.notify(&1, &7);
+        assert_eq!(Ok(7), fired.try_recv());
+        assert_eq!(1, notify_read.num_pending());
+
+        // Dropping deregisters; notifying a departed key is a no-op.
+        drop(dropped);
+        assert_eq!(0, notify_read.num_pending());
+        notify_read.notify(&2, &9);
+        drop(fired);
+        assert_eq!(0, notify_read.num_pending());
         for pending in &notify_read.pending {
             assert!(pending.lock().is_empty());
         }
