@@ -496,9 +496,11 @@ where
                                 .iter()
                                 .filter(|r| r.author == block_ref.author)
                                 .count();
+                            let lane_bound = MAX_PENDING_EXACT_REQUESTS
+                                .min(self.context.parameters.max_blocks_per_fetch);
                             if round_ok
                                 && author_count < author_share
-                                && self.pending_exact_requests.len() < MAX_PENDING_EXACT_REQUESTS
+                                && self.pending_exact_requests.len() < lane_bound
                             {
                                 self.pending_exact_requests.insert(block_ref);
                             } else {
@@ -1101,11 +1103,12 @@ where
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
             // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.
-            let fetch_after_rounds = Self::get_fetch_after_rounds(
-                &context,
-                dag_state.clone(),
-                self.pending_slot_floor.as_ref(),
-            );
+            // Deliberately unlowered: this filter decides which refs ride the
+            // request, and the server range-scans only authorities with refs in it —
+            // filtering an authority's refs out on account of its pending slots
+            // would strand exactly the slots the floor exists to repair.
+            let fetch_after_rounds =
+                Self::get_fetch_after_rounds(&context, dag_state.clone(), None);
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         }
         // Under commit-sync failover an empty set is meaningful: it selects the

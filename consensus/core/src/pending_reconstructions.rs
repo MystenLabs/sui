@@ -392,12 +392,17 @@ impl PendingReconstructions {
             .filter(|r| r.round <= gc_round)
             .copied()
             .collect();
+        let mut swept_any = false;
         for block_ref in swept {
             if let Some((peer, sidecar)) = self.held_sidecars.remove(&block_ref) {
                 let bytes: usize = sidecar.iter().map(Vec::len).sum();
                 self.per_peer_bytes[peer] -= bytes;
                 self.total_bytes -= bytes;
+                swept_any = true;
             }
+        }
+        if swept_any {
+            self.update_gauges();
         }
         if !obsolete.is_empty() || !frontier_dead.is_empty() {
             self.rebuild_slot_floor();
@@ -521,12 +526,15 @@ impl PendingReconstructions {
         // Charges are held for dispatched entries too; exact reconciliation is only
         // possible when nothing is in flight.
         if self.in_flight == 0 {
-            let total: usize = self.pending.values().map(|e| e.charge).sum();
-            assert_eq!(total, self.total_bytes, "byte accounting drifted");
             let mut per_peer = vec![0usize; self.per_peer_bytes.len()];
             for entry in self.pending.values() {
                 per_peer[entry.peer] += entry.charge;
             }
+            for (peer, sidecar) in self.held_sidecars.values() {
+                per_peer[*peer] += sidecar.iter().map(Vec::len).sum::<usize>();
+            }
+            let total: usize = per_peer.iter().sum();
+            assert_eq!(total, self.total_bytes, "byte accounting drifted");
             assert_eq!(per_peer, self.per_peer_bytes);
         }
     }
@@ -683,11 +691,15 @@ async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
             {
                 return false;
             }
-            pending_reconstructions.lock().hold_sidecar(
-                entry.claimed_ref,
-                entry.peer,
-                entry.excluded_ancestors,
-            );
+            // Release before holding: the entry charge still covers these bytes, and
+            // holding first double-counts the sidecar against the unified cap —
+            // refusing it on capacity that is about to free.
+            {
+                let mut pending = pending_reconstructions.lock();
+                pending.release(peer, charge);
+                pending.hold_sidecar(entry.claimed_ref, entry.peer, entry.excluded_ancestors);
+            }
+            return true;
         }
         Err(crate::minimal_block::InflateError::Malformed(error)) => {
             tracing::debug!(
@@ -925,6 +937,37 @@ mod tests {
         p.assert_invariants();
         // Slot floor is clear once nothing is pending.
         assert!(p.slot_floor.read().iter().all(|&r| r == Round::MAX));
+    }
+
+    /// A dispatched entry's charge still covers its sidecar; releasing before
+    /// holding is what lets the hint survive a re-inflation failure at the cap.
+    #[test]
+    fn release_then_hold_survives_cap_pressure() {
+        let mut p = pending_reconstructions();
+        let author = AuthorityIndex::new_for_test(1);
+        let payload = MAX_PARKED_BYTES_PER_PEER - 8;
+        assert!(
+            p.try_admit(
+                r(10, 1, 1),
+                Bytes::from(vec![0u8; payload]),
+                vec![vec![7u8; 8]],
+                author,
+                vec![slot(9, 2)],
+                0,
+                10,
+            )
+            .is_ok()
+        );
+        let effects = p.on_blocks_accepted(&[r(9, 2, 5)]);
+        assert_eq!(effects.ready.len(), 1);
+        let entry = &effects.ready[0];
+        // Worker order on NeedFullBlock: release first, then hold — the sidecar
+        // fits because the entry's own charge just freed.
+        p.release(entry.peer, entry.charge);
+        p.hold_sidecar(r(10, 1, 1), author, vec![vec![7u8; 8]]);
+        assert_eq!(p.held_sidecars.len(), 1, "hint must survive cap pressure");
+        assert_eq!(p.per_peer_bytes[author], 8);
+        p.assert_invariants();
     }
 
     /// The slot floor tracks the lowest pending slot per authority — the value the
