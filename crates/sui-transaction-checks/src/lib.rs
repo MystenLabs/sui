@@ -21,7 +21,7 @@ mod checked {
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
-        TransactionDataAPI, TransactionKind,
+        TransactionDataAPI, TransactionKind, UnifiedLinkageInformation,
     };
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
@@ -857,12 +857,14 @@ mod checked {
 
         // Reject a collected forbidden version, but let collection errors reach execution as invalid
         // linkage errors instead of denying signing.
-        let Ok((execution_original_ids, resolved_packages)) =
-            sui_execution::collect_unification_information_for_signing(
-                protocol_config,
-                pt,
-                backing_store,
-            )
+        let Ok(UnifiedLinkageInformation {
+            execution_original_ids,
+            resolved_packages,
+        }) = sui_execution::collect_unification_information_for_signing(
+            protocol_config,
+            pt,
+            backing_store,
+        )
         else {
             return Ok(());
         };
@@ -871,12 +873,7 @@ mod checked {
             let Some((_, version)) = resolved_packages.get(&original_id) else {
                 continue;
             };
-            if package_config::is_version_forbidden(
-                original_id.into(),
-                *version,
-                backing_store,
-                None,
-            ) {
+            if package_config::is_version_forbidden(original_id, *version, backing_store, None) {
                 return Err(UserInputError::TransactionDenied {
                     error: format!("Package {original_id} version {version} is forbidden"),
                 }

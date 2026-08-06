@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{EpochId, ObjectID};
-use crate::config::{Config, Setting};
-use crate::dynamic_field::{DOFWrapper, get_dynamic_field_from_store};
+use crate::config::{Config, get_config_from_store, read_config_setting};
+use crate::dynamic_field::DOFWrapper;
 use crate::storage::ObjectStore;
 use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_PACKAGE_ID, SUI_PACKAGE_CONFIG_OBJECT_ID};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 pub const PACKAGE_CONFIG_MODULE_NAME: &IdentStr = ident_str!("package_config");
 
@@ -78,7 +76,7 @@ pub fn get_per_package_config(
     let config_key = DOFWrapper {
         name: PackageMetadataKey::new(original_id),
     };
-    get_dynamic_field_from_store(object_store, SUI_PACKAGE_CONFIG_OBJECT_ID, &config_key).ok()
+    get_config_from_store(object_store, SUI_PACKAGE_CONFIG_OBJECT_ID, &config_key)
 }
 
 /// Reads flags for one package version. `None` means the config or setting is absent or could not
@@ -113,19 +111,4 @@ pub fn is_version_forbidden(
     get_per_package_config(original_id, object_store)
         .and_then(|config| read_version_forbid_flags(&config, version, object_store, cur_epoch))
         .is_some_and(flags_forbid_version)
-}
-
-fn read_config_setting<K, V>(
-    object_store: &dyn ObjectStore,
-    config: &Config,
-    setting_name: K,
-    cur_epoch: Option<EpochId>,
-) -> Option<V>
-where
-    K: Clone + MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
-    V: Clone + Serialize + DeserializeOwned,
-{
-    let setting: Setting<V> =
-        get_dynamic_field_from_store(object_store, *config.id.object_id(), &setting_name).ok()?;
-    setting.read_value(cur_epoch).cloned()
 }
