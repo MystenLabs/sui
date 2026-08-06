@@ -740,18 +740,20 @@ fn function_body(
                     .constant_values
                     .get(&module)
                     .expect("ICE constants not translated before functions");
+                let constants = Constants {
+                    values: constant_values,
+                    force_inline: false,
+                };
                 cfgir::optimize(
                     context.env,
                     &context.reporter,
-                    Constants {
-                        values: constant_values,
-                        force_inline: false,
-                    },
+                    constants,
                     context.current_package,
                     signature,
                     &locals,
                     &mut cfg,
                 );
+                cfgir::report_always_erroring_operations(&context.reporter, constants, &cfg);
                 if context.debug.print_optimized_blocks {
                     for (lbl, block) in &blocks {
                         println!("{lbl}:");

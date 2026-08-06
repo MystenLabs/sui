@@ -1,7 +1,7 @@
 //# init --edition 2024.alpha
 
 //# print-bytecode
-module 0x42::m {
+#[allow(always_errors)] module 0x42::m {
     const ONE: u64 = 1;
     const TWO: u64 = 2;
     const MAX_U16: u16 = 0xFFFF;
