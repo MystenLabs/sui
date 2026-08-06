@@ -21,6 +21,7 @@ use tracing::{debug, error, info};
 use crate::{
     block::BlockAPI as _,
     block_inflater::BlockInflater,
+    commit_vote_monitor::{CommitVoteMonitor, is_commit_lagging},
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
@@ -91,6 +92,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
     missing_block_registry: Arc<dyn MissingBlockRegistry>,
     round_tracker: Arc<RwLock<RoundTracker>>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -107,6 +109,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Arc<RwLock<DagState>>,
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
     ) -> Self {
         let pending_reconstructions =
             Arc::new(Mutex::new(PendingReconstructions::new(context.clone())));
@@ -156,6 +159,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             effects_tx,
             missing_block_registry,
             round_tracker,
+            commit_vote_monitor,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
             reconstruction_worker: Mutex::new(Some(reconstruction_worker)),
@@ -178,6 +182,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let effects_tx = self.effects_tx.clone();
         let missing_block_registry = self.missing_block_registry.clone();
         let round_tracker = self.round_tracker.clone();
+        let commit_vote_monitor = self.commit_vote_monitor.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -191,6 +196,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             effects_tx,
             missing_block_registry,
             round_tracker,
+            commit_vote_monitor,
             peer,
         )));
     }
@@ -323,6 +329,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         >,
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -609,6 +616,35 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             crate::pending_reconstructions::AdmitRefusal::PeerBytes
                                                 | crate::pending_reconstructions::AdmitRefusal::TotalBytes
                                         );
+                                        // Exception: while local commits lag the quorum,
+                                        // core rejects every block after reconstruction
+                                        // anyway (handle_send_block sheds on
+                                        // is_commit_lagging), so a replay reset refills
+                                        // the caps with the same doomed span — a
+                                        // self-sustaining loop. Shed instead and keep the
+                                        // stream: recovery is commit sync, the same
+                                        // contract full-form rejection relies on. The
+                                        // OutsideWindow reset stays — those claims carry
+                                        // no commit votes, so nothing else recovers them.
+                                        if cap_bound {
+                                            let lagging =
+                                                dag_state.upgrade().is_some_and(|dag_state| {
+                                                    let local =
+                                                        dag_state.read().last_commit_index();
+                                                    is_commit_lagging(
+                                                        &context,
+                                                        local,
+                                                        commit_vote_monitor.quorum_commit_index(),
+                                                    )
+                                                });
+                                            if lagging {
+                                                node_metrics
+                                                    .minimal_block_recovery_outcomes
+                                                    .with_label_values(&["shed_commit_lag"])
+                                                    .inc();
+                                                continue 'stream;
+                                            }
+                                        }
                                         if receiver_behind || cap_bound {
                                             info!(
                                                 "Minimal block {} from {} {} is past the                                                  admission window; resetting subscription                                                  for full replay",
@@ -710,9 +746,11 @@ mod test {
     use crate::{
         VerifiedBlock,
         block::{TestBlock, genesis_blocks},
-        commit::CommitRange,
+        commit::{CommitDigest, CommitRange, CommitRef, TrustedCommit},
+        commit_vote_monitor::COMMIT_LAG_MULTIPLIER,
         error::ConsensusResult,
         network::{BlockStream, ExtendedSerializedBlock, test_network::TestService},
+        pending_reconstructions::MAX_PARKED_BYTES_PER_PEER,
         storage::mem_store::MemStore,
     };
 
@@ -1022,10 +1060,12 @@ mod test {
     ) -> (
         Arc<dyn crate::pending_reconstructions::MissingBlockRegistry>,
         Arc<RwLock<RoundTracker>>,
+        Arc<CommitVoteMonitor>,
     ) {
         (
             Arc::new(NoopRegistry),
             Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![]))),
+            Arc::new(CommitVoteMonitor::new(context.clone())),
         )
     }
 
@@ -1067,7 +1107,7 @@ mod test {
         let network_client = Arc::new(FixedStreamClient::new(wire));
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
-        let (registry, tracker) = test_subscriber_deps(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
@@ -1075,6 +1115,7 @@ mod test {
             receiver_dag.clone(),
             registry,
             tracker,
+            monitor,
         );
         subscriber.subscribe(s.peer);
 
@@ -1125,7 +1166,7 @@ mod test {
         let network_client = Arc::new(client);
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&context);
-        let (registry, tracker) = test_subscriber_deps(&context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
@@ -1133,6 +1174,7 @@ mod test {
             receiver_dag,
             registry,
             tracker,
+            monitor,
         );
         subscriber.subscribe(peer);
 
@@ -1162,7 +1204,7 @@ mod test {
         receiver_dag
             .write()
             .accept_block(VerifiedBlock::new_for_test(TestBlock::new(1499, 0).build()));
-        let (registry, tracker) = test_subscriber_deps(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
@@ -1170,6 +1212,7 @@ mod test {
             receiver_dag,
             registry,
             tracker,
+            monitor,
         );
         subscriber.subscribe(s.peer);
 
@@ -1205,7 +1248,7 @@ mod test {
         let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
-        let (registry, tracker) = test_subscriber_deps(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
@@ -1213,6 +1256,7 @@ mod test {
             receiver_dag.clone(),
             registry,
             tracker.clone(),
+            monitor,
         );
         subscriber.subscribe(s.peer);
 
@@ -1234,7 +1278,7 @@ mod test {
         let network_client = Arc::new(SubscriberTestClient::new());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let (registry, tracker) = test_subscriber_deps(&context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client,
@@ -1242,6 +1286,7 @@ mod test {
             dag_state,
             registry,
             tracker,
+            monitor,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1284,7 +1329,7 @@ mod test {
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         let network_client = Arc::new(SubscriberTestClient::new());
         let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let (registry, tracker) = test_subscriber_deps(&context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
@@ -1292,6 +1337,7 @@ mod test {
             dag_state.clone(),
             registry,
             tracker,
+            monitor,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1338,7 +1384,7 @@ mod test {
         let network_client = Arc::new(SubscriberTestClient::new_pending());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let (registry, tracker) = test_subscriber_deps(&context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
@@ -1346,6 +1392,7 @@ mod test {
             dag_state,
             registry,
             tracker,
+            monitor,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1369,7 +1416,7 @@ mod test {
         let network_client = Arc::new(SubscriberTestClient::new_hanging_subscribe());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let (registry, tracker) = test_subscriber_deps(&context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
@@ -1377,6 +1424,7 @@ mod test {
             dag_state,
             registry,
             tracker,
+            monitor,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1402,7 +1450,7 @@ mod test {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let (registry, tracker) = test_subscriber_deps(&context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&context);
         let subscriber = Subscriber::new(
             context.clone(),
             network_client.clone(),
@@ -1410,6 +1458,7 @@ mod test {
             dag_state,
             registry,
             tracker,
+            monitor,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1425,6 +1474,166 @@ mod test {
         assert!(
             !authority_service.lock().handle_send_block.is_empty(),
             "blocks from the slow stream should have been processed"
+        );
+    }
+
+    /// Observes commit votes at `index` from a quorum of authorities so
+    /// `quorum_commit_index()` reaches it.
+    fn observe_quorum_commit_votes(monitor: &CommitVoteMonitor, index: u32) {
+        for authority in [0u32, 1, 3] {
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(1, authority)
+                    .set_commit_votes(vec![CommitRef::new(index, CommitDigest::MIN)])
+                    .build(),
+            );
+            monitor.observe_block(&block);
+        }
+    }
+
+    /// While local commits lag the quorum, a byte-cap refusal sheds the block and keeps
+    /// the stream (core would reject the reconstruction anyway; commit sync recovers
+    /// it). As soon as the lag clears, the next cap refusal resets for full replay.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn cap_refusal_sheds_while_commit_lagging_then_resets_after_catch_up() {
+        let s = minimal_wire_scenario(2, 2, 2);
+        let network_client = Arc::new(FixedStreamClient::new(vec![s.wire[0].clone()]));
+        let (live_tx, live_rx) = tokio::sync::mpsc::unbounded_channel();
+        *network_client.live.lock() = Some(live_rx);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
+        let lag_threshold = s.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
+        observe_quorum_commit_votes(&monitor, lag_threshold + 1);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            registry,
+            tracker,
+            monitor,
+        );
+        // Fill the peer's byte budget so the streamed minimal block refuses on the cap.
+        subscriber.pending_reconstructions.lock().hold_sidecar(
+            s.ancestors[1].reference(),
+            s.peer,
+            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
+        );
+        subscriber.subscribe(s.peer);
+
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| {
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["shed_commit_lag"])
+                .get()
+                >= 1
+        })
+        .await;
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
+        assert!(
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["peer_bytes"])
+                .get()
+                >= 1,
+            "the refusal itself must stay visible alongside the shed outcome"
+        );
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
+
+        // Catch up: one commit clears the lag, so the next cap refusal resets.
+        receiver_dag.write().accept_block(s.ancestors[0].clone());
+        receiver_dag.write().add_commit(TrustedCommit::new_for_test(
+            1,
+            CommitDigest::MIN,
+            0,
+            s.ancestors[0].reference(),
+            vec![],
+        ));
+        live_tx.send(s.wire[1].clone()).unwrap();
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        assert_eq!(
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["shed_commit_lag"])
+                .get(),
+            1,
+            "shedding must stop once commits are caught up"
+        );
+    }
+
+    /// Without commit lag a byte-cap refusal keeps its full-replay reset.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn cap_refusal_resets_when_commits_current() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            registry,
+            tracker,
+            monitor,
+        );
+        subscriber.pending_reconstructions.lock().hold_sidecar(
+            s.ancestors[1].reference(),
+            s.peer,
+            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
+        );
+        subscriber.subscribe(s.peer);
+
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        assert_eq!(
+            s.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["shed_commit_lag"])
+                .get(),
+            0
+        );
+    }
+
+    /// The shed exception must not fire at the exact lag threshold: equality is not
+    /// lagging, so the reset path applies.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn cap_refusal_at_exact_lag_threshold_resets() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
+        let lag_threshold = s.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
+        observe_quorum_commit_votes(&monitor, lag_threshold);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            registry,
+            tracker,
+            monitor,
+        );
+        subscriber.pending_reconstructions.lock().hold_sidecar(
+            s.ancestors[1].reference(),
+            s.peer,
+            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
+        );
+        subscriber.subscribe(s.peer);
+
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        assert_eq!(
+            s.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["shed_commit_lag"])
+                .get(),
+            0
         );
     }
 }

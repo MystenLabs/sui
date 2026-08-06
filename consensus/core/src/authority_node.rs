@@ -464,6 +464,7 @@ where
                 dag_state.clone(),
                 synchronizer.clone(),
                 round_tracker.clone(),
+                commit_vote_monitor.clone(),
             );
             for (peer, _) in context.committee.authorities() {
                 if peer != context.own_index {
