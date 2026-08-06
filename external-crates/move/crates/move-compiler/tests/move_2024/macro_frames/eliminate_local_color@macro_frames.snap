@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/eliminate_local_color.move:16:9
+   │
+16 │         m!(|x| x)
+   │         ^^^^^^^^^ [0] MacroBody(0x41::m::m)
+   │
+   = Frame transitions (test):
+       11: `let v = 1;`
+           [] -> [0:MacroBody(m)]
+       16: `m!(|x| x)`
+           [0:MacroBody(m)] -> []

@@ -422,6 +422,15 @@ pub struct Lambda {
 pub struct Block {
     pub name: Option<BlockLabel>,
     pub from_macro_argument: Option<MacroArgument>,
+    /// Structural macro expansion info for the debugger's frame tracking.
+    /// `None` for non-macro blocks; `Some(Arc<MacroInfo>)` for blocks introduced
+    /// by macro body, lambda, or argument expansion.
+    ///
+    /// During macro body recoloring (`recolor_use_funs = true`), this is set to
+    /// the MacroInfo for the current expansion. During argument/lambda recoloring
+    /// (`false`), it is preserved — resetting it would destroy info from a prior
+    /// substitution, making that frame invisible in debugger transitions.
+    pub expansion_color: macro_frames::ExpansionColor,
     pub seq: Sequence,
 }
 
@@ -2014,6 +2023,7 @@ impl AstDebug for Block {
         let Block {
             name,
             from_macro_argument,
+            expansion_color: _,
             seq,
         } = self;
         if let Some(name) = name {

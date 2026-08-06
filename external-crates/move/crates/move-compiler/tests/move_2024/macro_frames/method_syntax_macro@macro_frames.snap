@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/method_syntax_macro.move:14:9
+   │
+10 │         s.v + $by
+   │               --- [1] Argument
+   ·
+14 │         s.bump!(1)
+   │         ^^^^^^^^^^ [0] MacroBody(0x41::m::bump)
+   │
+   = Frame transitions (test):
+       10: `s.v + $by`
+           [] -> [0:MacroBody(bump)]
+       14: `s.bump!(1)`
+           [0:MacroBody(bump)] -> [0:MacroBody(bump), 1:Argument]
+       10: `s.v + $by`
+           [0:MacroBody(bump), 1:Argument] -> [0:MacroBody(bump)]
+       14: `s.bump!(1)`
+           [0:MacroBody(bump)] -> []

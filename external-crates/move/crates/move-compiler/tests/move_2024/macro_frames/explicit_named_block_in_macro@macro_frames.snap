@@ -1,0 +1,31 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/explicit_named_block_in_macro.move:20:9
+   │
+14 │             let y = $x + 1;
+   │                     -- [1,3] Argument
+   ·
+20 │         foo!(v) + foo!(v)
+   │         ^^^^^^^   ------- [2] MacroBody(0x41::m::foo)
+   │         │          
+   │         [0] MacroBody(0x41::m::foo)
+   │
+   = Frame transitions (test):
+       20: `foo!(v) + foo!(v)`
+           [] -> [0:MacroBody(foo), 1:Argument]
+       14: `let y = $x + 1;`
+           [0:MacroBody(foo), 1:Argument] -> [0:MacroBody(foo)]
+       20: `foo!(v) + foo!(v)`
+           [0:MacroBody(foo)] -> []
+       20: `foo!(v) + foo!(v)`
+           [] -> [2:MacroBody(foo), 3:Argument]
+       14: `let y = $x + 1;`
+           [2:MacroBody(foo), 3:Argument] -> [2:MacroBody(foo)]
+       20: `foo!(v) + foo!(v)`
+           [2:MacroBody(foo)] -> []

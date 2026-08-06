@@ -255,6 +255,12 @@ impl<T: AstDebug> AstDebug for move_ir_types::location::Spanned<T> {
     }
 }
 
+impl<T: AstDebug, C> AstDebug for move_ir_types::location::ColorSpanned<T, C> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        self.value.ast_debug(w)
+    }
+}
+
 //**************************************************************************************************
 // Display
 //**************************************************************************************************

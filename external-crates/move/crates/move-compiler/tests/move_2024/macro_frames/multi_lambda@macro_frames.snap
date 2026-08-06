@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+  ┌─ tests/move_2024/macro_frames/multi_lambda.move:8:9
+  │
+8 │         apply2!(|x| x + 1, |y| y * 2)
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::apply2)
+  │
+  = Frame transitions (test):
+      4: `$f(1) + $g(2)`
+          [] -> [0:MacroBody(apply2)]
+      8: `apply2!(|x| x + 1, |y| y * 2)`
+          [0:MacroBody(apply2)] -> []

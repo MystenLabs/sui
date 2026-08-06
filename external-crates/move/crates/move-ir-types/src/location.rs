@@ -194,3 +194,71 @@ macro_rules! sp {
         }
     };
 }
+
+//**************************************************************************************************
+// ColorSpanned
+//**************************************************************************************************
+
+/// Like `Spanned<T>`, but also carries an additional color field for tracking
+/// macro expansion context during debugging.
+#[derive(Debug, Clone)]
+pub struct ColorSpanned<T, C> {
+    pub loc: Loc,
+    pub color: C,
+    pub value: T,
+}
+
+impl<T: PartialEq, C: PartialEq> PartialEq for ColorSpanned<T, C> {
+    fn eq(&self, other: &ColorSpanned<T, C>) -> bool {
+        self.value == other.value && self.color == other.color
+    }
+}
+
+impl<T: Eq, C: Eq> Eq for ColorSpanned<T, C> {}
+
+/// Function used to have nearly tuple-like syntax for creating a ColorSpanned
+pub fn csp<T, C>(loc: Loc, color: C, value: T) -> ColorSpanned<T, C> {
+    ColorSpanned { loc, color, value }
+}
+
+/// Macro used to create a tuple-like pattern match for ColorSpanned
+#[macro_export]
+macro_rules! csp {
+    (_, _, $value:pat) => {
+        $crate::location::ColorSpanned { value: $value, .. }
+    };
+    (_, $color:pat, _) => {
+        $crate::location::ColorSpanned { color: $color, .. }
+    };
+    ($loc:pat, _, _) => {
+        $crate::location::ColorSpanned { loc: $loc, .. }
+    };
+    ($loc:pat, $color:pat, _) => {
+        $crate::location::ColorSpanned {
+            loc: $loc,
+            color: $color,
+            ..
+        }
+    };
+    ($loc:pat, _, $value:pat) => {
+        $crate::location::ColorSpanned {
+            loc: $loc,
+            value: $value,
+            ..
+        }
+    };
+    (_, $color:pat, $value:pat) => {
+        $crate::location::ColorSpanned {
+            color: $color,
+            value: $value,
+            ..
+        }
+    };
+    ($loc:pat, $color:pat, $value:pat) => {
+        $crate::location::ColorSpanned {
+            loc: $loc,
+            color: $color,
+            value: $value,
+        }
+    };
+}

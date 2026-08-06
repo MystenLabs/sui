@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/loop_in_macro.move:17:9
+   │
+ 9 │             if ((i + 1) * (i + 1) > $n) {
+   │                                     -- [1] Argument
+   ·
+17 │         find_sqrt_floor!(n)
+   │         ^^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::find_sqrt_floor)
+   │
+   = Frame transitions (test):
+       7: `let mut i = 0;`
+           [] -> [0:MacroBody(find_sqrt_floor)]
+       17: `find_sqrt_floor!(n)`
+           [0:MacroBody(find_sqrt_floor)] -> [0:MacroBody(find_sqrt_floor), 1:Argument]
+       9: `if ((i + 1) * (i + 1) > $n) {`
+           [0:MacroBody(find_sqrt_floor), 1:Argument] -> [0:MacroBody(find_sqrt_floor)]
+       17: `find_sqrt_floor!(n)`
+           [0:MacroBody(find_sqrt_floor)] -> []

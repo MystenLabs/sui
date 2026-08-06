@@ -375,6 +375,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         N::Exp_::Block(N::Block {
             name: _,
             from_macro_argument: _,
+            expansion_color: _,
             seq,
         }) => sequence(context, seq),
         N::Exp_::FieldMutate(ed, e) => {

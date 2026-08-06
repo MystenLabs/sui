@@ -471,8 +471,8 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
             }
             E::Loop { body, .. } => self.visit_exp(body),
-            E::NamedBlock(_, seq) => self.visit_seq(exp.exp.loc, seq),
-            E::Block(seq) => self.visit_seq(exp.exp.loc, seq),
+            E::NamedBlock(_, _, seq) => self.visit_seq(exp.exp.loc, seq),
+            E::Block(_, seq) => self.visit_seq(exp.exp.loc, seq),
             E::Assign(lvalues, ty_ann, e) => {
                 // visit the RHS first to better match control flow
                 self.visit_exp(e);
@@ -1072,8 +1072,8 @@ pub trait TypingMutVisitorContext {
                 self.visit_exp(e2);
             }
             E::Loop { body, .. } => self.visit_exp(body),
-            E::NamedBlock(_, seq) => self.visit_seq(seq),
-            E::Block(seq) => self.visit_seq(seq),
+            E::NamedBlock(_, _, seq) => self.visit_seq(seq),
+            E::Block(_, seq) => self.visit_seq(seq),
             E::Assign(lvalues, ty_ann, e) => {
                 // visit the RHS first to better match control flow
                 self.visit_exp(e);
@@ -1249,7 +1249,7 @@ where
             exp_satisfies_(esubject, p) || arms.iter().any(|(_, arm)| exp_satisfies_(arm, p))
         }
 
-        E::NamedBlock(_, seq) | E::Block(seq) => seq_satisfies_(seq, p),
+        E::NamedBlock(_, _, seq) | E::Block(_, seq) => seq_satisfies_(seq, p),
 
         E::Pack(_, _, _, fields) | E::PackVariant(_, _, _, _, fields) => fields
             .iter()
@@ -1328,9 +1328,8 @@ pub fn same_value_exp_(e1: &T::UnannotatedExp_, e2: &T::UnannotatedExp_) -> bool
         | (other, E::Dereference(e) | E::TempBorrow(_, e) | E::Cast(e, _) | E::Annotate(e, _)) => {
             same_value_exp_(&e.exp.value, other)
         }
-        (E::NamedBlock(_, s) | E::Block(s), other) | (other, E::NamedBlock(_, s) | E::Block(s)) => {
-            same_value_seq_exp_(s, other)
-        }
+        (E::NamedBlock(_, _, s) | E::Block(_, s), other)
+        | (other, E::NamedBlock(_, _, s) | E::Block(_, s)) => same_value_seq_exp_(s, other),
         (E::ExpList(l), other) | (other, E::ExpList(l)) if l.len() == 1 => match &l[0] {
             T::ExpListItem::Single(e, _) => same_value_exp_(&e.exp.value, other),
             T::ExpListItem::Splat(_, e, _) => same_value_exp_(&e.exp.value, other),

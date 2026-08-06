@@ -27,8 +27,51 @@ use std::{collections::BTreeMap, ops::Bound, path::PathBuf};
 
 pub type SourceName = (String, Loc);
 
-/// The current version of the trace format.
-const CURRENT_VERSION: u64 = 2;
+/// The current version of the source map format.
+const CURRENT_VERSION: u64 = 3;
+
+/// The type of macro expansion scope a frame represents.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MacroFrameKind {
+    /// Expansion of a macro function body.
+    MacroBody {
+        module_addr: AccountAddress,
+        module_name: Identifier,
+        function_name: Identifier,
+    },
+    /// Expansion of a lambda invocation inside a macro.
+    Lambda,
+    /// Evaluation of a by-name argument substituted into a macro body.
+    Argument,
+}
+
+/// A single macro expansion frame stored in the source map for debugger
+/// support. Produced during code generation by converting compiler-internal
+/// `ColorFrameInfo` records into bytecode-level entries with parent
+/// references resolved to indices.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacroFrameInfoEntry {
+    /// The type of expansion this frame represents.
+    pub kind: MacroFrameKind,
+    /// Location of the expanded construct — used by the debugger to determine
+    /// which source file to display when stepping into this frame. In
+    /// principle redundant with bytecode instruction locations (which point
+    /// to the same file), but stored explicitly for convenience:
+    /// - `MacroBody`: the macro function definition.
+    /// - `Lambda`: the lambda body definition.
+    /// - `Argument`: the argument expression at the call site.
+    pub source_loc: Loc,
+    /// Location of the site that triggered this expansion — shown in the
+    /// debugger's call stack as the "called from" position in the parent
+    /// frame:
+    /// - `MacroBody`: the `macro_name!(args)` invocation.
+    /// - `Lambda`: the `$f(args)` call inside the macro body.
+    /// - `Argument`: the `$x` reference inside the macro body.
+    pub call_loc: Loc,
+    /// Index of the parent frame in the function's `macro_frame_info` vec,
+    /// or `None` for top-level macro calls (no enclosing expansion).
+    pub parent_index: Option<u32>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StructSourceMap {
@@ -93,6 +136,17 @@ pub struct FunctionSourceMap {
 
     /// Whether this function is a native function or not.
     pub is_native: bool,
+
+    /// Metadata for each macro/lambda/argument expansion frame.
+    #[serde(default)]
+    pub macro_frame_info: Vec<MacroFrameInfoEntry>,
+
+    /// Maps bytecode offsets to macro frame indices. Stores only the offsets
+    /// where the active frame changes — consecutive instructions with the
+    /// same frame are not repeated. `None` means user code (no macro frame),
+    /// `Some(i)` is an index into `macro_frame_info`.
+    #[serde(default)]
+    pub macro_color_map: Vec<(CodeOffset, Option<u32>)>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -232,6 +286,8 @@ impl FunctionSourceMap {
             is_native,
             nops: BTreeMap::new(),
             labels: BTreeMap::new(),
+            macro_frame_info: Vec::new(),
+            macro_color_map: Vec::new(),
         }
     }
 
@@ -258,6 +314,15 @@ impl FunctionSourceMap {
             }
             _ => (),
         };
+    }
+
+    /// Record a color (macro frame index) for a given bytecode offset.
+    /// Only appends when the color differs from the most recent entry,
+    /// keeping the map compact.
+    pub fn add_color_mapping(&mut self, start_offset: CodeOffset, color_index: Option<u32>) {
+        if self.macro_color_map.last().map(|(_, c)| *c) != Some(color_index) {
+            self.macro_color_map.push((start_offset, color_index));
+        }
     }
 
     /// Record the code offset for an Nop label
@@ -653,6 +718,18 @@ impl SourceMap {
         Ok(())
     }
 
+    /// Iterates over all function source maps keyed by table index.
+    pub fn function_source_maps(&self) -> impl Iterator<Item = (TableIndex, &FunctionSourceMap)> {
+        self.function_map.iter().map(|(k, v)| (*k, v))
+    }
+
+    /// Mutable iterator over all function source maps keyed by table index.
+    pub fn function_source_maps_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (TableIndex, &mut FunctionSourceMap)> {
+        self.function_map.iter_mut().map(|(k, v)| (*k, v))
+    }
+
     pub fn get_function_source_map(
         &self,
         fdef_idx: FunctionDefinitionIndex,
@@ -807,6 +884,13 @@ impl SourceMap {
             }
             for (_, loc) in function_map.code_map.iter_mut() {
                 *loc = Loc::new(file_hash, loc.start(), loc.end());
+            }
+            // Defensive for generated source maps. Disassembly bytecode maps currently
+            // leave macro metadata empty because bytecode does not retain macro frames.
+            for frame in function_map.macro_frame_info.iter_mut() {
+                frame.source_loc =
+                    Loc::new(file_hash, frame.source_loc.start(), frame.source_loc.end());
+                frame.call_loc = Loc::new(file_hash, frame.call_loc.start(), frame.call_loc.end());
             }
         }
     }

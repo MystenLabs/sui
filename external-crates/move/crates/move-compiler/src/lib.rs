@@ -4,7 +4,7 @@
 
 // #![forbid(unsafe_code)]
 
-#[macro_use(sp)]
+#[macro_use(sp, csp)]
 extern crate move_ir_types;
 
 #[macro_use(symbol)]

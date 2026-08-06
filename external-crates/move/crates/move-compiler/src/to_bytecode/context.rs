@@ -5,7 +5,7 @@
 use crate::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
-    shared::{CompilationEnv, NumericalAddress},
+    shared::{CompilationEnv, NumericalAddress, macro_frames::ExpansionColor},
 };
 use move_core_types::account_address::AccountAddress as MoveAddress;
 use move_ir_types::ast as IR;
@@ -32,6 +32,16 @@ pub struct Context<'a> {
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
+    /// Active macro expansion color for bytecode annotation. Set from
+    /// `cmd.color` at command boundaries and from `e.color` at expression
+    /// boundaries (with save/restore). Starts at `None` (no macro scope).
+    pub color: ExpansionColor,
+    /// Colors for the block currently being built. Each `push_instr` call
+    /// appends `self.color` here in parallel with the instruction.
+    pub current_block_colors: Vec<ExpansionColor>,
+    /// Per-function color data for populating the source map's macro frame
+    /// info and color map.
+    pub function_color_data: BTreeMap<Symbol, Vec<ExpansionColor>>,
 }
 
 impl<'a> Context<'a> {
@@ -46,6 +56,9 @@ impl<'a> Context<'a> {
             current_module,
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
+            color: None,
+            current_block_colors: Vec::new(),
+            function_color_data: BTreeMap::new(),
         }
     }
 
