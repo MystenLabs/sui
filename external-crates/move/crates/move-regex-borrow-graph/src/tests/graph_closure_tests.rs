@@ -395,6 +395,53 @@ enum RawOp {
     Call(Vec<u8>, Vec<(bool, u8, Vec<u8>)>),
 }
 
+impl Model {
+    fn apply(&mut self, op: &RawOp) {
+        match op {
+            RawOp::Root(is_mut) => self.new_root(*is_mut),
+            RawOp::Alias(base, is_mut) => {
+                if self.len() == 0 {
+                    return;
+                }
+                self.alias(*base as usize % self.len(), *is_mut)
+            }
+            RawOp::Field(base, label, is_mut) => {
+                if self.len() == 0 {
+                    return;
+                }
+                let label = ALPHABET[*label as usize % ALPHABET.len()];
+                self.field(*base as usize % self.len(), label, *is_mut)
+            }
+            RawOp::Release(idx) => {
+                if self.len() <= 1 {
+                    return;
+                }
+                self.release(*idx as usize % self.len())
+            }
+            RawOp::Call(args, results) => {
+                if self.len() == 0 {
+                    return;
+                }
+                let arg_idxs = args
+                    .iter()
+                    .map(|a| *a as usize % self.len())
+                    .collect::<BTreeSet<_>>();
+                let results = results
+                    .iter()
+                    .map(|(is_mut, src, suffix)| {
+                        let suffix = suffix
+                            .iter()
+                            .map(|s| ALPHABET[*s as usize % ALPHABET.len()])
+                            .collect::<Vec<_>>();
+                        (*is_mut, *src as usize, suffix)
+                    })
+                    .collect::<Vec<_>>();
+                self.call(&arg_idxs, &results);
+            }
+        }
+    }
+}
+
 fn arb_raw_op() -> impl Strategy<Value = RawOp> {
     prop_oneof![
         2 => any::<bool>().prop_map(RawOp::Root),
@@ -422,48 +469,7 @@ fn run_history(ops: &[RawOp]) -> Model {
         if model.len() >= GRAPH_CAPACITY / 2 {
             break;
         }
-        match op {
-            RawOp::Root(is_mut) => model.new_root(*is_mut),
-            RawOp::Alias(base, is_mut) => {
-                if model.len() == 0 {
-                    continue;
-                }
-                model.alias(*base as usize % model.len(), *is_mut)
-            }
-            RawOp::Field(base, label, is_mut) => {
-                if model.len() == 0 {
-                    continue;
-                }
-                let label = ALPHABET[*label as usize % ALPHABET.len()];
-                model.field(*base as usize % model.len(), label, *is_mut)
-            }
-            RawOp::Release(idx) => {
-                if model.len() <= 1 {
-                    continue;
-                }
-                model.release(*idx as usize % model.len())
-            }
-            RawOp::Call(args, results) => {
-                if model.len() == 0 {
-                    continue;
-                }
-                let arg_idxs = args
-                    .iter()
-                    .map(|a| *a as usize % model.len())
-                    .collect::<BTreeSet<_>>();
-                let results = results
-                    .iter()
-                    .map(|(is_mut, src, suffix)| {
-                        let suffix = suffix
-                            .iter()
-                            .map(|s| ALPHABET[*s as usize % ALPHABET.len()])
-                            .collect::<Vec<_>>();
-                        (*is_mut, *src as usize, suffix)
-                    })
-                    .collect::<Vec<_>>();
-                model.call(&arg_idxs, &results);
-            }
-        }
+        model.apply(op);
     }
     model
 }
@@ -489,9 +495,7 @@ fn relation(graph: &G, refs: &[Ref]) -> BTreeMap<(Ref, Ref), BTreeSet<Vec<char>>
                 .filter(|w| paths.iter().any(|p| path_matches(p, w)))
                 .cloned()
                 .collect::<BTreeSet<_>>();
-            out.entry((x, y))
-                .or_insert_with(BTreeSet::new)
-                .extend(matched);
+            out.entry((x, y)).or_default().extend(matched);
         }
     }
     out
@@ -519,41 +523,9 @@ proptest! {
             if model.len() >= GRAPH_CAPACITY / 2 {
                 break;
             }
-            match op {
-                RawOp::Root(is_mut) => model.new_root(*is_mut),
-                RawOp::Alias(base, is_mut) => {
-                    if model.len() == 0 { continue }
-                    model.alias(*base as usize % model.len(), *is_mut)
-                }
-                RawOp::Field(base, label, is_mut) => {
-                    if model.len() == 0 { continue }
-                    let label = ALPHABET[*label as usize % ALPHABET.len()];
-                    model.field(*base as usize % model.len(), label, *is_mut)
-                }
-                RawOp::Release(idx) => {
-                    if model.len() <= 1 { continue }
-                    model.release(*idx as usize % model.len())
-                }
-                RawOp::Call(args, results) => {
-                    if model.len() == 0 { continue }
-                    let arg_idxs = args
-                        .iter()
-                        .map(|a| *a as usize % model.len())
-                        .collect::<BTreeSet<_>>();
-                    let results = results
-                        .iter()
-                        .map(|(is_mut, src, suffix)| {
-                            let suffix = suffix
-                                .iter()
-                                .map(|s| ALPHABET[*s as usize % ALPHABET.len()])
-                                .collect::<Vec<_>>();
-                            (*is_mut, *src as usize, suffix)
-                        })
-                        .collect::<Vec<_>>();
-                    model.call(&arg_idxs, &results);
-                }
-            }
-            prop_assert!(model.check_complete().is_ok(), "{}", model.check_complete().unwrap_err());
+            model.apply(op);
+            let complete = model.check_complete();
+            prop_assert!(complete.is_ok(), "{}", complete.unwrap_err());
             prop_assert!(
                 model.check_writability().is_ok(),
                 "{}",
@@ -672,7 +644,7 @@ fn canonicalize_to(model: &mut Model, keep: &[Ref]) -> Vec<Ref> {
         .map(|r| r.canonicalize(&remapping).unwrap())
         .collect::<Vec<_>>();
     model.graph.canonicalize(&remapping).unwrap();
-    for l in model.live.iter_mut() {
+    for l in &mut model.live {
         l.r = l.r.canonicalize(&remapping).unwrap();
     }
     canonical
@@ -702,16 +674,11 @@ proptest! {
             };
             for op in extra {
                 if model.len() >= GRAPH_CAPACITY / 2 { break }
-                match op {
-                    RawOp::Root(is_mut) => model.new_root(*is_mut),
-                    RawOp::Alias(b, m) => model.alias(*b as usize % model.len(), *m),
-                    RawOp::Field(b, l, m) => {
-                        let label = ALPHABET[*l as usize % ALPHABET.len()];
-                        model.field(*b as usize % model.len(), label, *m)
-                    }
-                    // Releases and calls would drop references we need to keep on both sides.
-                    RawOp::Release(_) | RawOp::Call(..) => continue,
+                // Releases and calls would drop references we need to keep on both sides.
+                if matches!(op, RawOp::Release(_) | RawOp::Call(..)) {
+                    continue;
                 }
+                model.apply(op);
             }
             model
         };
@@ -893,11 +860,7 @@ fn remove_prefix_never_returns_empty_except_for_label_mismatch() {
                 (_, None) => false,
                 (Extension::DotStar, Some(_)) => false,
                 (Extension::Epsilon, Some(_)) => true,
-                (Extension::Label(l), Some(first)) => {
-                    l != first
-                        || (r.labels.len() > 1 && !r.ends_in_dot_star)
-                        || (r.labels.len() > 1 && r.ends_in_dot_star)
-                }
+                (Extension::Label(l), Some(first)) => l != first || r.labels.len() > 1,
             };
             assert_eq!(
                 got.is_empty(),
@@ -1124,7 +1087,7 @@ impl Branch {
             .enumerate()
             .map(|(i, l)| (l.r, i as u32))
             .collect::<BTreeMap<_, _>>();
-        for l in self.live.iter_mut() {
+        for l in &mut self.live {
             l.r = l.r.canonicalize(&remapping).unwrap();
         }
         self.graph.canonicalize(&remapping).unwrap();
@@ -1195,7 +1158,7 @@ proptest! {
         };
         let mut shadow_locs = right.live.iter().map(|l| l.loc.clone()).collect::<Vec<_>>();
         joined.graph.refresh_refs().unwrap();
-        for l in joined.live.iter_mut() {
+        for l in &mut joined.live {
             l.r = l.r.refresh().unwrap();
         }
 
@@ -1298,7 +1261,7 @@ fn canonicalize_refresh_cycle_preserves_every_relation() {
     let refs = |b: &Branch| b.live.iter().map(|l| l.r).collect::<Vec<_>>();
     let before = relation(&branch.graph, &refs(&branch));
     branch.graph.refresh_refs().unwrap();
-    for l in branch.live.iter_mut() {
+    for l in &mut branch.live {
         l.r = l.r.refresh().unwrap();
     }
     branch.canonicalize();
@@ -1340,8 +1303,8 @@ proptest! {
     ) {
         let model = run_history(&ops);
         for i in 0..model.len() {
-            for j in 0..model.len() {
-                if i == j || model.live[i].loc != model.live[j].loc {
+            for j in (i + 1)..model.len() {
+                if model.live[i].loc != model.live[j].loc {
                     continue;
                 }
                 for (from, to) in [(i, j), (j, i)] {
@@ -1370,7 +1333,7 @@ proptest! {
         for x in model.live.iter().map(|l| l.r) {
             let succ = model.graph.borrowed_by(x, &mut DummyMeter).unwrap();
             prop_assert!(!succ.contains_key(&x), "{} has a non-trivial self edge", x);
-            for (_, paths) in &succ {
+            for paths in succ.values() {
                 prop_assert!(!paths.is_empty());
             }
         }
@@ -1395,11 +1358,11 @@ fn mutable_result_without_a_mutable_source_is_unconstrained() {
             .borrows_from(result, &mut DummyMeter)
             .unwrap()
             .is_empty(),
-        "mut result should have been tied to something"
+        "mutable result unexpectedly has incoming edges"
     );
     assert!(
         graph.borrowed_by(imm, &mut DummyMeter).unwrap().is_empty(),
-        "imm source should have been tied to the mut result"
+        "immutable source unexpectedly has an edge to the mutable result"
     );
     assert!(is_writable(&graph, result));
 }
@@ -1556,19 +1519,48 @@ fn overlapping_call_results_would_break_completeness() {
 fn graph_map_never_issues_a_colliding_node_index() {
     use crate::graph_map::{GraphMap, NodeIndex};
 
+    #[derive(Clone, Copy)]
+    enum Step {
+        Add,
+        Clear,
+        DropMax,
+        DropMin,
+        Minimize,
+    }
+
     let mut g: GraphMap<u32, u32> = GraphMap::new(32);
     let mut live: BTreeSet<NodeIndex> = BTreeSet::new();
     let mut ever_issued: BTreeSet<NodeIndex> = BTreeSet::new();
     let mut counter = 0u32;
     // A fixed script that exercises the id-reuse window: fill, drop the top, minimize, refill.
-    let script: &[&str] = &[
-        "add", "add", "add", "add", "drop_max", "drop_max", "minimize", "add", "add", "drop_min",
-        "minimize", "add", "add", "add", "clear", "add", "add", "minimize", "add", "drop_max",
-        "minimize", "add", "add",
+    let script = [
+        Step::Add,
+        Step::Add,
+        Step::Add,
+        Step::Add,
+        Step::DropMax,
+        Step::DropMax,
+        Step::Minimize,
+        Step::Add,
+        Step::Add,
+        Step::DropMin,
+        Step::Minimize,
+        Step::Add,
+        Step::Add,
+        Step::Add,
+        Step::Clear,
+        Step::Add,
+        Step::Add,
+        Step::Minimize,
+        Step::Add,
+        Step::DropMax,
+        Step::Minimize,
+        Step::Add,
+        Step::Add,
     ];
     for step in script {
-        match *step {
-            "add" => {
+        match step {
+            Step::Add => {
                 counter += 1;
                 let idx = g.add_node(counter).unwrap();
                 assert!(
@@ -1585,26 +1577,25 @@ fn graph_map_never_issues_a_colliding_node_index() {
                     }
                 }
             }
-            "drop_max" | "drop_min" => {
-                let victim = if *step == "drop_max" {
-                    live.iter().next_back().copied()
-                } else {
-                    live.iter().next().copied()
+            Step::DropMax | Step::DropMin => {
+                let victim = match step {
+                    Step::DropMax => live.iter().next_back().copied(),
+                    Step::DropMin => live.iter().next().copied(),
+                    _ => unreachable!(),
                 };
                 let Some(victim) = victim else { continue };
                 g.remove_node(victim).unwrap();
                 live.remove(&victim);
                 assert!(!g.contains_node(victim));
             }
-            "minimize" => g.minimize().unwrap(),
-            "clear" => {
+            Step::Minimize => g.minimize().unwrap(),
+            Step::Clear => {
                 g.clear().unwrap();
                 for stale in &live {
                     assert!(!g.contains_node(*stale), "{stale:?} survived clear()");
                 }
                 live.clear();
             }
-            other => unreachable!("{other}"),
         }
         g.check_invariants();
         assert_eq!(g.node_count(), live.len());

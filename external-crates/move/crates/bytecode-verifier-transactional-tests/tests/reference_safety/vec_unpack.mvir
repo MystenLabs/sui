@@ -38,7 +38,7 @@ label b0:
 }
 
 //# publish
-mvir 0x3::vunpack_through_ref_invalid {
+mvir 0x3::vunpack_through_ref {
 
 fun t(vr: &mut vector<u64>) {
     let a: u64;
