@@ -55,7 +55,7 @@ import TabItem from '@theme/TabItem';
 
 By the end of this page, you can:
 
-- Resolve a SuiNS name to an address onchain in Move and offchain through the Sui RPC.
+- Resolve a SuiNS name to an address onchain in Move and offchain through the SuiNS SDK.
 - Implement reverse lookup to display human-readable names in your UI.
 - Create and manage subnames under a domain you control.
 - Integrate the Enoki subname API to provision per-user identities programmatically.
@@ -64,7 +64,7 @@ By the end of this page, you can:
 <TabItem value="prereq" label="Prerequisites">
 
 - [x] [Sui CLI](/getting-started/onboarding/sui-install) installed (for onchain resolution examples)
-- [x] Node.js 18+ with `@mysten/sui` installed: `pnpm add @mysten/sui`
+- [x] Node.js 18+ with `@mysten/sui` and `@mysten/suins` installed: `pnpm add @mysten/sui @mysten/suins`
 - [x] A deployed Sui Move package if implementing onchain resolution
 - [x] A SuiNS domain if creating subnames (register at [suins.io](https://suins.io/))
 - [x] An [Enoki API key](https://portal.enoki.mystenlabs.com) if using the Enoki subname API
@@ -128,7 +128,7 @@ SuiNS supports 2 types of resolution:
 - **Lookup:** A name resolves to an address. For example, `example.sui` resolves to `0x2`. Use this when you want to send assets or look up what address a name points to.
 - **Reverse lookup:** An address resolves to a name. For example, `0x2` resolves to `example.sui`. Use this when you want to display a human-readable name for a known address.
 
-Both resolution types are available onchain in Move and offchain through the Sui RPC.
+Both resolution types are available onchain in Move and offchain through the SuiNS SDK and Sui APIs.
 
 ## Address types
 
@@ -343,7 +343,7 @@ For offchain verification (for example, in a backend service), combine the SuiNS
 
 ### Reverse lookup verification
 
-When you display a name for an address in your UI, use reverse lookup (`resolveNameServiceNames`) rather than scanning all names that point to that address. The reverse lookup returns only the name that the address owner has explicitly set as their default through a signed transaction. This guarantees that the address owner consented to being identified by that name ([SuiNS developer reference](https://docs.suins.io/developer)).
+When you display a name for an address in your UI, use reverse lookup (`core.defaultNameServiceName`) rather than scanning all names that point to that address. The reverse lookup returns only the name that the address owner has explicitly set as their default through a signed transaction. This guarantees that the address owner consented to being identified by that name ([SuiNS developer reference](https://docs.suins.io/developer)).
 
 ## Indexing
 
@@ -403,7 +403,7 @@ Configure the subname with the following parameters:
 
 ##### Step 3:
 
-Set up resolution so the subname can be looked up. The subname is resolvable immediately after creation through onchain `lookup` and offchain `resolveNameServiceAddress`. If the target address owner wants the subname as their default name, they must sign a separate set-default transaction. Both node and leaf subnames support reverse lookup registration.
+Set up resolution so the subname can be looked up. The subname is resolvable immediately after creation through onchain `lookup` and offchain `getNameRecord`. If the target address owner wants the subname as their default name, they must sign a separate set-default transaction. Both node and leaf subnames support reverse lookup registration.
 
 ### Subname configuration and parent rules
 
@@ -449,7 +449,7 @@ const extendedClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443
 ```
 
 :::info
-This example mirrors the Sui Messenger app, which uses the older `SuiClient` transport from `@mysten/sui/client` and client extension APIs from earlier `@mysten/seal` and `@mysten/messaging` releases. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for all new integrations. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
+This example mirrors the Sui Messenger app, which uses the older `SuiClient` transport from `@mysten/sui/client`, the `SealClient.asClientExtension` API that current `@mysten/seal` releases have removed, and `SuiStackMessagingClient.experimental_asClientExtension`, which `@mysten/messaging` has deprecated in favor of `messaging()`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for all new integrations. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
 :::
 
 This pattern (composing Seal, Walrus, and Messaging onto a single Sui client through `$extend`) is the standard way to build a multi-service Sui Stack app. Each extension adds its methods to the client without affecting the others. `useUserSubname` then resolves the wallet's subname independently and the UI renders it next to messages and channel entries, replacing raw addresses throughout the app.
