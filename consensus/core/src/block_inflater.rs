@@ -74,9 +74,16 @@ impl BlockInflater {
         block: &VerifiedBlock,
         dag_state: &DagState,
     ) -> Result<Bytes, bcs::Error> {
+        // Omit digests only for slots every reasonably-synced receiver can still
+        // resolve: within one GC depth of the block's round. The sender's own cache
+        // reaches much further back, but a receiver's GC does not — an omitted slot
+        // below the receiver's GC can never fill, and the claim strands until the
+        // exact lane rescues it. Older ancestors (a lagging author referenced by a
+        // current block, an excluded-ancestor reconnection) carry their 32-byte
+        // digest instead and repair through block_manager's ordinary digest fetch.
         let min_omittable_round = block
             .round()
-            .saturating_sub(self.context.parameters.dag_state_cached_rounds as Round);
+            .saturating_sub(self.context.protocol_config.gc_depth());
         let resolver = DagStateResolver {
             genesis_digests: &self.genesis_digests,
             dag_state,
