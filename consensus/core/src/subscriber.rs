@@ -24,8 +24,8 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
-    minimal_block::max_minimal_size,
     minimal_block::{FallbackReason, InflateError},
+    minimal_block::{max_excluded_ancestors_size, max_minimal_size},
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     pending_reconstructions::{
         MissingBlockRegistry, PendingReconstructions, ReconstructionHook, run_reconstruction_worker,
@@ -96,6 +96,8 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
     reconstruction_worker: Mutex<Option<JoinHandle<()>>>,
+    effects_tx:
+        tokio::sync::mpsc::UnboundedSender<crate::pending_reconstructions::AcceptanceEffects>,
 }
 
 impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
@@ -125,7 +127,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .write()
             .set_reconstruction_hook(ReconstructionHook {
                 pending_reconstructions: pending_reconstructions.clone(),
-                effects: effects_tx,
+                effects: effects_tx.clone(),
             });
         // spawn_monitored_task! wraps its body in an async-move coroutine, so the
         // captures are prepared outside it.
@@ -152,6 +154,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             pending_reconstructions,
+            effects_tx,
             missing_block_registry,
             round_tracker,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
@@ -173,6 +176,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let dag_state = Arc::downgrade(&self.dag_state);
         let block_inflater = self.block_inflater.clone();
         let pending_reconstructions = self.pending_reconstructions.clone();
+        let effects_tx = self.effects_tx.clone();
         let missing_block_registry = self.missing_block_registry.clone();
         let round_tracker = self.round_tracker.clone();
 
@@ -185,6 +189,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             pending_reconstructions,
+            effects_tx,
             missing_block_registry,
             round_tracker,
             peer,
@@ -259,6 +264,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .with_label_values(&[peer_hostname])
             .inc();
 
+        let sidecar_bytes: usize = block.excluded_ancestors.iter().map(Vec::len).sum();
+        if sidecar_bytes > max_excluded_ancestors_size(context) {
+            return Err(ConsensusError::MalformedMinimalBlock(format!(
+                "excluded-ancestors sidecar of {sidecar_bytes} bytes exceeds the cap"
+            )));
+        }
         let max_minimal_size = max_minimal_size(context);
         if minimal.len() > max_minimal_size {
             node_metrics
@@ -308,6 +319,9 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
         pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+        effects_tx: tokio::sync::mpsc::UnboundedSender<
+            crate::pending_reconstructions::AcceptanceEffects,
+        >,
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         peer: AuthorityIndex,
@@ -493,6 +507,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 node_metrics
                                     .minimal_block_park_missing_slots
                                     .observe(missing.len() as f64);
+                                let missing_snapshot = missing.clone();
                                 let admitted = pending_reconstructions.lock().try_admit(
                                     block_ref,
                                     minimal,
@@ -523,12 +538,64 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     Ok(()) => {
                                         retries = 0;
                                         backoff.reset();
+                                        // Close the read-then-admit race: any slot
+                                        // accepted between the frontier read and the
+                                        // admit would never re-fire the hook.
+                                        let filled: Vec<_> = {
+                                            let Some(dag_state) = dag_state.upgrade() else {
+                                                return;
+                                            };
+                                            let guard = dag_state.read();
+                                            missing_snapshot
+                                                .iter()
+                                                .flat_map(|slot| {
+                                                    guard
+                                                        .get_uncommitted_blocks_at_slot(*slot)
+                                                        .into_iter()
+                                                        .map(|b| b.reference())
+                                                        .take(1)
+                                                })
+                                                .collect()
+                                        };
+                                        if !filled.is_empty() {
+                                            let effects = pending_reconstructions
+                                                .lock()
+                                                .recheck_filled_slots(&filled);
+                                            if !effects.is_empty() {
+                                                let _ = effects_tx.send(effects);
+                                            }
+                                        }
                                     }
                                     Err(refusal) => {
                                         node_metrics
                                             .minimal_block_quota_drops
                                             .with_label_values(&[refusal.metric_label()])
                                             .inc();
+                                        // A refusal because the RECEIVER is behind the
+                                        // claim (round past the window top) is the one
+                                        // case with no other guaranteed recovery: the
+                                        // live stream keeps the connection healthy, so
+                                        // no timeout fires, and refused claims carry no
+                                        // commit votes to trigger commit sync. Reset
+                                        // for full-form replay — the jitter prevents a
+                                        // committee-wide reconnect storm.
+                                        if matches!(
+                                            refusal,
+                                            crate::pending_reconstructions::AdmitRefusal::OutsideWindow
+                                        ) && block_ref.round > credit_top
+                                        {
+                                            info!(
+                                                "Minimal block {} from {} {} is past the                                                  admission window; resetting subscription                                                  for full replay",
+                                                block_ref, peer, peer_hostname
+                                            );
+                                            sleep(caused_reset_delay(
+                                                context.own_index,
+                                                peer,
+                                                retries,
+                                            ))
+                                            .await;
+                                            continue 'subscription;
+                                        }
                                         if matches!(
                                             refusal,
                                             crate::pending_reconstructions::AdmitRefusal::DeadFrontierSlot
