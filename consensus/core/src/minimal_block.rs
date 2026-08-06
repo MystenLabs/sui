@@ -24,6 +24,7 @@ use consensus_types::block::{BlockDigest, BlockRef, Round};
 use prost::Message as _;
 
 use crate::block::{Block, BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock};
+use crate::context::Context;
 
 /// Ordered digest candidates for a slot. Backed in production by accepted DAG state
 /// only — inflation success therefore implies locally complete causal history — and by
@@ -111,6 +112,24 @@ pub(crate) enum InflateError {
         block_ref: BlockRef,
         reason: FallbackReason,
     },
+}
+
+/// Cap on untrusted minimal bytes, enforced before ANY decoding: a legitimate
+/// minimal block is bounded by the max transaction payload plus small per-ancestor
+/// structure.
+pub(crate) fn max_minimal_size(context: &Context) -> usize {
+    (context.protocol_config.max_transactions_in_block_bytes() as usize).saturating_mul(2)
+}
+
+/// Upper bound on a legitimate excluded-ancestors sidecar: the receive path caps the
+/// list at twice the committee size, each a serialized `BlockRef`.
+pub(crate) fn max_excluded_ancestors_size(context: &Context) -> usize {
+    const SERIALIZED_BLOCK_REF_BYTES: usize = 64;
+    context
+        .committee
+        .size()
+        .saturating_mul(2)
+        .saturating_mul(SERIALIZED_BLOCK_REF_BYTES)
 }
 
 /// Encodes a verified block into its minimal wire form.

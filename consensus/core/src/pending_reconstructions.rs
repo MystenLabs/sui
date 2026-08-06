@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Slot-keyed parking for minimal blocks that cannot be inflated at receipt —
+//! Slot-keyed pending_reconstructions for minimal blocks that cannot be inflated at receipt —
 //! block-manager suspension, transposed to slots, living beside it.
 //!
 //! A minimal block whose ancestor slots are not all locally accepted cannot be
@@ -15,7 +15,7 @@
 //!
 //! Bounds are structural, not tuned. Admission accepts only claimed rounds in
 //! `(gc_round, gc_round + 2·gc_depth]` — anchored to GC so the window has provable
-//! width, and so parking stops growing when commits stall instead of absorbing the
+//! width, and so pending_reconstructions stops growing when commits stall instead of absorbing the
 //! stall. One entry per claimed slot (the wire protocol only delivers minimal blocks
 //! on their author's own stream, so a second claim for a slot is only ever the
 //! author equivocating against itself). A per-peer byte quota bounds any one
@@ -32,16 +32,27 @@ use std::sync::Arc;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{block::Slot, context::Context};
 
-/// Admission window width above `gc_round`. Twice the GC depth: at steady state the
-/// accept frontier sits roughly one GC depth above `gc_round`, so tip-racing blocks
-/// land inside the window with one depth of headroom, while the width stays provable
-/// regardless of how far the frontier drifts from GC.
+/// Admission window: above `gc_round` (below it the claim is already obsolete) and
+/// at most one GC depth above the LOCAL accept frontier. Anchoring the top to the
+/// frontier rather than to `gc_round` matters at bootstrap and under commit lag,
+/// where the frontier runs arbitrarily far ahead of GC and a gc-anchored top would
+/// refuse every live block. The frontier anchor alone does not bound the entry
+/// count when commits stall (the frontier keeps moving while GC does not), so an
+/// explicit entry cap supplies the bound the window no longer proves.
 fn window_width(context: &Context) -> Round {
-    2 * context.protocol_config.gc_depth()
+    context.protocol_config.gc_depth()
+}
+
+/// Hard cap on resident entries: four GC windows of one-per-slot occupancy. Honest
+/// steady state sits two orders of magnitude below this; reaching it means commits
+/// have stalled for minutes, and refusing then is the correct backpressure.
+fn max_pending_entries(context: &Context) -> usize {
+    context.committee.size() * 4 * context.protocol_config.gc_depth() as usize
 }
 
 /// Per-peer resident-byte quota. Honest steady state per peer is a few hundred KB
@@ -112,7 +123,17 @@ pub(crate) struct ReadyEntry {
     pub(crate) parked_at_round: Round,
 }
 
-/// Outcome of a batch of acceptances, applied by the caller outside this struct.
+/// Shared handle DagState uses to drive pending_reconstructions from its acceptance and GC
+/// choke points. The effects channel is unbounded and drained by the
+/// reconstruction worker; sends never block under the DagState write guard.
+#[derive(Clone)]
+pub(crate) struct ReconstructionHook {
+    pub(crate) pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+    pub(crate) effects: UnboundedSender<AcceptanceEffects>,
+}
+
+/// Outcome of a batch of acceptances or a GC sweep, applied by the worker outside
+/// any DagState or pending_reconstructions lock.
 #[derive(Default)]
 pub(crate) struct AcceptanceEffects {
     /// Entries whose last missing slot filled: dispatch to the reconstruction worker.
@@ -120,6 +141,16 @@ pub(crate) struct AcceptanceEffects {
     /// Sidecars whose anchor block just got accepted through another path: deliver
     /// through `handle_excluded_ancestors` (the anchor precondition now holds).
     pub(crate) deliverable_sidecars: Vec<(AuthorityIndex, BlockRef, Vec<Vec<u8>>)>,
+    /// Entries whose frontier died at GC: only the exact-fetch lane can finish them.
+    pub(crate) frontier_dead: Vec<BlockRef>,
+}
+
+impl AcceptanceEffects {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.ready.is_empty()
+            && self.deliverable_sidecars.is_empty()
+            && self.frontier_dead.is_empty()
+    }
 }
 
 /// Per-authority lowest pending missing-slot round, shared with the synchronizer so
@@ -128,7 +159,7 @@ pub(crate) struct AcceptanceEffects {
 /// mutation; read lock-free-ish by the scheduler.
 pub(crate) type PendingSlotFloor = Arc<RwLock<Vec<Round>>>;
 
-pub(crate) struct MinimalBlockParking {
+pub(crate) struct PendingReconstructions {
     context: Arc<Context>,
     pending: BTreeMap<BlockRef, PendingMinimal>,
     /// Inverted index: missing slot → entries waiting on it.
@@ -143,7 +174,7 @@ pub(crate) struct MinimalBlockParking {
     slot_floor: PendingSlotFloor,
 }
 
-impl MinimalBlockParking {
+impl PendingReconstructions {
     pub(crate) fn new(context: Arc<Context>) -> Self {
         let committee_size = context.committee.size();
         Self {
@@ -183,6 +214,7 @@ impl MinimalBlockParking {
             peer,
             &missing,
             gc_round,
+            local_round,
         );
         if let Some(refusal) = refusal {
             self.hold_sidecar(claimed_ref, peer, excluded_ancestors);
@@ -229,10 +261,14 @@ impl MinimalBlockParking {
         peer: AuthorityIndex,
         missing: &[Slot],
         gc_round: Round,
+        local_round: Round,
     ) -> Option<AdmitRefusal> {
-        let window_top = gc_round.saturating_add(window_width(&self.context));
+        let window_top = local_round.saturating_add(window_width(&self.context));
         if claimed_ref.round <= gc_round || claimed_ref.round > window_top {
             return Some(AdmitRefusal::OutsideWindow);
+        }
+        if self.pending.len() >= max_pending_entries(&self.context) {
+            return Some(AdmitRefusal::TotalBytes);
         }
         if missing.iter().any(|slot| slot.round <= gc_round) {
             return Some(AdmitRefusal::DeadFrontierSlot);
@@ -359,7 +395,12 @@ impl MinimalBlockParking {
         Some(entry)
     }
 
-    fn hold_sidecar(&mut self, block_ref: BlockRef, peer: AuthorityIndex, sidecar: Vec<Vec<u8>>) {
+    pub(crate) fn hold_sidecar(
+        &mut self,
+        block_ref: BlockRef,
+        peer: AuthorityIndex,
+        sidecar: Vec<Vec<u8>>,
+    ) {
         if sidecar.is_empty() || self.held_sidecars.contains_key(&block_ref) {
             return;
         }
@@ -431,14 +472,143 @@ impl MinimalBlockParking {
     }
 }
 
+/// Where the exact-fetch lane lives: a durable registration with the synchronizer,
+/// released by acceptance through any path or by GC. Trait-shaped for tests.
+#[async_trait::async_trait]
+pub(crate) trait MissingBlockRegistry: Send + Sync + 'static {
+    async fn register_missing_block(
+        &self,
+        block_ref: BlockRef,
+    ) -> crate::error::ConsensusResult<()>;
+    /// Shares the pending-slot floor with the fetcher so periodic passes can
+    /// range-repair parked frontiers. Default no-op for test registries.
+    fn install_pending_slot_floor(&self, _floor: PendingSlotFloor) {}
+}
+
+#[async_trait::async_trait]
+impl MissingBlockRegistry for crate::synchronizer::SynchronizerHandle {
+    async fn register_missing_block(
+        &self,
+        block_ref: BlockRef,
+    ) -> crate::error::ConsensusResult<()> {
+        crate::synchronizer::SynchronizerHandle::register_missing_block(self, block_ref).await
+    }
+
+    fn install_pending_slot_floor(&self, floor: PendingSlotFloor) {
+        crate::synchronizer::SynchronizerHandle::install_pending_slot_floor(self, floor);
+    }
+}
+
+/// The reconstruction worker: drains effects from the acceptance/GC hooks and does
+/// everything that must not run under a DagState or pending_reconstructions lock — inflation,
+/// submission through the normal verification pipeline, sidecar delivery, and
+/// exact-lane registration for entries slot-waiting can no longer help.
+///
+/// Lock discipline: this task takes the DagState READ guard only for inflation and
+/// drops it before touching the pending-reconstructions lock, and never holds the pending-reconstructions lock
+/// across an await. The acceptance hook takes pending_reconstructions under the DagState WRITE
+/// guard; keeping this task's order opposite-free is what makes that safe.
+pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetworkService>(
+    context: Arc<Context>,
+    block_inflater: Arc<crate::block_inflater::BlockInflater>,
+    dag_state: std::sync::Weak<RwLock<crate::dag_state::DagState>>,
+    registry: Arc<dyn MissingBlockRegistry>,
+    service: std::sync::Weak<S>,
+    pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+    mut effects: tokio::sync::mpsc::UnboundedReceiver<AcceptanceEffects>,
+) {
+    while let Some(batch) = effects.recv().await {
+        for (peer, anchor, sidecar) in batch.deliverable_sidecars {
+            let Some(service) = service.upgrade() else {
+                return;
+            };
+            let _ = service
+                .handle_excluded_ancestors(peer, anchor, sidecar)
+                .await;
+        }
+        for block_ref in batch.frontier_dead {
+            if registry.register_missing_block(block_ref).await.is_err() {
+                return;
+            }
+        }
+        for entry in batch.ready {
+            let inflated = {
+                let Some(dag_state) = dag_state.upgrade() else {
+                    return;
+                };
+                let guard = dag_state.read();
+                block_inflater.inflate(&entry.minimal, entry.peer, &guard)
+            };
+            let metrics = &context.metrics.node_metrics;
+            match inflated {
+                Ok((_signed, serialized)) => {
+                    let Some(service) = service.upgrade() else {
+                        return;
+                    };
+                    let block = crate::network::ExtendedSerializedBlock {
+                        block: serialized,
+                        excluded_ancestors: entry.excluded_ancestors,
+                        minimal: None,
+                    };
+                    if let Err(error) = service.handle_send_block(entry.peer, block).await {
+                        // Commit-lag admission control: deliberate backpressure. The
+                        // block reaches us again through commit sync; nothing to hold.
+                        tracing::debug!(
+                            "Reconstructed minimal block {} rejected: {error}",
+                            entry.claimed_ref
+                        );
+                        metrics
+                            .minimal_block_quota_drops
+                            .with_label_values(&["reconstruction_rejected"])
+                            .inc();
+                    }
+                }
+                Err(crate::minimal_block::InflateError::NeedFullBlock { .. }) => {
+                    // The frontier filled with different blocks than the sender used
+                    // (equivocation) or ambiguity exceeded the search budget: only the
+                    // exact block can finish this. Rare by measurement; bounded lane.
+                    metrics
+                        .minimal_block_quota_drops
+                        .with_label_values(&["reinflation_failed"])
+                        .inc();
+                    if registry
+                        .register_missing_block(entry.claimed_ref)
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                    pending_reconstructions.lock().hold_sidecar(
+                        entry.claimed_ref,
+                        entry.peer,
+                        entry.excluded_ancestors,
+                    );
+                }
+                Err(crate::minimal_block::InflateError::Malformed(error)) => {
+                    // Structurally validated at receipt, so this indicates a peer
+                    // fault surfaced late; drop with a metric.
+                    tracing::debug!(
+                        "Parked minimal block {} malformed at reconstruction: {error}",
+                        entry.claimed_ref
+                    );
+                    metrics
+                        .minimal_block_quota_drops
+                        .with_label_values(&["malformed_at_reconstruction"])
+                        .inc();
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use consensus_types::block::BlockDigest;
 
-    fn parking() -> MinimalBlockParking {
+    fn pending_reconstructions() -> PendingReconstructions {
         let (context, _) = Context::new_for_test(4);
-        MinimalBlockParking::new(Arc::new(context))
+        PendingReconstructions::new(Arc::new(context))
     }
 
     fn r(round: Round, author: u32, digest_byte: u8) -> BlockRef {
@@ -456,7 +626,7 @@ mod tests {
     }
 
     fn admit(
-        p: &mut MinimalBlockParking,
+        p: &mut PendingReconstructions,
         claimed: BlockRef,
         missing: Vec<Slot>,
     ) -> Result<(), AdmitRefusal> {
@@ -476,7 +646,7 @@ mod tests {
     /// slot. Duplicate acceptances emit nothing; indexes stay exact throughout.
     #[test]
     fn slot_index_cascade() {
-        let mut p = parking();
+        let mut p = pending_reconstructions();
         let p_ref = r(10, 1, 1);
         let q_ref = r(11, 2, 2);
         admit(&mut p, p_ref, vec![slot(9, 2), slot(9, 3)]).unwrap();
@@ -510,10 +680,10 @@ mod tests {
     /// and slot occupancy refuses a DIFFERENT ref but is idempotent for the same.
     #[test]
     fn admission_window_occupancy_and_bounds() {
-        let mut p = parking();
+        let mut p = pending_reconstructions();
         let gc = 100;
         let width = window_width(&p.context);
-        let admit_at = |p: &mut MinimalBlockParking, claimed: BlockRef, missing: Vec<Slot>| {
+        let admit_at = |p: &mut PendingReconstructions, claimed: BlockRef, missing: Vec<Slot>| {
             p.try_admit(
                 claimed,
                 Bytes::from(vec![1u8; 64]),
@@ -530,13 +700,34 @@ mod tests {
             Err(AdmitRefusal::OutsideWindow),
             "at gc_round is out"
         );
+        // The top anchors to the local frontier, which the test helper sets to the
+        // claimed round: a claim more than one gc_depth past the frontier is out.
+        let frontier = gc + 40;
+        let too_far = frontier + width + 1;
         assert_eq!(
-            admit_at(&mut p, r(gc + width + 1, 1, 1), vec![]),
+            p.try_admit(
+                r(too_far, 1, 1),
+                Bytes::from(vec![1u8; 64]),
+                vec![],
+                AuthorityIndex::new_for_test(1),
+                vec![],
+                gc,
+                frontier,
+            ),
             Err(AdmitRefusal::OutsideWindow),
-            "one past the window top is out"
+            "one past the frontier window is out"
         );
         assert!(
-            admit_at(&mut p, r(gc + width, 1, 1), vec![slot(gc + 1, 2)]).is_ok(),
+            p.try_admit(
+                r(frontier + width, 1, 1),
+                Bytes::from(vec![1u8; 64]),
+                vec![],
+                AuthorityIndex::new_for_test(1),
+                vec![slot(gc + 1, 2)],
+                gc,
+                frontier,
+            )
+            .is_ok(),
             "window top is in"
         );
 
@@ -563,7 +754,7 @@ mod tests {
     /// entries below it and reports frontier-dead entries for exact-lane routing.
     #[test]
     fn quotas_sidecars_and_gc() {
-        let mut p = parking();
+        let mut p = pending_reconstructions();
         // Per-peer quota binds long before the aggregate cap.
         let big = Bytes::from(vec![0u8; MAX_PARKED_BYTES_PER_PEER - 1]);
         let author = AuthorityIndex::new_for_test(1);
@@ -603,7 +794,7 @@ mod tests {
     /// periodic scheduler folds into fetch_after_rounds.
     #[test]
     fn slot_floor_tracks_lowest_pending() {
-        let mut p = parking();
+        let mut p = pending_reconstructions();
         admit(&mut p, r(20, 1, 1), vec![slot(18, 2), slot(19, 3)]).unwrap();
         admit(&mut p, r(21, 2, 1), vec![slot(15, 3)]).unwrap();
         {
