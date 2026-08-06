@@ -611,7 +611,8 @@ where
         loop {
             tokio::select! {
                 Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
-                    let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+                    let fetch_after_rounds =
+                        Self::get_fetch_after_rounds(&context, dag_state.clone(), None);
 
                     requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
                 },
@@ -761,6 +762,9 @@ where
     fn get_fetch_after_rounds(
         context: &Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
+        // Pending reconstruction slots lower the vector so periodic requests cover
+        // every parked frontier gap, one round below the lowest gap per authority.
+        slot_floor: Option<&crate::pending_reconstructions::PendingSlotFloor>,
     ) -> Vec<Round> {
         let (blocks, gc_round) = {
             let dag_state = dag_state.read();
@@ -771,10 +775,19 @@ where
         };
         assert_eq!(blocks.len(), context.committee.size());
 
-        blocks
+        let mut rounds: Vec<Round> = blocks
             .into_iter()
             .map(|(block, _)| block.round().max(gc_round))
-            .collect::<Vec<_>>()
+            .collect();
+        if let Some(floor) = slot_floor {
+            let floor = floor.read();
+            for (fetch_after, pending) in rounds.iter_mut().zip(floor.iter()) {
+                if *pending != Round::MAX {
+                    *fetch_after = (*fetch_after).min(pending.saturating_sub(1));
+                }
+            }
+        }
+        rounds
     }
 
     fn verify_blocks(
@@ -1088,7 +1101,11 @@ where
         if self.commit_sync_failover {
             // Keep missing blocks to those that must be included in fetch request.
             // Filtered out missing blocks that will eventually be fetched with fetch_after_rounds.
-            let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+            let fetch_after_rounds = Self::get_fetch_after_rounds(
+                &context,
+                dag_state.clone(),
+                self.pending_slot_floor.as_ref(),
+            );
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         }
         // Under commit-sync failover an empty set is meaningful: it selects the
@@ -1157,6 +1174,7 @@ where
                         missing_blocks,
                         dag_state,
                         peers_pool,
+                        pending_slot_floor.clone(),
                     )
                     .await
                 });
@@ -1345,17 +1363,8 @@ where
         peers_pool: Arc<PeersPool>,
         pending_slot_floor: Option<crate::pending_reconstructions::PendingSlotFloor>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
-        let mut fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
-        // Pending reconstruction slots lower the vector: the range fetch then covers
-        // every parked frontier gap in one request, one round below the lowest gap.
-        if let Some(floor) = pending_slot_floor {
-            let floor = floor.read();
-            for (fetch_after, pending) in fetch_after_rounds.iter_mut().zip(floor.iter()) {
-                if *pending != Round::MAX {
-                    *fetch_after = (*fetch_after).min(pending.saturating_sub(1));
-                }
-            }
-        }
+        let fetch_after_rounds =
+            Self::get_fetch_after_rounds(&context, dag_state.clone(), pending_slot_floor.as_ref());
 
         // Pick a random peer (excluding self).
         // Get available peers from the PeersPool
@@ -1417,6 +1426,7 @@ where
         missing_blocks: Vec<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
+        pending_slot_floor: Option<crate::pending_reconstructions::PendingSlotFloor>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
@@ -1487,7 +1497,8 @@ where
             authorities.shuffle(&mut ThreadRng::default());
         }
 
-        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
+        let fetch_after_rounds =
+            Self::get_fetch_after_rounds(&context, dag_state.clone(), pending_slot_floor.as_ref());
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {
