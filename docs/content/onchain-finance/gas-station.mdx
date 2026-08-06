@@ -45,9 +45,10 @@ questions:
   - How do I validate transactions before sponsoring them?
 answer: >-
   A gas station sponsors transactions so users or agents do not pay gas. The
-  recommended approach is the @mysten-incubation/sponsor SDK, which manages gas
-  coins and the dual-signature flow automatically. You provide a signer and a
-  validation policy; the SDK handles everything else.
+  recommended approach is the @mysten-incubation/sponsor SDK, which validates
+  transactions and handles the dual-signature flow; sponsors pay gas from
+  their address balance, so no gas coin management is needed. You provide a
+  signer and a validation policy; the SDK handles everything else.
 ---
 
 A gas station is a backend service that pays gas on behalf of users or agents.
@@ -58,7 +59,7 @@ The recommended approach is [`@mysten-incubation/sponsor`](https://www.npmjs.com
 
 The sponsor handshake has six steps:
 
-1. **Client builds a transaction with the sponsor's gas data.** The client sets the sender, sets the sponsor's address as gas owner, sets an empty gas payment (address-balance gas), a gas budget within the sponsor's policy, and a bounded epoch expiration.
+1. **Client builds a transaction with the sponsor's gas data.** The client sets the sender, the sponsor's address as gas owner, and an empty gas payment (`setGasPayment([])`, address-balance gas), then builds with `build({ client })`. The build estimates the gas budget, and resolving address-balance gas makes the fullnode attach a bounded `ValidDuring` expiration.
 
 2. **Client signs and sends the transaction bytes.** A user signature is only valid over exact bytes, so the client builds and signs the final transaction, then sends the bytes plus the signature to the sponsor.
 
@@ -128,7 +129,7 @@ The `defaults()` bundle provides a strong baseline. Layer additional validators 
 | Validator | Rejects when |
 |-----------|-------------|
 | `validSender()` | sender unset or is gas owner |
-| `onlyAddressBalanceGas()` | gas payment is not empty |
+| `onlyAddressBalanceGas()` | gas payment unset or not empty |
 | `gasCoinNotUsed()` | a command uses the gas coin |
 | `onlySenderWithdrawals()` | FundsWithdrawal is not the sender's |
 | `userSignatureMatchesSender()` | user signature invalid or wrong signer |

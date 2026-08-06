@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@mysten-incubation/sponsor": "^0.2.10",
-    "@mysten/sui": "^2.0.0",
+    "@mysten/sui": "^2.23.2",
     "express": "^4.21.2"
   },
   "devDependencies": {
