@@ -593,14 +593,19 @@ impl MissingBlockRegistry for crate::synchronizer::SynchronizerHandle {
 }
 
 /// The reconstruction worker: drains effects from the acceptance/GC hooks and does
-/// everything that must not run under a DagState or pending_reconstructions lock — inflation,
+/// everything that must not run under a DagState or pending lock — inflation,
 /// submission through the normal verification pipeline, sidecar delivery, and
-/// exact-lane registration for entries slot-waiting can no longer help.
+/// exact-lane registration.
 ///
-/// Lock discipline: this task takes the DagState READ guard only for inflation and
-/// drops it before touching the pending-reconstructions lock, and never holds the pending-reconstructions lock
-/// across an await. The acceptance hook takes pending_reconstructions under the DagState WRITE
-/// guard; keeping this task's order opposite-free is what makes that safe.
+/// Submissions run with bounded concurrency. Each costs a full verification and
+/// core dispatch, and at busy tips ready entries arrive faster than one serial
+/// await chain can complete them; a serial worker pins in-flight charges until the
+/// byte cap turns arrival racing into refusals.
+///
+/// Lock discipline: DagState READ guards are scoped to inflation and dropped before
+/// the pending mutex, and the mutex is never held across an await.
+const RECONSTRUCTION_CONCURRENCY: usize = 32;
+
 pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetworkService>(
     context: Arc<Context>,
     block_inflater: Arc<crate::block_inflater::BlockInflater>,
@@ -610,99 +615,133 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
     mut effects: tokio::sync::mpsc::UnboundedReceiver<AcceptanceEffects>,
 ) {
-    while let Some(batch) = effects.recv().await {
-        for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
-            {
-                let Some(service) = service.upgrade() else {
-                    return;
-                };
-                let _ = service
-                    .handle_excluded_ancestors(peer, anchor, sidecar)
-                    .await;
-            }
-            match charge {
-                SidecarCharge::Entry(peer, charge) => {
-                    pending_reconstructions.lock().release(peer, charge)
-                }
-                SidecarCharge::Held(bytes) => pending_reconstructions.lock().release_held(bytes),
-            }
-        }
-        for block_ref in batch.frontier_dead {
-            if registry.register_missing_block(block_ref).await.is_err() {
-                return;
-            }
-        }
-        for entry in batch.ready {
-            let (peer, charge) = (entry.peer, entry.charge);
-            let inflated = {
-                let Some(dag_state) = dag_state.upgrade() else {
-                    return;
-                };
-                let guard = dag_state.read();
-                block_inflater.inflate(&entry.minimal, entry.peer, &guard)
-            };
-            let metrics = &context.metrics.node_metrics;
-            match inflated {
-                Ok((_signed, serialized)) => {
-                    let Some(service) = service.upgrade() else {
-                        return;
-                    };
-                    let block = crate::network::ExtendedSerializedBlock {
-                        block: serialized,
-                        excluded_ancestors: entry.excluded_ancestors,
-                        minimal: None,
-                    };
-                    if let Err(error) = service.handle_send_block(entry.peer, block).await {
-                        // Commit-lag admission control: deliberate backpressure. The
-                        // block reaches us again through commit sync; nothing to hold.
-                        tracing::debug!(
-                            "Reconstructed minimal block {} rejected: {error}",
-                            entry.claimed_ref
-                        );
-                        metrics
-                            .minimal_block_quota_drops
-                            .with_label_values(&["reconstruction_rejected"])
-                            .inc();
-                    }
-                }
-                Err(crate::minimal_block::InflateError::NeedFullBlock { .. }) => {
-                    // The frontier filled with different blocks than the sender used
-                    // (equivocation) or ambiguity exceeded the search budget: only the
-                    // exact block can finish this. Rare by measurement; bounded lane.
-                    metrics
-                        .minimal_block_quota_drops
-                        .with_label_values(&["reinflation_failed"])
-                        .inc();
-                    if registry
-                        .register_missing_block(entry.claimed_ref)
-                        .await
-                        .is_err()
+    use futures::stream::{FuturesUnordered, StreamExt as _};
+
+    let mut in_flight: FuturesUnordered<_> = FuturesUnordered::new();
+    loop {
+        tokio::select! {
+            batch = effects.recv(), if in_flight.len() < RECONSTRUCTION_CONCURRENCY => {
+                let Some(batch) = batch else { break };
+                for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
                     {
+                        let Some(service) = service.upgrade() else { return };
+                        let _ = service.handle_excluded_ancestors(peer, anchor, sidecar).await;
+                    }
+                    match charge {
+                        SidecarCharge::Entry(peer, charge) => {
+                            pending_reconstructions.lock().release(peer, charge)
+                        }
+                        SidecarCharge::Held(bytes) => {
+                            pending_reconstructions.lock().release_held(bytes)
+                        }
+                    }
+                }
+                for block_ref in batch.frontier_dead {
+                    if registry.register_missing_block(block_ref).await.is_err() {
                         return;
                     }
-                    pending_reconstructions.lock().hold_sidecar(
-                        entry.claimed_ref,
-                        entry.peer,
-                        entry.excluded_ancestors,
-                    );
                 }
-                Err(crate::minimal_block::InflateError::Malformed(error)) => {
-                    // fallthrough to shared release below
-                    // Structurally validated at receipt, so this indicates a peer
-                    // fault surfaced late; drop with a metric.
-                    tracing::debug!(
-                        "Parked minimal block {} malformed at reconstruction: {error}",
-                        entry.claimed_ref
-                    );
-                    metrics
-                        .minimal_block_quota_drops
-                        .with_label_values(&["malformed_at_reconstruction"])
-                        .inc();
+                for entry in batch.ready {
+                    in_flight.push(reconstruct_one(
+                        context.clone(),
+                        block_inflater.clone(),
+                        dag_state.clone(),
+                        registry.clone(),
+                        service.clone(),
+                        pending_reconstructions.clone(),
+                        entry,
+                    ));
                 }
             }
-            pending_reconstructions.lock().release(peer, charge);
+            Some(alive) = in_flight.next() => {
+                if !alive {
+                    return;
+                }
+            }
+            else => break,
         }
     }
+    // Channel closed: drain what is already in flight.
+    while in_flight.next().await.is_some() {}
+}
+
+/// One reconstruction from ready entry to terminal state; returns false when the
+/// node is shutting down (service or DagState gone).
+async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
+    context: Arc<Context>,
+    block_inflater: Arc<crate::block_inflater::BlockInflater>,
+    dag_state: std::sync::Weak<RwLock<crate::dag_state::DagState>>,
+    registry: Arc<dyn MissingBlockRegistry>,
+    service: std::sync::Weak<S>,
+    pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+    entry: ReadyEntry,
+) -> bool {
+    let (peer, charge) = (entry.peer, entry.charge);
+    let inflated = {
+        let Some(dag_state) = dag_state.upgrade() else {
+            return false;
+        };
+        let guard = dag_state.read();
+        block_inflater.inflate(&entry.minimal, entry.peer, &guard)
+    };
+    let metrics = &context.metrics.node_metrics;
+    match inflated {
+        Ok((_signed, serialized)) => {
+            let Some(service) = service.upgrade() else {
+                return false;
+            };
+            let block = crate::network::ExtendedSerializedBlock {
+                block: serialized,
+                excluded_ancestors: entry.excluded_ancestors,
+                minimal: None,
+            };
+            if let Err(error) = service.handle_send_block(entry.peer, block).await {
+                // Commit-lag admission control: deliberate backpressure. The block
+                // reaches us again through commit sync; nothing to hold.
+                tracing::debug!(
+                    "Reconstructed minimal block {} rejected: {error}",
+                    entry.claimed_ref
+                );
+                metrics
+                    .minimal_block_quota_drops
+                    .with_label_values(&["reconstruction_rejected"])
+                    .inc();
+            }
+        }
+        Err(crate::minimal_block::InflateError::NeedFullBlock { .. }) => {
+            // The frontier filled with different blocks than the sender used
+            // (equivocation) or ambiguity exceeded the search budget: only the exact
+            // block can finish this.
+            metrics
+                .minimal_block_quota_drops
+                .with_label_values(&["reinflation_failed"])
+                .inc();
+            if registry
+                .register_missing_block(entry.claimed_ref)
+                .await
+                .is_err()
+            {
+                return false;
+            }
+            pending_reconstructions.lock().hold_sidecar(
+                entry.claimed_ref,
+                entry.peer,
+                entry.excluded_ancestors,
+            );
+        }
+        Err(crate::minimal_block::InflateError::Malformed(error)) => {
+            tracing::debug!(
+                "Pending minimal block {} malformed at reconstruction: {error}",
+                entry.claimed_ref
+            );
+            metrics
+                .minimal_block_quota_drops
+                .with_label_values(&["malformed_at_reconstruction"])
+                .inc();
+        }
+    }
+    pending_reconstructions.lock().release(peer, charge);
+    true
 }
 
 #[cfg(test)]
