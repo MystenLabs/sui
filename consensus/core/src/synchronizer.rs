@@ -64,47 +64,6 @@ const MAX_PENDING_EXACT_REQUESTS: usize = 128;
 /// How long commit must be stalled before periodic sync kicks in as fallback.
 const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Chooses the refs one peer is actually asked for, from that peer's authority batch.
-///
-/// This is the stage where selection becomes a wire request, and it is lossy: the
-/// batch is capped at `budget`. Sorting the whole batch and truncating — the obvious
-/// implementation — silently discards whichever refs sort late, so the exact requests
-/// the scheduler just chose can fail to be requested at all. They then stay pending
-/// and consume selector budget again on every later pass while their parked blocks
-/// keep waiting, which makes the scheduler's choice purely nominal.
-///
-/// Exact requests therefore get a reserved half of the budget rather than relying on
-/// position in a vector that a sort will discard. Both classes are spent
-/// lowest-round-first within their share, preserving the ancestry-repair ordering the
-/// ordinary path depends on.
-fn select_peer_batch(
-    batch: &[Vec<BlockRef>],
-    exact_refs: &BTreeSet<BlockRef>,
-    budget: usize,
-) -> BTreeSet<BlockRef> {
-    let mut selected: BTreeSet<BlockRef> = batch
-        .iter()
-        .flatten()
-        .filter(|block_ref| exact_refs.contains(block_ref))
-        .copied()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .take(budget / 2)
-        .collect();
-    let remaining = budget.saturating_sub(selected.len());
-    selected.extend(
-        batch
-            .iter()
-            .flatten()
-            .filter(|block_ref| !exact_refs.contains(block_ref))
-            .copied()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .take(remaining),
-    );
-    selected
-}
-
 struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
     block_refs: BTreeSet<BlockRef>,
@@ -669,7 +628,8 @@ where
                                 context.clone(),
                                 commands_sender.clone(),
                                 round_tracker.clone(),
-                                "live"
+                                "live",
+                                context.parameters.max_blocks_per_sync,
                             ).await {
                                 warn!("Error while processing fetched blocks from peer {}: {err}", peer.hostname(&context));
                                 context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
@@ -709,22 +669,14 @@ where
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         sync_method: &str,
+        // Each caller knows the shape of the request it made and passes the matching
+        // limit, mirroring the server's response sizing; inferring it here from the
+        // guard was wrong for refs-only catch-up requests.
+        processing_limit: usize,
     ) -> ConsensusResult<()> {
         if serialized_blocks.is_empty() {
             return Ok(());
         }
-
-        // Limit the number of the returned blocks processed. The limit follows the
-        // request shape, mirroring the server's own response sizing: a request that
-        // named explicit refs is live sync and bounded by max_blocks_per_sync, while a
-        // rounds-only request (empty guard) is catch-up — the server sizes those
-        // responses by max_blocks_per_fetch, and truncating them here to the sync
-        // limit would discard blocks already paid for on the wire.
-        let processing_limit = if requested_blocks_guard.block_refs.is_empty() {
-            context.parameters.max_blocks_per_fetch
-        } else {
-            context.parameters.max_blocks_per_sync
-        };
         serialized_blocks.truncate(processing_limit);
 
         // Verify all the fetched blocks
@@ -1139,27 +1091,12 @@ where
             let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         }
-        // The exact lane is bounded at registration, so every ref always fits in a
-        // single pass with room to spare; no selection policy is needed. Merged ahead
-        // of ordinary missing ancestors, with per-peer batching preserving the
-        // classification so truncation cannot drop them.
-        let exact_selected: Vec<BlockRef> = pending_exact.iter().copied().collect();
-        // Carried into per-peer batching, which cannot recover the classification from
-        // ordering alone: it groups by authority and rebuilds each batch as a sorted set.
-        let exact_selected_set: BTreeSet<BlockRef> = exact_selected.iter().copied().collect();
-        let mut ordered_blocks = Vec::with_capacity(exact_selected.len() + missing_blocks.len());
-        ordered_blocks.extend(exact_selected.iter().copied());
-        ordered_blocks.extend(
-            missing_blocks
-                .into_iter()
-                .filter(|block_ref| !pending_exact.contains(block_ref)),
-        );
         // Under commit-sync failover an empty set is meaningful: it selects the
         // fetch_after_rounds path below. The same path serves pending reconstruction
         // slots — without the exemption, slot repair would be disabled exactly while
         // commit sync suppresses ordinary fetching. Only a pass with nothing to do
         // returns early.
-        if ordered_blocks.is_empty() && !self.commit_sync_failover {
+        if missing_blocks.is_empty() && pending_exact.is_empty() && !self.commit_sync_failover {
             let slot_repair_needed = self
                 .pending_slot_floor
                 .as_ref()
@@ -1168,7 +1105,7 @@ where
                 return Ok(());
             }
         }
-        let missing_blocks = ordered_blocks;
+        let missing_blocks: Vec<BlockRef> = missing_blocks.into_iter().collect();
         let pending_slot_floor = self.pending_slot_floor.clone();
 
         self.fetch_blocks_scheduler_task
@@ -1179,9 +1116,26 @@ where
                     .node_metrics
                     .fetch_blocks_scheduler_inflight
                     .inc();
-                let total_requested = missing_blocks.len();
+                let total_requested = missing_blocks.len() + pending_exact.len();
 
-                let results = if missing_blocks.is_empty() {
+                // The exact lane rides its own refs-only request: a request that
+                // carries both refs and rounds is served under the (much smaller)
+                // live-sync response limit, so combining lanes silently truncates
+                // exactly the refs registered for recovery.
+                let mut results = if pending_exact.is_empty() {
+                    Vec::new()
+                } else {
+                    Self::fetch_exact_refs(
+                        context.clone(),
+                        blocks_to_fetch.clone(),
+                        network_client.clone(),
+                        pending_exact.clone(),
+                        peers_pool.clone(),
+                    )
+                    .await
+                };
+
+                results.extend(if missing_blocks.is_empty() {
                     let _scope = monitored_scope("BlockSync::Periodic::HighestAcceptedRounds");
                     // Fetch blocks from a random peer using highest accepted rounds (commit sync failover)
                     Self::fetch_blocks_with_fetch_after_rounds(
@@ -1201,12 +1155,11 @@ where
                         blocks_to_fetch.clone(),
                         network_client,
                         missing_blocks,
-                        exact_selected_set,
                         dag_state,
                         peers_pool,
                     )
                     .await
-                };
+                });
                 context
                     .metrics
                     .node_metrics
@@ -1220,7 +1173,7 @@ where
 
                 // Now process the returned results
                 let mut total_fetched = 0;
-                for (blocks_guard, fetched_blocks, peer) in results {
+                for (blocks_guard, fetched_blocks, peer, processing_limit) in results {
                     total_fetched += fetched_blocks.len();
 
                     if let Err(err) = Self::process_fetched_blocks(
@@ -1235,6 +1188,7 @@ where
                         commands_sender.clone(),
                         round_tracker.clone(),
                         "periodic",
+                        processing_limit,
                     )
                     .await
                     {
@@ -1338,6 +1292,49 @@ where
         false
     }
 
+    /// Fetches the registered exact refs as a refs-only request from one random
+    /// peer. Refs-only selects the server's catch-up response limit, so the whole
+    /// lane fits in a single request.
+    async fn fetch_exact_refs(
+        context: Arc<Context>,
+        inflight_blocks: Arc<InflightBlocksMap>,
+        network_client: Arc<SynchronizerClient<VC, OC>>,
+        refs: BTreeSet<BlockRef>,
+        peers_pool: Arc<PeersPool>,
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
+        let mut peers = peers_pool.get_known_peers();
+        assert!(!peers.is_empty(), "No known peers to fetch blocks from");
+        if cfg!(not(test)) {
+            peers.shuffle(&mut ThreadRng::default());
+        }
+        let peer = peers.first().unwrap().clone();
+        let Some(blocks_guard) = inflight_blocks.lock_blocks(refs, peer.clone()) else {
+            return vec![];
+        };
+        let (response, blocks_guard, _retries, peer, _rounds) = Self::fetch_blocks_request(
+            network_client,
+            peer,
+            blocks_guard,
+            vec![],
+            false,
+            FETCH_REQUEST_TIMEOUT,
+            1,
+        )
+        .await;
+        match response {
+            Ok(serialized_blocks) => vec![(
+                blocks_guard,
+                serialized_blocks,
+                peer,
+                context.parameters.max_blocks_per_fetch,
+            )],
+            Err(err) => {
+                debug!("Failed to fetch exact refs from peer {peer}: {err}");
+                vec![]
+            }
+        }
+    }
+
     /// Fetches blocks from a random peer using only fetch_after_rounds (no specific missing blocks).
     /// Used during commit sync failover to make progress when commit sync is stalled.
     async fn fetch_blocks_with_fetch_after_rounds(
@@ -1347,7 +1344,7 @@ where
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
         pending_slot_floor: Option<crate::pending_reconstructions::PendingSlotFloor>,
-    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
         let mut fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
         // Pending reconstruction slots lower the vector: the range fetch then covers
         // every parked frontier gap in one request, one round below the lowest gap.
@@ -1404,7 +1401,8 @@ where
             peer: peer.clone(),
         };
 
-        vec![(blocks_guard, serialized_blocks, peer)]
+        let limit = context.parameters.max_blocks_per_fetch;
+        vec![(blocks_guard, serialized_blocks, peer, limit)]
     }
 
     /// Fetches the `missing_blocks` from peers. Requests the same number of authorities with missing blocks from each peer.
@@ -1416,16 +1414,10 @@ where
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
-        // Ordered: registered exact requests first, so truncation cannot starve them.
         missing_blocks: Vec<BlockRef>,
-        // The subset of `missing_blocks` that are registered exact requests. Ordering
-        // alone does not survive per-peer batching — that groups by authority and
-        // rebuilds each batch as a sorted set — so the classification is carried down
-        // explicitly and re-applied there.
-        exact_refs: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
-    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
         // per peer on average.
@@ -1507,8 +1499,15 @@ where
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
             //
-            let block_refs =
-                select_peer_batch(batch, &exact_refs, context.parameters.max_blocks_per_fetch);
+            // Fetch from the lowest round missing blocks to ensure progress.
+            let block_refs = batch
+                .iter()
+                .flatten()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(context.parameters.max_blocks_per_fetch)
+                .collect::<BTreeSet<_>>();
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
             if let Some(blocks_guard) =
@@ -1547,7 +1546,12 @@ where
                 Some((response, blocks_guard, _retries, peer, fetch_after_rounds)) = request_futures.next() => {
                     match response {
                         Ok(fetched_blocks) => {
-                            results.push((blocks_guard, fetched_blocks, peer));
+                            results.push((
+                                blocks_guard,
+                                fetched_blocks,
+                                peer,
+                                context.parameters.max_blocks_per_sync,
+                            ));
 
                             // no more pending requests are left, just break the loop
                             if request_futures.is_empty() {
@@ -1632,7 +1636,7 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::{
             BlocksGuard, COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
-            InflightBlocksMap, Synchronizer, select_peer_batch,
+            InflightBlocksMap, Synchronizer,
         },
     };
     use crate::{
@@ -1640,73 +1644,6 @@ mod tests {
         peers_pool::PeersPool, round_tracker::RoundTracker,
         transaction_vote_tracker::TransactionVoteTracker,
     };
-
-    /// Selection only matters if the selected refs actually reach the wire. Per-peer
-    /// batching caps the request, and sorting the batch before truncating drops
-    /// whichever refs sort late — so exact requests chosen for a node's recovery can
-    /// be silently discarded, stay pending, and consume selector budget every pass
-    /// while their parked blocks wait.
-    ///
-    /// Covers the node states that differ here: a lagging node whose exact refs sort
-    /// ABOVE its ordinary ancestors (the case that would lose them), and a tip node
-    /// with a large ordinary backlog.
-    #[tokio::test]
-    async fn peer_batch_requests_the_exact_refs_that_were_selected() {
-        const PER_PEER_BUDGET: usize = 1_000;
-
-        // A lagging node: ordinary missing ancestors sit at low rounds, while the
-        // exact refs it needs sit above them. Ascending truncation would take the
-        // ordinary ones first and drop every exact ref.
-        let ordinary: Vec<BlockRef> = (0..PER_PEER_BUDGET as u32)
-            .map(|i| BlockRef::new(100 + i, AuthorityIndex::new_for_test(0), BlockDigest::MIN))
-            .collect();
-        let exact: Vec<BlockRef> = (0..200u32)
-            .map(|i| BlockRef::new(5_000 + i, AuthorityIndex::new_for_test(1), BlockDigest::MIN))
-            .collect();
-        let exact_set: BTreeSet<BlockRef> = exact.iter().copied().collect();
-        let batch = vec![ordinary.clone(), exact.clone()];
-
-        let selected = select_peer_batch(&batch, &exact_set, PER_PEER_BUDGET);
-
-        assert!(
-            selected.len() <= PER_PEER_BUDGET,
-            "per-peer budget exceeded: {}",
-            selected.len()
-        );
-        let exact_requested = exact.iter().filter(|r| selected.contains(r)).count();
-        assert_eq!(
-            exact_requested,
-            exact.len(),
-            "only {exact_requested} of {} selected exact refs were actually requested; the rest \
-             are dropped by truncation and their parked blocks keep waiting",
-            exact.len()
-        );
-        // Ordinary repair must still get the rest of the budget, lowest-round first.
-        let ordinary_requested = ordinary.iter().filter(|r| selected.contains(r)).count();
-        assert!(
-            ordinary_requested >= PER_PEER_BUDGET / 2,
-            "ordinary ancestry repair was starved: only {ordinary_requested} refs requested"
-        );
-        assert!(
-            selected.contains(&ordinary[0]),
-            "ordinary refs must still be served lowest-round first"
-        );
-
-        // A tip node with a huge ordinary backlog and few exact refs must not have its
-        // exact share stolen, and must not waste the reserved half when it is unused.
-        let few_exact: BTreeSet<BlockRef> = exact.iter().take(3).copied().collect();
-        let selected = select_peer_batch(&batch, &few_exact, PER_PEER_BUDGET);
-        assert_eq!(
-            selected.len(),
-            PER_PEER_BUDGET,
-            "budget must be fully spent"
-        );
-        assert_eq!(
-            few_exact.iter().filter(|r| selected.contains(r)).count(),
-            few_exact.len(),
-            "a small exact set must always be requested in full"
-        );
-    }
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
     type FetchRequestResponse = (Vec<VerifiedBlock>, Option<Duration>);
@@ -2680,6 +2617,7 @@ mod tests {
             commands_sender,
             round_tracker,
             "test",
+            context.parameters.max_blocks_per_sync,
         )
         .await;
 
@@ -2758,6 +2696,7 @@ mod tests {
             commands_sender,
             round_tracker,
             "test",
+            context.parameters.max_blocks_per_fetch,
         )
         .await;
         assert!(result.is_ok());
