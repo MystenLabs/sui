@@ -231,7 +231,7 @@ A gas station pays gas on behalf of the sender, which works with any transaction
   tag="sponsored"
 />
 
-Sponsoring from a sponsor address balance removes the gas coin entirely. Pass an empty array to `setGasPayment`, which lets the user sign first and the sponsor sign afterward, and removes the risk that a competing transaction locks the gas coin:
+Sponsoring from an address balance removes the gas coin entirely. Pass an empty array to `setGasPayment`, which lets the user sign first and the sponsor sign afterward, and removes the risk that a competing transaction locks the gas coin:
 
 <ImportContent
   source="examples/ptb-cookbook/src/sponsored.ts"
