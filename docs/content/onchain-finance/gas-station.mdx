@@ -1,14 +1,13 @@
 ---
 title: Gas Station
 description: >-
-  Sponsor Sui transactions for users or agents using @mysten-incubation/sponsor,
-  or build a self-hosted gas station for custom requirements.
+  Sponsor Sui transactions for users or agents using the
+  @mysten-incubation/sponsor SDK.
 sidebar_label: Gas Station
 keywords:
   - gas station
   - sponsored transactions
   - gas sponsorship
-  - gas coin pool
   - transaction sponsorship
   - gasless
   - gas-free
@@ -43,7 +42,7 @@ builder_paths:
 questions:
   - How do I build a gas station on Sui?
   - How do I sponsor transactions for users on Sui?
-  - How do I manage a gas coin pool?
+  - How do I validate transactions before sponsoring them?
 answer: >-
   A gas station sponsors transactions so users or agents do not pay gas. The
   recommended approach is the @mysten-incubation/sponsor SDK, which manages gas
@@ -53,21 +52,19 @@ answer: >-
 
 A gas station is a backend service that pays gas on behalf of users or agents.
 
-The recommended approach is [`@mysten-incubation/sponsor`](https://www.npmjs.com/package/@mysten-incubation/sponsor), which manages gas coin selection, splitting, and the dual-signature flow automatically. You supply a signer keypair and a validation policy; the SDK handles the rest. Sponsors pay from address balance using `setGasPayment([])`, which avoids locking specific coin objects and enables parallel transaction execution.
-
-For custom requirements (self-managed coin pools, non-standard validation, multi-tenant isolation), see the [self-hosted gas station](#self-hosted-gas-station) section below.
+The recommended approach is [`@mysten-incubation/sponsor`](https://www.npmjs.com/package/@mysten-incubation/sponsor), which handles validation and the dual-signature flow. You supply a signer keypair and a validation policy; the SDK handles the rest. Sponsors pay from address balance using an empty gas payment (`setGasPayment([])`), which avoids locking specific coin objects and enables parallel transaction execution without managing a gas coin pool.
 
 ## How it works
 
 The sponsor handshake has six steps:
 
-1. **Client builds a transaction without gas.** The client sets `sender` but omits gas payment, gas budget, and gas owner.
+1. **Client builds a transaction with the sponsor's gas data.** The client sets the sender, sets the sponsor's address as gas owner, sets an empty gas payment (address-balance gas), a gas budget within the sponsor's policy, and a bounded epoch expiration.
 
-2. **Client sends the transaction bytes and signature.** The client sends already-built transaction bytes plus a user signature to the sponsor.
+2. **Client signs and sends the transaction bytes.** A user signature is only valid over exact bytes, so the client builds and signs the final transaction, then sends the bytes plus the signature to the sponsor.
 
-3. **Sponsor validates the transaction.** The service inspects the transaction, checks it against allowlists and budget caps, and rejects anything outside policy.
+3. **Sponsor validates the transaction.** The service runs its validators against the bytes, checks them against allowlists and budget caps, and rejects anything outside policy.
 
-4. **Sponsor adds gas payment and signs.** The service sets `gasOwner`, `gasBudget`, and `gasPayment`, builds the final bytes, and signs them with the sponsor keypair.
+4. **Sponsor co-signs.** The user-signed bytes are final, so the sponsor never modifies them; it adds its own signature over the same bytes.
 
 5. **Sponsor executes.** The sponsor submits the dual-signed transaction to a full node.
 
@@ -78,13 +75,15 @@ sequenceDiagram
     participant C as Client
     participant S as Sponsor SDK
     participant N as Full Node
-    C->>C: 1. Build tx, sign
+    C->>C: 1. Build tx with sponsor gas data, sign
     C->>S: 2. Send bytes + signature
     S->>S: 3. Validate against policy
-    S->>S: 4. Add gas, co-sign
+    S->>S: 4. Co-sign the exact bytes
     S->>N: 5. Submit dual-signed tx
     S-->>C: 6. Rejected | FailedTransaction | Transaction
 ```
+
+The SDK also supports a sponsor-builds flow (`signTransaction` without a user signature), where the sponsor sets itself as gas owner, builds the transaction, and returns sponsored bytes for the user to sign. This page uses the user-signed flow shown above.
 
 ## Using `@mysten-incubation/sponsor`
 
@@ -96,7 +95,7 @@ npm install @mysten-incubation/sponsor @mysten/sui
 
 ### Create a sponsor
 
-Create a sponsor with a signer keypair, a client, and a validation policy. The `defaults()` validator bundles eight built-in checks: `validSender`, `onlyAddressBalanceGas`, `gasCoinNotUsed`, `onlySenderWithdrawals`, `userSignatureMatchesSender`, `gasBudget`, `simulationSucceeds`, and `boundedExpiration`.
+Create a sponsor with a signer keypair, a client, and a validation policy. The `defaults()` bundle provides six built-in checks: `validSender`, `onlyAddressBalanceGas`, `gasCoinNotUsed`, `onlySenderWithdrawals`, `simulationSucceeds`, and `boundedExpiration`. These run automatically when you pass no `validate` array; once you pass your own, include `defaults()` explicitly to keep the baseline.
 
 <ImportContent
   source="examples/onchain-finance/gas-station/src/sponsor-sdk.ts"
@@ -116,7 +115,7 @@ Pass the client's transaction bytes and signature. The result is a discriminated
 
 ### Validation policy
 
-The `defaults()` validator provides a strong baseline. Layer additional validators to restrict which Move functions are sponsored:
+The `defaults()` bundle provides a strong baseline. Layer additional validators to verify the user's signature, cap the gas budget, and restrict which Move functions are sponsored:
 
 <ImportContent
   source="examples/onchain-finance/gas-station/src/sponsor-sdk.ts"
@@ -139,15 +138,17 @@ The `defaults()` validator provides a strong baseline. Layer additional validato
 | `simulationSucceeds()` | dry-run indicates failure |
 | `boundedExpiration()` | expiration missing or beyond next epoch |
 
+Only the first four plus `simulationSucceeds` and `boundedExpiration` are part of `defaults()`; add the others explicitly to match your policy. You can also write custom validators for application-specific checks such as authenticating callers or rate limiting senders.
+
 For full API details, see the [`@mysten-incubation/sponsor` documentation](https://sdk.mystenlabs.com/sponsor).
 
 ## Sponsoring agent transactions
 
-When sponsoring transactions for an autonomous agent rather than an interactive user, the validation flow changes:
+When sponsoring transactions for an autonomous agent rather than an interactive user, layer additional checks around the sponsor call:
 
-- **Identity verification:** The agent authenticates with an API key or presents a signed challenge instead of a wallet signature.
-- **Spending mandate checks:** The gas station can verify that the agent has a valid [spending mandate](/onchain-finance/agentic-payments/spending-policies) onchain before sponsoring.
+- **Identity verification:** The agent authenticates with an API key or presents a signed challenge before the gas station validates the transaction itself.
 - **Per-agent budgets:** Track cumulative gas spend per agent address and enforce daily or weekly caps.
+- **Tight allowlists:** Restrict agents to the specific Move functions they need with `allowedFunctions`.
 
 <ImportContent
 	source="examples/onchain-finance/gas-station/src/agent-sponsor.ts"
@@ -155,109 +156,15 @@ When sponsoring transactions for an autonomous agent rather than an interactive 
 	tag="agent-sponsor"
 />
 
-## Validation policies
-
-Before sponsoring a transaction, validate it against a deny-by-default policy:
-
-- **Command and package allowlist:** Sponsor only explicitly approved Move calls. Reject transfers, coin splitting or merging, publish, upgrade, intents, and every use of `GasCoin`; otherwise a client can transfer the sponsor's whole gas coin.
-- **Inputs:** Bound command and input counts. Validate object IDs, recipients, and pure values required by every approved call. The example rejects all object inputs.
-- **Type arguments:** Bound and allowlist them. An approved generic function still reaches arbitrary code through a caller-chosen type argument.
-- **Budget and expiration:** The sponsor sets a fixed gas budget and short epoch expiration.
-- **Simulation:** Dry-run the final transaction after attaching gas and reject unsuccessful execution before signing.
-- **Identity and rate limits:** Authenticate callers and limit each credential and each sender independently.
-
 ## Monitoring and cost control
 
 Track these metrics for your gas station:
 
-- **Available gas coins.** Alert when the pool drops below 20% capacity.
+- **Sponsor address balance.** Alert before the balance drops below your expected daily spend.
 - **Sponsorship volume.** Requests per minute, broken down by sender address.
 - **Gas spend.** Total SUI spent on gas per hour. Compare against your budget.
 - **Rejection rate.** Percentage of requests rejected by validation. A spike indicates possible abuse.
 
 Set a maximum daily spend for the entire gas station. When the limit is reached, reject all new sponsorship requests until the next day or until an operator manually raises the limit.
-
-## Self-hosted gas station
-
-<details>
-<summary>Build a self-hosted gas station with manual coin pool management</summary>
-
-If you need full control over gas coin management (custom pool strategies, multi-tenant isolation, or non-standard validation), build a self-hosted gas station using the TypeScript SDK directly.
-
-### Gas coin pool
-
-The sponsor address needs a pool of SUI coins to fund transactions. Two inflight transactions cannot use a single coin simultaneously. If you try, one transaction fails due to an object version conflict.
-
-Because the pool is deliberately made up of many small coins, paginate when you load it: a single owned-objects page will not return all of them. Skip coins that cannot cover the gas budget, or the sponsor hands out a coin that only fails at simulation.
-
-### Pre-splitting coins
-
-Split a single large coin into many smaller coins so multiple transactions can be sponsored concurrently:
-
-<ImportContent
-	source="examples/onchain-finance/gas-station/src/split-coins.ts"
-	mode="code"
-	tag="split-coins"
-/>
-
-### Pool management
-
-Track available gas coins in memory. When you use a coin for sponsorship, mark it as reserved until the transaction finalizes. The network always charges gas (even when a transaction fails), so the coin version changes in both cases. After finalization, re-fetch the coin to get its updated version before reusing it.
-
-<ImportContent source="examples/onchain-finance/gas-station/src/pool.ts" mode="code" tag="pool" />
-
-### Replenishment
-
-Monitor pool size. When the number of available coins drops below a threshold, split more coins from a reserve. Automate this with a periodic check or trigger it when `acquire()` returns `null`.
-
-### Gas station server
-
-The following Express.js server demonstrates a restricted sponsorship flow. It authenticates and rate-limits callers, accepts only configured Move calls with pure inputs and no `GasCoin` argument, sets a capped budget and epoch expiration, dry-runs the final transaction, and then signs it. Replace the placeholder allowlist with your application's complete argument policy.
-
-#### Setup
-
-<ImportContent
-	source="examples/onchain-finance/gas-station/src/server.ts"
-	mode="code"
-	tag="server-setup"
-/>
-
-#### Sponsor endpoint
-
-<ImportContent
-	source="examples/onchain-finance/gas-station/src/server.ts"
-	mode="code"
-	tag="sponsor-endpoint"
-/>
-
-#### Confirm endpoint
-
-<ImportContent
-	source="examples/onchain-finance/gas-station/src/server.ts"
-	mode="code"
-	tag="confirm-endpoint"
-/>
-
-#### Reservation reconciliation
-
-A client might never confirm. The server therefore reconciles reservations onchain and claims each reservation before awaiting RPC calls. It reuses a coin only after observing the sponsored transaction or after its epoch expiration makes late submission invalid.
-
-<ImportContent
-	source="examples/onchain-finance/gas-station/src/server.ts"
-	mode="code"
-	tag="reservation-reconciliation"
-/>
-
-### Client integration
-
-The client must not blindly sign returned bytes. It reconstructs the transaction, verifies that kind bytes and sender are unchanged, checks the sponsor identity, gas payment count and ID, budget cap, and digest, then dry-runs before signing.
-
-<ImportContent
-	source="examples/onchain-finance/gas-station/src/client.ts"
-	mode="code"
-	tag="client-flow"
-/>
-
-</details>
 
 For the protocol-level details of sponsored transactions (GasData structure, risk considerations, sequence diagrams), see [Sponsored Transactions](/develop/transaction-payment/sponsor-txn).

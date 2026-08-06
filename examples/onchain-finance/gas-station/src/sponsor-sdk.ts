@@ -6,6 +6,7 @@ import {
 	defaults,
 	gasBudget,
 	allowedFunctions,
+	userSignatureMatchesSender,
 } from '@mysten-incubation/sponsor';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -17,11 +18,15 @@ const client = new SuiGrpcClient({
 const sponsorKeypair = Ed25519Keypair.fromSecretKey(process.env.SPONSOR_SECRET_KEY!);
 
 // docs::#sponsor-sdk-create
+// defaults() is only run automatically when `validate` is omitted, so include
+// it explicitly when layering additional validators. userSignatureMatchesSender
+// and gasBudget are not part of defaults() and must be added when needed.
 const sponsor = createSponsor({
 	signer: sponsorKeypair,
 	client,
 	validate: [
 		defaults(),
+		userSignatureMatchesSender(),
 		gasBudget({ max: 50_000_000n }),
 		allowedFunctions(['0xPACKAGE::module::function']),
 	],
@@ -38,7 +43,8 @@ const result = await sponsor.signAndExecuteTransaction({
 
 if (result.$kind === 'Rejected') {
 	// Validation policy declined. No execution occurred, no gas charged.
-	console.error('Rejected:', result.Rejected.reason);
+	// `reason` is 'POLICY_REJECTED' or 'ANALYSIS_FAILED'; `issues` lists why.
+	console.error('Rejected:', result.reason, result.issues);
 } else if (result.$kind === 'FailedTransaction') {
 	// Executed onchain but Move execution aborted. Sponsor still pays gas.
 	// Do NOT retry: the transaction has a digest and effects.
@@ -50,9 +56,9 @@ if (result.$kind === 'Rejected') {
 // docs::/#sponsor-sdk-sponsor
 
 // docs::#sponsor-sdk-validate
-// defaults() bundles eight built-in validators:
+// defaults() bundles six built-in validators:
 //   validSender, onlyAddressBalanceGas, gasCoinNotUsed, onlySenderWithdrawals,
-//   userSignatureMatchesSender, gasBudget, simulationSucceeds, boundedExpiration
+//   simulationSucceeds, boundedExpiration
 //
 // Layer additional validators on top of defaults() for your application:
 const strictSponsor = createSponsor({
@@ -60,6 +66,7 @@ const strictSponsor = createSponsor({
 	client,
 	validate: [
 		defaults(),
+		userSignatureMatchesSender(),
 		gasBudget({ max: 10_000_000n }),
 		allowedFunctions([
 			'0xPACKAGE::shop::buy',

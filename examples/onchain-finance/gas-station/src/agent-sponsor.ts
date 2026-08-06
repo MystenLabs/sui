@@ -3,35 +3,21 @@
 
 import type express from 'express';
 
+import { sponsor } from './sponsor-sdk.js';
+
 // Placeholder types for the agent sponsorship example
 declare function verifyApiKey(
 	apiKey: string,
 ): Promise<{ address: string; dailyGasBudget: number } | null>;
 declare function getAgentDailySpend(address: string): Promise<number>;
-declare function sponsorTransaction(
-	txBytes: string,
-	sender: string,
-): Promise<{
-	txBytes: string;
-	sponsorSignature: string;
-	sponsorAddress: string;
-	gasCoinId: string;
-	digest: string;
-}>;
 
-class ValidationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = 'ValidationError';
-	}
-}
-
-// Keep in sync with GAS_BUDGET in server.ts.
-const GAS_BUDGET = 10_000_000;
+// Upper bound for a single sponsored transaction. Keep in sync with the
+// gasBudget({ max }) validator configured in sponsor-sdk.ts.
+const MAX_GAS_BUDGET = 50_000_000;
 
 // docs::#agent-sponsor
 async function handleAgentSponsor(req: express.Request, res: express.Response) {
-	const { txBytes, apiKey } = req.body;
+	const { txBytes, userSignature, apiKey } = req.body;
 
 	// Verify agent identity
 	const agent = await verifyApiKey(apiKey);
@@ -40,26 +26,34 @@ async function handleAgentSponsor(req: express.Request, res: express.Response) {
 		return;
 	}
 
-	// Check per-agent daily budget
+	// Check per-agent daily budget before validating the transaction itself
 	const todaySpend = await getAgentDailySpend(agent.address);
-	if (todaySpend + GAS_BUDGET > agent.dailyGasBudget) {
+	if (todaySpend + MAX_GAS_BUDGET > agent.dailyGasBudget) {
 		res.status(429).json({ error: 'Daily gas budget exceeded' });
 		return;
 	}
 
-	// From here the flow is identical to /sponsor: validate the transaction
-	// kind against the allowlist, acquire a gas coin, set gas data, simulate,
-	// then sign.
-	try {
-		res.json(await sponsorTransaction(txBytes, agent.address));
-	} catch (error) {
-		if (error instanceof ValidationError) {
-			res.status(400).json({ error: error.message });
-		} else {
-			res.status(500).json({ error: 'Internal server error' });
-		}
+	// From here the flow is the standard sponsor flow. Validation rejections
+	// are returned as part of the result, not thrown, so no error handling
+	// beyond the discriminated union is needed.
+	const result = await sponsor.signAndExecuteTransaction({
+		transaction: txBytes,
+		userSignature,
+	});
+
+	if (result.$kind === 'Rejected') {
+		res.status(400).json({ error: 'Transaction rejected', issues: result.issues });
+	} else if (result.$kind === 'FailedTransaction') {
+		// Executed onchain but aborted; gas was charged and a digest exists,
+		// so report it rather than retrying.
+		res.status(422).json({
+			digest: result.FailedTransaction.digest,
+			status: result.FailedTransaction.effects.status,
+		});
+	} else {
+		res.json({ digest: result.Transaction.digest });
 	}
 }
 // docs::/#agent-sponsor
 
-export { handleAgentSponsor, ValidationError };
+export { handleAgentSponsor };
