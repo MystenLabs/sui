@@ -206,6 +206,7 @@ pub mod checked {
         ) -> u64 {
             self.gas_status
                 .track_storage_mutation(object_id, new_size, storage_rebate)
+                .expect("storage gas overflow")
         }
 
         pub fn reset_storage_cost_and_rebate(&mut self) {

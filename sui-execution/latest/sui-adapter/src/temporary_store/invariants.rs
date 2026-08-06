@@ -580,7 +580,6 @@ impl InvariantChecker {
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
         gas_charger: &GasCharger,
-        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         // The funds-accumulator reservation budget is shared with the conservation checks; see
@@ -640,8 +639,15 @@ impl InvariantChecker {
             })
             .filter(|id| {
                 // remove any non-mutable inputs. This will remove deleted or readonly shared
-                // objects
-                mutable_inputs.contains(id)
+                // objects.
+                // REVIEW AND DELETE COMMENT AFTER: before we took a caller-passed `mutable_inputs`
+                // (= `input_objects.all_mutable_inputs()`); now we derive the identical set from the
+                // store. Verified exactly equivalent:
+                // all_mutable_inputs() ==
+                //      exclusive_mutable_inputs() (mutable_input_refs) ∪
+                //      non_exclusive_input_objects() (non_exclusive_input_original_versions).
+                store.mutable_input_refs.contains_key(id)
+                    || store.non_exclusive_input_original_versions.contains_key(id)
             })
             .copied()
             // Add any object IDs generated in the object runtime during execution to the
