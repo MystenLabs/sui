@@ -32,6 +32,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round};
+use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -205,6 +206,9 @@ pub(crate) struct PendingReconstructions {
     /// When commit-lag shedding first engaged, for the quiesce hysteresis. Cleared
     /// by the first non-lagging receipt.
     lag_shed_since: Option<tokio::time::Instant>,
+    /// Publishes the recovery backlog (pending + in-flight) on change, so paused
+    /// streams wake on drain instead of polling.
+    backlog_tx: tokio::sync::watch::Sender<usize>,
 
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
@@ -224,6 +228,7 @@ impl PendingReconstructions {
             held_sidecars: BTreeMap::new(),
             claims: BTreeMap::new(),
             lag_shed_since: None,
+            backlog_tx: tokio::sync::watch::channel(0).0,
 
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
@@ -355,6 +360,11 @@ impl PendingReconstructions {
     /// takes over. The grace keeps the sweep off the claim/acceptance race it
     /// would otherwise duplicate, and the retry spacing rotates attempts across
     /// the population under the caller's lane bound.
+    /// Subscribe to backlog changes (drain wake-ups for paused streams).
+    pub(crate) fn backlog_watch(&self) -> tokio::sync::watch::Receiver<usize> {
+        self.backlog_tx.subscribe()
+    }
+
     /// Resident recovery items: parked entries plus queued/in-flight
     /// reconstructions. The subscription backpressure watermarks read this.
     pub(crate) fn backlog(&self) -> usize {
@@ -571,10 +581,7 @@ impl PendingReconstructions {
                 swept_any = true;
             }
         }
-        if swept_any {
-            self.update_gauges();
-        }
-        if !obsolete.is_empty() || !frontier_dead.is_empty() {
+        if swept_any || !obsolete.is_empty() || !frontier_dead.is_empty() {
             self.update_gauges();
         }
         frontier_dead
@@ -717,6 +724,12 @@ impl PendingReconstructions {
     }
 
     fn update_gauges(&self) {
+        self.backlog_tx.send_if_modified(|b| {
+            let now = self.pending.len() + self.in_flight;
+            let changed = *b != now;
+            *b = now;
+            changed
+        });
         let metrics = &self.context.metrics.node_metrics;
         metrics
             .minimal_block_recovery_parked
@@ -824,6 +837,9 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     const SWEEP_CAP: usize = 32;
     let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
     sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Bounds concurrent sidecar deliveries and lane registrations spawned by the
+    // drain arm; acquired inside each task so the drain itself never waits.
+    let delivery_permits = std::sync::Arc::new(tokio::sync::Semaphore::new(64));
     loop {
         while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
             let Some(entry) = ready_queue.pop_front() else {
@@ -843,17 +859,32 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
             batch = effects.recv() => {
                 let Some(batch) = batch else { break };
                 ready_queue.extend(batch.ready);
+                // The drain arm never awaits I/O: sidecar delivery and lane
+                // registration are network-shaped, so one slow call must not delay
+                // acceptance-event processing queued behind it. Each runs as its
+                // own task, bounded by the delivery semaphore acquired inside the
+                // task, and releases its charge on completion.
                 for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
-                    {
-                        let Some(service) = service.upgrade() else { return };
-                        let _ = service.handle_excluded_ancestors(peer, anchor, sidecar).await;
-                    }
-                    pending_reconstructions.lock().release(peer, charge);
+                    let service = service.clone();
+                    let pending = pending_reconstructions.clone();
+                    let permits = delivery_permits.clone();
+                    spawn_monitored_task!(async move {
+                        let _permit = permits.acquire_owned().await;
+                        if let Some(service) = service.upgrade() {
+                            let _ = service
+                                .handle_excluded_ancestors(peer, anchor, sidecar)
+                                .await;
+                        }
+                        pending.lock().release(peer, charge);
+                    });
                 }
                 for block_ref in batch.frontier_dead {
-                    if registry.register_missing_block(block_ref).await.is_err() {
-                        return;
-                    }
+                    let registry = registry.clone();
+                    let permits = delivery_permits.clone();
+                    spawn_monitored_task!(async move {
+                        let _permit = permits.acquire_owned().await;
+                        let _ = registry.register_missing_block(block_ref).await;
+                    });
                 }
             }
             Some(alive) = in_flight.next() => {

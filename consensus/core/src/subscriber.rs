@@ -651,8 +651,17 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         .minimal_block_recovery_outcomes
                                         .with_label_values(&["backpressure_paused"])
                                         .inc();
+                                    let mut backlog_rx =
+                                        pending_reconstructions.lock().backlog_watch();
                                     loop {
-                                        sleep(Duration::from_millis(20)).await;
+                                        // Drain wakes arrive through the watch; the
+                                        // timeout only bounds how stale the lag
+                                        // recheck can get.
+                                        let _ = tokio::time::timeout(
+                                            Duration::from_millis(200),
+                                            backlog_rx.changed(),
+                                        )
+                                        .await;
                                         let lagging_now = {
                                             let Some(dag_state) = dag_state.upgrade() else {
                                                 return;
