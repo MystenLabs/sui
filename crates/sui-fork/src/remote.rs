@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Checkpoint-pinned remote access to the forked-from chain.
+//! Checkpoint-pinned GraphQL queries.
 //!
 //! [`RemoteSource`] owns every GraphQL round-trip the store makes and the
 //! fork's remote-read policy: object queries are pinned at the fork
