@@ -89,7 +89,7 @@ Before integrating against a pool, preflight it: confirm margin is enabled, reso
 
 Margin orders do not use the spot order entry. They go through the **pool proxy**, which places the order on the DeepBook pool on the manager's behalf and enforces the risk checks that keep a borrow safe. The current entry points are the `_v2` functions (`place_limit_order_v2`, `place_market_order_v2`, and the reduce-only variants); the unsuffixed originals are deprecated, so integrate against the `_v2` functions only.
 
-Every pool proxy order, and every operation that values a position (borrow, withdraw, risk read), takes Pyth `PriceInfoObject` arguments and reverts on a price older than the pool's maximum age. Spot orders take no oracle. This is the largest day-to-day difference: a margin integration keeps price feeds fresh, and any valuing call fails if they are stale. See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
+Every pool proxy order, and every operation that values a position (borrow, withdraw, risk read), takes Pyth `PriceInfoObject` arguments and reverts on a price older than the pool's maximum age. Spot orders take no oracle. This is the largest day-to-day difference: a margin integration keeps price feeds fresh, and any valuing call fails if they are stale. Append the refresh to the same transaction with `getPriceInfoObjects`, as in [Keep the price feeds fresh](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#keep-the-price-feeds-fresh). See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
 
 To monitor a position's health, read its oracle-priced risk ratio:
 

@@ -342,10 +342,10 @@ export class DeepBookMarketMaker {
 	}
 
 	static #getSignerFromPK = (privateKey: string) => {
-		const { schema, secretKey } = decodeSuiPrivateKey(privateKey);
-		if (schema === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
+		const { scheme, secretKey } = decodeSuiPrivateKey(privateKey);
+		if (scheme === 'ED25519') return Ed25519Keypair.fromSecretKey(secretKey);
 
-		throw new Error(`Unsupported schema: ${schema}`);
+		throw new Error(`Unsupported scheme: ${scheme}`);
 	};
 
 	signAndExecute = async (tx: Transaction) => {
@@ -413,34 +413,43 @@ The SDK provides functions for managing pool-specific referrals. Referrals allow
 
 ### Pool referral functions
 
-These functions are available on the `deepbook` contract for managing referrals at the pool level.
+These functions live on the `deepBook` contract namespace (`client.deepbook.deepBook`) and manage referrals at the pool level.
 
 :::info Multiplier constraints
 
-The referral multiplier must be a multiple of 0.1 (such as 0.1, 0.2, or 0.3) and cannot exceed 2.0.
+The referral multiplier must be a multiple of 0.1 (such as 0.1, 0.2, or 0.3) and cannot exceed 10.0. [`pool::mint_referral`](https://github.com/MystenLabs/deepbookv3/blob/main/packages/deepbook/sources/pool.move) asserts both constraints against `referral_multiplier` and `referral_max_multiplier`, so a value that breaks either one aborts the transaction.
 
 :::
 
 ```tsx
 // Mint a new referral for a specific pool
 // multiplier determines the portion of fees allocated to the referrer
-// Valid values: 0.1, 0.2, 0.3, ... up to 2.0
-client.deepbook.mintReferral('SUI_DBUSDC', 0.1)(tx);
+// Valid values: 0.1, 0.2, 0.3, ... up to 10.0
+client.deepbook.deepBook.mintReferral('SUI_DBUSDC', 0.1)(tx);
 
 // Update the multiplier for an existing referral
-client.deepbook.updatePoolReferralMultiplier('SUI_DBUSDC', referralId, 0.2)(tx);
+client.deepbook.deepBook.updatePoolReferralMultiplier('SUI_DBUSDC', referralId, 0.2)(tx);
 
-// Claim accumulated referral rewards (returns base, quote, and DEEP coins)
-const { baseRewards, quoteRewards, deepRewards } = tx.add(
-	client.deepbook.claimPoolReferralRewards('SUI_DBUSDC', referralId)
-);
+// Claim accumulated referral rewards (returns base, quote, and DEEP coins).
+// This call returns an object rather than a command, so apply the thunk to `tx`
+// directly instead of passing it to tx.add.
+const { baseRewards, quoteRewards, deepRewards } = client.deepbook.deepBook.claimPoolReferralRewards(
+	'SUI_DBUSDC',
+	referralId,
+)(tx);
 
 // Get the current balances for a referral
-client.deepbook.getPoolReferralBalances('SUI_DBUSDC', referralId)(tx);
+client.deepbook.deepBook.getPoolReferralBalances('SUI_DBUSDC', referralId)(tx);
 
 // Get the multiplier for a referral
-client.deepbook.poolReferralMultiplier('SUI_DBUSDC', referralId)(tx);
+client.deepbook.deepBook.poolReferralMultiplier('SUI_DBUSDC', referralId)(tx);
 ```
+
+:::info
+
+`client.deepbook.getPoolReferralBalances` and `client.deepbook.poolReferralMultiplier` also exist directly on the client. Those are `async` read methods you `await`, not transaction thunks. Use the `deepBook` namespace versions shown above when you want the value inside a transaction.
+
+:::
 
 ### Balance manager referral functions
 

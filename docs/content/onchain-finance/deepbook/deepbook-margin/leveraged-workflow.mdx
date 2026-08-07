@@ -96,6 +96,22 @@ The client references pools, coins, and margin pools by SDK key. On Testnet it a
 
 <ImportContent source="examples/deepbook-margin/src/client.ts" mode="code" tag="client" />
 
+## Keep the price feeds fresh
+
+Every margin operation that values a position (borrow, withdraw, order placement, risk read) reads the pool's Pyth `PriceInfoObject` for both the base and the quote coin, and reverts if that price is older than the pool's maximum age. The [`pool_proxy`](https://github.com/MystenLabs/deepbookv3/blob/main/packages/deepbook_margin/sources/pool_proxy.move) entry points take both price objects as arguments. Spot trading has no such dependency, so this is the step that most often surprises people coming from the spot workflow.
+
+Refresh the feeds in the same transaction as the operation that depends on them:
+
+<ImportContent source="examples/deepbook-margin/src/price-feeds.ts" mode="code" tag="refresh-prices" />
+
+The call is a no-op when the onchain price is still fresh, so it is safe to run before every margin transaction. To combine it with an order:
+
+<ImportContent source="examples/deepbook-margin/src/price-feeds.ts" mode="code" tag="order-with-fresh-prices" />
+
+Read-only calls such as `getMarginManagerState` cannot append an update, because they do not build a transaction. Check the age before you call one:
+
+<ImportContent source="examples/deepbook-margin/src/price-feeds.ts" mode="code" tag="price-age" />
+
 ## Create a `MarginManager`
 
 Create one `MarginManager` for the pool and reuse it across runs. A single `margin_manager::new` call creates the manager, shares it, and registers it in the `MarginRegistry`, so there is no separate registration step. Creating a new manager each run leaves orphaned shared objects that fragment your collateral, so discover or persist the ID and create only when you have none.
@@ -211,6 +227,6 @@ Withdraw your collateral back to your wallet. A withdraw must leave your risk ra
 - **Borrow aborts on risk ratio:** the borrow would leave your ratio below the pool's min borrow risk ratio. Deposit more collateral or borrow less. Read the current threshold with `getMinBorrowRiskRatio`.
 - **Withdraw aborts on risk ratio:** you are trying to withdraw collateral that a borrow still depends on. Repay first, then withdraw, and keep the ratio at or above the min withdraw ratio.
 - **Borrow fails for insufficient pool liquidity:** the margin pool has no headroom under its max utilization rate. Check `borrowableNow` from [Check borrow liquidity](#check-borrow-liquidity), borrow less, or wait for supply.
-- **Valuation reverts on a stale price:** the Pyth price is older than the pool's maximum price age. Refresh the price feed before the risk-reading or trading call. See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
+- **Valuation reverts on a stale price:** the Pyth price is older than the pool's maximum price age. Append `getPriceInfoObjects` to the same transaction, as in [Keep the price feeds fresh](#keep-the-price-feeds-fresh). See [Oracle risk](/onchain-finance/deepbook/deepbook-margin/margin-risks#oracle-risk).
 - **`Cannot convert <value> to a BigInt`:** `clientOrderId` is encoded as `u64`. The SDK types it as a string, but a non-numeric value fails to encode. Use a numeric string, such as a timestamp.
 - **Every run mints a new manager:** you are not reusing an existing `MarginManager`. Discover or persist the ID and create only when absent, as in [Create a MarginManager](#create-a-marginmanager).

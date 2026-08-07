@@ -68,6 +68,18 @@ The client references pools and coins by SDK key. Read-only calls work without a
 
 <ImportContent source="examples/deepbook-spot/src/client.ts" mode="code" tag="client" />
 
+## Sign and execute
+
+Every builder on this page returns an unsigned `Transaction`. Every later step submits one through this helper.
+
+<ImportContent source="examples/deepbook-spot/src/execute.ts" mode="code" tag="execute" />
+
+:::caution
+
+Wait for each transaction before building the next one. Execution returns as soon as the transaction finalizes, but the node you read from can still serve the pre-transaction state, and a transaction built against that stale state fails with a version-unavailable error. Every step in this workflow depends on the one before it, so `waitForTransaction` is not optional here.
+
+:::
+
 ## Set up a `BalanceManager`
 
 Create one `BalanceManager` and reuse it across runs. It holds your deposited balances and is the account every order trades from. Creating a new manager each run leaves orphaned shared objects and confuses any step that lists your managers, so reuse an existing manager and create only when you have none.
@@ -80,7 +92,11 @@ If that returns nothing (you have never created one, or the indexer has not caug
 
 <ImportContent source="examples/deepbook-spot/src/create-manager.ts" mode="code" tag="create-manager" />
 
-**Observe:** on creation, the effects contain a created shared object whose type ends in `BalanceManager`. Read its object ID from the effects, save it, and pass it to the client as a named manager.
+`createAndShareBalanceManager` returns nothing you can capture, so read the new manager's ID out of the transaction effects:
+
+<ImportContent source="examples/deepbook-spot/src/execute.ts" mode="code" tag="created-object" />
+
+**Observe:** the effects contain a created shared object whose type ends in `BalanceManager`. Save that ID and pass it to the client as a named manager.
 
 ## Deposit assets
 
@@ -148,11 +164,33 @@ Funds you deposit or earn live in the manager, a shared object, until you withdr
 
 ### Find stranded funds
 
-If a later deposit fails for insufficient funds even though you funded the key, the funds are usually sitting in another manager, not lost, because each manager is a shared object that keeps what you deposit. List the managers you have created (persist each ID when you create it, or scan your creation transactions with `suix_queryTransactionBlocks` filtered by `FromAddress`) and check their balances:
+If a later deposit fails for insufficient funds even though you funded the key, the funds are usually sitting in another manager, not lost, because each manager is a shared object that keeps what you deposit. List the managers you have created and check their balances. Persist each ID when you create it. If you did not, scan your creation transactions with the gRPC `LedgerService.ListTransactions` method and a `sender` filter, or the GraphQL `Query.transactions` field with a `sentAddress` filter. Both replace the deprecated `suix_queryTransactionBlocks` JSON-RPC method with its `FromAddress` filter. See [Migrating from JSON-RPC](/develop/accessing-data/json-rpc-migration) for the full method mapping, and the [gRPC](/develop/accessing-data/grpc/grpc-migration-cookbook#list-and-paginate-transactions) and [GraphQL](/develop/accessing-data/graphql/graphql-migration-cookbook#query-filtered-transactions) cookbooks for request shapes.
 
 <ImportContent source="examples/deepbook-spot/src/manager.ts" mode="code" tag="report-managers" />
 
 Withdraw each non-empty manager with `withdrawAllFromManager`, then reuse one manager going forward so funds stop fragmenting across orphans.
+
+## Run the same flow locally
+
+If you cannot obtain Testnet DEEP, or you want a book with reliable liquidity to trade against, run this workflow against a local deployment instead. The [DeepBook Sandbox](https://github.com/MystenLabs/deepbook-sandbox) deploys the full protocol (token, order book, margin, oracle, and a test USDC) to a private localnet in one command, seeds the pools with a market maker, and exposes a faucet for SUI, DEEP, and USDC:
+
+```sh
+$ git clone --recurse-submodules https://github.com/MystenLabs/deepbook-sandbox.git
+$ cd deepbook-sandbox/sandbox
+$ pnpm install
+$ pnpm deploy-all
+```
+
+The sandbox ships runnable versions of the steps on this page. Its `place-limit-order.ts` covers manager creation, deposit, and order placement end to end, and shows one detail this walkthrough leaves to you: reading the mid price, then rounding your price down to the pool's tick size before placing, so the order cannot fail the tick check.
+
+<ImportContent
+	source="examples/sandbox/place-limit-order.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbook-sandbox"
+/>
+
+Because the sandbox deploys its own packages, its client reads package, coin, and pool IDs from a generated manifest rather than the SDK's Testnet constants. Everything after client construction is the same SDK surface this page uses.
 
 ## Troubleshooting
 
