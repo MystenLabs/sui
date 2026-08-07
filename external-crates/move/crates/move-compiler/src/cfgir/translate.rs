@@ -5,7 +5,7 @@
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
-        self,
+        self, Constants,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
@@ -14,7 +14,7 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
-    ice_assert,
+    ice, ice_assert,
     parser::ast::{ConstantName, FunctionName},
     shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
@@ -59,6 +59,9 @@ struct Context<'env> {
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
+    // The value of every constant that could be folded, for each module's constants translated so
+    // far.
+    constant_values: BTreeMap<ModuleIdent, UniqueMap<ConstantName, Value>>,
     debug: CFGIRDebugFlags,
 }
 
@@ -73,6 +76,7 @@ impl<'env> Context<'env> {
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
+            constant_values: BTreeMap::new(),
             debug: CFGIRDebugFlags {
                 print_blocks: false,
                 print_optimized_blocks: false,
@@ -353,6 +357,7 @@ fn constants(
             .expect("ICE constant name collision");
     }
 
+    context.constant_values.insert(module, constant_values);
     out_map
 }
 
@@ -561,10 +566,13 @@ fn constant_(
     cfgir::optimize(
         context.env,
         &context.reporter,
+        Constants {
+            values: constant_values,
+            force_inline: true,
+        },
         context.current_package,
         &fake_signature,
         &locals,
-        constant_values,
         &mut cfg,
     );
 
@@ -727,29 +735,40 @@ fn function_body(
             };
             cfgir::refine_inference_and_verify(&function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
-            if !context.env.has_errors() {
-                // TODO thread through constants
-                let constants = &UniqueMap::new();
-                cfgir::optimize(
-                    context.env,
-                    &context.reporter,
-                    context.current_package,
-                    signature,
-                    &locals,
-                    constants,
-                    &mut cfg,
-                );
-                cfgir::report_always_erroring_operations(&context.reporter, constants, &cfg);
-                if context.debug.print_optimized_blocks {
-                    for (lbl, block) in &blocks {
-                        println!("{lbl}:");
-                        for cmd in block {
-                            print!("    ");
-                            cmd.print_verbose();
+            'optimize: {
+                if !context.env.has_errors() {
+                    let Some(constant_values) = context.constant_values.get(&module) else {
+                        context.add_diag(ice!((
+                            loc,
+                            "ICE constant values not found for module {module}"
+                        )));
+                        break 'optimize;
+                    };
+                    let constants = Constants {
+                        values: constant_values,
+                        force_inline: false,
+                    };
+                    cfgir::optimize(
+                        context.env,
+                        &context.reporter,
+                        constants,
+                        context.current_package,
+                        signature,
+                        &locals,
+                        &mut cfg,
+                    );
+                    cfgir::report_always_erroring_operations(&context.reporter, constants, &cfg);
+                    if context.debug.print_optimized_blocks {
+                        for (lbl, block) in &blocks {
+                            println!("{lbl}:");
+                            for cmd in block {
+                                print!("    ");
+                                cmd.print_verbose();
+                            }
                         }
                     }
                 }
-            }
+            };
             let block_info = block_info
                 .into_iter()
                 .filter(|(lbl, _info)| blocks.contains_key(lbl))
