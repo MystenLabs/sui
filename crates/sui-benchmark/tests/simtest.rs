@@ -1212,6 +1212,74 @@ mod test {
         }
     }
 
+    /// Waits until the observer fullnode (if the cluster has one) has finalized at least
+    /// the highest checkpoint the rpc fullnode has executed. The rpc fullnode catches up
+    /// via checkpoint sync, while the observer finalizes checkpoints locally from streamed
+    /// consensus blocks, so reaching the same sequence number proves block streaming kept
+    /// the observer up to date with the rest of the network.
+    async fn wait_for_observer_catch_up(test_cluster: &TestCluster, catch_up_timeout: Duration) {
+        let Some(observer_node) = test_cluster.observer_node() else {
+            return;
+        };
+
+        let target_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+                .expect("fullnode should have executed checkpoints")
+        });
+        assert!(
+            target_checkpoint > 0,
+            "network should have produced checkpoints for the catch-up check to be meaningful"
+        );
+
+        info!(
+            "Waiting for Observer node to catch up to checkpoint {} via block streaming",
+            target_checkpoint
+        );
+
+        // Re-acquire the observer's node handle on every read and drop it right away:
+        // holding a handle would keep a crashed instance's stores open and prevent the
+        // simulator from restarting the node. The node may also be down mid-crash, in
+        // which case the read yields None until the node is back up.
+        let read_observer_checkpoint = || {
+            observer_node.get_node_handle().and_then(|handle| {
+                handle.with(|node| {
+                    node.state()
+                        .get_checkpoint_store()
+                        .get_highest_executed_checkpoint_seq_number()
+                        .expect("checkpoint store read failed")
+                })
+            })
+        };
+        let observer_checkpoint = tokio::time::timeout(catch_up_timeout, async {
+            loop {
+                if let Some(seq) = read_observer_checkpoint()
+                    && seq >= target_checkpoint
+                {
+                    return seq;
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Observer node failed to catch up to checkpoint {} via block streaming within \
+                 {:?}; highest finalized checkpoint was {:?}",
+                target_checkpoint,
+                catch_up_timeout,
+                read_observer_checkpoint(),
+            )
+        });
+
+        info!(
+            "Observer node caught up to checkpoint {} (target {}) via block streaming",
+            observer_checkpoint, target_checkpoint
+        );
+    }
+
     async fn test_simulated_load(test_cluster: Arc<TestCluster>, test_duration_secs: u64) {
         test_simulated_load_with_test_config(
             test_cluster,
@@ -2515,105 +2583,42 @@ mod test {
     /// Test that Observer nodes can connect to validators and stream consensus
     #[sim_test(config = "test_config()")]
     async fn test_network_with_observer_node() {
-        use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
         use sui_benchmark::workloads::composite::*;
-        use sui_types::crypto::KeypairTraits;
 
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        info!("Setting up 4-validator network for Observer node test");
+        info!("Setting up 4-validator network with an observer fullnode");
 
-        // Build a 4-node validator network with observer server enabled on all validators
-        let mut test_cluster = init_test_cluster_builder(4, 40_000)
+        // Build a 4-node validator network with an observer fullnode subscribed to the
+        // first validator's observer server.
+        let test_cluster = init_test_cluster_builder(4, 40_000)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_validator_observer_config(Arc::new(|_idx| Some(ObserverParameters::default())))
+            .with_observer_fullnode()
             .build()
             .await;
 
-        info!("Creating Observer node configuration");
-
-        // Find the validator that has the observer server enabled
-        let observer_peers = {
-            let validator = test_cluster
-                .swarm
-                .validator_nodes()
-                .find(|v| {
-                    v.config()
-                        .consensus_config
-                        .as_ref()
-                        .and_then(|c| c.parameters.as_ref())
-                        .and_then(|p| p.observer.server_port)
-                        .is_some()
-                })
-                .expect("At least one validator should have observer server enabled");
-            let validator_config = validator.config();
-            let consensus_config = validator_config.consensus_config.as_ref().unwrap();
-
-            let observer_port = consensus_config
-                .parameters
-                .as_ref()
-                .and_then(|p| p.observer.server_port)
-                .unwrap();
-
-            let network_public_key =
-                NetworkPublicKey::new(validator_config.network_key_pair().public().clone());
-
-            let validator_host = validator_config
-                .network_address
-                .to_socket_addr()
-                .unwrap()
-                .ip()
-                .to_string();
-
-            let observer_address: sui_types::multiaddr::Multiaddr =
-                format!("/ip4/{}/udp/{}/http", validator_host, observer_port)
-                    .parse()
-                    .unwrap();
-
-            info!(
-                "Connecting Observer to validator at {} with observer port {}",
-                observer_address, observer_port
-            );
-
-            vec![PeerRecord {
-                public_key: network_public_key,
-                address: observer_address,
-            }]
-        };
-
-        info!(
-            "Creating Observer node with {} configured peers",
-            observer_peers.len()
-        );
-
-        let observer_config = test_cluster
-            .fullnode_config_builder()
-            .with_observer_config(ObserverParameters {
-                peers: observer_peers,
-                ..Default::default()
-            })
-            .build(&mut get_rng(), test_cluster.swarm.config());
-
-        info!("Starting Observer node with consensus enabled");
-
-        // Start the Observer node
-        let observer_handle = test_cluster
-            .start_fullnode_from_config(observer_config)
-            .await;
-        let observer_node_id = observer_handle.sui_node.with(|n| n.get_sim_node_id());
-        let observer_state = observer_handle.sui_node.state();
+        // Scope all node-handle access: holding a handle or state Arc across the test
+        // would prevent the simulator from restarting the observer if it crashes.
+        let (observer_node_id, observer_role) = test_cluster
+            .observer_node()
+            .expect("cluster should have an observer fullnode")
+            .get_node_handle()
+            .unwrap()
+            .with(|n| {
+                (
+                    n.get_sim_node_id(),
+                    n.state().epoch_store_for_testing().node_role(),
+                )
+            });
 
         info!(
             "Observer node started with node_id: {:?}, node_role: {:?}, runs_consensus: {}",
             observer_node_id,
-            observer_state.epoch_store_for_testing().node_role(),
-            observer_state
-                .epoch_store_for_testing()
-                .node_role()
-                .runs_consensus()
+            observer_role,
+            observer_role.runs_consensus()
         );
 
         // Let the Observer node stabilize
@@ -2658,67 +2663,15 @@ mod test {
             "observer workload must exercise object-funds insufficient execution"
         );
 
-        // Snapshot the latest checkpoint that the network has executed, as observed by the
-        // cluster's regular fullnode (which catches up via checkpoint sync). The Observer
-        // node instead catches up by streaming consensus blocks and finalizing checkpoints
-        // locally, so reaching this same sequence number proves block streaming keeps the
-        // Observer up to date with the rest of the network.
-        let target_checkpoint = test_cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("checkpoint store read failed")
-                .expect("fullnode should have executed checkpoints")
-        });
-        assert!(
-            target_checkpoint > 0,
-            "network should have produced checkpoints for the catch-up check to be meaningful"
-        );
-
-        info!(
-            "Waiting for Observer node to catch up to checkpoint {} via block streaming",
-            target_checkpoint
-        );
-
-        // Poll the Observer's checkpoint store until it has finalized at least the target
-        // checkpoint. The Observer streams blocks continuously, so it should reach this
-        // snapshot quickly; failing within the timeout means block streaming did not keep
-        // the Observer caught up to the latest checkpoint.
-        let catch_up_timeout = Duration::from_secs(60);
-        let read_observer_checkpoint = || {
-            observer_state
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("checkpoint store read failed")
-        };
-        let observer_checkpoint = tokio::time::timeout(catch_up_timeout, async {
-            loop {
-                if let Some(seq) = read_observer_checkpoint()
-                    && seq >= target_checkpoint
-                {
-                    return seq;
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Observer node failed to catch up to checkpoint {} via block streaming within \
-                 {:?}; highest finalized checkpoint was {:?}",
-                target_checkpoint,
-                catch_up_timeout,
-                read_observer_checkpoint(),
-            )
-        });
-
-        info!(
-            "Observer node caught up to checkpoint {} (target {}) via block streaming",
-            observer_checkpoint, target_checkpoint
-        );
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(60)).await;
 
         // The Observer must still be running with the Observer role after catching up.
-        let final_node_role = observer_state.epoch_store_for_testing().node_role();
+        let final_node_role = test_cluster
+            .observer_node()
+            .expect("cluster should have an observer fullnode")
+            .get_node_handle()
+            .unwrap()
+            .with(|n| n.state().epoch_store_for_testing().node_role());
         info!(
             "Observer node final check - node_role: {:?}, runs_consensus: {}",
             final_node_role,
