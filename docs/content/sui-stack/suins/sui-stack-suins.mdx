@@ -246,28 +246,11 @@ For offchain resolution in a TypeScript or JavaScript app, you have 2 options:
 
 **Lookup (name to address)** resolves a SuiNS name to its target address:
 
-{/* TODO: Import code from MystenLabs/sui-typescript/sdk/suins — show resolveNameServiceAddress example */}
+{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceAddress example */}
 {/* Description: Basic name-to-address resolution using SuiClient.resolveNameServiceAddress */}
 
-```ts
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-
-const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
-
-const address = await client.resolveNameServiceAddress({
-  name: 'example.sui',
-});
-// Returns the target address or null if the name does not exist
-```
-
-**Reverse lookup (address to default name)** resolves an address to its default SuiNS name:
-
-```ts
-const names = await client.resolveNameServiceNames({
-  address: '0x2',
-});
-// Returns: { data: ['example.sui'], hasNextPage: false, nextCursor: null }
-```
+{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceNames example */}
+{/* Description: Reverse lookup (address to default name) using SuiClient.resolveNameServiceNames */}
 
 For [GraphQL RPC](/develop/graphql-rpc), use the `resolveSuinsAddress` query for lookup and the `defaultSuinsName` field on the `Address` type for reverse lookup. See the [Sui GraphQL reference](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address) for the full schema.
 
@@ -275,18 +258,9 @@ For [GraphQL RPC](/develop/graphql-rpc), use the `resolveSuinsAddress` query for
 
 The `@mysten/suins` package provides the `suins()` extension function. Attach it to any `SuiClient` through `$extend` to add SuiNS methods. The extension uses `ClientWithCoreApi` and `PackageInfo` internally, and automatically loads the correct constants for Mainnet and Testnet ([SuiNS SDK source](https://github.com/MystenLabs/suins-contracts)):
 
-```ts
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import { suins } from '@mysten/suins';
+<ImportContent source="src/suins-client.ts" mode="code" org="MystenLabs" repo="suins-contracts" tag="suins-extension-example" language="ts" />
 
-const client = new SuiClient({
-  url: getFullnodeUrl('mainnet'),
-  network: 'mainnet',
-}).$extend(suins());
-
-const nameRecord = await client.suins.getNameRecord('example.sui');
-// Returns: { name, nftId, targetAddress, expirationTimestampMs, data, avatar, ... } or null
-```
+{/* TODO: If the suins-client.ts file does not have a docs:: tag for the extension example, import using the doc comment example at the top of the suins() function instead */}
 
 The `getNameRecord` method returns the full name record including expiration timestamp and metadata fields. Use this when you need to check expiry or retrieve associated data like avatars and content hashes.
 
@@ -348,25 +322,14 @@ The target address returned by `lookup` is a snapshot of the current registry st
 
 ### Offchain verification
 
-For offchain verification (for example, in a backend service), combine the SuiNS SDK `getNameRecord` method with expiry checks:
+For offchain verification (for example, in a backend service), combine the SuiNS SDK `getNameRecord` method with expiry checks. The verification follows the same 3-step sequence as the onchain approach:
 
-```ts
-const record = await client.suins.getNameRecord('example.sui');
+1. Call `getNameRecord` and check for a `null` return (name does not exist).
+2. Compare `expirationTimestampMs` against the current time to confirm the name has not expired.
+3. Check that `targetAddress` is set and non-empty before using it.
 
-if (!record) {
-  // Name does not exist
-}
-
-if (record.expirationTimestampMs < Date.now()) {
-  // Name is expired
-}
-
-if (!record.targetAddress) {
-  // Target address is not set
-}
-
-// Safe to use record.targetAddress
-```
+{/* TODO: Import code from MystenLabs/suins-contracts or a Sui example repo — show offchain verification pattern using getNameRecord with expiry and target address checks */}
+{/* Description: TypeScript function that resolves a SuiNS name, validates expiry, and confirms target address before use */}
 
 ### Reverse lookup verification
 
