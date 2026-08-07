@@ -198,6 +198,21 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
         block: ExtendedSerializedBlock,
     ) -> ConsensusResult<()>;
 
+    /// Submits blocks reconstructed from minimal form as one batch. Verification
+    /// stays per block, but Core dispatch is amortized across the batch instead of
+    /// paying a round trip per block: reconstruction is microseconds of CPU, so a
+    /// per-block round trip through Core's serialized loop caps recovery throughput
+    /// far below the rate blocks park. The default preserves per-block behavior.
+    async fn handle_reconstructed_blocks(
+        &self,
+        blocks: Vec<(AuthorityIndex, ExtendedSerializedBlock)>,
+    ) -> ConsensusResult<()> {
+        for (peer, block) in blocks {
+            let _ = self.handle_send_block(peer, block).await;
+        }
+        Ok(())
+    }
+
     /// Handles the excluded-ancestors sidecar of a block that was accepted through a
     /// path that strips it (synchronizer fetch or full-form replay racing a parked
     /// minimal). `block_ref` must already be accepted locally. Propagation hints must

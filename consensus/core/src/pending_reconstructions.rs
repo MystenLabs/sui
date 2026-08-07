@@ -196,9 +196,6 @@ pub(crate) struct PendingReconstructions {
     /// When commit-lag shedding first engaged, for the quiesce hysteresis. Cleared
     /// by the first non-lagging receipt.
     lag_shed_since: Option<tokio::time::Instant>,
-    /// Publishes the recovery backlog (pending + in-flight) on change, so paused
-    /// streams wake on drain instead of polling.
-    backlog_tx: tokio::sync::watch::Sender<usize>,
 
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
@@ -218,7 +215,6 @@ impl PendingReconstructions {
             held_sidecars: BTreeMap::new(),
             claims: BTreeMap::new(),
             lag_shed_since: None,
-            backlog_tx: tokio::sync::watch::channel(0).0,
 
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
@@ -353,17 +349,6 @@ impl PendingReconstructions {
     /// Snapshot of currently-missing slots, for the worker's reconcile pass.
     pub(crate) fn missing_slot_snapshot(&self) -> Vec<Slot> {
         self.missing_slots.keys().copied().collect()
-    }
-
-    /// Subscribe to backlog changes (drain wake-ups for paused streams).
-    pub(crate) fn backlog_watch(&self) -> tokio::sync::watch::Receiver<usize> {
-        self.backlog_tx.subscribe()
-    }
-
-    /// Resident recovery items: parked entries plus queued/in-flight
-    /// reconstructions. The subscription backpressure watermarks read this.
-    pub(crate) fn backlog(&self) -> usize {
-        self.pending.len() + self.in_flight
     }
 
     pub(crate) fn stale_dependents(&mut self, cap: usize) -> Vec<BlockRef> {
@@ -719,12 +704,6 @@ impl PendingReconstructions {
     }
 
     fn update_gauges(&self) {
-        self.backlog_tx.send_if_modified(|b| {
-            let now = self.pending.len() + self.in_flight;
-            let changed = *b != now;
-            *b = now;
-            changed
-        });
         let metrics = &self.context.metrics.node_metrics;
         metrics
             .minimal_block_recovery_parked
@@ -806,7 +785,14 @@ impl MissingBlockRegistry for crate::synchronizer::SynchronizerHandle {
 ///
 /// Lock discipline: DagState READ guards are scoped to inflation and dropped before
 /// the pending mutex, and the mutex is never held across an await.
-const RECONSTRUCTION_CONCURRENCY: usize = 32;
+/// Entries reconstructed per Core dispatch. Inflation is microseconds each, so the
+/// batch exists to amortize Core's round trip, not to parallelize CPU.
+const RECONSTRUCTION_BATCH_SIZE: usize = 128;
+
+/// Batches in flight at once. Small on purpose: with the round trip amortized there
+/// is nothing to hide, and a handful keeps the worker responsive while one batch
+/// waits on Core.
+const RECONSTRUCTION_BATCHES: usize = 4;
 
 /// Applies one batch of acceptance effects: ready entries queue for reconstruction,
 /// while sidecar deliveries and lane registrations run as their own bounded tasks so
@@ -883,18 +869,18 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     // the worker keeps serving its own effects channel and sweeps either way.
     let mut accepted_open = true;
     loop {
-        while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
-            let Some(entry) = ready_queue.pop_front() else {
-                break;
-            };
-            in_flight.push(reconstruct_one(
+        while in_flight.len() < RECONSTRUCTION_BATCHES && !ready_queue.is_empty() {
+            let batch: Vec<ReadyEntry> = ready_queue
+                .drain(..ready_queue.len().min(RECONSTRUCTION_BATCH_SIZE))
+                .collect();
+            in_flight.push(reconstruct_batch(
                 context.clone(),
                 block_inflater.clone(),
                 dag_state.clone(),
                 registry.clone(),
                 service.clone(),
                 pending_reconstructions.clone(),
-                entry,
+                batch,
             ));
         }
         tokio::select! {
@@ -985,108 +971,122 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     }
     // Channel closed: drain queued and in-flight work.
     while in_flight.next().await.is_some() || !ready_queue.is_empty() {
-        while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
-            let Some(entry) = ready_queue.pop_front() else {
-                break;
-            };
-            in_flight.push(reconstruct_one(
+        while in_flight.len() < RECONSTRUCTION_BATCHES && !ready_queue.is_empty() {
+            let batch: Vec<ReadyEntry> = ready_queue
+                .drain(..ready_queue.len().min(RECONSTRUCTION_BATCH_SIZE))
+                .collect();
+            in_flight.push(reconstruct_batch(
                 context.clone(),
                 block_inflater.clone(),
                 dag_state.clone(),
                 registry.clone(),
                 service.clone(),
                 pending_reconstructions.clone(),
-                entry,
+                batch,
             ));
         }
     }
 }
 
-/// One reconstruction from ready entry to terminal state; returns false when the
-/// node is shutting down (service or DagState gone).
-async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
+/// Reconstructs a batch of ready entries and submits them to Core in ONE dispatch.
+///
+/// Inflation is microseconds of CPU per entry, so it runs serially here; what used
+/// to dominate was the per-block round trip through Core's single-threaded loop
+/// (enqueue, wait for the reply carrying missing refs). Batching amortizes that
+/// round trip across the whole batch, which is what actually bounds recovery
+/// throughput. Returns false when the node is shutting down.
+async fn reconstruct_batch<S: crate::network::ValidatorNetworkService>(
     context: Arc<Context>,
     block_inflater: Arc<crate::block_inflater::BlockInflater>,
     dag_state: std::sync::Weak<RwLock<crate::dag_state::DagState>>,
     registry: Arc<dyn MissingBlockRegistry>,
     service: std::sync::Weak<S>,
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
-    entry: ReadyEntry,
+    entries: Vec<ReadyEntry>,
 ) -> bool {
-    let (peer, charge) = (entry.peer, entry.charge);
-    let inflated = {
-        let Some(dag_state) = dag_state.upgrade() else {
-            return false;
-        };
-        let guard = dag_state.read();
-        block_inflater.inflate(
-            &entry.minimal,
-            entry.peer,
-            &guard,
-            Some(&pending_reconstructions),
-        )
-    };
     let metrics = &context.metrics.node_metrics;
-    match inflated {
-        Ok((_signed, serialized)) => {
-            let Some(service) = service.upgrade() else {
+    let mut submit: Vec<(AuthorityIndex, crate::network::ExtendedSerializedBlock)> = Vec::new();
+    // Charges for entries whose bytes are handed off in this batch; released once
+    // the batch is submitted, since the minimal bytes are no longer held.
+    let mut settled: Vec<(AuthorityIndex, usize)> = Vec::new();
+
+    for entry in entries {
+        let (peer, charge) = (entry.peer, entry.charge);
+        let inflated = {
+            let Some(dag_state) = dag_state.upgrade() else {
                 return false;
             };
-            let block = crate::network::ExtendedSerializedBlock {
-                block: serialized,
-                excluded_ancestors: entry.excluded_ancestors,
-                minimal: None,
-            };
-            if let Err(error) = service.handle_send_block(entry.peer, block).await {
-                // Commit-lag admission control: deliberate backpressure. The block
-                // reaches us again through commit sync; nothing to hold.
-                tracing::debug!(
-                    "Reconstructed minimal block {} rejected: {error}",
-                    entry.claimed_ref
-                );
+            let guard = dag_state.read();
+            block_inflater.inflate(
+                &entry.minimal,
+                entry.peer,
+                &guard,
+                Some(&pending_reconstructions),
+            )
+        };
+        match inflated {
+            Ok((_signed, serialized)) => {
+                submit.push((
+                    peer,
+                    crate::network::ExtendedSerializedBlock {
+                        block: serialized,
+                        excluded_ancestors: entry.excluded_ancestors,
+                        minimal: None,
+                    },
+                ));
+                settled.push((peer, charge));
+            }
+            Err(crate::minimal_block::InflateError::NeedFullBlock { .. }) => {
+                // The frontier filled with different blocks than the sender used
+                // (equivocation) or ambiguity exceeded the search budget: only the
+                // exact block can finish this.
                 metrics
                     .minimal_block_recovery_outcomes
-                    .with_label_values(&["reconstruction_rejected"])
+                    .with_label_values(&["reinflation_failed"])
                     .inc();
-            }
-        }
-        Err(crate::minimal_block::InflateError::NeedFullBlock { .. }) => {
-            // The frontier filled with different blocks than the sender used
-            // (equivocation) or ambiguity exceeded the search budget: only the exact
-            // block can finish this.
-            metrics
-                .minimal_block_recovery_outcomes
-                .with_label_values(&["reinflation_failed"])
-                .inc();
-            if registry
-                .register_missing_block(entry.claimed_ref)
-                .await
-                .is_err()
-            {
-                return false;
-            }
-            // Release before holding: the entry charge still covers these bytes, and
-            // holding first double-counts the sidecar against the unified cap —
-            // refusing it on capacity that is about to free.
-            {
+                if registry
+                    .register_missing_block(entry.claimed_ref)
+                    .await
+                    .is_err()
+                {
+                    return false;
+                }
+                // Release before holding: the entry charge still covers these bytes,
+                // and holding first double-counts the sidecar against the unified cap.
                 let mut pending = pending_reconstructions.lock();
                 pending.release(peer, charge);
                 pending.hold_sidecar(entry.claimed_ref, entry.peer, entry.excluded_ancestors);
             }
-            return true;
-        }
-        Err(crate::minimal_block::InflateError::Malformed(error)) => {
-            tracing::debug!(
-                "Pending minimal block {} malformed at reconstruction: {error}",
-                entry.claimed_ref
-            );
-            metrics
-                .minimal_block_recovery_outcomes
-                .with_label_values(&["malformed_at_reconstruction"])
-                .inc();
+            Err(crate::minimal_block::InflateError::Malformed(error)) => {
+                tracing::debug!(
+                    "Pending minimal block {} malformed at reconstruction: {error}",
+                    entry.claimed_ref
+                );
+                metrics
+                    .minimal_block_recovery_outcomes
+                    .with_label_values(&["malformed_at_reconstruction"])
+                    .inc();
+                pending_reconstructions.lock().release(peer, charge);
+            }
         }
     }
-    pending_reconstructions.lock().release(peer, charge);
+
+    if !submit.is_empty() {
+        let Some(service) = service.upgrade() else {
+            return false;
+        };
+        let submitted = submit.len();
+        if service.handle_reconstructed_blocks(submit).await.is_err() {
+            metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["reconstruction_rejected"])
+                .inc_by(submitted as u64);
+        }
+        let mut pending = pending_reconstructions.lock();
+        for (peer, charge) in settled {
+            pending.release(peer, charge);
+        }
+    }
     true
 }
 
