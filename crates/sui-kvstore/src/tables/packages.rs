@@ -29,10 +29,6 @@ pub fn encode_key(original_id: &[u8], package_version: u64) -> Vec<u8> {
     key
 }
 
-pub fn encode_key_upper_bound(original_id: &[u8]) -> Vec<u8> {
-    encode_key(original_id, u64::MAX)
-}
-
 pub fn encode(
     cp_sequence_number: u64,
     package_id: &[u8],
