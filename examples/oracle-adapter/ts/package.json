@@ -7,9 +7,8 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@mysten/sui": "^1.30.0",
-    "@pythnetwork/pyth-sui-js": "^2.1.0",
-    "@switchboard-xyz/sui-sdk": "^0.1.16"
+    "@mysten/sui": "2.22.1",
+    "@pythnetwork/pyth-sui-js": "^4.0.0"
   },
   "devDependencies": {
     "tsx": "^4.0.0",

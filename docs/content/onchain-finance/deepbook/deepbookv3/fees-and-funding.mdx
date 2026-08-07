@@ -41,10 +41,10 @@ questions:
   - How does staking DEEP reduce trading fees?
 answer: >-
   DeepBook charges trading fees in DEEP by default, or in the input token at a
-  25% higher rate. The DEEP amount floats with an onchain price, so read it
-  with the SDK rather than hardcoding it. Fund a BalanceManager by depositing
-  DEEP. There is no Testnet DEEP faucet: request DEEP from the token-request
-  form, or swap faucet SUI for DEEP when the DEEP_SUI book has liquidity.
+  25% higher rate. The DEEP amount floats with an onchain price, so read it with
+  the SDK rather than hardcoding it. Fund a BalanceManager by depositing DEEP.
+  There is no Testnet DEEP faucet: request DEEP from the token-request form, or
+  swap faucet SUI for DEEP when the DEEP_SUI book has liquidity.
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -99,7 +99,7 @@ Deposit DEEP into your BalanceManager so orders can pay fees from it. The same D
 
 <ImportContent source="examples/deepbook-spot/src/fund-with-deep.ts" mode="code" tag="fund-deep" />
 
-Sign and execute the returned transaction with your keypair. See [BalanceManager](/onchain-finance/deepbook/deepbookv3-sdk/balance-manager) for creating and sharing a manager.
+Sign and execute the returned transaction with your keypair, then wait for it before building the next one. See [Sign and execute](/onchain-finance/deepbook/deepbookv3/spot-workflow#sign-and-execute) for that step, and [BalanceManager](/onchain-finance/deepbook/deepbookv3-sdk/balance-manager) for creating and sharing a manager.
 
 ## Obtain Testnet DEEP, USDC, and SUI
 
@@ -107,6 +107,8 @@ There is no Testnet DEEP faucet, by design: the DEEP token's treasury cap is loc
 
 - **Token-request form (reliable):** the [DeepBook Testnet token request form](https://tally.so/r/Xx102L) grants DEEP and quote assets such as DBUSDC directly. Use it as the default, and always for quote assets.
 - **Swap SUI for DEEP (when the book has liquidity):** on the whitelisted `DEEP_SUI` pool, faucet SUI converts to DEEP with no BalanceManager. The Testnet `DEEP_SUI` book is thin and intermittent, so treat this as a convenience, not a guarantee.
+
+If neither route works, or you want a book with reliable liquidity, run DeepBook locally instead. The [DeepBook Sandbox](https://github.com/MystenLabs/deepbook-sandbox) deploys the protocol to a private localnet with its own DEEP and USDC faucet and a market maker seeding the pools. See [Run the same flow locally](/onchain-finance/deepbook/deepbookv3/spot-workflow#run-the-same-flow-locally).
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -134,5 +136,5 @@ Deposit the DEEP into your BalanceManager with the [funding step above](#fund-a-
 ### Troubleshooting
 
 - `InsufficientCoinBalance`: the transaction spends more of a coin than you hold after gas. The swap draws SUI from the same balance that pays gas, so size it below your SUI balance minus a gas budget, or fund more SUI. The SDK also reserves a default gas budget when you do not set one, so leave room for it or call `setGasBudget` explicitly and size the swap around it.
-- `version unavailable for consumption`: you built a transaction from stale state before a previous one finalized. Wait for finality (the SDK's `waitForTransaction`) before building the next transaction. Do not blindly retry a rejected transaction, because it can leave the gas coin equivocation-locked.
+- `version unavailable for consumption`: you built a transaction from stale state before a previous one finalized. Call `client.core.waitForTransaction({ digest })` before building the next transaction, as in [Sign and execute](/onchain-finance/deepbook/deepbookv3/spot-workflow#sign-and-execute). Do not blindly retry a rejected transaction, because it can leave the gas coin equivocation-locked.
 - **Swap succeeds but you receive zero DEEP:** the book was empty and `minOut` was 0, so the pool returned your SUI unfilled. Set a nonzero `minOut` from `getQuantityOut` so an empty book reverts, and check the quote before swapping.

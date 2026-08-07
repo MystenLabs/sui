@@ -172,7 +172,7 @@ Set the supply model early, and understand the implications of a fixed, burn-onl
 
 Access control determines who can call privileged functions in your package, such as minting, withdrawals, or configuration changes. Move gives you several mechanisms to enforce authorization. Choose them deliberately, because a missing or weak check can expose privileged operations to any caller.
 
-For implementation patterns and code examples, see the [Access control](/develop/write-move/move-best-practices) section of the Move best practices guide and the [Capability Pattern](/getting-started/examples/capability-pattern) example.
+For implementation patterns and code examples, see the [Access control](/develop/write-move/move-best-practices) and [Admin capability](/develop/write-move/move-best-practices) sections of the Move best practices guide, and the [Capability Pattern](/getting-started/examples/capability-pattern) example for a worked module. For the version-gating pattern that makes a capability revocable across an upgrade, see [Versioned shared objects](/develop/publish-upgrade-packages/upgrade#versioned-shared-objects).
 
 #### Prefer capability objects over address allowlists
 
@@ -220,11 +220,53 @@ When a capability governs a specific object, store the object's ID in the capabi
 
 Anyone can submit a transaction that references a [shared object](/develop/objects/object-ownership/shared). A `public` function that takes a shared object runs for any caller unless the function itself checks authorization. Never assume access to a shared object is restricted. Require a capability, validate the sender, or check object ownership inside every privileged function that touches shared state.
 
+## DeFi composition security
+
+A DeFi transaction composes protocols that were audited separately. A [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) runs its commands atomically, so a caller can borrow from one protocol, act on a second, and repay the first, and either all of it applies or none does. That atomicity is what makes composition safe to offer, and it is also what an attacker composes against. The practices below cover the risks that appear when protocols meet, rather than inside any one of them.
+
+#### Reason about flash loans from Move's rules, not from other chains
+
+A flash loan hands you borrowed funds and a hot potato: a value whose type has neither the `drop` nor the `store` ability, so you cannot keep it, store it, or discard it. The only way to finish the transaction is to pass it back to the lender. DeepBook's `borrow_flashloan_base` returns `(Coin<Base>, FlashLoan)` and `return_flashloan_base` consumes both, so a transaction that borrows and never repays cannot execute at all. See [Flash loans](/onchain-finance/deepbook/deepbookv3/contract-information/flash-loans) for the API and [hot potato values](/develop/transactions/ptbs/prog-txn-blocks#non-public-entry-function-restrictions) for the ability rules and the clique tracking that enforces them.
+
+Repayment is therefore guaranteed, and several attack classes that define flash-loan exploits on other chains do not carry over:
+
+- **Reentrancy.** Move has no dynamic dispatch, as the [Sui for Ethereum developers](/getting-started/sui-for-ethereum) comparison notes. A protocol you call cannot hand control back to attacker-supplied code partway through your function, because there is no fallback hook and no call target the attacker chooses. The reentrancy guard you would write in Solidity has no Move equivalent because it has nothing to guard against.
+- **Borrowed voting power.** Buying governance with flash-borrowed tokens depends on voting power counting the instant it is deposited. Where a protocol activates stake on an epoch boundary, it cannot. In DeepBook, `add_stake` credits `inactive_stake`, and only the epoch-boundary `update` promotes it into `active_stake`; proposing and voting assert `active_stake` is nonzero. Stake acquired in a transaction is therefore worth no votes and no fee discount in that same transaction. Verify the activation rule for any protocol you integrate rather than assuming this shape.
+- **Forcing a callback through a non-public entry point.** A non-public `entry` function cannot be called while its arguments are entangled with a live hot potato, and consuming a shared object by value marks its clique permanently hot. Both rules exist to stop a borrowed value from compelling behavior after a call completes.
+
+The class that does transfer is using borrowed size to move a price that another protocol reads. Borrowing does not have to be profitable on its own to be worth doing, because the profit comes from the consumer acting on the moved price. Guard the read, not the borrow: see [Gate oracle-dependent logic on a checked read](#gate-oracle-dependent-logic-on-a-checked-read).
+
+Also design for the case where composition simply fails. Borrowing from a pool and trading in that same pool can abort, because the funds the trade needs are the funds you borrowed.
+
+#### Treat shared-object contention as a liveness risk
+
+Everyone trades against the same order book, so a popular DeFi object is a contended object. Sui meters throughput per object, so a single hot shared object throttles every transaction that touches it, and users experience that as transactions that do not land rather than as an error in your logic. A liquidation or a margin call that cannot execute during volatility is a solvency problem, not just a latency problem, which is what makes contention a security concern and not only a performance one.
+
+Design for it before you launch. [Local fee markets](/develop/transaction-payment/local-fee-markets#best-practices) covers the mechanics and the three levers: raise the gas price for priority access to a congested object, split state across objects rather than routing everything through one shared object, and shorten the execution time of the functions that touch the hot object. Prefer the second lever at design time, because the first is a per-transaction cost you pay forever and the third has a floor.
+
+#### Gate oracle-dependent logic on a checked read
+
+Any position your protocol values, liquidates, or settles depends on a price you did not produce. Read it through a staleness bound that aborts rather than returns an old value, reject a price whose confidence interval is too wide to act on, and define what happens when a feed is unavailable rather than falling through to the last value.
+
+[Oracle safety for high-stakes consumers](/onchain-finance/oracles/oracle-safety) owns this in full: the failure modes, what liquidations and collateral valuation each additionally require, and the guards to apply. [The Move adapter pattern](/onchain-finance/oracles/move-adapter) centralizes those guards so consumers cannot skip them.
+
+#### Version-gate shared objects across upgrades
+
+Every previous version of your package stays onchain and callable after you upgrade. A shared object that any version can reach is a shared object your old, unfixed code can still mutate, which turns a patched vulnerability into a live one.
+
+Guard it with a version check: track a `VERSION` constant in the module and a `version` field on the shared object, assert they match at the entry of every function that touches the object, and gate the migration that advances the field behind an `AdminCap`. [Versioned shared objects](/develop/publish-upgrade-packages/upgrade#versioned-shared-objects) owns the pattern with working Move. The same mechanism gives you the capability revocation path described in [Access control](#access-control), because advancing a version invalidates capabilities issued against the old one.
+
+#### Do not hardcode liquidation and risk parameters
+
+Lending and margin protocols keep their thresholds onchain and let governance change them. A liquidation ratio, a maximum utilization rate, or a maximum price age you compiled into your integration is a value that can drift away from the one the protocol enforces, and your risk math silently stops matching reality.
+
+Read the parameters at execution time and treat a change as an event to react to. For a worked model of what these thresholds mean and how a position moves between them, see [Margin risks](/onchain-finance/deepbook/deepbook-margin/margin-risks), which owns the liquidation math, and [Integrate margin trading](/onchain-finance/deepbook/deepbook-margin/margin-integration) for the registry events to watch when governance updates them.
+
 ## Oracle and offchain data
 
 #### Validate offchain data before you use it
 
-If your contracts consume offchain data, such as price feeds, validate it before you act on it. Check the freshness of the data, confirm the source, and verify any signatures. Apply replay protection so an old data point cannot be submitted again. Define explicit failure behavior for when the data is missing, stale, or invalid, so a feed outage does not produce an unsafe result.
+If your contracts consume offchain data, such as price feeds, validate it before you act on it. Check the freshness of the data, confirm the source, and verify any signatures. Apply replay protection so an old data point cannot be submitted again. Define explicit failure behavior for when the data is missing, stale, or invalid, so a feed outage does not produce an unsafe result. For price feeds specifically, [Oracle safety](/onchain-finance/oracles/oracle-safety) covers the failure modes and guards in depth.
 
 ## Emergency controls
 
