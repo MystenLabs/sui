@@ -27,7 +27,6 @@ use crate::{
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
-    pending_reconstructions::{AcceptanceEffects, ReconstructionHook},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
     threshold_clock::ThresholdClock,
@@ -111,15 +110,7 @@ pub struct DagState {
 
     // The number of cached rounds
     cached_rounds: Round,
-
     // Wakes waiters registered on a slot when a block is first accepted into it.
-    // Notified under the DagState write lock, after the slot is readable via
-    // `get_uncommitted_blocks_at_slot`, so waiters can register-then-recheck
-    // without missing an acceptance.
-    /// Parking hook: consulted on every acceptance and GC advance so parked
-    /// minimal blocks are unblocked by the same choke point that unblocks
-    /// suspended full blocks. None on observers and before wiring.
-    reconstruction_hook: Option<ReconstructionHook>,
 }
 
 impl DagState {
@@ -198,7 +189,6 @@ impl DagState {
             store: store.clone(),
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
-            reconstruction_hook: None,
         };
 
         let mut recovered_blocks = Vec::new();
@@ -359,20 +349,6 @@ impl DagState {
             .accepted_blocks
             .with_label_values(&[source])
             .inc();
-
-        // Must stay last: the pending_reconstructions index may hand out entries for reconstruction
-        // the moment their final slot fills, and by this point the block is readable
-        // by the reconstruction worker. The duplicate early-return above must not
-        // re-fire the hook.
-        if let Some(hook) = &self.reconstruction_hook {
-            let effects = hook
-                .pending_reconstructions
-                .lock()
-                .on_blocks_accepted(&[block_ref]);
-            if !effects.is_empty() {
-                let _ = hook.effects.send(effects);
-            }
-        }
     }
 
     /// Updates internal metadata for a block.
@@ -1112,22 +1088,6 @@ impl DagState {
 
         self.pending_commit_votes.push_back(commit.reference());
         self.commits_to_write.push(commit);
-
-        // After `last_commit` is set, the advanced GC round is observable by
-        // readers, so parked entries below it can be swept: obsolete claims drop,
-        // and entries whose frontier died route to the exact-fetch lane.
-        if let Some(hook) = &self.reconstruction_hook {
-            let gc_round = self.gc_round();
-            let local_round = self.highest_accepted_round();
-            let mut effects = AcceptanceEffects::default();
-            effects.frontier_dead = hook
-                .pending_reconstructions
-                .lock()
-                .on_gc(gc_round, local_round);
-            if !effects.is_empty() {
-                let _ = hook.effects.send(effects);
-            }
-        }
     }
 
     /// Recovers commits to write from storage, at startup.
@@ -1244,9 +1204,6 @@ impl DagState {
 
     /// Wires the minimal-block pending_reconstructions hook; called once at startup on
     /// validators. Observers never set it.
-    pub(crate) fn set_reconstruction_hook(&mut self, hook: ReconstructionHook) {
-        self.reconstruction_hook = Some(hook);
-    }
 
     /// Flushes unpersisted blocks, commits and commit info to storage.
     ///
