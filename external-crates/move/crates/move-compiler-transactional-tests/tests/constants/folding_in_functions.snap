@@ -1,0 +1,47 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 3-21:
+//# print-bytecode
+// Move bytecode v7
+module 42.m {
+
+public binop(): u64 {
+B0:
+	0: LdU64(3)
+	1: Ret
+}
+
+public cast(): u64 {
+B0:
+	0: LdU64(65535)
+	1: Ret
+}
+
+public nested(): u64 {
+B0:
+	0: LdU64(196605)
+	1: Ret
+}
+
+public used_directly(): u64 {
+B0:
+	0: LdConst[0](u64: 1)
+	1: Ret
+}
+
+public unfoldable(): u8 {
+B0:
+	0: LdConst[2](u16: 65535)
+	1: CastU8
+	2: Ret
+}
+
+Constants [
+	0 => u64: 1
+	1 => u64: 2
+	2 => u16: 65535
+]
+}
