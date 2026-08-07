@@ -94,7 +94,7 @@ Use `account` to retrieve the account information for a `BalanceManager` in a po
 - `poolKey`: String that identifies the pool to query.
 - `balanceManagerKey`: key of the balance manager defined in the SDK.
 
-<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="account" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/queries/accountQueries.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="account" signatureOnly />
 
 ### accountOpenOrders
 
@@ -277,7 +277,7 @@ Use `lockedBalance` to retrieve a `BalanceManager` locked balance in the pool. T
 
 `poolKey`: String that identifies the pool to query. `balanceManagerKey`: key of the balance manager defined in the SDK.
 
-<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="lockedBalance" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/queries/accountQueries.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="lockedBalance" signatureOnly />
 
 ### poolTradeParams
 
@@ -375,7 +375,7 @@ Use `getPoolDeepPrice` to get the DEEP price conversion for a pool. The call ret
 
 - `poolKey`: String that identifies the pool to query.
 
-<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getPoolDeepPrice" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/queries/accountQueries.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getPoolDeepPrice" signatureOnly />
 
 ## Administrative functions
 
@@ -443,9 +443,9 @@ Use `mintReferral` to create a new referral for a pool with a specified multipli
 
 <ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="mintReferral" signatureOnly />
 
-### `updateReferralMultiplier`
+### `updatePoolReferralMultiplier`
 
-Use `updateReferralMultiplier` to update the multiplier for an existing referral. Only the referral owner can update the multiplier. The call returns a function that takes a `Transaction` object.
+Use `updatePoolReferralMultiplier` to update the multiplier for an existing referral. Only the referral owner can update the multiplier. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -453,26 +453,26 @@ Use `updateReferralMultiplier` to update the multiplier for an existing referral
 - `referral`: String representing the referral ID.
 - `multiplier`: Number representing the new referral multiplier.
 
-<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="updateReferralMultiplier" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="updatePoolReferralMultiplier" signatureOnly />
 
-### `claimReferralRewards`
+### `claimPoolReferralRewards`
 
-Use `claimReferralRewards` to claim accumulated referral fees. Returns an object with `baseRewards`, `quoteRewards`, and `deepRewards`. The call returns a function that takes a `Transaction` object.
-
-**Parameters**
-
-- `poolKey`: String that identifies the pool.
-- `referral`: String representing the referral ID.
-
-<ImportContent source="/packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="claimReferralRewards" signatureOnly />
-
-### `getReferralBalances`
-
-Use `getReferralBalances` to view the current accumulated balances for a referral without claiming them. The call returns a `Promise` with the balances in base, quote, and DEEP tokens.
+Use `claimPoolReferralRewards` to claim accumulated referral fees. Returns an object with `baseRewards`, `quoteRewards`, and `deepRewards`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
 - `poolKey`: String that identifies the pool.
 - `referral`: String representing the referral ID.
 
-<ImportContent source="/packages/deepbook-v3/src/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getReferralBalances" signatureOnly />
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="claimPoolReferralRewards" signatureOnly />
+
+### `getPoolReferralBalances`
+
+Use `getPoolReferralBalances` to view the current accumulated balances for a referral without claiming them. The call returns a `Promise` with the balances in base, quote, and DEEP tokens.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `referral`: String representing the referral ID.
+
+<ImportContent source="packages/deepbook-v3/src/queries/referralQueries.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getPoolReferralBalances" signatureOnly />
