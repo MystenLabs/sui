@@ -123,10 +123,12 @@ runs:
     - name: Set sccache environment
       if: inputs.role-to-assume != '' || inputs.aws-access-key-id != ''
       shell: bash
+      env:
+        KEY_PREFIX: ${{ inputs.key-prefix }}
       run: |
         echo "SCCACHE_BUCKET=mystenlabs-sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_REGION=us-west-2" >> "$GITHUB_ENV"
-        echo "SCCACHE_S3_KEY_PREFIX=${{ inputs.key-prefix }}" >> "$GITHUB_ENV"
+        echo "SCCACHE_S3_KEY_PREFIX=${KEY_PREFIX}" >> "$GITHUB_ENV"
 
     - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
       if: inputs.role-to-assume != '' || inputs.aws-access-key-id != ''
