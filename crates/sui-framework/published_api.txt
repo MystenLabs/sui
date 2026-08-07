@@ -2944,6 +2944,9 @@ randomness_state
 sui_deny_list_object_id
 	public(package) fun
 	0x2::object
+sui_package_config_object_id
+	public(package) fun
+	0x2::object
 sui_accumulator_root_object_id
 	public(package) fun
 	0x2::object
@@ -3172,6 +3175,54 @@ original_package_id_impl
 restrict
 	fun
 	0x2::package
+PackageConfig
+	public struct
+	0x2::package_config
+PackageConfigCap
+	public struct
+	0x2::package_config
+PackageMetadataKey
+	public struct
+	0x2::package_config
+VersionForbiddenKey
+	public struct
+	0x2::package_config
+forbid_version
+	public fun
+	0x2::package_config
+forbid_version_range
+	public fun
+	0x2::package_config
+is_version_forbidden_for_next_epoch
+	public(package) fun
+	0x2::package_config
+create
+	fun
+	0x2::package_config
+add_per_package_config
+	fun
+	0x2::package_config
+borrow_per_package_config_mut
+	fun
+	0x2::package_config
+borrow_per_package_config
+	fun
+	0x2::package_config
+per_package_metadata_exists
+	fun
+	0x2::package_config
+is_version_forbidden
+	fun
+	0x2::package_config
+cap_package_info
+	fun
+	0x2::package_config
+assert_historical_version
+	fun
+	0x2::package_config
+forbid_version_impl
+	fun
+	0x2::package_config
 Party
 	public struct
 	0x2::party
