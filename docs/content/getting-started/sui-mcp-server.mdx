@@ -57,3 +57,73 @@ The server is hosted at `https://sui.mcp.kapa.ai` and exposes 2 tools:
 
 Run the following command in your terminal:
 
+```sh
+$ claude mcp add --transport http sui-docs https://sui.mcp.kapa.ai
+```
+
+Start Claude Code and run `/mcp` to verify the connection. Authenticate through your browser when prompted ([Kapa MCP docs](https://docs.kapa.ai/integrations/mcp/overview)).
+
+</TabItem>
+
+<TabItem value="cursor" label="Cursor">
+
+Create or update the `.cursor/mcp.json` file in your project root with the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "sui-docs": {
+      "type": "http",
+      "url": "https://sui.mcp.kapa.ai"
+    }
+  }
+}
+```
+
+Restart Cursor to load the new MCP server. Authenticate through your browser when prompted ([Kapa MCP docs](https://docs.kapa.ai/integrations/mcp/overview)).
+
+</TabItem>
+
+<TabItem value="vscode" label="VS Code">
+
+Create or update the `.vscode/mcp.json` file in your project root with the following configuration (requires VS Code 1.102 or later with GitHub Copilot):
+
+```json
+{
+  "servers": {
+    "sui-docs": {
+      "type": "http",
+      "url": "https://sui.mcp.kapa.ai"
+    }
+  }
+}
+```
+
+Restart VS Code to load the new MCP server. Authenticate through your browser when prompted ([Kapa MCP docs](https://docs.kapa.ai/integrations/mcp/overview)).
+
+</TabItem>
+
+</Tabs>
+
+## Authentication
+
+The Sui MCP server uses OAuth authentication through Google or GitHub. When you connect for the first time, your IDE opens a browser window for authentication. After you authenticate, the server associates your identity with rate limits ([Kapa MCP overview](https://docs.kapa.ai/integrations/mcp/overview)).
+
+## Rate limits
+
+The server enforces per-user rate limits ([Kapa MCP overview](https://docs.kapa.ai/integrations/mcp/overview)):
+
+| **Tool** | **Per-user daily limit** |
+|---|---|
+| `search_sui_knowledge_sources` | 300 requests per day |
+| `get_sui_knowledge_documents` | 300 requests per day |
+
+## Verify the connection
+
+After configuring the MCP server, verify that your IDE can access it:
+
+1. Open your AI assistant in the IDE.
+2. Ask a question about Sui development (for example, "How do programmable transaction blocks work on Sui?").
+3. Confirm that the assistant references Sui documentation in its response.
+
+If the connection fails, check that the URL `https://sui.mcp.kapa.ai` is accessible from your network and that you completed the browser authentication step.
