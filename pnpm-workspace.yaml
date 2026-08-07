@@ -7,6 +7,9 @@ packages:
   - '!examples/deepbook-spot'
   - '!examples/deepbook-margin'
   - '!examples/oracle-adapter/ts'
+  # Standalone for the opposite reason: @switchboard-xyz/sui-sdk still requires
+  # @mysten/sui 1.x, so this sample cannot share a resolution with the 2.x ones.
+  - '!examples/oracle-adapter/ts-switchboard'
   - '!examples/ptb-cookbook'
   - 'external-crates/move/tooling/prettier-move'
   - '!**/dist/**'

@@ -6,6 +6,11 @@ import { Transaction } from '@mysten/sui/transactions';
 import type { SuiClient } from '@mysten/sui/client';
 import { SwitchboardClient, Aggregator } from '@switchboard-xyz/sui-sdk';
 
+// NOTE ON VERSIONS: this sample pins `@mysten/sui` 1.x, unlike the Pyth samples
+// in `../ts`, which run on 2.x. `@switchboard-xyz/sui-sdk` has not migrated to
+// the 2.x SDK, and the two `Transaction` types are not interchangeable, so a
+// Switchboard consumer builds its transaction with the 1.x client today.
+//
 // Switchboard is on-demand: instead of a shared price object you update, you
 // hold an Aggregator feed and pull a fresh oracle response into your
 // transaction. `fetchUpdateTx` appends the update commands, and it MUST be the

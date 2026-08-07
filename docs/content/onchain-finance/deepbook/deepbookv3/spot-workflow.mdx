@@ -70,9 +70,15 @@ The client references pools and coins by SDK key. Read-only calls work without a
 
 ## Sign and execute
 
-Every builder on this page returns an unsigned `Transaction`. Every later step submits one through this helper.
+Every builder on this page returns an unsigned `Transaction`. Every later step submits one through a helper like this one, taken from the [DeepBook Sandbox](https://github.com/MystenLabs/deepbook-sandbox). Nothing in it is network-specific, so it works against Testnet exactly as it does against the sandbox's localnet:
 
-<ImportContent source="examples/deepbook-spot/src/execute.ts" mode="code" tag="execute" />
+<ImportContent
+	source="examples/sandbox/setup.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbook-sandbox"
+	fun="signAndExecute"
+/>
 
 :::caution
 
@@ -92,9 +98,7 @@ If that returns nothing (you have never created one, or the indexer has not caug
 
 <ImportContent source="examples/deepbook-spot/src/create-manager.ts" mode="code" tag="create-manager" />
 
-`createAndShareBalanceManager` returns nothing you can capture, so read the new manager's ID out of the transaction effects:
-
-<ImportContent source="examples/deepbook-spot/src/execute.ts" mode="code" tag="created-object" />
+`createAndShareBalanceManager` returns nothing you can capture, so read the new manager's ID out of the transaction effects instead. Ask for `objectTypes` alongside `effects` when you execute, then find the created object whose type contains `BalanceManager`. The sandbox's `setupWithBalanceManager` in [Run the same flow locally](#run-the-same-flow-locally) does exactly this, in its step 3.
 
 **Observe:** the effects contain a created shared object whose type ends in `BalanceManager`. Save that ID and pass it to the client as a named manager.
 
@@ -190,7 +194,17 @@ The sandbox ships runnable versions of the steps on this page. Its `place-limit-
 	repo="deepbook-sandbox"
 />
 
-Because the sandbox deploys its own packages, its client reads package, coin, and pool IDs from a generated manifest rather than the SDK's Testnet constants. Everything after client construction is the same SDK surface this page uses.
+Its `setupWithBalanceManager` covers manager creation end to end, including the effects read that recovers the new manager's ID:
+
+<ImportContent
+	source="examples/sandbox/setup.ts"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbook-sandbox"
+	fun="setupWithBalanceManager"
+/>
+
+Because the sandbox deploys its own packages, its client reads package, coin, and pool IDs from a generated manifest rather than the SDK's Testnet constants, and it funds a fresh keypair from a local faucet. Those two steps are localnet-only. Everything else, including the effects extraction and the `waitForTransaction` gate, is the same SDK surface this page uses.
 
 ## Troubleshooting
 

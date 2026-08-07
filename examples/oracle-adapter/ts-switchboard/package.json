@@ -1,0 +1,17 @@
+{
+  "name": "oracle-adapter-switchboard",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Switchboard on-demand sample. Pinned to @mysten/sui 1.x because @switchboard-xyz/sui-sdk has not migrated to 2.x.",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.45.2",
+    "@switchboard-xyz/sui-sdk": "^0.1.16"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3"
+  }
+}

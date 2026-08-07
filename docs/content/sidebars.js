@@ -481,6 +481,7 @@ export default {
             'onchain-finance/deepbook/deepbook-margin/margin-risks',
             'onchain-finance/deepbook/deepbook-margin/leveraged-workflow',
             'onchain-finance/deepbook/deepbook-margin/margin-integration',
+            'onchain-finance/deepbook/deepbook-margin/monitoring-runbook',
             {
               type: 'category',
               label: 'Contract Information',

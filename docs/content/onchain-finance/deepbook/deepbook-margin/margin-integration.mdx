@@ -44,9 +44,9 @@ answer: >-
   trade caps, so unlike spot, every action routes through the manager and orders
   go through the pool proxy. Each manager is bound to one DeepBook pool and
   borrows one side from one isolated MarginPool, valued through Pyth oracles.
-  Anyone can liquidate positions at the pool's liquidation risk ratio
-  through the margin liquidation vault. Index the MarginManager and MarginPool
-  events to track positions, loans, and liquidations.
+  Anyone can liquidate positions at the pool's liquidation risk ratio through
+  the margin liquidation vault. Index the MarginManager and MarginPool events to
+  track positions, loans, and liquidations.
 builder_paths:
   - path_id: defi-deepbook
     path_name: DeFi / DeepBook
@@ -95,11 +95,21 @@ To monitor a position's health, read its oracle-priced risk ratio:
 
 <ImportContent source="examples/deepbook-margin/src/risk.ts" mode="code" tag="read-risk" />
 
-## Liquidation from the integrator's view
+## Liquidation paths and who gets paid
 
-Anyone can liquidate any position your integration opens once its risk ratio falls to the pool's liquidation risk ratio. Liquidation is permissionless and, in the current deployment, runs through the separate `margin_liquidation` package: an entry callable by anyone checks eligibility with the registry, sources repay capital from a shared liquidation vault, and calls the manager's inner settlement to repay part of the debt and pay a reward out of the collateral, restoring the position to the target risk ratio. The [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#what-happens-if-you-do-nothing-and-the-price-moves-against-you) shows the onchain entry point, and [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks#how-liquidation-works) works the consequences through with numbers.
+Anyone can liquidate any position your integration opens once its risk ratio falls to the pool's liquidation risk ratio. Two entry points do this, in two different packages, and they differ in who funds the repayment and who keeps the proceeds. Choose deliberately, because the economics are opposite.
 
-For an integrator this means two things. First, no grace period protects the positions you build, so surface the risk ratio and its distance to the liquidation threshold to your users, and act early. Second, if you run a liquidator, it is a standard permissionless keeper: watch positions, supply oracles and repay capital, and receive the reward.
+| **Aspect** | **`margin_manager::liquidate`** | **`liquidation_vault::liquidate_base` and `_quote`** |
+| --- | --- | --- |
+| Package | Margin package | Separate `margin_liquidation` package |
+| Repay capital | You supply a `Coin<DebtAsset>` | The shared liquidation vault supplies it |
+| Proceeds | Returned to you as base, quote, and leftover debt coins, including the user liquidation reward | Deposited back into the vault. The caller receives nothing |
+| Caller cost | Gas plus the repay capital you commit | Gas only |
+| Not liquidatable | Aborts with `ECannotLiquidate` | Returns silently, emitting no event and changing no state |
+
+Both are permissionless in the sense that neither takes a capability. The vault functions gate only their `swap_*` siblings on an authorized trader, not the liquidation calls themselves. But permissionless to call is not the same as profitable to call: a third party who calls the vault path pays gas and hands every proceed to the vault. The direct call is the one with keeper economics.
+
+For an integrator this means two things. First, no grace period protects the positions you build, so surface the risk ratio and its distance to the liquidation threshold to your users, and act early. Second, if you run a liquidator, use `margin_manager::liquidate`, hold the debt asset in size, and keep price feeds fresh, because the same oracle staleness that blocks a valuation blocks a liquidation. See [Monitoring Runbook](/onchain-finance/deepbook/deepbook-margin/monitoring-runbook) for watching positions approach that threshold. The [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow#what-happens-if-you-do-nothing-and-the-price-moves-against-you) shows the onchain entry point, and [Margin Risks](/onchain-finance/deepbook/deepbook-margin/margin-risks#how-liquidation-works) works the consequences through with numbers.
 
 ## Events to index
 
