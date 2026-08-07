@@ -97,6 +97,9 @@ pub(crate) struct PendingMinimal {
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
     pub(crate) peer: AuthorityIndex,
     pub(crate) parked_at_round: Round,
+    /// Last round the exact-dependent sweep registered this entry, so retries
+    /// rotate across the pending population instead of hammering the lane.
+    last_swept_round: Round,
     /// Full remaining missing-slot set — kept per entry so removal can unlink from
     /// the inverted index without scanning it.
     missing: BTreeSet<Slot>,
@@ -180,12 +183,6 @@ impl AcceptanceEffects {
     }
 }
 
-/// Per-authority lowest pending missing-slot round, shared with the synchronizer so
-/// the periodic scheduler can lower its `fetch_after_rounds` vector. `Round::MAX`
-/// means no pending slot for that authority. Updated under the core thread on every
-/// mutation; read lock-free-ish by the scheduler.
-pub(crate) type PendingSlotFloor = Arc<RwLock<Vec<Round>>>;
-
 pub(crate) struct PendingReconstructions {
     context: Arc<Context>,
     pending: BTreeMap<BlockRef, PendingMinimal>,
@@ -207,7 +204,6 @@ pub(crate) struct PendingReconstructions {
     /// Entries dispatched to the worker and not yet terminal; counted against the
     /// entry cap alongside `pending`.
     in_flight: usize,
-    slot_floor: PendingSlotFloor,
 }
 
 impl PendingReconstructions {
@@ -225,12 +221,7 @@ impl PendingReconstructions {
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
             in_flight: 0,
-            slot_floor: Arc::new(RwLock::new(vec![Round::MAX; committee_size])),
         }
-    }
-
-    pub(crate) fn slot_floor(&self) -> PendingSlotFloor {
-        self.slot_floor.clone()
     }
 
     /// Admits a claim or says why not. On refusal the sidecar is still held so the
@@ -283,11 +274,11 @@ impl PendingReconstructions {
                 excluded_ancestors,
                 peer,
                 parked_at_round: local_round,
+                last_swept_round: 0,
                 missing,
                 charge,
             },
         );
-        self.rebuild_slot_floor();
         self.update_gauges();
         Ok(())
     }
@@ -346,6 +337,35 @@ impl PendingReconstructions {
             return Some(AdmitRefusal::TotalBytes);
         }
         None
+    }
+
+    /// Dependents parked past a grace window, for the periodic exact-ref sweep
+    /// that replaced the slot floor: each ref's digest is already known from the
+    /// claim, so the refs-only lane fetches the full dependent; its arrival
+    /// supersedes the parked entry and block_manager's digest-addressed recovery
+    /// takes over. The grace keeps the sweep off the claim/acceptance race it
+    /// would otherwise duplicate, and the retry spacing rotates attempts across
+    /// the population under the caller's lane bound.
+    pub(crate) fn stale_dependents(&mut self, local_round: Round, cap: usize) -> Vec<BlockRef> {
+        const GRACE_ROUNDS: Round = 4;
+        const RETRY_ROUNDS: Round = 20;
+        let mut out = Vec::new();
+        for (block_ref, entry) in self.pending.iter_mut() {
+            if out.len() >= cap {
+                break;
+            }
+            if local_round.saturating_sub(entry.parked_at_round) < GRACE_ROUNDS {
+                continue;
+            }
+            if entry.last_swept_round != 0
+                && local_round.saturating_sub(entry.last_swept_round) < RETRY_ROUNDS
+            {
+                continue;
+            }
+            entry.last_swept_round = local_round;
+            out.push(*block_ref);
+        }
+        out
     }
 
     /// The unique claim for `slot`, if any — consulted by the inflater when the
@@ -413,7 +433,6 @@ impl PendingReconstructions {
             });
         }
         if !ready.is_empty() {
-            self.rebuild_slot_floor();
             self.update_gauges();
         }
         ready
@@ -473,7 +492,6 @@ impl PendingReconstructions {
             }
         }
         if !effects.ready.is_empty() || !effects.deliverable_sidecars.is_empty() {
-            self.rebuild_slot_floor();
             self.update_gauges();
         }
         effects
@@ -540,7 +558,6 @@ impl PendingReconstructions {
             self.update_gauges();
         }
         if !obsolete.is_empty() || !frontier_dead.is_empty() {
-            self.rebuild_slot_floor();
             self.update_gauges();
         }
         frontier_dead
@@ -596,7 +613,6 @@ impl PendingReconstructions {
                 self.total_bytes -= bytes;
             }
         }
-        self.rebuild_slot_floor();
         self.update_gauges();
         evicted
     }
@@ -661,15 +677,6 @@ impl PendingReconstructions {
         self.per_peer_bytes[peer] += bytes;
         self.total_bytes += bytes;
         self.held_sidecars.insert(block_ref, (peer, sidecar));
-    }
-
-    fn rebuild_slot_floor(&self) {
-        let mut floor = vec![Round::MAX; self.context.committee.size()];
-        for slot in self.missing_slots.keys() {
-            let entry = &mut floor[slot.authority];
-            *entry = (*entry).min(slot.round);
-        }
-        *self.slot_floor.write() = floor;
     }
 
     fn observe_residency(&self, entry: &PendingMinimal, outcome: &str, local_round: Round) {
@@ -738,9 +745,6 @@ pub(crate) trait MissingBlockRegistry: Send + Sync + 'static {
         &self,
         block_ref: BlockRef,
     ) -> crate::error::ConsensusResult<()>;
-    /// Shares the pending-slot floor with the fetcher so periodic passes can
-    /// range-repair parked frontiers. Default no-op for test registries.
-    fn install_pending_slot_floor(&self, _floor: PendingSlotFloor) {}
 }
 
 #[async_trait::async_trait]
@@ -750,10 +754,6 @@ impl MissingBlockRegistry for crate::synchronizer::SynchronizerHandle {
         block_ref: BlockRef,
     ) -> crate::error::ConsensusResult<()> {
         crate::synchronizer::SynchronizerHandle::register_missing_block(self, block_ref).await
-    }
-
-    fn install_pending_slot_floor(&self, floor: PendingSlotFloor) {
-        crate::synchronizer::SynchronizerHandle::install_pending_slot_floor(self, floor);
     }
 }
 
@@ -787,6 +787,14 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     // per entry, not per effects batch, and ready work is dispatched before the
     // sequential sidecar deliveries of the same batch.
     let mut ready_queue: std::collections::VecDeque<ReadyEntry> = Default::default();
+    // Exact-dependent sweep (the slot floor's replacement): entries parked past the
+    // grace window get their known refs registered on the refs-only lane; the
+    // fetched full dependent supersedes the park and block_manager recovers its
+    // ancestors by digest. Cadence well above the claim/acceptance race window.
+    const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_millis(700);
+    const SWEEP_CAP: usize = 32;
+    let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
+    sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
             let Some(entry) = ready_queue.pop_front() else {
@@ -822,6 +830,20 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
             Some(alive) = in_flight.next() => {
                 if !alive {
                     return;
+                }
+            }
+            _ = sweep.tick() => {
+                let stale = {
+                    let Some(dag_state) = dag_state.upgrade() else {
+                        return;
+                    };
+                    let tip = dag_state.read().highest_accepted_round();
+                    pending_reconstructions.lock().stale_dependents(tip, SWEEP_CAP)
+                };
+                for block_ref in stale {
+                    if registry.register_missing_block(block_ref).await.is_err() {
+                        return;
+                    }
                 }
             }
             else => break,
@@ -1154,7 +1176,6 @@ mod tests {
         assert!(p.pending.is_empty());
         p.assert_invariants();
         // Slot floor is clear once nothing is pending.
-        assert!(p.slot_floor.read().iter().all(|&r| r == Round::MAX));
     }
 
     /// A dispatched entry's charge still covers its sidecar; releasing before
@@ -1186,23 +1207,6 @@ mod tests {
         assert_eq!(p.held_sidecars.len(), 1, "hint must survive cap pressure");
         assert_eq!(p.per_peer_bytes[author], 8);
         p.assert_invariants();
-    }
-
-    /// The slot floor tracks the lowest pending slot per authority — the value the
-    /// periodic scheduler folds into fetch_after_rounds.
-    #[test]
-    fn slot_floor_tracks_lowest_pending() {
-        let mut p = pending_reconstructions();
-        admit(&mut p, r(20, 1, 1), vec![slot(18, 2), slot(19, 3)]).unwrap();
-        admit(&mut p, r(21, 2, 1), vec![slot(15, 3)]).unwrap();
-        {
-            let floor = p.slot_floor.read();
-            assert_eq!(floor[2], 18);
-            assert_eq!(floor[3], 15);
-            assert_eq!(floor[1], Round::MAX);
-        }
-        p.on_blocks_accepted(&[r(15, 3, 5)]);
-        assert_eq!(p.slot_floor.read()[3], 19);
     }
 
     /// Quiesce evicts parked and held state, zeroes the books, and leaves the
@@ -1297,6 +1301,45 @@ mod tests {
         assert!(pending.observe_claim(other, BlockDigest::MIN).is_empty());
         assert!(pending.observe_claim(other, BlockDigest::MAX).is_empty());
         assert_eq!(pending.unique_claim(other), None);
+        pending.assert_invariants();
+    }
+
+    /// The sweep respects the grace window, the retry spacing, and the cap, and
+    /// rotates across the population instead of resampling the same entries.
+    #[tokio::test]
+    async fn stale_dependents_grace_retry_and_cap() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mut pending = PendingReconstructions::new(context.clone());
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let missing = vec![Slot::new(
+            9,
+            context.committee.to_authority_index(2).unwrap(),
+        )];
+        for i in 0..3u8 {
+            pending
+                .try_admit(
+                    BlockRef::new(10 + i as Round, peer, BlockDigest::MIN),
+                    Bytes::from(vec![i; 32]),
+                    vec![],
+                    peer,
+                    missing.clone(),
+                    0,
+                    10,
+                )
+                .unwrap();
+        }
+        // Inside the grace window: nothing qualifies.
+        assert!(pending.stale_dependents(11, 8).is_empty());
+        // Past grace: capped batch, oldest-first order.
+        let first = pending.stale_dependents(30, 2);
+        assert_eq!(first.len(), 2);
+        // Immediately after: only the uncovered entry qualifies (retry spacing).
+        let second = pending.stale_dependents(30, 8);
+        assert_eq!(second.len(), 1);
+        assert!(!first.contains(&second[0]));
+        // Once the retry window passes, swept entries qualify again.
+        assert_eq!(pending.stale_dependents(55, 8).len(), 3);
         pending.assert_invariants();
     }
 }
