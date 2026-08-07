@@ -112,6 +112,10 @@ mod address_balance_gas_tests;
 #[path = "unit_tests/transaction_claims_tests.rs"]
 mod transaction_claims_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/allowed_proposers_tests.rs"]
+mod allowed_proposers_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -2330,7 +2334,7 @@ pub fn is_gasless_transaction(gas_data: &GasData, transaction_kind: &Transaction
     is_gas_paid_from_address_balance(gas_data, transaction_kind) && gas_data.price == 0
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionExpiration {
     /// The transaction has no expiration
     None,
@@ -2360,19 +2364,106 @@ pub enum TransactionExpiration {
         /// User-provided uniqueness identifier to differentiate otherwise identical transactions
         nonce: u32,
     },
+    /// Everything in `ValidDuring`, plus a restriction on which validators may propose the
+    /// transaction in consensus.
+    Validity {
+        /// Transaction invalid before this epoch. Must equal current epoch.
+        min_epoch: Option<EpochId>,
+        /// Transaction expires after this epoch. Must equal current epoch
+        max_epoch: Option<EpochId>,
+        /// Future support for sub-epoch timing (not yet implemented)
+        min_timestamp: Option<u64>,
+        /// Future support for sub-epoch timing (not yet implemented)
+        max_timestamp: Option<u64>,
+        /// Network identifier to prevent cross-chain replay
+        chain: ChainIdentifier,
+        /// User-provided uniqueness identifier to differentiate otherwise identical transactions
+        nonce: u32,
+        /// The validators allowed to propose this transaction in consensus, if it restricts them.
+        allowed_proposers: Option<AllowedProposers>,
+    },
 }
+
+/// The validators allowed to propose a transaction in consensus. Proposal by any other validator
+/// is byzantine behavior and invalidates the whole block.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct AllowedProposers {
+    /// The epoch whose committee `proposers` indexes into. Committee indices are only meaningful
+    /// against one committee, so a set recorded for any other epoch is ignored entirely — see
+    /// `TransactionExpiration::allowed_proposers`.
+    pub epoch: EpochId,
+    /// Committee indices of the allowed proposers. Must be strictly increasing, and each index
+    /// must be within the committee.
+    ///
+    /// SIP-45 bounds the length by the gas price: see `MAX_UNPAID_ALLOWED_PROPOSERS`.
+    #[serde(with = "nonempty_as_vec")]
+    pub proposers: NonEmpty<u32>,
+}
+
+/// The number of allowed proposers a transaction may name without paying for amplification.
+/// Beyond this, SIP-45 caps the proposer set at `gas_price / reference_gas_price`.
+///
+/// Naming several proposers is also what keeps a transaction submittable when some of them are
+/// offline, so this is a floor as much as it is an allowance.
+pub const MAX_UNPAID_ALLOWED_PROPOSERS: u64 = 3;
 
 impl TransactionExpiration {
     /// Validators remember all executed transaction digests from the current and previous
-    /// epoch. Therefore, ValidDuring with a one or two epoch range provides replay protection.
+    /// epoch. Therefore, a one or two epoch validity window provides replay protection.
     /// Either the transaction is statically invalid (current epoch not within range) or the
     /// validator will remember if the transaction was already executed.
     pub fn is_replay_protected(&self) -> bool {
-        matches!(self, TransactionExpiration::ValidDuring {
+        matches!(
+            self,
+            TransactionExpiration::ValidDuring {
                 min_epoch: Some(min_epoch),
                 max_epoch: Some(max_epoch),
                 ..
-            } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1))
+            }
+            | TransactionExpiration::Validity {
+                min_epoch: Some(min_epoch),
+                max_epoch: Some(max_epoch),
+                ..
+            } if *max_epoch == *min_epoch || *max_epoch == min_epoch.saturating_add(1)
+        )
+    }
+
+    /// The validators allowed to propose this transaction in consensus during `epoch`.
+    ///
+    /// A set recorded for any other epoch indexes into a committee that is not the one deciding
+    /// this transaction, so it is ignored entirely and the transaction is treated as naming no
+    /// proposers. The incentive to record the current epoch is on the signer, who is the party
+    /// the restriction protects; transactions without a usable set may in future be subject to
+    /// submission delays to limit amplification.
+    pub fn allowed_proposers(&self, epoch: EpochId) -> Option<&AllowedProposers> {
+        match self {
+            TransactionExpiration::Validity {
+                allowed_proposers: Some(allowed),
+                ..
+            } if allowed.epoch == epoch => Some(allowed),
+            _ => None,
+        }
+    }
+
+    /// Whether the transaction restricts its proposers during `epoch`. Only such a transaction has
+    /// its consensus amplification bounded by `validity_check`.
+    pub fn restricts_proposers(&self, epoch: EpochId) -> bool {
+        self.allowed_proposers(epoch).is_some()
+    }
+
+    /// Whether `proposer` (an index into `epoch`'s committee) may propose this transaction in
+    /// consensus.
+    pub fn is_allowed_proposer(&self, proposer: u32, epoch: EpochId) -> bool {
+        self.allowed_proposers(epoch).is_none_or(|allowed| {
+            // The set is strictly increasing, so stop as soon as it passes `proposer`. An
+            // unsorted set is rejected by validity_check; reading it as a miss here is
+            // deterministic across validators, which is all block verification requires.
+            allowed
+                .proposers
+                .iter()
+                .find(|p| **p >= proposer)
+                .is_some_and(|p| *p == proposer)
+        })
     }
 }
 
@@ -3171,8 +3262,86 @@ impl TransactionDataAPI for TransactionDataV1 {
                 min_timestamp,
                 max_timestamp,
                 chain,
-                nonce: _,
+                ..
+            }
+            | TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                ..
             } => {
+                // The variant itself is gated regardless of whether its proposer set is usable,
+                // so that a transaction accepted after the upgrade cannot be accepted before it.
+                if matches!(self.expiration(), TransactionExpiration::Validity { .. }) {
+                    fp_ensure!(
+                        config.allowed_proposers(),
+                        UserInputError::Unsupported(
+                            "Restricting the proposers of a transaction is not supported"
+                                .to_string(),
+                        )
+                        .into()
+                    );
+                }
+
+                // A proposer set recorded for another epoch is ignored, so there is nothing to
+                // check: the transaction is treated as if it named no proposers at all.
+                if let Some(allowed_proposers) = self.expiration().allowed_proposers(context.epoch)
+                {
+                    let proposers = &allowed_proposers.proposers;
+
+                    // SIP-45: submitting the same transaction to several proposers amplifies its
+                    // consensus cost, which must be paid for with a raised gas price. Sizing the
+                    // proposer set is the sender's declaration of how much it intends to amplify.
+                    // No gas price buys more proposers than there are validators.
+                    //
+                    // Checked first, so that everything below walks a bounded list.
+                    let max_proposers = MAX_UNPAID_ALLOWED_PROPOSERS
+                        .max(self.gas_data.price / context.reference_gas_price.max(1))
+                        .min(context.committee_size as u64);
+                    fp_ensure!(
+                        proposers.len() as u64 <= max_proposers,
+                        UserInputError::InvalidExpiration {
+                            error: format!(
+                                "allowed_proposers has {} entries, but at most {max_proposers} \
+                                 are permitted with gas price {}, reference gas price {}, and a \
+                                 committee of {}",
+                                proposers.len(),
+                                self.gas_data.price,
+                                context.reference_gas_price,
+                                context.committee_size,
+                            ),
+                        }
+                        .into()
+                    );
+
+                    // Canonical encoding: a proposer set cannot be padded with duplicates, and
+                    // lookups can rely on the ordering.
+                    fp_ensure!(
+                        proposers.iter().is_sorted_by(|a, b| a < b),
+                        UserInputError::InvalidExpiration {
+                            error: "allowed_proposers must be strictly increasing".to_string(),
+                        }
+                        .into()
+                    );
+
+                    // An out-of-range index names no one, so it can only make the transaction
+                    // unproposable.
+                    if let Some(out_of_range) =
+                        proposers.iter().find(|i| **i >= context.committee_size)
+                    {
+                        return Err(UserInputError::InvalidExpiration {
+                            error: format!(
+                                "allowed_proposers contains index {out_of_range}, but the \
+                                 committee has {} members",
+                                context.committee_size,
+                            ),
+                        }
+                        .into());
+                    }
+                }
+
                 if min_timestamp.is_some() || max_timestamp.is_some() {
                     return Err(UserInputError::Unsupported(
                         "Timestamp-based transaction expiration is not yet supported".to_string(),
@@ -3180,9 +3349,9 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .into());
                 }
 
-                // Legacy behavior: If ValidDuring is present, it must have either one- or two-epoch
-                // validity, even if the transaction is has other replay-protection.
-                // New behavior: ValidDuring can specify any epoch range. Replay protection is enforced
+                // Legacy behavior: If a validity window is present, it must have either one- or
+                // two-epoch validity, even if the transaction has other replay-protection.
+                // New behavior: any epoch range can be specified. Replay protection is enforced
                 // by sui_transaction_checks::check_replay_protection.
                 match (min_epoch, max_epoch) {
                     _ if config.relax_valid_during_for_owned_inputs() => (),
@@ -3651,6 +3820,8 @@ pub struct TxValidityCheckContext<'a> {
     pub epoch: EpochId,
     pub chain_identifier: ChainIdentifier,
     pub reference_gas_price: u64,
+    /// Number of validators in the current epoch's committee, used to bound committee indices.
+    pub committee_size: u32,
 }
 
 impl<'a> TxValidityCheckContext<'a> {
@@ -3660,6 +3831,7 @@ impl<'a> TxValidityCheckContext<'a> {
             epoch: 0,
             chain_identifier: ChainIdentifier::default(),
             reference_gas_price: 1000,
+            committee_size: 4,
         }
     }
 }

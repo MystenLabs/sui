@@ -2274,7 +2274,7 @@ fn merge_transaction_data(
     }
 
     if mask.contains(Transaction::EXPIRATION_FIELD.name) {
-        message.expiration = Some(source.expiration.into());
+        message.expiration = Some(source.expiration.clone().into());
     }
 }
 
@@ -2314,6 +2314,8 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 message.epoch = Some(epoch);
                 TransactionExpirationKind::Epoch
             }
+            // TODO: `Validity`'s allowed_proposers has no proto representation yet, so a
+            // `Validity` expiration is reported as `ValidDuring`.
             E::ValidDuring {
                 min_epoch,
                 max_epoch,
@@ -2321,6 +2323,15 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 max_timestamp,
                 chain,
                 nonce,
+            }
+            | E::Validity {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+                allowed_proposers: _,
             } => {
                 message.epoch = max_epoch;
                 message.min_epoch = min_epoch;
