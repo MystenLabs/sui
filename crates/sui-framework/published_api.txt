@@ -1252,6 +1252,150 @@ replace_all
 remove
 	entry fun
 	0x2::address_alias
+AllowanceWithdrawal
+	public struct
+	0x2::allowance
+Allowance
+	public struct
+	0x2::allowance
+Settings
+	public struct
+	0x2::allowance
+AllowanceCap
+	public struct
+	0x2::allowance
+AllowanceProposal
+	public struct
+	0x2::allowance
+SpendPermit
+	public struct
+	0x2::allowance
+SettingsPermit
+	public struct
+	0x2::allowance
+RateLimit
+	public enum
+	0x2::allowance
+Window
+	public enum
+	0x2::allowance
+spend_permit
+	public fun
+	0x2::allowance
+settings_permit
+	public fun
+	0x2::allowance
+periodic_rate_limit
+	public fun
+	0x2::allowance
+calendar_rate_limit
+	public fun
+	0x2::allowance
+monthly_rate_limit
+	public fun
+	0x2::allowance
+quarterly_rate_limit
+	public fun
+	0x2::allowance
+yearly_rate_limit
+	public fun
+	0x2::allowance
+new
+	entry fun
+	0x2::allowance
+propose_for_app
+	entry fun
+	0x2::allowance
+issue
+	public fun
+	0x2::allowance
+balance_spend
+	public fun
+	0x2::allowance
+app_balance_spend
+	public fun
+	0x2::allowance
+revoke
+	public fun
+	0x2::allowance
+rotate_spender
+	public fun
+	0x2::allowance
+settings
+	public fun
+	0x2::allowance
+current_spend
+	public fun
+	0x2::allowance
+proposed_settings
+	public fun
+	0x2::allowance
+funder
+	public fun
+	0x2::allowance
+spender
+	public fun
+	0x2::allowance
+app
+	public fun
+	0x2::allowance
+lifetime_cap
+	public fun
+	0x2::allowance
+start_timestamp_ms
+	public fun
+	0x2::allowance
+expiration_timestamp_ms
+	public fun
+	0x2::allowance
+rate_limit
+	public fun
+	0x2::allowance
+name
+	public fun
+	0x2::allowance
+rate_limit_limit
+	public fun
+	0x2::allowance
+rate_limit_spent
+	public fun
+	0x2::allowance
+rate_limit_window
+	public fun
+	0x2::allowance
+civil_from_ms
+	public(package) fun
+	0x2::allowance
+days_in_month
+	public(package) fun
+	0x2::allowance
+assert_app
+	fun
+	0x2::allowance
+consume
+	fun
+	0x2::allowance
+new_rate_limit
+	fun
+	0x2::allowance
+charge
+	fun
+	0x2::allowance
+index_at
+	fun
+	0x2::allowance
+elapsed_windows
+	fun
+	0x2::allowance
+is_leap_year
+	fun
+	0x2::allowance
+new_settings
+	fun
+	0x2::allowance
+share_new
+	fun
+	0x2::allowance
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
