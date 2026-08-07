@@ -386,6 +386,7 @@ const MAINNET_USDB: &str =
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
 //              Enable package-version forbid lists.
+//              Enable package pauses.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -774,6 +775,10 @@ struct FeatureFlags {
     // If true, enable package-version forbid lists.
     #[serde(skip_serializing_if = "is_false")]
     enable_package_version_forbid_list: bool,
+
+    // If true, enable package global pauses.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_package_global_pause: bool,
 
     // If true, enable the coin deny list V2.
     #[serde(skip_serializing_if = "is_false")]
@@ -4651,6 +4656,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.allowed_proposers = true;
                     }
                     cfg.feature_flags.enable_package_version_forbid_list = true;
+                    cfg.feature_flags.enable_package_global_pause = true;
                 }
                 // Use this template when making changes:
                 //

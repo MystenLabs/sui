@@ -68,6 +68,31 @@ impl MoveTypeTagTrait for VersionForbiddenKey {
     }
 }
 
+/// Rust representation of the Move type 0x2::package_config::GlobalPauseKey.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GlobalPauseKey(bool);
+
+impl GlobalPauseKey {
+    pub fn new() -> Self {
+        Self(false)
+    }
+
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_PACKAGE_ID.into(),
+            module: PACKAGE_CONFIG_MODULE_NAME.to_owned(),
+            name: ident_str!("GlobalPauseKey").to_owned(),
+            type_params: vec![],
+        }
+    }
+}
+
+impl MoveTypeTagTrait for GlobalPauseKey {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(Self::type_()))
+    }
+}
+
 /// Returns the per-package config for `original_id`, if it exists and can be decoded.
 pub fn get_per_package_config(
     original_id: ObjectID,
@@ -94,6 +119,20 @@ pub fn read_version_forbid_flags(
         VersionForbiddenKey::new(version),
         cur_epoch,
     )
+}
+
+/// Returns whether the package family identified by `original_id` is globally paused. Missing
+/// configuration is unpaused.
+pub fn is_global_pause_enabled(
+    original_id: ObjectID,
+    object_store: &dyn ObjectStore,
+    cur_epoch: Option<EpochId>,
+) -> bool {
+    get_per_package_config(original_id, object_store)
+        .and_then(|config| {
+            read_config_setting(object_store, &config, GlobalPauseKey::new(), cur_epoch)
+        })
+        .unwrap_or(false)
 }
 
 /// Returns whether flags deny a package version. Unknown bitset schema versions are denied.

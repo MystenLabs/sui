@@ -100,7 +100,7 @@ mod checked {
 
         check_receiving_objects(&input_objects, receiving_objects)?;
 
-        check_package_version_forbid_list(transaction, protocol_config, backing_store)?;
+        check_package_configuration(transaction, protocol_config, backing_store)?;
 
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
@@ -136,7 +136,7 @@ mod checked {
         )?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
 
-        check_package_version_forbid_list(transaction, protocol_config, backing_store)?;
+        check_package_configuration(transaction, protocol_config, backing_store)?;
 
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
@@ -842,12 +842,14 @@ mod checked {
         Ok(())
     }
 
-    fn check_package_version_forbid_list(
+    fn check_package_configuration(
         transaction: &TransactionData,
         protocol_config: &ProtocolConfig,
         backing_store: &dyn BackingStore,
     ) -> SuiResult {
-        if !protocol_config.enable_package_version_forbid_list() {
+        let enforce_version_forbid_list = protocol_config.enable_package_version_forbid_list();
+        let enforce_global_pause = protocol_config.enable_package_global_pause();
+        if !enforce_version_forbid_list && !enforce_global_pause {
             return Ok(());
         }
 
@@ -855,8 +857,8 @@ mod checked {
             return Ok(());
         };
 
-        // Reject a collected forbidden version, but let collection errors reach execution as invalid
-        // linkage errors instead of denying signing.
+        // Reject collected package configuration violations, but let collection errors reach
+        // execution as invalid linkage errors instead of denying signing.
         let Ok(UnifiedLinkageInformation {
             execution_original_ids,
             resolved_packages,
@@ -869,15 +871,29 @@ mod checked {
             return Ok(());
         };
 
-        for original_id in execution_original_ids {
-            let Some((_, version)) = resolved_packages.get(&original_id) else {
-                continue;
-            };
-            if package_config::is_version_forbidden(original_id, *version, backing_store, None) {
-                return Err(UserInputError::TransactionDenied {
-                    error: format!("Package {original_id} version {version} is forbidden"),
+        if enforce_global_pause {
+            for original_id in &execution_original_ids {
+                if package_config::is_global_pause_enabled(*original_id, backing_store, None) {
+                    return Err(UserInputError::TransactionDenied {
+                        error: format!("Package {original_id} is globally paused"),
+                    }
+                    .into());
                 }
-                .into());
+            }
+        }
+
+        if enforce_version_forbid_list {
+            for original_id in execution_original_ids {
+                let Some((_, version)) = resolved_packages.get(&original_id) else {
+                    continue;
+                };
+                if package_config::is_version_forbidden(original_id, *version, backing_store, None)
+                {
+                    return Err(UserInputError::TransactionDenied {
+                        error: format!("Package {original_id} version {version} is forbidden"),
+                    }
+                    .into());
+                }
             }
         }
 

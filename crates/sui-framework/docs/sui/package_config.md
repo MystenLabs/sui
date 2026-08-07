@@ -9,27 +9,35 @@ The configuration hierarchy is:
 PackageConfig
   └── PackageMetadataKey(original package ID)
         └── Config<PackageConfigCap>
-              └── VersionForbiddenKey(package version number)
-                    └── Setting<u64> value
+              ├── VersionForbiddenKey(package version number)
+              │     └── Setting<u64> value
+              └── GlobalPauseKey()
+                    └── Setting<bool> value
 ```
 Each version has an independent <code>Setting</code>: <code>1</code> means the version is forbidden and <code>0</code> means it
-is allowed.
+is allowed. The global-pause setting applies to every version in the package family.
 
 
 -  [Struct `PackageConfig`](#sui_package_config_PackageConfig)
 -  [Struct `PackageConfigCap`](#sui_package_config_PackageConfigCap)
 -  [Struct `PackageMetadataKey`](#sui_package_config_PackageMetadataKey)
 -  [Struct `VersionForbiddenKey`](#sui_package_config_VersionForbiddenKey)
+-  [Struct `GlobalPauseKey`](#sui_package_config_GlobalPauseKey)
 -  [Constants](#@Constants_0)
 -  [Function `forbid_version`](#sui_package_config_forbid_version)
 -  [Function `forbid_version_range`](#sui_package_config_forbid_version_range)
 -  [Function `is_version_forbidden_for_next_epoch`](#sui_package_config_is_version_forbidden_for_next_epoch)
+-  [Function `enable_global_pause`](#sui_package_config_enable_global_pause)
+-  [Function `disable_global_pause`](#sui_package_config_disable_global_pause)
+-  [Function `is_global_pause_enabled_for_next_epoch`](#sui_package_config_is_global_pause_enabled_for_next_epoch)
 -  [Function `create`](#sui_package_config_create)
 -  [Function `add_per_package_config`](#sui_package_config_add_per_package_config)
 -  [Function `borrow_per_package_config_mut`](#sui_package_config_borrow_per_package_config_mut)
 -  [Function `borrow_per_package_config`](#sui_package_config_borrow_per_package_config)
 -  [Function `per_package_metadata_exists`](#sui_package_config_per_package_metadata_exists)
 -  [Function `is_version_forbidden`](#sui_package_config_is_version_forbidden)
+-  [Function `enable_global_pause_impl`](#sui_package_config_enable_global_pause_impl)
+-  [Function `disable_global_pause_impl`](#sui_package_config_disable_global_pause_impl)
 -  [Function `cap_package_info`](#sui_package_config_cap_package_info)
 -  [Function `assert_historical_version`](#sui_package_config_assert_historical_version)
 -  [Function `forbid_version_impl`](#sui_package_config_forbid_version_impl)
@@ -158,6 +166,28 @@ Setting key used to store the forbid-list value for one package version.
 </dt>
 <dd>
 </dd>
+</dl>
+
+
+</details>
+
+<a name="sui_package_config_GlobalPauseKey"></a>
+
+## Struct `GlobalPauseKey`
+
+Setting key used to store the global-pause value for a package family.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/package_config.md#sui_package_config_GlobalPauseKey">GlobalPauseKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
 </dl>
 
 
@@ -302,6 +332,97 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
     <b>let</b> value = <a href="../sui/config.md#sui_config">config</a>.read_setting_for_next_epoch&lt;_, _, u64&gt;(<a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a>(version));
     <b>if</b> (value.is_none()) <b>return</b> <b>false</b>;
     <a href="../sui/package_config.md#sui_package_config_is_version_forbidden">is_version_forbidden</a>(value.destroy_some())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_enable_global_pause"></a>
+
+## Function `enable_global_pause`
+
+Enable the global pause for every version of the package controlled by <code>cap</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_enable_global_pause">enable_global_pause</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_enable_global_pause">enable_global_pause</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    cap: &UpgradeCap,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_enable_global_pause_impl">enable_global_pause_impl</a>(cap.original_package_id(), ctx);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_disable_global_pause"></a>
+
+## Function `disable_global_pause`
+
+Disable the global pause for every version of the package controlled by <code>cap</code>.
+
+If the setting exists, it is retained with a value of <code><b>false</b></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_disable_global_pause">disable_global_pause</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_disable_global_pause">disable_global_pause</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    cap: &UpgradeCap,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_disable_global_pause_impl">disable_global_pause_impl</a>(cap.original_package_id(), ctx);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_is_global_pause_enabled_for_next_epoch"></a>
+
+## Function `is_global_pause_enabled_for_next_epoch`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_global_pause_enabled_for_next_epoch">is_global_pause_enabled_for_next_epoch</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package_config.md#sui_package_config_is_global_pause_enabled_for_next_epoch">is_global_pause_enabled_for_next_epoch</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    original_id: ID,
+): bool {
+    <b>if</b> (!<a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_metadata_exists">per_package_metadata_exists</a>(original_id)) <b>return</b> <b>false</b>;
+    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_borrow_per_package_config">borrow_per_package_config</a>(original_id);
+    <a href="../sui/config.md#sui_config">config</a>
+        .read_setting_for_next_epoch&lt;_, _, bool&gt;(<a href="../sui/package_config.md#sui_package_config_GlobalPauseKey">GlobalPauseKey</a>())
+        .destroy_or!(<b>false</b>)
 }
 </code></pre>
 
@@ -471,6 +592,79 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 </details>
 
+<a name="sui_package_config_enable_global_pause_impl"></a>
+
+## Function `enable_global_pause_impl`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_enable_global_pause_impl">enable_global_pause_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_enable_global_pause_impl">enable_global_pause_impl</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    original_id: ID,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_config_entry">per_package_config_entry</a>!(original_id, ctx);
+    <b>let</b> next_epoch_entry = <a href="../sui/config.md#sui_config">config</a>.<b>entry</b>!&lt;_, <a href="../sui/package_config.md#sui_package_config_GlobalPauseKey">GlobalPauseKey</a>, bool&gt;(
+        &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfigCap">PackageConfigCap</a>(),
+        <a href="../sui/package_config.md#sui_package_config_GlobalPauseKey">GlobalPauseKey</a>(),
+        |_package_config, _cap, _ctx| <b>true</b>,
+        ctx,
+    );
+    *next_epoch_entry = <b>true</b>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_disable_global_pause_impl"></a>
+
+## Function `disable_global_pause_impl`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_disable_global_pause_impl">disable_global_pause_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_disable_global_pause_impl">disable_global_pause_impl</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    original_id: ID,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>if</b> (!<a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_per_package_metadata_exists">per_package_metadata_exists</a>(original_id)) <b>return</b>;
+    <b>let</b> <a href="../sui/config.md#sui_config">config</a> = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_borrow_per_package_config_mut">borrow_per_package_config_mut</a>(original_id);
+    <b>let</b> setting_name = <a href="../sui/package_config.md#sui_package_config_GlobalPauseKey">GlobalPauseKey</a>();
+    <b>if</b> (!<a href="../sui/config.md#sui_config">config</a>.exists_with_type&lt;_, <a href="../sui/package_config.md#sui_package_config_GlobalPauseKey">GlobalPauseKey</a>, bool&gt;(setting_name)) <b>return</b>;
+    <a href="../sui/config.md#sui_config">config</a>.update!(
+        &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfigCap">PackageConfigCap</a>(),
+        setting_name,
+        |_package_config, _cap, _ctx| <b>false</b>,
+        |_old_value, value| *value = <b>false</b>,
+        ctx,
+    );
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_package_config_cap_package_info"></a>
 
 ## Function `cap_package_info`
@@ -487,7 +681,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 
 <pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_cap_package_info">cap_package_info</a>(cap: &UpgradeCap): (ID, u64) {
-    (<a href="../sui/package.md#sui_package_original_package_id">package::original_package_id</a>(cap), <a href="../sui/package.md#sui_package_version">package::version</a>(cap))
+    (cap.original_package_id(), <a href="../sui/package.md#sui_package_version">package::version</a>(cap))
 }
 </code></pre>
 
