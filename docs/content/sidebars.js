@@ -239,6 +239,7 @@ export default {
   gettingStartedSidebar: [
     'getting-started',
     { type: 'link', label: 'Skills', href: '/skills' },
+    'getting-started/sui-mcp-server',
     {
       type: 'category',
       label: 'Hello, World!',
