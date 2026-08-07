@@ -367,6 +367,136 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         Ok(())
     }
 
+    async fn handle_reconstructed_blocks(
+        &self,
+        blocks: Vec<(AuthorityIndex, ExtendedSerializedBlock)>,
+    ) -> ConsensusResult<()> {
+        if blocks.is_empty() {
+            return Ok(());
+        }
+        // Verify in parallel on the blocking pool — genuine CPU, per block — then
+        // dispatch ONCE. The per-block ordering that full-form receipt relies on is
+        // preserved: votes are observed before the commit-lag door, and the door is
+        // node state, so it is evaluated once for the whole batch.
+        let mut verifications = Vec::with_capacity(blocks.len());
+        for (peer, serialized_block) in blocks {
+            let block_verifier = self.block_verifier.clone();
+            let serialized = serialized_block.block.clone();
+            let Ok(signed_block) = bcs::from_bytes::<SignedBlock>(&serialized) else {
+                continue;
+            };
+            if signed_block.author() != peer {
+                continue;
+            }
+            verifications.push(async move {
+                let verified = spawn_blocking(move || {
+                    block_verifier.verify_and_vote(signed_block, serialized)
+                })
+                .await;
+                (peer, serialized_block, verified)
+            });
+        }
+        let results = futures::future::join_all(verifications).await;
+
+        let mut verified = Vec::with_capacity(results.len());
+        for (peer, serialized_block, result) in results {
+            let peer_hostname = &self.context.committee.authority(peer).hostname;
+            let Ok(Ok((verified_block, reject_txn_votes))) = result else {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[
+                        peer_hostname.as_str(),
+                        "handle_reconstructed_blocks",
+                        "InvalidBlock",
+                    ])
+                    .inc();
+                continue;
+            };
+            let Ok(excluded_ancestors) = self.parse_excluded_ancestors(
+                peer,
+                &verified_block,
+                serialized_block.excluded_ancestors,
+            ) else {
+                continue;
+            };
+            self.context
+                .metrics
+                .node_metrics
+                .verified_blocks
+                .with_label_values(&[peer_hostname])
+                .inc();
+            // Votes before the door, exactly as the per-block path requires.
+            self.commit_vote_monitor.observe_block(&verified_block);
+            self.round_tracker
+                .write()
+                .update_from_verified_block(&ExtendedBlock {
+                    block: verified_block.clone(),
+                    excluded_ancestors: excluded_ancestors.clone(),
+                    minimal: None,
+                });
+            verified.push((peer, verified_block, reject_txn_votes, excluded_ancestors));
+        }
+        if verified.is_empty() {
+            return Ok(());
+        }
+
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        if is_commit_lagging(
+            self.context.as_ref(),
+            last_commit_index,
+            quorum_commit_index,
+        ) {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_blocks
+                .with_label_values(&["commit_lagging"])
+                .inc_by(verified.len() as u64);
+            return Ok(());
+        }
+
+        if self.context.protocol_config.transaction_voting_enabled() {
+            self.transaction_vote_tracker.add_voted_blocks(
+                verified
+                    .iter()
+                    .map(|(_, block, votes, _)| (block.clone(), votes.clone()))
+                    .collect(),
+            );
+        }
+
+        let missing_ancestors = self
+            .core_dispatcher
+            .add_blocks(verified.iter().map(|(_, b, _, _)| b.clone()).collect())
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
+
+        let first_peer = verified[0].0;
+        if !missing_ancestors.is_empty()
+            && let Ok(permit) = self.ancestor_fetch_permits.clone().try_acquire_owned()
+        {
+            let synchronizer = self.synchronizer.clone();
+            let refs = missing_ancestors;
+            spawn_monitored_task!(async move {
+                let _permit = permit;
+                if let Err(err) = synchronizer
+                    .fetch_blocks(refs, PeerId::Validator(first_peer))
+                    .await
+                {
+                    debug!("Failed to fetch missing ancestors after reconstruction: {err}");
+                }
+            });
+        }
+
+        for (peer, _, _, excluded_ancestors) in verified {
+            self.process_missing_excluded_ancestors(peer, excluded_ancestors)
+                .await?;
+        }
+        Ok(())
+    }
+
     async fn handle_excluded_ancestors(
         &self,
         peer: AuthorityIndex,

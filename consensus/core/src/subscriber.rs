@@ -54,13 +54,6 @@ const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// reset-triggering ones could otherwise force immediate reconnects in an unbounded
 /// loop. Jittered per (node, peer, attempt): a fixed delay
 /// synchronizes resets across every subscription into committee-wide thrash.
-/// Park-admission watermarks: the stream pauses when resident recovery items
-/// (parked + queued/in-flight reconstructions) reach the high mark and resumes
-/// below the low mark. Healthy steady state sits around tens of entries; the gap
-/// prevents wake/sleep oscillation at the boundary.
-const PARK_HIGH_WATERMARK: usize = 512;
-const PARK_LOW_WATERMARK: usize = 384;
-
 const CAUSED_RESET_DELAY_FLOOR_MS: u64 = 700;
 const CAUSED_RESET_DELAY_JITTER_MS: u64 = 600;
 
@@ -631,73 +624,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         continue 'stream;
                                     }
                                 };
-                                // Self-clocking: full mode's stream cannot outrun
-                                // Core because every block awaits acceptance inline;
-                                // parking broke that clock. Restore it here: hold the
-                                // stream while the recovery backlog is saturated, so
-                                // transport flow control pushes back on the sender
-                                // instead of the window/refusal machinery absorbing
-                                // the overrun. Drain proceeds without stream input
-                                // (worker, wall-clock sweep, commit sync), so the
-                                // pause cannot deadlock. Commit lag is rechecked in
-                                // the wait: a node that starts lagging while paused
-                                // must shed, not sleep.
-                                if pending_reconstructions.lock().backlog() >= PARK_HIGH_WATERMARK {
-                                    node_metrics
-                                        .minimal_block_recovery_outcomes
-                                        .with_label_values(&["backpressure_paused"])
-                                        .inc();
-                                    let mut backlog_rx =
-                                        pending_reconstructions.lock().backlog_watch();
-                                    loop {
-                                        // Drain wakes arrive through the watch; the
-                                        // timeout only bounds how stale the lag
-                                        // recheck can get.
-                                        let _ = tokio::time::timeout(
-                                            Duration::from_millis(200),
-                                            backlog_rx.changed(),
-                                        )
-                                        .await;
-                                        let lagging_now = {
-                                            let Some(dag_state) = dag_state.upgrade() else {
-                                                return;
-                                            };
-                                            let local = dag_state.read().last_commit_index();
-                                            is_commit_lagging(
-                                                &context,
-                                                local,
-                                                commit_vote_monitor.quorum_commit_index(),
-                                            )
-                                        };
-                                        if lagging_now {
-                                            node_metrics
-                                                .minimal_block_recovery_outcomes
-                                                .with_label_values(&["shed_commit_lag"])
-                                                .inc();
-                                            let evicted = {
-                                                let mut pending = pending_reconstructions.lock();
-                                                if pending.should_quiesce_on_shed() {
-                                                    pending.quiesce()
-                                                } else {
-                                                    0
-                                                }
-                                            };
-                                            if evicted > 0 {
-                                                node_metrics
-                                                    .minimal_block_recovery_outcomes
-                                                    .with_label_values(&["quiesced"])
-                                                    .inc_by(evicted as u64);
-                                            }
-                                            exiting_lag = true;
-                                            continue 'stream;
-                                        }
-                                        if pending_reconstructions.lock().backlog()
-                                            <= PARK_LOW_WATERMARK
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
                                 let missing_snapshot = missing.clone();
                                 let admitted = pending_reconstructions.lock().try_admit(
                                     block_ref,
@@ -770,12 +696,15 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         // instead of waiting on a hook that already
                                         // fired.
                                         if gc_now > gc_round {
-                                            let mut effects =
-                                                crate::pending_reconstructions::AcceptanceEffects::default();
-                                            effects.frontier_dead =
+                                            let frontier_dead =
                                                 pending_reconstructions.lock().on_gc(gc_now, tip);
-                                            if !effects.is_empty() {
-                                                let _ = effects_tx.send(effects);
+                                            if !frontier_dead.is_empty() {
+                                                let _ = effects_tx.send(
+                                                    crate::pending_reconstructions::AcceptanceEffects {
+                                                        frontier_dead,
+                                                        ..Default::default()
+                                                    },
+                                                );
                                             }
                                         }
                                     }
@@ -796,16 +725,29 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             refusal,
                                             crate::pending_reconstructions::AdmitRefusal::OutsideWindowHigh
                                         );
-                                        // Byte-cap refusals get the same escape: any
-                                        // refusal that drops a live block needs the
-                                        // replay path, and "the cap only binds under
-                                        // attack" proved false at bootstrap.
+                                        // Cap refusals must never stop the stream: it
+                                        // carries the claims that drain the backlog,
+                                        // so throttling it starves its own recovery
+                                        // (measured: intake fell to a quarter and the
+                                        // node could not catch up again). The refused
+                                        // block's own digest is known, so route it to
+                                        // the exact lane and keep reading — bounded
+                                        // memory comes from the caps refusing, not
+                                        // from slowing the peer down.
                                         let cap_bound = matches!(
                                             refusal,
                                             crate::pending_reconstructions::AdmitRefusal::PeerBytes
                                                 | crate::pending_reconstructions::AdmitRefusal::TotalBytes
                                         );
-                                        if receiver_behind || cap_bound {
+                                        if cap_bound
+                                            && missing_block_registry
+                                                .register_missing_block(block_ref)
+                                                .await
+                                                .is_err()
+                                        {
+                                            return;
+                                        }
+                                        if receiver_behind {
                                             info!(
                                                 "Minimal block {} from {} {} is past the                                                  admission window; resetting subscription                                                  for full replay",
                                                 block_ref, peer, peer_hostname
@@ -1670,11 +1612,11 @@ mod test {
     }
 
     /// While local commits lag the quorum, an uninflatable minimal block is shed at
-    /// receipt — before admission — with no stream reset, and anything already parked
-    /// or held is quiesced so the byte caps cannot stay pinned. Once the lag clears,
-    /// cap refusals resume the full-replay reset.
+    /// receipt — before admission — with no stream reset, and once the lag is
+    /// sustained anything already parked or held is quiesced so the byte caps cannot
+    /// stay pinned. Once commits catch up, shedding stops.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn sheds_at_receipt_while_commit_lagging_then_resets_after_catch_up() {
+    async fn sheds_at_receipt_while_commit_lagging_and_stops_after_catch_up() {
         let s = minimal_wire_scenario(2, 2, 4);
         let network_client = Arc::new(FixedStreamClient::new(vec![s.wire[0].clone()]));
         let (live_tx, live_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1752,11 +1694,21 @@ mod test {
             s.peer,
             vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
         );
-        // First post-lag block consumes the exact-lane anchor; the next exercises
-        // the restored cap-refusal reset.
+        // Post-catch-up the block is handled normally: no further shedding, and the
+        // stream is never reset (cap pressure routes to the lane instead).
+        // The first post-lag block consumes the exact-lane anchor; the next reaches
+        // admission, where the still-full quota refuses it. It routes to the lane
+        // rather than parking — and crucially, without a reset.
         live_tx.send(s.wire[2].clone()).unwrap();
         live_tx.send(s.wire[3].clone()).unwrap();
-        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        wait_until(|| {
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["peer_bytes"])
+                .get()
+                >= 1
+        })
+        .await;
         assert_eq!(
             node_metrics
                 .minimal_block_recovery_outcomes
@@ -1765,6 +1717,7 @@ mod test {
             2,
             "shedding must stop once commits are caught up"
         );
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
     }
 
     /// A minimal block that cannot be inflated still feeds its author's commit votes
@@ -1902,83 +1855,6 @@ mod test {
         );
     }
 
-    /// Without commit lag a byte-cap refusal keeps its full-replay reset.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn cap_refusal_resets_when_commits_current() {
-        let s = minimal_wire_scenario(2, 2, 1);
-        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = empty_receiver_dag(&s.context);
-        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
-        let subscriber = Subscriber::new(
-            s.context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag,
-            registry,
-            tracker,
-            monitor,
-            tokio::sync::broadcast::channel(64).1,
-        );
-        subscriber.pending_reconstructions.lock().hold_sidecar(
-            s.ancestors[1].reference(),
-            s.peer,
-            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
-        );
-        subscriber.subscribe(s.peer);
-
-        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
-        assert_eq!(
-            s.context
-                .metrics
-                .node_metrics
-                .minimal_block_recovery_outcomes
-                .with_label_values(&["shed_commit_lag"])
-                .get(),
-            0
-        );
-    }
-
-    /// The shed exception must not fire at the exact lag threshold: equality is not
-    /// lagging, so the reset path applies.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn cap_refusal_at_exact_lag_threshold_resets() {
-        let s = minimal_wire_scenario(2, 2, 1);
-        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
-        let authority_service = Arc::new(Mutex::new(TestService::new()));
-        let receiver_dag = empty_receiver_dag(&s.context);
-        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
-        let lag_threshold = s.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
-        observe_quorum_commit_votes(&monitor, lag_threshold);
-        let subscriber = Subscriber::new(
-            s.context.clone(),
-            network_client.clone(),
-            authority_service.clone(),
-            receiver_dag,
-            registry,
-            tracker,
-            monitor,
-            tokio::sync::broadcast::channel(64).1,
-        );
-        subscriber.pending_reconstructions.lock().hold_sidecar(
-            s.ancestors[1].reference(),
-            s.peer,
-            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
-        );
-        subscriber.subscribe(s.peer);
-
-        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
-        assert_eq!(
-            s.context
-                .metrics
-                .node_metrics
-                .minimal_block_recovery_outcomes
-                .with_label_values(&["shed_commit_lag"])
-                .get(),
-            0
-        );
-    }
-
     /// The wavefront breaker: a parked block whose missing ancestor is only CLAIMED
     /// (its envelope observed, its content not accepted) reconstructs through the
     /// claim resolver and reaches the service as a full block — where block_manager
@@ -2081,15 +1957,16 @@ mod test {
         assert_eq!(*network_client.subscribe_calls.lock(), 1);
     }
 
-    /// Codex-required liveness proof: with the backlog at the high watermark and
-    /// every stream paused, the wall-clock sweep still escalates parked refs, and
-    /// acceptance draining the backlog resumes the stream — no live stream item or
-    /// commit required to make progress.
+    /// A cap refusal must never stall the stream: the stream carries the claims that
+    /// drain the backlog, so throttling it starves its own recovery. The refused
+    /// block routes to the exact lane by its known digest, the subscription is not
+    /// reset, and the following block is still processed.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn paused_streams_drain_through_sweep_and_acceptance() {
-        let s = minimal_wire_scenario(2, 2, 1);
+    async fn cap_refusal_routes_to_lane_without_stalling_the_stream() {
+        let s = minimal_wire_scenario(2, 2, 2);
         let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
         let authority_service = Arc::new(Mutex::new(TestService::new()));
+        // Ancestors absent, so both streamed blocks fail inflation and attempt to park.
         let receiver_dag = empty_receiver_dag(&s.context);
         let registry = Arc::new(NoopRegistry::default());
         let tracker = Arc::new(RwLock::new(RoundTracker::new(s.context.clone(), vec![])));
@@ -2104,83 +1981,33 @@ mod test {
             monitor,
             tokio::sync::broadcast::channel(64).1,
         );
-        // Saturate the backlog with synthetic parked entries before the stream block.
-        let filler_author = s.context.committee.to_authority_index(1).unwrap();
-        let filler_missing = vec![crate::block::Slot::new(
-            2,
-            s.context.committee.to_authority_index(3).unwrap(),
-        )];
-        let mut filler_refs = Vec::new();
-        {
-            let mut pending = subscriber.pending_reconstructions.lock();
-            for i in 0..PARK_HIGH_WATERMARK as u32 {
-                let claim = BlockRef::new(
-                    3 + i,
-                    filler_author,
-                    consensus_types::block::BlockDigest::MIN,
-                );
-                pending
-                    .try_admit(
-                        claim,
-                        Bytes::from(vec![1u8; 8]),
-                        vec![],
-                        filler_author,
-                        filler_missing.clone(),
-                        0,
-                        3 + i,
-                    )
-                    .unwrap();
-                filler_refs.push(claim);
-            }
-            assert!(pending.backlog() >= PARK_HIGH_WATERMARK);
-        }
+        // Saturate this peer's byte quota so admission refuses on PeerBytes.
+        subscriber.pending_reconstructions.lock().hold_sidecar(
+            s.ancestors[1].reference(),
+            s.peer,
+            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
+        );
         subscriber.subscribe(s.peer);
 
-        // The paused stream admits nothing, but the wall-clock sweep escalates.
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| {
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["peer_bytes"])
+                .get()
+                >= 1
+        })
+        .await;
+        // BOTH blocks are refused and routed: the stream kept reading past the first
+        // refusal instead of stalling or resetting.
         wait_until(|| {
             registry
                 .registered
                 .load(std::sync::atomic::Ordering::Relaxed)
-                >= 1
-        })
-        .await;
-        let node_metrics = &s.context.metrics.node_metrics;
-        assert_eq!(
-            node_metrics.minimal_block_recovery_parked.get(),
-            PARK_HIGH_WATERMARK as i64
-        );
-        assert!(
-            node_metrics
-                .minimal_block_recovery_outcomes
-                .with_label_values(&["backpressure_paused"])
-                .get()
-                >= 1
-        );
-
-        // Acceptance (as from fetched full forms) drains below the low mark; the
-        // stream resumes and parks its block.
-        let drain = PARK_HIGH_WATERMARK - PARK_LOW_WATERMARK + 8;
-        for chunk in filler_refs[..drain].chunks(64) {
-            let effects = subscriber
-                .pending_reconstructions
-                .lock()
-                .on_blocks_accepted(chunk);
-            for (peer, charge) in effects
-                .deliverable_sidecars
-                .iter()
-                .map(|(p, _, _, c)| (*p, *c))
-            {
-                subscriber
-                    .pending_reconstructions
-                    .lock()
-                    .release(peer, charge);
-            }
-        }
-        wait_until(|| {
-            node_metrics.minimal_block_recovery_parked.get()
-                == (PARK_HIGH_WATERMARK - drain + 1) as i64
+                >= 2
         })
         .await;
         assert_eq!(*network_client.subscribe_calls.lock(), 1);
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
     }
 }
