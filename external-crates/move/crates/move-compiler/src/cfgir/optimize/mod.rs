@@ -20,11 +20,21 @@ use crate::{
     shared::{CompilationEnv, unique_map::UniqueMap},
 };
 
+/// The values of the constants in scope, and whether uses of them should be replaced by those
+/// values.
+#[derive(Clone, Copy)]
+pub struct Constants<'a> {
+    pub values: &'a UniqueMap<ConstantName, Value>,
+    /// Replace every use of a constant with its value
+    /// Used so constants can be used in another `const`
+    pub force_inline: bool,
+}
+
 pub type Optimization = fn(
     &DiagnosticReporter,
+    Constants,
     &FunctionSignature,
     &UniqueMap<Var, (Mutability, SingleType)>,
-    &UniqueMap<ConstantName, Value>,
     &mut MutForwardCFG,
 ) -> bool;
 
@@ -47,10 +57,10 @@ const MOVE_2024_OPTIMIZATIONS: &[Optimization] = &[
 pub fn optimize(
     env: &CompilationEnv,
     reporter: &DiagnosticReporter,
+    constants: Constants,
     package: Option<Symbol>,
     signature: &FunctionSignature,
     locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) {
     let mut count = 0;
@@ -69,7 +79,7 @@ pub fn optimize(
         }
 
         // reset the count if something has changed
-        if optimization(reporter, signature, locals, constants, cfg) {
+        if optimization(reporter, constants, signature, locals, cfg) {
             count = 0
         } else {
             count += 1

@@ -5,22 +5,21 @@
 use move_proc_macros::growing_stack;
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{cfg::MutForwardCFG, optimize::Constants},
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
-        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value, Value_, Var,
+        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value_, Var,
     },
-    parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
 
 /// returns true if anything changed
 pub fn optimize(
     _reporter: &DiagnosticReporter,
+    _constants: Constants,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let mut changed = false;

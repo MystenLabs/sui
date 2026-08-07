@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{cfg::MutForwardCFG, optimize::Constants},
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value, Value_, Var,
+        TypeName_, UnannotatedExp_, Value_, Var,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
-    parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
+    parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
     shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
@@ -21,9 +21,9 @@ use std::convert::TryFrom;
 /// returns true if anything changed
 pub fn optimize(
     reporter: &DiagnosticReporter,
+    constants: Constants,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let context = Context {
@@ -53,7 +53,7 @@ pub fn optimize(
 struct Context<'a> {
     #[allow(dead_code)]
     reporter: &'a DiagnosticReporter<'a>,
-    constants: &'a UniqueMap<ConstantName, Value>,
+    constants: Constants<'a>,
 }
 
 //**************************************************************************************************
@@ -95,6 +95,7 @@ fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
 fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
     let optimize_exp = |e| optimize_exp(context, e);
+    let foldable_exp = |e: &Exp| foldable_exp(context, e);
     match &mut e.exp.value {
         //************************************
         // Pass through cases
@@ -112,7 +113,9 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let E::Constant(name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = context.constants.get(name) {
+            if context.constants.force_inline
+                && let Some(value) = context.constants.values.get(name)
+            {
                 *e_ = E::Value(value.clone());
                 true
             } else {
@@ -449,9 +452,17 @@ const fn evalue_(loc: Loc, v: Value_) -> UnannotatedExp_ {
 // Foldable Value
 //**************************************************************************************************
 
-fn foldable_exp(e: &Exp) -> Option<Value_> {
+/// The value of `e` if it is statically known.
+/// Constants have their values used, even when not forcibly inlined. This enables outer
+/// operations/expressions to be folded.
+fn foldable_exp(context: &Context, e: &Exp) -> Option<Value_> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
+        E::Constant(name) => context
+            .constants
+            .values
+            .get(name)
+            .map(|sp!(_, v_)| v_.clone()),
         E::Value(sp!(_, v_)) => Some(v_.clone()),
         _ => None,
     }
