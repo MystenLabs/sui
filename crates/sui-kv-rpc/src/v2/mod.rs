@@ -26,6 +26,7 @@ pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
 mod list_transactions;
+mod move_package_service;
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {

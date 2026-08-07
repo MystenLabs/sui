@@ -27,6 +27,8 @@ use sui_package_resolver::Resolver;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServiceServer;
 use sui_rpc_api::ServerVersion;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
@@ -288,6 +290,13 @@ where
     LedgerServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
 }
 
+fn move_package_service_with_response_compression<T>(service: T) -> MovePackageServiceServer<T>
+where
+    T: MovePackageService,
+{
+    MovePackageServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
+}
+
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
@@ -496,6 +505,7 @@ impl KvRpcServer {
                     file_descriptor_sets.iter().copied(),
                 )?,
             )
+            .add_service(move_package_service_with_response_compression(self.clone()))
             .add_service(ledger_service_with_response_compression(self));
 
         if config.enable_reflection {
