@@ -161,7 +161,13 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
 
     // TODO: make tracing better abstracted? different tracers?
     if let Some(trace_builder) = trace_builder_opt {
-        save_trace_output(artifact_manager, trace_builder, &context_and_effects).map_err(|e| {
+        save_trace_output(
+            artifact_manager,
+            trace_builder,
+            &context_and_effects.object_cache,
+            &context_and_effects.inner_store,
+        )
+        .map_err(|e| {
             anyhow!(
                 "transaction {} failed to build a trace output path -> {:?}",
                 tx_digest,

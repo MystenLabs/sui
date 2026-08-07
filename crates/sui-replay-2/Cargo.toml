@@ -36,12 +36,17 @@ sui-types.workspace = true
 serde_json.workspace = true
 tabled.workspace = true
 sui-package-alt.workspace = true
+sui-transaction-checks.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 toml.workspace = true
 tracing.workspace = true
 zstd.workspace = true
 indicatif.workspace = true
+
+[dev-dependencies]
+sui-framework.workspace = true
+sui-protocol-config.workspace = true
 
 [features]
 tracing = [

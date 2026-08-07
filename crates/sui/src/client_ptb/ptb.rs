@@ -3,7 +3,8 @@
 
 use crate::{
     client_commands::{
-        GasDataArgs, SuiClientCommandResult, TxProcessingArgs, dry_run_or_execute_or_serialize,
+        GasDataArgs, SuiClientCommandResult, TxProcessingArgs, USER_AGENT,
+        dry_run_or_execute_or_serialize,
     },
     client_ptb::{
         ast::{ParsedProgram, Program},
@@ -14,15 +15,29 @@ use crate::{
     displays::Pretty,
     mvr_resolver::MvrResolver,
     sp,
+    sui_commands::get_replay_node,
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
-use anyhow::{Error, anyhow, ensure};
+use anyhow::{Context, Error, anyhow, ensure};
 use clap::{Args, ValueHint, arg};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
+use sui_data_store::{CheckpointContextStore, stores::DataStore};
+use sui_json_rpc_types::DryRunTransactionBlockResponse;
 use sui_keys::keystore::AccountKeystore;
+use sui_replay_2::{
+    artifacts::ArtifactManager,
+    dry_run::{
+        build_local_dry_run_response, execute_prepared_local_dry_run,
+        prepare_checked_local_dry_run, protocol_config_for_snapshot, save_local_dry_run_artifacts,
+    },
+};
 use sui_rpc_api::Client;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
@@ -32,8 +47,14 @@ use sui_types::{
     execution_status::ExecutionStatus,
     gas::GasCostSummary,
     move_package::MovePackage,
-    transaction::{ProgrammableTransaction, TransactionKind},
+    transaction::{ProgrammableTransaction, TransactionData, TransactionKind},
 };
+
+const LOCAL_DRY_RUN_MODE: &str = "experimental local checkpoint dry-run";
+const LOCAL_DRY_RUN_VALIDATION: &str = "local-protocol-checked";
+const LOCAL_DRY_RUN_CHECKS: &str = "transaction validity and canonical input checks applied";
+const LOCAL_DRY_RUN_UNAVAILABLE: &str =
+    "target fullnode deny policy, receiving markers, and congestion pricing";
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -52,6 +73,43 @@ pub struct Summary {
     pub digest: TransactionDigest,
     pub status: ExecutionStatus,
     pub gas_cost: GasCostSummary,
+}
+
+/// Trace-specific provenance that has no equivalent in an ordinary fullnode dry-run response.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalDryRunTrace {
+    /// User-visible label that distinguishes this best-effort local execution mode.
+    mode: &'static str,
+    /// Confidence level for the checks performed locally; this does not claim fullnode parity.
+    validation: &'static str,
+    network: String,
+    /// Finalized checkpoint whose post-state was read; the simulated transaction is not in it.
+    checkpoint: u64,
+    checkpoint_digest: String,
+    epoch: u64,
+    protocol_version: u64,
+    /// Digest after mock-gas normalization, shared by effects, trace, and artifact directory.
+    digest: TransactionDigest,
+    /// Checks that were applied before local execution.
+    checks: &'static str,
+    /// Fullnode-specific checks or suggestions unavailable to the local executor.
+    not_evaluated: &'static str,
+    /// Synthetic gas object injected locally when the submitted payment was empty.
+    mock_gas_id: Option<ObjectID>,
+    /// Directory containing the normalized transaction, effects, gas, and trace artifacts.
+    artifact_path: PathBuf,
+}
+
+/// Ordinary dry-run response fields augmented only with trace-specific provenance.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalDryRunOutput {
+    /// Standard response flattened to preserve familiar dry-run JSON field names and formatting.
+    #[serde(flatten)]
+    response: DryRunTransactionBlockResponse,
+    /// Details that explain where and how the local trace was produced.
+    trace: LocalDryRunTrace,
 }
 
 /// An enum holding either an account address or a move package information. The Move Package data
@@ -117,6 +175,32 @@ impl PTB {
             !program_metadata.serialize_unsigned_set || !program_metadata.serialize_signed_set,
             "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
         );
+        if program_metadata.trace_set {
+            ensure!(
+                program_metadata.dry_run_set,
+                "--trace can only be used together with --dry-run."
+            );
+            ensure!(
+                !program_metadata.preview_set,
+                "--trace cannot be combined with --preview."
+            );
+            ensure!(
+                !program_metadata.dev_inspect_set,
+                "--trace cannot be combined with --dev-inspect."
+            );
+            ensure!(
+                !program_metadata.tx_digest_set,
+                "--trace cannot be combined with --tx-digest."
+            );
+            ensure!(
+                !program_metadata.serialize_unsigned_set && !program_metadata.serialize_signed_set,
+                "--trace cannot be combined with transaction serialization."
+            );
+            #[cfg(not(feature = "tracing"))]
+            anyhow::bail!(
+                "tracing is not enabled in this build; rebuild `sui` with `--features tracing`"
+            );
+        }
 
         if program_metadata.preview_set {
             println!(
@@ -214,6 +298,15 @@ impl PTB {
                 .map(|x| x.value.into_inner().into()),
         };
 
+        let gas_payment = client.transaction_builder().input_refs(&gas).await?;
+
+        if program_metadata.trace_set {
+            let output =
+                execute_local_dry_run(context, sender, tx_kind, gas_payment, gas_data).await?;
+            print_local_dry_run(&output, program_metadata.json_set)?;
+            return Ok(());
+        }
+
         let processing = TxProcessingArgs {
             tx_digest: program_metadata.tx_digest_set,
             dry_run: program_metadata.dry_run_set,
@@ -223,8 +316,6 @@ impl PTB {
             sender: program_metadata.sender.map(|x| x.value.into_inner().into()),
             skip_signing: false,
         };
-
-        let gas_payment = client.transaction_builder().input_refs(&gas).await?;
 
         let transaction_response = dry_run_or_execute_or_serialize(
             sender,
@@ -310,6 +401,136 @@ impl PTB {
     }
 }
 
+/// Execute and trace a PTB against one coherent finalized checkpoint.
+///
+/// Omitted gas values come from that checkpoint's protocol context. Blocking checkpoint reads,
+/// checked execution, response projection, and artifact writes stay on one worker because the
+/// traced execution state is not `Send`.
+async fn execute_local_dry_run(
+    context: &mut WalletContext,
+    signer: sui_types::base_types::SuiAddress,
+    tx_kind: TransactionKind,
+    gas_payment: Vec<sui_types::base_types::ObjectRef>,
+    gas_data: GasDataArgs,
+) -> Result<LocalDryRunOutput, Error> {
+    let GasDataArgs {
+        gas_budget,
+        gas_price,
+        gas_sponsor,
+    } = gas_data;
+    let node = get_replay_node(context).await?;
+    let network = node.network_name();
+    let output_root = std::env::current_dir()?.join(".dry-run");
+
+    tokio::task::spawn_blocking(move || {
+        let store = DataStore::new(node, USER_AGENT)?;
+        let snapshot = store.checkpoint_execution_context(None)?;
+        let protocol_config = protocol_config_for_snapshot(&snapshot)?;
+        let transaction = TransactionData::new_with_gas_coins_allow_sponsor(
+            tx_kind,
+            signer,
+            gas_payment,
+            gas_budget.unwrap_or_else(|| protocol_config.max_tx_gas()),
+            gas_price.unwrap_or(snapshot.epoch.rgp),
+            gas_sponsor.unwrap_or(signer),
+        );
+        // Ordinary dry-run displays the submitted transaction even when execution injects mock gas.
+        let submitted_transaction = transaction.clone();
+        let prepared = prepare_checked_local_dry_run(transaction, snapshot, &store, true)?;
+        let mut execution = execute_prepared_local_dry_run(prepared, &store, true)?;
+        // Finish fallible display projection before replacing a previous complete artifact set.
+        let response = build_local_dry_run_response(&execution, submitted_transaction)?;
+        let artifact_path = output_root.join(execution.digest.to_string());
+        let output = LocalDryRunOutput {
+            response,
+            trace: LocalDryRunTrace {
+                mode: LOCAL_DRY_RUN_MODE,
+                validation: LOCAL_DRY_RUN_VALIDATION,
+                network: network.clone(),
+                checkpoint: execution.snapshot.checkpoint,
+                checkpoint_digest: execution.snapshot.checkpoint_digest.to_string(),
+                epoch: execution.snapshot.epoch.epoch_id,
+                protocol_version: execution.snapshot.epoch.protocol_version,
+                digest: execution.digest,
+                checks: LOCAL_DRY_RUN_CHECKS,
+                not_evaluated: LOCAL_DRY_RUN_UNAVAILABLE,
+                mock_gas_id: execution.mock_gas_id,
+                artifact_path: artifact_path.clone(),
+            },
+        };
+        clear_previous_dry_run(&output_root, &artifact_path)?;
+        let manager = ArtifactManager::new(&artifact_path, false)?;
+        save_local_dry_run_artifacts(&manager, &mut execution, network)?;
+        Ok(output)
+    })
+    .await
+    .context("local dry-run worker failed")?
+}
+
+/// Replace artifacts only at the normalized transaction's exact output directory.
+///
+/// The `.dry-run` root and digest path must be real directories rather than symlinks or files.
+fn clear_previous_dry_run(root: &Path, path: &Path) -> Result<(), Error> {
+    match fs::symlink_metadata(root) {
+        Ok(metadata) => {
+            ensure!(
+                metadata.is_dir() && !metadata.file_type().is_symlink(),
+                "refusing to use non-directory dry-run artifact root {}",
+                root.display(),
+            );
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir(root)
+            .with_context(|| {
+                format!("failed to create dry-run artifact root {}", root.display())
+            })?,
+        Err(error) => return Err(error.into()),
+    }
+
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    ensure!(
+        metadata.is_dir() && !metadata.file_type().is_symlink(),
+        "refusing to replace non-directory dry-run artifact path {}",
+        path.display(),
+    );
+    fs::remove_dir_all(path)
+        .with_context(|| format!("failed to remove previous dry-run at {}", path.display()))
+}
+
+/// Print trace provenance followed by the ordinary dry-run presentation.
+///
+/// JSON keeps the standard response fields at the top level and adds one `trace` object. Text uses
+/// the existing `Pretty<DryRunTransactionBlockResponse>` implementation unchanged.
+fn print_local_dry_run(output: &LocalDryRunOutput, json: bool) -> Result<(), Error> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(output)?);
+        return Ok(());
+    }
+
+    let trace = &output.trace;
+    println!("Mode: {}", trace.mode);
+    println!("Validation: {}", trace.validation);
+    println!("Network: {}", trace.network);
+    println!(
+        "Checkpoint: {} ({})",
+        trace.checkpoint, trace.checkpoint_digest
+    );
+    println!("Epoch: {}", trace.epoch);
+    println!("Protocol version: {}", trace.protocol_version);
+    println!("Digest: {}", trace.digest);
+    println!("Checks: {}", trace.checks);
+    println!("Not evaluated: {}", trace.not_evaluated);
+    if let Some(mock_gas_id) = trace.mock_gas_id {
+        println!("Mock gas: {mock_gas_id} (synthetic; funding was not evaluated)");
+    }
+    println!("Artifacts: {}", trace.artifact_path.display());
+    println!("{}", Pretty(&output.response));
+    Ok(())
+}
+
 /// Convert a vector of shell tokens into a single string, with each shell token separated by a
 /// space with each command starting on a new line.
 /// NB: we add a space to the end of the source string to ensure that for unexpected EOF
@@ -362,6 +583,19 @@ pub fn ptb_description() -> clap::Command {
         .arg(arg!(
             --"dry-run"
             "Perform a dry run of the PTB instead of executing it."
+        ))
+        .arg(arg!(
+            --"trace"
+            "Execute locally against a finalized checkpoint with protocol checks and save an \
+            experimental Move trace. Requires --dry-run."
+        )
+        .long_help(
+            "Execute the PTB locally against a finalized checkpoint using protocol transaction \
+            and canonical input checks, then save replay and Move trace artifacts under \
+            <current-directory>/.dry-run/<digest>. This does not call the fullnode dry-run endpoint \
+            and may differ from ordinary --dry-run. When no gas coin is supplied, the local run \
+            uses synthetic mock gas and does not evaluate account funding. Requires a binary built \
+            with the `tracing` feature and must be combined with --dry-run. [Experimental]"
         ))
         .arg(arg!(
             --"dev-inspect"
