@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["event_filter_to_query","transaction_filter_to_query"]};

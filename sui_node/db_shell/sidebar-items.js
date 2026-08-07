@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_LIMIT"],"enum":["ReadFormat"],"struct":["DeleteParams","DirEntry","LsParams","ReadParams"]};

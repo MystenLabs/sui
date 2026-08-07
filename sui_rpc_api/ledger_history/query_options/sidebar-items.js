@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Ordering","RangeExhaustion"],"struct":["CheckpointRange","EventPosition","EventScanBounds","QueryOptions","ResolvedCheckpointRange","ResolvedEventRange","ResolvedRange"]};
