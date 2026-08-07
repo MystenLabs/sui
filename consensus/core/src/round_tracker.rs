@@ -416,6 +416,7 @@ mod test {
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
         round_tracker.update_from_verified_block(&ExtendedBlock {
+            minimal: None,
             block,
             excluded_ancestors: vec![BlockRef::new(
                 8,
@@ -435,6 +436,7 @@ mod test {
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
         round_tracker.update_from_verified_block(&ExtendedBlock {
+            minimal: None,
             block,
             excluded_ancestors: vec![BlockRef::new(
                 8,
@@ -491,6 +493,7 @@ mod test {
             let block =
                 VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build());
             round_tracker.update_from_verified_block(&ExtendedBlock {
+                minimal: None,
                 block,
                 excluded_ancestors: vec![],
             });

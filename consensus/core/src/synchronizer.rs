@@ -692,6 +692,7 @@ where
             let mut tracker = round_tracker.write();
             for block in &blocks {
                 tracker.update_from_verified_block(&ExtendedBlock {
+                    minimal: None,
                     block: block.clone(),
                     excluded_ancestors: vec![],
                 });

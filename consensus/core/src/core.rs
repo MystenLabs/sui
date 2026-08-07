@@ -282,6 +282,9 @@ impl Core {
                 .new_block(ExtendedBlock {
                     block: last_proposed_block.clone(),
                     excluded_ancestors: vec![],
+                    // Liveness re-broadcast: full form is always valid, and this
+                    // path is rare enough that re-encoding is not worth an inflater.
+                    minimal: None,
                 })
                 .unwrap();
             last_proposed_block

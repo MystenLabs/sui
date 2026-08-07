@@ -1175,7 +1175,7 @@ mod test {
                 block: block.serialized().clone(),
                 minimal: Some(
                     sender_inflater
-                        .serialize(&block, &sender_dag.read())
+                        .serialize_for_test(&block, &sender_dag.read())
                         .unwrap(),
                 ),
                 excluded_ancestors: vec![],
@@ -1767,7 +1767,7 @@ mod test {
                 .build(),
         );
         let minimal = BlockInflater::new(s.context.clone())
-            .serialize(&voted, &sender_dag.read())
+            .serialize_for_test(&voted, &sender_dag.read())
             .unwrap();
         let wire = vec![ExtendedSerializedBlock {
             block: voted.serialized().clone(),
