@@ -15233,10 +15233,13 @@ version = "1.78.0"
 dependencies = [
  "anyhow",
  "futures",
+ "pin-project",
  "tap",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "tracing-error",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -15576,7 +15579,6 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
- "timeout-tracing",
  "tokio",
  "tokio-stream",
  "toml 0.7.4",
@@ -18423,18 +18425,6 @@ checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
-]
-
-[[package]]
-name = "timeout-tracing"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4215a5d507354cba4bca5cd7c0dffdec3b7483758ddf4116cf21186bb73e913"
-dependencies = [
- "pin-project-lite",
- "tokio",
- "tracing",
- "tracing-error",
 ]
 
 [[package]]

@@ -12,10 +12,13 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 futures.workspace = true
+pin-project.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "time", "macros", "sync", "signal"] }
 tracing.workspace = true
+tracing-error.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-subscriber.workspace = true
