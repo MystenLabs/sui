@@ -573,16 +573,42 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
         // Minimal blocks are emitted for live broadcasts only: the catch-up replay above
         // serves rounds where the subscriber's cache state is unpredictable, so it always
-        // sends full blocks — which is also what makes the receive-side quota-overflow
-        // reset sound (the replayed range bypasses recovery entirely) and gives deep
-        // laggards a deterministic catch-up path. Emission is protocol-gated: every
-        // validator on a version with the flag can decode both forms. No lag gate is
-        // needed: a receiver that cannot inflate a live minimal block parks it in a
-        // bounded slot-wait and inflates it as its DAG advances, at any lag.
+        // sends full blocks. Emission is protocol-gated: every validator on a version
+        // with the flag can decode both forms.
+        //
+        // Lag gate: a subscriber that is behind cannot use minimal blocks at all, so
+        // sending them wastes both sides' work. Reconstruction is all-or-nothing across
+        // a block's ~100 ancestors — one unresolvable slot parks the whole block — so a
+        // small per-ancestor miss rate compounds into near-total failure once a receiver
+        // trails the omission horizon. Measured on a lagging cohort: 76% of blocks failed
+        // to inflate (16% on caught-up peers), and the parked entries died 0.6 rounds
+        // below GC at 42/s, i.e. GC reclaimed their ancestors before the DAG could
+        // advance to them. Full blocks put such a subscriber back on the ordinary path -
+        // verify, suspend in block_manager, fetch missing ancestors by digest - which is
+        // how it catches up; it earns minimal blocks again when it resubscribes near the
+        // frontier. `last_received` is the subscriber's own reported position, so this
+        // costs nothing to evaluate.
+        let subscriber_lag = self
+            .dag_state
+            .read()
+            .highest_accepted_round()
+            .saturating_sub(last_received);
         let emit_minimal = self
             .context
             .protocol_config
-            .minimal_block_propagation_enabled();
+            .minimal_block_propagation_enabled()
+            && subscriber_lag <= self.context.protocol_config.gc_depth();
+        if !emit_minimal
+            && self
+                .context
+                .protocol_config
+                .minimal_block_propagation_enabled()
+        {
+            debug!(
+                "Subscriber {} is {} rounds behind; serving full blocks until it catches up",
+                peer, subscriber_lag
+            );
+        }
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
 
@@ -1680,15 +1706,24 @@ mod tests {
     /// (rollout safety: flag off means full-only), and replay always rides full.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_subscribe_blocks_emission_follows_protocol_flag() {
-        subscribe_blocks_emission(true).await;
-        subscribe_blocks_emission(false).await;
+        // Flag on + subscriber at the frontier: minimal emitted.
+        subscribe_blocks_emission(true, 10, true).await;
+        // Flag off: never emitted.
+        subscribe_blocks_emission(false, 10, false).await;
+        // Flag on but the subscriber trails the omission horizon: it cannot resolve
+        // omitted digests, so emission degrades to full form until it catches up.
+        subscribe_blocks_emission(true, 0, false).await;
     }
 
-    async fn subscribe_blocks_emission(emit_minimal: bool) {
+    async fn subscribe_blocks_emission(
+        flag_enabled: bool,
+        subscribe_from: Round,
+        emit_minimal: bool,
+    ) {
         let (mut context, _keys) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_minimal_block_propagation_enabled_for_testing(emit_minimal);
+            .set_minimal_block_propagation_enabled_for_testing(flag_enabled);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1749,7 +1784,7 @@ mod tests {
 
         let peer = context.committee.to_authority_index(1).unwrap();
         let mut stream = authority_service
-            .handle_subscribe_blocks(peer, 10)
+            .handle_subscribe_blocks(peer, subscribe_from)
             .await
             .unwrap();
 
