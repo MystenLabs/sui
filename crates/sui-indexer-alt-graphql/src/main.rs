@@ -28,8 +28,25 @@ static VERSION: &str = const_str::concat!(
     GIT_REVISION
 );
 
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
+#[global_allocator]
+static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+// The default allocator holds on to freed memory rather than returning it to the OS
+// promptly after a burst of concurrent allocations; jemalloc's background threads decay
+// and purge unused arenas automatically instead. Without this, jemalloc behaves no better
+// than the default allocator here (mirrors the enable step in move-analyzer.rs).
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
+fn enable_jemalloc_background_purge() {
+    let _ = tikv_jemalloc_ctl::background_thread::write(true);
+    let _ = tikv_jemalloc_ctl::epoch::advance();
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    #[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
+    enable_jemalloc_background_purge();
+
     let args = Args::parse();
 
     // Enable tracing, configured by environment variables.
