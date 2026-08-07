@@ -115,6 +115,14 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
+### Lint a Move project
+
+Use `sui move lint` to run the Move linter on a package and check for potential issues. The linter runs both generic Move lints and Sui-specific object-model lints.
+
+```sh
+$ sui move lint
+```
+
 ### Get test coverage for a module
 
 This example uses [`first_package`](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package) Move package.
