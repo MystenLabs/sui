@@ -556,7 +556,14 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         .minimal_block_recovery_outcomes
                                         .with_label_values(&["shed_commit_lag"])
                                         .inc();
-                                    let evicted = pending_reconstructions.lock().quiesce();
+                                    let evicted = {
+                                        let mut pending = pending_reconstructions.lock();
+                                        if pending.should_quiesce_on_shed() {
+                                            pending.quiesce()
+                                        } else {
+                                            0
+                                        }
+                                    };
                                     if evicted > 0 {
                                         node_metrics
                                             .minimal_block_recovery_outcomes
@@ -577,6 +584,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     }
                                     continue 'stream;
                                 }
+                                pending_reconstructions.lock().note_not_lagging();
                                 if exiting_lag {
                                     exiting_lag = false;
                                     if missing_block_registry
@@ -1575,7 +1583,7 @@ mod test {
     /// cap refusals resume the full-replay reset.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn sheds_at_receipt_while_commit_lagging_then_resets_after_catch_up() {
-        let s = minimal_wire_scenario(2, 2, 3);
+        let s = minimal_wire_scenario(2, 2, 4);
         let network_client = Arc::new(FixedStreamClient::new(vec![s.wire[0].clone()]));
         let (live_tx, live_rx) = tokio::sync::mpsc::unbounded_channel();
         *network_client.live.lock() = Some(live_rx);
@@ -1611,16 +1619,31 @@ mod test {
         })
         .await;
         assert_eq!(*network_client.subscribe_calls.lock(), 1);
-        assert!(
+        // Hysteresis: a first shed never evicts — transient lag must not dump
+        // healthy parked state.
+        assert_eq!(
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["quiesced"])
+                .get(),
+            0
+        );
+
+        // Sustained lag: a shed past the hysteresis window evicts everything. Stay
+        // under SUBSCRIPTION_TIMEOUT so the idle stream is not torn down meanwhile.
+        tokio::time::sleep(Duration::from_secs(21)).await;
+        live_tx.send(s.wire[1].clone()).unwrap();
+        wait_until(|| {
             node_metrics
                 .minimal_block_recovery_outcomes
                 .with_label_values(&["quiesced"])
                 .get()
-                >= 1,
-            "held bytes must be evicted on entry into commit-lag shedding"
-        );
+                >= 1
+        })
+        .await;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
         assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
 
         // Catch up: one commit clears the lag; a cap refusal then resets as always.
         receiver_dag.write().accept_block(s.ancestors[0].clone());
@@ -1636,17 +1659,17 @@ mod test {
             s.peer,
             vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
         );
-        // First post-lag block consumes the exact-lane anchor; the second exercises
+        // First post-lag block consumes the exact-lane anchor; the next exercises
         // the restored cap-refusal reset.
-        live_tx.send(s.wire[1].clone()).unwrap();
         live_tx.send(s.wire[2].clone()).unwrap();
+        live_tx.send(s.wire[3].clone()).unwrap();
         wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
         assert_eq!(
             node_metrics
                 .minimal_block_recovery_outcomes
                 .with_label_values(&["shed_commit_lag"])
                 .get(),
-            1,
+            2,
             "shedding must stop once commits are caught up"
         );
     }
