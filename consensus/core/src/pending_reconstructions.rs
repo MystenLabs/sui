@@ -198,6 +198,9 @@ pub(crate) struct PendingReconstructions {
     /// Slot digests claimed by their authors' own stream envelopes. Metadata only:
     /// uncharged, bounded by `claims_capacity`, swept with GC.
     claims: BTreeMap<Slot, SlotClaim>,
+    /// When commit-lag shedding first engaged, for the quiesce hysteresis. Cleared
+    /// by the first non-lagging receipt.
+    lag_shed_since: Option<tokio::time::Instant>,
 
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
@@ -217,6 +220,7 @@ impl PendingReconstructions {
             occupancy: BTreeMap::new(),
             held_sidecars: BTreeMap::new(),
             claims: BTreeMap::new(),
+            lag_shed_since: None,
 
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
@@ -540,6 +544,29 @@ impl PendingReconstructions {
             self.update_gauges();
         }
         frontier_dead
+    }
+
+    /// Quiesce hysteresis: eviction is warranted only when commit lag SUSTAINS —
+    /// a frozen node whose GC has stopped and whose parked mass would otherwise pin
+    /// the caps for the whole lag. A node that merely flaps across the lag boundary
+    /// (transient commit latency on a distant region) must not dump tens of
+    /// thousands of healthy in-race parks on a single shed: its GC still runs, so
+    /// the caps bound memory without eviction. Sheds always drop the arriving
+    /// block; this only gates the eviction of what is already parked.
+    pub(crate) fn should_quiesce_on_shed(&mut self) -> bool {
+        const QUIESCE_AFTER: std::time::Duration = std::time::Duration::from_secs(20);
+        match self.lag_shed_since {
+            None => {
+                self.lag_shed_since = Some(tokio::time::Instant::now());
+                false
+            }
+            Some(since) => since.elapsed() >= QUIESCE_AFTER,
+        }
+    }
+
+    /// First non-lagging receipt clears the hysteresis window.
+    pub(crate) fn note_not_lagging(&mut self) {
+        self.lag_shed_since = None;
     }
 
     /// Resident-only eviction of every parked entry and held sidecar, releasing
