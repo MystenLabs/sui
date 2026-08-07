@@ -167,11 +167,20 @@ mod test {
     async fn test_simulated_load_with_reconfig_and_correlated_crashes() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        register_fail_point_if("correlated-crash-after-consensus-commit-boundary", || true);
+        let test_cluster = build_test_cluster(4, 15000, 1).await;
+
+        // The correlated-crash failpoint fires on every node running the consensus
+        // handler, which includes the observer fullnode. Exclude the keep-alive nodes:
+        // the test harness holds their node handles, so a killed node cannot re-acquire
+        // its DB locks when the simulator restarts it.
+        let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
+        register_fail_point_if(
+            "correlated-crash-after-consensus-commit-boundary",
+            move || !keep_alive_nodes.contains(&sui_simulator::current_simnode_id()),
+        );
         // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
-        let test_cluster = build_test_cluster(4, 15000, 1).await;
         test_simulated_load(test_cluster, 90).await;
     }
 
@@ -276,17 +285,17 @@ mod test {
     /// rpc fullnode which are needed to run the benchmark.
     fn get_keep_alive_nodes(cluster: &TestCluster) -> HashSet<sui_simulator::task::NodeId> {
         let mut keep_alive_nodes = HashSet::new();
-        // The first fullnode in the swarm ins the rpc fullnode.
         keep_alive_nodes.insert(
             cluster
-                .swarm
-                .fullnodes()
-                .next()
-                .unwrap()
-                .get_node_handle()
-                .unwrap()
+                .fullnode_handle
+                .sui_node
                 .with(|n| n.get_sim_node_id()),
         );
+        // TODO: allow killing the observer fullnode once observer crash recovery is
+        // hardened, to also cover its restart path in crash tests.
+        if let Some(observer_handle) = &cluster.observer_handle {
+            keep_alive_nodes.insert(observer_handle.sui_node.with(|n| n.get_sim_node_id()));
+        }
         keep_alive_nodes.insert(sui_simulator::current_simnode_id());
         keep_alive_nodes
     }
@@ -1125,6 +1134,11 @@ mod test {
             ))
             .disable_fullnode_pruning()
             .with_synthetic_execution_time_injection();
+        // The standard setup includes an observer fullnode subscribed to the first
+        // validator, so that every scenario also exercises consensus block streaming.
+        if get_var("SIM_STRESS_TEST_OBSERVER", 1u8) != 0 {
+            builder = builder.with_observer_fullnode();
+        }
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
         }
@@ -1479,6 +1493,7 @@ mod test {
         });
 
         if enable_surfer {
+            let surfer_cluster = test_cluster.clone();
             let surfer_task = tokio::spawn(async move {
                 // now do a sui-surfer test
                 let mut test_packages_dir = benchmark_move_base_dir();
@@ -1497,7 +1512,7 @@ mod test {
                     surf_strategy,
                     test_duration,
                     test_package_paths,
-                    test_cluster,
+                    surfer_cluster,
                     1, // skip first account for use by bench_task
                 )
                 .await;
@@ -1511,6 +1526,10 @@ mod test {
             info!("Surfer disabled, running only benchmark task");
             bench_task.await.unwrap();
         }
+
+        // With load stopped, the observer (when present) must be able to reach the
+        // network's latest checkpoint via block streaming, in any scenario.
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
     }
 
     // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
