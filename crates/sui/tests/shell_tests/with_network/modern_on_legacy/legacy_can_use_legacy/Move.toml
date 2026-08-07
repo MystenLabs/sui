@@ -1,0 +1,8 @@
+[package]
+name = "legacy_can_use_legacy"
+
+[dependencies]
+Sui = { local = "../sui-framework" }
+
+[addresses]
+legacy_can_use_legacy = "0x0"

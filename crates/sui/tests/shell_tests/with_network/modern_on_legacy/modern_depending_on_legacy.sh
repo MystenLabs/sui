@@ -1,0 +1,13 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests that building a package that depends on a legacy that has explicit System deps can build successfully 
+# Resolving the implicit system dependencies needs the protocol version of the chain being
+# built for, so point the root package at the test cluster.
+
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
+echo "" >> modern_depending_on_legacy/Move.toml
+echo "[environments]" >> modern_depending_on_legacy/Move.toml
+echo "localnet = \"$chain_id\"" >> modern_depending_on_legacy/Move.toml
+
+sui move --client.config $CONFIG build -p modern_depending_on_legacy

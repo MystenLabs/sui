@@ -1,0 +1,13 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests that building a package that implicitly depends on `sui` can build
+# Resolving the implicit system dependencies needs the protocol version of the chain being
+# built for, so point the root package at the test cluster.
+
+chain_id=$(sui client --client.config $CONFIG chain-identifier --format=hex)
+echo "" >> example/Move.toml
+echo "[environments]" >> example/Move.toml
+echo "localnet = \"$chain_id\"" >> example/Move.toml
+
+sui move --client.config $CONFIG build -p example 2> /dev/null
