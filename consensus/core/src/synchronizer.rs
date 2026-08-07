@@ -183,7 +183,6 @@ enum Command {
     },
     /// Installs the shared per-authority floor of pending reconstruction slots, so
     /// periodic passes can range-repair parked frontiers. Sent once at startup.
-    InstallPendingSlotFloor(crate::pending_reconstructions::PendingSlotFloor),
     FetchOwnLastBlock,
     KickOffScheduler,
     Shutdown {
@@ -219,14 +218,6 @@ impl SynchronizerHandle {
     /// Installs the pending-slot floor; fire-and-forget at startup (the command
     /// channel is empty then, so try_send cannot realistically fail, and a missed
     /// install only delays slot repair until restart).
-    pub(crate) fn install_pending_slot_floor(
-        &self,
-        floor: crate::pending_reconstructions::PendingSlotFloor,
-    ) {
-        let _ = self
-            .commands_sender
-            .try_send(Command::InstallPendingSlotFloor(floor));
-    }
 
     /// Durably registers `block_ref` for periodic fetching until it is accepted or
     /// GC'ed. Unlike `fetch_blocks`, registration survives queue saturation and empty
@@ -313,7 +304,6 @@ pub(crate) struct Synchronizer<
     pending_exact_requests: BTreeSet<BlockRef>,
     /// Per-authority lowest pending reconstruction slot, shared from the receive
     /// side; None until installed (observers never install it).
-    pending_slot_floor: Option<crate::pending_reconstructions::PendingSlotFloor>,
     last_changed_commit_index: CommitIndex,
     last_commit_change_time: Instant,
     // When commit is not progressing, commit sync fails over to periodic sync for catchup.
@@ -398,7 +388,6 @@ where
                 dag_state,
                 round_tracker,
                 pending_exact_requests: BTreeSet::new(),
-                pending_slot_floor: None,
                 last_changed_commit_index: 0,
                 last_commit_change_time: Instant::now(),
                 commit_sync_failover: false,
@@ -512,9 +501,6 @@ where
                                     .inc();
                             }
                         }
-                        Command::InstallPendingSlotFloor(floor) => {
-                            self.pending_slot_floor = Some(floor);
-                        }
                         Command::FetchOwnLastBlock => {
                             if self.fetch_own_last_block_task.is_empty() {
                                 self.start_fetch_own_last_block_task();
@@ -614,7 +600,7 @@ where
             tokio::select! {
                 Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
                     let fetch_after_rounds =
-                        Self::get_fetch_after_rounds(&context, dag_state.clone(), None);
+                        Self::get_fetch_after_rounds(&context, dag_state.clone());
 
                     requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
                 },
@@ -764,9 +750,6 @@ where
     fn get_fetch_after_rounds(
         context: &Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
-        // Pending reconstruction slots lower the vector so periodic requests cover
-        // every parked frontier gap, one round below the lowest gap per authority.
-        slot_floor: Option<&crate::pending_reconstructions::PendingSlotFloor>,
     ) -> Vec<Round> {
         let (blocks, gc_round) = {
             let dag_state = dag_state.read();
@@ -777,19 +760,10 @@ where
         };
         assert_eq!(blocks.len(), context.committee.size());
 
-        let mut rounds: Vec<Round> = blocks
+        blocks
             .into_iter()
             .map(|(block, _)| block.round().max(gc_round))
-            .collect();
-        if let Some(floor) = slot_floor {
-            let floor = floor.read();
-            for (fetch_after, pending) in rounds.iter_mut().zip(floor.iter()) {
-                if *pending != Round::MAX {
-                    *fetch_after = (*fetch_after).min(pending.saturating_sub(1));
-                }
-            }
-        }
-        rounds
+            .collect()
     }
 
     fn verify_blocks(
@@ -1107,26 +1081,14 @@ where
             // request, and the server range-scans only authorities with refs in it —
             // filtering an authority's refs out on account of its pending slots
             // would strand exactly the slots the floor exists to repair.
-            let fetch_after_rounds =
-                Self::get_fetch_after_rounds(&context, dag_state.clone(), None);
+            let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
             missing_blocks.retain(|block| block.round <= fetch_after_rounds[block.author.value()]);
         }
         // Under commit-sync failover an empty set is meaningful: it selects the
-        // fetch_after_rounds path below. The same path serves pending reconstruction
-        // slots — without the exemption, slot repair would be disabled exactly while
-        // commit sync suppresses ordinary fetching. Only a pass with nothing to do
-        // returns early.
         if missing_blocks.is_empty() && pending_exact.is_empty() && !self.commit_sync_failover {
-            let slot_repair_needed = self
-                .pending_slot_floor
-                .as_ref()
-                .is_some_and(|floor| floor.read().iter().any(|round| *round != Round::MAX));
-            if !slot_repair_needed {
-                return Ok(());
-            }
+            return Ok(());
         }
         let missing_blocks: Vec<BlockRef> = missing_blocks.into_iter().collect();
-        let pending_slot_floor = self.pending_slot_floor.clone();
 
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
@@ -1164,7 +1126,6 @@ where
                         network_client,
                         dag_state,
                         peers_pool,
-                        pending_slot_floor,
                     )
                     .await
                 } else {
@@ -1177,7 +1138,6 @@ where
                         missing_blocks,
                         dag_state,
                         peers_pool,
-                        pending_slot_floor.clone(),
                     )
                     .await
                 });
@@ -1364,10 +1324,8 @@ where
         network_client: Arc<SynchronizerClient<VC, OC>>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
-        pending_slot_floor: Option<crate::pending_reconstructions::PendingSlotFloor>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
-        let fetch_after_rounds =
-            Self::get_fetch_after_rounds(&context, dag_state.clone(), pending_slot_floor.as_ref());
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
         // Pick a random peer (excluding self).
         // Get available peers from the PeersPool
@@ -1429,7 +1387,6 @@ where
         missing_blocks: Vec<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
-        pending_slot_floor: Option<crate::pending_reconstructions::PendingSlotFloor>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId, usize)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
@@ -1500,8 +1457,7 @@ where
             authorities.shuffle(&mut ThreadRng::default());
         }
 
-        let fetch_after_rounds =
-            Self::get_fetch_after_rounds(&context, dag_state.clone(), pending_slot_floor.as_ref());
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {

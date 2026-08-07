@@ -123,8 +123,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         // subscriber is the receive side's owner, constructed once per validator,
         // so the hook is registered here rather than threading a constructor
         // parameter through Core.
-        missing_block_registry
-            .install_pending_slot_floor(pending_reconstructions.lock().slot_floor());
         let (effects_tx, effects_rx) = tokio::sync::mpsc::unbounded_channel();
         dag_state
             .write()
@@ -1937,5 +1935,48 @@ mod test {
         wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
         let received = authority_service.lock().handle_send_block[0].1.clone();
         assert_eq!(&received.block, s.blocks[0].serialized());
+    }
+
+    /// A parked block whose ancestors never arrive is escalated by the periodic
+    /// exact-dependent sweep: its known ref reaches the fetch lane registry.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn stuck_parked_block_escalates_to_exact_lane() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let registry = Arc::new(NoopRegistry::default());
+        let tracker = Arc::new(RwLock::new(RoundTracker::new(s.context.clone(), vec![])));
+        let monitor = Arc::new(CommitVoteMonitor::new(s.context.clone()));
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            registry.clone(),
+            tracker,
+            monitor,
+        );
+        subscriber.subscribe(s.peer);
+
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 1).await;
+        // Advance the accepted frontier past the grace window with unrelated blocks.
+        for round in 10..20u32 {
+            receiver_dag
+                .write()
+                .accept_block(VerifiedBlock::new_for_test(
+                    TestBlock::new(round, 0).build(),
+                ));
+        }
+        wait_until(|| {
+            registry
+                .registered
+                .load(std::sync::atomic::Ordering::Relaxed)
+                >= 1
+        })
+        .await;
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
     }
 }
