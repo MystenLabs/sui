@@ -109,6 +109,7 @@ const references = [
 		items: [
 			'references/ide/move',
 			'references/ide/debugger',
+			'references/ide/sui-mcp-server',
 		],
 	},
 	{

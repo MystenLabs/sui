@@ -312,7 +312,20 @@ You need a new zero-knowledge proof whenever the ephemeral key pair expires or i
 
 ### Option A: use the Mysten Labs proving service
 
-For Mainnet access, refer to the [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact Mysten Labs. For development, use the public prover endpoint.
+The Mysten Labs hosted proving service generates zero-knowledge proofs on your behalf. Access depends on the environment:
+
+- **Devnet and Testnet:** The public prover endpoint is available without registration. Use it for development and testing.
+- **Mainnet:** Mainnet access requires allowlisting through the [Enoki platform](https://docs.enoki.mystenlabs.com/). Register your app's client ID in the Enoki Portal and contact Mysten Labs to enable Mainnet proving.
+
+#### Hosted prover allowlisting
+
+Before your app can use the Mysten Labs prover on Mainnet, complete the following:
+
+1. Register your app in the [Enoki Portal](https://portal.enoki.mystenlabs.com) and obtain an API key.
+2. Add your OAuth client ID to the Enoki Portal configuration. The prover only accepts JWTs from allowlisted client IDs.
+3. Contact Mysten Labs through the [Enoki docs](https://docs.enoki.mystenlabs.com/) to request Mainnet prover access for your registered app.
+
+The hosted prover auto-scales for traffic surges. If you expect a spike in prover requests, reach out on [Discord](https://discord.gg/sui) ([zkLogin integration guide](https://docs.sui.io/sui-stack/zklogin-integration/integration-guide)).
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`:
 
@@ -385,7 +398,9 @@ export type PartialZkLoginSignature = Omit<
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ```
 
-### Option B: Self-hosted proving service
+### Option B: self-hosted proving service
+
+Self-host the proving service when you need full control over proof generation, want to avoid the hosted prover allowlisting process, or have compliance requirements that prevent sending JWTs to a third-party service. The self-hosted prover uses the same request and response format as the Mysten Labs service, so you can switch between hosted and self-hosted without changing your client code.
 
 1. Install [Git Large File Storage](https://git-lfs.com/) before downloading the zkey.
 
