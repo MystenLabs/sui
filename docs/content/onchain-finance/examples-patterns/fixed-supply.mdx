@@ -35,10 +35,42 @@ answer: >-
   as a dynamic object field to prevent further modifications.
 ---
 
-This fixed supply example mints the total supply of 10,000,000,000,000,000,000 coins and transfers the coins to the sender. Then, the treasury cap is locked as a dynamic object field to prevent further modifications.
+A fixed-supply coin has a predetermined total supply that cannot increase after creation. No additional tokens can ever be minted because the minting capability (`TreasuryCap`) is locked or destroyed during initialization. Fixed supply is common for governance tokens, utility tokens, and any asset where scarcity is a design requirement.
 
-To further ensure that the package cannot be modified in the future, burn the upgrade cap rather than transferring it.
+This pattern involves 3 steps during the module's `init` function:
+
+1. **Create the currency.** Call `coin::create_currency` with a [One-Time Witness](/develop/write-move/one-time-witness) to create the `TreasuryCap` and `CoinMetadata`. The `create_currency` function takes parameters for the coin's decimals, symbol, name, description, and icon URL.
+2. **Mint the total supply.** Call `coin::mint` with the `TreasuryCap` to create all tokens at once. The amount is specified in the smallest unit (base units). For example, if your coin has 9 decimals, a supply of `10_000_000_000_000_000_000` represents 10 billion coins.
+3. **Lock the `TreasuryCap`.** Store the `TreasuryCap` as a [dynamic object field](/develop/objects/dynamic-fields) on a permanent object. This prevents anyone from calling `coin::mint` again because the `TreasuryCap` is no longer directly accessible. You can also freeze or destroy the `TreasuryCap` depending on your requirements.
 
 <ImportContent source="I2/fixed_supply/sources/silver.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" noComments />
+
+### Why lock the `TreasuryCap`
+
+The `TreasuryCap` is the [capability](/develop/objects/transfers/custom-rules) that authorizes minting and burning. If you transfer it to the deployer's address instead of locking it, anyone who gains access to that address (through key compromise or social engineering) can mint unlimited tokens. Locking the `TreasuryCap` as a dynamic object field makes it inaccessible to any function call, including `coin::mint` ([Security Best Practices](/develop/security/best-practices)).
+
+### Why burn the `UpgradeCap`
+
+To further ensure the package cannot be modified, burn the `UpgradeCap` rather than transferring it. If the `UpgradeCap` remains accessible, a future upgrade could add a function that extracts the locked `TreasuryCap` from its dynamic field and mints additional tokens. Burning the `UpgradeCap` makes the package immutable and the fixed supply permanent ([Security Best Practices](/develop/security/best-practices)).
+
+:::caution
+
+Burning the `UpgradeCap` is irreversible. You cannot fix bugs or add features to the package after burning it. Only burn the `UpgradeCap` when you are confident the package is production-ready.
+
+:::
+
+### Deploy and verify
+
+To deploy a fixed-supply coin:
+
+1. Build the package:
+   ```sh
+   $ sui move build
+   ```
+2. Publish to the network:
+   ```sh
+   $ sui client publish
+   ```
+3. Verify the total supply by querying the `CoinMetadata` object returned in the publish transaction. The `supply` field should match your intended total.
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/I2).
