@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
+use anyhow::bail;
 use api::types::address::IAddressable;
 use api::types::move_datatype::IMoveDatatype;
 use api::types::move_object::IMoveObject;
@@ -47,7 +48,7 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+use sui_indexer_alt_reader::package_resolver::GrpcPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
@@ -361,7 +362,11 @@ pub async fn start_rpc(
             .context("--ledger-grpc-url must be configured")?,
     );
 
-    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
+    // Package resolution is served exclusively by the ledger gRPC service (kv-rpc or fullnode).
+    let Some(reader) = &ledger_grpc_reader else {
+        bail!("Package resolution requires a ledger gRPC service; configure --ledger-grpc-url");
+    };
+    let package_store = Arc::new(PackageCache::new(Box::new(GrpcPackageStore::new(reader))));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
