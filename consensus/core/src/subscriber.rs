@@ -54,6 +54,13 @@ const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 /// reset-triggering ones could otherwise force immediate reconnects in an unbounded
 /// loop. Jittered per (node, peer, attempt): a fixed delay
 /// synchronizes resets across every subscription into committee-wide thrash.
+/// Park-admission watermarks: the stream pauses when resident recovery items
+/// (parked + queued/in-flight reconstructions) reach the high mark and resumes
+/// below the low mark. Healthy steady state sits around tens of entries; the gap
+/// prevents wake/sleep oscillation at the boundary.
+const PARK_HIGH_WATERMARK: usize = 512;
+const PARK_LOW_WATERMARK: usize = 384;
+
 const CAUSED_RESET_DELAY_FLOOR_MS: u64 = 700;
 const CAUSED_RESET_DELAY_JITTER_MS: u64 = 600;
 
@@ -269,6 +276,16 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .with_label_values(&[peer_hostname])
             .inc();
 
+        // Structural sidecar bounds before any byte accounting: tiny or empty
+        // elements carry near-zero byte charge, so counts must be bounded
+        // independently of bytes.
+        if block.excluded_ancestors.len() > 2 * context.committee.size()
+            || block.excluded_ancestors.iter().any(|e| e.is_empty())
+        {
+            return Err(ConsensusError::MalformedMinimalBlock(
+                "excluded-ancestors sidecar exceeds element bounds or has empty elements".into(),
+            ));
+        }
         let sidecar_bytes: usize = block.excluded_ancestors.iter().map(Vec::len).sum();
         if sidecar_bytes > max_excluded_ancestors_size(context) {
             return Err(ConsensusError::MalformedMinimalBlock(format!(
@@ -618,6 +635,64 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         continue 'stream;
                                     }
                                 };
+                                // Self-clocking: full mode's stream cannot outrun
+                                // Core because every block awaits acceptance inline;
+                                // parking broke that clock. Restore it here: hold the
+                                // stream while the recovery backlog is saturated, so
+                                // transport flow control pushes back on the sender
+                                // instead of the window/refusal machinery absorbing
+                                // the overrun. Drain proceeds without stream input
+                                // (worker, wall-clock sweep, commit sync), so the
+                                // pause cannot deadlock. Commit lag is rechecked in
+                                // the wait: a node that starts lagging while paused
+                                // must shed, not sleep.
+                                if pending_reconstructions.lock().backlog() >= PARK_HIGH_WATERMARK {
+                                    node_metrics
+                                        .minimal_block_recovery_outcomes
+                                        .with_label_values(&["backpressure_paused"])
+                                        .inc();
+                                    loop {
+                                        sleep(Duration::from_millis(20)).await;
+                                        let lagging_now = {
+                                            let Some(dag_state) = dag_state.upgrade() else {
+                                                return;
+                                            };
+                                            let local = dag_state.read().last_commit_index();
+                                            is_commit_lagging(
+                                                &context,
+                                                local,
+                                                commit_vote_monitor.quorum_commit_index(),
+                                            )
+                                        };
+                                        if lagging_now {
+                                            node_metrics
+                                                .minimal_block_recovery_outcomes
+                                                .with_label_values(&["shed_commit_lag"])
+                                                .inc();
+                                            let evicted = {
+                                                let mut pending = pending_reconstructions.lock();
+                                                if pending.should_quiesce_on_shed() {
+                                                    pending.quiesce()
+                                                } else {
+                                                    0
+                                                }
+                                            };
+                                            if evicted > 0 {
+                                                node_metrics
+                                                    .minimal_block_recovery_outcomes
+                                                    .with_label_values(&["quiesced"])
+                                                    .inc_by(evicted as u64);
+                                            }
+                                            exiting_lag = true;
+                                            continue 'stream;
+                                        }
+                                        if pending_reconstructions.lock().backlog()
+                                            <= PARK_LOW_WATERMARK
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
                                 let missing_snapshot = missing.clone();
                                 let admitted = pending_reconstructions.lock().try_admit(
                                     block_ref,
@@ -714,8 +789,8 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                         // committee-wide reconnect storm.
                                         let receiver_behind = matches!(
                                             refusal,
-                                            crate::pending_reconstructions::AdmitRefusal::OutsideWindow
-                                        ) && block_ref.round > credit_top;
+                                            crate::pending_reconstructions::AdmitRefusal::OutsideWindowHigh
+                                        );
                                         // Byte-cap refusals get the same escape: any
                                         // refusal that drops a live block needs the
                                         // replay path, and "the cap only binds under
@@ -1307,7 +1382,7 @@ mod test {
                 .metrics
                 .node_metrics
                 .minimal_block_recovery_outcomes
-                .with_label_values(&["outside_window"])
+                .with_label_values(&["outside_window_high"])
                 .get()
                 >= 1
         })
@@ -1977,6 +2052,108 @@ mod test {
         })
         .await;
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 1);
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
+    }
+
+    /// Codex-required liveness proof: with the backlog at the high watermark and
+    /// every stream paused, the wall-clock sweep still escalates parked refs, and
+    /// acceptance draining the backlog resumes the stream — no live stream item or
+    /// commit required to make progress.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn paused_streams_drain_through_sweep_and_acceptance() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let registry = Arc::new(NoopRegistry::default());
+        let tracker = Arc::new(RwLock::new(RoundTracker::new(s.context.clone(), vec![])));
+        let monitor = Arc::new(CommitVoteMonitor::new(s.context.clone()));
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            registry.clone(),
+            tracker,
+            monitor,
+        );
+        // Saturate the backlog with synthetic parked entries before the stream block.
+        let filler_author = s.context.committee.to_authority_index(1).unwrap();
+        let filler_missing = vec![crate::block::Slot::new(
+            2,
+            s.context.committee.to_authority_index(3).unwrap(),
+        )];
+        let mut filler_refs = Vec::new();
+        {
+            let mut pending = subscriber.pending_reconstructions.lock();
+            for i in 0..PARK_HIGH_WATERMARK as u32 {
+                let claim = BlockRef::new(
+                    3 + i,
+                    filler_author,
+                    consensus_types::block::BlockDigest::MIN,
+                );
+                pending
+                    .try_admit(
+                        claim,
+                        Bytes::from(vec![1u8; 8]),
+                        vec![],
+                        filler_author,
+                        filler_missing.clone(),
+                        0,
+                        3 + i,
+                    )
+                    .unwrap();
+                filler_refs.push(claim);
+            }
+            assert!(pending.backlog() >= PARK_HIGH_WATERMARK);
+        }
+        subscriber.subscribe(s.peer);
+
+        // The paused stream admits nothing, but the wall-clock sweep escalates.
+        wait_until(|| {
+            registry
+                .registered
+                .load(std::sync::atomic::Ordering::Relaxed)
+                >= 1
+        })
+        .await;
+        let node_metrics = &s.context.metrics.node_metrics;
+        assert_eq!(
+            node_metrics.minimal_block_recovery_parked.get(),
+            PARK_HIGH_WATERMARK as i64
+        );
+        assert!(
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["backpressure_paused"])
+                .get()
+                >= 1
+        );
+
+        // Acceptance (as from fetched full forms) drains below the low mark; the
+        // stream resumes and parks its block.
+        let drain = PARK_HIGH_WATERMARK - PARK_LOW_WATERMARK + 8;
+        for chunk in filler_refs[..drain].chunks(64) {
+            let effects = subscriber
+                .pending_reconstructions
+                .lock()
+                .on_blocks_accepted(chunk);
+            for (peer, charge) in effects
+                .deliverable_sidecars
+                .iter()
+                .map(|(p, _, _, c)| (*p, *c))
+            {
+                subscriber
+                    .pending_reconstructions
+                    .lock()
+                    .release(peer, charge);
+            }
+        }
+        wait_until(|| {
+            node_metrics.minimal_block_recovery_parked.get()
+                == (PARK_HIGH_WATERMARK - drain + 1) as i64
+        })
+        .await;
         assert_eq!(*network_client.subscribe_calls.lock(), 1);
     }
 }

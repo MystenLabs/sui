@@ -97,9 +97,12 @@ pub(crate) struct PendingMinimal {
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
     pub(crate) peer: AuthorityIndex,
     pub(crate) parked_at_round: Round,
-    /// Last round the exact-dependent sweep registered this entry, so retries
-    /// rotate across the pending population instead of hammering the lane.
-    last_swept_round: Round,
+    /// Wall-clock parking instant: the sweep must make progress even when rounds
+    /// do not advance (a fleet-wide backpressure pause at bootstrap), so grace and
+    /// retry are measured in time, never rounds.
+    parked_at: tokio::time::Instant,
+    /// Last sweep registration, rotating retries across the population.
+    last_swept: Option<tokio::time::Instant>,
     /// Full remaining missing-slot set — kept per entry so removal can unlink from
     /// the inverted index without scanning it.
     missing: BTreeSet<Slot>,
@@ -116,8 +119,11 @@ impl PendingMinimal {
 /// "equivocation": claims are unverified here, and a slot collision is not evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AdmitRefusal {
-    /// Claimed round outside `(gc_round, gc_round + window]`.
-    OutsideWindow,
+    /// Claimed round at or below `gc_round`: stale, typically a replay duplicate.
+    OutsideWindowLow,
+    /// Claimed round above the admission window top: the receiver is behind the
+    /// claim, the one case with no other guaranteed recovery.
+    OutsideWindowHigh,
     /// A frontier slot is at or below `gc_round`: it can never fill, so slot-waiting
     /// cannot recover this block. The caller routes it to the exact-fetch lane.
     DeadFrontierSlot,
@@ -130,7 +136,8 @@ pub(crate) enum AdmitRefusal {
 impl AdmitRefusal {
     pub(crate) fn metric_label(self) -> &'static str {
         match self {
-            AdmitRefusal::OutsideWindow => "outside_window",
+            AdmitRefusal::OutsideWindowLow => "outside_window_low",
+            AdmitRefusal::OutsideWindowHigh => "outside_window_high",
             AdmitRefusal::DeadFrontierSlot => "dead_frontier_slot",
             AdmitRefusal::SlotOccupied => "slot_occupied",
             AdmitRefusal::PeerBytes => "peer_bytes",
@@ -274,7 +281,8 @@ impl PendingReconstructions {
                 excluded_ancestors,
                 peer,
                 parked_at_round: local_round,
-                last_swept_round: 0,
+                parked_at: tokio::time::Instant::now(),
+                last_swept: None,
                 missing,
                 charge,
             },
@@ -294,15 +302,16 @@ impl PendingReconstructions {
         local_round: Round,
     ) -> Option<AdmitRefusal> {
         let window_top = local_round.saturating_add(window_width(&self.context));
-        if claimed_ref.round <= gc_round || claimed_ref.round > window_top {
-            if claimed_ref.round > window_top {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .minimal_block_window_overshoot
-                    .observe((claimed_ref.round - window_top) as f64);
-            }
-            return Some(AdmitRefusal::OutsideWindow);
+        if claimed_ref.round <= gc_round {
+            return Some(AdmitRefusal::OutsideWindowLow);
+        }
+        if claimed_ref.round > window_top {
+            self.context
+                .metrics
+                .node_metrics
+                .minimal_block_window_overshoot
+                .observe((claimed_ref.round - window_top) as f64);
+            return Some(AdmitRefusal::OutsideWindowHigh);
         }
         if self.pending.len() + self.in_flight >= max_pending_entries(&self.context) {
             return Some(AdmitRefusal::TotalBytes);
@@ -346,23 +355,31 @@ impl PendingReconstructions {
     /// takes over. The grace keeps the sweep off the claim/acceptance race it
     /// would otherwise duplicate, and the retry spacing rotates attempts across
     /// the population under the caller's lane bound.
-    pub(crate) fn stale_dependents(&mut self, local_round: Round, cap: usize) -> Vec<BlockRef> {
-        const GRACE_ROUNDS: Round = 4;
-        const RETRY_ROUNDS: Round = 20;
+    /// Resident recovery items: parked entries plus queued/in-flight
+    /// reconstructions. The subscription backpressure watermarks read this.
+    pub(crate) fn backlog(&self) -> usize {
+        self.pending.len() + self.in_flight
+    }
+
+    pub(crate) fn stale_dependents(&mut self, cap: usize) -> Vec<BlockRef> {
+        const GRACE: std::time::Duration = std::time::Duration::from_millis(300);
+        const RETRY: std::time::Duration = std::time::Duration::from_millis(1500);
+        let now = tokio::time::Instant::now();
         let mut out = Vec::new();
         for (block_ref, entry) in self.pending.iter_mut() {
             if out.len() >= cap {
                 break;
             }
-            if local_round.saturating_sub(entry.parked_at_round) < GRACE_ROUNDS {
+            if now.duration_since(entry.parked_at) < GRACE {
                 continue;
             }
-            if entry.last_swept_round != 0
-                && local_round.saturating_sub(entry.last_swept_round) < RETRY_ROUNDS
+            if entry
+                .last_swept
+                .is_some_and(|last| now.duration_since(last) < RETRY)
             {
                 continue;
             }
-            entry.last_swept_round = local_round;
+            entry.last_swept = Some(now);
             out.push(*block_ref);
         }
         out
@@ -655,6 +672,18 @@ impl PendingReconstructions {
         peer: AuthorityIndex,
         sidecar: Vec<Vec<u8>>,
     ) {
+        // Count cap alongside the byte caps: sidecars with tiny inner elements
+        // carry near-zero byte charge, so bytes alone cannot bound the entry
+        // population.
+        if self.held_sidecars.len() >= max_pending_entries(&self.context) {
+            self.context
+                .metrics
+                .node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["sidecar_hold_cap"])
+                .inc();
+            return;
+        }
         if sidecar.is_empty() || self.held_sidecars.contains_key(&block_ref) {
             return;
         }
@@ -833,13 +862,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                 }
             }
             _ = sweep.tick() => {
-                let stale = {
-                    let Some(dag_state) = dag_state.upgrade() else {
-                        return;
-                    };
-                    let tip = dag_state.read().highest_accepted_round();
-                    pending_reconstructions.lock().stale_dependents(tip, SWEEP_CAP)
-                };
+                let stale = pending_reconstructions.lock().stale_dependents(SWEEP_CAP);
                 for block_ref in stale {
                     if registry.register_missing_block(block_ref).await.is_err() {
                         return;
@@ -1056,7 +1079,7 @@ mod tests {
 
         assert_eq!(
             admit_at(&mut p, r(gc, 1, 1), vec![]),
-            Err(AdmitRefusal::OutsideWindow),
+            Err(AdmitRefusal::OutsideWindowLow),
             "at gc_round is out"
         );
         // The top anchors to the local frontier, which the test helper sets to the
@@ -1073,7 +1096,7 @@ mod tests {
                 gc,
                 frontier,
             ),
-            Err(AdmitRefusal::OutsideWindow),
+            Err(AdmitRefusal::OutsideWindowHigh),
             "one past the frontier window is out"
         );
         assert!(
@@ -1304,9 +1327,9 @@ mod tests {
         pending.assert_invariants();
     }
 
-    /// The sweep respects the grace window, the retry spacing, and the cap, and
-    /// rotates across the population instead of resampling the same entries.
-    #[tokio::test]
+    /// The sweep respects the wall-clock grace window, the retry spacing, and the
+    /// cap, rotating across the population instead of resampling the same entries.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn stale_dependents_grace_retry_and_cap() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1330,16 +1353,17 @@ mod tests {
                 .unwrap();
         }
         // Inside the grace window: nothing qualifies.
-        assert!(pending.stale_dependents(11, 8).is_empty());
-        // Past grace: capped batch, oldest-first order.
-        let first = pending.stale_dependents(30, 2);
+        assert!(pending.stale_dependents(8).is_empty());
+        // Past grace: capped batch, then only the uncovered entry (retry spacing).
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        let first = pending.stale_dependents(2);
         assert_eq!(first.len(), 2);
-        // Immediately after: only the uncovered entry qualifies (retry spacing).
-        let second = pending.stale_dependents(30, 8);
+        let second = pending.stale_dependents(8);
         assert_eq!(second.len(), 1);
         assert!(!first.contains(&second[0]));
         // Once the retry window passes, swept entries qualify again.
-        assert_eq!(pending.stale_dependents(55, 8).len(), 3);
+        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        assert_eq!(pending.stale_dependents(8).len(), 3);
         pending.assert_invariants();
     }
 }
