@@ -4,6 +4,7 @@
 
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
+use crate::allowance::{ResolvedAllowance, parse_allowance_object};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
@@ -59,6 +60,7 @@ use mysten_common::{ZipDebugEqIteratorExt, assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
+use std::collections::btree_map::Entry;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -2948,6 +2950,11 @@ pub trait TransactionDataAPI {
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64>;
 
+    /// Validates each `WithdrawFrom::Allowance` against its loaded input
+    /// object: declared funder, spender gate, funds type. Execution then
+    /// trusts the declaration (the funder is immutable); policy lives in Move.
+    fn validate_allowance_withdrawals(&self, input_objects: &InputObjects) -> UserInputResult<()>;
+
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
 
@@ -3152,6 +3159,70 @@ impl TransactionDataAPI for TransactionDataV1 {
         withdraw_map
     }
 
+    fn validate_allowance_withdrawals(&self, input_objects: &InputObjects) -> UserInputResult<()> {
+        let allowance_withdrawals: Vec<_> = self
+            .get_funds_withdrawals()
+            .filter(|w| matches!(w.withdraw_from, WithdrawFrom::Allowance { .. }))
+            .collect();
+        if allowance_withdrawals.is_empty() {
+            return Ok(());
+        }
+        // One pass over the inputs; each allowance below is a map lookup. The
+        // allowance must be among the tx's inputs (spending needs it as an
+        // input anyway), or it fails to resolve here.
+        let objects_by_id: BTreeMap<ObjectID, &Object> = input_objects
+            .iter()
+            .filter_map(|input| Some((input.id(), input.as_object()?)))
+            .collect();
+        // Parses are cached per object, but every withdrawal is checked: two
+        // may source the same allowance with different declared funders.
+        let mut resolved_allowances: BTreeMap<ObjectID, ResolvedAllowance> = BTreeMap::new();
+        for withdraw in allowance_withdrawals {
+            let WithdrawFrom::Allowance { funder, allowance } = &withdraw.withdraw_from else {
+                continue;
+            };
+            let resolved = match resolved_allowances.entry(*allowance) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => {
+                    let object = objects_by_id.get(allowance).ok_or_else(|| {
+                        UserInputError::InvalidWithdrawReservation {
+                            error: format!(
+                                "declared allowance {allowance} not found among the tx inputs"
+                            ),
+                        }
+                    })?;
+                    entry.insert(parse_allowance_object(object)?)
+                }
+            };
+            if &resolved.funder != funder {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Declared funder {funder} does not match the funder of \
+                        allowance {allowance}"
+                    ),
+                });
+            }
+            if resolved.spender != Some(self.sender()) {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Transaction sender is not the spender of allowance {allowance}"
+                    ),
+                });
+            }
+            if resolved.funds_type != withdraw.type_arg.to_type_tag() {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Allowance {} is for {}, not {}",
+                        allowance,
+                        resolved.funds_type,
+                        withdraw.type_arg.to_type_tag()
+                    ),
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn has_funds_withdrawals(&self) -> bool {
         if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             return true;
@@ -3281,6 +3352,17 @@ impl TransactionDataAPI for TransactionDataV1 {
                             error: "Explicit sponsor withdrawals are not yet supported".to_string(),
                         }
                         .into());
+                    }
+                    // The allowance itself is checked after input loading, in
+                    // `validate_allowance_withdrawals`.
+                    WithdrawFrom::Allowance { .. } => {
+                        fp_ensure!(
+                            config.enable_allowances(),
+                            UserInputError::Unsupported(
+                                "Allowance withdrawals are not enabled".to_string()
+                            )
+                            .into()
+                        );
                     }
                 }
 
