@@ -259,6 +259,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         peer: AuthorityIndex,
         mut block: ExtendedSerializedBlock,
         dag_state: &DagState,
+        pending_reconstructions: &Mutex<PendingReconstructions>,
     ) -> ConsensusResult<InflateOutcome> {
         let Some(minimal) = block.minimal.take() else {
             return Ok(InflateOutcome::Block(block));
@@ -288,7 +289,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             )));
         }
 
-        match block_inflater.inflate(&minimal, peer, dag_state) {
+        match block_inflater.inflate(&minimal, peer, dag_state, Some(pending_reconstructions)) {
             Ok((_signed_block, serialized)) => {
                 block.block = serialized;
                 Ok(InflateOutcome::Block(block))
@@ -484,6 +485,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     peer,
                                     block,
                                     &guard,
+                                    &pending_reconstructions,
                                 ),
                                 guard.gc_round(),
                                 guard.highest_accepted_round(),
@@ -511,6 +513,24 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // enforced author == peer), or a lagging node starves
                                 // the very signal its recovery runs on.
                                 commit_vote_monitor.observe_stream_claim(peer, &commit_votes);
+                                // Record the envelope's own claimed digest so blocks
+                                // referencing this slot can rebuild their ancestor
+                                // vectors without waiting for local acceptance — the
+                                // full-form pipeline shape. Own-author only: the
+                                // decoder has already bound envelope author to this
+                                // stream's peer; sidecars never feed this.
+                                let claim_ready = pending_reconstructions.lock().observe_claim(
+                                    crate::block::Slot::from(block_ref),
+                                    block_ref.digest,
+                                );
+                                if !claim_ready.is_empty() {
+                                    let _ = effects_tx.send(
+                                        crate::pending_reconstructions::AcceptanceEffects {
+                                            ready: claim_ready,
+                                            ..Default::default()
+                                        },
+                                    );
+                                }
                                 // While local commits lag the quorum, core rejects
                                 // every block after reconstruction anyway; the
                                 // full-form door consumes and discards cheaply, and
@@ -1837,5 +1857,62 @@ mod test {
                 .get(),
             0
         );
+    }
+
+    /// The wavefront breaker: a parked block whose missing ancestor is only CLAIMED
+    /// (its envelope observed, its content not accepted) reconstructs through the
+    /// claim resolver and reaches the service as a full block — where block_manager
+    /// suspension takes over, exactly like full-form mode.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn parked_block_reconstructs_from_claim_without_acceptance() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        // The streamed block's ancestors are the four round-2 blocks; accept all but
+        // author 1's at the receiver, so the block parks missing exactly that slot.
+        let network_client = Arc::new(FixedStreamClient::new(s.wire.clone()));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let missing_author = s.context.committee.to_authority_index(1).unwrap();
+        let mut missing_digest = None;
+        for ancestor in &s.ancestors {
+            if ancestor.author() == missing_author {
+                missing_digest = Some(ancestor.digest());
+                continue;
+            }
+            receiver_dag.write().accept_block(ancestor.clone());
+        }
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            registry,
+            tracker,
+            monitor,
+        );
+        subscriber.subscribe(s.peer);
+
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 1).await;
+        assert!(authority_service.lock().handle_send_block.is_empty());
+
+        // The missing author's envelope claim arrives (content still not accepted).
+        let missing_slot = crate::block::Slot::new(2, missing_author);
+        let ready = subscriber
+            .pending_reconstructions
+            .lock()
+            .observe_claim(missing_slot, missing_digest.unwrap());
+        assert_eq!(ready.len(), 1);
+        subscriber
+            .effects_tx
+            .send(crate::pending_reconstructions::AcceptanceEffects {
+                ready,
+                ..Default::default()
+            })
+            .unwrap();
+
+        wait_until(|| !authority_service.lock().handle_send_block.is_empty()).await;
+        let received = authority_service.lock().handle_send_block[0].1.clone();
+        assert_eq!(&received.block, s.blocks[0].serialized());
     }
 }

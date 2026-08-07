@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockDigest, BlockRef, Round};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -57,6 +57,24 @@ fn window_width(context: &Context) -> Round {
 /// have stalled for minutes, and refusing then is the correct backpressure.
 fn max_pending_entries(context: &Context) -> usize {
     context.committee.size() * 4 * context.protocol_config.gc_depth() as usize
+}
+
+/// A slot digest claimed by its author's own authenticated stream envelope
+/// (structural validation passed, signature unverified). Lets dependents rebuild
+/// their ancestor vectors without waiting for local ACCEPTANCE of the ancestor —
+/// the dependent's own claimed-digest gate and signature verification validate the
+/// choice, and block_manager suspension covers ancestor content that has not
+/// arrived. A second, different claim for the same slot marks it ambiguous:
+/// resolution then falls back to acceptance or the exact-fetch lane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SlotClaim {
+    Unique(BlockDigest),
+    Ambiguous,
+}
+
+/// Bound on retained claims: one per slot across the admission window.
+fn claims_capacity(context: &Context) -> usize {
+    context.committee.size() * window_width(context) as usize
 }
 
 /// Per-peer resident-byte quota. Honest steady state per peer is a few hundred KB
@@ -177,6 +195,9 @@ pub(crate) struct PendingReconstructions {
     occupancy: BTreeMap<Slot, BlockRef>,
     /// Sidecars held for refused / terminal-without-acceptance blocks, FIFO-bounded.
     held_sidecars: BTreeMap<BlockRef, (AuthorityIndex, Vec<Vec<u8>>)>,
+    /// Slot digests claimed by their authors' own stream envelopes. Metadata only:
+    /// uncharged, bounded by `claims_capacity`, swept with GC.
+    claims: BTreeMap<Slot, SlotClaim>,
 
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
@@ -195,6 +216,7 @@ impl PendingReconstructions {
             missing_slots: BTreeMap::new(),
             occupancy: BTreeMap::new(),
             held_sidecars: BTreeMap::new(),
+            claims: BTreeMap::new(),
 
             per_peer_bytes: vec![0; committee_size],
             total_bytes: 0,
@@ -322,6 +344,77 @@ impl PendingReconstructions {
         None
     }
 
+    /// The unique claim for `slot`, if any — consulted by the inflater when the
+    /// accepted DAG has no candidate.
+    pub(crate) fn unique_claim(&self, slot: Slot) -> Option<BlockDigest> {
+        match self.claims.get(&slot) {
+            Some(SlotClaim::Unique(digest)) => Some(*digest),
+            _ => None,
+        }
+    }
+
+    /// True when every missing slot of the entry carries a unique claim, so its
+    /// ancestor vector can be rebuilt without waiting for acceptance.
+    fn claim_ready(&self, block_ref: &BlockRef) -> bool {
+        let Some(entry) = self.pending.get(block_ref) else {
+            return false;
+        };
+        entry
+            .missing
+            .iter()
+            .all(|slot| matches!(self.claims.get(slot), Some(SlotClaim::Unique(_))))
+    }
+
+    /// Records the digest its author's own stream claims for `slot`, returning any
+    /// entries that become reconstructable through claims. Conflicts mark the slot
+    /// ambiguous rather than replacing: an unverified claim must never win a race.
+    pub(crate) fn observe_claim(&mut self, slot: Slot, digest: BlockDigest) -> Vec<ReadyEntry> {
+        use std::collections::btree_map::Entry as MapEntry;
+        if self.claims.len() >= claims_capacity(&self.context) && !self.claims.contains_key(&slot) {
+            return vec![];
+        }
+        match self.claims.entry(slot) {
+            MapEntry::Vacant(vacant) => {
+                vacant.insert(SlotClaim::Unique(digest));
+            }
+            MapEntry::Occupied(mut occupied) => match occupied.get() {
+                SlotClaim::Unique(existing) if *existing == digest => return vec![],
+                SlotClaim::Unique(_) => {
+                    occupied.insert(SlotClaim::Ambiguous);
+                    return vec![];
+                }
+                SlotClaim::Ambiguous => return vec![],
+            },
+        }
+        let Some(dependents) = self.missing_slots.get(&slot) else {
+            return vec![];
+        };
+        let candidates: Vec<BlockRef> = dependents.iter().copied().collect();
+        let mut ready = Vec::new();
+        for block_ref in candidates {
+            if !self.claim_ready(&block_ref) {
+                continue;
+            }
+            let entry = self
+                .remove_entry_keeping_charge(&block_ref)
+                .expect("entry exists");
+            self.in_flight += 1;
+            self.observe_residency(&entry, "claim_ready", slot.round);
+            ready.push(ReadyEntry {
+                claimed_ref: block_ref,
+                minimal: entry.minimal,
+                excluded_ancestors: entry.excluded_ancestors,
+                peer: entry.peer,
+                charge: entry.charge,
+            });
+        }
+        if !ready.is_empty() {
+            self.rebuild_slot_floor();
+            self.update_gauges();
+        }
+        ready
+    }
+
     /// One lookup per accepted block: unblocks dependents, and if the accepted block
     /// IS a parked or sidecar-held ref, resolves that entry. Call AFTER the blocks
     /// are visible in DagState, so dispatched reconstructions can see them.
@@ -358,7 +451,8 @@ impl PendingReconstructions {
                     continue;
                 };
                 entry.missing.remove(&slot);
-                if entry.missing.is_empty() {
+                let empty = entry.missing.is_empty();
+                if empty || self.claim_ready(&dependent) {
                     let entry = self
                         .remove_entry_keeping_charge(&dependent)
                         .expect("entry exists");
@@ -385,6 +479,7 @@ impl PendingReconstructions {
     /// with a frontier slot that crossed GC can never fill by waiting and are
     /// returned for exact-lane routing.
     pub(crate) fn on_gc(&mut self, gc_round: Round, local_round: Round) -> Vec<BlockRef> {
+        self.claims.retain(|slot, _| slot.round > gc_round);
         let obsolete: Vec<BlockRef> = self
             .pending
             .iter()
@@ -661,10 +756,29 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     use futures::stream::{FuturesUnordered, StreamExt as _};
 
     let mut in_flight: FuturesUnordered<_> = FuturesUnordered::new();
+    // Ready entries beyond the concurrency bound queue here: the bound is enforced
+    // per entry, not per effects batch, and ready work is dispatched before the
+    // sequential sidecar deliveries of the same batch.
+    let mut ready_queue: std::collections::VecDeque<ReadyEntry> = Default::default();
     loop {
+        while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
+            let Some(entry) = ready_queue.pop_front() else {
+                break;
+            };
+            in_flight.push(reconstruct_one(
+                context.clone(),
+                block_inflater.clone(),
+                dag_state.clone(),
+                registry.clone(),
+                service.clone(),
+                pending_reconstructions.clone(),
+                entry,
+            ));
+        }
         tokio::select! {
-            batch = effects.recv(), if in_flight.len() < RECONSTRUCTION_CONCURRENCY => {
+            batch = effects.recv() => {
                 let Some(batch) = batch else { break };
+                ready_queue.extend(batch.ready);
                 for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
                     {
                         let Some(service) = service.upgrade() else { return };
@@ -677,17 +791,6 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                         return;
                     }
                 }
-                for entry in batch.ready {
-                    in_flight.push(reconstruct_one(
-                        context.clone(),
-                        block_inflater.clone(),
-                        dag_state.clone(),
-                        registry.clone(),
-                        service.clone(),
-                        pending_reconstructions.clone(),
-                        entry,
-                    ));
-                }
             }
             Some(alive) = in_flight.next() => {
                 if !alive {
@@ -697,8 +800,23 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
             else => break,
         }
     }
-    // Channel closed: drain what is already in flight.
-    while in_flight.next().await.is_some() {}
+    // Channel closed: drain queued and in-flight work.
+    while in_flight.next().await.is_some() || !ready_queue.is_empty() {
+        while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
+            let Some(entry) = ready_queue.pop_front() else {
+                break;
+            };
+            in_flight.push(reconstruct_one(
+                context.clone(),
+                block_inflater.clone(),
+                dag_state.clone(),
+                registry.clone(),
+                service.clone(),
+                pending_reconstructions.clone(),
+                entry,
+            ));
+        }
+    }
 }
 
 /// One reconstruction from ready entry to terminal state; returns false when the
@@ -718,7 +836,12 @@ async fn reconstruct_one<S: crate::network::ValidatorNetworkService>(
             return false;
         };
         let guard = dag_state.read();
-        block_inflater.inflate(&entry.minimal, entry.peer, &guard)
+        block_inflater.inflate(
+            &entry.minimal,
+            entry.peer,
+            &guard,
+            Some(&pending_reconstructions),
+        )
     };
     let metrics = &context.metrics.node_metrics;
     match inflated {
@@ -1111,6 +1234,42 @@ mod tests {
                 12,
             )
             .unwrap();
+        pending.assert_invariants();
+    }
+
+    /// A claim from the missing author's own envelope readies dependents without
+    /// acceptance; a conflicting claim poisons the slot to ambiguous instead.
+    #[tokio::test]
+    async fn observe_claim_readies_dependents_and_conflicts_poison() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mut pending = PendingReconstructions::new(context.clone());
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let author = context.committee.to_authority_index(2).unwrap();
+        let claim_ref = BlockRef::new(10, peer, BlockDigest::MIN);
+        let missing_slot = Slot::new(9, author);
+        pending
+            .try_admit(
+                claim_ref,
+                Bytes::from(vec![1u8; 64]),
+                vec![],
+                peer,
+                vec![missing_slot],
+                0,
+                9,
+            )
+            .unwrap();
+        let ready = pending.observe_claim(missing_slot, BlockDigest::MAX);
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].claimed_ref, claim_ref);
+        assert_eq!(pending.unique_claim(missing_slot), Some(BlockDigest::MAX));
+        pending.release(peer, ready[0].charge);
+
+        // Conflicting claims mark the slot ambiguous: no unique digest served.
+        let other = Slot::new(9, peer);
+        assert!(pending.observe_claim(other, BlockDigest::MIN).is_empty());
+        assert!(pending.observe_claim(other, BlockDigest::MAX).is_empty());
+        assert_eq!(pending.unique_claim(other), None);
         pending.assert_invariants();
     }
 }
