@@ -1923,6 +1923,12 @@ mod checked {
                             should have been checked at signing"
                         );
                     }
+                    WithdrawFrom::Allowance { .. } => {
+                        invariant_violation!(
+                            "WithdrawFrom::Allowance is not supported by this execution version, \
+                            should have been checked at signing"
+                        );
+                    }
                 };
                 // After this point, we can treat this like any other returned/loaded value, e.g.
                 // from a Move call. As such, sanity check Withdrawal should have only drop.
