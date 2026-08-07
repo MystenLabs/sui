@@ -47,9 +47,48 @@ You can view the metrics in the metrics UI, or use a tool like `curl` to get the
 $ curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
 ```
 
+## Key metrics
+
+The following metrics are useful for monitoring node health:
+
+| Metric | Description |
+|---|---|
+| `uptime` | Time since the node process started |
+| `highest_synced_checkpoint` | The latest checkpoint the node has synced |
+| `last_executed_checkpoint` | The latest checkpoint the node has executed |
+| `sui_fullnode_highest_known_checkpoint` | The highest checkpoint known to the network (compare against `highest_synced_checkpoint` to detect sync lag) |
+| `total_transactions` | Total number of transactions processed |
+
+{/* TODO: Citation needed — verify these metric names against the current Sui node Prometheus output */}
+
 ## Production monitoring
 
-For production monitoring, [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/) are recommended.
+For production monitoring, use [Prometheus](https://prometheus.io/) to scrape metrics and [Grafana](https://grafana.com/) to visualize them.
 
-You can use Grafana Agent, Grafana Alloy, or another tool to scrape the metrics from your node.
+### Prometheus configuration
+
+Add a scrape target for your Sui node in your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'sui-node'
+    static_configs:
+      - targets: ['HOSTNAME:9184']
+```
+
+Replace `HOSTNAME` with your node's hostname or IP address. The default metrics port is **9184**.
+
+### Grafana setup
+
+1. Add Prometheus as a data source in Grafana (Settings > Data Sources > Add data source > Prometheus).
+2. Set the Prometheus URL to your Prometheus instance (for example, `http://localhost:9090`).
+3. Create a dashboard with panels for key metrics like `highest_synced_checkpoint`, `last_executed_checkpoint`, and `total_transactions`.
+
+### Alerting
+
+Set up alerts for the following conditions:
+
+- **Sync lag:** Alert when `highest_synced_checkpoint` falls more than 100 checkpoints behind `sui_fullnode_highest_known_checkpoint`.
+- **Node down:** Alert when the Prometheus target is unreachable for more than 5 minutes.
+- **High resource usage:** Alert on CPU or memory usage thresholds specific to your infrastructure.
 

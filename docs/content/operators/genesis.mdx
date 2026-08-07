@@ -31,10 +31,40 @@ questions:
 answer: Genesis refers to the initial state of the Sui blockchain at launch.
 ---
 
-Genesis is the initial state of the Sui blockchain. To launch a network, the initial committee of validators collaborate by providing their validator information (public keys, network addresses, and so on) to a shared workspace. After all of the initial validators have contributed their information, Sui generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0) and each validator provides their signature. Sui aggregates these signatures to form a certificate on the genesis checkpoint. Sui bundles this checkpoint, as well as the initial objects, together into a single genesis.blob file that is used to initialize the state when running the `sui-node` binary for both validators and full nodes.
+Genesis is the initial state of the Sui blockchain at network launch. The genesis process produces a `genesis.blob` file that every node (validator and full node) uses to initialize its state.
+
+## Genesis ceremony
+
+To launch a new Sui network, the initial committee of validators performs a genesis ceremony:
+
+1. **Validator registration.** Each validator provides their public keys, network addresses, and stake information to a shared workspace (typically a Git repository).
+2. **Genesis checkpoint generation.** After all validators have contributed their information, the genesis tooling generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0). This checkpoint contains the initial system objects, the validator set, and the framework packages.
+3. **Validator signing.** Each validator signs the genesis checkpoint with their private key.
+4. **Certificate aggregation.** The tooling aggregates the validator signatures into a certificate on the genesis checkpoint.
+5. **Genesis blob creation.** The signed checkpoint and all initial objects are bundled into a single `genesis.blob` file.
+
+## Initial objects
+
+The genesis checkpoint creates several system objects that exist from the start of the network:
+
+- **Sui Framework packages** (`0x1` for Move stdlib, `0x2` for Sui framework)
+- **System state object** containing the validator set and epoch information
+- **Clock object** (`0x6`) for timestamp access
+- **DenyList object** (`0x403`) for regulated token deny-listing
+- **Initial gas coins** distributed according to the token allocation plan
 
 ## Genesis blob locations
 
-The `genesis.blob` files for each network are in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository.
+The `genesis.blob` files for each network are in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository:
 
-See [Sui Full Node](/operators/full-node/sui-full-node) for how to get the genesis.blob file for each network.
+| Network | Repository path |
+|---|---|
+| Mainnet | [sui-genesis/main/mainnet](https://github.com/MystenLabs/sui-genesis) |
+| Testnet | [sui-genesis/main/testnet](https://github.com/MystenLabs/sui-genesis) |
+| Devnet | [sui-genesis/main/devnet](https://github.com/MystenLabs/sui-genesis) |
+
+See [Sui Full Node](/operators/full-node/sui-full-node) for instructions on downloading the `genesis.blob` file and configuring your node.
+
+## Local network genesis
+
+When you run `sui genesis` locally, it creates a local genesis blob with a preconfigured validator set and test accounts. This is useful for development and testing. See [Create a Local Sui Network](/getting-started/onboarding/local-network) for setup instructions.

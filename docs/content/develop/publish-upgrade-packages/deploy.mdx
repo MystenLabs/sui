@@ -13,7 +13,6 @@ keywords:
   - move smart contract
   - package overview
 pagination_prev: null
-draft: true
 goal:
   description: Reader can compile and publish a Move package to a Sui network
   requires:
@@ -45,4 +44,78 @@ answer: >-
   A Move package on Sui includes one or more modules that define the package's
   interaction with onchain objects.
 ---
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] [Sui CLI](/getting-started/onboarding/sui-install) installed
+- [x] A Move project with `Move.toml` configured ([Manifest Reference](/references/package-managers/manifest-reference))
+- [x] A funded [Sui address](/getting-started/onboarding/get-coins) on the target network
+</TabItem>
+</Tabs>
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Publishing deploys your compiled Move package as an immutable object on a Sui network. After publishing, you receive a package ID that other modules and transactions use to call your functions.
+
+## Publish a package
+
+To publish a package, run `sui client publish` from the package root directory:
+
+```sh
+$ sui client publish
+```
+
+The command compiles your package, submits a publish transaction, and returns the package ID, the `UpgradeCap` object ID, and any objects created during the `init` function.
+
+### Dry-run before publishing
+
+Use `--dry-run` to simulate the publish transaction without committing it to the network. This helps you estimate gas costs and catch errors before spending gas:
+
+```sh
+$ sui client publish --dry-run
+```
+
+The dry-run output shows the gas budget required, the objects that would be created, and any errors in your package.
+
+### Estimate gas
+
+The gas cost of publishing depends on the size of your compiled bytecode. Use `--dry-run` to see the exact gas budget required. For most packages, the gas cost is between 0.1 and 1 SUI. Large packages with many modules or dependencies cost more.
+
+## Post-publish verification
+
+After publishing, verify that the onchain bytecode matches your local source:
+
+```sh
+$ sui client verify-source
+```
+
+This command rebuilds your package with the toolchain that originally published it and compares the resulting bytecode against the onchain version. Run this from your package directory.
+
+## Publish to different networks
+
+Your active environment determines which network receives the publish transaction. Switch environments before publishing:
+
+```sh
+$ sui client switch --env testnet
+$ sui client publish
+```
+
+Use separate environments for Testnet and Mainnet to avoid publishing to the wrong network. See [Sui CLI client](/references/cli/client) for environment management.
+
+:::caution
+
+Publishing is irreversible. Once you publish a package, you cannot remove it from the network. Store your `UpgradeCap` in a multisig address or apply a custom upgrade policy for production packages. Burn the `UpgradeCap` only when you are certain the package needs no future updates ([Security Best Practices](/develop/security/best-practices)).
+
+:::
+
+## Serialize for multisig signing
+
+For production deployments that use multisig custody, serialize the unsigned publish transaction instead of executing it directly:
+
+```sh
+$ sui client publish --serialize-unsigned-transaction
+```
+
+This outputs base64-encoded transaction bytes that you can distribute to multisig signers. After collecting enough signatures, submit the signed transaction with `sui client execute-signed-tx`.
 

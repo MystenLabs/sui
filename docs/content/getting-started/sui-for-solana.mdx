@@ -113,7 +113,14 @@ In Move, PTBs solve this problem. PTBs give builders the ability to chain contra
 
 Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
 
-See [Programmable Transaction Blocks](/develop/transactions/ptbs/prog-txn-blocks) for details on PTBs.
+The following example shows a basic PTB that splits a coin and transfers the result to another address using the TypeScript SDK:
+
+{/* TODO: Import code from MystenLabs/sui-typescript — show a basic PTB example using Transaction, splitCoins, and transferObjects */}
+{/* Description: TypeScript PTB that splits a coin from the gas coin and transfers the split amount to a recipient address */}
+
+Unlike Solana CPIs (limited to 4 levels deep with explicit account declarations), PTBs chain up to 1,024 commands in a single atomic transaction without depth limits. The `splitCoins` command creates a new coin, and `transferObjects` sends it to the recipient. Both execute atomically.
+
+See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for the full guide on constructing PTBs with the TypeScript SDK, including `moveCall`, chaining results, and gas management.
 
 ## More comparison
 

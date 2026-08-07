@@ -37,8 +37,14 @@ answer: >-
 
 import Protocol from "../../site/src/components/Protocol";
 
-Sui full node gRPC API replaces JSON-RPC on full nodes. JSON-RPC is `deprecated`.
+The Sui full node [gRPC](/develop/accessing-data/grpc) API provides programmatic access to onchain state, transaction submission, and event subscriptions. Every Sui full node exposes this API. Use it to query objects, execute transactions, subscribe to real-time events, and build indexing pipelines.
 
-See also: [Message Definitions](fullnode-protocol-messages) | [Enum and Scalar Types](fullnode-protocol-types)
+The gRPC API is the primary interface for interacting with Sui full nodes. For application-level queries (filtered lookups, pagination, nested data), use the [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) instead.
+
+The API reference is split across 3 pages:
+
+- **Methods** (this page) — RPC method signatures and request/response formats
+- [Message Definitions](fullnode-protocol-messages) — Protobuf message structures used in requests and responses
+- [Enum and Scalar Types](fullnode-protocol-types) — Enum variants and scalar type definitions
 
 <Protocol />
