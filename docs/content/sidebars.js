@@ -337,6 +337,8 @@ export default {
             ],
           },
           'onchain-finance/asset-custody/address-aliases',
+          'onchain-finance/asset-custody/fiat-on-ramps',
+          'onchain-finance/asset-custody/fiat-off-ramps',
         ],
       },
       {
