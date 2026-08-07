@@ -1,0 +1,23 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-23:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5464400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 25-30:
+//# programmable --sender A --inputs 100 @A
+// splitting the gas coin while the `&mut Balance<SUI>` result is live must fail
+//> 0: test::m::bal_mut(Gas);
+//> 1: SplitCoins(Gas, [Input(0)]);
+//> 2: test::m::check_positive(Result(0));
+//> TransferObjects([Result(1)], Input(1))
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot write to an argument location that is still borrowed, and where that borrow is an extension of that reference. This is likely due to this argument being used in a Move call that returns a reference, and that reference is used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference }, source: None, command: Some(1) } }
