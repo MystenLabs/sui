@@ -204,12 +204,37 @@ pub(crate) fn serialize_minimal(
 /// matches `claimed_block_digest` (checked here). Signature verification is the caller's
 /// responsibility — a signature failure after a digest match is a peer fault, not a
 /// reconstruction failure.
+/// A structurally validated envelope, produced with no lock or DAG access. Fields
+/// stay private: nothing here is verified, so a caller can never obtain a
+/// `SignedBlock` that bypassed the digest gate in [`rebuild_minimal`]. Accessors
+/// arrive with the split receive path that needs them.
+pub(crate) struct ParsedEnvelope {
+    minimal: MinimalBlock,
+    skeleton: Block,
+    block_ref: BlockRef,
+    claimed_digest: BlockDigest,
+}
+
+/// Joined parse + rebuild against a live resolver. Production splits the phases so
+/// no lock is held across the parse, serialization, and hashing work; this form
+/// serves tests and the sender-side round trip.
 pub(crate) fn deserialize_minimal(
     serialized: &[u8],
     committee: &Committee,
     expected_author: AuthorityIndex,
     resolver: &impl AncestorDigestResolver,
 ) -> Result<(SignedBlock, Bytes), InflateError> {
+    let parsed = parse_minimal(serialized, committee, expected_author)?;
+    rebuild_minimal(parsed, committee, resolver)
+}
+
+/// Structural phase: decode and every validation that needs no DAG access.
+/// `Malformed` is the only error this phase can produce.
+pub(crate) fn parse_minimal(
+    serialized: &[u8],
+    committee: &Committee,
+    expected_author: AuthorityIndex,
+) -> Result<ParsedEnvelope, InflateError> {
     let minimal = MinimalBlock::decode(serialized)
         .map_err(|e| InflateError::Malformed(format!("prost decode: {e}")))?;
 
@@ -310,6 +335,29 @@ pub(crate) fn deserialize_minimal(
     }
 
     let block_ref = BlockRef::new(skeleton.round(), skeleton.author(), claimed_digest);
+    Ok(ParsedEnvelope {
+        minimal,
+        skeleton,
+        block_ref,
+        claimed_digest,
+    })
+}
+
+/// Resolution phase: assembles ancestor candidates from the caller's resolver —
+/// which reads a snapshot taken OUTSIDE any lock — then runs the bounded
+/// reconstruction search behind the claimed-digest gate.
+pub(crate) fn rebuild_minimal(
+    parsed: ParsedEnvelope,
+    committee: &Committee,
+    resolver: &impl AncestorDigestResolver,
+) -> Result<(SignedBlock, Bytes), InflateError> {
+    let ParsedEnvelope {
+        minimal,
+        skeleton,
+        block_ref,
+        claimed_digest,
+    } = parsed;
+    let authors = &minimal.ancestor_authors;
     let default_round = skeleton.round().saturating_sub(1);
     // Collect ordered digest candidates per ancestor. Slots the sender resolved explicitly
     // have exactly one candidate; omitted slots take the resolver's ordered accepted-DAG

@@ -118,6 +118,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
+        accepted_blocks: tokio::sync::broadcast::Receiver<crate::block::VerifiedBlock>,
     ) -> Self {
         let pending_reconstructions =
             Arc::new(Mutex::new(PendingReconstructions::new(context.clone())));
@@ -147,6 +148,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             worker_service,
             worker_pending,
             effects_rx,
+            accepted_blocks,
         ));
 
         Self {
@@ -1271,6 +1273,7 @@ mod test {
         let authority_service = Arc::new(Mutex::new(TestService::new()));
         let receiver_dag = empty_receiver_dag(&s.context);
         let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
+        let (accepted_tx, accepted_rx) = tokio::sync::broadcast::channel(64);
         let subscriber = Subscriber::new(
             s.context.clone(),
             network_client.clone(),
@@ -1279,6 +1282,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            accepted_rx,
         );
         subscriber.subscribe(s.peer);
 
@@ -1292,9 +1296,13 @@ mod test {
                 .get(),
             1
         );
-        // Land the missing ancestors in one atomic batch: the acceptance itself is the
-        // wake, and the task heals by local re-inflation.
+        // Land the missing ancestors, then announce them on Core's accepted-block
+        // broadcast exactly as Core does once its DagState write guard is released:
+        // that announcement is the wake, and the entry heals by re-inflation.
         receiver_dag.write().accept_blocks(s.ancestors.clone());
+        for block in &s.ancestors {
+            accepted_tx.send(block.clone()).unwrap();
+        }
         wait_until(|| authority_service.lock().handle_send_block.len() >= 2).await;
 
         let received = authority_service.lock().handle_send_block.clone();
@@ -1338,6 +1346,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(peer);
 
@@ -1376,6 +1385,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
 
@@ -1420,6 +1430,7 @@ mod test {
             registry,
             tracker.clone(),
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
 
@@ -1450,6 +1461,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1501,6 +1513,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1556,6 +1569,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1588,6 +1602,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1622,6 +1637,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
 
         let peer = context.committee.to_authority_index(2).unwrap();
@@ -1676,6 +1692,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         // Pre-held bytes stand in for parked state that quiesce must evict.
         subscriber.pending_reconstructions.lock().hold_sidecar(
@@ -1799,6 +1816,7 @@ mod test {
             registry,
             tracker,
             monitor.clone(),
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
 
@@ -1836,6 +1854,7 @@ mod test {
             registry.clone(),
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
 
@@ -1899,6 +1918,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.pending_reconstructions.lock().hold_sidecar(
             s.ancestors[1].reference(),
@@ -1938,6 +1958,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.pending_reconstructions.lock().hold_sidecar(
             s.ancestors[1].reference(),
@@ -1988,6 +2009,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
 
@@ -2034,6 +2056,7 @@ mod test {
             registry.clone(),
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
 
@@ -2079,6 +2102,7 @@ mod test {
             registry.clone(),
             tracker,
             monitor,
+            tokio::sync::broadcast::channel(64).1,
         );
         // Saturate the backlog with synthetic parked entries before the stream block.
         let filler_author = s.context.committee.to_authority_index(1).unwrap();

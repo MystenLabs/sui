@@ -808,6 +808,42 @@ impl MissingBlockRegistry for crate::synchronizer::SynchronizerHandle {
 /// the pending mutex, and the mutex is never held across an await.
 const RECONSTRUCTION_CONCURRENCY: usize = 32;
 
+/// Applies one batch of acceptance effects: ready entries queue for reconstruction,
+/// while sidecar deliveries and lane registrations run as their own bounded tasks so
+/// network-shaped work never delays the next batch.
+fn dispatch_effects<S: crate::network::ValidatorNetworkService>(
+    batch: AcceptanceEffects,
+    ready_queue: &mut std::collections::VecDeque<ReadyEntry>,
+    service: &std::sync::Weak<S>,
+    pending_reconstructions: &Arc<Mutex<PendingReconstructions>>,
+    registry: &Arc<dyn MissingBlockRegistry>,
+    delivery_permits: &Arc<tokio::sync::Semaphore>,
+) {
+    ready_queue.extend(batch.ready);
+    for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
+        let service = service.clone();
+        let pending = pending_reconstructions.clone();
+        let permits = delivery_permits.clone();
+        spawn_monitored_task!(async move {
+            let _permit = permits.acquire_owned().await;
+            if let Some(service) = service.upgrade() {
+                let _ = service
+                    .handle_excluded_ancestors(peer, anchor, sidecar)
+                    .await;
+            }
+            pending.lock().release(peer, charge);
+        });
+    }
+    for block_ref in batch.frontier_dead {
+        let registry = registry.clone();
+        let permits = delivery_permits.clone();
+        spawn_monitored_task!(async move {
+            let _permit = permits.acquire_owned().await;
+            let _ = registry.register_missing_block(block_ref).await;
+        });
+    }
+}
+
 pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetworkService>(
     context: Arc<Context>,
     block_inflater: Arc<crate::block_inflater::BlockInflater>,
@@ -816,6 +852,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     service: std::sync::Weak<S>,
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
     mut effects: tokio::sync::mpsc::UnboundedReceiver<AcceptanceEffects>,
+    mut accepted_blocks: tokio::sync::broadcast::Receiver<crate::block::VerifiedBlock>,
 ) {
     use futures::stream::{FuturesUnordered, StreamExt as _};
 
@@ -835,15 +872,16 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     // Bounds concurrent sidecar deliveries and lane registrations spawned by the
     // drain arm; acquired inside each task so the drain itself never waits.
     let delivery_permits = std::sync::Arc::new(tokio::sync::Semaphore::new(64));
-    // Acceptance/GC discovery: the receive path adds ZERO work inside DagState
-    // locks or the commit path, so the worker discovers progress itself — a short
-    // snapshot read every DISCOVER_INTERVAL reconciles filled slots and GC. The
-    // subscriber's claim observations and post-admit rechecks remain the
-    // event-driven fast path; this pass bounds the staleness of everything else.
-    const DISCOVER_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
-    let mut discover = tokio::time::interval(DISCOVER_INTERVAL);
-    discover.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Acceptance and GC arrive on Core's existing accepted-block broadcast, which
+    // is already sent AFTER the DagState write guard is released (and already
+    // consumed by the observer service): the receive path adds zero work inside
+    // DagState locks or the commit path, and still learns of acceptance with no
+    // polling delay. GC advances only behind acceptance, so gc_round is read once
+    // per batch rather than on a timer of its own.
     let mut last_gc_round: Round = 0;
+    // Cleared if Core's broadcast closes (shutdown, or a test harness with no Core):
+    // the worker keeps serving its own effects channel and sweeps either way.
+    let mut accepted_open = true;
     loop {
         while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
             let Some(entry) = ready_queue.pop_front() else {
@@ -862,94 +900,77 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
         tokio::select! {
             batch = effects.recv() => {
                 let Some(batch) = batch else { break };
-                ready_queue.extend(batch.ready);
-                // The drain arm never awaits I/O: sidecar delivery and lane
-                // registration are network-shaped, so one slow call must not delay
-                // acceptance-event processing queued behind it. Each runs as its
-                // own task, bounded by the delivery semaphore acquired inside the
-                // task, and releases its charge on completion.
-                for (peer, anchor, sidecar, charge) in batch.deliverable_sidecars {
-                    let service = service.clone();
-                    let pending = pending_reconstructions.clone();
-                    let permits = delivery_permits.clone();
-                    spawn_monitored_task!(async move {
-                        let _permit = permits.acquire_owned().await;
-                        if let Some(service) = service.upgrade() {
-                            let _ = service
-                                .handle_excluded_ancestors(peer, anchor, sidecar)
-                                .await;
-                        }
-                        pending.lock().release(peer, charge);
-                    });
-                }
-                for block_ref in batch.frontier_dead {
-                    let registry = registry.clone();
-                    let permits = delivery_permits.clone();
-                    spawn_monitored_task!(async move {
-                        let _permit = permits.acquire_owned().await;
-                        let _ = registry.register_missing_block(block_ref).await;
-                    });
-                }
+                dispatch_effects(
+                    batch,
+                    &mut ready_queue,
+                    &service,
+                    &pending_reconstructions,
+                    &registry,
+                    &delivery_permits,
+                );
             }
             Some(alive) = in_flight.next() => {
                 if !alive {
                     return;
                 }
             }
-            _ = discover.tick() => {
+            accepted = accepted_blocks.recv(), if accepted_open => {
+                use tokio::sync::broadcast::error::RecvError;
+                let mut refs = Vec::new();
+                let mut lagged = false;
+                match accepted {
+                    Ok(block) => refs.push(block.reference()),
+                    // Falling behind the broadcast must not lose wake-ups: reconcile
+                    // every pending slot against DagState instead.
+                    Err(RecvError::Lagged(_)) => lagged = true,
+                    Err(RecvError::Closed) => {
+                        accepted_open = false;
+                        continue;
+                    }
+                }
+                loop {
+                    match accepted_blocks.try_recv() {
+                        Ok(block) => refs.push(block.reference()),
+                        Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => lagged = true,
+                        Err(_) => break,
+                    }
+                }
                 let Some(dag_state) = dag_state.upgrade() else {
                     return;
                 };
-                let missing = pending_reconstructions.lock().missing_slot_snapshot();
-                let (filled, gc_round, local_round) = {
+                let (gc_round, local_round) = {
                     let guard = dag_state.read();
-                    let filled: Vec<BlockRef> = missing
-                        .iter()
-                        .flat_map(|slot| {
+                    if lagged {
+                        let missing = pending_reconstructions.lock().missing_slot_snapshot();
+                        refs.extend(missing.iter().flat_map(|slot| {
                             guard
                                 .get_uncommitted_blocks_at_slot(*slot)
                                 .into_iter()
                                 .map(|b| b.reference())
                                 .take(1)
-                        })
-                        .collect();
-                    (filled, guard.gc_round(), guard.highest_accepted_round())
+                        }));
+                    }
+                    (guard.gc_round(), guard.highest_accepted_round())
                 };
-                let mut effects = AcceptanceEffects::default();
-                if !filled.is_empty() {
-                    effects = pending_reconstructions.lock().on_blocks_accepted(&filled);
-                }
+                let mut batch = if refs.is_empty() {
+                    AcceptanceEffects::default()
+                } else {
+                    pending_reconstructions.lock().on_blocks_accepted(&refs)
+                };
                 if gc_round > last_gc_round {
                     last_gc_round = gc_round;
-                    effects
+                    batch
                         .frontier_dead
                         .extend(pending_reconstructions.lock().on_gc(gc_round, local_round));
                 }
-                if !effects.is_empty() {
-                    ready_queue.extend(effects.ready);
-                    for (peer, anchor, sidecar, charge) in effects.deliverable_sidecars {
-                        let service = service.clone();
-                        let pending = pending_reconstructions.clone();
-                        let permits = delivery_permits.clone();
-                        spawn_monitored_task!(async move {
-                            let _permit = permits.acquire_owned().await;
-                            if let Some(service) = service.upgrade() {
-                                let _ = service
-                                    .handle_excluded_ancestors(peer, anchor, sidecar)
-                                    .await;
-                            }
-                            pending.lock().release(peer, charge);
-                        });
-                    }
-                    for block_ref in effects.frontier_dead {
-                        let registry = registry.clone();
-                        let permits = delivery_permits.clone();
-                        spawn_monitored_task!(async move {
-                            let _permit = permits.acquire_owned().await;
-                            let _ = registry.register_missing_block(block_ref).await;
-                        });
-                    }
-                }
+                dispatch_effects(
+                    batch,
+                    &mut ready_queue,
+                    &service,
+                    &pending_reconstructions,
+                    &registry,
+                    &delivery_permits,
+                );
             }
             _ = sweep.tick() => {
                 let stale = pending_reconstructions.lock().stale_dependents(SWEEP_CAP);
