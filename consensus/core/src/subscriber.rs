@@ -75,6 +75,7 @@ enum InflateOutcome {
         reason: FallbackReason,
         minimal: Bytes,
         excluded_ancestors: Vec<Vec<u8>>,
+        commit_votes: Vec<crate::commit::CommitVote>,
     },
 }
 
@@ -292,7 +293,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                 block.block = serialized;
                 Ok(InflateOutcome::Block(block))
             }
-            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+            Err(InflateError::NeedFullBlock {
+                block_ref,
+                reason,
+                commit_votes,
+            }) => {
                 node_metrics
                     .minimal_block_inflate_drop
                     .with_label_values(&[peer_hostname, reason.label()])
@@ -304,6 +309,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                     reason,
                     minimal,
                     excluded_ancestors: std::mem::take(&mut block.excluded_ancestors),
+                    commit_votes,
                 })
             }
             Err(error @ InflateError::Malformed(_)) => {
@@ -342,6 +348,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
 
         let peer_hostname = &context.committee.authority(peer).hostname;
         let mut retries: i64 = 0;
+        // Set while commit-lag shedding; on exit the next uninflatable block routes
+        // to the exact-fetch lane so recovery gets the same exact-reference anchor a
+        // full-form block would provide through block_manager, instead of waiting on
+        // periodic range repair.
+        let mut exiting_lag = false;
         'subscription: loop {
             context
                 .metrics
@@ -488,8 +499,80 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 reason,
                                 minimal,
                                 excluded_ancestors,
+                                commit_votes,
                             }) => {
                                 let node_metrics = &context.metrics.node_metrics;
+                                // Full-form streams verify every block at receipt, so
+                                // every block's commit votes reach the monitor before
+                                // any accept/reject decision — and commit-sync
+                                // targeting plus the periodic-sync gate read it. A
+                                // minimal block that cannot be reconstructed must feed
+                                // it the same way (deserialize_minimal has already
+                                // enforced author == peer), or a lagging node starves
+                                // the very signal its recovery runs on.
+                                commit_vote_monitor.observe_stream_claim(peer, &commit_votes);
+                                // While local commits lag the quorum, core rejects
+                                // every block after reconstruction anyway; the
+                                // full-form door consumes and discards cheaply, and
+                                // this path must match it. Votes are harvested above;
+                                // recovery is commit sync, as for full-form
+                                // rejection. Nothing enters the parked pipeline, and
+                                // evicting what is already parked releases byte caps
+                                // that frozen GC would otherwise keep pinned.
+                                let lagging = {
+                                    let Some(dag_state) = dag_state.upgrade() else {
+                                        return;
+                                    };
+                                    let local = dag_state.read().last_commit_index();
+                                    is_commit_lagging(
+                                        &context,
+                                        local,
+                                        commit_vote_monitor.quorum_commit_index(),
+                                    )
+                                };
+                                if lagging {
+                                    exiting_lag = true;
+                                    node_metrics
+                                        .minimal_block_recovery_outcomes
+                                        .with_label_values(&["shed_commit_lag"])
+                                        .inc();
+                                    let evicted = pending_reconstructions.lock().quiesce();
+                                    if evicted > 0 {
+                                        node_metrics
+                                            .minimal_block_recovery_outcomes
+                                            .with_label_values(&["quiesced"])
+                                            .inc_by(evicted as u64);
+                                    }
+                                    // The claim was genuinely received: credit it like
+                                    // the equivalent full-form receipt would be.
+                                    let credit_top = tip.saturating_add(
+                                        (context.parameters.dag_state_cached_rounds as Round)
+                                            .max(2 * context.protocol_config.gc_depth()),
+                                    );
+                                    if block_ref.round <= credit_top {
+                                        round_tracker.write().update_received_claim(
+                                            block_ref.author,
+                                            block_ref.round,
+                                        );
+                                    }
+                                    continue 'stream;
+                                }
+                                if exiting_lag {
+                                    exiting_lag = false;
+                                    if missing_block_registry
+                                        .register_missing_block(block_ref)
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                    pending_reconstructions.lock().hold_sidecar(
+                                        block_ref,
+                                        peer,
+                                        excluded_ancestors,
+                                    );
+                                    continue 'stream;
+                                }
                                 let missing = match reason {
                                     FallbackReason::MissingAncestors(slots) => slots,
                                     FallbackReason::AmbiguousSlot(_)
@@ -616,35 +699,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                             crate::pending_reconstructions::AdmitRefusal::PeerBytes
                                                 | crate::pending_reconstructions::AdmitRefusal::TotalBytes
                                         );
-                                        // Exception: while local commits lag the quorum,
-                                        // core rejects every block after reconstruction
-                                        // anyway (handle_send_block sheds on
-                                        // is_commit_lagging), so a replay reset refills
-                                        // the caps with the same doomed span — a
-                                        // self-sustaining loop. Shed instead and keep the
-                                        // stream: recovery is commit sync, the same
-                                        // contract full-form rejection relies on. The
-                                        // OutsideWindow reset stays — those claims carry
-                                        // no commit votes, so nothing else recovers them.
-                                        if cap_bound {
-                                            let lagging =
-                                                dag_state.upgrade().is_some_and(|dag_state| {
-                                                    let local =
-                                                        dag_state.read().last_commit_index();
-                                                    is_commit_lagging(
-                                                        &context,
-                                                        local,
-                                                        commit_vote_monitor.quorum_commit_index(),
-                                                    )
-                                                });
-                                            if lagging {
-                                                node_metrics
-                                                    .minimal_block_recovery_outcomes
-                                                    .with_label_values(&["shed_commit_lag"])
-                                                    .inc();
-                                                continue 'stream;
-                                            }
-                                        }
                                         if receiver_behind || cap_bound {
                                             info!(
                                                 "Minimal block {} from {} {} is past the                                                  admission window; resetting subscription                                                  for full replay",
@@ -1043,7 +1097,10 @@ mod test {
         )))
     }
 
-    struct NoopRegistry;
+    #[derive(Default)]
+    struct NoopRegistry {
+        registered: std::sync::atomic::AtomicUsize,
+    }
 
     #[async_trait]
     impl crate::pending_reconstructions::MissingBlockRegistry for NoopRegistry {
@@ -1051,6 +1108,8 @@ mod test {
             &self,
             _block_ref: BlockRef,
         ) -> crate::error::ConsensusResult<()> {
+            self.registered
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             Ok(())
         }
     }
@@ -1063,7 +1122,7 @@ mod test {
         Arc<CommitVoteMonitor>,
     ) {
         (
-            Arc::new(NoopRegistry),
+            Arc::new(NoopRegistry::default()),
             Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![]))),
             Arc::new(CommitVoteMonitor::new(context.clone())),
         )
@@ -1490,12 +1549,13 @@ mod test {
         }
     }
 
-    /// While local commits lag the quorum, a byte-cap refusal sheds the block and keeps
-    /// the stream (core would reject the reconstruction anyway; commit sync recovers
-    /// it). As soon as the lag clears, the next cap refusal resets for full replay.
+    /// While local commits lag the quorum, an uninflatable minimal block is shed at
+    /// receipt — before admission — with no stream reset, and anything already parked
+    /// or held is quiesced so the byte caps cannot stay pinned. Once the lag clears,
+    /// cap refusals resume the full-replay reset.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn cap_refusal_sheds_while_commit_lagging_then_resets_after_catch_up() {
-        let s = minimal_wire_scenario(2, 2, 2);
+    async fn sheds_at_receipt_while_commit_lagging_then_resets_after_catch_up() {
+        let s = minimal_wire_scenario(2, 2, 3);
         let network_client = Arc::new(FixedStreamClient::new(vec![s.wire[0].clone()]));
         let (live_tx, live_rx) = tokio::sync::mpsc::unbounded_channel();
         *network_client.live.lock() = Some(live_rx);
@@ -1513,7 +1573,7 @@ mod test {
             tracker,
             monitor,
         );
-        // Fill the peer's byte budget so the streamed minimal block refuses on the cap.
+        // Pre-held bytes stand in for parked state that quiesce must evict.
         subscriber.pending_reconstructions.lock().hold_sidecar(
             s.ancestors[1].reference(),
             s.peer,
@@ -1534,14 +1594,149 @@ mod test {
         assert!(
             node_metrics
                 .minimal_block_recovery_outcomes
-                .with_label_values(&["peer_bytes"])
+                .with_label_values(&["quiesced"])
                 .get()
                 >= 1,
-            "the refusal itself must stay visible alongside the shed outcome"
+            "held bytes must be evicted on entry into commit-lag shedding"
         );
         assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
+        assert_eq!(node_metrics.minimal_block_recovery_parked_bytes.get(), 0);
 
-        // Catch up: one commit clears the lag, so the next cap refusal resets.
+        // Catch up: one commit clears the lag; a cap refusal then resets as always.
+        receiver_dag.write().accept_block(s.ancestors[0].clone());
+        receiver_dag.write().add_commit(TrustedCommit::new_for_test(
+            1,
+            CommitDigest::MIN,
+            0,
+            s.ancestors[0].reference(),
+            vec![],
+        ));
+        subscriber.pending_reconstructions.lock().hold_sidecar(
+            s.ancestors[2].reference(),
+            s.peer,
+            vec![vec![0u8; MAX_PARKED_BYTES_PER_PEER]],
+        );
+        // First post-lag block consumes the exact-lane anchor; the second exercises
+        // the restored cap-refusal reset.
+        live_tx.send(s.wire[1].clone()).unwrap();
+        live_tx.send(s.wire[2].clone()).unwrap();
+        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        assert_eq!(
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["shed_commit_lag"])
+                .get(),
+            1,
+            "shedding must stop once commits are caught up"
+        );
+    }
+
+    /// A minimal block that cannot be inflated still feeds its author's commit votes
+    /// to the monitor at receipt — the invariant full-form verification provides.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn uninflatable_minimal_feeds_commit_vote_monitor() {
+        let s = minimal_wire_scenario(2, 2, 1);
+        // Rebuild the streamed block with commit votes attached, minimally encoded
+        // against a sender DAG that holds its ancestors.
+        let sender_dag = empty_receiver_dag(&s.context);
+        for ancestor in &s.ancestors {
+            sender_dag.write().accept_block(ancestor.clone());
+        }
+        let mut refs: Vec<_> = s.ancestors.iter().map(|b| b.reference()).collect();
+        refs.sort_by_key(|r| (r.author != s.peer, r.author));
+        let voted = VerifiedBlock::new_for_test(
+            TestBlock::new(3, s.peer.value() as u32)
+                .set_ancestors_raw(refs)
+                .set_commit_votes(vec![CommitRef::new(5, CommitDigest::MIN)])
+                .build(),
+        );
+        let minimal = BlockInflater::new(s.context.clone())
+            .serialize(&voted, &sender_dag.read())
+            .unwrap();
+        let wire = vec![ExtendedSerializedBlock {
+            block: voted.serialized().clone(),
+            minimal: Some(minimal),
+            excluded_ancestors: vec![],
+        }];
+        let network_client = Arc::new(FixedStreamClient::new(wire));
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let (registry, tracker, monitor) = test_subscriber_deps(&s.context);
+        // Two other columns already vote index 5; the streamed claim completes the quorum.
+        for authority in [0u32, 1] {
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(1, authority)
+                    .set_commit_votes(vec![CommitRef::new(5, CommitDigest::MIN)])
+                    .build(),
+            );
+            monitor.observe_block(&block);
+        }
+        assert_eq!(monitor.quorum_commit_index(), 0);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag,
+            registry,
+            tracker,
+            monitor.clone(),
+        );
+        subscriber.subscribe(s.peer);
+
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| node_metrics.minimal_block_recovery_parked.get() == 1).await;
+        assert_eq!(
+            monitor.quorum_commit_index(),
+            5,
+            "the parked block's votes must reach the monitor at receipt"
+        );
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
+    }
+
+    /// The first uninflatable minimal block after commit lag clears must anchor
+    /// recovery through the exact-fetch lane (like full mode's exact ancestor
+    /// scheduling), not wait on slot repair.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn first_uninflatable_block_after_lag_exit_routes_to_exact_lane() {
+        let s = minimal_wire_scenario(2, 2, 2);
+        let network_client = Arc::new(FixedStreamClient::new(vec![s.wire[0].clone()]));
+        let (live_tx, live_rx) = tokio::sync::mpsc::unbounded_channel();
+        *network_client.live.lock() = Some(live_rx);
+        let authority_service = Arc::new(Mutex::new(TestService::new()));
+        let receiver_dag = empty_receiver_dag(&s.context);
+        let registry = Arc::new(NoopRegistry::default());
+        let tracker = Arc::new(RwLock::new(RoundTracker::new(s.context.clone(), vec![])));
+        let monitor = Arc::new(CommitVoteMonitor::new(s.context.clone()));
+        let lag_threshold = s.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER;
+        observe_quorum_commit_votes(&monitor, lag_threshold + 1);
+        let subscriber = Subscriber::new(
+            s.context.clone(),
+            network_client.clone(),
+            authority_service.clone(),
+            receiver_dag.clone(),
+            registry.clone(),
+            tracker,
+            monitor,
+        );
+        subscriber.subscribe(s.peer);
+
+        let node_metrics = &s.context.metrics.node_metrics;
+        wait_until(|| {
+            node_metrics
+                .minimal_block_recovery_outcomes
+                .with_label_values(&["shed_commit_lag"])
+                .get()
+                >= 1
+        })
+        .await;
+        assert_eq!(
+            registry
+                .registered
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "shed blocks must not feed the lane while lagging"
+        );
+
         receiver_dag.write().accept_block(s.ancestors[0].clone());
         receiver_dag.write().add_commit(TrustedCommit::new_for_test(
             1,
@@ -1551,14 +1746,21 @@ mod test {
             vec![],
         ));
         live_tx.send(s.wire[1].clone()).unwrap();
-        wait_until(|| *network_client.subscribe_calls.lock() >= 2).await;
+        wait_until(|| {
+            registry
+                .registered
+                .load(std::sync::atomic::Ordering::Relaxed)
+                >= 1
+        })
+        .await;
+        assert_eq!(node_metrics.minimal_block_recovery_parked.get(), 0);
+        assert_eq!(*network_client.subscribe_calls.lock(), 1);
         assert_eq!(
             node_metrics
                 .minimal_block_recovery_outcomes
                 .with_label_values(&["shed_commit_lag"])
                 .get(),
-            1,
-            "shedding must stop once commits are caught up"
+            1
         );
     }
 
