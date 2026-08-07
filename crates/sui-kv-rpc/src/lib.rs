@@ -27,6 +27,8 @@ use sui_package_resolver::Resolver;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServiceServer;
 use sui_rpc_api::ServerVersion;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
@@ -293,9 +295,17 @@ where
     LedgerServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
 }
 
-/// Build and start one gRPC listener serving `ledger`'s `LedgerService`, wired with the given
-/// (shared, already-constructed) metrics/logging layers and optional reflection. `builder` carries
-/// whatever TLS config the caller wants for this listener (or none, for a plaintext listener).
+fn move_package_service_with_response_compression<T>(service: T) -> MovePackageServiceServer<T>
+where
+    T: MovePackageService,
+{
+    MovePackageServiceServer::new(service).send_compressed(tonic::codec::CompressionEncoding::Zstd)
+}
+
+/// Build and start one gRPC listener serving `ledger`'s `LedgerService` and `MovePackageService`,
+/// wired with the given (shared, already-constructed) metrics/logging layers and optional reflection.
+/// `builder` carries whatever TLS config the caller wants for this listener (or none, for a plaintext
+/// listener).
 ///
 /// Used once per listener -- the primary listener, and the optional second plaintext one -- so
 /// that expensive shared pieces (metrics, allowlist, request-log layer) are constructed once by
@@ -322,6 +332,9 @@ fn spawn_listener(
             ),
         ))
         .layer(request_log_layer)
+        .add_service(move_package_service_with_response_compression(
+            ledger.clone(),
+        ))
         .add_service(ledger_service_with_response_compression(ledger));
 
     if enable_reflection {
@@ -572,7 +585,7 @@ impl KvRpcServer {
 
         // Second, unencrypted listener for trusted internal callers (e.g.
         // other in-cluster services) that should not need to negotiate TLS
-        // to reach this server. Serves the same `LedgerService`.
+        // to reach this server. Serves the same `LedgerService` and `MovePackageService`.
         if let Some(plaintext_address) = config.plaintext_address {
             let ledger =
                 ledger_for_plaintext.expect("cloned above whenever plaintext_address is set");
