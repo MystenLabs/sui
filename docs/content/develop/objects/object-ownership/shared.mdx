@@ -150,19 +150,13 @@ public fun collect_profits(
 
 ## Security considerations
 
-Anyone can submit a transaction that references a shared object. The Sui runtime does not enforce access control on shared objects. Your Move code must verify authorization for every privileged operation ([Security Best Practices](/develop/security/best-practices)):
-
-- **Require capability objects for privileged functions.** The `collect_profits` function in the example above takes a `&ShopOwnerCap` parameter. Only the address holding the capability object can call the function. This is the recommended access control pattern.
-- **Do not rely solely on `tx_context::sender()`.** Using `sender()` alone for authorization breaks composability because other modules cannot call your function on the user's behalf. Prefer capability objects as the primary authorization mechanism.
-- **Validate relationships between capabilities and objects.** If your shared object has an associated capability, verify that the capability matches the specific shared object instance. This prevents a valid capability from being used on a different shared object of the same type.
-- **Emit events for privileged actions.** Log all administrative changes (price updates, withdrawals, configuration changes) as events to enable offchain monitoring and auditing.
+Anyone can submit a transaction that references a shared object. The Sui runtime does not enforce access control on shared objects. Your Move code must verify authorization for every privileged operation. Learn more in ([Security Best Practices](/develop/security/best-practices)).
 
 ## Performance considerations
 
-Shared objects go through consensus ordering, which has 2 performance implications:
+Transactions that touch shared objects take longer to finalize than address-owned-object transactions because they require consensus. 
 
-- **Higher latency.** Transactions that touch shared objects take longer to finalize than address-owned-object transactions because they require consensus. Plan your app's user experience around this additional latency.
-- **Contention under load.** When many transactions write to the same shared object in the same checkpoint, they are sequenced rather than executed in parallel. This reduces throughput for that object. If your use case requires high write throughput, consider splitting state across multiple shared objects (for example, sharding an order book by price range) or using address-owned objects where possible.
+When many transactions write to the same shared object in the same checkpoint, they are sequenced rather than executed in parallel. This reduces throughput for that object. If your use case requires high write throughput, consider splitting state across multiple shared objects (for example, sharding an order book by price range) or using address-owned objects where possible.
 
 ## Query shared objects offchain
 

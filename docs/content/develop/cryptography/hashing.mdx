@@ -46,9 +46,9 @@ answer: >-
   functions.
 ---
 
-Cryptographic hash functions map arbitrary-length input to a fixed-length output (the hash value). These functions are one-way (you cannot recover the input from the hash) and collision-resistant (you cannot find two different inputs that produce the same hash). You use hash functions on Sui for data integrity verification, commitment schemes, and content addressing.
+Cryptographic hash functions map arbitrary-length input to a fixed-length output (the hash value). These functions are one-way, meaning you cannot recover the input from the hash, and collision-resistant, meaning you cannot find two different inputs that produce the same hash. You use hash functions on Sui for data integrity verification, commitment schemes, and content addressing.
 
-Sui supports 4 cryptographic hash functions ([Move Standard Library](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/move-stdlib), [Sui Framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework)):
+Sui supports the following cryptographic hash functions:
 
 | Hash function | Module | Output size | Use case |
 |---|---|---|---|

@@ -56,13 +56,29 @@ Every object has an owner that determines who can use it in transactions and whe
 
 ### Choosing an ownership type
 
-Choose the ownership type based on your access pattern:
+Choose the ownership type based on your access pattern.
 
 - **Use address-owned objects** when a single user owns and controls the object (for example, a user's NFT, a personal wallet, or a capability token). Address-owned objects skip consensus, so transactions against them have the lowest latency.
 - **Use shared objects** when multiple users need to read and write the same object (for example, a marketplace, a liquidity pool, or a game board). Shared objects go through consensus, which adds latency but enables concurrent access. Contention on a single shared object can reduce transaction throughput, so minimize the number of transactions that write to the same shared object in the same checkpoint ([Security Best Practices](/develop/security/best-practices)).
 - **Use immutable objects** for data that never changes after creation (for example, published packages, configuration constants, or reference data). Immutable objects have no versioning overhead and any transaction can read them without consensus.
 - **Use wrapped objects** when an object should only be accessible through its parent (for example, a ticket inside an envelope, or inventory items inside a character). See [Wrapped Objects](/develop/objects/object-ownership/wrapped) for details.
-- **Use party objects** when you want single-address ownership but need to allow multiple inflight transactions against the same object without fastpath locks. Party objects are sequenced by consensus but owned by a single address.
+#### Address-owned 
+
+Use address-owned objects when a single user owns and controls the object (for example, a user's NFT, a personal wallet, or a capability token). Address-owned objects skip consensus, so transactions against them have the lowest latency.
+
+#### Shared
+
+Use shared objects when multiple users need to read and write the same object (for example, a marketplace, a liquidity pool, or a game board). Shared objects go through consensus, which adds latency but enables concurrent access. Contention on a single shared object can reduce transaction throughput, so minimize the number of transactions that write to the same shared object in the same checkpoint.
+
+#### Immutable 
+
+Use immutable objects for data that never changes after creation (for example, published packages, configuration constants, or reference data). Immutable objects have no versioning overhead and any transaction can read them without consensus.
+
+#### Wrapped
+Use wrapped objects when an object should only be accessible through its parent (for example, a ticket inside an envelope, or inventory items inside a character). See [Wrapped Objects](/develop/objects/object-ownership/wrapped) for details.
+
+#### Party
+Use party objects when you want single-address ownership but need to allow multiple inflight transactions against the same object without fastpath locks. Party objects are sequenced by consensus but owned by a single address.
 
 APIs expose consensus-address-owned objects with a `ConsensusAddressOwner` owner variant. Party objects are the public Move-facing way to create this ownership form with `sui::party::Party` and `sui::transfer::party_transfer` or `sui::transfer::public_party_transfer`.
 

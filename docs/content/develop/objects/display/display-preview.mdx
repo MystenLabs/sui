@@ -36,7 +36,7 @@ answer: >-
   templates. These templates use Object Display V2.
 ---
 
-Object Display templates define how your Sui objects appear in wallets, explorers, and other clients. Each template maps a display property (for example, `name`, `description`, `image_url`) to a format string that references fields on your object using `{field_name}` syntax ([Object Display](/develop/objects/display)).
+Object Display templates define how your Sui objects appear in wallets, explorers, and other clients. Each template maps a display property (for example, `name`, `description`, `image_url`) to a format string that references fields on your object using `{field_name}` syntax.
 
 The interactive tool below lets you experiment with Object Display V2 templates. You can modify template values and see how different field references and formatting options affect the rendered output.
 
@@ -50,7 +50,7 @@ The interactive tool below lets you experiment with Object Display V2 templates.
 
 Display templates typically include the following properties:
 
-| Property | Purpose | Example value |
+| **Property** | **Purpose** | **Example value** |
 |---|---|---|
 | `name` | Object title shown in wallets | `{collection_name} #{number}` |
 | `description` | Object description | `A collectible from the {collection_name} series` |

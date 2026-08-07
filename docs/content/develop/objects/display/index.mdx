@@ -38,7 +38,7 @@ answer: >-
   code.
 ---
 
-Object Display is a template engine that controls how Sui objects appear in wallets, explorers, and other offchain applications ([Sui Framework source](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/display)). You define a set of key-value pairs where both keys and values are format strings. The keys represent display properties (for example, `name`, `description`, `image_url`, `link`), and the values are templates that reference fields on your object using `{field_name}` syntax.
+Object Display is a template engine that controls how Sui objects appear in wallets, explorers, and other offchain applications. You define a set of key-value pairs where both keys and values are format strings. The keys represent display properties (for example, `name`, `description`, `image_url`, `link`), and the values are templates that reference fields on your object using `{field_name}` syntax.
 
 When a client (wallet, explorer, marketplace) renders your object, it reads the Display definition from the chain and substitutes the template variables with the object's actual field values. This enables onchain management of offchain representation without modifying the object's struct definition.
 
