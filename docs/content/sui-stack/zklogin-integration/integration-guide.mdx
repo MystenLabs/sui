@@ -325,7 +325,7 @@ Before your app can use the Mysten Labs prover on Mainnet, complete the followin
 2. Add your OAuth client ID to the Enoki Portal configuration. The prover only accepts JWTs from allowlisted client IDs.
 3. Contact Mysten Labs through the [Enoki docs](https://docs.enoki.mystenlabs.com/) to request Mainnet prover access for your registered app.
 
-The hosted prover auto-scales for traffic surges. If you expect a spike in prover requests, reach out on [Discord](https://discord.gg/sui) ([zkLogin integration guide](https://docs.sui.io/sui-stack/zklogin-integration/integration-guide)).
+The hosted prover auto-scales for traffic surges. If you expect a spike in prover requests, reach out on [Discord](https://discord.gg/sui).
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`:
 
@@ -398,7 +398,7 @@ export type PartialZkLoginSignature = Omit<
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ```
 
-### Option B: self-hosted proving service
+### Option B: Self-hosted proving service
 
 Self-host the proving service when you need full control over proof generation, want to avoid the hosted prover allowlisting process, or have compliance requirements that prevent sending JWTs to a third-party service. The self-hosted prover uses the same request and response format as the Mysten Labs service, so you can switch between hosted and self-hosted without changing your client code.
 
