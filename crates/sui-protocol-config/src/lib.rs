@@ -374,6 +374,7 @@ const MAINNET_USDB: &str =
 //              Create the ForwardingAddressRegistry system object on devnet.
 //              Make upgrade-init linkage checks independent of PTB command order.
 // Version 133: Add `package::original_package_id` and its native costs.
+//              Enable package-version forbid lists.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -752,6 +753,10 @@ struct FeatureFlags {
     // Enable Soft Bundle (SIP-19).
     #[serde(skip_serializing_if = "is_false")]
     soft_bundle: bool,
+
+    // If true, enable package-version forbid lists.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_package_version_forbid_list: bool,
 
     // If true, enable the coin deny list V2.
     #[serde(skip_serializing_if = "is_false")]
@@ -4568,6 +4573,7 @@ impl ProtocolConfig {
                     let package_read_cost_per_byte = cfg.obj_access_cost_read_per_byte();
                     cfg.package_original_package_id_impl_cost_per_byte =
                         Some(package_read_cost_per_byte);
+                    cfg.feature_flags.enable_package_version_forbid_list = true;
                 }
                 // Use this template when making changes:
                 //

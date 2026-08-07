@@ -79,6 +79,7 @@ pub mod multisig_legacy;
 pub mod nitro_attestation;
 pub mod node_role;
 pub mod object;
+pub mod package_config;
 pub mod passkey_authenticator;
 pub mod programmable_transaction_builder;
 pub mod ptb_trace;

@@ -506,6 +506,8 @@ EndOfEpochTransactionKind:
           TYPENAME: WriteAccumulatorStorageCost
     13:
       ForwardingAddressRegistryCreate: UNIT
+    14:
+      PackageConfigCreate: UNIT
 Event:
   STRUCT:
     - package_id:

@@ -1113,6 +1113,10 @@ pub(crate) mod checked {
                             assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::PackageConfigCreate => {
+                            assert!(protocol_config.enable_package_version_forbid_list());
+                            builder = setup_package_config_create(builder);
+                        }
                         EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
                             assert!(protocol_config.bridge());
                             builder = setup_bridge_create(builder, chain_id)
@@ -1763,6 +1767,21 @@ pub(crate) mod checked {
                 vec![],
             )
             .expect("Unable to generate coin_deny_list_create transaction!");
+        builder
+    }
+
+    fn setup_package_config_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("package_config").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate package_config_create transaction!");
         builder
     }
 
