@@ -13,10 +13,12 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+use sui_indexer_alt_reader::package_resolver::GrpcPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_schema::schema::kv_genesis;
+use sui_package_resolver::PackageStore;
 use sui_package_resolver::Resolver;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
@@ -87,17 +89,25 @@ impl Context {
         let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
+        let ledger_grpc_reader = kv_args
+            .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
+            .await?;
+
         let kv_loader = KvLoader::from_kv_sources(
             kv_args
                 .bigtable_reader("indexer-alt-jsonrpc".to_owned(), registry)
                 .await?,
-            kv_args
-                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
-                .await?,
+            ledger_grpc_reader.clone(),
             pg_loader.clone(),
         );
 
-        let store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
+        // Package resolution follows KV routing: served by the ledger gRPC service when
+        // configured, falling back to the Postgres `kv_packages` table.
+        let store: Box<dyn PackageStore> = match &ledger_grpc_reader {
+            Some(reader) => Box::new(GrpcPackageStore::new(reader)),
+            None => Box::new(DbPackageStore::new(pg_loader.clone())),
+        };
+        let store = Arc::new(PackageCache::new(store));
         let package_resolver = Arc::new(Resolver::new_with_limits(
             store,
             config.package_resolver.clone(),
