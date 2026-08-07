@@ -60,3 +60,170 @@ async fn test_get_latest_object_bounds_scan() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_get_package_latest_pages_past_row_cap() -> Result<()> {
+    require_bigtable_emulator();
+    let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
+        .await
+        .context("spawn_blocking panicked")??;
+    create_tables(emulator.host(), INSTANCE_ID).await?;
+
+    let mut client =
+        BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string())
+            .await
+            .context("Failed to create BigTable client")?;
+
+    // Versions 1..=60, version v published at checkpoint 100 + v. Queried at the bound of
+    // version 1, 59 later versions must be scanned past — more than one 50-row page.
+    let original_id = ObjectID::random();
+    let entries = (1..=60u64)
+        .map(|version| {
+            tables::make_entry(
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(100 + version, original_id.as_ref(), false),
+                None,
+            )
+        })
+        .collect::<Vec<_>>();
+    client
+        .write_entries(tables::packages::NAME, entries)
+        .await?;
+
+    let latest = client.get_package_latest(original_id, 101).await?;
+    let pkg = latest.expect("version 1 is visible at checkpoint 101");
+    assert_eq!(pkg.package_version, 1);
+    assert_eq!(pkg.cp_sequence_number, 101);
+
+    // Bound before any version exists.
+    assert!(client.get_package_latest(original_id, 100).await?.is_none());
+
+    // Unbounded-in-practice lookup resolves the newest version.
+    let latest = client.get_package_latest(original_id, u64::MAX).await?;
+    assert_eq!(latest.expect("package exists").package_version, 60);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_package_versions_pages_past_fetch_cap() -> Result<()> {
+    require_bigtable_emulator();
+    let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
+        .await
+        .context("spawn_blocking panicked")??;
+    create_tables(emulator.host(), INSTANCE_ID).await?;
+
+    let mut client =
+        BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string())
+            .await
+            .context("Failed to create BigTable client")?;
+
+    // Versions 1..=250, version v published at checkpoint 100 + v.
+    let original_id = ObjectID::random();
+    let entries = (1..=250u64)
+        .map(|version| {
+            tables::make_entry(
+                tables::packages::encode_key(original_id.as_ref(), version),
+                tables::packages::encode(100 + version, original_id.as_ref(), false),
+                None,
+            )
+        })
+        .collect::<Vec<_>>();
+    client
+        .write_entries(tables::packages::NAME, entries)
+        .await?;
+
+    // A page larger than the old fixed 200-row fetch cap comes back complete.
+    let versions = client
+        .get_package_versions(original_id, u64::MAX, None, None, 250, false)
+        .await?;
+    assert_eq!(versions.len(), 250);
+    assert_eq!(versions.first().map(|pkg| pkg.package_version), Some(1));
+    assert_eq!(versions.last().map(|pkg| pkg.package_version), Some(250));
+
+    // Descending at a bound that filters out the newest 150 versions: the scan must page past
+    // all of them to fill the page with versions 100..=51.
+    let versions = client
+        .get_package_versions(original_id, 200, None, None, 50, true)
+        .await?;
+    assert_eq!(versions.first().map(|pkg| pkg.package_version), Some(100));
+    assert_eq!(versions.last().map(|pkg| pkg.package_version), Some(51));
+    assert_eq!(versions.len(), 50);
+
+    // Version bounds still apply on top of paging.
+    let versions = client
+        .get_package_versions(original_id, u64::MAX, Some(10), Some(21), 100, false)
+        .await?;
+    assert_eq!(versions.len(), 10);
+    assert_eq!(versions.first().map(|pkg| pkg.package_version), Some(11));
+    assert_eq!(versions.last().map(|pkg| pkg.package_version), Some(20));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_system_packages_fills_page_past_filtered_rows() -> Result<()> {
+    require_bigtable_emulator();
+    let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
+        .await
+        .context("spawn_blocking panicked")??;
+    create_tables(emulator.host(), INSTANCE_ID).await?;
+
+    let mut client =
+        BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.to_string())
+            .await
+            .context("Failed to create BigTable client")?;
+
+    // Six system packages in key order: the first three first appear after the queried bound,
+    // the last three before it. A raw-row limit of 3 sees only the ineligible rows.
+    let mut ids: Vec<ObjectID> = (0..6).map(|_| ObjectID::random()).collect();
+    ids.sort();
+    let (ineligible, eligible) = ids.split_at(3);
+
+    let mut system_entries = Vec::new();
+    let mut package_entries = Vec::new();
+    for id in ineligible {
+        system_entries.push(tables::make_entry(
+            tables::system_packages::encode_key(id.as_ref()),
+            tables::system_packages::encode(100),
+            None,
+        ));
+        package_entries.push(tables::make_entry(
+            tables::packages::encode_key(id.as_ref(), 1),
+            tables::packages::encode(100, id.as_ref(), true),
+            None,
+        ));
+    }
+    for id in eligible {
+        system_entries.push(tables::make_entry(
+            tables::system_packages::encode_key(id.as_ref()),
+            tables::system_packages::encode(1),
+            None,
+        ));
+        package_entries.push(tables::make_entry(
+            tables::packages::encode_key(id.as_ref(), 1),
+            tables::packages::encode(1, id.as_ref(), true),
+            None,
+        ));
+    }
+    client
+        .write_entries(tables::system_packages::NAME, system_entries)
+        .await?;
+    client
+        .write_entries(tables::packages::NAME, package_entries)
+        .await?;
+
+    let results = client.get_system_packages(10, None, 3).await?;
+    let found: Vec<&[u8]> = results
+        .iter()
+        .map(|pkg| pkg.original_id.as_slice())
+        .collect();
+    let expected: Vec<&[u8]> = eligible.iter().map(|id| id.as_ref()).collect();
+    assert_eq!(found, expected);
+
+    // Cursoring past the first eligible package returns the remaining two.
+    let results = client.get_system_packages(10, Some(eligible[0]), 3).await?;
+    assert_eq!(results.len(), 2);
+
+    Ok(())
+}

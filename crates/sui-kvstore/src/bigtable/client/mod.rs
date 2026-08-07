@@ -2032,31 +2032,49 @@ impl KeyValueStoreReader for BigTableClient {
         original_id: ObjectID,
         cp_bound: u64,
     ) -> Result<Option<PackageData>> {
-        // Over-fetch up to 50 versions in reverse order, then filter by cp_bound.
-        // Packages rarely have 50+ upgrades.
+        // Versions publish at strictly increasing checkpoints, so a reverse scan over versions
+        // also walks publish checkpoints newest-first: the first row with `cp <= cp_bound` is
+        // the answer. The scan must page rather than cap: a fixed cap wrongly returns `None`
+        // when more than a page of upgrades landed after the queried bound.
+        const PAGE_SIZE: i64 = 50;
+
         let start_key = Bytes::from(tables::packages::encode_key(original_id.as_ref(), 0));
-        let end_key = Bytes::from(tables::packages::encode_key_upper_bound(
-            original_id.as_ref(),
-        ));
+        let mut end_version = u64::MAX;
 
-        let rows = self
-            .range_scan(
-                tables::packages::NAME,
-                Some(start_key),
-                Some(end_key),
-                50,
-                true,
-                None,
-            )
-            .await?;
+        loop {
+            let end_key = Bytes::from(tables::packages::encode_key(
+                original_id.as_ref(),
+                end_version,
+            ));
 
-        for (key, row) in rows {
-            let pkg = tables::packages::decode(key.as_ref(), &row)?;
-            if pkg.cp_sequence_number <= cp_bound {
-                return Ok(Some(pkg));
+            let rows = self
+                .range_scan(
+                    tables::packages::NAME,
+                    Some(start_key.clone()),
+                    Some(end_key),
+                    PAGE_SIZE,
+                    true,
+                    None,
+                )
+                .await?;
+            let full_page = rows.len() as i64 == PAGE_SIZE;
+
+            let mut oldest_version = None;
+            for (key, row) in rows {
+                let pkg = tables::packages::decode(key.as_ref(), &row)?;
+                if pkg.cp_sequence_number <= cp_bound {
+                    return Ok(Some(pkg));
+                }
+                oldest_version = Some(pkg.package_version);
+            }
+
+            match oldest_version {
+                // Both range bounds are inclusive, so version 0 means the scan is complete even
+                // when the page came back full.
+                Some(version) if full_page && version > 0 => end_version = version - 1,
+                _ => return Ok(None),
             }
         }
-        Ok(None)
     }
 
     async fn get_package_versions(
@@ -2068,39 +2086,55 @@ impl KeyValueStoreReader for BigTableClient {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>> {
-        let start_version = after_version.map(|v| v + 1).unwrap_or(0);
-        let end_version = before_version.map(|v| v - 1).unwrap_or(u64::MAX);
+        let mut start_version = after_version.map(|v| v + 1).unwrap_or(0);
+        let mut end_version = before_version.map(|v| v - 1).unwrap_or(u64::MAX);
 
-        let start_key = Bytes::from(tables::packages::encode_key(
-            original_id.as_ref(),
-            start_version,
-        ));
-        let end_key = Bytes::from(tables::packages::encode_key(
-            original_id.as_ref(),
-            end_version,
-        ));
-
-        // Over-fetch to account for versions beyond cp_bound that need filtering out.
-        let fetch_limit = (limit as i64).saturating_mul(2).min(200);
-        let rows = self
-            .range_scan(
-                tables::packages::NAME,
-                Some(start_key),
-                Some(end_key),
-                fetch_limit,
-                descending,
-                None,
-            )
-            .await?;
-
+        // `limit` bounds post-filter results, but the scan's row limit applies before the
+        // `cp <= cp_bound` filter — filtered-out rows must not shrink the page (and a fixed
+        // fetch cap must not truncate large pages), so keep scanning until the page fills or
+        // the version range runs out.
         let mut results = Vec::with_capacity(limit);
-        for (key, row) in rows {
-            if results.len() >= limit {
+        while results.len() < limit && start_version <= end_version {
+            let start_key = Bytes::from(tables::packages::encode_key(
+                original_id.as_ref(),
+                start_version,
+            ));
+            let end_key = Bytes::from(tables::packages::encode_key(
+                original_id.as_ref(),
+                end_version,
+            ));
+
+            let page_limit = (limit - results.len()) as i64;
+            let rows = self
+                .range_scan(
+                    tables::packages::NAME,
+                    Some(start_key),
+                    Some(end_key),
+                    page_limit,
+                    descending,
+                    None,
+                )
+                .await?;
+            let exhausted = (rows.len() as i64) < page_limit;
+
+            let mut last_version = None;
+            for (key, row) in rows {
+                let pkg = tables::packages::decode(key.as_ref(), &row)?;
+                last_version = Some(pkg.package_version);
+                if pkg.cp_sequence_number <= cp_bound {
+                    results.push(pkg);
+                }
+            }
+
+            if exhausted {
                 break;
             }
-            let pkg = tables::packages::decode(key.as_ref(), &row)?;
-            if pkg.cp_sequence_number <= cp_bound {
-                results.push(pkg);
+            // Continue past the last row seen; both range bounds are inclusive, so hitting the
+            // edge of the version space means the scan is complete.
+            match last_version {
+                Some(version) if descending && version > 0 => end_version = version - 1,
+                Some(version) if !descending && version < u64::MAX => start_version = version + 1,
+                _ => break,
             }
         }
         Ok(results)
@@ -2155,36 +2189,50 @@ impl KeyValueStoreReader for BigTableClient {
         after_original_id: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<PackageData>> {
-        let start_key = after_original_id.map(|id| {
+        let mut start_key = after_original_id.map(|id| {
             // Start just after the given original_id by appending a byte.
             let mut key = tables::system_packages::encode_key(id.as_ref());
             key.push(0);
             Bytes::from(key)
         });
-        let end_key = Some(Bytes::from(tables::system_packages::encode_key(
-            &[0xff; 32],
-        )));
+        let end_key = Bytes::from(tables::system_packages::encode_key(&[0xff; 32]));
 
-        let rows = self
-            .range_scan(
-                tables::system_packages::NAME,
-                start_key,
-                end_key,
-                limit as i64,
-                false,
-                None,
-            )
-            .await?;
+        // `limit` bounds post-filter results, but the scan's row limit applies before the
+        // `first_cp <= cp_bound` filter — filtered-out rows must not shrink the page, so keep
+        // scanning until the page fills or the key range runs out.
+        let mut results = Vec::with_capacity(limit);
+        while results.len() < limit {
+            let page_limit = (limit - results.len()) as i64;
+            let rows = self
+                .range_scan(
+                    tables::system_packages::NAME,
+                    start_key.clone(),
+                    Some(end_key.clone()),
+                    page_limit,
+                    false,
+                    None,
+                )
+                .await?;
+            let exhausted = (rows.len() as i64) < page_limit;
 
-        let mut results = Vec::with_capacity(rows.len());
-        for (key, row) in &rows {
-            let first_cp = tables::system_packages::decode(row)?;
-            if first_cp > cp_bound {
-                continue;
+            for (key, row) in &rows {
+                let first_cp = tables::system_packages::decode(row)?;
+                if first_cp > cp_bound {
+                    continue;
+                }
+                let original_id = ObjectID::from_bytes(key.as_ref())?;
+                if let Some(pkg) = self.get_package_latest(original_id, cp_bound).await? {
+                    results.push(pkg);
+                }
             }
-            let original_id = ObjectID::from_bytes(key.as_ref())?;
-            if let Some(pkg) = self.get_package_latest(original_id, cp_bound).await? {
-                results.push(pkg);
+
+            if exhausted {
+                break;
+            }
+            if let Some((last_key, _)) = rows.last() {
+                let mut key = last_key.to_vec();
+                key.push(0);
+                start_key = Some(Bytes::from(key));
             }
         }
         Ok(results)
