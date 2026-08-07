@@ -24,6 +24,7 @@ use consensus_types::block::{BlockDigest, BlockRef, Round};
 use prost::Message as _;
 
 use crate::block::{Block, BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock};
+use crate::commit::CommitVote;
 use crate::context::Context;
 
 /// Ordered digest candidates for a slot. Backed in production by accepted DAG state
@@ -111,6 +112,16 @@ pub(crate) enum InflateError {
     NeedFullBlock {
         block_ref: BlockRef,
         reason: FallbackReason,
+        /// The skeleton's commit votes, parsed before ancestor resolution. Only
+        /// surfaced here, after every structural validation has passed — `Malformed`
+        /// carries no votes, so a never-verifiable skeleton cannot feed the monitor.
+        /// The authenticated stream + the expected-author check establish the same
+        /// provenance verification would: votes are the author's own claims either
+        /// way (a signature proves authorship, not vote truthfulness), though an
+        /// unsigned claim cannot later serve as cryptographic evidence. Surfaced so
+        /// receipt can feed the commit-vote monitor even when the block cannot be
+        /// reconstructed — commit-sync targeting depends on it.
+        commit_votes: Vec<CommitVote>,
     },
 }
 
@@ -328,6 +339,7 @@ pub(crate) fn deserialize_minimal(
                     return Err(InflateError::NeedFullBlock {
                         block_ref,
                         reason: FallbackReason::AmbiguousSlot(slot),
+                        commit_votes: skeleton.commit_votes().to_vec(),
                     });
                 }
                 if resolved.is_empty() {
@@ -342,6 +354,7 @@ pub(crate) fn deserialize_minimal(
         return Err(InflateError::NeedFullBlock {
             block_ref,
             reason: FallbackReason::MissingAncestors(missing),
+            commit_votes: skeleton.commit_votes().to_vec(),
         });
     }
 
@@ -377,6 +390,7 @@ pub(crate) fn deserialize_minimal(
             return Err(InflateError::NeedFullBlock {
                 block_ref,
                 reason: FallbackReason::DigestMismatch,
+                commit_votes: skeleton.commit_votes().to_vec(),
             });
         }
         variant = match next_variant(&candidates, variant) {
@@ -385,6 +399,7 @@ pub(crate) fn deserialize_minimal(
                 return Err(InflateError::NeedFullBlock {
                     block_ref,
                     reason: FallbackReason::DigestMismatch,
+                    commit_votes: skeleton.commit_votes().to_vec(),
                 });
             }
         };
@@ -730,7 +745,9 @@ mod tests {
         match deserialize_minimal(&minimal, &context.committee, block.author(), &receiver)
             .map(|_| ())
         {
-            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+            Err(InflateError::NeedFullBlock {
+                block_ref, reason, ..
+            }) => {
                 assert_eq!(block_ref, block.reference());
                 assert_eq!(
                     reason,
@@ -781,7 +798,9 @@ mod tests {
         skewed.insert(BlockRef::new(9, ancestors[3].author, test_digest(&mut rng)));
         match deserialize_minimal(&minimal, &context.committee, block.author(), &skewed).map(|_| ())
         {
-            Err(InflateError::NeedFullBlock { block_ref, reason }) => {
+            Err(InflateError::NeedFullBlock {
+                block_ref, reason, ..
+            }) => {
                 assert_eq!(block_ref, block.reference());
                 assert_eq!(reason, FallbackReason::DigestMismatch);
             }

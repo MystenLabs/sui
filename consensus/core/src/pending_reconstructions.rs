@@ -447,6 +447,38 @@ impl PendingReconstructions {
         frontier_dead
     }
 
+    /// Resident-only eviction of every parked entry and held sidecar, releasing
+    /// their byte charges. Called when the node enters commit-lag shedding.
+    /// Deliberate divergence from full mode (which retains blocks already admitted
+    /// to block_manager): an entry admitted before the lag could in principle
+    /// complete after catch-up, but retaining it keeps the byte caps pinned for the
+    /// whole lag because GC freezes with commits. Bounded memory wins; committed
+    /// content is recovered through commit sync regardless. Queued and in-flight
+    /// reconstructions are untouched — their charges release at their terminal
+    /// transitions, never here. Returns the number of evicted items.
+    pub(crate) fn quiesce(&mut self) -> usize {
+        if self.pending.is_empty() && self.held_sidecars.is_empty() {
+            return 0;
+        }
+        let refs: Vec<BlockRef> = self.pending.keys().copied().collect();
+        let mut evicted = refs.len();
+        for block_ref in &refs {
+            self.remove_entry(block_ref).expect("entry exists");
+        }
+        let held: Vec<BlockRef> = self.held_sidecars.keys().copied().collect();
+        evicted += held.len();
+        for block_ref in held {
+            if let Some((peer, sidecar)) = self.held_sidecars.remove(&block_ref) {
+                let bytes: usize = sidecar.iter().map(Vec::len).sum();
+                self.per_peer_bytes[peer] -= bytes;
+                self.total_bytes -= bytes;
+            }
+        }
+        self.rebuild_slot_floor();
+        self.update_gauges();
+        evicted
+    }
+
     /// Removes an entry and releases its byte charge immediately (terminal here).
     fn remove_entry(&mut self, block_ref: &BlockRef) -> Option<PendingMinimal> {
         let entry = self.remove_entry_keeping_charge(block_ref)?;
@@ -1021,5 +1053,64 @@ mod tests {
         }
         p.on_blocks_accepted(&[r(15, 3, 5)]);
         assert_eq!(p.slot_floor.read()[3], 19);
+    }
+
+    /// Quiesce evicts parked and held state, zeroes the books, and leaves the
+    /// structure ready for fresh admissions.
+    #[tokio::test]
+    async fn quiesce_releases_everything() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mut pending = PendingReconstructions::new(context.clone());
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let claim_a = BlockRef::new(10, peer, BlockDigest::MIN);
+        let claim_b = BlockRef::new(11, peer, BlockDigest::MAX);
+        let missing = vec![Slot::new(
+            9,
+            context.committee.to_authority_index(2).unwrap(),
+        )];
+        pending
+            .try_admit(
+                claim_a,
+                Bytes::from(vec![1u8; 100]),
+                vec![],
+                peer,
+                missing.clone(),
+                0,
+                9,
+            )
+            .unwrap();
+        pending
+            .try_admit(
+                claim_b,
+                Bytes::from(vec![2u8; 100]),
+                vec![],
+                peer,
+                missing,
+                0,
+                10,
+            )
+            .unwrap();
+        pending.hold_sidecar(
+            BlockRef::new(12, peer, BlockDigest::MIN),
+            peer,
+            vec![vec![0u8; 64]],
+        );
+        assert_eq!(pending.quiesce(), 3);
+        pending.assert_invariants();
+        assert_eq!(pending.quiesce(), 0);
+        // Fresh admissions work after a quiesce.
+        pending
+            .try_admit(
+                BlockRef::new(13, peer, BlockDigest::MIN),
+                Bytes::from(vec![3u8; 100]),
+                vec![],
+                peer,
+                vec![Slot::new(12, peer)],
+                0,
+                12,
+            )
+            .unwrap();
+        pending.assert_invariants();
     }
 }
