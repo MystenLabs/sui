@@ -40,6 +40,9 @@ use crate::{
 };
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
+/// Concurrent detached ancestor-fetch tasks (and their RPCs) per node.
+const ANCESTOR_FETCH_PERMITS: usize = 256;
+
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -54,6 +57,12 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_sync_service: Arc<BlockSyncService>,
     block_inflater: Arc<BlockInflater>,
     minimal_cache: Arc<MinimalBlockCache>,
+    /// Bounds detached ancestor-fetch tasks AND the RPC lifetime behind them (the
+    /// permit rides into the spawned future): unbounded spawns here let excluded-
+    /// ancestor churn pile waiting tasks on the synchronizer channel and crowd the
+    /// shared network paths the round prober and commit sync depend on. Skipped
+    /// scheduling is recovered by live and periodic sync.
+    ancestor_fetch_permits: Arc<tokio::sync::Semaphore>,
 }
 
 /// Shares one minimal encoding of each broadcast block across all subscriber streams,
@@ -136,6 +145,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             block_sync_service,
             block_inflater,
             minimal_cache: Arc::new(MinimalBlockCache::new()),
+            ancestor_fetch_permits: Arc::new(tokio::sync::Semaphore::new(ANCESTOR_FETCH_PERMITS)),
         }
     }
 
@@ -162,7 +172,12 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
                 .inc_by(missing_excluded_ancestors.len() as u64);
 
             let synchronizer = self.synchronizer.clone();
+            let Ok(permit) = self.ancestor_fetch_permits.clone().try_acquire_owned() else {
+                // At capacity: skip scheduling; periodic sync covers the gap.
+                return Ok(());
+            };
             spawn_monitored_task!(async move {
+                let _permit = permit;
                 // This does not wait for the fetch request to complete.
                 if let Err(err) = synchronizer
                     .fetch_blocks(missing_excluded_ancestors, PeerId::Validator(peer))
@@ -389,18 +404,21 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 .with_label_values(&[peer_hostname])
                 .inc_by(missing_ancestors.len() as u64);
             let synchronizer = self.synchronizer.clone();
-            spawn_monitored_task!(async move {
-                // This does not wait for the fetch request to complete.
-                // It only waits for synchronizer to queue the request to a peer.
-                // When this fails, it usually means the queue is full.
-                // The fetch will retry from other peers via live and periodic syncs.
-                if let Err(err) = synchronizer
-                    .fetch_blocks(missing_ancestors, PeerId::Validator(peer))
-                    .await
-                {
-                    debug!("Failed to fetch missing ancestors via synchronizer: {err}");
-                }
-            });
+            if let Ok(permit) = self.ancestor_fetch_permits.clone().try_acquire_owned() {
+                spawn_monitored_task!(async move {
+                    let _permit = permit;
+                    // This does not wait for the fetch request to complete.
+                    // It only waits for synchronizer to queue the request to a peer.
+                    // When this fails, it usually means the queue is full.
+                    // The fetch will retry from other peers via live and periodic syncs.
+                    if let Err(err) = synchronizer
+                        .fetch_blocks(missing_ancestors, PeerId::Validator(peer))
+                        .await
+                    {
+                        debug!("Failed to fetch missing ancestors via synchronizer: {err}");
+                    }
+                });
+            }
         }
 
         // Schedule fetching missing soft links from this peer in the background.
