@@ -5,23 +5,21 @@
 use move_proc_macros::growing_stack;
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{cfg::MutForwardCFG, optimize::OptConstants},
     diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleIdent, Mutability},
+    expansion::ast::Mutability,
     hlir::ast::{
-        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value, Value_, Var,
+        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value_, Var,
     },
-    parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
-use std::collections::BTreeMap;
 
 /// returns true if anything changed
 pub fn optimize(
     _reporter: &DiagnosticReporter,
+    _constants: OptConstants,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let mut changed = false;

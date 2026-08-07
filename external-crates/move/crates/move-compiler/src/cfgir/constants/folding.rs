@@ -10,7 +10,7 @@
 
 use crate::{
     cfgir::{
-        self, ast as G,
+        self, OptConstants, ast as G,
         cfg::MutForwardCFG,
         constants::{
             ConstantEntry, ConstantId, ConstantValues, Constants, unfoldable_constant_use_error,
@@ -441,10 +441,13 @@ fn verify_and_optimize(
     cfgir::optimize(
         context.env,
         context.reporter(),
+        OptConstants {
+            values: constant_values,
+            force_inline: true,
+        },
         context.current_package,
         &fake_signature,
         locals,
-        constant_values,
         cfg,
     );
 }

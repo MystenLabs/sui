@@ -5,7 +5,7 @@
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
-        self,
+        self, OptConstants,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
         constants::{self, Constants},
@@ -235,7 +235,8 @@ fn module(
     );
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter.clone());
-    let mut functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
+    let mut functions =
+        hfunctions.map(|name, f| function(context, constants, module_ident, name, f));
     constants::cross_module_gen::module(
         context,
         constants,
@@ -293,6 +294,7 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
 
 fn function(
     context: &mut Context,
+    constants: &Constants,
     module: ModuleIdent,
     name: FunctionName,
     f: H::Function,
@@ -311,6 +313,7 @@ fn function(
     context.push_warning_filter_scope(warning_filter.clone());
     let body = function_body(
         context,
+        constants,
         module,
         name,
         &attributes,
@@ -335,6 +338,7 @@ fn function(
 
 fn function_body(
     context: &mut Context,
+    constants: &Constants,
     module: ModuleIdent,
     name: FunctionName,
     attributes: &Attributes,
@@ -375,21 +379,20 @@ fn function_body(
                     cfgir::refine_inference_and_verify(&function_context, cfg);
                     // do not optimize if there are errors, warnings are okay
                     if !context.env.has_errors() {
+                        let constants = OptConstants {
+                            values: &constants.values,
+                            force_inline: false,
+                        };
                         cfgir::optimize(
                             context.env,
                             &context.reporter,
+                            constants,
                             context.current_package,
                             signature,
                             &locals,
-                            &BTreeMap::new(),
                             cfg,
                         );
-                        // TODO thread through constants
-                        cfgir::report_always_erroring_operations(
-                            &context.reporter,
-                            &BTreeMap::new(),
-                            cfg,
-                        );
+                        cfgir::report_always_erroring_operations(&context.reporter, constants, cfg);
                     }
                 },
             );

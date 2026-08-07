@@ -3,29 +3,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::cfg::MutForwardCFG,
+    cfgir::{cfg::MutForwardCFG, optimize::OptConstants},
     diag,
     diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleIdent, Mutability},
+    expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value, Value_, Var,
+        TypeName_, UnannotatedExp_, Value_, Var,
     },
     ice,
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
-    parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
+    parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
     shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::{borrow::Cow, collections::BTreeMap, convert::TryFrom};
+use std::{borrow::Cow, convert::TryFrom};
 
 /// returns true if anything changed
 pub fn optimize(
     reporter: &DiagnosticReporter,
+    constants: OptConstants,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let context = Context {
@@ -54,7 +54,7 @@ pub fn optimize(
 
 struct Context<'a> {
     reporter: &'a DiagnosticReporter<'a>,
-    constants: &'a BTreeMap<(ModuleIdent, ConstantName), Value>,
+    constants: OptConstants<'a>,
 }
 
 //**************************************************************************************************
@@ -113,7 +113,9 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let E::Constant(module, name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = context.constants.get(&(*module, *name)) {
+            if context.constants.force_inline
+                && let Some(value) = context.constants.values.get(&(*module, *name))
+            {
                 *e_ = E::Value(value.clone());
                 true
             } else {
@@ -140,7 +142,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(er);
-            let v = match foldable_exp(er) {
+            let v = match foldable_exp(context, er) {
                 Some(v) => v,
                 None => return changed,
             };
@@ -157,8 +159,8 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
-            let v1_opt = foldable_exp(e1);
-            let v2_opt = foldable_exp(e2);
+            let v1_opt = foldable_exp(context, e1);
+            let v2_opt = foldable_exp(context, e2);
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
@@ -177,7 +179,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(e);
-            let v = match foldable_exp(e) {
+            let v = match foldable_exp(context, e) {
                 Some(v) => v,
                 None => return changed,
             };
@@ -202,7 +204,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let mut vs = vec![];
             for earg in eargs {
                 let eloc = earg.exp.loc;
-                if let Some(v) = foldable_exp(earg) {
+                if let Some(v) = foldable_exp(context, earg) {
                     vs.push(sp(eloc, v.clone()));
                 } else {
                     return changed;
@@ -455,9 +457,17 @@ const fn evalue_(loc: Loc, v: Value_) -> UnannotatedExp_ {
 // Foldable Value
 //**************************************************************************************************
 
-fn foldable_exp(e: &Exp) -> Option<&Value_> {
+/// The value of `e` if it is statically known.
+/// Constants have their values used, even when not forcibly inlined. This enables outer
+/// operations/expressions to be folded.
+fn foldable_exp<'a>(context: &Context<'a>, e: &'a Exp) -> Option<&'a Value_> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
+        E::Constant(module, name) => context
+            .constants
+            .values
+            .get(&(*module, *name))
+            .map(|sp!(_, v_)| v_),
         E::Value(sp!(_, v_)) => Some(v_),
         _ => None,
     }
@@ -481,7 +491,7 @@ fn ignorable_exp(e: &Exp) -> bool {
 /// `0xFFFFu16 as u8`.
 pub fn report_always_erroring_operations(
     reporter: &DiagnosticReporter,
-    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
+    constants: OptConstants<'_>,
     cfg: &MutForwardCFG,
 ) {
     let context = Context {
@@ -520,10 +530,10 @@ fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
 /// errors is reported. If the expression cannot be evaluated statically (from an error or
 /// otherwise), returns `None`.
 #[growing_stack]
-fn check_exp<'a>(context: &Context, e: &'a Exp) -> Option<Cow<'a, Value_>> {
+fn check_exp<'a>(context: &Context<'a>, e: &'a Exp) -> Option<Cow<'a, Value_>> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
-        E::Value(_) | E::Constant(_, _) => foldable_exp(e).map(Cow::Borrowed),
+        E::Value(_) | E::Constant(_, _) => foldable_exp(context, e).map(Cow::Borrowed),
 
         E::Unit { .. }
         | E::UnresolvedError

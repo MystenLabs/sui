@@ -3,22 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::{cfg::MutForwardCFG, remove_no_ops},
+    cfgir::{cfg::MutForwardCFG, optimize::OptConstants, remove_no_ops},
     diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleIdent, Mutability},
-    hlir::ast::{FunctionSignature, SingleType, Value, Var},
-    parser::ast::ConstantName,
+    expansion::ast::Mutability,
+    hlir::ast::{FunctionSignature, SingleType, Var},
     shared::unique_map::UniqueMap,
 };
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 /// returns true if anything changed
 pub fn optimize(
     _reporter: &DiagnosticReporter,
+    _constants: OptConstants,
     signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = remove_no_ops::optimize(cfg);

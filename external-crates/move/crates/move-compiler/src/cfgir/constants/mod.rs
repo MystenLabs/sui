@@ -44,7 +44,7 @@ enum ConstantEntry {
 #[derive(Default)]
 pub(crate) struct Constants {
     defs: BTreeMap<ConstantId, ConstantEntry>,
-    values: ConstantValues,
+    pub(super) values: ConstantValues,
 }
 
 //**************************************************************************************************
