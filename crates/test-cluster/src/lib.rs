@@ -108,6 +108,9 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+    /// A fullnode that syncs by streaming consensus blocks from the first validator's
+    /// observer server, when the cluster is built with an observer fullnode.
+    pub observer_handle: Option<FullNodeHandle>,
 }
 
 impl TestCluster {
@@ -183,6 +186,18 @@ impl TestCluster {
                 .build(&mut OsRng, self.swarm.config()),
         )
         .await
+    }
+
+    /// Convenience method to start a new observer fullnode subscribed to the first
+    /// validator, which must have its observer server enabled.
+    pub async fn spawn_new_observer_node(&mut self) -> FullNodeHandle {
+        let mut config = self
+            .fullnode_config_builder()
+            .with_observer_subscribed_to_validator(0)
+            .build(&mut OsRng, self.swarm.config());
+        // An observer that halts at a checkpoint range boundary defeats its purpose.
+        config.run_with_range = None;
+        self.start_fullnode_from_config(config).await
     }
 
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
@@ -1234,6 +1249,8 @@ pub struct TestClusterBuilder {
 
     validator_observer_config: Option<ValidatorObserverConfigCallback>,
 
+    observer_fullnode: bool,
+
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
 
     peer_deny_sync_config_callback:
@@ -1283,6 +1300,7 @@ impl TestClusterBuilder {
             rpc_config: None,
             execution_time_observer_config: None,
             validator_observer_config: None,
+            observer_fullnode: false,
             state_sync_config: None,
             peer_deny_sync_config_callback: None,
             #[cfg(msim)]
@@ -1317,6 +1335,15 @@ impl TestClusterBuilder {
 
     pub fn with_validator_observer_config(mut self, c: ValidatorObserverConfigCallback) -> Self {
         self.validator_observer_config = Some(c);
+        self
+    }
+
+    /// Adds a fullnode to the cluster that syncs as a consensus observer, subscribed to the
+    /// first validator. Unless a validator observer config is provided, the first validator
+    /// gets its observer server enabled. The observer is available via
+    /// `TestCluster::observer_handle`.
+    pub fn with_observer_fullnode(mut self) -> Self {
+        self.observer_fullnode = true;
         self
     }
 
@@ -1566,13 +1593,35 @@ impl TestClusterBuilder {
             }));
         }
 
-        let swarm = self.start_swarm().await.unwrap();
-        let working_dir = swarm.dir();
+        if self.observer_fullnode && self.validator_observer_config.is_none() {
+            // The observer fullnode subscribes to the first validator, so its observer
+            // server must be enabled.
+            self.validator_observer_config = Some(Arc::new(|idx| {
+                (idx == 0).then(consensus_config::ObserverParameters::default)
+            }));
+        }
+
+        let mut swarm = self.start_swarm().await.unwrap();
+        let working_dir = swarm.dir().to_path_buf();
 
         let fullnode = swarm.fullnodes().next().unwrap();
         let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
+
+        let observer_handle = if self.observer_fullnode {
+            let mut config = swarm
+                .get_fullnode_config_builder()
+                .with_observer_subscribed_to_validator(0)
+                .build(&mut OsRng, swarm.config());
+            // An observer that halts at a checkpoint range boundary defeats its purpose.
+            config.run_with_range = None;
+            let json_rpc_address = config.json_rpc_address;
+            let node = swarm.spawn_new_node(config).await;
+            Some(FullNodeHandle::new(node, json_rpc_address).await)
+        } else {
+            None
+        };
 
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
@@ -1597,6 +1646,7 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
+            observer_handle,
         };
 
         // The embedded rpc-store indexes the tip asynchronously, so genesis

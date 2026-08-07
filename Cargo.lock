@@ -18141,6 +18141,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "consensus-config",
  "fastcrypto-zkp",
  "futures",
  "jsonrpsee",

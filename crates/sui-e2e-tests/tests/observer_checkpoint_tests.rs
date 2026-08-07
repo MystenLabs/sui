@@ -1,51 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, time::Duration};
 
-use consensus_config::{NetworkPublicKey, ObserverParameters, PeerRecord};
 use sui_macros::sim_test;
-use sui_types::crypto::KeypairTraits;
 use sui_types::node_role::FullNodeSyncMode;
 use test_cluster::TestClusterBuilder;
 use tracing::info;
-
-/// Helper to build observer peers from a test cluster's validator nodes.
-fn build_observer_peers(test_cluster: &test_cluster::TestCluster) -> Vec<PeerRecord> {
-    test_cluster
-        .swarm
-        .validator_nodes()
-        .filter_map(|v| {
-            let config = v.config();
-            let consensus_config = config.consensus_config.as_ref()?;
-            let observer_port = consensus_config
-                .parameters
-                .as_ref()
-                .and_then(|p| p.observer.server_port)?;
-
-            let network_public_key =
-                NetworkPublicKey::new(config.network_key_pair().public().clone());
-
-            let host = config
-                .network_address
-                .to_socket_addr()
-                .unwrap()
-                .ip()
-                .to_string();
-
-            let address: sui_types::multiaddr::Multiaddr =
-                format!("/ip4/{}/udp/{}/http", host, observer_port)
-                    .parse()
-                    .unwrap();
-
-            Some(PeerRecord {
-                public_key: network_public_key,
-                address,
-            })
-        })
-        .take(1)
-        .collect()
-}
 
 /// Verifies that an observer full node takes the verify-locally-built-checkpoint
 /// path in the checkpoint executor. The observer processes consensus commits
@@ -56,29 +17,16 @@ fn build_observer_peers(test_cluster: &test_cluster::TestCluster) -> Vec<PeerRec
 async fn test_observer_uses_verify_checkpoint_path() {
     telemetry_subscribers::init_for_testing();
 
-    let mut test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_num_validators(4)
-        .with_validator_observer_config(Arc::new(|_idx| Some(ObserverParameters::default())))
+        .with_observer_fullnode()
         .build()
         .await;
 
-    let observer_peers = build_observer_peers(&test_cluster);
-    assert!(
-        !observer_peers.is_empty(),
-        "need at least one observer peer"
-    );
-
-    let observer_config = test_cluster
-        .fullnode_config_builder()
-        .with_observer_config(ObserverParameters {
-            peers: observer_peers,
-            ..Default::default()
-        })
-        .build(&mut rand::rngs::OsRng, test_cluster.swarm.config());
-
     let observer_handle = test_cluster
-        .start_fullnode_from_config(observer_config)
-        .await;
+        .observer_handle
+        .as_ref()
+        .expect("cluster should have an observer fullnode");
     let observer_state = observer_handle.sui_node.state();
 
     // Confirm the observer has the correct role.
