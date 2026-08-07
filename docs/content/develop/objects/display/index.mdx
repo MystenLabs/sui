@@ -38,6 +38,20 @@ answer: >-
   code.
 ---
 
+Object Display is a template engine that controls how Sui objects appear in wallets, explorers, and other offchain applications ([Sui Framework source](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/display)). You define a set of key-value pairs where both keys and values are format strings. The keys represent display properties (for example, `name`, `description`, `image_url`, `link`), and the values are templates that reference fields on your object using `{field_name}` syntax.
+
+When a client (wallet, explorer, marketplace) renders your object, it reads the Display definition from the chain and substitutes the template variables with the object's actual field values. This enables onchain management of offchain representation without modifying the object's struct definition.
+
+### Common use cases
+
+- **NFTs and collectibles:** Define `name`, `description`, `image_url`, and `project_url` so wallets display rich previews.
+- **Gaming items:** Use dynamic templates that reference evolving object fields (level, rarity, stats) for composable and dynamic displays.
+- **Marketplace listings:** Set standardized metadata fields so aggregators can index and display your objects consistently.
+
+### What happens without a Display
+
+If no Display is defined for a type, clients fall back to rendering raw object data (struct fields and values). The object remains fully functional on Sui, but wallets and explorers cannot show human-readable names, images, or descriptions.
+
 :::info
 
 Object Display V2 is the current Object Display standard. Use the `sui::display_registry` APIs when creating or updating displays from Move code.
