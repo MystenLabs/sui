@@ -1,19 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, VecDeque},
-    pin::Pin,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt, ready, stream, task};
-use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
@@ -23,7 +18,6 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::{BlockAPI as _, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
-    block_inflater::BlockInflater,
     block_sync_service::BlockSyncService,
     block_verifier::BlockVerifier,
     commit::{CommitRange, TrustedCommit},
@@ -55,65 +49,12 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
-    block_inflater: Arc<BlockInflater>,
-    minimal_cache: Arc<MinimalBlockCache>,
     /// Bounds detached ancestor-fetch tasks AND the RPC lifetime behind them (the
     /// permit rides into the spawned future): unbounded spawns here let excluded-
     /// ancestor churn pile waiting tasks on the synchronizer channel and crowd the
     /// shared network paths the round prober and commit sync depend on. Skipped
     /// scheduling is recovered by live and periodic sync.
     ancestor_fetch_permits: Arc<tokio::sync::Semaphore>,
-}
-
-/// Shares one minimal encoding of each broadcast block across all subscriber streams,
-/// which would otherwise each re-encode it — O(committee size) work per block. A few
-/// recent entries suffice since subscribers observe a block at nearly the same time.
-struct MinimalBlockCache {
-    // Small enough that a linear scan under a short-lived lock beats a hash map.
-    recent: parking_lot::Mutex<VecDeque<(BlockRef, Bytes)>>,
-}
-
-impl MinimalBlockCache {
-    // A few slots absorb subscribers that lag by a block or two without unbounded growth.
-    const CAPACITY: usize = 8;
-
-    fn new() -> Self {
-        Self {
-            recent: parking_lot::Mutex::new(VecDeque::with_capacity(Self::CAPACITY)),
-        }
-    }
-
-    /// Returns the block's minimal encoding, encoding it only on the first request.
-    /// `None` means this block cannot be sent minimally (e.g. an unsupported variant);
-    /// the caller falls back to the full form.
-    fn encode(
-        &self,
-        inflater: &BlockInflater,
-        block: &VerifiedBlock,
-        dag_state: &RwLock<DagState>,
-    ) -> Option<Bytes> {
-        let block_ref = block.reference();
-        {
-            let recent = self.recent.lock();
-            if let Some((_, bytes)) = recent.iter().find(|(r, _)| *r == block_ref) {
-                return Some(bytes.clone());
-            }
-        }
-        // Encode outside the cache lock: a concurrent subscriber may duplicate this work
-        // for the same block, which is harmless and far cheaper than serializing all
-        // subscribers. Scoped so send-side encode cost — and the cache's hit rate
-        // against many interleaved subscriber streams — is measurable.
-        let _scope = monitored_scope("MinimalBlock::encode_for_send");
-        let bytes = inflater.serialize(block, &dag_state.read()).ok()?;
-        let mut recent = self.recent.lock();
-        if !recent.iter().any(|(r, _)| *r == block_ref) {
-            if recent.len() == Self::CAPACITY {
-                recent.pop_front();
-            }
-            recent.push_back((block_ref, bytes.clone()));
-        }
-        Some(bytes)
-    }
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -130,7 +71,6 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         block_sync_service: Arc<BlockSyncService>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
-        let block_inflater = Arc::new(BlockInflater::new(context.clone()));
         Self {
             context,
             block_verifier,
@@ -143,8 +83,6 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
-            block_inflater,
-            minimal_cache: Arc::new(MinimalBlockCache::new()),
             ancestor_fetch_permits: Arc::new(tokio::sync::Semaphore::new(ANCESTOR_FETCH_PERMITS)),
         }
     }
@@ -345,6 +283,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .update_from_verified_block(&ExtendedBlock {
                 block: verified_block.clone(),
                 excluded_ancestors: excluded_ancestors.clone(),
+                minimal: None,
             });
 
         // Reject blocks when local commit index is lagging too far from quorum commit index,
@@ -514,14 +453,8 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .context
             .protocol_config
             .minimal_block_propagation_enabled();
-        let block_inflater = self.block_inflater.clone();
-        let minimal_cache = self.minimal_cache.clone();
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
-        // The response stream must not keep the stopped authority's DagState alive
-        // (spawned-task/stream state holds it weakly, like the subscription loops);
-        // with the state gone, emission degrades to full form.
-        let dag_state = Arc::downgrade(&self.dag_state);
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         let stream = past_proposed_blocks.chain(broadcasted_blocks.flat_map(move |items| {
@@ -529,17 +462,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 items.len() <= MAX_BLOCKS_PER_POLL,
                 "Too many blocks received from broadcast"
             );
-            let block_inflater = block_inflater.clone();
             let context = context.clone();
             let peer_hostname = peer_hostname.clone();
-            let minimal_cache = minimal_cache.clone();
-            let dag_state = dag_state.clone();
-            stream::iter(items.into_iter().map(move |extended_block| {
+            stream::iter(items.into_iter().map(move |mut extended_block| {
+                // Proposal time already produced the shared encoding; the fan-out
+                // only forwards bytes.
                 let minimal = emit_minimal
-                    .then(|| {
-                        let dag_state = dag_state.upgrade()?;
-                        minimal_cache.encode(&block_inflater, &extended_block.block, &dag_state)
-                    })
+                    .then(|| extended_block.minimal.take())
                     .flatten();
                 let mut serialized = ExtendedSerializedBlock::from(extended_block);
                 if minimal.is_some() {
@@ -1700,11 +1629,21 @@ mod tests {
         assert!(replayed.minimal.is_none());
 
         // A live broadcast carries the minimal form (the tonic layer sends only one of
-        // the two on the wire) exactly when the protocol flag allows emission.
+        // the two on the wire) exactly when the protocol flag allows emission. The
+        // encoding is produced at proposal time and forwarded by the fan-out, so the
+        // test encodes exactly as the proposer does.
         let live_block =
             VerifiedBlock::new_for_test(TestBlock::new(16, 0).set_ancestors_raw(ancestors).build());
+        let minimal = emit_minimal
+            .then(|| {
+                crate::block_inflater::BlockInflater::new(context.clone())
+                    .serialize_for_test(&live_block, &dag_state.read())
+                    .ok()
+            })
+            .flatten();
         tx_block_broadcast
             .send(ExtendedBlock {
+                minimal,
                 block: live_block.clone(),
                 excluded_ancestors: vec![],
             })

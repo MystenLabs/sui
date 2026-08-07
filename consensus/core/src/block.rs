@@ -691,6 +691,10 @@ impl fmt::Debug for VerifiedBlock {
 pub(crate) struct ExtendedBlock {
     pub block: VerifiedBlock,
     pub excluded_ancestors: Vec<BlockRef>,
+    /// Minimal encoding produced once at proposal time (sender side only), so the
+    /// subscription fan-out shares one encoding without touching DagState or any
+    /// cache lock. None on non-broadcast constructions and full-form fallbacks.
+    pub minimal: Option<Bytes>,
 }
 
 /// Generates the genesis blocks for the current Committee.

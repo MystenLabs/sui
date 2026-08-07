@@ -80,29 +80,70 @@ impl BlockInflater {
         }
     }
 
-    /// Encodes a block for the wire, omitting ancestor digests the receiver can
-    /// resolve. Ancestors older than the receivers' DAG-cache retention keep explicit
-    /// digests — a caught-up receiver cannot be assumed to resolve rounds it no longer
-    /// caches.
-    pub(crate) fn serialize(
+    /// Test-only convenience joining snapshot and encode in one call; production
+    /// always separates them so no DagState guard spans the encoding work.
+    #[cfg(test)]
+    pub(crate) fn serialize_for_test(
         &self,
         block: &VerifiedBlock,
         dag_state: &DagState,
     ) -> Result<Bytes, bcs::Error> {
-        // Omit digests only for slots every reasonably-synced receiver can still
-        // resolve: within one GC depth of the block's round. The sender's own cache
-        // reaches much further back, but a receiver's GC does not — an omitted slot
-        // below the receiver's GC can never fill, and the claim strands until the
-        // exact lane rescues it. Older ancestors (a lagging author referenced by a
-        // current block, an excluded-ancestor reconnection) carry their 32-byte
-        // digest instead and repair through block_manager's ordinary digest fetch.
+        let snapshot = self.ancestor_snapshot(block, dag_state);
+        self.serialize_from_snapshot(block, &snapshot)
+    }
+
+    /// Snapshot of ancestor-slot candidates for one block, taken under a short
+    /// DagState read guard so encoding can run entirely against owned data.
+    pub(crate) fn ancestor_snapshot(
+        &self,
+        block: &VerifiedBlock,
+        dag_state: &DagState,
+    ) -> std::collections::BTreeMap<Slot, Vec<BlockDigest>> {
+        block
+            .ancestors()
+            .iter()
+            .filter(|r| r.round != GENESIS_ROUND)
+            .map(|r| {
+                let slot = Slot::from(*r);
+                (
+                    slot,
+                    dag_state
+                        .get_uncommitted_blocks_at_slot(slot)
+                        .iter()
+                        .map(|b| b.digest())
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// Encodes against a detached snapshot: no DagState guard is held during the
+    /// prost/bcs work. Slots absent from the snapshot conservatively carry their
+    /// explicit digest (an ancestor evicted between snapshot and encode costs 32
+    /// bytes, never correctness).
+    pub(crate) fn serialize_from_snapshot(
+        &self,
+        block: &VerifiedBlock,
+        snapshot: &std::collections::BTreeMap<Slot, Vec<BlockDigest>>,
+    ) -> Result<Bytes, bcs::Error> {
+        struct SnapshotResolver<'a> {
+            genesis_digests: &'a [BlockDigest],
+            snapshot: &'a std::collections::BTreeMap<Slot, Vec<BlockDigest>>,
+        }
+        impl AncestorDigestResolver for SnapshotResolver<'_> {
+            fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest> {
+                if slot.round == GENESIS_ROUND {
+                    return vec![self.genesis_digests[slot.authority.value()]];
+                }
+                self.snapshot.get(&slot).cloned().unwrap_or_default()
+            }
+        }
         let min_omittable_round = block
             .round()
             .saturating_sub(self.context.protocol_config.gc_depth());
-        let resolver = DagStateResolver {
+        let resolver = SnapshotResolver {
             genesis_digests: &self.genesis_digests,
-            dag_state,
-            claims: None,
+            snapshot,
         };
         serialize_minimal(block, &resolver, min_omittable_round)
     }
@@ -149,7 +190,9 @@ mod tests {
         let inflater = BlockInflater::new(context.clone());
         let block =
             VerifiedBlock::new_for_test(TestBlock::new(1, 0).set_ancestors_raw(genesis).build());
-        let minimal = inflater.serialize(&block, &dag_state.read()).unwrap();
+        let minimal = inflater
+            .serialize_for_test(&block, &dag_state.read())
+            .unwrap();
         let (_signed, serialized) = inflater
             .inflate(&minimal, block.author(), &dag_state.read(), None)
             .unwrap();
@@ -189,7 +232,9 @@ mod tests {
                 .build(),
         );
         let inflater = BlockInflater::new(context.clone());
-        let minimal = inflater.serialize(&block, &sender_dag.read()).unwrap();
+        let minimal = inflater
+            .serialize_for_test(&block, &sender_dag.read())
+            .unwrap();
 
         // Receiver: empty DAG, claims only.
         let empty_dag = Arc::new(RwLock::new(DagState::new(

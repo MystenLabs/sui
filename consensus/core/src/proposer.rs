@@ -80,6 +80,7 @@ pub(crate) struct ValidatorProposer {
     round_tracker: Arc<RwLock<RoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     leader_waiter: ProposalLeaderWaiter,
+    block_inflater: crate::block_inflater::BlockInflater,
 }
 
 impl ValidatorProposer {
@@ -95,6 +96,7 @@ impl ValidatorProposer {
         leader_waiter: ProposalLeaderWaiter,
     ) -> Self {
         let last_included_ancestors = vec![None; context.committee.size()];
+        let block_inflater = crate::block_inflater::BlockInflater::new(context.clone());
         Self {
             context,
             transaction_pool,
@@ -107,6 +109,7 @@ impl ValidatorProposer {
             round_tracker,
             dag_state,
             leader_waiter,
+            block_inflater,
         }
     }
 
@@ -654,9 +657,26 @@ impl Proposer for ValidatorProposer {
             .with_label_values(&[&force.to_string()])
             .inc();
 
+        // Encode the minimal form once, here, where every ancestor is already
+        // accepted: the subscription fan-out then shares these bytes without any
+        // cache, lock, or DagState access of its own.
+        let minimal = self
+            .context
+            .protocol_config
+            .minimal_block_propagation_enabled()
+            .then(|| {
+                let snapshot = self
+                    .block_inflater
+                    .ancestor_snapshot(&verified_block, &self.dag_state.read());
+                self.block_inflater
+                    .serialize_from_snapshot(&verified_block, &snapshot)
+                    .ok()
+            })
+            .flatten();
         let extended_block = ExtendedBlock {
             block: verified_block,
             excluded_ancestors,
+            minimal,
         };
 
         // Update round tracker with our own highest accepted blocks

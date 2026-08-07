@@ -747,6 +747,7 @@ where
             for commit in &certified_commits {
                 for block in commit.blocks() {
                     tracker.update_from_verified_block(&ExtendedBlock {
+                        minimal: None,
                         block: block.clone(),
                         excluded_ancestors: vec![],
                     });
@@ -755,6 +756,7 @@ where
             // Update from vote blocks
             for block in &commit_certifying_blocks {
                 tracker.update_from_verified_block(&ExtendedBlock {
+                    minimal: None,
                     block: block.clone(),
                     excluded_ancestors: vec![],
                 });
