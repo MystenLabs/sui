@@ -1007,6 +1007,20 @@ impl<'a> UnresolvedInput<'a> {
                             sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::Sponsor => {
                                 WithdrawFrom::Sponsor
                             }
+                            sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::Allowance => {
+                                WithdrawFrom::Allowance {
+                                    funder: w.funder().parse().map_err(|e| {
+                                        FieldViolation::new("funder")
+                                            .with_description(format!("invalid funder: {e}"))
+                                            .with_reason(ErrorReason::FieldInvalid)
+                                    })?,
+                                    allowance: w.allowance().parse().map_err(|e| {
+                                        FieldViolation::new("allowance")
+                                            .with_description(format!("invalid allowance: {e}"))
+                                            .with_reason(ErrorReason::FieldInvalid)
+                                    })?,
+                                }
+                            }
                             _ => WithdrawFrom::Sender,
                         },
                     })
