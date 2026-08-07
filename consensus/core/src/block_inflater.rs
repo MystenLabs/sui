@@ -4,10 +4,11 @@
 //! Inflates minimal blocks received on the subscription stream back into full serialized
 //! `SignedBlock`s using local DAG state, and produces minimal encodings on the send path.
 //!
-//! Inflation is synchronous and never waits: a block whose ancestors are not yet accepted
-//! locally is reported as un-inflatable so the caller can drop it from the stream and
-//! hand it to a recovery task that waits on the missing slot off the critical path
-//! (see `minimal_block_receive.rs`).
+//! Inflation is synchronous and never waits: a block whose ancestor digests cannot be
+//! resolved right now is reported as un-inflatable so the caller can drop it from the
+//! stream and park it (see `pending_reconstructions.rs`). Once a claim or an acceptance
+//! resolves the missing slots, the reconstructed block re-enters the normal receive
+//! pipeline — verification, then block_manager acceptance — like any full block.
 
 use std::sync::Arc;
 
@@ -25,9 +26,7 @@ use crate::{
 };
 
 /// Minimal-block codec bound to the committee, usable on both the send side (digest
-/// omission decisions) and the receive side (re-inflation). DAG state is passed per
-/// call: callers hold it under the ownership discipline of their own context (strong
-/// in components, weak in spawned tasks), and the codec stays ownership-free.
+/// omission decisions) and the receive side (re-inflation).
 pub(crate) struct BlockInflater {
     context: Arc<Context>,
     // Genesis digests by authority index: deterministic from the committee, so round-0
