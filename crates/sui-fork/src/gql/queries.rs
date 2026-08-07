@@ -585,8 +585,194 @@ pub(crate) mod address_owned_objects_query {
     }
 }
 
+/// Coin types for which an address holds an *accumulator* balance at a
+/// checkpoint.
+///
+/// This exists to answer a question the seed cannot answer any other way. An
+/// address balance is not stored on the address; it lives in a dynamic field
+/// under the accumulator root, so it never appears in the address's owned-object
+/// enumeration. The field's object id is derivable from `(address, coin type)`,
+/// but only once the coin type is known — and nothing local knows which coin
+/// types an address has an accumulator balance in, including coin types it holds
+/// no `Coin<T>` of. This query supplies exactly that list, and nothing else: the
+/// balance *amounts* are deliberately ignored, because the objects themselves are
+/// seeded and the stock `Balance` restore pipeline derives the amounts from them.
+pub(crate) mod address_balances_query {
+    use sui_types::base_types::SuiAddress as SuiAddressType;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    use super::*;
+
+    const PAGE_SIZE: i32 = 50;
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "BigInt")]
+    pub(crate) struct BigInt(pub String);
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct AddressBalancesArgs {
+        pub sequence_number: Option<u64>,
+        pub address: SuiAddress,
+        pub first: Option<i32>,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "AddressBalancesArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Query {
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "AddressBalancesArgs",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Checkpoint {
+        query: Option<ScopedQuery>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "AddressBalancesArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ScopedQuery {
+        #[arguments(address: $address)]
+        address: Option<Address>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "AddressBalancesArgs",
+        graphql_type = "Address",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Address {
+        #[arguments(first: $first, after: $after)]
+        balances: Option<BalanceConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct BalanceConnection {
+        nodes: Vec<Balance>,
+        page_info: PageInfo,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct PageInfo {
+        has_next_page: bool,
+        end_cursor: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct Balance {
+        address_balance: Option<BigInt>,
+        coin_type: Option<MoveType>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct MoveType {
+        repr: String,
+    }
+
+    /// Coin types (the inner `T`, e.g. `0x2::sui::SUI`) for which `address` has a
+    /// non-zero accumulator balance at `checkpoint`.
+    ///
+    /// Rows with a zero or absent `addressBalance` are dropped: the connection
+    /// reports a row for every coin type the address has *any* balance in,
+    /// including ones backed purely by coin objects, and those carry no
+    /// accumulator field to seed.
+    pub(crate) async fn query(
+        address: SuiAddressType,
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<String>, Error> {
+        let mut coin_types = Vec::new();
+        let mut cursor = None;
+
+        loop {
+            let operation = Query::build(AddressBalancesArgs {
+                sequence_number: Some(checkpoint),
+                address: SuiAddress(address.to_string()),
+                first: Some(PAGE_SIZE),
+                after: cursor,
+            });
+            let response = client
+                .run_query(&operation)
+                .await
+                .with_context(|| format!("failed to query address balances for {address}"))?;
+
+            let data = response.data.ok_or_else(|| {
+                anyhow!(
+                    "missing data in address balances response for {address}: {:?}",
+                    response.errors,
+                )
+            })?;
+            let Some(checkpoint_data) = data.checkpoint else {
+                return Err(anyhow!(
+                    "checkpoint {checkpoint} not found for address balance seeding"
+                ));
+            };
+            let scoped_query = checkpoint_data.query.ok_or_else(|| {
+                anyhow!("missing checkpoint-scoped query for address balance seeding")
+            })?;
+            let Some(address_data) = scoped_query.address else {
+                return Ok(coin_types);
+            };
+            let Some(balances) = address_data.balances else {
+                return Ok(coin_types);
+            };
+
+            for node in balances.nodes {
+                let Some(coin_type) = node.coin_type else {
+                    continue;
+                };
+                if !has_accumulator_balance(node.address_balance.as_ref()) {
+                    continue;
+                }
+                coin_types.push(coin_type.repr);
+            }
+
+            if !balances.page_info.has_next_page {
+                break;
+            }
+            cursor = balances.page_info.end_cursor;
+        }
+
+        Ok(coin_types)
+    }
+
+    /// Whether an `addressBalance` reading indicates a live accumulator field.
+    ///
+    /// `BigInt` arrives as a decimal string. A malformed one is treated as
+    /// "no balance" rather than an error: the worst outcome is a field left
+    /// unseeded, whereas failing here would take down seeding for the whole
+    /// address over a single unparseable row.
+    fn has_accumulator_balance(balance: Option<&BigInt>) -> bool {
+        balance
+            .and_then(|balance| balance.0.parse::<i128>().ok())
+            .is_some_and(|balance| balance > 0)
+    }
+}
+
 pub(crate) mod object_seed_query {
     use sui_types::base_types::ObjectID;
+    use sui_types::base_types::ObjectRef;
     use sui_types::base_types::SequenceNumber;
     use sui_types::base_types::SuiAddress as SuiAddressType;
     use sui_types::digests::ObjectDigest;
@@ -713,6 +899,78 @@ pub(crate) mod object_seed_query {
         }
 
         Ok(results)
+    }
+
+    /// Resolve `(id, version, digest)` for objects at `checkpoint` without
+    /// classifying their owner.
+    ///
+    /// The owner check in [`query`] is a policy about what a *user* may name as
+    /// a seed, not a fact about what can be seeded. This entry point is for ids
+    /// the fork derived itself and already knows the shape of — accumulator
+    /// balance fields, which are owned by the accumulator root rather than by
+    /// any address, and so would be rejected by that check. Objects absent at
+    /// the checkpoint come back as `None`, which is not an error: an address
+    /// may simply have no field for a given coin type.
+    pub(crate) async fn query_refs(
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<Option<ObjectRef>>, Error> {
+        let mut results = Vec::with_capacity(object_ids.len());
+
+        for object_ids in object_ids.chunks(MAX_KEYS_SIZE) {
+            let keys = object_ids
+                .iter()
+                .map(|object_id| ObjectKey {
+                    address: SuiAddress(object_id.to_string()),
+                    version: None,
+                    root_version: None,
+                    at_checkpoint: Some(checkpoint),
+                })
+                .collect();
+            let operation = Query::build(ObjectSeedArgs { keys });
+            let response = client.run_query(&operation).await.with_context(|| {
+                format!("failed to query object refs at checkpoint {checkpoint}")
+            })?;
+            let data = response.data.with_context(|| {
+                format!(
+                    "missing data in object ref query response at checkpoint {checkpoint}: {:?}",
+                    response.errors,
+                )
+            })?;
+
+            if data.multi_get_objects.len() != object_ids.len() {
+                return Err(anyhow!(
+                    "object ref query returned {} results for {} object IDs",
+                    data.multi_get_objects.len(),
+                    object_ids.len(),
+                ));
+            }
+
+            for (object_id, object) in object_ids.iter().copied().zip_eq(data.multi_get_objects) {
+                results.push(match object {
+                    Some(object) => Some(decode_object_ref(object_id, object)?),
+                    None => None,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn decode_object_ref(
+        object_id: ObjectID,
+        object: ObjectSeedObject,
+    ) -> Result<ObjectRef, Error> {
+        let digest = object
+            .digest
+            .with_context(|| format!("seed object {object_id} is missing digest"))?
+            .parse::<ObjectDigest>()
+            .with_context(|| format!("invalid seed object digest for {object_id}"))?;
+        let version = object
+            .version
+            .with_context(|| format!("seed object {object_id} is missing version"))?;
+        Ok((object_id, SequenceNumber::from_u64(version), digest))
     }
 
     fn decode_object_seed(
@@ -1291,7 +1549,6 @@ pub(crate) mod object_query {
             ObjectKey {
                 address: SuiAddress(key.object_id.to_string()),
                 version: match key.version_query {
-                    VersionQuery::Version(v) => Some(v),
                     VersionQuery::VersionAtCheckpoint {
                         version,
                         checkpoint,
@@ -1323,15 +1580,6 @@ pub(crate) mod object_query {
         #[test]
         fn object_key_from_version_query_sets_only_selected_bound() {
             let object_id = ObjectID::random();
-
-            let version_key = ObjectKey::from(GqlObjectKey {
-                object_id,
-                version_query: VersionQuery::Version(7),
-            });
-            assert_eq!(version_key.address.0, object_id.to_string());
-            assert_eq!(version_key.version, Some(7));
-            assert_eq!(version_key.root_version, None);
-            assert_eq!(version_key.at_checkpoint, None);
 
             let root_version_key = ObjectKey::from(GqlObjectKey {
                 object_id,
