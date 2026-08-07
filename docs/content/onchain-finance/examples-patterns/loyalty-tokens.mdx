@@ -71,7 +71,7 @@ Lastly, a `buy_a_gift` function handles the redemption of `LOYALTY` tokens for `
 
 <ImportContent source="examples/move/token/sources/loyalty.move" mode="code" fun="buy_a_gift" noComments />
 
-## Security considerations
+## Implementation considerations
 
 When you implement loyalty tokens, consider the following:
 
@@ -86,6 +86,6 @@ Loyalty tokens follow this lifecycle:
 1. **Minting:** The `TreasuryCap` holder calls `reward_user` to mint tokens to a recipient.
 2. **Spending:** The recipient calls `buy_a_gift` to spend tokens. The `token::spend` function consumes the token and creates an `ActionRequest`.
 3. **Settlement:** The `ActionRequest` is confirmed against the `TokenPolicy`, which accumulates the spent balance.
-4. **Flushing:** The `TreasuryCap` holder can flush the accumulated spent balance from the `TokenPolicy`, effectively burning the tokens.
+4. **Burning:** The `TreasuryCap` holder can remove the accumulated spent balance from the `TokenPolicy`, effectively burning the tokens.
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui/tree/main/examples/move/token/sources/loyalty.move).

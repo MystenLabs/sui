@@ -102,10 +102,5 @@ To add rental support to an existing NFT type, follow these steps:
 5. **Use the rented NFT.** The borrower accesses the NFT through `borrow` (immutable reference) or `borrow_val` (mutable reference, for use cases where the NFT state changes during rental).
 6. **Reclaim after expiry.** After the rental period ends, the lender calls `reclaim` to regain full control of the NFT. The NFT can then be sold, rented again, or transferred normally.
 
-## Security considerations
-
-- **Kiosk transfers during rental.** Transferring a kiosk while an NFT is actively rented can cause unexpected behavior. Consider using personal kiosks (non-transferable) to prevent this scenario.
-- **Rental fee denomination.** The rental fee is paid upfront. Define clear pricing in your listing to avoid disputes. The smart contract does not support partial refunds by default.
-- **Creator royalties.** The rental implementation respects [transfer policy rules](/develop/objects/transfers/custom-rules) set by the NFT creator. Royalties apply when the NFT changes hands through a sale after the rental period ends.
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental/sources/nft_rental.move).

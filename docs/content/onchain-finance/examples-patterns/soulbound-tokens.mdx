@@ -59,7 +59,7 @@ If a user tries to transfer a soulbound NFT using `transfer::public_transfer`, t
 
 To check whether an NFT is soulbound, query the object's type and inspect its abilities. A struct with `key` but without `store` is soulbound (cannot be publicly transferred). You can verify this through the [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) by querying the object's type information, or by inspecting the Move source code for the type definition.
 
-## Security considerations
+## Design considerations
 
 When you design soulbound NFTs, consider the following:
 

@@ -42,7 +42,7 @@ answer: >-
   currency within a game application.
 ---
 
-In-game currencies are [closed-loop tokens](/onchain-finance/closed-loop-token) that players earn and spend within your game's economy. You mint the currency on Sui, but players can only use it within the workflows you define (for example, buying items, upgrading characters, or trading with other players through a governed marketplace). Common examples include gems, diamonds, credits, and gold.
+In-game currencies can use [closed-loop tokens](/onchain-finance/closed-loop-token) to create assets that players earn and spend within your game's economy. You mint the currency on Sui, but players can only use it within the workflows you define (for example, buying items, upgrading characters, or trading with other players through a governed marketplace). Common examples include gems, diamonds, credits, and gold.
 
 Closed-loop tokens differ from standard `Coin` types because they restrict what actions holders can perform. You configure a [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy) with rules that gate minting, spending, and transferring. This lets you control the game economy onchain while preventing players from extracting currency outside the game's intended flows.
 
@@ -81,7 +81,7 @@ To deploy the King Credits currency:
 4. Add council members by calling `add_council_member` with the `TreasuryCap`.
 5. Test a transfer by minting tokens to a user, then having a council member call `prove` to approve the transfer.
 
-## Security considerations
+## Implementation considerations
 
 - **Protect the `TreasuryCap`.** The holder can mint unlimited tokens, disrupting the game economy. Store it in a multisig address or dedicated custody ([Security Best Practices](/develop/security/best-practices)).
 - **Council member management.** The `add_council_member` and `remove_council_member` functions should be gated by the `TreasuryCap` holder. Log all membership changes as events for auditability.
