@@ -50,7 +50,7 @@ A module is the basic unit of code organization in Move. Each module belongs to 
 
 Move provides the following primitive types:
 
-| Type | Description |
+| **Type** | **Description** |
 |---|---|
 | `bool` | Boolean (`true` or `false`) |
 | `u8`, `u16`, `u32`, `u64`, `u128`, `u256` | Unsigned integers of various widths |
@@ -66,7 +66,7 @@ Structs define custom data types with named fields. On Sui, structs with the `ke
 
 Abilities control what operations you can perform on a type. Every struct has a set of abilities declared at definition time:
 
-| Ability | Grants |
+| **Ability** | **Grants** |
 |---|---|
 | `key` | The type can be stored as a Sui object (requires `id: UID` as first field) |
 | `store` | The type can be stored inside other objects or transferred using `public_transfer` |
@@ -79,9 +79,9 @@ A struct with `key` but without `drop` must be explicitly transferred or destroy
 
 Functions contain the executable logic of your module. Move has 3 visibility levels:
 
-- **`public`:** Callable from any module. Function signatures cannot change after publication.
-- **`public(package)`:** Callable only from modules in the same package. Signatures can change through upgrades.
-- **`entry`:** Callable directly from a transaction but not from other Move modules.
+- `public`: Callable from any module. Function signatures cannot change after publication.
+- `public(package)`: Callable only from modules in the same package. Signatures can change through upgrades.
+- `entry`: Callable directly from a transaction but not from other Move modules.
 
 Private functions (no visibility modifier) are callable only within the defining module. See [The Move Book: Functions](https://move-book.com/move-basics/function.html) and [Visibility Modifiers](https://move-book.com/move-basics/visibility.html).
 
@@ -111,8 +111,8 @@ Constants are module-level values that do not change. Declare them with `const` 
 
 Move uses ownership-based memory safety. Each value has exactly one owner. When you pass a value to a function, ownership transfers to that function. To avoid transferring ownership, pass a reference:
 
-- **`&T`:** Immutable reference (read-only access)
-- **`&mut T`:** Mutable reference (read and write access)
+- `&T`: Immutable reference (read-only access)
+- `&mut T`: Mutable reference (read and write access)
 
 References prevent copying or moving the original value while the reference is active. See [The Move Book: References](https://move-book.com/move-basics/references.html) and [Ownership and Scope](https://move-book.com/move-basics/ownership-and-scope.html).
 

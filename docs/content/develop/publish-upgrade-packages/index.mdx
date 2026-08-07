@@ -44,11 +44,11 @@ A Move package on Sui includes one or more modules that define the package's int
 
 Publishing a package follows this sequence:
 
-1. **Write and test your Move code.** Create a Move project with `sui move new PROJECT_NAME`, write your modules, and run tests with `sui move test`. See the [Hello, World](/getting-started/onboarding/hello-world) guide for a step-by-step introduction.
-2. **Configure your manifest.** Verify that your `Move.toml` uses `edition = "2024"` and lists all dependencies. The Sui framework is resolved automatically and does not need an explicit entry in `[dependencies]`. See the [Manifest Reference](/references/package-managers/manifest-reference) for the full syntax.
-3. **Build the package.** Run `sui move build` to compile. Fix any errors before publishing.
-4. **Publish to the network.** Run `sui client publish` from the package root. The command compiles, creates a package object onchain, and returns the package ID. You need sufficient gas in your active address. Use `--dry-run` to estimate gas cost before publishing.
-5. **Verify publication.** Use `sui client verify-source` from the package directory to confirm that the onchain bytecode matches your local source.
+1. **Write and test your Move code:** Create a Move project with `sui move new PROJECT_NAME`, write your modules, and run tests with `sui move test`. 
+2. **Configure your manifest:** Verify that your `Move.toml` uses `edition = "2024"` and lists all dependencies. The Sui framework is resolved automatically and does not need an explicit entry in `[dependencies]`. See the [Manifest Reference](/references/package-managers/manifest-reference) for the full syntax.
+3. **Build the package:** Run `sui move build` to compile. Fix any errors before publishing.
+4. **Publish to the network:** Run `sui client publish` from the package root. The command compiles, creates a package object onchain, and returns the package ID. You need sufficient gas in your active address. Use `--dry-run` to estimate gas cost before publishing.
+5. **Verify publication:** Use `sui client verify-source` from the package directory to confirm that the onchain bytecode matches your local source.
 
 :::caution
 

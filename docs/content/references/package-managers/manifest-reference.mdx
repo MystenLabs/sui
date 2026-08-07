@@ -65,9 +65,9 @@ name = "<package-name>"
 
 ### `[dependencies]`
 
-Lists the packages your project depends on. Each dependency has a name (the key) and a source specifier (the value). The following dependency formats are available ([dependency types](/develop/manage-packages/move-package-management#dependency-types)):
+Lists the packages your project depends on. Each dependency has a name (the key) and a source specifier (the value). The following dependency formats are available:
 
-| Format | Syntax | When to use |
+| **Format** | **Syntax** | **When to use** |
 |---|---|---|
 | MVR (Move Registry) | `name = { r.mvr = "@SCOPE/PACKAGE" }` | Published packages registered in the Move Registry |
 | Git | `name = { git = "URL", subdir = "PATH", rev = "BRANCH_OR_TAG" }` | Packages hosted in a Git repository. `subdir` is required when the package is not at the repo root. `rev` specifies a branch, tag, or commit hash. |
@@ -157,8 +157,16 @@ my_lib = { use-environment = "testnet" }
 
 The `use-environment` key tells the resolver to use the published address from the specified environment. In this example, building for `staging` uses the Testnet addresses for both dependencies.
 
-### Common questions
+### FAQ
 
-- **When should you use Git dependencies versus MVR?** Use MVR for packages registered in the Move Registry (these resolve network-specific addresses automatically). Use Git dependencies for packages not registered in MVR, or when you need to pin to a specific branch, tag, or commit.
-- **How do environments affect publishing?** The environment determines which dependency addresses the compiler uses during the build. When you publish with `sui client publish`, the active environment (set with `--build-env` or inferred from the connected network) determines which `[dep-replacements]` section applies.
-- **What is a lockfile?** The `Move.lock` file records the exact resolved versions and addresses of your dependencies. It is generated automatically when you build. Commit `Move.lock` to version control to ensure reproducible builds.
+##### When should you use Git dependencies versus MVR?
+
+Use MVR for packages registered in the Move Registry (these resolve network-specific addresses automatically). Use Git dependencies for packages not registered in MVR, or when you need to pin to a specific branch, tag, or commit.
+
+##### How do environments affect publishing?
+
+The environment determines which dependency addresses the compiler uses during the build. When you publish with `sui client publish`, the active environment (set with `--build-env` or inferred from the connected network) determines which `[dep-replacements]` section applies.
+
+##### What is a lockfile?
+
+The `Move.lock` file records the exact resolved versions and addresses of your dependencies. It is generated automatically when you build. Commit `Move.lock` to version control to ensure reproducible builds.
