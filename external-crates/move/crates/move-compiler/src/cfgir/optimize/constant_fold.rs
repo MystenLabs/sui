@@ -4,12 +4,14 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, optimize::Constants},
+    diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value_, Var,
     },
+    ice,
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
     parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
     shared::unique_map::UniqueMap,
@@ -51,7 +53,6 @@ pub fn optimize(
 }
 
 struct Context<'a> {
-    #[allow(dead_code)]
     reporter: &'a DiagnosticReporter<'a>,
     constants: Constants<'a>,
 }
@@ -160,7 +161,6 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let changed = changed1 || changed2;
             let v1_opt = foldable_exp(e1);
             let v2_opt = foldable_exp(e2);
-            // TODO warn on operations that always fail
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
@@ -179,7 +179,6 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(e);
-            // TODO warn on operations that always fail
             let v = match foldable_exp(e) {
                 Some(v) => v,
                 None => return changed,
@@ -250,22 +249,24 @@ fn is_valid_const_builtin_type(sp!(_, bt_): &BuiltinTypeName) -> bool {
 // Folding
 //**************************************************************************************************
 
-fn fold_unary_op(loc: Loc, sp!(_, op_): &UnaryOp, v: Value_) -> UnannotatedExp_ {
-    use UnaryOp_ as U;
-    use Value_ as V;
-    let folded = match (op_, v) {
-        (U::Not, V::Bool(b)) => V::Bool(!b),
-        (op_, v) => panic!("ICE unknown unary op. combo while folding: {} {:?}", op_, v),
-    };
-    evalue_(loc, folded)
+fn fold_unary_op(loc: Loc, op: &UnaryOp, v: Value_) -> UnannotatedExp_ {
+    evalue_(loc, fold_unary_op_(op, v))
 }
 
-fn fold_binary_op(
-    loc: Loc,
-    sp!(_, op_): &BinOp,
-    v1: Value_,
-    v2: Value_,
-) -> Option<UnannotatedExp_> {
+fn fold_unary_op_(sp!(_, op_): &UnaryOp, v: Value_) -> Value_ {
+    use UnaryOp_ as U;
+    use Value_ as V;
+    match (op_, v) {
+        (U::Not, V::Bool(b)) => V::Bool(!b),
+        (op_, v) => panic!("ICE unknown unary op. combo while folding: {} {:?}", op_, v),
+    }
+}
+
+fn fold_binary_op(loc: Loc, op: &BinOp, v1: Value_, v2: Value_) -> Option<UnannotatedExp_> {
+    Some(evalue_(loc, fold_binary_op_(op, v1, v2)?))
+}
+
+fn fold_binary_op_(sp!(_, op_): &BinOp, v1: Value_, v2: Value_) -> Option<Value_> {
     use BinOp_ as B;
     use Value_ as V;
     let v = match (op_, v1, v2) {
@@ -390,10 +391,14 @@ fn fold_binary_op(
             v1, op_, v2
         ),
     };
-    Some(evalue_(loc, v))
+    Some(v)
 }
 
-fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<UnannotatedExp_> {
+fn fold_cast(loc: Loc, bt: &BuiltinTypeName, v: Value_) -> Option<UnannotatedExp_> {
+    Some(evalue_(loc, fold_cast_(bt, v)?))
+}
+
+fn fold_cast_(sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Value_> {
     use BuiltinTypeName_ as BT;
     use Value_ as V;
     let cast = match (bt_, v) {
@@ -440,7 +445,7 @@ fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Unann
         (BT::U256, V::U256(u)) => V::U256(u),
         (_, v) => panic!("ICE unexpected cast while folding: {:?} as {:?}", v, bt_),
     };
-    Some(evalue_(loc, cast))
+    Some(cast)
 }
 
 const fn evalue_(loc: Loc, v: Value_) -> UnannotatedExp_ {
@@ -476,4 +481,211 @@ fn ignorable_exp(e: &Exp) -> bool {
         E::Multiple(es) => es.iter().all(ignorable_exp),
         _ => false,
     }
+}
+
+//**************************************************************************************************
+// Always erroring operations
+//**************************************************************************************************
+
+/// Reports any operation over values that will always error at runtime, e.g. `1 / 0` or
+/// `0xFFFFu16 as u8`.
+pub fn report_always_erroring_operations(
+    reporter: &DiagnosticReporter,
+    constants: Constants,
+    cfg: &MutForwardCFG,
+) {
+    let context = Context {
+        reporter,
+        constants,
+    };
+    for block in cfg.blocks().values() {
+        for cmd in block {
+            check_cmd(&context, cmd);
+        }
+    }
+}
+
+#[growing_stack]
+fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
+    use Command_ as C;
+    match cmd_ {
+        C::Assign(_, _, e)
+        | C::Return { exp: e, .. }
+        | C::Abort(_, e)
+        | C::JumpIf { cond: e, .. }
+        | C::VariantSwitch { subject: e, .. }
+        | C::IgnoreAndPop { exp: e, .. } => {
+            check_exp(context, e);
+        }
+        C::Mutate(el, er) => {
+            check_exp(context, el);
+            check_exp(context, er);
+        }
+        C::Jump { .. } => (),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
+    }
+}
+
+/// Returns the value of `e` if it can be evaluated statically. Any expression that always
+/// errors is reported. If the expression cannot be evaluated statically (from an error or
+/// otherwise), returns `None`.
+#[growing_stack]
+fn check_exp(context: &Context, e: &Exp) -> Option<Value_> {
+    use UnannotatedExp_ as E;
+    match &e.exp.value {
+        E::Value(_) | E::Constant(_) => foldable_exp(context, e),
+
+        E::Unit { .. }
+        | E::UnresolvedError
+        | E::BorrowLocal(_, _)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::ErrorConstant { .. }
+        | E::Unreachable => None,
+
+        E::ModuleCall(mcall) => {
+            check_exps(context, &mcall.arguments);
+            None
+        }
+
+        E::Freeze(er) | E::Dereference(er) | E::Borrow(_, er, _, _) => {
+            check_exp(context, er);
+            None
+        }
+
+        E::Pack(_, _, fields) => {
+            for (_, _, er) in fields {
+                check_exp(context, er);
+            }
+            None
+        }
+
+        E::PackVariant(_, _, _, fields) => {
+            for (_, _, er) in fields {
+                check_exp(context, er);
+            }
+            None
+        }
+
+        E::Multiple(es) | E::Vector(_, _, _, es) => {
+            check_exps(context, es);
+            None
+        }
+
+        E::UnaryExp(op, er) => {
+            let v = check_exp(context, er)?;
+            Some(fold_unary_op_(op, v))
+        }
+
+        E::BinopExp(e1, op, e2) => {
+            let v1_opt = check_exp(context, e1);
+            let v2_opt = check_exp(context, e2);
+            let (v1, v2) = (v1_opt?, v2_opt?);
+            match fold_binary_op_(op, v1.clone(), v2.clone()) {
+                folded @ Some(_) => folded,
+                None => {
+                    report_binop_always_errors(context, e.exp.loc, op, &v1, &v2);
+                    None
+                }
+            }
+        }
+
+        E::Cast(er, bt) => {
+            let v = check_exp(context, er)?;
+            match fold_cast_(bt, v.clone()) {
+                folded @ Some(_) => folded,
+                None => {
+                    report_cast_always_errors(context, e.exp.loc, bt, &v);
+                    None
+                }
+            }
+        }
+    }
+}
+
+fn check_exps(context: &Context, es: &[Exp]) {
+    for e in es {
+        check_exp(context, e);
+    }
+}
+
+fn report_binop_always_errors(
+    context: &Context,
+    loc: Loc,
+    sp!(_, op_): &BinOp,
+    v1: &Value_,
+    v2: &Value_,
+) {
+    use BinOp_ as B;
+    let (Some((n1, ty)), Some((n2, _))) = (numeric_value(v1), numeric_value(v2)) else {
+        context
+            .reporter
+            .add_diag(ice!((loc, "Only numeric operations can error at runtime")));
+        return;
+    };
+    let reason = match op_ {
+        B::Add => format!("The sum of '{n1}' and '{n2}' is outside the range of '{ty}'"),
+        B::Sub => format!("Subtracting '{n2}' from '{n1}' is less than zero"),
+        B::Mul => format!("The product of '{n1}' and '{n2}' is outside the range of '{ty}'"),
+        B::Div => "Cannot divide by zero".to_owned(),
+        B::Mod => "Cannot take the remainder modulo zero".to_owned(),
+        B::Shl | B::Shr => format!(
+            "The shift amount '{n2}' is greater than or equal to the number of bits in '{ty}'"
+        ),
+        // no other operation can error
+        B::BitOr
+        | B::BitAnd
+        | B::Xor
+        | B::And
+        | B::Or
+        | B::Eq
+        | B::Neq
+        | B::Lt
+        | B::Gt
+        | B::Le
+        | B::Ge => {
+            context.reporter.add_diag(ice!((
+                loc,
+                format!("'{op_}' cannot error at runtime, but it could not be folded")
+            )));
+            return;
+        }
+    };
+    report_always_errors(context, loc, reason)
+}
+
+fn report_cast_always_errors(
+    context: &Context,
+    loc: Loc,
+    sp!(_, bt_): &BuiltinTypeName,
+    v: &Value_,
+) {
+    let Some((n, ty)) = numeric_value(v) else {
+        context
+            .reporter
+            .add_diag(ice!((loc, "Only numeric casts can error at runtime")));
+        return;
+    };
+    let reason = format!("The '{ty}' value '{n}' is outside the range of '{bt_}'");
+    report_always_errors(context, loc, reason)
+}
+
+fn report_always_errors(context: &Context, loc: Loc, reason: String) {
+    let msg = format!("{reason}. This operation always errors at runtime");
+    context
+        .reporter
+        .add_diag(diag!(CodeGeneration::AlwaysErrors, (loc, msg)));
+}
+
+fn numeric_value(v: &Value_) -> Option<(String, &'static str)> {
+    use Value_ as V;
+    Some(match v {
+        V::U8(u) => (u.to_string(), "u8"),
+        V::U16(u) => (u.to_string(), "u16"),
+        V::U32(u) => (u.to_string(), "u32"),
+        V::U64(u) => (u.to_string(), "u64"),
+        V::U128(u) => (u.to_string(), "u128"),
+        V::U256(u) => (u.to_string(), "u256"),
+        V::Address(_) | V::Bool(_) | V::Vector(_, _) => return None,
+    })
 }
