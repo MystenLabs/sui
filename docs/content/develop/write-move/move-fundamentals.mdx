@@ -14,7 +14,6 @@ keywords:
   - primitive types
   - enums
   - Move modules
-draft: true
 goal:
   description: >-
     Reader understands a comprehensive reference for Move language syntax
@@ -41,30 +40,82 @@ answer: >-
   more.
 ---
 
-5. Move Basics
-5.1. Modules
-5.2. Comments
-5.3. Primitive Types
-5.4. Address Type
-5.5. Expressions
-5.6. Structs
-5.7. Abilities Introduction
-5.8. Ability: Drop
-5.9. Importing Modules
-5.10. Standard Library
-5.11. Vector
-5.12. Option
-5.13. String
-5.14. Control Flow
-5.15. Enums and Match
-5.16. Constants
-5.17. Aborting Execution
-5.18. Functions
-5.19. Struct Methods
-5.20. Visibility Modifiers
-5.21. Ownership and Scope
-5.22. Ability: Copy
-5.23. References
-5.24. Generics
-5.25. Type Reflection
-5.26. Testing
+Move is a resource-oriented programming language designed for safe smart contract development. Sui uses Move with extensions for the [object model](/develop/objects), [programmable transaction blocks](/develop/transactions/ptbs/prog-txn-blocks), and the Sui-specific framework modules. This page covers the core language syntax. For the full language reference, see [The Move Book](https://move-book.com/).
+
+## Modules
+
+A module is the basic unit of code organization in Move. Each module belongs to a package and contains struct definitions, function declarations, and constants. Modules are published onchain as part of a package and cannot be modified after publication (use [package upgrades](/develop/publish-upgrade-packages) for updates). See [The Move Book: Modules](https://move-book.com/reference/modules.html).
+
+## Primitive types
+
+Move provides the following primitive types:
+
+| Type | Description |
+|---|---|
+| `bool` | Boolean (`true` or `false`) |
+| `u8`, `u16`, `u32`, `u64`, `u128`, `u256` | Unsigned integers of various widths |
+| `address` | A 32-byte address value representing an account or object location on Sui |
+
+See [The Move Book: Primitive Types](https://move-book.com/move-basics/primitive-types.html).
+
+## Structs
+
+Structs define custom data types with named fields. On Sui, structs with the `key` ability represent [objects](/develop/objects) and must have `id: UID` as their first field. See [The Move Book: Structs](https://move-book.com/move-basics/struct.html).
+
+## Abilities
+
+Abilities control what operations you can perform on a type. Every struct has a set of abilities declared at definition time:
+
+| Ability | Grants |
+|---|---|
+| `key` | The type can be stored as a Sui object (requires `id: UID` as first field) |
+| `store` | The type can be stored inside other objects or transferred using `public_transfer` |
+| `copy` | The type can be copied (duplicated in memory) |
+| `drop` | The type can be discarded when it goes out of scope |
+
+A struct with `key` but without `drop` must be explicitly transferred or destroyed. This is the foundation of resource safety in Move. See [The Move Book: Abilities](https://move-book.com/move-basics/abilities-introduction.html).
+
+## Functions
+
+Functions contain the executable logic of your module. Move has 3 visibility levels:
+
+- **`public`:** Callable from any module. Function signatures cannot change after publication.
+- **`public(package)`:** Callable only from modules in the same package. Signatures can change through upgrades.
+- **`entry`:** Callable directly from a transaction but not from other Move modules.
+
+Private functions (no visibility modifier) are callable only within the defining module. See [The Move Book: Functions](https://move-book.com/move-basics/function.html) and [Visibility Modifiers](https://move-book.com/move-basics/visibility.html).
+
+## Generics
+
+Generics let you write type-parameterized functions and structs. You declare type parameters in angle brackets and optionally constrain them with ability requirements. See [The Move Book: Generics](https://move-book.com/move-basics/generics.html).
+
+## Control flow
+
+Move supports `if`/`else` expressions, `while` loops, `loop` (infinite loop with `break`), and `for` loops (Move 2024 edition). The `return` keyword exits a function early. `abort` halts execution with an error code. See [The Move Book: Control Flow](https://move-book.com/move-basics/control-flow.html).
+
+## Enums and pattern matching
+
+Move 2024 edition introduces enums and `match` expressions. Enums define a type with multiple variants, each potentially holding different data. `match` expressions destructure enum values and execute variant-specific logic. See [The Move Book: Enums and Match](https://move-book.com/move-basics/enum.html).
+
+## Vectors, options, and strings
+
+- **Vector (`vector<T>`):** A growable, ordered collection of elements of a single type. Use `vector::push_back`, `vector::pop_back`, `vector::length`, and index syntax to manipulate vectors. See [The Move Book: Vector](https://move-book.com/move-basics/vector.html).
+- **Option (`Option<T>`):** Represents a value that might be absent. Use `option::some(value)` and `option::none()` to construct, and `option::is_some()`, `option::extract()` to access. See [The Move Book: Option](https://move-book.com/move-basics/option.html).
+- **String (`String`):** UTF-8 encoded text. Use `string::utf8(bytes)` to create from a byte vector. See [The Move Book: String](https://move-book.com/move-basics/string.html).
+
+## Constants
+
+Constants are module-level values that do not change. Declare them with `const` at the top of a module. Error constants (prefixed with `E`) are the convention for abort codes. See [The Move Book: Constants](https://move-book.com/move-basics/constants.html).
+
+## References and ownership
+
+Move uses ownership-based memory safety. Each value has exactly one owner. When you pass a value to a function, ownership transfers to that function. To avoid transferring ownership, pass a reference:
+
+- **`&T`:** Immutable reference (read-only access)
+- **`&mut T`:** Mutable reference (read and write access)
+
+References prevent copying or moving the original value while the reference is active. See [The Move Book: References](https://move-book.com/move-basics/references.html) and [Ownership and Scope](https://move-book.com/move-basics/ownership-and-scope.html).
+
+## Testing
+
+Move supports inline unit tests using the `#[test]` attribute. Test functions run during `sui move test` and do not deploy onchain. Use `#[test_only]` for helper modules that exist only for testing. See [The Move Book: Testing](https://move-book.com/move-basics/testing.html) and the [Move unit testing guide](/develop/write-move/unit-testing).
