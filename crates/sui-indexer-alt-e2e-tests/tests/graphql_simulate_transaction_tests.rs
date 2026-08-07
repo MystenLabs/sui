@@ -853,7 +853,7 @@ async fn test_simulate_transaction_json_transfer() {
         .execute_graphql(
             r#"
             query($txJson: JSON!) {
-                simulateTransaction(transaction: $txJson) {
+                simulateTransaction(transaction: $txJson, doGasSelection: true) {
                     effects {
                         digest
                         status

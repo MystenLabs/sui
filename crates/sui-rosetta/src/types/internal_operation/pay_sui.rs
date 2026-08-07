@@ -115,7 +115,14 @@ impl TryConstructTransaction for PaySui {
             simulate_transaction(client, pt_ab_gas, sender, vec![], gas_price, budget).await;
 
         match sim_result {
-            Ok((budget, gas_coin_objs)) if gas_coin_objs.is_empty() => {
+            // Simulation deliberately permits an unfunded address-balance gas payment so callers
+            // can inspect it. Rosetta must still construct an executable transaction, so only
+            // retain Path A when the actual address balance covers both its explicit withdrawal
+            // and the resolved gas budget.
+            Ok((budget, gas_coin_objs))
+                if gas_coin_objs.is_empty()
+                    && address_balance >= address_balance_withdrawl.saturating_add(budget) =>
+            {
                 // Path A succeeded with address-balance gas
                 let total_sui_balance = (coin_objects_total as i128) + (address_balance as i128);
                 Ok(TransactionObjectData {

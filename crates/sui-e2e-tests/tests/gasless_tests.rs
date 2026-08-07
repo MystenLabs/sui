@@ -164,7 +164,6 @@ async fn test_gasless_dryrun() {
         node.state().simulate_transaction(
             tx_data,
             sui_types::transaction_executor::TransactionChecks::Enabled,
-            true,
         )
     });
     if let Err(e) = result {

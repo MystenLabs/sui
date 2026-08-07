@@ -22,7 +22,8 @@ async fn build_transfer_sui_tx(
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(SuiAddress::random_for_testing_only(), None);
     let pt = builder.finish();
-    // Empty gas payment — dry_run injects a mock gas coin.
+    // Empty gas payment — these tests exercise validation before the address-balance payment is
+    // checked for available funds.
     TransactionData::new_programmable(sender, vec![], pt, gas_budget, gas_price)
 }
 

@@ -1257,14 +1257,25 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     *transaction.expiration_mut_for_testing() = expiration;
                     self.dry_run(transaction).await?
                 } else {
-                    let sender_address = self.get_sender(sender).address;
+                    let sender_acc = self.get_sender(sender.clone());
+                    let sponsor_acc = sponsor.map_or(sender_acc, |a| self.get_sender(Some(a)));
+                    let gas_objects = (!address_balance_gas)
+                        .then(|| self.resolve_gas_payments(sponsor_acc, gas_payment))
+                        .transpose()?;
                     let transaction =
                         TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
                             inputs,
                             commands,
                         });
-                    self.dev_inspect(sender_address, transaction, gas_price)
-                        .await?
+                    self.dev_inspect(
+                        sender_acc.address,
+                        transaction,
+                        gas_price,
+                        Some(gas_budget),
+                        Some(sponsor_acc.address),
+                        gas_objects,
+                    )
+                    .await?
                 };
                 let output = self.object_summary_output(&summary, /* summarize */ false);
                 Ok(output)
@@ -1840,9 +1851,15 @@ impl SuiTestAdapter {
         };
 
         if dry_run {
+            let sender_acc = self.get_sender(Some(sender));
+            let payments = if address_balance_gas {
+                vec![]
+            } else {
+                self.resolve_gas_payments(sender_acc, None)?
+            };
             let mut transaction = TransactionData::new_programmable(
-                self.get_sender(Some(sender)).address,
-                vec![],
+                sender_acc.address,
+                payments,
                 pt,
                 gas_budget,
                 gas_price,
@@ -2192,10 +2209,20 @@ impl SuiTestAdapter {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
     ) -> anyhow::Result<TxnSummary> {
         let results = self
             .executor
-            .dev_inspect_transaction_block(sender, transaction_kind, gas_price)
+            .dev_inspect_transaction_block(
+                sender,
+                transaction_kind,
+                gas_price,
+                gas_budget,
+                gas_sponsor,
+                gas_objects,
+            )
             .await?;
         let DevInspectResults {
             effects, events, ..

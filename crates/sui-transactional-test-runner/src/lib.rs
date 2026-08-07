@@ -40,6 +40,7 @@ mod testing_imports {
     pub use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
     pub use sui_storage::key_value_store::TransactionKeyValueStore;
     pub use sui_types::base_types::ObjectID;
+    pub use sui_types::base_types::ObjectRef;
     pub use sui_types::base_types::SuiAddress;
     pub use sui_types::base_types::VersionNumber;
     pub use sui_types::committee::EpochId;
@@ -135,6 +136,9 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
     ) -> SuiResult<DevInspectResults>;
 
     async fn query_tx_events_asc(
@@ -223,15 +227,18 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
     ) -> SuiResult<DevInspectResults> {
         self.fullnode
             .dev_inspect_transaction_block(
                 sender,
                 transaction_kind,
                 gas_price,
-                None,
-                None,
-                None,
+                gas_budget,
+                gas_sponsor,
+                gas_objects,
                 None,
                 None,
             )
@@ -490,6 +497,9 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         _sender: SuiAddress,
         _transaction_kind: TransactionKind,
         _gas_price: Option<u64>,
+        _gas_budget: Option<u64>,
+        _gas_sponsor: Option<SuiAddress>,
+        _gas_objects: Option<Vec<ObjectRef>>,
     ) -> SuiResult<DevInspectResults> {
         unimplemented!("dev_inspect_transaction_block not supported in simulator mode")
     }

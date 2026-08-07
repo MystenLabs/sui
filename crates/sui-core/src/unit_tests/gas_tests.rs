@@ -15,7 +15,7 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::SignedTransactionEffects;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::GAS_VALUE_FOR_TESTING;
+use sui_types::object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -34,13 +34,6 @@ static MIN_GAS_BUDGET_PRE_RGP: Lazy<u64> =
 #[test]
 fn test_gas_invariants() {
     let max_tx_gas = ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
-    assert!(
-        DEV_INSPECT_GAS_COIN_VALUE >= max_tx_gas,
-        "DEV_INSPECT_GAS_COIN_VALUE {} cannot be less than max_tx_gas {}",
-        DEV_INSPECT_GAS_COIN_VALUE,
-        max_tx_gas
-    );
-
     let max_gas_price = ProtocolConfig::get_for_max_version_UNSAFE().max_gas_price();
     let base_tx_cost_fixed = ProtocolConfig::get_for_max_version_UNSAFE().base_tx_cost_fixed();
     assert!(

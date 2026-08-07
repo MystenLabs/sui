@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ObjectID;
 use crate::effects::TransactionEffects;
 use crate::effects::TransactionEvents;
 use crate::error::ExecutionError;
@@ -28,7 +27,6 @@ pub trait TransactionExecutor: Send + Sync {
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
-        allow_mock_gas_coin: bool,
     ) -> Result<SimulateTransactionResult, SuiError>;
 }
 
@@ -37,7 +35,6 @@ pub struct SimulateTransactionResult {
     pub events: Option<TransactionEvents>,
     pub objects: ObjectSet,
     pub execution_result: Result<Vec<ExecutionResult>, ExecutionError>,
-    pub mock_gas_id: Option<ObjectID>,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
     pub suggested_gas_price: Option<u64>,
 }
