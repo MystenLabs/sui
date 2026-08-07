@@ -996,3 +996,34 @@ fn valid_during_transaction_expiration_round_trips_through_proto() {
 
     assert_eq!(round_tripped, original);
 }
+
+#[test]
+fn validity_transaction_expiration_round_trips_through_proto() {
+    use sui_types::transaction::{AllowedProposers, TransactionExpiration};
+
+    let chain = sui_types::digests::ChainIdentifier::from(
+        sui_types::digests::CheckpointDigest::new([7u8; 32]),
+    );
+    let expiration = |allowed_proposers| TransactionExpiration::Validity {
+        min_epoch: Some(42),
+        max_epoch: Some(43),
+        min_timestamp: Some(1_700_000_000_123),
+        max_timestamp: Some(1_700_000_999_456),
+        chain,
+        nonce: 0xc0ffee,
+        allowed_proposers,
+    };
+
+    // The proposer set is the part that used to be dropped on the way through the proto.
+    for original in [
+        expiration(Some(AllowedProposers {
+            epoch: 42,
+            proposers: nonempty::nonempty![0, 2, 5],
+        })),
+        expiration(None),
+    ] {
+        let proto = ProtoTransactionExpiration::from(original.clone());
+        let round_tripped = TransactionExpiration::try_from(&proto).unwrap();
+        assert_eq!(round_tripped, original);
+    }
+}
