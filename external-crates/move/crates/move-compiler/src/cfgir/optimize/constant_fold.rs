@@ -11,6 +11,7 @@ use crate::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value, Value_, Var,
     },
+    ice,
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
     parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
     shared::unique_map::UniqueMap,
@@ -245,22 +246,24 @@ fn is_valid_const_builtin_type(sp!(_, bt_): &BuiltinTypeName) -> bool {
 // Folding
 //**************************************************************************************************
 
-fn fold_unary_op(loc: Loc, sp!(_, op_): &UnaryOp, v: Value_) -> UnannotatedExp_ {
-    use UnaryOp_ as U;
-    use Value_ as V;
-    let folded = match (op_, v) {
-        (U::Not, V::Bool(b)) => V::Bool(!b),
-        (op_, v) => panic!("ICE unknown unary op. combo while folding: {} {:?}", op_, v),
-    };
-    evalue_(loc, folded)
+fn fold_unary_op(loc: Loc, op: &UnaryOp, v: Value_) -> UnannotatedExp_ {
+    evalue_(loc, fold_unary_op_(op, v))
 }
 
-fn fold_binary_op(
-    loc: Loc,
-    sp!(_, op_): &BinOp,
-    v1: Value_,
-    v2: Value_,
-) -> Option<UnannotatedExp_> {
+fn fold_unary_op_(sp!(_, op_): &UnaryOp, v: Value_) -> Value_ {
+    use UnaryOp_ as U;
+    use Value_ as V;
+    match (op_, v) {
+        (U::Not, V::Bool(b)) => V::Bool(!b),
+        (op_, v) => panic!("ICE unknown unary op. combo while folding: {} {:?}", op_, v),
+    }
+}
+
+fn fold_binary_op(loc: Loc, op: &BinOp, v1: Value_, v2: Value_) -> Option<UnannotatedExp_> {
+    Some(evalue_(loc, fold_binary_op_(op, v1, v2)?))
+}
+
+fn fold_binary_op_(sp!(_, op_): &BinOp, v1: Value_, v2: Value_) -> Option<Value_> {
     use BinOp_ as B;
     use Value_ as V;
     let v = match (op_, v1, v2) {
@@ -385,10 +388,14 @@ fn fold_binary_op(
             v1, op_, v2
         ),
     };
-    Some(evalue_(loc, v))
+    Some(v)
 }
 
-fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<UnannotatedExp_> {
+fn fold_cast(loc: Loc, bt: &BuiltinTypeName, v: Value_) -> Option<UnannotatedExp_> {
+    Some(evalue_(loc, fold_cast_(bt, v)?))
+}
+
+fn fold_cast_(sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Value_> {
     use BuiltinTypeName_ as BT;
     use Value_ as V;
     let cast = match (bt_, v) {
@@ -435,7 +442,7 @@ fn fold_cast(loc: Loc, sp!(_, bt_): &BuiltinTypeName, v: Value_) -> Option<Unann
         (BT::U256, V::U256(u)) => V::U256(u),
         (_, v) => panic!("ICE unexpected cast while folding: {:?} as {:?}", v, bt_),
     };
-    Some(evalue_(loc, cast))
+    Some(cast)
 }
 
 const fn evalue_(loc: Loc, v: Value_) -> UnannotatedExp_ {
@@ -469,11 +476,8 @@ fn ignorable_exp(e: &Exp) -> bool {
 // Always erroring operations
 //**************************************************************************************************
 
-/// Reports any operation over constant values that will always error at runtime, e.g. `1 / 0` or
+/// Reports any operation over values that will always error at runtime, e.g. `1 / 0` or
 /// `0xFFFFu16 as u8`.
-///
-/// This must be run only after `optimize` has reached a fixed point. Otherwise, operations that
-/// have not yet been folded, or that live in code that will be removed, would be reported.
 pub fn report_always_erroring_operations(
     reporter: &DiagnosticReporter,
     constants: &UniqueMap<ConstantName, Value>,
@@ -511,8 +515,9 @@ fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
     }
 }
 
-/// Returns the value of `e` if it can be evaluated statically. Any subexpression that always
-/// errors is reported, and yields `None` for the expressions containing it.
+/// Returns the value of `e` if it can be evaluated statically. Any expression that always
+/// errors is reported. If the expression cannot be evaluated statically (from an error or
+/// otherwise), returns `None`.
 #[growing_stack]
 fn check_exp(context: &Context, e: &Exp) -> Option<Value_> {
     use UnannotatedExp_ as E;
@@ -558,15 +563,15 @@ fn check_exp(context: &Context, e: &Exp) -> Option<Value_> {
 
         E::UnaryExp(op, er) => {
             let v = check_exp(context, er)?;
-            Some(folded_value(fold_unary_op(e.exp.loc, op, v)))
+            Some(fold_unary_op_(op, v))
         }
 
         E::BinopExp(e1, op, e2) => {
             let v1_opt = check_exp(context, e1);
             let v2_opt = check_exp(context, e2);
             let (v1, v2) = (v1_opt?, v2_opt?);
-            match fold_binary_op(e.exp.loc, op, v1.clone(), v2.clone()) {
-                Some(folded) => Some(folded_value(folded)),
+            match fold_binary_op_(op, v1.clone(), v2.clone()) {
+                folded @ Some(_) => folded,
                 None => {
                     report_binop_always_errors(context, e.exp.loc, op, &v1, &v2);
                     None
@@ -576,8 +581,8 @@ fn check_exp(context: &Context, e: &Exp) -> Option<Value_> {
 
         E::Cast(er, bt) => {
             let v = check_exp(context, er)?;
-            match fold_cast(e.exp.loc, bt, v.clone()) {
-                Some(folded) => Some(folded_value(folded)),
+            match fold_cast_(bt, v.clone()) {
+                folded @ Some(_) => folded,
                 None => {
                     report_cast_always_errors(context, e.exp.loc, bt, &v);
                     None
@@ -602,7 +607,9 @@ fn report_binop_always_errors(
 ) {
     use BinOp_ as B;
     let (Some((n1, ty)), Some((n2, _))) = (numeric_value(v1), numeric_value(v2)) else {
-        debug_assert!(false, "ICE only numeric operations can error");
+        context
+            .reporter
+            .add_diag(ice!((loc, "Only numeric operations can error at runtime")));
         return;
     };
     let reason = match op_ {
@@ -626,7 +633,10 @@ fn report_binop_always_errors(
         | B::Gt
         | B::Le
         | B::Ge => {
-            debug_assert!(false, "ICE '{op_}' cannot error");
+            context.reporter.add_diag(ice!((
+                loc,
+                format!("'{op_}' cannot error at runtime, but it could not be folded")
+            )));
             return;
         }
     };
@@ -640,7 +650,9 @@ fn report_cast_always_errors(
     v: &Value_,
 ) {
     let Some((n, ty)) = numeric_value(v) else {
-        debug_assert!(false, "ICE only numeric casts can error");
+        context
+            .reporter
+            .add_diag(ice!((loc, "Only numeric casts can error at runtime")));
         return;
     };
     let reason = format!("The '{ty}' value '{n}' is outside the range of '{bt_}'");
@@ -665,11 +677,4 @@ fn numeric_value(v: &Value_) -> Option<(String, &'static str)> {
         V::U256(u) => (u.to_string(), "u256"),
         V::Address(_) | V::Bool(_) | V::Vector(_, _) => return None,
     })
-}
-
-fn folded_value(e_: UnannotatedExp_) -> Value_ {
-    match e_ {
-        UnannotatedExp_::Value(sp!(_, v_)) => v_,
-        _ => panic!("ICE folding did not produce a value"),
-    }
 }
