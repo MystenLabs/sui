@@ -212,7 +212,6 @@ const references = [
 				label: 'Submit a SIP',
 				href: 'https://sips.sui.io',
 			},
-			'references/contribute/localize-sui-docs',
 			'references/contribute/code-of-conduct',
 			'references/contribute/style-guide',
 			'references/contribute/mdx-components',
