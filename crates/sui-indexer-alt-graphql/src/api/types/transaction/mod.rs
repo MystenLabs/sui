@@ -16,7 +16,6 @@ use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
@@ -635,22 +634,6 @@ fn transaction_from_stream_item(
         scope,
         Arc::new(NativeTransactionContents::LedgerGrpc(contents)),
     )
-}
-
-/// Build the edge for a single transaction returned by the gRPC list API.
-pub(crate) fn build_edge(
-    scope: &Scope,
-    item: &PageItem<v2::ExecutedTransaction>,
-) -> Result<Edge<String, Transaction, EmptyFields>, RpcError> {
-    let contents = CheckpointedTransaction::try_from(&item.payload)
-        .context("Failed to convert ListTransactions item")?;
-    Ok(Edge::new(
-        encode_grpc_cursor(&item.cursor)?,
-        Transaction::with_contents(
-            scope.clone(),
-            Arc::new(NativeTransactionContents::LedgerGrpc(contents)),
-        )?,
-    ))
 }
 
 /// Build a `TransactionConnection` from draining a bitmap-scan page.

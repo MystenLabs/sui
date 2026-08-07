@@ -70,7 +70,7 @@ pub(crate) enum End {
 
 /// Connection for fields served by a gRPC stream. Unlike the stock `Connection`, pages may be
 /// partially filled, with `PageInfo` cursors decoupled from the edge list.
-pub(crate) struct StreamConnection<N> {
+pub(crate) struct StreamConnection<N: OutputType> {
     pub edges: Vec<Edge<String, N, EmptyFields>>,
     pub page_info: PageInfo,
 }
@@ -353,8 +353,9 @@ where
     /// Translate a `StreamPage` into a `StreamConnection`. The server is expected to have already
     /// applied page bounds and limit.
     ///
-    /// `node` converts one stream payload into the connection's node type. Edges are returned in
-    /// ascending order (the stream emits descending order when paginating from the back).
+    /// `node` converts one stream payload into the connection's node type; cursors are minted
+    /// here, from the server's per-item tokens. Edges are returned in ascending order (the stream
+    /// emits descending order when paginating from the back).
     pub(crate) fn paginate_stream_results<T, N: OutputType>(
         &self,
         result: StreamPage<T>,
@@ -421,7 +422,7 @@ impl<N: OutputType> StreamConnection<N> {
     }
 }
 
-impl<N> StreamConnection<N> {
+impl<N: OutputType> StreamConnection<N> {
     pub(crate) fn empty() -> Self {
         Self {
             edges: vec![],

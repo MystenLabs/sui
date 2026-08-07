@@ -13,7 +13,6 @@ use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -472,17 +471,6 @@ fn event_from_stream_item(scope: Scope, payload: &v2::Event) -> Result<Event, Rp
         sequence_number: event_index as u64,
         timestamp_ms: OnceCell::new(),
     })
-}
-
-/// Build the edge for a single event returned by the gRPC list API.
-pub(crate) fn build_edge(
-    scope: &Scope,
-    item: &PageItem<v2::Event>,
-) -> Result<Edge<String, Event, EmptyFields>, RpcError> {
-    Ok(Edge::new(
-        encode_grpc_cursor(&item.cursor)?,
-        event_from_stream_item(scope.clone(), &item.payload)?,
-    ))
 }
 
 /// Build an `EventConnection` from draining a bitmap-scan page, hydrating each edge's event from
