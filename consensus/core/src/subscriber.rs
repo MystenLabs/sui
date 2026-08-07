@@ -29,7 +29,7 @@ use crate::{
     minimal_block::{max_excluded_ancestors_size, max_minimal_size},
     network::{ExtendedSerializedBlock, ValidatorNetworkClient, ValidatorNetworkService},
     pending_reconstructions::{
-        MissingBlockRegistry, PendingReconstructions, ReconstructionHook, run_reconstruction_worker,
+        MissingBlockRegistry, PendingReconstructions, run_reconstruction_worker,
     },
     round_tracker::RoundTracker,
     task::{join_and_propagate_panic, reap_finished_task},
@@ -126,17 +126,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             .collect::<Vec<_>>();
         let block_inflater = Arc::new(BlockInflater::new(context.clone()));
 
-        // Wire the acceptance/GC hooks and start the reconstruction worker. The
-        // subscriber is the receive side's owner, constructed once per validator,
-        // so the hook is registered here rather than threading a constructor
-        // parameter through Core.
+        // The worker discovers acceptance and GC on its own: nothing the receive
+        // path owns runs inside DagState locks or the commit path. The effects
+        // channel carries subscriber-originated events (claim readiness, post-admit
+        // rechecks); acceptance and GC arrive via the worker's poll/reconcile pass.
         let (effects_tx, effects_rx) = tokio::sync::mpsc::unbounded_channel();
-        dag_state
-            .write()
-            .set_reconstruction_hook(ReconstructionHook {
-                pending_reconstructions: pending_reconstructions.clone(),
-                effects: effects_tx.clone(),
-            });
         // spawn_monitored_task! wraps its body in an async-move coroutine, so the
         // captures are prepared outside it.
         let worker_context = context.clone();

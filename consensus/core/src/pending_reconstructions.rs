@@ -34,7 +34,6 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{block::Slot, context::Context};
 
@@ -157,15 +156,6 @@ pub(crate) struct ReadyEntry {
     /// in-flight reconstructions stay inside the admission caps and a lagging worker
     /// backpressures admission instead of letting the effects queue grow unbounded.
     pub(crate) charge: usize,
-}
-
-/// Shared handle DagState uses to drive pending_reconstructions from its acceptance and GC
-/// choke points. The effects channel is unbounded and drained by the
-/// reconstruction worker; sends never block under the DagState write guard.
-#[derive(Clone)]
-pub(crate) struct ReconstructionHook {
-    pub(crate) pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
-    pub(crate) effects: UnboundedSender<AcceptanceEffects>,
 }
 
 /// Outcome of a batch of acceptances or a GC sweep, applied by the worker outside
@@ -360,6 +350,11 @@ impl PendingReconstructions {
     /// takes over. The grace keeps the sweep off the claim/acceptance race it
     /// would otherwise duplicate, and the retry spacing rotates attempts across
     /// the population under the caller's lane bound.
+    /// Snapshot of currently-missing slots, for the worker's reconcile pass.
+    pub(crate) fn missing_slot_snapshot(&self) -> Vec<Slot> {
+        self.missing_slots.keys().copied().collect()
+    }
+
     /// Subscribe to backlog changes (drain wake-ups for paused streams).
     pub(crate) fn backlog_watch(&self) -> tokio::sync::watch::Receiver<usize> {
         self.backlog_tx.subscribe()
@@ -840,6 +835,15 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     // Bounds concurrent sidecar deliveries and lane registrations spawned by the
     // drain arm; acquired inside each task so the drain itself never waits.
     let delivery_permits = std::sync::Arc::new(tokio::sync::Semaphore::new(64));
+    // Acceptance/GC discovery: the receive path adds ZERO work inside DagState
+    // locks or the commit path, so the worker discovers progress itself — a short
+    // snapshot read every DISCOVER_INTERVAL reconciles filled slots and GC. The
+    // subscriber's claim observations and post-admit rechecks remain the
+    // event-driven fast path; this pass bounds the staleness of everything else.
+    const DISCOVER_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
+    let mut discover = tokio::time::interval(DISCOVER_INTERVAL);
+    discover.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut last_gc_round: Round = 0;
     loop {
         while in_flight.len() < RECONSTRUCTION_CONCURRENCY {
             let Some(entry) = ready_queue.pop_front() else {
@@ -890,6 +894,61 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
             Some(alive) = in_flight.next() => {
                 if !alive {
                     return;
+                }
+            }
+            _ = discover.tick() => {
+                let Some(dag_state) = dag_state.upgrade() else {
+                    return;
+                };
+                let missing = pending_reconstructions.lock().missing_slot_snapshot();
+                let (filled, gc_round, local_round) = {
+                    let guard = dag_state.read();
+                    let filled: Vec<BlockRef> = missing
+                        .iter()
+                        .flat_map(|slot| {
+                            guard
+                                .get_uncommitted_blocks_at_slot(*slot)
+                                .into_iter()
+                                .map(|b| b.reference())
+                                .take(1)
+                        })
+                        .collect();
+                    (filled, guard.gc_round(), guard.highest_accepted_round())
+                };
+                let mut effects = AcceptanceEffects::default();
+                if !filled.is_empty() {
+                    effects = pending_reconstructions.lock().on_blocks_accepted(&filled);
+                }
+                if gc_round > last_gc_round {
+                    last_gc_round = gc_round;
+                    effects
+                        .frontier_dead
+                        .extend(pending_reconstructions.lock().on_gc(gc_round, local_round));
+                }
+                if !effects.is_empty() {
+                    ready_queue.extend(effects.ready);
+                    for (peer, anchor, sidecar, charge) in effects.deliverable_sidecars {
+                        let service = service.clone();
+                        let pending = pending_reconstructions.clone();
+                        let permits = delivery_permits.clone();
+                        spawn_monitored_task!(async move {
+                            let _permit = permits.acquire_owned().await;
+                            if let Some(service) = service.upgrade() {
+                                let _ = service
+                                    .handle_excluded_ancestors(peer, anchor, sidecar)
+                                    .await;
+                            }
+                            pending.lock().release(peer, charge);
+                        });
+                    }
+                    for block_ref in effects.frontier_dead {
+                        let registry = registry.clone();
+                        let permits = delivery_permits.clone();
+                        spawn_monitored_task!(async move {
+                            let _permit = permits.acquire_owned().await;
+                            let _ = registry.register_missing_block(block_ref).await;
+                        });
+                    }
                 }
             }
             _ = sweep.tick() => {
