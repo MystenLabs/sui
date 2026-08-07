@@ -137,7 +137,7 @@ Lookups work with 2 types of addresses:
 - **Target address:** The address that a SuiNS name points to. The NFT holder sets this. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`. Multiple names can point to the same target address.
 - **Default address:** The SuiNS name that the owner of a wallet address has designated to represent that address. For example, if you own `example.sui` and its target address is your wallet, you can set `example.sui` as the default name for your wallet. The owner must sign a set-default transaction to establish this connection.
 
-When you display names in your UI, use the default address (reverse lookup) rather than the target address. The default address is guaranteed onchain because the wallet owner explicitly signed a transaction to set it ([SuiNS developer reference](https://docs.suins.io/developer)).
+When you display names in your UI, use the default address (reverse lookup) rather than the target address. The default address is guaranteed onchain because the wallet owner explicitly signed a transaction to set it.
 
 ### Default address reset behavior
 
@@ -244,7 +244,6 @@ For offchain resolution in a TypeScript or JavaScript app, you have 2 options:
 
 ### Lookup with `@mysten/sui`
 
-**Lookup (name to address)** resolves a SuiNS name to its target address:
 
 {/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceAddress example */}
 {/* Description: Basic name-to-address resolution using SuiClient.resolveNameServiceAddress */}
@@ -256,7 +255,7 @@ For [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), use the `resolve
 
 ### Lookup with the SuiNS SDK extension
 
-The `@mysten/suins` package provides the `suins()` extension function. Attach it to any `SuiClient` through `$extend` to add SuiNS methods. The extension uses `ClientWithCoreApi` and `PackageInfo` internally, and automatically loads the correct constants for Mainnet and Testnet ([SuiNS SDK source](https://github.com/MystenLabs/suins-contracts)):
+The `@mysten/suins` package provides the `suins()` extension function. Attach it to any `SuiClient` through `$extend` to add SuiNS methods. The extension uses `ClientWithCoreApi` and `PackageInfo` internally, and automatically loads the correct constants for Mainnet and Testnet:
 
 <ImportContent source="src/suins-client.ts" mode="code" org="MystenLabs" repo="suins-contracts" tag="suins-extension-example" language="ts" />
 
@@ -305,7 +304,6 @@ The key limitation of the Enoki approach is that each user gets at most 1 subnam
 
 When you resolve a SuiNS name to send assets or authorize actions, verify 4 conditions before using the result. Skipping any check can result in assets sent to the wrong address, expired names, or unresolvable targets.
 
-### Verification checklist
 
 Follow this sequence for every onchain resolution:
 
@@ -377,7 +375,7 @@ You can create subnames through 3 methods:
 
 ##### Step 1:
 
-**Choose your creation method** based on your use case:
+Choose your creation method based on your use case:
 
 - **SuiNS portal ([suins.io](https://suins.io/)):** Create subnames manually through the web interface. Navigate to your domain, select the subnames tab, and create a new subname. You need to own the parent domain NFT in your connected wallet.
 - **Enoki subname API:** Create subnames programmatically through a REST API. Best for apps that assign subnames to users automatically. See the [Enoki subname documentation](https://docs.enoki.mystenlabs.com/subnames) for API details.
@@ -385,7 +383,7 @@ You can create subnames through 3 methods:
 
 ##### Step 2:
 
-**Configure the subname** with the following parameters:
+Configure the subname with the following parameters:
 
 - **Name:** The label for the subname (for example, `alice` for `alice.myapp.sui`). Labels follow the same character rules as SuiNS names: lowercase alphanumeric characters and hyphens, 3 to 63 characters.
 - **Target address:** The address the subname points to. Required for leaf subnames. Optional for node subnames (can be set later by the NFT holder).
@@ -393,15 +391,11 @@ You can create subnames through 3 methods:
 
 ##### Step 3:
 
-**Set up resolution** so the subname can be looked up:
-
-- The subname is resolvable immediately after creation through onchain `lookup` and offchain `resolveNameServiceAddress`.
-- If the target address owner wants the subname as their default name, they must sign a separate set-default transaction.
-- Both node and leaf subnames support reverse lookup registration.
+Set up resolution so the subname can be looked up. The subname is resolvable immediately after creation through onchain `lookup` and offchain `resolveNameServiceAddress`. If the target address owner wants the subname as their default name, they must sign a separate set-default transaction. Both node and leaf subnames support reverse lookup registration.
 
 ### Subname configuration and parent rules
 
-The parent domain holder configures rules that govern child subname behavior ([SuiNS developer reference](https://docs.suins.io/developer)):
+The parent domain holder configures rules that govern child subname behavior:
 
 - **Allow child creation:** The parent can enable or disable subname creation under their domain. If disabled, no new subnames can be created.
 - **Allow expiration extension:** For node subnames, the parent can permit the subname holder to extend the expiration up to the parent's own expiration date.
