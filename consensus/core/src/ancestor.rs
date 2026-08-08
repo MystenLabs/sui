@@ -65,6 +65,10 @@ pub(crate) struct AncestorStateManager {
     // This is the running total of ancestors by stake that have been marked
     // as excluded. This cannot exceed the excluded_nodes_stake_threshold
     total_excluded_stake: Stake,
+    // Authorities whose exclusion was suppressed by excluded_nodes_stake_threshold
+    // on the previous update, sorted, so that suppression can be logged as an event
+    // rather than on every call.
+    last_suppressed: Vec<AuthorityIndex>,
     // This is the reputation scores that we use for leader election but we are
     // using it here as a signal for high quality block propagation as well.
     pub(crate) propagation_scores: ReputationScores,
@@ -100,6 +104,7 @@ impl AncestorStateManager {
             excluded_nodes_stake_threshold,
             // All ancestors start in the include state.
             total_excluded_stake: 0,
+            last_suppressed: Vec::new(),
             propagation_scores: ReputationScores::default(),
         }
     }
@@ -198,6 +203,7 @@ impl AncestorStateManager {
         // We can now apply state change for all ancestors that are moving to the exclude
         // state as we know there is no new stake that will be freed up by ancestor
         // state transition to include.
+        let mut suppressed = Vec::new();
         for transition in include_to_exclude {
             // If the stake of this ancestor would cause us to exceed the threshold
             // we do nothing. The lock will continue to be unlocked meaning we can
@@ -206,17 +212,35 @@ impl AncestorStateManager {
                 let new_state = AncestorState::Exclude(transition.score);
                 self.apply_state_change(transition, new_state, current_clock_round);
             } else {
-                info!(
-                    "Authority {} would have moved to {:?} state with score {} & quorum_round {} but we would have exceeded total excluded stake threshold. current_excluded_stake {} + authority_stake {} > exclude_stake_threshold {}",
-                    transition.authority_id,
-                    AncestorState::Exclude(transition.score),
-                    transition.score,
-                    transition.high_quorum_round,
-                    self.total_excluded_stake,
-                    transition.stake,
-                    self.excluded_nodes_stake_threshold
-                );
+                suppressed.push(transition);
             }
+        }
+
+        self.context
+            .metrics
+            .node_metrics
+            .ancestor_exclusion_suppressed_by_stake_threshold
+            .set(suppressed.len() as i64);
+
+        // Log only when the set of suppressed authorities changes to avoid spam.
+        let mut suppressed_ids = suppressed
+            .iter()
+            .map(|t| t.authority_id)
+            .collect::<Vec<_>>();
+        suppressed_ids.sort_unstable();
+
+        if suppressed_ids != self.last_suppressed {
+            info!(
+                "Could not exclude {} authorities at round {current_clock_round} with current_excluded_stake {} and exclude_stake_threshold {}: {:?}",
+                suppressed.len(),
+                self.total_excluded_stake,
+                self.excluded_nodes_stake_threshold,
+                suppressed
+                    .iter()
+                    .map(|t| (t.authority_id, t.score))
+                    .collect::<Vec<_>>(),
+            );
+            self.last_suppressed = suppressed_ids;
         }
     }
 
@@ -359,7 +383,8 @@ mod test {
         let mut dag_builder = DagBuilder::new(context.clone());
 
         let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3, 4]);
-        let mut ancestor_state_manager = AncestorStateManager::new(context, dag_state.clone());
+        let mut ancestor_state_manager =
+            AncestorStateManager::new(context.clone(), dag_state.clone());
         ancestor_state_manager.set_propagation_scores(scores);
 
         let accepted_quorum_rounds =
@@ -391,6 +416,16 @@ mod test {
             }
         }
 
+        // Authority 0 wanted to be excluded but did not fit under the stake threshold.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .ancestor_exclusion_suppressed_by_stake_threshold
+                .get(),
+            1
+        );
+
         ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // 1 authorities should still be excluded with these scores and no new
@@ -403,6 +438,17 @@ mod test {
                 assert_eq!(*state, AncestorState::Include);
             }
         }
+
+        // Suppression is unchanged across the repeated call, which is what keeps the
+        // log quiet while nothing moves.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .ancestor_exclusion_suppressed_by_stake_threshold
+                .get(),
+            1
+        );
 
         // Updating the clock round will expire the lock as we only need 5
         // clock round updates for tests.
@@ -425,6 +471,17 @@ mod test {
                 assert_eq!(*state, AncestorState::Include);
             }
         }
+
+        // Authority 1 returning to INCLUDE freed up the stake for authority 0, so
+        // nothing is suppressed anymore.
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .ancestor_exclusion_suppressed_by_stake_threshold
+                .get(),
+            0
+        );
 
         let accepted_quorum_rounds =
             vec![(229, 300), (229, 300), (229, 300), (229, 300), (229, 300)];
