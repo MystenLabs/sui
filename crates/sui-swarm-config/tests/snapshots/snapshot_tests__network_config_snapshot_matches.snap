@@ -179,6 +179,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -364,6 +365,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -549,6 +551,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -734,6 +737,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -919,6 +923,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1104,6 +1109,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1289,6 +1295,7 @@ validator_configs:
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
+    enable-gasless-dry-run-at-signing: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
