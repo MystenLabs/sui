@@ -622,6 +622,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // subscription, off the peer's own latest block in our DAG — always fresh,
         // and independent of the round prober.
         let gate_dag_state = Arc::downgrade(&self.dag_state);
+        let gate_context = self.context.clone();
         let mut emit_minimal = emit_minimal;
         let mut gate_checked_at = std::time::Instant::now();
 
@@ -637,6 +638,15 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     let lag = subscriber_lag(&dag_state.read(), peer, last_received);
                     let now_minimal = lag <= lag_limit;
                     if now_minimal != emit_minimal {
+                        // Counted, not just logged: these flips decide whether a
+                        // peer is served compressed or full blocks, and the fleet
+                        // runs at INFO where the log below is invisible.
+                        gate_context
+                            .metrics
+                            .node_metrics
+                            .minimal_block_gate_transitions
+                            .with_label_values(&[if now_minimal { "minimal" } else { "full" }])
+                            .inc();
                         debug!(
                             "Subscriber {peer} is {lag} rounds behind; \
                              {} minimal emission",

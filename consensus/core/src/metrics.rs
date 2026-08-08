@@ -186,6 +186,9 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_parked: IntGauge,
     pub(crate) minimal_block_recovery_parked_bytes: IntGauge,
     pub(crate) minimal_block_recovery_outcomes: IntCounterVec,
+    pub(crate) minimal_block_seen_digests: IntGauge,
+    pub(crate) minimal_block_seen_digests_refused: IntCounter,
+    pub(crate) minimal_block_gate_transitions: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
@@ -619,6 +622,22 @@ impl NodeMetrics {
                 "minimal_block_recovery_outcomes",
                 "Un-inflatable minimal blocks not admitted to recovery, by cause: a per-peer bound (peer_bytes|peer_count — attack indicator, never expected for honest traffic) or a claimed round beyond the recovery horizon (round_horizon); each drop resets the stream so full replay redelivers the range",
                 &["limit"],
+                registry,
+            ).unwrap(),
+            minimal_block_seen_digests: register_int_gauge_with_registry!(
+                "minimal_block_seen_digests",
+                "Slots currently held in the seen-digest map, across all shards. Bounded below by GC and above by a per-shard cap",
+                registry,
+            ).unwrap(),
+            minimal_block_seen_digests_refused: register_int_counter_with_registry!(
+                "minimal_block_seen_digests_refused",
+                "Slots not admitted to the seen-digest map because a shard hit its cap. Non-zero means GC has stalled; reconstruction degrades to fetching, it does not fail",
+                registry,
+            ).unwrap(),
+            minimal_block_gate_transitions: register_int_counter_vec_with_registry!(
+                "minimal_block_gate_transitions",
+                "Emission-gate flips for a subscriber, by new mode (minimal|full). A subscriber trailing the omission horizon is served full blocks; sustained churn here means the fleet is riding the threshold",
+                &["mode"],
                 registry,
             ).unwrap(),
             minimal_block_park_residency_rounds: register_histogram_vec_with_registry!(

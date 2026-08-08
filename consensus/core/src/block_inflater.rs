@@ -14,15 +14,14 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockDigest, Round};
-use parking_lot::Mutex;
+use consensus_types::block::BlockDigest;
 
 use crate::{
     block::{BlockAPI as _, GENESIS_ROUND, SignedBlock, Slot, VerifiedBlock, genesis_blocks},
     context::Context,
     dag_state::DagState,
     minimal_block::{AncestorDigestResolver, InflateError, deserialize_minimal, serialize_minimal},
-    pending_reconstructions::PendingReconstructions,
+    seen_digests::SeenDigests,
 };
 
 /// Minimal-block codec bound to the committee, usable on both the send side (digest
@@ -37,14 +36,14 @@ pub(crate) struct BlockInflater {
 struct DagStateResolver<'a> {
     genesis_digests: &'a [BlockDigest],
     dag_state: &'a DagState,
-    /// Stream-claimed slot digests, consulted only when the accepted DAG has no
-    /// candidate. A claim-resolved reconstruction verifies against the dependent's
-    /// own claimed digest and signature, then enters block_manager, whose ordinary
-    /// suspension covers ancestor content that has not been accepted yet — the
-    /// full-form pipeline shape. Lock order: DagState is already held (read) by
-    /// callers; PendingReconstructions is taken briefly inside, matching the
-    /// DagState-then-pending order the acceptance hook establishes.
-    claims: Option<&'a Mutex<PendingReconstructions>>,
+    /// Digests seen at a slot by any path, consulted only when the accepted DAG
+    /// has no candidate. A seen-resolved reconstruction verifies against the
+    /// dependent's own claimed digest and signature, then enters block_manager,
+    /// whose ordinary suspension covers ancestor content that has not been
+    /// accepted yet — the full-form pipeline shape. Reading it takes one sharded
+    /// read lock and no other consensus lock, so the hot resolver path cannot
+    /// contend with reconstruction bookkeeping.
+    seen: Option<&'a SeenDigests>,
 }
 
 impl AncestorDigestResolver for DagStateResolver<'_> {
@@ -61,10 +60,10 @@ impl AncestorDigestResolver for DagStateResolver<'_> {
         if !accepted.is_empty() {
             return accepted;
         }
-        let Some(claims) = self.claims else {
+        let Some(seen) = self.seen else {
             return accepted;
         };
-        claims.lock().unique_claim(slot).into_iter().collect()
+        seen.get(slot).into_iter().collect()
     }
 }
 
@@ -155,12 +154,12 @@ impl BlockInflater {
         minimal: &[u8],
         author: AuthorityIndex,
         dag_state: &DagState,
-        claims: Option<&Mutex<PendingReconstructions>>,
+        seen: Option<&SeenDigests>,
     ) -> Result<(SignedBlock, Bytes), InflateError> {
         let resolver = DagStateResolver {
             genesis_digests: &self.genesis_digests,
             dag_state,
-            claims,
+            seen,
         };
         deserialize_minimal(minimal, &self.context.committee, author, &resolver)
     }
@@ -241,17 +240,10 @@ mod tests {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let pending = Mutex::new(crate::pending_reconstructions::PendingReconstructions::new(
-            context.clone(),
-        ));
-        for ancestor in &ancestors {
-            pending.lock().observe_claim(
-                crate::block::Slot::from(ancestor.reference()),
-                ancestor.digest(),
-            );
-        }
+        let seen = crate::seen_digests::SeenDigests::new(context.clone());
+        seen.observe_all(ancestors.iter().map(|a| a.reference()));
         let (_signed, serialized) = inflater
-            .inflate(&minimal, block.author(), &empty_dag.read(), Some(&pending))
+            .inflate(&minimal, block.author(), &empty_dag.read(), Some(&seen))
             .unwrap();
         assert_eq!(&serialized, block.serialized());
     }

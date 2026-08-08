@@ -39,6 +39,7 @@ mod pending_reconstructions;
 mod proposer;
 mod round_prober;
 mod round_tracker;
+mod seen_digests;
 mod stake_aggregator;
 pub mod storage;
 mod subscriber;
