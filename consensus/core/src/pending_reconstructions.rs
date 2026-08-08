@@ -31,11 +31,11 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockDigest, BlockRef, Round};
+use consensus_types::block::{BlockRef, Round};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
 
-use crate::{block::Slot, context::Context};
+use crate::{block::Slot, context::Context, seen_digests::SeenDigests};
 
 /// Admission window: above `gc_round` (below it the claim is already obsolete) and
 /// at most the DAG cache depth above the LOCAL accept frontier. The frontier anchor
@@ -57,24 +57,6 @@ fn window_width(context: &Context) -> Round {
 /// have stalled for minutes, and refusing then is the correct backpressure.
 fn max_pending_entries(context: &Context) -> usize {
     context.committee.size() * 4 * context.protocol_config.gc_depth() as usize
-}
-
-/// A slot digest claimed by its author's own authenticated stream envelope
-/// (structural validation passed, signature unverified). Lets dependents rebuild
-/// their ancestor vectors without waiting for local ACCEPTANCE of the ancestor —
-/// the dependent's own claimed-digest gate and signature verification validate the
-/// choice, and block_manager suspension covers ancestor content that has not
-/// arrived. A second, different claim for the same slot marks it ambiguous:
-/// resolution then falls back to acceptance or the exact-fetch lane.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SlotClaim {
-    Unique(BlockDigest),
-    Ambiguous,
-}
-
-/// Bound on retained claims: one per slot across the admission window.
-fn claims_capacity(context: &Context) -> usize {
-    context.committee.size() * window_width(context) as usize
 }
 
 /// Per-peer resident-byte quota. Honest steady state per peer is a few hundred KB
@@ -190,9 +172,9 @@ pub(crate) struct PendingReconstructions {
     occupancy: BTreeMap<Slot, BlockRef>,
     /// Sidecars held for refused / terminal-without-acceptance blocks, FIFO-bounded.
     held_sidecars: BTreeMap<BlockRef, (AuthorityIndex, Vec<Vec<u8>>)>,
-    /// Slot digests claimed by their authors' own stream envelopes. Metadata only:
-    /// uncharged, bounded by `claims_capacity`, swept with GC.
-    claims: BTreeMap<Slot, SlotClaim>,
+    /// Slot → digest for every block seen by any path. Shared, and deliberately
+    /// not owned here: fetch and commit sync write it without touching this lock.
+    seen: Arc<SeenDigests>,
     /// When commit-lag shedding first engaged, for the quiesce hysteresis. Cleared
     /// by the first non-lagging receipt.
     lag_shed_since: Option<tokio::time::Instant>,
@@ -205,7 +187,7 @@ pub(crate) struct PendingReconstructions {
 }
 
 impl PendingReconstructions {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(context: Arc<Context>, seen: Arc<SeenDigests>) -> Self {
         let committee_size = context.committee.size();
         Self {
             context,
@@ -213,7 +195,7 @@ impl PendingReconstructions {
             missing_slots: BTreeMap::new(),
             occupancy: BTreeMap::new(),
             held_sidecars: BTreeMap::new(),
-            claims: BTreeMap::new(),
+            seen,
             lag_shed_since: None,
 
             per_peer_bytes: vec![0; committee_size],
@@ -375,15 +357,6 @@ impl PendingReconstructions {
         out
     }
 
-    /// The unique claim for `slot`, if any — consulted by the inflater when the
-    /// accepted DAG has no candidate.
-    pub(crate) fn unique_claim(&self, slot: Slot) -> Option<BlockDigest> {
-        match self.claims.get(&slot) {
-            Some(SlotClaim::Unique(digest)) => Some(*digest),
-            _ => None,
-        }
-    }
-
     /// True when every missing slot of the entry carries a unique claim, so its
     /// ancestor vector can be rebuilt without waiting for acceptance.
     fn claim_ready(&self, block_ref: &BlockRef) -> bool {
@@ -393,51 +366,61 @@ impl PendingReconstructions {
         entry
             .missing
             .iter()
-            .all(|slot| matches!(self.claims.get(slot), Some(SlotClaim::Unique(_))))
+            .all(|slot| self.seen.get(*slot).is_some())
     }
 
-    /// Records the digest its author's own stream claims for `slot`, returning any
-    /// entries that become reconstructable through claims. Conflicts mark the slot
-    /// ambiguous rather than replacing: an unverified claim must never win a race.
-    pub(crate) fn observe_claim(&mut self, slot: Slot, digest: BlockDigest) -> Vec<ReadyEntry> {
-        use std::collections::btree_map::Entry as MapEntry;
-        if self.claims.len() >= claims_capacity(&self.context) && !self.claims.contains_key(&slot) {
-            return vec![];
-        }
-        match self.claims.entry(slot) {
-            MapEntry::Vacant(vacant) => {
-                vacant.insert(SlotClaim::Unique(digest));
-            }
-            MapEntry::Occupied(mut occupied) => match occupied.get() {
-                SlotClaim::Unique(existing) if *existing == digest => return vec![],
-                SlotClaim::Unique(_) => {
-                    occupied.insert(SlotClaim::Ambiguous);
-                    return vec![];
-                }
-                SlotClaim::Ambiguous => return vec![],
-            },
-        }
-        let Some(dependents) = self.missing_slots.get(&slot) else {
-            return vec![];
-        };
-        let candidates: Vec<BlockRef> = dependents.iter().copied().collect();
+    #[cfg(test)]
+    pub(crate) fn seen(&self) -> &Arc<SeenDigests> {
+        &self.seen
+    }
+
+    /// Test mirror of the production two-step: record the ref in the shared map,
+    /// then wake whatever that resolved. Production keeps these separate so the
+    /// map write can happen on a sync path without taking this lock.
+    #[cfg(test)]
+    pub(crate) fn observe_claim(
+        &mut self,
+        slot: Slot,
+        digest: consensus_types::block::BlockDigest,
+    ) -> Vec<ReadyEntry> {
+        let resolved = self
+            .seen
+            .clone()
+            .observe(BlockRef::new(slot.round, slot.authority, digest));
+        self.on_slots_resolved(&resolved)
+    }
+
+    /// Given slots that just resolved to a unique digest in the shared map,
+    /// returns the parked entries that can now rebuild their ancestor vectors.
+    ///
+    /// The map write happens before this call and outside this lock, so the paths
+    /// that feed it — synchronizer fetch and commit sync above all — never wait on
+    /// reconstruction. Dropping a wakeup only delays an entry to the stale sweep;
+    /// it cannot strand one.
+    pub(crate) fn on_slots_resolved(&mut self, slots: &[Slot]) -> Vec<ReadyEntry> {
         let mut ready = Vec::new();
-        for block_ref in candidates {
-            if !self.claim_ready(&block_ref) {
+        for slot in slots {
+            let Some(dependents) = self.missing_slots.get(slot) else {
                 continue;
+            };
+            let candidates: Vec<BlockRef> = dependents.iter().copied().collect();
+            for block_ref in candidates {
+                if !self.claim_ready(&block_ref) {
+                    continue;
+                }
+                let entry = self
+                    .remove_entry_keeping_charge(&block_ref)
+                    .expect("entry exists");
+                self.in_flight += 1;
+                self.observe_residency(&entry, "claim_ready", slot.round);
+                ready.push(ReadyEntry {
+                    claimed_ref: block_ref,
+                    minimal: entry.minimal,
+                    excluded_ancestors: entry.excluded_ancestors,
+                    peer: entry.peer,
+                    charge: entry.charge,
+                });
             }
-            let entry = self
-                .remove_entry_keeping_charge(&block_ref)
-                .expect("entry exists");
-            self.in_flight += 1;
-            self.observe_residency(&entry, "claim_ready", slot.round);
-            ready.push(ReadyEntry {
-                claimed_ref: block_ref,
-                minimal: entry.minimal,
-                excluded_ancestors: entry.excluded_ancestors,
-                peer: entry.peer,
-                charge: entry.charge,
-            });
         }
         if !ready.is_empty() {
             self.update_gauges();
@@ -508,7 +491,6 @@ impl PendingReconstructions {
     /// with a frontier slot that crossed GC can never fill by waiting and are
     /// returned for exact-lane routing.
     pub(crate) fn on_gc(&mut self, gc_round: Round, local_round: Round) -> Vec<BlockRef> {
-        self.claims.retain(|slot, _| slot.round > gc_round);
         let obsolete: Vec<BlockRef> = self
             .pending
             .iter()
@@ -838,6 +820,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     service: std::sync::Weak<S>,
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
     mut effects: tokio::sync::mpsc::UnboundedReceiver<AcceptanceEffects>,
+    seen_digests: Arc<SeenDigests>,
     mut accepted_blocks: tokio::sync::broadcast::Receiver<crate::block::VerifiedBlock>,
 ) {
     use futures::stream::{FuturesUnordered, StreamExt as _};
@@ -880,6 +863,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                 registry.clone(),
                 service.clone(),
                 pending_reconstructions.clone(),
+                seen_digests.clone(),
                 batch,
             ));
         }
@@ -938,13 +922,26 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                     }
                     (guard.gc_round(), guard.highest_accepted_round())
                 };
+                // Every accepted block, whatever path delivered it — live stream,
+                // synchronizer fetch, commit sync, replay — records its slot here.
+                // This is what makes the map universal without those paths having
+                // to call into reconstruction themselves: they simply accept, and
+                // acceptance is already broadcast. Written before the pending lock
+                // is taken, never while holding it.
+                let resolved = seen_digests.observe_all(refs.iter().copied());
                 let mut batch = if refs.is_empty() {
                     AcceptanceEffects::default()
                 } else {
                     pending_reconstructions.lock().on_blocks_accepted(&refs)
                 };
+                if !resolved.is_empty() {
+                    batch
+                        .ready
+                        .extend(pending_reconstructions.lock().on_slots_resolved(&resolved));
+                }
                 if gc_round > last_gc_round {
                     last_gc_round = gc_round;
+                    seen_digests.gc(gc_round);
                     batch
                         .frontier_dead
                         .extend(pending_reconstructions.lock().on_gc(gc_round, local_round));
@@ -982,6 +979,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                 registry.clone(),
                 service.clone(),
                 pending_reconstructions.clone(),
+                seen_digests.clone(),
                 batch,
             ));
         }
@@ -1002,6 +1000,7 @@ async fn reconstruct_batch<S: crate::network::ValidatorNetworkService>(
     registry: Arc<dyn MissingBlockRegistry>,
     service: std::sync::Weak<S>,
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+    seen_digests: Arc<SeenDigests>,
     entries: Vec<ReadyEntry>,
 ) -> bool {
     let metrics = &context.metrics.node_metrics;
@@ -1017,12 +1016,7 @@ async fn reconstruct_batch<S: crate::network::ValidatorNetworkService>(
                 return false;
             };
             let guard = dag_state.read();
-            block_inflater.inflate(
-                &entry.minimal,
-                entry.peer,
-                &guard,
-                Some(&pending_reconstructions),
-            )
+            block_inflater.inflate(&entry.minimal, entry.peer, &guard, Some(&seen_digests))
         };
         match inflated {
             Ok((_signed, serialized)) => {
@@ -1097,7 +1091,9 @@ mod tests {
 
     fn pending_reconstructions() -> PendingReconstructions {
         let (context, _) = Context::new_for_test(4);
-        PendingReconstructions::new(Arc::new(context))
+        let context = Arc::new(context);
+        let seen = Arc::new(SeenDigests::new(context.clone()));
+        PendingReconstructions::new(context, seen)
     }
 
     fn r(round: Round, author: u32, digest_byte: u8) -> BlockRef {
@@ -1349,7 +1345,10 @@ mod tests {
     async fn quiesce_releases_everything() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let mut pending = PendingReconstructions::new(context.clone());
+        let mut pending = PendingReconstructions::new(
+            context.clone(),
+            Arc::new(SeenDigests::new(context.clone())),
+        );
         let peer = context.committee.to_authority_index(1).unwrap();
         let claim_a = BlockRef::new(10, peer, BlockDigest::MIN);
         let claim_b = BlockRef::new(11, peer, BlockDigest::MAX);
@@ -1408,7 +1407,10 @@ mod tests {
     async fn observe_claim_readies_dependents_and_conflicts_poison() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let mut pending = PendingReconstructions::new(context.clone());
+        let mut pending = PendingReconstructions::new(
+            context.clone(),
+            Arc::new(SeenDigests::new(context.clone())),
+        );
         let peer = context.committee.to_authority_index(1).unwrap();
         let author = context.committee.to_authority_index(2).unwrap();
         let claim_ref = BlockRef::new(10, peer, BlockDigest::MIN);
@@ -1427,14 +1429,14 @@ mod tests {
         let ready = pending.observe_claim(missing_slot, BlockDigest::MAX);
         assert_eq!(ready.len(), 1);
         assert_eq!(ready[0].claimed_ref, claim_ref);
-        assert_eq!(pending.unique_claim(missing_slot), Some(BlockDigest::MAX));
+        assert_eq!(pending.seen().get(missing_slot), Some(BlockDigest::MAX));
         pending.release(peer, ready[0].charge);
 
         // Conflicting claims mark the slot ambiguous: no unique digest served.
         let other = Slot::new(9, peer);
         assert!(pending.observe_claim(other, BlockDigest::MIN).is_empty());
         assert!(pending.observe_claim(other, BlockDigest::MAX).is_empty());
-        assert_eq!(pending.unique_claim(other), None);
+        assert_eq!(pending.seen().get(other), None);
         pending.assert_invariants();
     }
 
@@ -1444,7 +1446,10 @@ mod tests {
     async fn stale_dependents_grace_retry_and_cap() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let mut pending = PendingReconstructions::new(context.clone());
+        let mut pending = PendingReconstructions::new(
+            context.clone(),
+            Arc::new(SeenDigests::new(context.clone())),
+        );
         let peer = context.committee.to_authority_index(1).unwrap();
         let missing = vec![Slot::new(
             9,

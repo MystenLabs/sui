@@ -32,6 +32,7 @@ use crate::{
         MissingBlockRegistry, PendingReconstructions, run_reconstruction_worker,
     },
     round_tracker::RoundTracker,
+    seen_digests::SeenDigests,
     task::{join_and_propagate_panic, reap_finished_task},
 };
 
@@ -91,6 +92,9 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     dag_state: Arc<RwLock<DagState>>,
     block_inflater: Arc<BlockInflater>,
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+    /// Shared with the reconstruction worker and every arrival path; see
+    /// `seen_digests` for why writes here never block sync work.
+    seen_digests: Arc<SeenDigests>,
     missing_block_registry: Arc<dyn MissingBlockRegistry>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -113,8 +117,11 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         accepted_blocks: tokio::sync::broadcast::Receiver<crate::block::VerifiedBlock>,
     ) -> Self {
-        let pending_reconstructions =
-            Arc::new(Mutex::new(PendingReconstructions::new(context.clone())));
+        let seen_digests = Arc::new(SeenDigests::new(context.clone()));
+        let pending_reconstructions = Arc::new(Mutex::new(PendingReconstructions::new(
+            context.clone(),
+            seen_digests.clone(),
+        )));
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
@@ -133,6 +140,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let worker_registry = missing_block_registry.clone();
         let worker_service = Arc::downgrade(&authority_service);
         let worker_pending = pending_reconstructions.clone();
+        let worker_seen = seen_digests.clone();
         let reconstruction_worker = spawn_monitored_task!(run_reconstruction_worker(
             worker_context,
             worker_inflater,
@@ -141,6 +149,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             worker_service,
             worker_pending,
             effects_rx,
+            worker_seen,
             accepted_blocks,
         ));
 
@@ -151,6 +160,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             pending_reconstructions,
+            seen_digests,
             effects_tx,
             missing_block_registry,
             round_tracker,
@@ -174,6 +184,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         let dag_state = Arc::downgrade(&self.dag_state);
         let block_inflater = self.block_inflater.clone();
         let pending_reconstructions = self.pending_reconstructions.clone();
+        let seen_digests = self.seen_digests.clone();
         let effects_tx = self.effects_tx.clone();
         let missing_block_registry = self.missing_block_registry.clone();
         let round_tracker = self.round_tracker.clone();
@@ -188,6 +199,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             dag_state,
             block_inflater,
             pending_reconstructions,
+            seen_digests,
             effects_tx,
             missing_block_registry,
             round_tracker,
@@ -253,7 +265,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         peer: AuthorityIndex,
         mut block: ExtendedSerializedBlock,
         dag_state: &DagState,
-        pending_reconstructions: &Mutex<PendingReconstructions>,
+        seen_digests: &SeenDigests,
     ) -> ConsensusResult<InflateOutcome> {
         let Some(minimal) = block.minimal.take() else {
             return Ok(InflateOutcome::Block(block));
@@ -293,7 +305,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             )));
         }
 
-        match block_inflater.inflate(&minimal, peer, dag_state, Some(pending_reconstructions)) {
+        match block_inflater.inflate(&minimal, peer, dag_state, Some(seen_digests)) {
             Ok((_signed_block, serialized)) => {
                 block.block = serialized;
                 Ok(InflateOutcome::Block(block))
@@ -335,6 +347,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         dag_state: Weak<RwLock<DagState>>,
         block_inflater: Arc<BlockInflater>,
         pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
+        seen_digests: Arc<SeenDigests>,
         effects_tx: tokio::sync::mpsc::UnboundedSender<
             crate::pending_reconstructions::AcceptanceEffects,
         >,
@@ -489,7 +502,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                     peer,
                                     block,
                                     &guard,
-                                    &pending_reconstructions,
+                                    &seen_digests,
                                 ),
                                 guard.gc_round(),
                                 guard.highest_accepted_round(),
@@ -523,10 +536,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                 // full-form pipeline shape. Own-author only: the
                                 // decoder has already bound envelope author to this
                                 // stream's peer; sidecars never feed this.
-                                let claim_ready = pending_reconstructions.lock().observe_claim(
-                                    crate::block::Slot::from(block_ref),
-                                    block_ref.digest,
-                                );
+                                let resolved = seen_digests.observe(block_ref);
+                                let claim_ready = if resolved.is_empty() {
+                                    Vec::new()
+                                } else {
+                                    pending_reconstructions.lock().on_slots_resolved(&resolved)
+                                };
                                 if !claim_ready.is_empty() {
                                     let _ = effects_tx.send(
                                         crate::pending_reconstructions::AcceptanceEffects {
