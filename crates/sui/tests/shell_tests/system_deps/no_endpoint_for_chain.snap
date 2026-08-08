@@ -1,0 +1,19 @@
+---
+source: crates/sui/tests/shell_tests.rs
+assertion_line: 114
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Building for `custom_env` when no configured environment serves its chain, and it isn't one of
+# the well-known public networks either, so there is nothing to ask.
+sui move --client.config configs/serves_other_chain.yaml build -e custom_env -p example
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+Error while loading dependency .: Could not determine the system dependencies for environment `1234`: none of your configured environments serve the chain `1234`. Add one with `sui client new-env --alias <name> --rpc <url>`.
+
+----- stderr -----

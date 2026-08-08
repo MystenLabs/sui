@@ -9,8 +9,8 @@ mod resolve;
 pub use resolve::ResolverError;
 
 mod pin;
-pub(crate) use pin::Pinned;
 pub use pin::PinnedDependency;
+pub(crate) use pin::{Pinned, SystemDepCache};
 
 pub mod fetch;
 pub use fetch::FetchError;

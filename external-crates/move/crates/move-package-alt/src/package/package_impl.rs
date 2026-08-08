@@ -23,7 +23,7 @@ use crate::{
 };
 use crate::{dependency::fetch, schema::ReplacementDependency};
 use crate::{
-    dependency::{CombinedDependency, PinnedDependency},
+    dependency::{CombinedDependency, PinnedDependency, SystemDepCache},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
@@ -383,7 +383,8 @@ pub async fn cache_package<F: MoveFlavor>(
     // pin
     let root = Pinned::Root(dummy_path.clone());
     let flavor = Arc::new(flavor);
-    let deps = PinnedDependency::pin(&root, vec![combined], env, &*flavor).await?;
+    let deps =
+        PinnedDependency::pin(&root, vec![combined], env, &*flavor, &SystemDepCache::new()).await?;
 
     // load
     let package = Package::<F>::load(
@@ -452,6 +453,8 @@ fn check_for_environment<F: MoveFlavor>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use crate::{
         flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla},
         schema::{
@@ -486,11 +489,15 @@ mod tests {
             IndexMap::from([(DEFAULT_ENV_NAME.into(), DEFAULT_ENV_ID.into())])
         }
 
+        fn system_dep_names(&self) -> BTreeSet<SystemDepName> {
+            BTreeSet::from(["FOO".into(), "BAR".into(), "BAZ".into()])
+        }
+
         // Our test flavor has `[foo, bar, baz]` system dependencies.
         async fn system_deps(
             &self,
             _env: &EnvironmentID,
-        ) -> BTreeMap<SystemDepName, LockfileDependencyInfo> {
+        ) -> Result<BTreeMap<SystemDepName, LockfileDependencyInfo>, String> {
             let mut deps = BTreeMap::new();
             deps.insert(
                 "FOO".into(),
@@ -510,7 +517,7 @@ mod tests {
                     local: "../baz".into(),
                 }),
             );
-            deps
+            Ok(deps)
         }
 
         // In this flavor, only `[foo, bar]` are enabled by default.

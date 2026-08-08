@@ -1,0 +1,7 @@
+[package]
+name = "no_system_deps"
+edition = "2024.beta"
+implicit-dependencies = false
+
+[environments]
+custom_env = "1234"
