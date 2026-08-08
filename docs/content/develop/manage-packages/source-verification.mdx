@@ -47,11 +47,20 @@ that the source is authentic.
 
 :::info
 
-Verification compares **bytecode**, not source text. Anything that does not affect the compiled output
-(comments, formatting, and **the bodies of `macro` functions**) can differ between
-the source and the published package and still verify. The compiler inlines the bodies of called
-macros into their callers, so those affect the bytecode and verification covers them. A package that
-verifies has bytecode identical to the onchain version.
+Verification compares **bytecode**, not source text, but the correspondence is more exacting than it
+first appears. Most comments and formatting do not affect the compiled output and can differ between
+the source and the published package while still verifying. Two things that look invisible are not,
+though:
+
+- The compiler inlines the body of every **called `macro`** into its caller, so a change inside such
+  a macro changes the caller's bytecode.
+- With `move 2024` **clever errors** (on by default), the compiler records the **source line** of each
+  `abort` — including the ones a failed `assert!` expands to — inside the module, so that a runtime
+  abort can report where it came from. Editing anything *above* an abort, even inserting a comment or a
+  blank line, shifts that line number and changes the bytecode.
+
+So to keep a package verifiable, preserve its source exactly — layout included, not just its meaning.
+A package that verifies has bytecode identical to the onchain version.
 
 :::
 
