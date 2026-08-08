@@ -17291,6 +17291,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "msim",
  "mysten-common",
  "mysten-metrics",
  "num_enum 0.6.1",

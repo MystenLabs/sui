@@ -293,17 +293,22 @@ async fn execute_owned_on_first_three_authorities(
         );
     }
 
-    // Wait for execution on the third authority and return effects
-    let effects = authority_clients[2]
-        .authority_client()
-        .state
-        .get_transaction_cache_reader()
-        .notify_read_executed_effects("", &[*executable.digest()])
-        .await
-        .pop()
-        .unwrap();
+    // Wait for all three authorities before using any of them to construct the next transaction.
+    let mut effects = None;
+    for client in authority_clients.iter().take(3) {
+        effects = Some(
+            client
+                .authority_client()
+                .state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects("", &[*executable.digest()])
+                .await
+                .pop()
+                .unwrap(),
+        );
+    }
 
-    (executable, effects)
+    (executable, effects.unwrap())
 }
 
 // Helper to execute a shared object transaction via consensus.
