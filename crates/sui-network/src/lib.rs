@@ -9,6 +9,7 @@ pub mod discovery;
 pub mod endpoint_manager;
 pub mod randomness;
 pub mod state_sync;
+pub mod topology_crawler;
 pub mod utils;
 pub mod validator;
 
