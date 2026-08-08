@@ -44,6 +44,7 @@ use crate::api::types::event::filter::EventFilter;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package;
 use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_package::MovePackageConnection;
 use crate::api::types::move_package::PackageCheckpointFilter;
 use crate::api::types::move_package::PackageKey;
 use crate::api::types::move_type;
@@ -610,7 +611,7 @@ impl Query {
         last: Option<u64>,
         before: Option<move_package::CPackage>,
         filter: Option<PackageCheckpointFilter>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;
@@ -641,7 +642,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;
@@ -656,6 +657,7 @@ impl Query {
                     filter.unwrap_or_default(),
                 )
                 .await
+                .map(Into::into)
             }
             .await,
         )

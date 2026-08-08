@@ -48,11 +48,13 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+use sui_indexer_alt_reader::package_resolver::GrpcPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_package_resolver::PackageStore;
 use task::chain_identifier;
 use task::watermark::WatermarkTask;
 use task::watermark::WatermarksLock;
@@ -367,7 +369,13 @@ pub async fn start_rpc(
         pg_loader.clone(),
     );
 
-    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
+    // Package resolution follows KV routing: served by the ledger gRPC service when configured,
+    // falling back to the Postgres `kv_packages` table.
+    let package_store: Box<dyn PackageStore> = match &ledger_grpc_reader {
+        Some(reader) => Box::new(GrpcPackageStore::new(reader)),
+        None => Box::new(DbPackageStore::new(pg_loader.clone())),
+    };
+    let package_store = Arc::new(PackageCache::new(package_store));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
