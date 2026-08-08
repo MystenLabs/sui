@@ -11,10 +11,22 @@ use sui_rpc::proto::sui::rpc::v2::{
 use sui_types::base_types::ObjectID;
 use tap::Pipe;
 
+/// Cursor for `ListPackageVersions` pagination. Public so other implementors of
+/// `MovePackageService` mint wire-compatible page tokens.
 #[derive(serde::Serialize, serde::Deserialize)]
-struct PageToken {
-    original_package_id: ObjectID,
-    version: u64,
+pub struct PageToken {
+    pub original_package_id: ObjectID,
+    pub version: u64,
+}
+
+impl PageToken {
+    pub fn decode(page_token: &[u8]) -> Result<Self> {
+        decode_page_token(page_token)
+    }
+
+    pub fn encode(self) -> Bytes {
+        encode_page_token(self)
+    }
 }
 
 #[tracing::instrument(skip(service))]
