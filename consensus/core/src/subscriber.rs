@@ -115,13 +115,19 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         missing_block_registry: Arc<dyn MissingBlockRegistry>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
+        seen_digests: Arc<SeenDigests>,
         accepted_blocks: tokio::sync::broadcast::Receiver<crate::block::VerifiedBlock>,
     ) -> Self {
-        let seen_digests = Arc::new(SeenDigests::new(context.clone()));
         let pending_reconstructions = Arc::new(Mutex::new(PendingReconstructions::new(
             context.clone(),
             seen_digests.clone(),
         )));
+        // Bound the wakeup channel here, where the worker that drains it is spawned,
+        // so a SeenDigests can never be wired for recording without also being wired
+        // for waking. Bounded and non-blocking: arrival paths hand slots over with
+        // try_send and never wait on reconstruction.
+        let (slot_wakeup_tx, slot_wakeups) = tokio::sync::mpsc::channel(1024);
+        seen_digests.set_wakeup(slot_wakeup_tx);
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
@@ -150,6 +156,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             worker_pending,
             effects_rx,
             worker_seen,
+            slot_wakeups,
             accepted_blocks,
         ));
 
@@ -1239,6 +1246,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             accepted_rx,
         );
         subscriber.subscribe(s.peer);
@@ -1303,6 +1311,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(peer);
@@ -1342,6 +1351,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
@@ -1387,6 +1397,7 @@ mod test {
             registry,
             tracker.clone(),
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
@@ -1418,6 +1429,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
 
@@ -1470,6 +1482,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
 
@@ -1526,6 +1539,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
 
@@ -1559,6 +1573,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
 
@@ -1594,6 +1609,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
 
@@ -1649,6 +1665,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         // Pre-held bytes stand in for parked state that quiesce must evict.
@@ -1784,6 +1801,7 @@ mod test {
             registry,
             tracker,
             monitor.clone(),
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
@@ -1822,6 +1840,7 @@ mod test {
             registry.clone(),
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
@@ -1900,6 +1919,7 @@ mod test {
             registry,
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
@@ -1947,6 +1967,7 @@ mod test {
             registry.clone(),
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         subscriber.subscribe(s.peer);
@@ -1994,6 +2015,7 @@ mod test {
             registry.clone(),
             tracker,
             monitor,
+            Arc::new(SeenDigests::new(s.context.clone())),
             tokio::sync::broadcast::channel(64).1,
         );
         // Saturate this peer's byte quota so admission refuses on PeerBytes.

@@ -821,6 +821,7 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     pending_reconstructions: Arc<Mutex<PendingReconstructions>>,
     mut effects: tokio::sync::mpsc::UnboundedReceiver<AcceptanceEffects>,
     seen_digests: Arc<SeenDigests>,
+    mut slot_wakeups: tokio::sync::mpsc::Receiver<Vec<Slot>>,
     mut accepted_blocks: tokio::sync::broadcast::Receiver<crate::block::VerifiedBlock>,
 ) {
     use futures::stream::{FuturesUnordered, StreamExt as _};
@@ -868,6 +869,23 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
             ));
         }
         tokio::select! {
+            // Slots that just became resolvable on some arrival path. The recorder
+            // hands them over without waiting, so this is where the pending lock is
+            // taken -- on the worker, never on a sync thread.
+            slots = slot_wakeups.recv() => {
+                let Some(slots) = slots else { return; };
+                let ready = pending_reconstructions.lock().on_slots_resolved(&slots);
+                if !ready.is_empty() {
+                    dispatch_effects(
+                        AcceptanceEffects { ready, ..Default::default() },
+                        &mut ready_queue,
+                        &service,
+                        &pending_reconstructions,
+                        &registry,
+                        &delivery_permits,
+                    );
+                }
+            }
             batch = effects.recv() => {
                 let Some(batch) = batch else { break };
                 dispatch_effects(

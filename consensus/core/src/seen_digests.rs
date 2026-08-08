@@ -46,7 +46,7 @@
 //! parked blocks are waiting on.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round};
@@ -74,6 +74,13 @@ enum SeenSlot {
 
 pub(crate) struct SeenDigests {
     shards: Vec<RwLock<BTreeMap<Slot, SeenSlot>>>,
+    /// Where newly-resolved slots go so parked reconstructions can be woken.
+    /// Held here rather than at each call site so that no arrival path can record
+    /// identity and silently fail to wake its dependents -- recording without
+    /// waking would be a regression, since `observe_all` reports a slot as newly
+    /// resolved exactly once. Bound late: the reconstruction worker outlives this
+    /// map's construction.
+    wakeup: OnceLock<tokio::sync::mpsc::Sender<Vec<Slot>>>,
     /// Per-shard admission cap, not a global one: a global counter would need a
     /// shared atomic on every write, reintroducing the contention sharding removes.
     capacity_per_shard: usize,
@@ -91,8 +98,14 @@ impl SeenDigests {
                 .map(|_| RwLock::new(BTreeMap::new()))
                 .collect(),
             capacity_per_shard,
+            wakeup: OnceLock::new(),
             context,
         }
+    }
+
+    /// Binds the reconstruction worker's wakeup channel. Called once at startup.
+    pub(crate) fn set_wakeup(&self, tx: tokio::sync::mpsc::Sender<Vec<Slot>>) {
+        let _ = self.wakeup.set(tx);
     }
 
     fn shard(&self, authority: AuthorityIndex) -> &RwLock<BTreeMap<Slot, SeenSlot>> {
@@ -137,6 +150,15 @@ impl SeenDigests {
                 .node_metrics
                 .minimal_block_seen_digests_refused
                 .inc_by(refused);
+        }
+        // Every shard lock is released by now. `try_send` never blocks, so a fetch
+        // or commit-sync thread recording identity is never made to wait on
+        // reconstruction; a full channel drops the wakeup, which costs latency only
+        // -- the stale-dependent sweep still recovers the block.
+        if !resolved.is_empty() {
+            if let Some(tx) = self.wakeup.get() {
+                let _ = tx.try_send(resolved.clone());
+            }
         }
         resolved
     }
