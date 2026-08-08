@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// FlexCommitter will be wired into Core in a follow-up PR.
-#![allow(dead_code)]
-
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -394,6 +391,22 @@ impl FlexCommitter {
             .map(|b| b.expect("All blocks referenced by a trusted commit must be in DagState"))
             .collect();
         drop(dag_state);
+
+        // Every block in the commit's leader round is a committed leader (same-round
+        // blocks cannot be ancestors of each other, so they can only appear in the
+        // commit as leaders). Report them like `build_commit` does for local
+        // decisions, so `committed_leaders_total` covers the commit sync path too.
+        for block in &blocks {
+            if block.round() == commit.leader().round {
+                let leader_host = &self.context.committee.authority(block.author()).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .committed_leaders_total
+                    .with_label_values(&[leader_host, "certified-commit"])
+                    .inc();
+            }
+        }
 
         let mut subdag = CommittedSubDag::new(
             commit.leader(),
