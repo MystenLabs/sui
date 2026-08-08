@@ -38,6 +38,24 @@ use crate::{
 /// enough to use minimal blocks.
 const GATE_REEVALUATION_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Minimum time a subscription stays in a mode before it may switch back. Deleting the
+/// gate entirely was tried and collapsed the fleet to 1.5 rounds/s, so the mechanism is
+/// load-bearing; what is not load-bearing is switching on every re-evaluation. Lag is a
+/// jittery estimate, and a bare threshold on it made subscriptions flap — measured at
+/// ~100 transitions/s in each direction, sustained for minutes, while the fleet stalled.
+/// Each flip changes the wire form mid-stream, so flapping churns both sides' work
+/// without either mode ever taking effect.
+const GATE_MIN_DWELL: Duration = Duration::from_secs(10);
+
+/// Lag at which a subscriber is switched to full blocks, and the lower lag at which it
+/// earns minimal blocks back. The gap is what stops a subscriber sitting exactly on the
+/// threshold from oscillating: crossing up is not the inverse of crossing down, so noise
+/// around one boundary cannot drive the mode. Expressed as a fraction of `gc_depth`
+/// because that is the horizon reconstruction can resolve within.
+fn gate_thresholds(gc_depth: Round) -> (Round, Round) {
+    (gc_depth, gc_depth / 4)
+}
+
 /// How far the subscriber trails this node's accepted frontier. Uses the peer's own
 /// latest block in our DAG once we have one — a node accepts its own proposals
 /// immediately, so that round is its frontier — and falls back to the position it
@@ -626,9 +644,13 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             .context
             .protocol_config
             .minimal_block_propagation_enabled();
-        let lag_limit = self.context.protocol_config.gc_depth();
+        let (lag_to_full, lag_to_minimal) =
+            gate_thresholds(self.context.protocol_config.gc_depth());
+        // Enter on the strict threshold: a subscriber must be demonstrably close before it
+        // is trusted with minimal blocks, and bootstrap starts everyone far from the
+        // frontier.
         let emit_minimal = flag_enabled
-            && subscriber_lag(&self.dag_state.read(), peer, last_received) <= lag_limit;
+            && subscriber_lag(&self.dag_state.read(), peer, last_received) <= lag_to_minimal;
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
         // The gate must keep tracking the subscriber: a node that falls behind mid
@@ -642,6 +664,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         let gate_context = self.context.clone();
         let mut emit_minimal = emit_minimal;
         let mut gate_checked_at = std::time::Instant::now();
+        let mut gate_switched_at = std::time::Instant::now();
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         let stream = past_proposed_blocks.chain(broadcasted_blocks.flat_map(move |items| {
@@ -649,12 +672,23 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 items.len() <= MAX_BLOCKS_PER_POLL,
                 "Too many blocks received from broadcast"
             );
-            if flag_enabled && gate_checked_at.elapsed() >= GATE_REEVALUATION_INTERVAL {
+            if flag_enabled
+                && gate_checked_at.elapsed() >= GATE_REEVALUATION_INTERVAL
+                && gate_switched_at.elapsed() >= GATE_MIN_DWELL
+            {
                 gate_checked_at = std::time::Instant::now();
                 if let Some(dag_state) = gate_dag_state.upgrade() {
                     let lag = subscriber_lag(&dag_state.read(), peer, last_received);
-                    let now_minimal = lag <= lag_limit;
+                    // Asymmetric: fall out of minimal at the horizon, but earn it back
+                    // only well inside — so lag hovering at one boundary cannot drive
+                    // the mode.
+                    let now_minimal = if emit_minimal {
+                        lag <= lag_to_full
+                    } else {
+                        lag <= lag_to_minimal
+                    };
                     if now_minimal != emit_minimal {
+                        gate_switched_at = std::time::Instant::now();
                         // Counted, not just logged: these flips decide whether a
                         // peer is served compressed or full blocks, and the fleet
                         // runs at INFO where the log below is invisible.
