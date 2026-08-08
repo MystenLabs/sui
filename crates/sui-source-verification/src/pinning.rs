@@ -4,9 +4,10 @@
 use std::path::Path;
 
 use move_package_alt::SourcePackageLayout;
+use serde::Serialize;
 
 /// A dependency pinned to a revision that can move, such as a branch or a tag.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct MovingRevision {
     pub dependency: String,
     pub rev: String,
