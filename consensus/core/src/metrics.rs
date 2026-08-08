@@ -189,6 +189,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_seen_digests: IntGauge,
     pub(crate) minimal_block_seen_digests_refused: IntCounter,
     pub(crate) minimal_block_gate_transitions: IntCounterVec,
+    pub(crate) minimal_block_missing_slots_at_park: Histogram,
+    pub(crate) minimal_block_park_resolve_ms: HistogramVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
@@ -638,6 +640,19 @@ impl NodeMetrics {
                 "minimal_block_gate_transitions",
                 "Emission-gate flips for a subscriber, by new mode (minimal|full). A subscriber trailing the omission horizon is served full blocks; sustained churn here means the fleet is riding the threshold",
                 &["mode"],
+                registry,
+            ).unwrap(),
+            minimal_block_missing_slots_at_park: register_histogram_with_registry!(
+                "minimal_block_missing_slots_at_park",
+                "Ancestor slots still unresolved when a minimal block parks. With identity recorded at arrival a slot is unresolved only when that ancestor has not arrived at all, so this is the arrival-skew between a block and its ancestors -- the quantity that decides whether reconstruction can match full-block flow",
+                vec![1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0, 34.0, 55.0, 89.0, 100.0],
+                registry,
+            ).unwrap(),
+            minimal_block_park_resolve_ms: register_histogram_vec_with_registry!(
+                "minimal_block_park_resolve_ms",
+                "Wall-clock milliseconds a minimal block stayed parked, by terminal outcome. Rounds are the stability signal; milliseconds are what says whether parking is a brief arrival-skew wait or a structural stall",
+                &["outcome"],
+                vec![0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
                 registry,
             ).unwrap(),
             minimal_block_park_residency_rounds: register_histogram_vec_with_registry!(

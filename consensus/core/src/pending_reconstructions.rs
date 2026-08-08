@@ -217,6 +217,11 @@ impl PendingReconstructions {
         gc_round: Round,
         local_round: Round,
     ) -> Result<(), AdmitRefusal> {
+        self.context
+            .metrics
+            .node_metrics
+            .minimal_block_missing_slots_at_park
+            .observe(missing.len() as f64);
         let refusal = self.admission_refusal(
             &claimed_ref,
             &minimal,
@@ -683,6 +688,10 @@ impl PendingReconstructions {
             .minimal_block_park_residency_rounds
             .with_label_values(&[outcome])
             .observe(local_round.saturating_sub(entry.parked_at_round) as f64);
+        metrics
+            .minimal_block_park_resolve_ms
+            .with_label_values(&[outcome])
+            .observe(entry.parked_at.elapsed().as_secs_f64() * 1000.0);
     }
 
     fn update_gauges(&self) {
