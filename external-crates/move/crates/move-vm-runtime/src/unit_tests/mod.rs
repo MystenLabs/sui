@@ -31,6 +31,7 @@ mod nested_loop_tests;
 mod package_cache_tests;
 mod publish_tests;
 mod return_value_tests;
+mod system_packages_tests;
 mod telemetry_tests;
 mod value_tests;
 
