@@ -1,0 +1,15 @@
+{
+  "name": "payment-reconciliation",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mysten/sui": "2.22.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3"
+  }
+}
