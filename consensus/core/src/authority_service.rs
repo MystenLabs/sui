@@ -34,22 +34,6 @@ use crate::{
 };
 
 /// Authority's network service implementation, agnostic to the actual networking stack used.
-/// How often a live subscription re-evaluates whether its subscriber is still close
-/// enough to use minimal blocks.
-const GATE_REEVALUATION_INTERVAL: Duration = Duration::from_secs(1);
-
-/// How far the subscriber trails this node's accepted frontier. Uses the peer's own
-/// latest block in our DAG once we have one — a node accepts its own proposals
-/// immediately, so that round is its frontier — and falls back to the position it
-/// reported when subscribing.
-fn subscriber_lag(dag_state: &DagState, peer: AuthorityIndex, last_received: Round) -> Round {
-    let frontier = dag_state.highest_accepted_round();
-    let peer_round = dag_state
-        .get_last_block_for_authority(peer)
-        .round()
-        .max(last_received);
-    frontier.saturating_sub(peer_round)
-}
 
 /// Concurrent detached ancestor-fetch tasks (and their RPCs) per node.
 const ANCESTOR_FETCH_PERMITS: usize = 256;
@@ -610,38 +594,28 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
         // sends full blocks. Emission is protocol-gated: every validator on a version
         // with the flag can decode both forms.
         //
-        // Lag gate: a subscriber that is behind cannot use minimal blocks at all, so
-        // sending them wastes both sides' work. Reconstruction is all-or-nothing across
-        // a block's ~100 ancestors — one unresolvable slot parks the whole block — so a
-        // small per-ancestor miss rate compounds into near-total failure once a receiver
-        // trails the omission horizon. Measured on a lagging cohort: 76% of blocks failed
-        // to inflate (16% on caught-up peers), and the parked entries died 0.6 rounds
-        // below GC at 42/s, i.e. GC reclaimed their ancestors before the DAG could
-        // advance to them. Full blocks put such a subscriber back on the ordinary path -
-        // verify, suspend in block_manager, fetch missing ancestors by digest - which is
-        // how it catches up; it earns minimal blocks again when it resubscribes near the
-        // frontier. `last_received` is the subscriber's own reported position, so this
-        // costs nothing to evaluate.
-        let flag_enabled = self
+        // There is deliberately no sender-side lag gate. One existed: it withheld minimal
+        // blocks from subscribers trailing the omission horizon, because reconstruction is
+        // all-or-nothing across ~100 ancestors, and a receiver that could not resolve them
+        // parked everything and stalled. That reasoning held while a slot digest could only
+        // be learned from its author's own stream. It no longer does: identity is recorded
+        // on arrival from every path, so a receiver resolves an ancestor as soon as it
+        // arrives rather than once it is accepted, and a block that still cannot be rebuilt
+        // falls back to fetching the full block by its own digest.
+        //
+        // That fallback is the protection the gate provided, applied per block and after
+        // the fact instead of per subscription and in advance. Predicting it from DAG lag
+        // was strictly worse: the estimate is jittery, so subscriptions flapped between
+        // modes — measured at ~100 transitions/s in each direction, sustained for minutes,
+        // while the fleet stalled — and evaluating it cost a DagState read per subscriber
+        // per second on the same lock Core needs to accept blocks. A block either
+        // reconstructs or it does not, and that decision cannot oscillate.
+        let emit_minimal = self
             .context
             .protocol_config
             .minimal_block_propagation_enabled();
-        let lag_limit = self.context.protocol_config.gc_depth();
-        let emit_minimal = flag_enabled
-            && subscriber_lag(&self.dag_state.read(), peer, last_received) <= lag_limit;
         let context = self.context.clone();
         let peer_hostname = context.committee.authority(peer).hostname.clone();
-        // The gate must keep tracking the subscriber: a node that falls behind mid
-        // stream would otherwise be served minimal blocks forever, since the initial
-        // decision was made when it was healthy (measured: a lagging cohort held a
-        // stable ~450-round deficit while still receiving 347 minimal blocks/s, 84%
-        // of which could not be inflated). Re-evaluated at most once a second per
-        // subscription, off the peer's own latest block in our DAG — always fresh,
-        // and independent of the round prober.
-        let gate_dag_state = Arc::downgrade(&self.dag_state);
-        let gate_context = self.context.clone();
-        let mut emit_minimal = emit_minimal;
-        let mut gate_checked_at = std::time::Instant::now();
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         let stream = past_proposed_blocks.chain(broadcasted_blocks.flat_map(move |items| {
@@ -649,35 +623,6 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 items.len() <= MAX_BLOCKS_PER_POLL,
                 "Too many blocks received from broadcast"
             );
-            if flag_enabled && gate_checked_at.elapsed() >= GATE_REEVALUATION_INTERVAL {
-                gate_checked_at = std::time::Instant::now();
-                if let Some(dag_state) = gate_dag_state.upgrade() {
-                    let lag = subscriber_lag(&dag_state.read(), peer, last_received);
-                    let now_minimal = lag <= lag_limit;
-                    if now_minimal != emit_minimal {
-                        // Counted, not just logged: these flips decide whether a
-                        // peer is served compressed or full blocks, and the fleet
-                        // runs at INFO where the log below is invisible.
-                        gate_context
-                            .metrics
-                            .node_metrics
-                            .minimal_block_gate_transitions
-                            .with_label_values(&[if now_minimal { "minimal" } else { "full" }])
-                            .inc();
-                        debug!(
-                            "Subscriber {peer} is {lag} rounds behind; \
-                             {} minimal emission",
-                            if now_minimal {
-                                "resuming"
-                            } else {
-                                "suspending"
-                            }
-                        );
-                    }
-                    emit_minimal = now_minimal;
-                }
-            }
-            let emit_minimal = emit_minimal;
             let context = context.clone();
             let peer_hostname = peer_hostname.clone();
             stream::iter(items.into_iter().map(move |mut extended_block| {
