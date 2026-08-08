@@ -1,0 +1,176 @@
+---
+title: Regulated Payments
+description: >-
+  Build compliant payment flows on Sui by combining deny lists, permissioned
+  assets, and event-based audit trails with provider-owned identity and
+  sanctions screening.
+keywords:
+  - regulated payments
+  - compliance
+  - KYC
+  - AML
+  - sanctions
+  - deny list
+  - DenyCapV2
+  - permissioned assets
+  - PAS
+  - compliance architecture
+  - freeze
+  - revoke
+  - audit trail
+  - regulated coin
+goal:
+  description: >-
+    Reader understands the compliance architecture for regulated payments on
+    Sui and knows what Sui primitives handle compared to provider-owned
+    responsibilities
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments / Neomoney
+    step: Regulated payments
+    stage: Compliance
+questions:
+  - How do I build compliant payment flows on Sui?
+  - What does Sui provide for compliance compared to what a payment provider owns?
+  - How do I freeze or revoke access to regulated coins?
+  - How do I log compliance events for audit trails on Sui?
+  - How do I integrate KYC and AML checks with Sui payments?
+answer: >-
+  Sui provides deny lists (DenyCapV2), the Permissioned Asset Standard (PAS),
+  payment events, and address balances as compliance primitives. Payment
+  providers own identity verification (KYC), sanctions screening (AML),
+  fiat settlement, and compliance reporting.
+---
+
+Regulated payment flows on Sui combine onchain enforcement primitives with offchain provider responsibilities. Sui provides the tools to enforce transfer restrictions, log events, and gate asset movement. Your payment provider or legal team handles identity verification, sanctions screening, fiat settlement, and regulatory reporting. 
+
+## Sui-owned compared to provider-owned
+
+:::warning
+
+Sui does not perform identity verification, screen transactions against sanctions lists, or settle fiat payments. These are provider-owned responsibilities. Sui provides the onchain enforcement layer that providers use to apply their compliance decisions.
+
+:::
+
+| **Sui (onchain controls and evidence)** | **Provider (legal and compliance obligations)** |
+|---|---|
+| `DenyList` shared object at `0x403` for epoch-based address restrictions | KYC identity verification, including document checks, liveness, and risk scoring |
+| `DenyCapV2` capability for address-level restrictions and global pause controls | AML transaction monitoring, suspicious activity review, and reporting workflows |
+| PAS Accounts, Policies, and approval witnesses for gated transfer logic | Sanctions screening, allow/deny-list policy decisions, and customer eligibility rules |
+| `TreasuryCap` governance for minting, burning, and supply control | Legal authority, issuer controls, reserve management, and regulatory reporting |
+| Payment Kit events such as `PaymentReceipt` for onchain audit trails | Fiat settlement, bank reconciliation, refunds, and chargeback operations |
+| Address-balance APIs/workflows for stateless transfer construction | Custody operations, account servicing, and user support workflows |
+| Sui events for real-time streaming and historical queries | Compliance monitoring, audit preparation, and regulator-facing reporting |
+| Onchain policy enforcement and transparent transaction history | Legal opinions, licensing analysis, jurisdictional compliance, and risk governance |
+
+## Architecture
+
+A compliant payment system on Sui can be built using different independent layers. Each layer can be adopted separately or combined with the others, depending on the provider's regulatory and product requirements.
+
+1. **Identity verification (offchain, provider-owned):** The payment provider verifies the user's identity through KYC checks, document verification, sanctions screening, and risk scoring. This happens outside Sui and remains under the provider's compliance program.
+
+2. **Onchain eligibility signal:** After verification, the provider can publish an app-defined onchain eligibility signal, such as a registry entry, attestation object, or verified-address record. PAS does not create this attestation automatically. Instead, an approval witness can check provider-owned onchain state before approving a restricted action. For example, a `KYCRegistry` contract can store verified addresses, and a PAS approval witness can consult that registry before approving a transfer request.
+
+3. **Token policy enforcement:** Transfer restrictions execute onchain through the mechanism that best fits the asset. PAS policies can require an approval witness before allowing a protected action. Regulated fungible tokens can also use `DenyCapV2` deny lists to block specific addresses from sending or receiving the coin. These tools are independent: a provider can use deny lists without PAS, or PAS without regulated-token deny lists.
+
+4. **Audit trail:** Compliance systems should index Sui transaction data, transaction effects, and relevant package events to build an offchain audit log. Providers can subscribe through gRPC or query through GraphQL to track payments, approvals, policy checks, deny list updates, and other compliance-relevant activity.
+
+### Where KYC fits
+
+The [PAS integration guide](/onchain-finance/pas/integrating-pas) demonstrates an example using a `KYCRegistry` pattern where a provider-maintained contract stores verified addresses. The approval witness for a `SendFunds` request checks this registry before it approves the transfer. If the address is not in the registry, the transaction fails.
+
+This pattern separates concerns cleanly:
+
+- **Provider:** Decides who passes KYC and updates the `KYCRegistry` onchain.
+
+- **PAS policy:** Enforces that only registry-approved addresses can move funds.
+
+- **Application:** Builds transactions that include the required approval calls.
+
+### Where AML fits
+
+AML transaction monitoring happens offchain. Your provider monitors transaction patterns, flags suspicious activity, and reports to regulators as required. When AML screening identifies a problematic address, the provider uses `DenyCapV2` to block it onchain.
+
+## Admin operations: freeze, unfreeze, and global pause
+
+The `DenyCapV2` capability lets you freeze individual addresses or pause all transfers of a regulated coin. 
+
+### Freeze an address
+
+To block an address from sending or receiving a regulated coin, add it to the deny list:
+
+```bash
+$ sui client call \
+  --package 0x2 \
+  --module coin \
+  --function deny_list_v2_add \
+  --type-args '0xPACKAGE::module::MY_COIN' \
+  --args 0x403 $DENY_CAP_ID $ADDRESS_TO_FREEZE \
+  --gas-budget 10000000
+```
+
+The denied address cannot use the coin as a transaction input immediately. It can still receive the coin until the next epoch starts when the network also blocks receiving.
+
+For the full Move and TypeScript code, see [Regulated Currencies](/onchain-finance/fungible-tokens/regulated-tokens).
+
+### Unfreeze an address
+
+Remove the address from the deny list:
+
+```bash
+$ sui client call \
+  --package 0x2 \
+  --module coin \
+  --function deny_list_v2_remove \
+  --type-args '0xPACKAGE::module::MY_COIN' \
+  --args 0x403 $DENY_CAP_ID $ADDRESS_TO_UNFREEZE \
+  --gas-budget 10000000
+```
+
+After removal, the address can use the coin as a transaction input immediately. The network continues to block receiving until the next epoch.
+
+### Global pause
+
+If you created your currency with `allow_global_pause: true`, you can freeze all transfers network-wide:
+
+```bash
+$ sui client call \
+  --package 0x2 \
+  --module coin \
+  --function deny_list_v2_enable_global_pause \
+  --type-args '0xPACKAGE::module::MY_COIN' \
+  --args 0x403 $DENY_CAP_ID \
+  --gas-budget 10000000
+```
+
+Use global pause for emergency situations only, such as a security breach or a regulatory order. Disable it with `deny_list_v2_disable_global_pause` when the situation resolves. Global pause blocks use as transaction inputs immediately, the same as a per-address deny. The network blocks receiving starting at the next epoch.
+
+:::caution DenyCapV2
+
+The `DenyCapV2` holder can freeze any address or pause all transfers. 
+
+:::
+
+## Event-based compliance logging
+
+Payment Kit and PAS emit events for payments, approvals, and request resolutions. Build your compliance audit trail by subscribing to these events and storing them in your offchain logging system.
+
+Use gRPC subscriptions or the list APIs to capture compliance-relevant events in real time or historically. For historical queries over a checkpoint range, use the [ledger history list APIs](/develop/accessing-data/grpc/using-grpc#ledger-history-list-apis). For event concepts and additional query patterns, see [Using Events](/develop/accessing-data/using-events).
