@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 4-25:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::mut_and_dotstar_imm_invalid'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x2::mut_and_dotstar_imm_invalid,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 11)],
+}
+
+task 2, lines 50-65:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::mut_and_same_field_imm_invalid'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x4::mut_and_same_field_imm_invalid,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 3, lines 67-86:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::two_mut_from_two_calls_invalid'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x5::two_mut_from_two_calls_invalid,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 4)],
+}

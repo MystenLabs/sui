@@ -1,0 +1,58 @@
+// graph shape for vector element references
+
+//# publish
+mvir 0x71::shapes {
+
+fun mut_elem(v: &mut vector<u64>) {
+    let e: &mut u64;
+label b0:
+    e = vec_mut_borrow<u64>(copy(v), 0);
+    jump b1;
+label b1:
+    _ = move(e);
+    _ = move(v);
+    return;
+}
+
+fun nested(o: &mut vector<vector<u64>>) {
+    let i: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    i = vec_mut_borrow<vector<u64>>(copy(o), 0);
+    e = vec_mut_borrow<u64>(copy(i), 0);
+    jump b1;
+label b1:
+    _ = move(e);
+    _ = move(i);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x71::shapes::mut_elem
+
+//# view-abstract-state 0x71::shapes::nested
+
+// two element refs of one vector become mutual dot-star extensions
+
+//# publish
+mvir 0x72::mut_and_imm {
+
+fun mut_and_imm_elem(v: &mut vector<u64>) {
+    let e_mut: &mut u64;
+    let e_imm: &u64;
+label b0:
+    e_mut = vec_mut_borrow<u64>(copy(v), 0);
+    e_imm = vec_imm_borrow<u64>(freeze(copy(v)), 1);
+    jump b1;
+label b1:
+    _ = move(e_mut);
+    _ = move(e_imm);
+    _ = move(v);
+    return;
+}
+
+}
+
+//# view-abstract-state 0x72::mut_and_imm::mut_and_imm_elem

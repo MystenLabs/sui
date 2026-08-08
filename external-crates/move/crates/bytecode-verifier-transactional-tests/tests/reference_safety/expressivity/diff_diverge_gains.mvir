@@ -1,0 +1,47 @@
+// old rejects, regex accepts, and the program runs
+
+//# run
+
+mvir 0x46::write_through_mut_alias_then_read_imm {
+
+public struct T has copy, drop { f: u64 }
+
+entry fun t() {
+    let x: Self::T;
+    let i: &Self::T;
+    let s: &mut Self::T;
+label b0:
+    x = T { f: 0 };
+    // the immutable borrow taken first is allowed by the old checker
+    i = &x;
+    s = &mut x;
+    // old: WRITEREF_EXISTS_BORROW_ERROR; new: epsilon aliases do not block a write
+    *move(s) = T { f: 1 };
+    _ = *move(i);
+    return;
+}
+
+}
+
+//# run
+
+mvir 0x55::vec_imm_elem_with_live_mut_elem {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+    let i: &u64;
+label b0:
+    v = vector<u64; 2>(0, 1);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    // old: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR; new: imm and mut element borrows may coexist
+    i = vec_imm_borrow<u64>(freeze(copy(vr)), 1);
+    _ = *move(i);
+    *move(e) = 5;
+    _ = move(vr);
+    return;
+}
+
+}

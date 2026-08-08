@@ -1,0 +1,64 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 0, lines 4-15:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::callee_returns_aliasing_mut_pair'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x2::callee_returns_aliasing_mut_pair,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 1, lines 17-27:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::callee_returns_mut_and_its_extension'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x3::callee_returns_mut_and_its_extension,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 2, lines 29-39:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::callee_returns_imm_parent_mut_child'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x4::callee_returns_imm_parent_mut_child,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 3, lines 41-51:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::callee_returns_mut_alias_of_imm'. Got VMError: {
+    major_status: RET_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x5::callee_returns_mut_alias_of_imm,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 4, lines 53-75:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::caller_passes_aliasing_mut_pair'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x6::caller_passes_aliasing_mut_pair,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}
+
+task 5, lines 77-99:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::caller_passes_mut_and_imm_alias'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x7::caller_passes_mut_and_imm_alias,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}

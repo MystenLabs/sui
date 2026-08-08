@@ -1,0 +1,86 @@
+// an extension created only in the loop body is live across the back edge, but the header join
+// drops the local holding it
+
+//# publish
+mvir 0x2::extension_created_only_in_body {
+
+public struct S has copy, drop { f: u64 }
+
+fun t(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+    let f: &mut u64;
+label b0:
+    r = move(s);
+label header:
+    // on the back edge f holds &mut r.f; on the entry edge it holds nothing
+    *copy(r) = S { f: 1 };
+    jump_if (copy(n) == 0) exit;
+    n = move(n) - 1;
+    f = &mut copy(r).S::f;
+    jump header;
+label exit:
+    _ = move(r);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::extension_created_and_consumed_in_body {
+
+public struct S has copy, drop { f: u64 }
+
+fun id(s: &mut Self::S): &mut Self::S {
+label b0:
+    return move(s);
+}
+
+entry fun t() {
+    let s: Self::S;
+    let r: &mut Self::S;
+    let f: &mut u64;
+    let n: u64;
+label b0:
+    s = S { f: 0 };
+    r = &mut s;
+    n = 3;
+label header:
+    jump_if (copy(n) == 0) exit;
+    n = move(n) - 1;
+    f = &mut copy(r).S::f;
+    *move(f) = 5;
+    r = Self::id(move(r));
+    jump header;
+label exit:
+    assert(*(&move(r).S::f) == 5, 42);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::extension_survives_into_next_iteration {
+
+public struct S has copy, drop { f: u64 }
+
+// f is live at the header on both edges
+fun t(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+    let f: &mut u64;
+label b0:
+    r = copy(s);
+    f = &mut move(s).S::f;
+label header:
+    *copy(r) = S { f: 1 };
+    jump_if (copy(n) == 0) exit;
+    n = move(n) - 1;
+    _ = move(f);
+    f = &mut copy(r).S::f;
+    jump header;
+label exit:
+    _ = move(f);
+    _ = move(r);
+    return;
+}
+
+}

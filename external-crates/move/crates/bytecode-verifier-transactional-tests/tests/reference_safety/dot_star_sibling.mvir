@@ -1,0 +1,128 @@
+// a call result is a dot-star extension of its argument; then borrow and write a sibling field
+
+//# publish
+mvir 0x21::b1_write_sibling {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun get(o: &mut Self::O): &mut Self::S {
+label b0:
+    return &mut move(o).O::a;
+}
+
+fun t(o: &mut Self::O) {
+    let n: &mut Self::S;
+    let w: &mut Self::S;
+label b0:
+    n = Self::get(copy(o));
+    w = &mut copy(o).O::b;
+    *move(w) = S { f: 0, g: 0 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x22::b2_write_call_result {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun get(o: &mut Self::O): &mut Self::S {
+label b0:
+    return &mut move(o).O::a;
+}
+
+fun t(o: &mut Self::O) {
+    let n: &mut Self::S;
+    let w: &mut Self::S;
+label b0:
+    n = Self::get(copy(o));
+    w = &mut copy(o).O::b;
+    *move(n) = S { f: 0, g: 0 };
+    _ = move(w);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x23::b3_release_then_field {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun get(o: &mut Self::O): &mut Self::S {
+label b0:
+    return &mut move(o).O::a;
+}
+
+fun t(o: &mut Self::O) {
+    let n: &mut Self::S;
+    let w: &mut Self::S;
+label b0:
+    n = Self::get(copy(o));
+    _ = move(n);
+    w = &mut copy(o).O::b;
+    *move(w) = S { f: 0, g: 0 };
+    _ = move(o);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x24::b4_imm_sibling_of_call {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun get(o: &Self::O): &Self::S {
+label b0:
+    return &move(o).O::a;
+}
+
+fun t(o: &mut Self::O) {
+    let n: &Self::S;
+    let w: &mut Self::S;
+label b0:
+    n = Self::get(freeze(copy(o)));
+    w = &mut copy(o).O::b;
+    *move(w) = S { f: 0, g: 0 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x25::b5_field_then_call_then_write {
+
+public struct S has copy, drop, store { f: u64, g: u64 }
+public struct O has copy, drop, store { a: Self::S, b: Self::S }
+
+fun get(o: &mut Self::S): &mut Self::S {
+label b0:
+    return move(o);
+}
+
+fun t(o: &mut Self::O) {
+    let x: &mut Self::S;
+    let n: &mut Self::S;
+    let w: &mut Self::S;
+label b0:
+    x = &mut copy(o).O::a;
+    n = Self::get(move(x));
+    w = &mut copy(o).O::b;
+    *move(w) = S { f: 0, g: 0 };
+    _ = move(n);
+    _ = move(o);
+    return;
+}
+
+}

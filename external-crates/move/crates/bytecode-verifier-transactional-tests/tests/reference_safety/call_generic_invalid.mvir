@@ -1,0 +1,34 @@
+// CallGeneric shapes rejected by both checkers.
+
+//# publish
+mvir 0x2::write_parent_with_live_generic_extension_invalid {
+
+public struct S<T> has copy, drop { f: T }
+
+fun borrow_f<T>(s: &mut Self::S<T>): &mut T {
+label b0:
+    return &mut move(s).S<T>::f;
+}
+
+fun t(s: &mut Self::S<u64>) {
+    let m: &mut u64;
+label b0:
+    m = Self::borrow_f<u64>(copy(s));
+    *copy(s) = S<u64> { f: 1 };
+    _ = move(m);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::generic_two_mut_returns_alias_invalid {
+
+public struct P<T> has copy, drop { x: T, y: T }
+
+fun split<T>(p: &mut Self::P<T>): &mut T * &mut T {
+label b0:
+    return (&mut copy(p).P<T>::x, &mut copy(p).P<T>::x);
+}
+
+}

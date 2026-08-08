@@ -1,0 +1,37 @@
+// StLoc over a vector local: allowed with a whole-local alias, rejected with a ref into the
+// contents
+
+//# run
+mvir 0x81::stloc_with_whole_vector_ref {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+label b0:
+    v = vector<u64; 1>(1);
+    vr = &mut v;
+    v = vector<u64; 2>(2, 3);
+    assert(vec_len<u64>(freeze(copy(vr))) == 2, 42);
+    assert(*vec_imm_borrow<u64>(freeze(move(vr)), 1) == 3, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x83::stloc_then_push_through_old_ref {
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+label b0:
+    v = vector<u64; 1>(1);
+    vr = &mut v;
+    v = vector<u64; 0>();
+    vec_push_back<u64>(copy(vr), 9);
+    assert(vec_len<u64>(freeze(move(vr))) == 1, 42);
+    assert(vec_len<u64>(&v) == 1, 43);
+    return;
+}
+
+}

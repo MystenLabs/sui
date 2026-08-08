@@ -1,0 +1,12 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, line 26:
+//# view-abstract-state 0xb01::variant_field_labels::t
+view-abstract-state subcommand is only available with regex reference safety
+
+task 3, line 51:
+//# view-abstract-state 0xb02::variant_field_join::t
+view-abstract-state subcommand is only available with regex reference safety

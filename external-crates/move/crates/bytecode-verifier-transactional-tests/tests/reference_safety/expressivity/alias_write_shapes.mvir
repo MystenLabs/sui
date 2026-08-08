@@ -1,0 +1,155 @@
+// writes through a reference with an epsilon alias, for every value shape
+
+//# run
+mvir 0x2::alias_write_struct {
+
+public struct Inner has copy, drop { v: u64 }
+public struct S has copy, drop { f: Self::Inner }
+
+entry fun t() {
+    let a: Self::S;
+    let x: &mut Self::S;
+    let y: &mut Self::S;
+    let inner: &mut Self::Inner;
+label b0:
+    a = S { f: Inner { v: 0 } };
+    x = &mut a;
+    y = copy(x);
+    *move(x) = S { f: Inner { v: 7 } };
+    inner = &mut move(y).S::f;
+    assert(*&mut move(inner).Inner::v == 7, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::alias_write_enum_then_read {
+
+public enum X has copy, drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::X;
+    let x: &mut Self::X;
+    let y: &Self::X;
+    let b: &address;
+label b0:
+    e = X::One { a: 0 };
+    x = &mut e;
+    y = freeze(copy(x));
+    *move(x) = X::Two { b: 0x0 };
+    // the imm alias observes the new variant
+    &X::Two { b: b } = move(y);
+    assert(*move(b) == 0x0, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::alias_write_primvec {
+
+entry fun t() {
+    let v: vector<u64>;
+    let x: &mut vector<u64>;
+    let y: &mut vector<u64>;
+label b0:
+    v = vector<u64; 3>(1, 2, 3);
+    x = &mut v;
+    y = copy(x);
+    *move(x) = vector<u64; 1>(9);
+    assert(vec_len<u64>(freeze(copy(y))) == 1, 42);
+    assert(*vec_imm_borrow<u64>(freeze(move(y)), 0) == 9, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x5::alias_write_vec_of_struct {
+
+public struct Inner has copy, drop { v: u64 }
+
+entry fun t() {
+    let v: vector<Self::Inner>;
+    let x: &mut vector<Self::Inner>;
+    let y: &mut vector<Self::Inner>;
+label b0:
+    v = vector<Self::Inner; 1>(Inner { v: 1 });
+    x = &mut v;
+    y = copy(x);
+    *move(x) = vector<Self::Inner; 2>(Inner { v: 5 }, Inner { v: 6 });
+    assert(vec_len<Self::Inner>(freeze(copy(y))) == 2, 42);
+    assert(*&mut vec_mut_borrow<Self::Inner>(move(y), 1).Inner::v == 6, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x6::alias_mutate_vector_of_resource {
+
+// R has no abilities: never dropped implicitly
+public struct R { v: u64 }
+
+entry fun t() {
+    let v: vector<Self::R>;
+    let x: &mut vector<Self::R>;
+    let y: &mut vector<Self::R>;
+    let r1: Self::R;
+    let r2: Self::R;
+    let n1: u64;
+    let n2: u64;
+label b0:
+    v = vector<Self::R; 2>(R { v: 1 }, R { v: 2 });
+    x = &mut v;
+    y = copy(x);
+    // swap through one alias, pop through the other
+    vec_swap<Self::R>(move(x), 0, 1);
+    r1 = vec_pop_back<Self::R>(copy(y));
+    r2 = vec_pop_back<Self::R>(move(y));
+    R { v: n1 } = move(r1);
+    R { v: n2 } = move(r2);
+    assert(move(n1) == 1, 42);
+    assert(move(n2) == 2, 43);
+    vector<Self::R; 0>() = move(v);
+    return;
+}
+
+}
+
+//# run
+mvir 0x7::alias_write_nested_then_reborrow {
+
+public struct Inner has copy, drop { v: u64 }
+public struct Mid has copy, drop { i: Self::Inner }
+public struct Outer has copy, drop { m: Self::Mid }
+
+entry fun t() {
+    let a: Self::Outer;
+    let x: &mut Self::Outer;
+    let y: &mut Self::Outer;
+    let z: &mut Self::Outer;
+    let mid: &mut Self::Mid;
+    let inner: &mut Self::Inner;
+label b0:
+    a = Outer { m: Mid { i: Inner { v: 0 } } };
+    x = &mut a;
+    y = copy(x);
+    z = copy(y);
+    // three-way epsilon alias; write through the middle
+    *move(y) = Outer { m: Mid { i: Inner { v: 3 } } };
+    mid = &mut move(x).Outer::m;
+    inner = &mut move(mid).Mid::i;
+    assert(*&mut move(inner).Inner::v == 3, 42);
+    *move(z) = Outer { m: Mid { i: Inner { v: 4 } } };
+    mid = &mut (&mut a).Outer::m;
+    inner = &mut move(mid).Mid::i;
+    assert(*&mut move(inner).Inner::v == 4, 43);
+    return;
+}
+
+}

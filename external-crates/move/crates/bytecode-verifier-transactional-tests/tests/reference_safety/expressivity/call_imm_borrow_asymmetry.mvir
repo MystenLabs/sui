@@ -1,0 +1,64 @@
+// an immutable borrow off a &mut that has a live mutable extension, for a struct field and for
+// a vector element. Neither is rejected: VecImmBorrow freezes its operand first.
+
+//# publish
+mvir 0x3::vec_imm_borrow_with_mut_extension {
+
+fun t(v: &mut vector<u64>) {
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    m = vec_mut_borrow<u64>(copy(v), 0);
+    // the vector analogue: accepted too
+    i = vec_imm_borrow<u64>(copy(v), 1);
+    _ = *copy(i);
+    _ = move(m);
+    _ = move(i);
+    _ = move(v);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x4::vec_imm_borrow_with_mut_extension_frozen {
+
+fun t(v: &mut vector<u64>) {
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    m = vec_mut_borrow<u64>(copy(v), 0);
+    // explicitly frozen: same result
+    i = vec_imm_borrow<u64>(freeze(copy(v)), 1);
+    _ = *copy(i);
+    _ = move(m);
+    _ = move(i);
+    _ = move(v);
+    return;
+}
+
+}
+
+//# run
+mvir 0x6::vec_imm_borrow_with_mut_extension_frozen_run {
+
+// the frozen form runs and observes the right values
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let m: &mut u64;
+    let i: &u64;
+label b0:
+    v = vector<u64; 2>(10, 20);
+    vr = &mut v;
+    m = vec_mut_borrow<u64>(copy(vr), 0);
+    i = vec_imm_borrow<u64>(freeze(copy(vr)), 1);
+    assert(*copy(i) == 20, 70);
+    assert(*copy(m) == 10, 71);
+    _ = move(m);
+    _ = move(i);
+    _ = move(vr);
+    return;
+}
+
+}

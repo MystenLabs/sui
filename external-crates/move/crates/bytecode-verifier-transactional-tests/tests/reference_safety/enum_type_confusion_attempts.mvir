@@ -1,0 +1,161 @@
+// X::One.a and X::Two.b get different labels but name the same storage. Each task builds an
+// alias of the enum by a different route and tries to flip the variant through it.
+
+//# run
+mvir 0x901::alias_via_second_unpack {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { V { i: Self::Inner } }
+
+entry fun t() {
+    let o: Self::Outer;
+    let e: &mut Self::Outer;
+    let ia: &mut Self::Inner;
+    let ib: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::V { i: Inner::P { n: 0 } };
+    e = &mut o;
+    &mut Outer::V { i: ia } = copy(e);
+    &mut Outer::V { i: ib } = copy(e);
+    &mut Inner::P { n: n } = move(ia);
+    *move(ib) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# run
+mvir 0x902::alias_via_copy {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { V { i: Self::Inner } }
+
+entry fun t() {
+    let o: Self::Outer;
+    let ia: &mut Self::Inner;
+    let ic: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::V { i: Inner::P { n: 0 } };
+    &mut Outer::V { i: ia } = &mut o;
+    ic = copy(ia);
+    &mut Inner::P { n: n } = move(ia);
+    *move(ic) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x903::alias_via_call_dot_star {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { V { i: Self::Inner } }
+
+fun id(i: &mut Self::Inner): &mut Self::Inner {
+label b0:
+    return move(i);
+}
+
+entry fun t() {
+    let o: Self::Outer;
+    let ia: &mut Self::Inner;
+    let ib: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::V { i: Inner::P { n: 0 } };
+    &mut Outer::V { i: ia } = &mut o;
+    ib = Self::id(copy(ia));
+    &mut Inner::P { n: n } = move(ia);
+    *move(ib) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x904::field_from_dot_star_flip_source {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { V { i: Self::Inner } }
+
+fun id(i: &mut Self::Inner): &mut Self::Inner {
+label b0:
+    return move(i);
+}
+
+// mirror of 0x903: the flip goes through the original reference
+entry fun t() {
+    let o: Self::Outer;
+    let ia: &mut Self::Inner;
+    let ib: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::V { i: Inner::P { n: 0 } };
+    &mut Outer::V { i: ia } = &mut o;
+    ib = Self::id(copy(ia));
+    &mut Inner::P { n: n } = move(ib);
+    *move(ia) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x905::alias_created_after_field {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { V { i: Self::Inner } }
+
+// the aliasing unpack happens after the field reference already exists
+entry fun t() {
+    let o: Self::Outer;
+    let e: &mut Self::Outer;
+    let ia: &mut Self::Inner;
+    let ib: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::V { i: Inner::P { n: 0 } };
+    e = &mut o;
+    &mut Outer::V { i: ia } = copy(e);
+    &mut Inner::P { n: n } = move(ia);
+    &mut Outer::V { i: ib } = copy(e);
+    *move(ib) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    _ = move(e);
+    return;
+}
+
+}
+
+//# run
+mvir 0x906::alias_via_vector_element {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+
+// two borrows of the same vector slot
+entry fun t() {
+    let v: vector<Self::Inner>;
+    let r: &mut vector<Self::Inner>;
+    let ia: &mut Self::Inner;
+    let ib: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    v = vector<Self::Inner; 0>();
+    vec_push_back<Self::Inner>(&mut v, Inner::P { n: 0 });
+    r = &mut v;
+    ia = vec_mut_borrow<Self::Inner>(copy(r), 0);
+    ib = vec_mut_borrow<Self::Inner>(move(r), 0);
+    &mut Inner::P { n: n } = move(ia);
+    *move(ib) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    return;
+}
+
+}

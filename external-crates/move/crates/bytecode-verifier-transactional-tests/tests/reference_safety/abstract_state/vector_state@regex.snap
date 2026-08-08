@@ -1,0 +1,232 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, line 33:
+//# view-abstract-state 0x71::shapes::mut_elem
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#v": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      },
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true,
+        "r#v": true
+      },
+      "outgoing": {
+        "r#e": {
+          "r#v": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#v": {
+          "r#e": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 35-37:
+//# view-abstract-state 0x71::shapes::nested
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "e": {
+        "Reference": "r#e"
+      },
+      "i": {
+        "Reference": "r#i"
+      },
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e": true,
+        "r#i": true,
+        "r#o": true
+      },
+      "outgoing": {
+        "r#e": {
+          "r#i": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#i": {
+          "r#e": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#o": {
+          "r#e": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#i": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 4, line 58:
+//# view-abstract-state 0x72::mut_and_imm::mut_and_imm_elem
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#v": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "e_imm": {
+        "Reference": "r#e_imm"
+      },
+      "e_mut": {
+        "Reference": "r#e_mut"
+      },
+      "v": {
+        "Reference": "r#v"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#e_imm": false,
+        "r#e_mut": true,
+        "r#v": true
+      },
+      "outgoing": {
+        "r#e_imm": {
+          "r#e_mut": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#v": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#e_mut": {
+          "r#e_imm": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#v": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#v": {
+          "r#e_imm": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#e_mut": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

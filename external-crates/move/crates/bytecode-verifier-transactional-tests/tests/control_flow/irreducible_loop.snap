@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 3-27:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::irred'. Got VMError: {
+    major_status: INVALID_LOOP_SPLIT,
+    sub_status: None,
+    location: 0x2::irred,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}

@@ -1,0 +1,26 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 3-67:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::shapes'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::shapes,
+    indices: [(FunctionDefinition, 3)],
+    offsets: [(FunctionDefinitionIndex(3), 4)],
+}
+
+task 1, line 69:
+//# view-abstract-state 0x2::shapes::imm_arg_with_mut_extension
+view-abstract-state subcommand is only available with regex reference safety
+
+task 2, line 71:
+//# view-abstract-state 0x2::shapes::mixed_results
+view-abstract-state subcommand is only available with regex reference safety
+
+task 3, line 73:
+//# view-abstract-state 0x2::shapes::free_floating_mut
+view-abstract-state subcommand is only available with regex reference safety

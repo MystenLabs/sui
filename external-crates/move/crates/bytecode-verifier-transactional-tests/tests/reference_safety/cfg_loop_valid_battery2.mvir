@@ -1,0 +1,219 @@
+// exotic CFG shapes that are memory-safe
+
+//# publish
+mvir 0x2::a_entry_is_loop_head {
+public struct S has copy, drop { f: u64 }
+// back edge to the entry block
+fun t(s: &mut Self::S, n: u64) {
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    *copy(s) = S { f: 1 };
+    jump h;
+label e:
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0x3::b_self_loop_block {
+public struct S has copy, drop { f: u64 }
+// a block that is its own successor
+fun t(s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    p = &mut move(s).S::f;
+label h:
+    *copy(p) = 1;
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump h;
+label e:
+    _ = move(p);
+    return;
+}
+}
+
+//# publish
+mvir 0x4::c_diamond_in_loop {
+public struct S has copy, drop { f: u64, g: u64 }
+fun t(cond: bool, s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    jump_if (copy(cond)) l2;
+label l1:
+    p = &mut copy(s).S::f;
+    jump l3;
+label l2:
+    p = &mut copy(s).S::g;
+label l3:
+    *move(p) = 1;
+    jump h;
+label e:
+    *copy(s) = S { f: 0, g: 0 };
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0x5::d_call_two_returns_in_loop {
+public struct S has copy, drop { f: u64, g: u64 }
+fun split(s: &mut Self::S): &mut u64 * &mut u64 {
+label b0:
+    return &mut copy(s).S::f, &mut move(s).S::g;
+}
+fun t(s: &mut Self::S, n: u64) {
+    let a: &mut u64;
+    let b: &mut u64;
+label b0:
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    a, b = Self::split(copy(s));
+    *move(a) = 1;
+    *move(b) = 2;
+    jump h;
+label e:
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0x6::e_vector_in_loop {
+fun t(v: &mut vector<u64>, n: u64) {
+    let p: &mut u64;
+label b0:
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    p = vec_mut_borrow<u64>(copy(v), 0);
+    *move(p) = 1;
+    jump h;
+label e:
+    vec_push_back<u64>(move(v), 5);
+    return;
+}
+}
+
+//# publish
+mvir 0x7::f_enum_unpack_in_loop {
+public enum E has copy, drop { V { x: u64 } }
+fun t(e: &mut Self::E, n: u64) {
+    let p: &mut u64;
+label b0:
+label h:
+    jump_if (copy(n) == 0) ex;
+    n = move(n) - 1;
+    &mut E::V { x: p } = copy(e);
+    *move(p) = 1;
+    jump h;
+label ex:
+    *copy(e) = E::V { x: 0 };
+    _ = move(e);
+    return;
+}
+}
+
+//# publish
+mvir 0x8::g_stloc_reload_in_loop {
+public struct S has copy, drop { f: u64 }
+fun t(s: &mut Self::S, n: u64) {
+    let r: &mut Self::S;
+    let q: &mut Self::S;
+label b0:
+    r = move(s);
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    q = move(r);
+    r = move(q);
+    jump h;
+label e:
+    *copy(r) = S { f: 1 };
+    _ = move(r);
+    return;
+}
+}
+
+//# publish
+mvir 0x9::h_pop_ref_in_loop {
+public struct S has copy, drop { f: u64 }
+fun t(s: &mut Self::S, n: u64) {
+label b0:
+label h:
+    jump_if (copy(n) == 0) e;
+    n = move(n) - 1;
+    _ = &mut copy(s).S::f;
+    jump h;
+label e:
+    *copy(s) = S { f: 1 };
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0xa::i_two_heads_shared_tail {
+public struct S has copy, drop { f: u64, g: u64 }
+// two sibling loops feeding a common tail
+fun t(cond: bool, s: &mut Self::S, n: u64) {
+    let p: &mut u64;
+label b0:
+    jump_if (move(cond)) h2;
+label h1:
+    jump_if (copy(n) == 0) tail;
+    n = move(n) - 1;
+    p = &mut copy(s).S::f;
+    *move(p) = 1;
+    jump h1;
+label h2:
+    jump_if (copy(n) == 0) tail;
+    n = move(n) - 1;
+    p = &mut copy(s).S::g;
+    *move(p) = 2;
+    jump h2;
+label tail:
+    *copy(s) = S { f: 0, g: 0 };
+    _ = move(s);
+    return;
+}
+}
+
+//# publish
+mvir 0xb::j_infinite_loop_with_ref {
+public struct S has copy, drop { f: u64 }
+// no exit from the loop
+fun t(s: &mut Self::S) {
+    let p: &mut u64;
+label b0:
+    p = &mut move(s).S::f;
+label h:
+    *copy(p) = 1;
+    jump h;
+}
+}
+
+//# publish
+mvir 0xc::k_freeze_one_branch {
+public struct S has copy, drop { f: u64 }
+fun rd(r: &Self::S): u64 { label b0: return *(&move(r).S::f); }
+// the same imm local from ImmBorrowLoc on one path and FreezeRef on the other
+fun t(cond: bool, s: Self::S): u64 {
+    let i: &Self::S;
+label b0:
+    jump_if (move(cond)) l2;
+label l1:
+    i = &s;
+    jump l3;
+label l2:
+    i = freeze(&mut s);
+label l3:
+    return Self::rd(move(i));
+}
+}

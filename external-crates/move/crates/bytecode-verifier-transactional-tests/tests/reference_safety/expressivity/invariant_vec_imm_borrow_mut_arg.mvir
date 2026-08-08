@@ -1,0 +1,17 @@
+// VecImmBorrow freezes its operand, so a &mut vector with a live extension is still accepted
+
+//# publish
+mvir 0x2::vec_imm_borrow_on_mut_with_extension {
+
+fun t(v: &mut vector<u64>) {
+    let e: &mut u64;
+    let i: &u64;
+label b0:
+    e = vec_mut_borrow<u64>(copy(v), 0);
+    i = vec_imm_borrow<u64>(move(v), 1);
+    _ = *move(i);
+    _ = move(e);
+    return;
+}
+
+}

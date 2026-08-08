@@ -1,0 +1,54 @@
+// no edge between a mut and an imm return, or between two mut returns; run the assumption end
+// to end
+
+// write through a dot-star mut return while an alias of its parent is live
+//# run
+mvir 0x83::h3_write_dotstar_with_alias {
+
+fun id(v: &mut vector<u64>): &mut vector<u64> {
+label b0:
+    return move(v);
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let r: &mut vector<u64>;
+    let alias: &mut vector<u64>;
+    let n: &mut vector<u64>;
+label b0:
+    v = vector<u64; 3>(1, 2, 3);
+    r = &mut v;
+    alias = copy(r);
+    n = Self::id(move(r));
+    *move(n) = vector<u64; 1>(9);
+    assert(vec_len<u64>(freeze(move(alias))) == 1, 42);
+    return;
+}
+
+}
+
+// same, but the alias is what gets passed to id, and r is the one left live
+//# run
+mvir 0x84::h4_write_dotstar_of_alias {
+
+fun id(v: &mut vector<u64>): &mut vector<u64> {
+label b0:
+    return move(v);
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let r: &mut vector<u64>;
+    let alias: &mut vector<u64>;
+    let n: &mut vector<u64>;
+label b0:
+    v = vector<u64; 3>(1, 2, 3);
+    r = &mut v;
+    alias = copy(r);
+    n = Self::id(move(alias));
+    *move(n) = vector<u64; 1>(9);
+    assert(vec_len<u64>(freeze(move(r))) == 1, 42);
+    return;
+}
+
+}

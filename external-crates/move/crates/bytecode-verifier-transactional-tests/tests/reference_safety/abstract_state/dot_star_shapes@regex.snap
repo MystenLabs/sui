@@ -1,0 +1,344 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, line 93:
+//# view-abstract-state 0x2::zzds_shapes::c_two_mut
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      },
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true,
+        "r#s": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "m1": {
+        "Reference": "r#m1"
+      },
+      "m2": {
+        "Reference": "r#m2"
+      },
+      "o": {
+        "Reference": "r#o"
+      },
+      "s": {
+        "Reference": "r#s"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#m1": true,
+        "r#m2": true,
+        "r#o": true,
+        "r#s": true
+      },
+      "outgoing": {
+        "r#m1": {
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#m2": {
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#s": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#o": {
+          "r#m1": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#m2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#s": {
+          "r#m1": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#m2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, line 95:
+//# view-abstract-state 0x2::zzds_shapes::c_mut_imm
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "i": {
+        "Reference": "r#i"
+      },
+      "n": {
+        "Reference": "r#n"
+      },
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#i": false,
+        "r#n": true,
+        "r#o": true
+      },
+      "outgoing": {
+        "r#i": {
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#n": {
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#o": {
+          "r#i": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#n": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 3, line 97:
+//# view-abstract-state 0x2::zzds_shapes::c_two_imm
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": false
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "i1": {
+        "Reference": "r#i1"
+      },
+      "i2": {
+        "Reference": "r#i2"
+      },
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#i1": false,
+        "r#i2": false,
+        "r#o": false
+      },
+      "outgoing": {
+        "r#i1": {
+          "r#i2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#i2": {
+          "r#i1": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#o": {
+          "r#i1": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#i2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 4, line 99:
+//# view-abstract-state 0x2::zzds_shapes::c_extend_return
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#o": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "i": {
+        "Reference": "r#i"
+      },
+      "nf": {
+        "Reference": "r#nf"
+      },
+      "o": {
+        "Reference": "r#o"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#i": false,
+        "r#nf": true,
+        "r#o": true
+      },
+      "outgoing": {
+        "r#i": {
+          "r#o": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#o": {
+          "r#i": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ],
+          "r#nf": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            },
+            {
+              "labels": [
+                "S.f"
+              ],
+              "ends_in_dot_star": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

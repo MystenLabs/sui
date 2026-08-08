@@ -1,0 +1,19 @@
+// a mutable call argument with a live extension, and dot-star vs StLoc/MoveLoc
+
+//# publish
+mvir 0x33::c3_stloc_alias_only {
+
+public struct S has copy, drop, store { f: u64 }
+
+fun t() {
+    let a: Self::S;
+    let r: &mut Self::S;
+label b0:
+    a = S { f: 0 };
+    r = &mut a;
+    a = S { f: 1 };
+    _ = move(r);
+    return;
+}
+
+}

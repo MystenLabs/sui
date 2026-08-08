@@ -1,0 +1,54 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 0, lines 3-18:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000011::elem_via_alias_push_via_original'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x11::elem_via_alias_push_via_original,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 1, lines 20-35:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000012::elem_via_original_push_via_alias'. Got VMError: {
+    major_status: VEC_BORROW_ELEMENT_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x12::elem_via_original_push_via_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 2, lines 37-53:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000013::elem_then_reborrow_local_push'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x13::elem_then_reborrow_local_push,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 3, lines 55-72:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000014::imm_elem_via_freeze_push_via_mut'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x14::imm_elem_via_freeze_push_via_mut,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}
+
+task 4, lines 74-96:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000015::elem_from_call_then_push'. Got VMError: {
+    major_status: VEC_UPDATE_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x15::elem_from_call_then_push,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 10)],
+}

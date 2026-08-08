@@ -1,0 +1,95 @@
+// nested enums, enum-in-struct, struct-in-enum: change the variant with a field ref live
+
+//# run
+mvir 0x201::inner_write_blocked {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { A { i: Self::Inner } }
+
+entry fun t() {
+    let o: Self::Outer;
+    let i: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::A { i: Inner::P { n: 0 } };
+    &mut Outer::A { i: i } = &mut o;
+    &mut Inner::P { n: n } = copy(i);
+    *move(i) = Inner::Q { s: 0x0 };
+    *move(n) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x202::outer_write_blocked {
+
+public enum Inner has drop { P { n: u64 }, Q { s: address } }
+public enum Outer has drop { A { i: Self::Inner } }
+
+entry fun t() {
+    let o: Self::Outer;
+    let r: &mut Self::Outer;
+    let i: &mut Self::Inner;
+    let n: &mut u64;
+label b0:
+    o = Outer::A { i: Inner::P { n: 0 } };
+    r = &mut o;
+    &mut Outer::A { i: i } = copy(r);
+    &mut Inner::P { n: n } = move(i);
+    *move(r) = Outer::A { i: Inner::Q { s: 0x0 } };
+    *move(n) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x203::enum_in_struct_reborrow {
+
+public enum X has drop { One { a: u64 }, Two { b: address } }
+public struct S has drop { e: Self::X }
+
+entry fun t() {
+    let s: Self::S;
+    let sr: &mut Self::S;
+    let f1: &mut Self::X;
+    let f2: &mut Self::X;
+    let a: &mut u64;
+label b0:
+    s = S { e: X::One { a: 0 } };
+    sr = &mut s;
+    f1 = &mut copy(sr).S::e;
+    &mut X::One { a: a } = move(f1);
+    f2 = &mut move(sr).S::e;
+    *move(f2) = X::Two { b: 0x0 };
+    *move(a) = 1;
+    return;
+}
+
+}
+
+//# run
+mvir 0x204::enum_in_struct_valid {
+
+public enum X has drop { One { a: u64 }, Two { b: address } }
+public struct S has drop { e: Self::X }
+
+entry fun t() {
+    let s: Self::S;
+    let sr: &mut Self::S;
+    let f1: &mut Self::X;
+    let a: &mut u64;
+    let ia: &u64;
+label b0:
+    s = S { e: X::One { a: 0 } };
+    sr = &mut s;
+    f1 = &mut move(sr).S::e;
+    &mut X::One { a: a } = move(f1);
+    *move(a) = 1;
+    &X::One { a: ia } = &(&s).S::e;
+    assert(*move(ia) == 1, 42);
+    return;
+}
+
+}

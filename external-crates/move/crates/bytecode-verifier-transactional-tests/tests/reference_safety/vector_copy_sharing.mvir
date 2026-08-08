@@ -1,0 +1,91 @@
+// CopyLoc / ReadRef / VecPack of a vector must deep-copy rather than share storage
+
+//# run
+mvir 0x91::copy_loc_vector_sharing {
+
+entry fun t() {
+    let v1: vector<u64>;
+    let v2: vector<u64>;
+    let e: &mut u64;
+label b0:
+    v1 = vector<u64; 1>(1);
+    v2 = copy(v1);
+    e = vec_mut_borrow<u64>(&mut v1, 0);
+    vec_push_back<u64>(&mut v2, 2);
+    *move(e) = 5;
+    assert(vec_len<u64>(&v1) == 1, 41);
+    assert(vec_len<u64>(&v2) == 2, 42);
+    assert(*vec_imm_borrow<u64>(&v1, 0) == 5, 43);
+    assert(*vec_imm_borrow<u64>(&v2, 0) == 1, 44);
+    return;
+}
+
+}
+
+//# run
+mvir 0x92::read_ref_vector_sharing {
+
+entry fun t() {
+    let v1: vector<u64>;
+    let v2: vector<u64>;
+    let r: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v1 = vector<u64; 1>(1);
+    r = &mut v1;
+    v2 = *freeze(copy(r));
+    e = vec_mut_borrow<u64>(move(r), 0);
+    vec_push_back<u64>(&mut v2, 2);
+    *move(e) = 5;
+    assert(vec_len<u64>(&v1) == 1, 41);
+    assert(vec_len<u64>(&v2) == 2, 42);
+    assert(*vec_imm_borrow<u64>(&v2, 0) == 1, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x93::vec_pack_inner_sharing {
+
+entry fun t() {
+    let inner: vector<u64>;
+    let outer: vector<vector<u64>>;
+    let e: &mut u64;
+    let i: &mut vector<u64>;
+label b0:
+    inner = vector<u64; 1>(1);
+    outer = vector<vector<u64>; 1>(copy(inner));
+    e = vec_mut_borrow<u64>(&mut inner, 0);
+    i = vec_mut_borrow<vector<u64>>(&mut outer, 0);
+    vec_push_back<u64>(move(i), 2);
+    *move(e) = 5;
+    assert(vec_len<u64>(&inner) == 1, 41);
+    assert(*vec_imm_borrow<u64>(&inner, 0) == 5, 42);
+    assert(*vec_imm_borrow<u64>(vec_imm_borrow<vector<u64>>(&outer, 0), 0) == 1, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x94::struct_field_vector_copy_sharing {
+
+public struct S has copy, drop { v: vector<u64> }
+
+entry fun t() {
+    let s1: Self::S;
+    let s2: Self::S;
+    let e: &mut u64;
+label b0:
+    s1 = S { v: vector<u64; 1>(1) };
+    s2 = copy(s1);
+    e = vec_mut_borrow<u64>(&mut (&mut s1).S::v, 0);
+    vec_push_back<u64>(&mut (&mut s2).S::v, 2);
+    *move(e) = 5;
+    assert(vec_len<u64>(&(&s1).S::v) == 1, 41);
+    assert(vec_len<u64>(&(&s2).S::v) == 2, 42);
+    return;
+}
+
+}

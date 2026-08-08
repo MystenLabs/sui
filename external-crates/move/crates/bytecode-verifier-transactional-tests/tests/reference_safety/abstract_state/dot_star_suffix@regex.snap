@@ -1,0 +1,110 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 36-38:
+//# view-abstract-state 0x71::zzds_suffix::shape
+{
+  "b0": {
+    "local_root": "ROOT",
+    "locals": {
+      "t": {
+        "Reference": "r#t"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#t": true
+      },
+      "outgoing": {}
+    }
+  },
+  "b1": {
+    "local_root": "ROOT",
+    "locals": {
+      "m2": {
+        "Reference": "r#m2"
+      },
+      "n": {
+        "Reference": "r#n"
+      },
+      "t": {
+        "Reference": "r#t"
+      }
+    },
+    "graph": {
+      "nodes": {
+        "ROOT": true,
+        "r#m2": true,
+        "r#n": false,
+        "r#t": true
+      },
+      "outgoing": {
+        "r#m2": {
+          "r#n": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        },
+        "r#n": {
+          "r#m2": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "Mid.y"
+              ],
+              "ends_in_dot_star": false
+            },
+            {
+              "labels": [
+                "Top.x",
+                "Mid.y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#t": [
+            {
+              "labels": [],
+              "ends_in_dot_star": false
+            }
+          ]
+        },
+        "r#t": {
+          "r#m2": [
+            {
+              "labels": [
+                "Top.x",
+                "Mid.y"
+              ],
+              "ends_in_dot_star": false
+            }
+          ],
+          "r#n": [
+            {
+              "labels": [],
+              "ends_in_dot_star": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 39-69:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000072::zzds_suffix_write'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x72::zzds_suffix_write,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 15)],
+}

@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 0, lines 3-30:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::imm_alias_sees_new_variant'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::imm_alias_sees_new_variant,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}
+
+task 1, lines 32-52:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::imm_elem_and_mut_alias_len_only'. Got VMError: {
+    major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x6::imm_elem_and_mut_alias_len_only,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 9)],
+}
+
+task 2, lines 54-78:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::imm_struct_field_and_mut_field_alias'. Got VMError: {
+    major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
+    sub_status: None,
+    location: 0x7::imm_struct_field_and_mut_field_alias,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

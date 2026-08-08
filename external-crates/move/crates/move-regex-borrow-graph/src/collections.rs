@@ -345,6 +345,18 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     /// consider all edges source --> x and x --> source,
     /// for each new reference, determine the edge new --> x and x --> new based on the extension
     /// provided
+    ///
+    /// This is what maintains the invariant the bytecode verifier rests on. For every concrete
+    /// state the graph describes, any two live references that are path related must have a
+    /// direct edge covering that relation. A new reference extends one of the sources, so
+    /// anything related to it is related to that source, and the direct edges of the sources are
+    /// enough to derive all of them.
+    ///
+    /// Note this is weaker than the graph being transitively closed, since the graph is not closed
+    /// after a join. `join` unions the edges of each incoming branch, so a two hop path can run
+    /// through edges contributed by different branches while no single concrete state needs the
+    /// composed edge. `borrowed_by` and `borrows_from` read only direct edges, and the checks
+    /// built on them only ever get stricter as edges are added, and the union stays safe.
     fn determine_all_new_edges<M: Meter>(
         &self,
         acc: &mut BTreeMap<(NodeIndex, NodeIndex), Vec<Regex<Lbl>>>,
@@ -612,7 +624,23 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
 
     /// Canonicalize all references according to the remapping. This allows graphs to have the same
     /// set of references before being joined.
+    ///
+    /// The remapping must be injective over the references this graph holds. Two references
+    /// sharing a canonical id would collapse into one entry in `self.nodes` while both nodes, and
+    /// all of their edges, stayed in the `GraphMap`, and the queries would then silently lose
+    /// edges. That is checked before anything is mutated, so a rejected remapping leaves the
+    /// graph untouched.
     pub fn canonicalize(&mut self, remapping: &BTreeMap<Ref, u32>) -> Result<()> {
+        let mut canonicalized = BTreeSet::new();
+        for r in self.nodes.keys() {
+            let r_canon = (*r).canonicalize(remapping)?;
+            ensure!(
+                canonicalized.insert(r_canon),
+                "remapping is not injective, two references map to {:?}",
+                r_canon
+            );
+        }
+
         let nodes = std::mem::take(&mut self.nodes);
         self.nodes = nodes
             .into_iter()
