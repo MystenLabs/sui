@@ -53,12 +53,13 @@ impl OverloadTracker {
     }
 
     pub(crate) fn remove_pending_certificate(&self, tx_data: &SenderSignedData) {
+        let tx_digest = tx_data.digest();
         let exclusively_accessed_shared_objects =
             Self::get_exclusively_accessed_shared_objects(tx_data);
         let mut object_waiting_queue = self.object_waiting_queue.write();
         for object_id in exclusively_accessed_shared_objects {
             if let Some(entry) = object_waiting_queue.get_mut(&object_id) {
-                entry.remove(&tx_data.digest());
+                entry.remove(&tx_digest);
                 if entry.is_empty() {
                     object_waiting_queue.remove(&object_id);
                 }
