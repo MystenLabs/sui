@@ -283,6 +283,12 @@ opt-level = 1
 unexpected_cfgs = { level = "warn", check-cfg = [
   'cfg(msim)',
   'cfg(fail_points)',
+  # Verus sets these cfgs while running `cargo verus check`. Stable
+  # `cargo build` ignores them.
+  'cfg(verus_only)',
+  'cfg(verus_keep_ghost)',
+  'cfg(verus_keep_ghost_body)',
+  'cfg(verus_verify_core)',
 ] }
 
 # Project-wide clippy lints, applied by `cargo clippy` / `cargo xclippy`. Every workspace
@@ -304,6 +310,13 @@ assert_cmd = "2.0.6"
 async-graphql = "=7.0.1"
 async-graphql-axum = "=7.0.1"
 async-graphql-value = "=7.0.1"
+
+# Verus formal verification deps. The `verus!` macro is a no-op for stable
+# `cargo build`; these crates only carry weight when invoked through
+# `cargo verus check`.
+vstd = "=0.0.0-2026-04-20-1748"
+verus_builtin = "=0.0.0-2026-04-12-0118"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 async-recursion = "1.0.4"
 async-stream = "0.3.6"
 async-trait = "0.1.61"
@@ -762,6 +775,7 @@ sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
 sui-types = { path = "crates/sui-types" }
+sui-types-verified = { path = "crates/sui-types/verified" }
 sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }
 sui-verifier-transactional-tests = { path = "crates/sui-verifier-transactional-tests" }
 telemetry-subscribers = { path = "crates/telemetry-subscribers" }
