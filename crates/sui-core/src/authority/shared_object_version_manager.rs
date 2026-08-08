@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::ZipDebugEqIteratorExt;
+use sui_types::transaction::CancelledVersion;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
@@ -31,10 +32,43 @@ use tracing::trace;
 
 pub struct SharedObjVerManager {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignedVersion {
+    Assigned(SequenceNumber),
+    Cancelled(CancelledVersion),
+}
+
+impl AssignedVersion {
+    pub fn from_sequence_number(version: SequenceNumber) -> Self {
+        match version {
+            SequenceNumber::CONGESTED => Self::Cancelled(CancelledVersion::Congested),
+            SequenceNumber::CANCELLED_READ => Self::Cancelled(CancelledVersion::CancelledRead),
+            SequenceNumber::RANDOMNESS_UNAVAILABLE => {
+                Self::Cancelled(CancelledVersion::RandomnessUnavailable)
+            }
+            _ => {
+                assert!(!version.is_cancelled());
+                Self::Assigned(version)
+            }
+        }
+    }
+
+    pub fn sequence_number(&self) -> SequenceNumber {
+        match self {
+            Self::Assigned(version) => *version,
+            Self::Cancelled(version) => version.sequence_number(),
+        }
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled(_))
+    }
+}
+
 /// Version assignments for a single transaction
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AssignedVersions {
-    pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+    pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, AssignedVersion)>,
     /// Versions of system objects, keyed by object ID, that this transaction may read during
     /// execution but that are not part of its declared shared inputs. Each version is assigned
     /// deterministically during consensus sequencing, so that every validator reads the same
@@ -49,7 +83,7 @@ pub struct AssignedVersions {
 
 impl AssignedVersions {
     pub fn new(
-        shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        shared_object_versions: Vec<(ConsensusObjectSequenceKey, AssignedVersion)>,
         system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         Self {
@@ -67,7 +101,10 @@ impl AssignedVersions {
         accumulator_version: Option<SequenceNumber>,
     ) -> Self {
         Self::new(
-            shared_object_versions,
+            shared_object_versions
+                .into_iter()
+                .map(|(key, version)| (key, AssignedVersion::from_sequence_number(version)))
+                .collect(),
             accumulator_version
                 .map(|v| (SUI_ACCUMULATOR_ROOT_OBJECT_ID, v))
                 .into_iter()
@@ -82,11 +119,11 @@ impl AssignedVersions {
             .copied()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, AssignedVersion)> {
         self.shared_object_versions.iter()
     }
 
-    pub fn as_slice(&self) -> &[(ConsensusObjectSequenceKey, SequenceNumber)] {
+    pub fn as_slice(&self) -> &[(ConsensusObjectSequenceKey, AssignedVersion)] {
         &self.shared_object_versions
     }
 }
@@ -370,7 +407,8 @@ impl SharedObjVerManager {
                     let initial_version = initial_version_map
                         .get(&id)
                         .expect("transaction must have all inputs from effects");
-                    ((id, *initial_version), version)
+                    let assigned_version = AssignedVersion::from_sequence_number(version);
+                    ((id, *initial_version), assigned_version)
                 })
                 .collect();
             let tx_key = cert.key();
@@ -462,16 +500,16 @@ impl SharedObjVerManager {
                             .as_ref()
                             .is_some_and(|info| info.contains(id))
                         {
-                            SequenceNumber::CONGESTED
+                            AssignedVersion::Cancelled(CancelledVersion::Congested)
                         } else {
-                            SequenceNumber::CANCELLED_READ
+                            AssignedVersion::Cancelled(CancelledVersion::CancelledRead)
                         }
                     }
                     Some(CancelConsensusCertificateReason::DkgFailed) => {
                         if id == &SUI_RANDOMNESS_STATE_OBJECT_ID {
-                            SequenceNumber::RANDOMNESS_UNAVAILABLE
+                            AssignedVersion::Cancelled(CancelledVersion::RandomnessUnavailable)
                         } else {
-                            SequenceNumber::CANCELLED_READ
+                            AssignedVersion::Cancelled(CancelledVersion::CancelledRead)
                         }
                     }
                     None => unreachable!("cancelled transaction should have cancellation info"),
@@ -495,7 +533,10 @@ impl SharedObjVerManager {
                         .unwrap(),
                 )
             }) {
-                assigned_versions.push(((*id, *initial_shared_version), assigned_version));
+                assigned_versions.push((
+                    (*id, *initial_shared_version),
+                    AssignedVersion::Assigned(assigned_version),
+                ));
                 input_object_keys.push(ObjectKey(*id, assigned_version));
                 is_exclusively_accessed_input.push(mutability.is_exclusive());
             }

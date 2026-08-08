@@ -1726,8 +1726,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .any(|(_, version)| version.is_cancelled())
             {
                 assert_reachable!("cancelled transactions");
-                cancelled_txn_version_assignment
-                    .push((*d, assigned_versions.shared_object_versions.clone()));
+                cancelled_txn_version_assignment.push((
+                    *d,
+                    assigned_versions
+                        .shared_object_versions
+                        .iter()
+                        .map(|(key, version)| (*key, version.sequence_number()))
+                        .collect(),
+                ));
             }
         }
 

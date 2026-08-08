@@ -4673,14 +4673,31 @@ pub struct ObjectReadResult {
     pub object: ObjectReadResultKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CancelledVersion {
+    Congested,
+    CancelledRead,
+    RandomnessUnavailable,
+}
+
+impl CancelledVersion {
+    pub fn sequence_number(&self) -> SequenceNumber {
+        match self {
+            CancelledVersion::Congested => SequenceNumber::CONGESTED,
+            CancelledVersion::CancelledRead => SequenceNumber::CANCELLED_READ,
+            CancelledVersion::RandomnessUnavailable => SequenceNumber::RANDOMNESS_UNAVAILABLE,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum ObjectReadResultKind {
     Object(Object),
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that removed it from consensus.
     ObjectConsensusStreamEnded(SequenceNumber, TransactionDigest),
-    // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
-    CancelledTransactionSharedObject(SequenceNumber),
+    // A shared object in a cancelled transaction.
+    CancelledTransactionSharedObject(CancelledVersion),
 }
 
 impl ObjectReadResultKind {
@@ -4695,7 +4712,7 @@ impl ObjectReadResultKind {
         match self {
             ObjectReadResultKind::Object(object) => object.version(),
             ObjectReadResultKind::ObjectConsensusStreamEnded(seq, _) => *seq,
-            ObjectReadResultKind::CancelledTransactionSharedObject(seq) => *seq,
+            ObjectReadResultKind::CancelledTransactionSharedObject(v) => v.sequence_number(),
         }
     }
 }
@@ -4710,7 +4727,7 @@ impl std::fmt::Debug for ObjectReadResultKind {
                 write!(f, "ObjectConsensusStreamEnded({}, {:?})", seq, digest)
             }
             ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
-                write!(f, "CancelledTransactionSharedObject({})", seq)
+                write!(f, "CancelledTransactionSharedObject({:?})", seq)
             }
         }
     }
@@ -4855,7 +4872,7 @@ impl ObjectReadResult {
                     SharedInput::ConsensusStreamEnded((id, *seq, mutability, *digest))
                 }
                 ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
-                    SharedInput::Cancelled((id, *seq))
+                    SharedInput::Cancelled((id, seq.sequence_number()))
                 }
             }),
         }
@@ -4943,16 +4960,17 @@ impl InputObjects {
 
     // Returns IDs of objects responsible for a transaction being cancelled, and the corresponding
     // reason for cancellation.
-    pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, SequenceNumber)> {
+    pub fn get_cancelled_objects(&self) -> Option<(Vec<ObjectID>, CancelledVersion)> {
         let mut contains_cancelled = false;
         let mut cancel_reason = None;
         let mut cancelled_objects = Vec::new();
         for obj in &self.objects {
             if let ObjectReadResultKind::CancelledTransactionSharedObject(version) = obj.object {
                 contains_cancelled = true;
-                if version == SequenceNumber::CONGESTED
-                    || version == SequenceNumber::RANDOMNESS_UNAVAILABLE
-                {
+                if matches!(
+                    version,
+                    CancelledVersion::Congested | CancelledVersion::RandomnessUnavailable
+                ) {
                     // Verify we don't have multiple cancellation reasons.
                     assert!(cancel_reason.is_none() || cancel_reason == Some(version));
                     cancel_reason = Some(version);
