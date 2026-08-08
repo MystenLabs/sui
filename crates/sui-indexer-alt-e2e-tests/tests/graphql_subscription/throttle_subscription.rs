@@ -165,7 +165,7 @@ async fn throttle_paces_transaction_backfill() {
 
     let query = format!(
         "subscription($sender: SuiAddress!) {{ \
-            transactions(afterCheckpoint: {resume_from}, filter: {{ sentAddress: $sender }}) {{ \
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{ \
                 node {{ digest }} }} }}"
     );
     let mut stream = cluster
