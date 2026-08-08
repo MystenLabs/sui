@@ -438,6 +438,10 @@ where
         ));
 
         let (subscriber, round_prober_handle, observer_service) = if context.is_validator() {
+            // Node-wide slot -> digest table. Created here, not inside Subscriber,
+            // because identity must be recorded at ARRIVAL on every path, and the
+            // arrival points live in AuthorityService as well as the subscription.
+            let seen_digests = Arc::new(crate::seen_digests::SeenDigests::new(context.clone()));
             let authority_service = Arc::new(AuthorityService::new(
                 context.clone(),
                 block_verifier.clone(),
@@ -449,6 +453,7 @@ where
                 transaction_vote_tracker.clone(),
                 dag_state.clone(),
                 block_sync_service.clone(),
+                seen_digests.clone(),
             ));
 
             // Start the validator server if this is a validator node.
@@ -465,6 +470,7 @@ where
                 synchronizer.clone(),
                 round_tracker.clone(),
                 commit_vote_monitor.clone(),
+                seen_digests.clone(),
                 signals_receivers.accepted_block_broadcast_receiver(),
             );
             for (peer, _) in context.committee.authorities() {

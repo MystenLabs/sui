@@ -66,6 +66,8 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
+    /// Node-wide slot -> digest table, written at arrival on every path.
+    seen_digests: Arc<crate::seen_digests::SeenDigests>,
     /// Bounds detached ancestor-fetch tasks AND the RPC lifetime behind them (the
     /// permit rides into the spawned future): unbounded spawns here let excluded-
     /// ancestor churn pile waiting tasks on the synchronizer channel and crowd the
@@ -86,6 +88,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         transaction_vote_tracker: TransactionVoteTracker,
         dag_state: Arc<RwLock<DagState>>,
         block_sync_service: Arc<BlockSyncService>,
+        seen_digests: Arc<crate::seen_digests::SeenDigests>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
@@ -100,6 +103,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
+            seen_digests,
             ancestor_fetch_permits: Arc::new(tokio::sync::Semaphore::new(ANCESTOR_FETCH_PERMITS)),
         }
     }
@@ -257,6 +261,19 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                         .inc();
                     info!("Invalid block from {}: {}", peer, e);
                 })?;
+
+        // Identity is recorded on ARRIVAL, not at acceptance. Reconstruction needs an
+        // ancestor's digest, which is only an identifier -- recording it at acceptance
+        // would make "identity known" coincide with "content accepted", so a dependent
+        // would park in this layer for exactly as long as BlockManager would have
+        // suspended it: paying for the parking machinery and gaining nothing. Taken
+        // here rather than before verification only to reuse the digest verification
+        // already computed; everything downstream (Core dispatch, BlockManager
+        // suspension, acceptance) is still ahead of us. Own ref only: recording the
+        // ancestors a block claims would let its author write into slots it does not
+        // own.
+        self.seen_digests.observe(verified_block.reference());
+
         let excluded_ancestors = self
             .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
             .tap_err(|e| {
@@ -1213,6 +1230,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state,
             block_sync_service,
+            Arc::new(crate::seen_digests::SeenDigests::new(context.clone())),
         ));
 
         // Test delaying blocks with time drift.
@@ -1342,6 +1360,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            Arc::new(crate::seen_digests::SeenDigests::new(context.clone())),
         ));
 
         // GIVEN: 40 rounds of blocks in the dag state.
@@ -1618,6 +1637,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            Arc::new(crate::seen_digests::SeenDigests::new(context.clone())),
         ));
 
         // Create some blocks for a few authorities. Create some equivocations as well and store in dag state.
@@ -1709,6 +1729,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            Arc::new(crate::seen_digests::SeenDigests::new(context.clone())),
         ));
 
         let peer = context.committee.to_authority_index(1).unwrap();
@@ -1823,6 +1844,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            Arc::new(crate::seen_digests::SeenDigests::new(context.clone())),
         ));
 
         let peer = context.committee.to_authority_index(1).unwrap();
@@ -1919,6 +1941,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            Arc::new(crate::seen_digests::SeenDigests::new(context.clone())),
         ));
 
         let peer = context.committee.to_authority_index(1).unwrap();
