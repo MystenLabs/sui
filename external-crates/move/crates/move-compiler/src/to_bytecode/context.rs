@@ -7,7 +7,7 @@ use crate::{
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
     shared::{CompilationEnv, NumericalAddress},
 };
-use move_core_types::account_address::AccountAddress as MoveAddress;
+use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::ast as IR;
 use move_symbol_pool::Symbol;
 use std::{
@@ -32,6 +32,9 @@ pub struct Context<'a> {
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
+    /// the compiled signature and value of the current module's constants, for compiling constant
+    /// references as `LdConst`
+    constant_values: BTreeMap<ConstantName, (IR::Type, MoveValue)>,
 }
 
 impl<'a> Context<'a> {
@@ -46,7 +49,16 @@ impl<'a> Context<'a> {
             current_module,
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
+            constant_values: BTreeMap::new(),
         }
+    }
+
+    pub fn record_constant_value(&mut self, n: ConstantName, ty: IR::Type, value: MoveValue) {
+        self.constant_values.insert(n, (ty, value));
+    }
+
+    pub fn constant_value(&self, n: &ConstantName) -> Option<&(IR::Type, MoveValue)> {
+        self.constant_values.get(n)
     }
 
     #[allow(unused)]
