@@ -761,6 +761,18 @@ suiStackSidebar: [
     },
     {
       type: 'category',
+      label: 'Hashi',
+      link: { type: 'doc', id: 'sui-stack/hashi/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'Hashi Docs',
+          href: 'https://mystenlabs.github.io/hashi/design/',
+        },
+      ],
+    },
+    {
+      type: 'category',
       label: 'SuiPlay0X1',
       link: { type: 'doc', id: 'sui-stack/suiplay0x1/index' },
       items: [
