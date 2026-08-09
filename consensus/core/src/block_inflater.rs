@@ -47,15 +47,22 @@ struct DagStateResolver<'a> {
 impl AncestorDigestResolver for DagStateResolver<'_> {
     /// Seen digests are consulted BEFORE the accepted DAG.
     ///
-    /// The order is a throughput decision, not a correctness one: both sources give the
-    /// same digest for a slot, because `SeenDigests` records a block's own reference and
-    /// yields nothing once a slot is ambiguous. What differs is cost. A DAG lookup runs
-    /// under a `DagState` read guard held across the whole inflation, and one inflation
-    /// resolves ~100 ancestors; at a few thousand blocks per second per node that is a
-    /// torrent of read-lock traffic on the one lock Core must take to WRITE in order to
-    /// accept blocks. Readers never block each other, so this never appears as reader
-    /// latency — it shows up only as Core doing less work than it should, which is
-    /// exactly what the fleet measured against main.
+    /// The order is a throughput decision. It is safe because a wrong digest cannot be
+    /// accepted: the rebuilt bytes must hash to the digest the author claimed, and the
+    /// signature is checked afterwards. The two sources normally agree, but not always —
+    /// after a restart `SeenDigests` starts empty, so it can hold a digest learned from
+    /// an unverified claim while the DAG holds a different accepted one. The cost of that
+    /// is a failed rebuild and a fetch, never a wrong block.
+    ///
+    /// What differs is expense. A DAG lookup runs under a `DagState` read guard held
+    /// across the whole inflation, and one inflation resolves ~100 ancestors; at a few
+    /// thousand blocks per second per node that is continuous read traffic on the lock
+    /// Core must take to WRITE in order to accept blocks. `parking_lot`'s `RwLock` is
+    /// task-fair, so a waiting writer does block new readers and is not starved outright
+    /// — but it still waits for each in-flight read phase to drain, and with 127
+    /// subscription tasks reading constantly those phases convoy. None of it appears as
+    /// receive latency, since readers do not block each other; it surfaces only as Core
+    /// doing less work than main's, which is what the fleet measured.
     fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest> {
         if slot.round == GENESIS_ROUND {
             return vec![self.genesis_digests[slot.authority.value()]];

@@ -499,10 +499,12 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             // any inflation work. It used to span the whole inflation,
                             // which resolved ~100 ancestor slots against DagState per
                             // block: at a few thousand blocks/s across 127 subscription
-                            // tasks, that read traffic starved the writer Core needs to
-                            // accept blocks. Readers do not block each other, so it never
-                            // showed as receive latency — only as Core running cooler
-                            // than main's while producing fewer rounds. Inflation now
+                            // tasks, that read traffic convoyed against the writer Core
+                            // needs to accept blocks — the lock is task-fair, so the
+                            // writer is not starved outright, but it waits out each read
+                            // phase. Readers do not block each other, so it never showed
+                            // as receive latency — only as Core running cooler than
+                            // main's while producing fewer rounds. Inflation now
                             // resolves from the seen-digest map, which is sharded and
                             // independent of DagState; a slot only the DAG could answer
                             // parks, and the reconstruction worker retries it with the
