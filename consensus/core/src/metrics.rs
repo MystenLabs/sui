@@ -191,6 +191,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_gate_transitions: IntCounterVec,
     pub(crate) minimal_block_missing_slots_at_park: Histogram,
     pub(crate) minimal_block_park_resolve_ms: HistogramVec,
+    pub(crate) minimal_block_park_cause: IntCounterVec,
     pub(crate) subscribe_blocks_response_bytes: IntCounterVec,
     pub(crate) observer_subscribed_blocks_batch_size: Histogram,
     pub(crate) verified_blocks: IntCounterVec,
@@ -653,6 +654,12 @@ impl NodeMetrics {
                 "Wall-clock milliseconds a minimal block stayed parked, by terminal outcome. Rounds are the stability signal; milliseconds are what says whether parking is a brief arrival-skew wait or a structural stall",
                 &["outcome"],
                 vec![0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0],
+                registry,
+            ).unwrap(),
+            minimal_block_park_cause: register_int_counter_vec_with_registry!(
+                "minimal_block_park_cause",
+                "Per missing slot of a parked block, whether the accepted DAG could have answered it. dag_only means receipt-time resolution (seen-digests only) missed a slot the DAG knew, so parking is the price of keeping DagState off the receive path; never_arrived means the ancestor is genuinely not here yet and no resolver could have helped",
+                &["cause"],
                 registry,
             ).unwrap(),
             minimal_block_park_residency_rounds: register_histogram_vec_with_registry!(

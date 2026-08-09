@@ -714,6 +714,29 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                                                 guard.gc_round(),
                                             )
                                         };
+                                        // `filled` is exactly the set of missing slots the
+                                        // accepted DAG could answer but receipt-time
+                                        // resolution could not, so it separates the two
+                                        // reasons a block parks: slots we chose not to
+                                        // look up (the price of keeping DagState off the
+                                        // receive path) from ancestors that genuinely have
+                                        // not arrived, which no resolver could supply. The
+                                        // scan above already computed it; only the counters
+                                        // are new.
+                                        {
+                                            let causes = &context
+                                                .metrics
+                                                .node_metrics
+                                                .minimal_block_park_cause;
+                                            let dag_only = filled.len() as u64;
+                                            causes
+                                                .with_label_values(&["dag_only"])
+                                                .inc_by(dag_only);
+                                            causes.with_label_values(&["never_arrived"]).inc_by(
+                                                (missing_snapshot.len() as u64)
+                                                    .saturating_sub(dag_only),
+                                            );
+                                        }
                                         if !filled.is_empty() {
                                             let effects = pending_reconstructions
                                                 .lock()
