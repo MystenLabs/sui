@@ -1042,8 +1042,15 @@ async fn reconstruct_batch<S: crate::network::ValidatorNetworkService>(
             let Some(dag_state) = dag_state.upgrade() else {
                 return false;
             };
+            // The worker can afford the guard: it runs off the receive path, so a slot
+            // only the accepted DAG can answer is resolved here rather than parking on.
             let guard = dag_state.read();
-            block_inflater.inflate(&entry.minimal, entry.peer, &guard, Some(&seen_digests))
+            block_inflater.inflate(
+                &entry.minimal,
+                entry.peer,
+                Some(&guard),
+                Some(&seen_digests),
+            )
         };
         match inflated {
             Ok((_signed, serialized)) => {

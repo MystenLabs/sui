@@ -271,7 +271,6 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         block_inflater: &BlockInflater,
         peer: AuthorityIndex,
         mut block: ExtendedSerializedBlock,
-        dag_state: &DagState,
         seen_digests: &SeenDigests,
     ) -> ConsensusResult<InflateOutcome> {
         let Some(minimal) = block.minimal.take() else {
@@ -312,7 +311,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             )));
         }
 
-        match block_inflater.inflate(&minimal, peer, dag_state, Some(seen_digests)) {
+        match block_inflater.inflate(&minimal, peer, None, Some(seen_digests)) {
             Ok((_signed_block, serialized)) => {
                 block.block = serialized;
                 Ok(InflateOutcome::Block(block))
@@ -495,24 +494,33 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                             let Some(dag_state) = dag_state.upgrade() else {
                                 return;
                             };
-                            // Scoped so the DagState read-guard hold time on the
-                            // receive path is measurable against the writer-side
-                            // BlockManager::try_accept_blocks scope: reconstruction
-                            // and hashing run under this guard today, and whether
-                            // that delays acceptance is a question only data settles.
                             let _scope = monitored_scope("MinimalBlock::inflate_at_receipt");
-                            let guard = dag_state.read();
+                            // The guard is taken for two field reads and dropped before
+                            // any inflation work. It used to span the whole inflation,
+                            // which resolved ~100 ancestor slots against DagState per
+                            // block: at a few thousand blocks/s across 127 subscription
+                            // tasks, that read traffic starved the writer Core needs to
+                            // accept blocks. Readers do not block each other, so it never
+                            // showed as receive latency — only as Core running cooler
+                            // than main's while producing fewer rounds. Inflation now
+                            // resolves from the seen-digest map, which is sharded and
+                            // independent of DagState; a slot only the DAG could answer
+                            // parks, and the reconstruction worker retries it with the
+                            // DAG available.
+                            let (gc_round, tip) = {
+                                let guard = dag_state.read();
+                                (guard.gc_round(), guard.highest_accepted_round())
+                            };
                             (
                                 Self::inflate_received_block(
                                     &context,
                                     &block_inflater,
                                     peer,
                                     block,
-                                    &guard,
                                     &seen_digests,
                                 ),
-                                guard.gc_round(),
-                                guard.highest_accepted_round(),
+                                gc_round,
+                                tip,
                             )
                         };
                         let block = match outcome {

@@ -35,35 +35,42 @@ pub(crate) struct BlockInflater {
 
 struct DagStateResolver<'a> {
     genesis_digests: &'a [BlockDigest],
-    dag_state: &'a DagState,
-    /// Digests seen at a slot by any path, consulted only when the accepted DAG
-    /// has no candidate. A seen-resolved reconstruction verifies against the
-    /// dependent's own claimed digest and signature, then enters block_manager,
-    /// whose ordinary suspension covers ancestor content that has not been
-    /// accepted yet — the full-form pipeline shape. Reading it takes one sharded
-    /// read lock and no other consensus lock, so the hot resolver path cannot
-    /// contend with reconstruction bookkeeping.
+    /// Optional: callers that cannot afford to hold the DagState guard across an
+    /// inflation pass `None` and resolve from `seen` alone.
+    dag_state: Option<&'a DagState>,
+    /// Digests seen at a slot by any path. Since identity is recorded on arrival
+    /// this holds essentially the whole live window, so it answers the common case
+    /// on its own, from sharded locks that share nothing with DagState.
     seen: Option<&'a SeenDigests>,
 }
 
 impl AncestorDigestResolver for DagStateResolver<'_> {
+    /// Seen digests are consulted BEFORE the accepted DAG.
+    ///
+    /// The order is a throughput decision, not a correctness one: both sources give the
+    /// same digest for a slot, because `SeenDigests` records a block's own reference and
+    /// yields nothing once a slot is ambiguous. What differs is cost. A DAG lookup runs
+    /// under a `DagState` read guard held across the whole inflation, and one inflation
+    /// resolves ~100 ancestors; at a few thousand blocks per second per node that is a
+    /// torrent of read-lock traffic on the one lock Core must take to WRITE in order to
+    /// accept blocks. Readers never block each other, so this never appears as reader
+    /// latency — it shows up only as Core doing less work than it should, which is
+    /// exactly what the fleet measured against main.
     fn digests_at_slot(&self, slot: Slot) -> Vec<BlockDigest> {
         if slot.round == GENESIS_ROUND {
             return vec![self.genesis_digests[slot.authority.value()]];
         }
-        let accepted: Vec<BlockDigest> = self
-            .dag_state
+        if let Some(digest) = self.seen.and_then(|seen| seen.get(slot)) {
+            return vec![digest];
+        }
+        let Some(dag_state) = self.dag_state else {
+            return vec![];
+        };
+        dag_state
             .get_uncommitted_blocks_at_slot(slot)
             .iter()
             .map(|block| block.digest())
-            .collect();
-        if !accepted.is_empty() {
-            return accepted;
-        }
-        let Some(seen) = self.seen else {
-            return accepted;
-        };
-        seen.get(slot).into_iter().collect()
+            .collect()
     }
 }
 
@@ -153,7 +160,7 @@ impl BlockInflater {
         &self,
         minimal: &[u8],
         author: AuthorityIndex,
-        dag_state: &DagState,
+        dag_state: Option<&DagState>,
         seen: Option<&SeenDigests>,
     ) -> Result<(SignedBlock, Bytes), InflateError> {
         let resolver = DagStateResolver {
@@ -193,7 +200,7 @@ mod tests {
             .serialize_for_test(&block, &dag_state.read())
             .unwrap();
         let (_signed, serialized) = inflater
-            .inflate(&minimal, block.author(), &dag_state.read(), None)
+            .inflate(&minimal, block.author(), Some(&dag_state.read()), None)
             .unwrap();
         assert_eq!(&serialized, block.serialized());
     }
@@ -243,7 +250,12 @@ mod tests {
         let seen = crate::seen_digests::SeenDigests::new(context.clone());
         seen.observe_all(ancestors.iter().map(|a| a.reference()));
         let (_signed, serialized) = inflater
-            .inflate(&minimal, block.author(), &empty_dag.read(), Some(&seen))
+            .inflate(
+                &minimal,
+                block.author(),
+                Some(&empty_dag.read()),
+                Some(&seen),
+            )
             .unwrap();
         assert_eq!(&serialized, block.serialized());
     }
