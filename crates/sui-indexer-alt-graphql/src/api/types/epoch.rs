@@ -41,6 +41,7 @@ use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::move_package::CSysPackage;
 use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_package::MovePackageConnection;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
 use crate::api::types::object::Object;
@@ -280,7 +281,7 @@ impl Epoch {
         after: Option<CSysPackage>,
         last: Option<u64>,
         before: Option<CSysPackage>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         async {
             let pagination: &PaginationConfig = ctx.data()?;
             let limits = pagination.limits("Epoch", "systemPackages");
@@ -297,7 +298,8 @@ impl Epoch {
                     page,
                     contents.cp_lo as u64,
                 )
-                .await?,
+                .await?
+                .into(),
             ))
         }
         .await
