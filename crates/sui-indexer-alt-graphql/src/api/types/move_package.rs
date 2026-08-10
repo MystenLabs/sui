@@ -139,15 +139,28 @@ pub(crate) struct PackageCursor {
 }
 
 /// Cursor for iterating over package publishes on the gRPC path, which scans transactions that
-/// wrote packages, in transaction order. Points at one package write within one transaction.
+/// wrote packages, in transaction order.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
 pub struct PackageToken {
     /// Hint for the checkpoint the transaction belongs to (0 = unknown).
     checkpoint: u64,
-    tx_seq: u64,
-    /// Position among the transaction's package writes, in effects order. `u32::MAX` marks a
-    /// resume point past every write in the transaction (minted from a scan-frontier cursor).
-    write_index: u32,
+    position: PackagePosition,
+}
+
+/// Where a [`PackageToken`] sits in the scan. Enriches the wire's item vs. watermark cursor
+/// distinction: a cursor either points at a served package write, or at scan progress through a
+/// transaction that served nothing.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
+enum PackagePosition {
+    /// Points at one package write within a transaction, by its position in effects order. The
+    /// transaction may hold writes on either side of this one, so resuming from here re-fetches
+    /// the transaction and skips the writes on the cursor's served side (at-or-before it going
+    /// forwards, at-or-after it going backwards).
+    Tx { tx_seq: u64, write_index: u32 },
+
+    /// A scan frontier: the wire scanned through this transaction but served nothing from it.
+    /// Resume strictly past it, in either direction.
+    Scan { tx_seq: u64 },
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -1031,47 +1044,53 @@ impl MovePackage {
         let after = page.after().map(|c| c.token()).transpose()?;
         let before = page.before().map(|c| c.token()).transpose()?;
 
-        // The wire cursors address transactions, so a cursor pointing mid-transaction widens to
-        // re-include its transaction; the writes already returned are skipped client-side during
-        // expansion. Checkpoint hints on widened bounds are reset to unknown (0 for `after`,
-        // `u64::MAX` for `before`) because the adjacent transaction may fall in a neighboring
-        // checkpoint.
+        // The wire cursors address transactions, so a `Tx` cursor widens to re-include its
+        // transaction, and the writes it has already covered are skipped client-side during
+        // expansion; a `Scan` cursor bounds on its transaction directly. Checkpoint hints on
+        // widened bounds are reset to unknown (0 for `after`, `u64::MAX` for `before`) because
+        // the neighboring transaction may fall in a different checkpoint.
         let wire_after = after.as_ref().and_then(|t| {
-            let position = if t.write_index == u32::MAX {
-                Position::Transactions {
+            let position = match t.position {
+                // Nothing was served from a scan frontier; bound on it directly.
+                PackagePosition::Scan { tx_seq } => Position::Transactions {
                     checkpoint: t.checkpoint,
-                    tx_seq: t.tx_seq,
-                }
-            } else if t.tx_seq == 0 {
+                    tx_seq,
+                },
                 // Nothing precedes the first transaction; resume from the range start and skip
                 // client-side.
-                return None;
-            } else {
-                Position::Transactions {
+                PackagePosition::Tx { tx_seq: 0, .. } => return None,
+                // The cursor's transaction may hold further writes; re-include it.
+                PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
                     checkpoint: 0,
-                    tx_seq: t.tx_seq - 1,
-                }
+                    tx_seq: tx_seq - 1,
+                },
             };
             Some(CursorToken::item(position).encode())
         });
 
         let wire_before = before.as_ref().map(|t| {
-            let position = if t.write_index == 0 {
-                Position::Transactions {
-                    // Pg-minted package cursors don't reach this path, but a 0 hint would
-                    // collapse the checkpoint window all the same.
+            let position = match t.position {
+                // A scan frontier, or a cursor at a transaction's first write: everything from
+                // the transaction's start onward is on the served side, so bound on it directly.
+                PackagePosition::Scan { tx_seq }
+                | PackagePosition::Tx {
+                    tx_seq,
+                    write_index: 0,
+                } => Position::Transactions {
+                    // A 0 hint would collapse the checkpoint window, so treat it as unknown.
                     checkpoint: if t.checkpoint == 0 {
                         u64::MAX
                     } else {
                         t.checkpoint
                     },
-                    tx_seq: t.tx_seq,
-                }
-            } else {
-                Position::Transactions {
+                    tx_seq,
+                },
+                // Writes before the cursor still belong to the backward page; re-include the
+                // transaction.
+                PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
                     checkpoint: u64::MAX,
-                    tx_seq: t.tx_seq.saturating_add(1),
-                }
+                    tx_seq: tx_seq.saturating_add(1),
+                },
             };
             CursorToken::item(position).encode()
         });
@@ -1131,22 +1150,14 @@ impl MovePackage {
             for (write_index, id, version) in writes {
                 // Skip writes a boundary cursor has already covered — its transaction was
                 // deliberately re-included by the widened wire bounds.
-                if let Some(a) = &after
-                    && position.tx_seq == a.tx_seq
-                    && write_index <= a.write_index
-                {
+                if after.is_some_and(|a| a.covers_up_to(position.tx_seq(), write_index)) {
                     continue;
                 }
-                if let Some(b) = &before
-                    && position.tx_seq == b.tx_seq
-                    && write_index >= b.write_index
-                {
+                if before.is_some_and(|b| b.covers_from(position.tx_seq(), write_index)) {
                     continue;
                 }
 
-                let token = position.with_write_index(write_index);
-
-                expanded.push((token, id, version));
+                expanded.push((position.at(write_index), id, version));
             }
         }
 
@@ -1188,25 +1199,38 @@ impl MovePackage {
             .map(|c| PackageToken::from_cursor(c))
             .transpose()?;
 
+        let first_edge = expanded.first().map(|(t, _, _)| *t);
+        let last_edge = expanded.last().map(|(t, _, _)| *t);
+
+        // The side where the scan entered, and the side where it stopped. A fence naming the
+        // same transaction as its boundary edge is that item's own cursor — the transaction
+        // served writes, so resume at the edge (`Tx`); otherwise nothing was served from the
+        // fence's transaction and it can be scanned past (`Scan`). A trimmed page's far side
+        // always resumes from the last kept edge.
+        let same_tx = |edge: Option<PackageToken>, fence: Option<PackageToken>| {
+            edge.zip(fence)
+                .is_some_and(|(edge, fence)| edge.tx_seq() == fence.tx_seq())
+        };
+
+        let entry = if same_tx(first_edge, first_pos) {
+            first_edge
+        } else {
+            first_pos
+        };
+
+        let far = if trimmed || same_tx(last_edge, last_pos) {
+            last_edge
+        } else {
+            last_pos
+        };
+
         let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
-            let end = if trimmed {
-                expanded.last().map(|(t, _, _)| *t)
-            } else {
-                last_pos.map(|t| t.with_write_index(u32::MAX))
-            };
-            (page.after().is_some(), trimmed || more, first_pos, end)
+            (page.after().is_some(), trimmed || more, entry, far)
         } else {
             edges.reverse();
-            // Descending scan: `first_cursor` is nearest `before` (the ascending end of the
-            // page), `last_cursor` — or the trimmed tail — is furthest back (the ascending
-            // start).
-            let start = if trimmed {
-                expanded.last().map(|(t, _, _)| *t)
-            } else {
-                last_pos
-            };
-            let end = first_pos.map(|t| t.with_write_index(u32::MAX));
-            (trimmed || more, page.before().is_some(), start, end)
+            // Descending: the scan enters at the ascending end of the page, and its far side is
+            // the ascending start.
+            (trimmed || more, page.before().is_some(), far, entry)
         };
 
         let encode = |t: PackageToken| CPackage::new(OpaqueCursor::new(t)).encode_cursor();
@@ -1351,7 +1375,7 @@ impl MovePackage {
 }
 
 impl PackageToken {
-    /// Converts an encoded `CursorToken` into a package resume point representing the start of a transaction.
+    /// Converts an encoded `CursorToken` (a transaction position) into a scan frontier.
     fn from_cursor(bytes: &[u8]) -> Result<Self, RpcError> {
         let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
         let Position::Transactions { checkpoint, tx_seq } = token.position else {
@@ -1359,16 +1383,51 @@ impl PackageToken {
         };
         Ok(PackageToken {
             checkpoint,
-            tx_seq,
-            write_index: 0,
+            position: PackagePosition::Scan { tx_seq },
         })
     }
 
-    fn with_write_index(self, write_index: u32) -> Self {
+    /// The position of one package write within this token's transaction.
+    fn at(self, write_index: u32) -> Self {
         Self {
-            write_index,
-            ..self
+            checkpoint: self.checkpoint,
+            position: PackagePosition::Tx {
+                tx_seq: self.tx_seq(),
+                write_index,
+            },
         }
+    }
+
+    fn tx_seq(&self) -> u64 {
+        match self.position {
+            PackagePosition::Tx { tx_seq, .. } | PackagePosition::Scan { tx_seq } => tx_seq,
+        }
+    }
+
+    /// Whether the write at `write_index` of transaction `tx_seq` is behind this token when it is
+    /// used as an `after` bound.
+    fn covers_up_to(&self, tx_seq: u64, write_index: u32) -> bool {
+        self.tx_seq() == tx_seq
+            && match self.position {
+                PackagePosition::Tx {
+                    write_index: served,
+                    ..
+                } => write_index <= served,
+                PackagePosition::Scan { .. } => true,
+            }
+    }
+
+    /// Whether the write at `write_index` of transaction `tx_seq` is behind this token when it is
+    /// used as a `before` bound.
+    fn covers_from(&self, tx_seq: u64, write_index: u32) -> bool {
+        self.tx_seq() == tx_seq
+            && match self.position {
+                PackagePosition::Tx {
+                    write_index: served,
+                    ..
+                } => write_index >= served,
+                PackagePosition::Scan { .. } => true,
+            }
     }
 }
 
