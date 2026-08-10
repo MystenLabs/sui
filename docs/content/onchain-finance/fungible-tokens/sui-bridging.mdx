@@ -137,7 +137,7 @@ The maximum transfer equals the global USD limit. See [Global limiter](#global-l
 Bridge transfers are not instant. Each direction has a different finality requirement:
 
 - **Ethereum to Sui:** The bridge waits for a configurable number of Ethereum block confirmations before minting tokens on Sui. This confirmation depth protects against Ethereum chain reorganizations. The exact depth is set by the bridge validator committee.
-- **Sui to Ethereum:** The bridge waits for Sui transaction finality (which is near-instant on Sui) before releasing tokens on the Ethereum side. The Ethereum transaction itself then requires Ethereum block confirmations before funds are available.
+- **Sui to Ethereum:** The bridge waits for Sui transaction finality before releasing tokens on the Ethereum side. The Ethereum transaction itself then requires Ethereum block confirmations before funds are available.
 
 When you build an app that credits users for bridged assets (for example, an on-ramp flow where a user bridges ETH to Sui), do not credit the user until the bridge transfer is fully confirmed on the destination chain. Poll the bridge status to check whether the transfer is complete before updating your app state.
 
