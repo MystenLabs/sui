@@ -18,7 +18,7 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{error, info};
 use uuid::Uuid;
 
-// Decimals of SUI, and the default for entries that do not declare their own.
+// Default for entries that do not declare their own.
 const SUI_DECIMALS: u32 = 9;
 
 fn default_decimals() -> u32 {
@@ -59,9 +59,8 @@ pub struct WalletMonitoringEntry {
     #[serde(default = "default_decimals")]
     decimals: u32,
     // Optional freshness guard, set together with `max_data_age_secs`. Must return the age in
-    // seconds of the data backing `sql_query`. The balances come from a snapshot built upstream,
-    // and a stale snapshot yields no breaching rows, which is indistinguishable from a healthy
-    // run -- so without this a stalled pipeline silently disables the monitor.
+    // seconds of the data behind `sql_query`. A stale snapshot yields no breaching rows, which is
+    // indistinguishable from a healthy run, so without this a stalled pipeline mutes the monitor.
     #[serde(default)]
     freshness_sql: Option<String>,
     #[serde(default)]
@@ -213,8 +212,7 @@ impl SchedulerService {
         Ok(())
     }
 
-    /// Fails the job when the snapshot behind `sql_query` is older than the entry allows, so a
-    /// stalled upstream pipeline surfaces as an error instead of a run that finds no breaches.
+    /// Fails the job when the data behind `sql_query` is older than the entry allows.
     async fn check_freshness(
         query_runner: &Arc<dyn QueryRunner>,
         entry: &WalletMonitoringEntry,
@@ -266,8 +264,7 @@ impl SchedulerService {
             id: service_id.to_string(),
             ..Default::default()
         };
-        // Balances arrive in the coin's base units, so scale by its own decimals rather than
-        // always by SUI's, which understated the 6-decimal coins by a factor of 1000.
+        // Scale by the coin's own decimals, not SUI's, which understated 6-decimal coins 1000x.
         let per_token = 10i128.pow(decimals);
         let incident_body = Body {
             details: format!(
@@ -432,7 +429,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_freshness_config_must_be_complete() {
-        // Only one half of the guard set: it would look configured but never fire, so reject it.
         let entry = WalletMonitoringEntry {
             name: "partial".to_string(),
             cron_schedule: "0 */10 * * * *".to_string(),
@@ -442,8 +438,7 @@ mod tests {
             max_data_age_secs: None,
         };
         let runner: Arc<dyn QueryRunner> = Arc::new(
-            ClickHouseQueryRunner::new("localhost", 8123, "ds_prod", "user", "passwd", true, 1)
-                .unwrap(),
+            ClickHouseQueryRunner::new("localhost", 8443, "ds_prod", "user", "passwd").unwrap(),
         );
         assert!(
             SchedulerService::check_freshness(&runner, &entry)

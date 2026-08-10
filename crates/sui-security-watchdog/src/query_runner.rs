@@ -49,32 +49,18 @@ pub struct ClickHouseQueryRunner {
 }
 
 impl ClickHouseQueryRunner {
-    /// Creates a new `ClickHouseQueryRunner` targeting the HTTP interface.
-    ///
-    /// # Arguments
-    /// * `host` - ClickHouse host name.
-    /// * `port` - Port of the HTTP interface (8443 for TLS, 8123 for plain HTTP).
-    /// * `database` - The database to query against.
-    /// * `user` - Username for authentication.
-    /// * `passwd` - Password for authentication.
-    /// * `no_tls` - Connect over plain HTTP instead of HTTPS.
-    /// * `query_timeout_secs` - Per-request timeout.
     pub fn new(
         host: &str,
         port: u16,
         database: &str,
         user: &str,
         passwd: &str,
-        no_tls: bool,
-        query_timeout_secs: u64,
     ) -> anyhow::Result<Self> {
-        let scheme = if no_tls { "http" } else { "https" };
-        let client = Client::builder()
-            .timeout(Duration::from_secs(query_timeout_secs))
-            .build()?;
+        // Jobs run on a cron, so a hung query must not outlive its interval.
+        let client = Client::builder().timeout(Duration::from_secs(60)).build()?;
         Ok(Self {
             client,
-            url: format!("{}://{}:{}/", scheme, host, port),
+            url: format!("https://{}:{}/", host, port),
             database: database.to_string(),
             user: user.to_string(),
             passwd: passwd.to_string(),
@@ -91,8 +77,6 @@ impl ClickHouseQueryRunner {
             &config.ch_database,
             &config.ch_user,
             &ch_password,
-            config.ch_no_tls,
-            config.ch_query_timeout_secs,
         )
     }
 
@@ -157,7 +141,7 @@ fn json_to_i128(value: &Value) -> Option<i128> {
 fn json_to_f64(value: &Value) -> Option<f64> {
     match value {
         Value::Number(number) => number.as_f64(),
-        // `inf`/`nan` and wide integers are quoted.
+        // `inf`/`nan` arrive quoted.
         Value::String(string) => string.parse::<f64>().ok(),
         _ => None,
     }
@@ -239,7 +223,6 @@ mod tests {
     #[test]
     fn test_json_to_i128_accepts_both_encodings() {
         assert_eq!(json_to_i128(&serde_json::json!(42)), Some(42));
-        // Wide integers arrive quoted; going through f64 here would lose precision.
         assert_eq!(
             json_to_i128(&serde_json::json!("87500000000000001")),
             Some(87500000000000001)
@@ -261,8 +244,7 @@ mod tests {
         ) else {
             panic!("CH_HOST, CH_USER and CH_PASSWORD must be set");
         };
-        let runner =
-            ClickHouseQueryRunner::new(&host, 8443, "ds_prod", &user, &passwd, false, 60).unwrap();
+        let runner = ClickHouseQueryRunner::new(&host, 8443, "ds_prod", &user, &passwd).unwrap();
 
         // Same shape as the configured jobs, with the breach predicate inverted so rows come back
         // on a healthy dataset.
@@ -322,7 +304,6 @@ mod tests {
         let wallet = to_any("String", &serde_json::json!("0xabc")).unwrap();
         assert_eq!(wallet.downcast_ref::<String>().unwrap(), "0xabc");
 
-        // Every integer width lands on i128 so callers need only one downcast.
         let balance = to_any("Int64", &serde_json::json!("87500000000000000")).unwrap();
         assert_eq!(balance.downcast_ref::<i128>().unwrap(), &87500000000000000);
 
