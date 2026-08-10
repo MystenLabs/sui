@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
   ┌─ tests/move_check/folding/constant_cross_module.move:7:20
   │
 2 │     const C_ZERO: u64 = 0;

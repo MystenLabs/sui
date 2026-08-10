@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// '#[error]' constants cannot be used in abort positions outside their defining module, since
-// the error information is encoded against the aborting module's tables
+// '#[error]' constants cannot be declared 'public(package)': the error information is encoded
+// against the aborting module's tables, so they cannot be used outside their defining module.
+// The combination is rejected at the definition
 
 module 0x42::a {
 

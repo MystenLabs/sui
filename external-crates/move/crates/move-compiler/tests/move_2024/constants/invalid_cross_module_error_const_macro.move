@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// An '#[error]' constant used in an abort position inside a macro is rejected when the macro
-// expands in another module: the abort executes in the caller, whose tables cannot encode the
-// defining module's constant
+// An internal '#[error]' constant used in an abort position inside a macro is rejected when the
+// macro expands in another module: visibility is resolved in the scope of the caller, which
+// cannot access the internal constant
 
 module 0x42::a {
 
 #[error]
-public(package) const ENotValid: vector<u8> = b"invalid";
+const ENotValid: vector<u8> = b"invalid";
 
 public macro fun check_valid($x: u64) {
     assert!($x < 10, ENotValid);

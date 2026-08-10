@@ -91,9 +91,9 @@ In both cases the value is baked into the using module when it is compiled: upgr
 defining package does not change the values already compiled into modules that use them, and no
 runtime call is made.
 
-One usage is restricted: a [`#[error]` constant](./abort-and-assert.md) used as an abort code
-must come from the aborting module, since its name and value are encoded against the aborting
-module's tables.
+One combination is restricted: an [`#[error]` constant](./abort-and-assert.md) cannot be
+declared `public(package)`, since its name and value are encoded against the tables of the
+module that aborts with it, so it cannot be used outside its defining module.
 
 ## Valid Expressions
 
@@ -150,7 +150,9 @@ const SQUARE: u8 = BASE * BASE;
 ```
 
 Note though, that any cycle in the constant definitions results in an error. This includes
-cycles formed across modules, which are reported as module dependency cycles.
+cycles formed across modules. Only genuine constant cycles are errors: because constant values
+are fully resolved at compile time, constant references do not create module dependencies, so
+modules whose only mutual references are through constants are fine.
 
 ```move
 const A: u16 = B + 1;

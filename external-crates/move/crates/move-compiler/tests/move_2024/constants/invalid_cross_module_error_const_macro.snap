@@ -5,11 +5,17 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04035]: invalid constant usage in error context
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/constants/invalid_cross_module_error_const_macro.move:14:22
    │
-11 │ public(package) const ENotValid: vector<u8> = b"invalid";
-   │                       --------- '#[error]' constants can only be used in the module that defines them
+11 │ const ENotValid: vector<u8> = b"invalid";
+   │       --------- This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
    ·
 14 │     assert!($x < 10, ENotValid);
-   │                      ^^^^^^^^^ Invalid use of '#[error]' constant '0x42::a::ENotValid' in assertion
+   │                      ^^^^^^^^^ Invalid access of internal constant '0x42::a::ENotValid'
+   ·
+24 │     a::check_valid!(x)
+   │     ------------------ While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro '0x42::a::check_valid'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.

@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:8:1
    │  
  8 │ ╭ module 0x42::a {
@@ -22,7 +22,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:14:28
    │
 14 │ public fun secret(): u64 { SECRET }
@@ -33,7 +33,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:18:1
    │  
 18 │ ╭ module 0x42::b {
@@ -50,7 +50,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:22:25
    │
 22 │ public fun max(): u64 { a::MAX }
@@ -61,7 +61,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:24:27
    │
 24 │ public fun steal(): u64 { a::SECRET }
@@ -72,16 +72,16 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-error[E04001]: restricted visibility
+error[EC04001]: restricted visibility
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:24:27
    │
 12 │ const SECRET: u64 = 7;
-   │       ------ The constant '0x42::a::SECRET' is internal to its module. Declare it 'public(package)' to allow access from other modules in its package
+   │       ------ This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
    ·
 24 │ public fun steal(): u64 { a::SECRET }
-   │                           ^^^^^^^^^ Invalid access of '0x42::a::SECRET'
+   │                           ^^^^^^^^^ Invalid access of internal constant '0x42::a::SECRET'
 
-note[I15006]: IDE path autocomplete
+note[NC15006]: IDE path autocomplete
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:27:5
    │
 27 │     a::
@@ -92,7 +92,7 @@ note[I15006]: IDE path autocomplete
    = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
    = type params: 
 
-error[E01016]: invalid name
+error[EC01016]: invalid name
    ┌─ tests/move_2024/ide_mode/cross_module_constants.move:27:5
    │
 27 │     a::

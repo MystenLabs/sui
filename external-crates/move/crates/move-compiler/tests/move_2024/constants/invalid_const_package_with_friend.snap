@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02016]: invalid visibility modifier
+error[EC02016]: invalid visibility modifier
    ┌─ tests/move_2024/constants/invalid_const_package_with_friend.move:8:1
    │
  8 │ friend 0x42::b;
@@ -14,13 +14,13 @@ error[E02016]: invalid visibility modifier
 10 │ public(package) const MAX: u64 = 100;
    │ --------------- 'public(package)' visibility used here
 
-error[E13002]: feature is deprecated in specified edition
+error[EC13002]: feature is deprecated in specified edition
   ┌─ tests/move_2024/constants/invalid_const_package_with_friend.move:8:1
   │
 8 │ friend 0x42::b;
   │ ^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
 
-error[E02016]: invalid visibility modifier
+error[EC02016]: invalid visibility modifier
    ┌─ tests/move_2024/constants/invalid_const_package_with_friend.move:10:1
    │
  8 │ friend 0x42::b;

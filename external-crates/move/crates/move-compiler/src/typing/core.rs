@@ -1966,108 +1966,15 @@ pub fn make_constant_type(
         } = context.constant_info(m, c);
         (*defined_loc, *visibility, signature.clone())
     };
-    check_constant_visibility(context, defined_loc, loc, m, c, visibility);
+    check_member_visibility(
+        context,
+        defined_loc,
+        loc,
+        m,
+        VisibilityMember::Constant(c),
+        visibility,
+    );
     signature
-}
-
-fn check_constant_visibility(
-    context: &mut Context,
-    defined_loc: Loc,
-    usage_loc: Loc,
-    m: &ModuleIdent,
-    c: &ConstantName,
-    visibility: Visibility,
-) {
-    let in_current_module = context.is_current_module(m);
-    // Inside a macro function definition, visibility is resolved in the scope of the caller at
-    // each expansion site
-    if in_current_module || context.in_macro_function {
-        return;
-    }
-    let cross_module_constants = context
-        .env()
-        .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
-    if !cross_module_constants {
-        let msg = format!("Invalid access of '{}::{}'", m, c);
-        let internal_msg = "Constants are internal to their module, and cannot be \
-                            accessed outside of their module";
-        let mut diag = diag!(
-            TypeSafety::Visibility,
-            (usage_loc, msg),
-            (defined_loc, internal_msg)
-        );
-        if let Some(note) = editions::feature_edition_error_msg(
-            context.env().edition(context.current_package()),
-            FeatureGate::CrossModuleConstants,
-        ) {
-            diag.add_note(note);
-        }
-        context.add_diag(diag);
-        return;
-    }
-    match visibility {
-        // The use is resolved entirely at compile time: constant-definition uses fold the value
-        // in, and function-body uses compile to a module-local copy of the constant synthesized
-        // during CFGIR translation. No friend relationship is created.
-        Visibility::Package(_) if context.current_module_shares_package_and_address(m) => (),
-        Visibility::Package(vis_loc) => {
-            let msg = format!(
-                "Invalid access of '{}' visible constant '{}::{}'",
-                Visibility::PACKAGE,
-                m,
-                c
-            );
-            let internal_msg = format!(
-                "A '{}' constant can only be accessed from the same address and package as \
-                 module '{}' in package '{}'. This access is from address '{}' in package '{}'",
-                Visibility::PACKAGE,
-                m,
-                context
-                    .module_info(m)
-                    .package
-                    .map(|pkg_name| format!("{}", pkg_name))
-                    .unwrap_or("<unknown package>".to_string()),
-                &context
-                    .current_module()
-                    .map(|cur_module| cur_module.value.address.to_string())
-                    .unwrap_or("<unknown addr>".to_string()),
-                &context
-                    .current_module()
-                    .and_then(|cur_module| context.module_info(cur_module).package)
-                    .map(|pkg_name| format!("{}", pkg_name))
-                    .unwrap_or("<unknown package>".to_string())
-            );
-            context.add_diag(diag!(
-                TypeSafety::Visibility,
-                (usage_loc, msg),
-                (vis_loc, internal_msg)
-            ));
-        }
-        Visibility::Internal => {
-            let msg = format!("Invalid access of '{}::{}'", m, c);
-            let internal_msg = format!(
-                "The constant '{}::{}' is internal to its module. Declare it '{}' to allow \
-                 access from other modules in its package",
-                m,
-                c,
-                Visibility::PACKAGE,
-            );
-            context.add_diag(diag!(
-                TypeSafety::Visibility,
-                (usage_loc, msg),
-                (defined_loc, internal_msg)
-            ));
-        }
-        // rejected during expansion
-        Visibility::Public(vis_loc) | Visibility::Friend(vis_loc) => {
-            ice_assert!(
-                context.reporter,
-                context.env().has_errors(),
-                vis_loc,
-                "constant declared with disallowed visibility"
-            );
-        }
-    }
 }
 
 //**************************************************************************************************
@@ -2183,13 +2090,15 @@ pub fn make_function_type(
     let return_ty = make_function_type_no_visibility_check(context, loc, m, f, ty_args_opt);
     let finfo = context.function_info(m, f);
     let defined_loc = finfo.defined_loc;
-    check_function_visibility(
+    check_member_visibility(
         context,
         defined_loc,
         loc,
         m,
-        f,
-        finfo.entry,
+        VisibilityMember::Function {
+            name: f,
+            entry: finfo.entry,
+        },
         finfo.visibility,
     );
     return_ty
@@ -2260,43 +2169,138 @@ pub fn make_function_type_no_visibility_check(
     }
 }
 
-fn check_function_visibility(
+//**************************************************************************************************
+// Member Visibility
+//**************************************************************************************************
+
+/// A module member subject to visibility checking. Constants only permit `Internal` and
+/// `Package` visibility; the other visibilities are rejected during expansion.
+enum VisibilityMember<'a> {
+    Function {
+        name: &'a FunctionName,
+        entry: Option<Loc>,
+    },
+    Constant(&'a ConstantName),
+}
+
+impl VisibilityMember<'_> {
+    fn kind(&self) -> &'static str {
+        match self {
+            VisibilityMember::Function { .. } => "function",
+            VisibilityMember::Constant(_) => "constant",
+        }
+    }
+
+    /// "call to"/"access of", for `Invalid {} ...` messages
+    fn access(&self) -> &'static str {
+        match self {
+            VisibilityMember::Function { .. } => "call to",
+            VisibilityMember::Constant(_) => "access of",
+        }
+    }
+
+    fn access_noun(&self) -> &'static str {
+        match self {
+            VisibilityMember::Function { .. } => "call",
+            VisibilityMember::Constant(_) => "access",
+        }
+    }
+
+    fn verb(&self) -> &'static str {
+        match self {
+            VisibilityMember::Function { .. } => "called",
+            VisibilityMember::Constant(_) => "accessed",
+        }
+    }
+
+    fn full_name(&self, m: &ModuleIdent) -> String {
+        match self {
+            VisibilityMember::Function { name, .. } => format!("{}::{}", m, name),
+            VisibilityMember::Constant(c) => format!("{}::{}", m, c),
+        }
+    }
+}
+
+fn check_member_visibility(
     context: &mut Context,
     defined_loc: Loc,
     usage_loc: Loc,
     m: &ModuleIdent,
-    f: &FunctionName,
-    entry_opt: Option<Loc>,
+    member: VisibilityMember<'_>,
     visibility: Visibility,
 ) {
+    use VisibilityMember as VM;
     let in_current_module = context.is_current_module(m);
-    let public_for_testing =
-        public_testing_visibility(context.env(), context.current_package(), f, entry_opt);
+    if let VM::Constant(_) = &member {
+        // Inside a macro function definition, visibility is resolved in the scope of the caller
+        // at each expansion site
+        if in_current_module || context.in_macro_function {
+            return;
+        }
+        let cross_module_constants = context
+            .env()
+            .supports_feature(context.current_package(), FeatureGate::CrossModuleConstants);
+        if !cross_module_constants {
+            let msg = format!("Invalid access of '{}'", member.full_name(m));
+            let internal_msg = "Constants are internal to their module, and cannot be \
+                                accessed outside of their module";
+            let mut diag = diag!(
+                TypeSafety::Visibility,
+                (usage_loc, msg),
+                (defined_loc, internal_msg)
+            );
+            if let Some(note) = editions::feature_edition_error_msg(
+                context.env().edition(context.current_package()),
+                FeatureGate::CrossModuleConstants,
+            ) {
+                diag.add_note(note);
+            }
+            context.add_diag(diag);
+            return;
+        }
+    }
+    let public_for_testing = match &member {
+        VM::Function { name, entry } => {
+            public_testing_visibility(context.env(), context.current_package(), name, *entry)
+        }
+        VM::Constant(_) => None,
+    };
     let is_testing_context = context.is_testing_context();
-    let supports_public_package = context
-        .env()
-        .supports_feature(context.current_package(), FeatureGate::PublicPackage);
     match visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
-            let friend_or_package = if supports_public_package {
-                Visibility::PACKAGE
-            } else {
-                Visibility::FRIEND
+            let valid_visibilities = match &member {
+                VM::Function { .. } => {
+                    let supports_public_package = context
+                        .env()
+                        .supports_feature(context.current_package(), FeatureGate::PublicPackage);
+                    let friend_or_package = if supports_public_package {
+                        Visibility::PACKAGE
+                    } else {
+                        Visibility::FRIEND
+                    };
+                    format!("'{}' and '{}'", Visibility::PUBLIC, friend_or_package)
+                }
+                VM::Constant(_) => format!("'{}'", Visibility::PACKAGE),
             };
             let internal_msg = format!(
-                "This function is internal to its module. Only '{}' and '{}' functions can \
-                 be called outside of their module",
-                Visibility::PUBLIC,
-                friend_or_package,
+                "This {kind} is internal to its module. Only {valid_visibilities} {kind}s can \
+                 be {verb} outside of their module",
+                kind = member.kind(),
+                verb = member.verb(),
             );
             report_visibility_error_(
                 context,
                 public_for_testing,
                 (
                     usage_loc,
-                    format!("Invalid call to internal function '{m}::{f}'"),
+                    format!(
+                        "Invalid {} internal {} '{}'",
+                        member.access(),
+                        member.kind(),
+                        member.full_name(m)
+                    ),
                 ),
                 (defined_loc, internal_msg),
             );
@@ -2304,18 +2308,23 @@ fn check_function_visibility(
         Visibility::Package(loc)
             if in_current_module || context.current_module_shares_package_and_address(m) =>
         {
-            context.record_current_module_as_friend(m, loc);
+            // Constant uses are resolved entirely at compile time and create no linkage, so no
+            // friend relationship is recorded for them
+            if matches!(member, VM::Function { .. }) {
+                context.record_current_module_as_friend(m, loc);
+            }
         }
         Visibility::Package(vis_loc) => {
             let msg = format!(
-                "Invalid call to '{}' visible function '{}::{}'",
+                "Invalid {} '{}' visible {} '{}'",
+                member.access(),
                 Visibility::PACKAGE,
-                m,
-                f
+                member.kind(),
+                member.full_name(m)
             );
             let internal_msg = format!(
-                "A '{}' function can only be called from the same address and package as \
-                module '{}' in package '{}'. This call is from address '{}' in package '{}'",
+                "A '{}' {kind} can only be {verb} from the same address and package as \
+                module '{}' in package '{}'. This {noun} is from address '{}' in package '{}'",
                 Visibility::PACKAGE,
                 m,
                 context
@@ -2331,7 +2340,10 @@ fn check_function_visibility(
                     .current_module()
                     .and_then(|cur_module| context.module_info(cur_module).package)
                     .map(|pkg_name| format!("{}", pkg_name))
-                    .unwrap_or("<unknown package>".to_string())
+                    .unwrap_or("<unknown package>".to_string()),
+                kind = member.kind(),
+                verb = member.verb(),
+                noun = member.access_noun(),
             );
             report_visibility_error_(
                 context,
@@ -2340,11 +2352,23 @@ fn check_function_visibility(
                 (vis_loc, internal_msg),
             );
         }
+        // rejected during expansion
+        Visibility::Friend(vis_loc) | Visibility::Public(vis_loc)
+            if matches!(member, VM::Constant(_)) =>
+        {
+            ice_assert!(
+                context.reporter,
+                context.env().has_errors(),
+                vis_loc,
+                "constant declared with disallowed visibility"
+            );
+        }
         Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}
         Visibility::Friend(vis_loc) => {
             let msg = format!(
-                "Invalid call to '{}' visible function '{m}::{f}'",
+                "Invalid call to '{}' visible function '{}'",
                 Visibility::FRIEND,
+                member.full_name(m)
             );
             let internal_msg =
                 format!("This function can only be called from a 'friend' of module '{m}'",);
