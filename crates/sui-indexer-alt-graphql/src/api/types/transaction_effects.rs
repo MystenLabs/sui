@@ -366,12 +366,13 @@ impl EffectsContents {
     }
 
     /// The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
-    async fn effects_json(&self) -> Option<Result<Json, RpcError>> {
+    async fn effects_json(&self, ctx: &Context<'_>) -> Option<Result<Json, RpcError>> {
         let content = self.contents.as_ref()?;
 
         Some(
             async {
-                let mut proto_effects = content.proto_effects()?;
+                let kv_loader: &KvLoader = ctx.data()?;
+                let mut proto_effects = content.proto_effects(kv_loader).await?;
                 // Clear the bcs field as effectsJson is intended to provide a full structured output
                 proto_effects.bcs = None;
                 let json_value = serde_json::to_value(&proto_effects)
@@ -580,9 +581,10 @@ impl EffectsContents {
             });
         }
 
-        let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
+        // Execution context is not backed by the index yet.
+        if self.scope.is_executed() {
             return Ok(self.clone());
-        };
+        }
 
         let kv_loader: &KvLoader = ctx.data()?;
         let Some(transaction) = kv_loader
@@ -593,12 +595,15 @@ impl EffectsContents {
             return Ok(self.clone());
         };
 
-        let cp_num = transaction
-            .cp_sequence_number()
-            .context("Fetched transaction should have checkpoint sequence number")?;
-
-        if cp_num > checkpoint_viewed_at {
-            return Ok(self.clone());
+        // Enforce the consistency cutoff only when viewing as of a specific checkpoint. A
+        // subscription backfill has no `checkpoint_viewed_at` and takes the indexed contents as-is.
+        if let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() {
+            let cp_num = transaction
+                .cp_sequence_number()
+                .context("Fetched transaction should have checkpoint sequence number")?;
+            if cp_num > checkpoint_viewed_at {
+                return Ok(self.clone());
+            }
         }
 
         Ok(Self {

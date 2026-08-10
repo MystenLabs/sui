@@ -13,9 +13,8 @@
 //! live tip and snapshot-bound projections.
 //!
 //! [`Schema`] is implemented for the live variant (`MySchema<Db>`)
-//! and pairs the static set of column families a schema requires
-//! ([`Schema::cfs`]) with the constructor that builds the schema
-//! struct from an opened database ([`Schema::open`]).
+//! and owns the database-open sequence for its static set of column
+//! families and typed handles.
 //!
 //! [`SchemaAtSnapshot`] is a separate trait the schema author opts
 //! into; it declares a `MySchema<Snapshot>` projection and a
@@ -41,15 +40,22 @@
 //! }
 //!
 //! impl Schema for MySchema {
-//!     fn cfs(opts: &sui_consistent_store::CfOptionsResolver) -> Vec<CfDescriptor> {
-//!         vec![CfDescriptor::new("my_cf", opts.options("my_cf"))]
-//!     }
-//!
-//!     fn open(db: &Db) -> Result<Self, OpenError> {
-//!         Ok(Self {
+//!     fn open(
+//!         path: &std::path::Path,
+//!         opts: &sui_consistent_store::CfOptionsResolver,
+//!         snapshot_capacity: usize,
+//!     ) -> Result<(Db, Self), OpenError> {
+//!         let db = Db::open_cfs(
+//!             path,
+//!             opts,
+//!             snapshot_capacity,
+//!             vec![CfDescriptor::new("my_cf", opts.options("my_cf"))],
+//!         )?;
+//!         let schema = Self {
 //!             _reader: std::marker::PhantomData,
 //!             _db: db.clone(),
-//!         })
+//!         };
+//!         Ok((db, schema))
 //!     }
 //! }
 //!
@@ -67,13 +73,15 @@
 //! let (_db, _schema) = Db::open::<MySchema>(dir.path(), DbOptions::default()).unwrap();
 //! ```
 
+use std::path::Path;
+
 use crate::db::Db;
 use crate::error::OpenError;
 use crate::options::CfOptionsResolver;
 use crate::snapshot::Snapshot;
 
-/// Declares the column families a database needs and constructs the
-/// typed handle struct against an opened database at the live tip.
+/// Opens a database with its column-family layout and constructs the
+/// typed handle struct against that database at the live tip.
 ///
 /// Implementations are typically hand-written structs parameterized
 /// by a [`Reader`](crate::Reader) (defaulted to [`Db`]) whose fields
@@ -81,46 +89,36 @@ use crate::snapshot::Snapshot;
 /// only for the [`Db`]-bound variant of the schema; snapshot-bound
 /// variants are constructed by re-binding, not by re-opening.
 ///
-/// The trait has two responsibilities:
-///
-/// - [`cfs`](Self::cfs) returns the column families this schema
-///   requires, with per-CF [`rocksdb::Options`]. It is called once at
-///   open time, with a [`CfOptionsResolver`] as input. The
-///   order of entries does not matter.
-/// - [`open`](Self::open) constructs the schema struct against an
-///   already-opened database. Each column family named by `cfs()` is
-///   guaranteed to exist on the database before this is called.
+/// [`Schema::open`] defines the schema's column families, opens them
+/// through [`Db::open_cfs`], and constructs the typed handles. A
+/// schema can create private state before opening the database when
+/// its RocksDB callbacks and typed handles must share that state.
 pub trait Schema: Sized {
-    /// The column families this schema requires.
+    /// Open the schema's column families and construct the typed
+    /// handle struct.
     ///
-    /// Each entry is a [`CfDescriptor`] carrying a column-family
-    /// name (a `&'static str` so the schema's CF set is fixed at
-    /// compile time) and its [`rocksdb::Options`] applied at create
-    /// time. Implementations obtain the resolved per-CF options from
-    /// `opts` via [`CfOptionsResolver::options`] and layer only
-    /// correctness-bearing per-CF tweaks (merge operators, compaction
-    /// filters) on top — performance knobs such as compression, write
-    /// buffers, and write-stall thresholds are resolved from
-    /// configuration inside the resolver.
+    /// Build one [`CfDescriptor`] for each schema-owned column family.
+    /// Each descriptor pairs a compile-time `&'static str` name with
+    /// the [`rocksdb::Options`] applied when the database is opened.
+    /// Start with `opts.options(name)`, which applies the configured
+    /// performance settings, then attach correctness-bearing merge
+    /// operators and compaction filters before calling
+    /// [`Db::open_cfs`].
     ///
-    /// RocksDB's mandatory `default` column family is opened
-    /// automatically and need not be included here, though including
-    /// it is harmless.
+    /// Pass only schema-owned column families to [`Db::open_cfs`].
+    /// RocksDB opens its mandatory `default` column family, and the
+    /// framework registers `__restore`, `__watermark`, and `__chain_id`.
     ///
-    /// The framework-internal column families (`__restore`,
-    /// `__watermark`, `__chain_id`) are reserved by the crate; a
-    /// schema that declares one is rejected by
-    /// [`Db::open`](crate::Db::open).
-    fn cfs(opts: &CfOptionsResolver) -> Vec<CfDescriptor>;
-
-    /// Construct the schema struct against `db`.
-    ///
-    /// Implementations typically clone the supplied [`Db`] handle
-    /// into each column-family handle they construct (a `Db` clone
-    /// is one `Arc` bump). The default implementation in user
-    /// schemas is usually a one-line `Self::new(db.clone())` that
-    /// delegates to inherent methods on the schema struct.
-    fn open(db: &Db) -> Result<Self, OpenError>;
+    /// Implementations must forward `snapshot_capacity` unchanged to
+    /// [`Db::open_cfs`] so the framework's bookkeeping column families,
+    /// configuration validation, and snapshot retention are applied
+    /// consistently. The returned schema must be bound to the returned
+    /// database.
+    fn open(
+        path: &Path,
+        opts: &CfOptionsResolver,
+        snapshot_capacity: usize,
+    ) -> Result<(Db, Self), OpenError>;
 }
 
 /// Describes one column family in a [`Schema`].

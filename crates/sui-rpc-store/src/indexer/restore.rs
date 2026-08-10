@@ -32,7 +32,6 @@ use sui_consistent_store::ChainId;
 use sui_consistent_store::Db;
 use sui_consistent_store::FrameworkSchema;
 use sui_consistent_store::PipelineTaskKey;
-use sui_consistent_store::Schema as _;
 use sui_consistent_store::Watermark;
 use sui_consistent_store::restore::RestoreDriver;
 use sui_consistent_store::restore::RestoreDriverConfig;
@@ -203,6 +202,7 @@ pub fn restore_indexes<Src: RestoreSource>(
 /// re-writes the pruning row.
 pub fn floor_unrestored_pipelines(
     db: &Db,
+    schema: &Arc<RpcStoreSchema>,
     target_watermark: Watermark,
     target_chain_id: ChainId,
     layer: &RestoreLayer,
@@ -259,12 +259,6 @@ pub fn floor_unrestored_pipelines(
             .with_context(|| format!("stage __chain_id for {name:?}"))?;
     }
 
-    // Resolve the rpc-store schema handle once for the
-    // pruning-watermark CF. The schema is cheap to re-bind to a
-    // live `Db` and gives the typed `store` helper plus the
-    // pruning-floor setter the bitmap CFs depend on.
-    let schema =
-        Arc::new(RpcStoreSchema::open(db).context("re-open RpcStoreSchema for pruning watermark")?);
     let (k, v) = pruning_watermark::store(&pruning_watermark::Watermarks {
         tx_seq_lo: target_watermark.tx_hi,
         checkpoint_lo: target_watermark.checkpoint_hi_inclusive.saturating_add(1),
@@ -286,7 +280,7 @@ pub fn floor_unrestored_pipelines(
     if layer.objects {
         let reader = RpcStoreReader::new(db.clone(), schema.clone());
         let start_checkpoint = target_watermark.checkpoint_hi_inclusive.saturating_add(1);
-        match seed_current_epoch_start(&schema, &reader, Some(start_checkpoint), &mut batch) {
+        match seed_current_epoch_start(schema, &reader, Some(start_checkpoint), &mut batch) {
             Ok(epoch) => info!(
                 epoch,
                 start_checkpoint, "seeded start record for restore epoch"
@@ -302,11 +296,8 @@ pub fn floor_unrestored_pipelines(
 
     batch.commit().context("commit floor batch")?;
 
-    // Mirror the on-disk floor into the process-wide atomic so any
-    // compaction-filter clones started in this process see the
-    // updated value immediately. A subsequent `Indexer::from_store`
-    // also calls `refresh_pruning_atomics` so cross-process boots
-    // converge.
+    // The watermark is durable; publish it to this database's
+    // bitmap compaction filters.
     schema.set_pruning_floor(target_watermark.tx_hi);
 
     Ok(())
@@ -450,10 +441,8 @@ pub fn seed_history_cohort(
 
     batch.commit().context("commit history-cohort seed batch")?;
 
-    // Mirror the on-disk floor into the process-wide atomic so any
-    // bitmap compaction-filter clones in this process see it
-    // immediately (a subsequent `Indexer::from_store` also calls
-    // `refresh_pruning_atomics`).
+    // The watermark is durable; publish it to this database's
+    // bitmap compaction filters.
     schema.set_pruning_floor(tx_seq_lo);
 
     Ok(())
@@ -727,7 +716,8 @@ mod tests {
     #[test]
     fn floor_unrestored_pipelines_writes_watermarks_for_tip_only_pipelines() {
         let dir = tempfile::tempdir().unwrap();
-        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
 
         let chain_id = ChainId([42u8; 32]);
         let target = Watermark {
@@ -737,7 +727,7 @@ mod tests {
             timestamp_ms_hi_inclusive: 1_700_000_000_000,
         };
 
-        floor_unrestored_pipelines(&db, target, chain_id, &RestoreLayer::all()).unwrap();
+        floor_unrestored_pipelines(&db, &schema, target, chain_id, &RestoreLayer::all()).unwrap();
 
         // Sample raw-chain-data / bitmap pipelines that the
         // formal-snapshot path doesn't cover — every one of them
@@ -794,7 +784,6 @@ mod tests {
         // Pruning singleton reflects the post-restore floor: tx
         // ids and checkpoint sequences below this row aren't
         // available in the new database.
-        let schema = RpcStoreSchema::open(&db).unwrap();
         assert_eq!(
             schema.get_pruning_watermarks().unwrap(),
             Some(crate::schema::pruning_watermark::Watermarks {
@@ -810,12 +799,20 @@ mod tests {
     #[test]
     fn floor_unrestored_pipelines_includes_objects_when_layer_skips_it() {
         let dir = tempfile::tempdir().unwrap();
-        let (db, _schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let (db, schema) = Db::open::<RpcStoreSchema>(dir.path(), DbOptions::default()).unwrap();
+        let schema = Arc::new(schema);
 
         let chain_id = ChainId([11u8; 32]);
         let target = Watermark::for_checkpoint(42);
 
-        floor_unrestored_pipelines(&db, target, chain_id, &RestoreLayer::indexes_only()).unwrap();
+        floor_unrestored_pipelines(
+            &db,
+            &schema,
+            target,
+            chain_id,
+            &RestoreLayer::indexes_only(),
+        )
+        .unwrap();
 
         let key = PipelineTaskKey::new(Objects::NAME);
         assert_eq!(db.framework().watermarks.get(&key).unwrap(), Some(target),);

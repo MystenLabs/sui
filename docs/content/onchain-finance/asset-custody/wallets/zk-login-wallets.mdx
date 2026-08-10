@@ -172,6 +172,18 @@ All zkLogin utilities are exported from `@mysten/sui/zklogin`.
   noComments
 />
 
+#### ISS normalization
+
+The `computeZkLoginAddressFromSeed` function normalizes the `iss` (issuer) value before computing the address through the internal [`normalizeZkLoginIssuer` helper](https://github.com/MystenLabs/ts-sdks/blob/main/packages/sui/src/zklogin/utils.ts). This normalization handles a specific case: Google's OpenID configuration returns the issuer as `accounts.google.com` (without a protocol prefix), but the zkLogin address computation expects `https://accounts.google.com`. The SDK prepends `https://` automatically for Google. For all other providers, the `iss` value passes through unchanged.
+
+If you compute the address seed yourself (outside the SDK) and pass it to `computeZkLoginAddressFromSeed`, you must pass the `iss` value exactly as it appears in the JWT. The function applies the normalization internally. If you pre-normalize the `iss` by adding `https://` to Google's issuer before passing it to the function, the double normalization produces a different address.
+
+:::caution
+
+If you call `genAddressSeed` and `computeZkLoginAddressFromSeed` separately, pass the raw `iss` from the JWT to both functions. Do not strip or add a protocol prefix. The SDK normalizes the value internally. Mismatched `iss` values between the address seed and the address computation produce a different address, and transactions signed for that address fail with `InvalidSignature` ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+
+:::
+
 **Serialize a zkLogin signature for transaction submission:**
 
 <ImportContent

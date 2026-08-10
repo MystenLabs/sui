@@ -97,7 +97,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
 /// (Postgres, serves package resolution from the DB). Recovered checkpoints don't go
 /// through `index_and_broadcast`, so subscribers resolving their packages fall through
 /// to the DB and need `kv_packages` to be ready.
-async fn wait_for_pipelines_catching_up_at(
+pub(crate) async fn wait_for_pipelines_catching_up_at(
     target: u64,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
 ) -> anyhow::Result<()> {

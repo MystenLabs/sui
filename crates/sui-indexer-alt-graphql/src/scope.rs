@@ -173,6 +173,28 @@ impl Scope {
         }
     }
 
+    /// Create a scope for transactions backfilled through the indexed pathway during a
+    /// subscription's catch-up phase. Unlike the live [`for_streamed_checkpoint`] path, backfilled
+    /// transactions are already finalized and indexed, so their fields resolve lazily through the
+    /// index (`KvLoader`) rather than from an in-memory payload. `checkpoint_viewed_at` is `None`,
+    /// matching the live path: a subscription does not resolve as of a single consistent checkpoint,
+    /// so checkpoint-anchored fields (balances, latest object versions) stay null and transaction
+    /// contents hydrate by digest.
+    #[cfg(feature = "staging")]
+    pub(crate) fn for_backfilled_transactions(
+        package_store: Arc<StreamingPackageStore>,
+        resolver_limits: sui_package_resolver::Limits,
+    ) -> Self {
+        Self {
+            checkpoint_viewed_at: None,
+            active_transaction: None,
+            root_bound: None,
+            data_source: DataSource::Indexed,
+            package_store,
+            resolver_limits,
+        }
+    }
+
     /// Anchor a nested scope to a transaction by digest only. Used when the caller does not yet
     /// hold the transaction's contents. If the scope is already anchored to the same digest
     /// (with or without hydrated contents), the existing anchor is preserved so descendants
@@ -301,6 +323,12 @@ impl Scope {
     /// their operation makes sense without checkpoint context.
     pub(crate) fn checkpoint_viewed_at(&self) -> Option<u64> {
         self.checkpoint_viewed_at
+    }
+
+    /// True in the execution context: a freshly executed or simulated transaction, whose data
+    /// lives only in the in-memory payload rather than the index.
+    pub(crate) fn is_executed(&self) -> bool {
+        matches!(self.data_source, DataSource::Executed { .. })
     }
 
     /// Root parent object version for dynamic fields.

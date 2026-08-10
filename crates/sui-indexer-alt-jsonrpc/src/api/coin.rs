@@ -34,7 +34,7 @@ use sui_types::object::Owner;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
-use crate::data::load_address_balance_coin;
+use crate::data::AddressBalanceCoin;
 use crate::data::load_live;
 use crate::error::InternalContext;
 use crate::error::RpcError;
@@ -168,11 +168,15 @@ impl CoinsApiServer for Coins {
         // Fetch real coins and address balance coin concurrently.
         let (coin_results, address_balance_coin) = tokio::join!(
             future::join_all(coin_futures),
-            address_balance_coin_response(ctx, owner, inner),
+            AddressBalanceCoin::by_owner(ctx, owner, inner),
         );
 
         let address_balance_coin = address_balance_coin
             .context("Failed to get address balance coin")
+            .map_err(RpcError::<Error>::from)?
+            .map(AddressBalanceCoin::into_coin)
+            .transpose()
+            .context("Failed to render address balance coin")
             .map_err(RpcError::<Error>::from)?;
 
         let mut has_next_page = results.has_next_page;
@@ -435,27 +439,6 @@ async fn coin_metadata_response(
         bcs::from_bytes(move_object.contents()).context("Failed to parse Currency object")?;
 
     Ok(Some(coin_metadata.into()))
-}
-
-/// Query the address balance for this owner/coin_type and synthesize an address balance coin if
-/// the balance is non-zero.
-async fn address_balance_coin_response(
-    ctx: &Context,
-    owner: SuiAddress,
-    coin_type: TypeTag,
-) -> Result<Option<Coin>, anyhow::Error> {
-    let balance_response = ctx
-        .consistent_reader()
-        .get_balance(
-            None,
-            owner.to_string(),
-            coin_type.to_canonical_string(/* with_prefix */ true),
-        )
-        .await?;
-
-    let address_balance = balance_response.address_balance.unwrap_or(0);
-
-    load_address_balance_coin(ctx, owner, coin_type, address_balance).await
 }
 
 async fn object_with_coin_data(

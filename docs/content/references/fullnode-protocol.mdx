@@ -37,14 +37,19 @@ answer: >-
 
 import Protocol from "../../site/src/components/Protocol";
 
-The Sui full node [gRPC](/develop/accessing-data/grpc) API provides programmatic access to onchain state, transaction submission, and event subscriptions. Every Sui full node exposes this API. Use it to query objects, execute transactions, subscribe to real-time events, and build indexing pipelines.
+The Sui Full Node gRPC API provides type-safe access to blockchain data through Protocol Buffers. By default, full nodes serve plaintext HTTP/2 on **port 9000**. For production traffic, configure the node's native TLS listener (**port 9443** by default) or terminate TLS at a proxy, commonly on **port 443**.
 
-The gRPC API is the primary interface for interacting with Sui full nodes. For application-level queries (filtered lookups, pagination, nested data), use the [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) instead.
+```sh
+# Test connectivity with grpcurl
+$ grpcurl fullnode.mainnet.sui.io:443 list
+```
 
-The API reference is split across 3 pages:
+The reference below lists every gRPC service, its methods, request types, and response types. Use the dropdowns to navigate between proto files and services.
 
-- **Methods** (this page) — RPC method signatures and request/response formats
-- [Message Definitions](fullnode-protocol-messages) — Protobuf message structures used in requests and responses
-- [Enum and Scalar Types](fullnode-protocol-types) — Enum variants and scalar type definitions
+- **[Message Definitions](fullnode-protocol-messages):** Field-level reference for all request and response messages.
+- **[Enum and Scalar Types](fullnode-protocol-types):** Enum values and protobuf scalar type mappings.
+- **[Proto source files](https://github.com/MystenLabs/sui-apis/tree/main/proto):** Generate clients in any language from these definitions.
+
+For usage guides, see [What is gRPC](/develop/accessing-data/grpc/what-is-grpc) and [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
 <Protocol />

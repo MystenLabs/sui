@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::time::Duration;
+use std::time::Instant;
 
 use async_stream::stream;
 use bytes::BytesMut;
@@ -14,10 +16,12 @@ use fastcrypto::encoding::Encoding;
 use prometheus::Registry;
 use serde_json::Value;
 use serde_json::json;
+use sui_config::RpcConfig;
+use sui_config::rpc_config::LedgerHistoryConfig;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+pub use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
@@ -41,6 +45,9 @@ pub struct SubscriptionTestCluster {
     #[allow(unused)]
     pub db: TempDb,
     pub subscription_url: String,
+    /// Prometheus registry the GraphQL service records into; lets tests read backend call counters
+    /// (e.g. ledger gRPC `BatchGetTransactions`) to assert `KvLoader` coalescing.
+    registry: Registry,
     #[allow(unused)]
     service: Service,
     #[allow(unused)]
@@ -54,7 +61,16 @@ impl SubscriptionTestCluster {
     /// validator + postgres DB + kv_packages indexer + GraphQL service.
     /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
     pub async fn new() -> Self {
-        let (cluster, _controller) = Self::new_inner(false).await;
+        let (cluster, _controller) = Self::new_inner(false, false, GraphQlConfig::default()).await;
+        cluster
+    }
+
+    /// Same as `new()`, but enables the validator's v2alpha `LedgerService` (bitmap-backed
+    /// `list_transactions`) so the transaction subscription's backfill scan has a data source.
+    /// Requires ledger-history indexing on the validator and the experimental query APIs on the
+    /// GraphQL reader.
+    pub async fn new_with_ledger_history() -> Self {
+        let (cluster, _controller) = Self::new_inner(false, true, GraphQlConfig::default()).await;
         cluster
     }
 
@@ -68,16 +84,64 @@ impl SubscriptionTestCluster {
     /// `disconnect_all()` only severs the stream and leaves recovery reads
     /// untouched.
     pub async fn new_with_disruption_proxy() -> (Self, ProxyController) {
-        Self::new_inner(true).await
+        Self::new_inner(true, false, GraphQlConfig::default()).await
     }
 
-    async fn new_inner(use_proxy: bool) -> (Self, ProxyController) {
+    /// Combines `new_with_ledger_history` and `new_with_disruption_proxy`: the transaction
+    /// subscription (which requires the ledger `list_transactions` reader) can be exercised while a
+    /// test disrupts the streaming connection. `ledger_grpc_url` bypasses the proxy, so backfill and
+    /// gap-recovery reads are untouched; only the live stream is severed.
+    pub async fn new_with_disruption_proxy_and_ledger_history() -> (Self, ProxyController) {
+        Self::new_inner(true, true, GraphQlConfig::default()).await
+    }
+
+    /// Like `new_with_ledger_history`, but overrides the subscription resolve concurrency (how many
+    /// payloads resolve at once). Used by benchmarks to compare serial (1) vs concurrent resolution.
+    pub async fn new_with_ledger_history_and_concurrency(
+        max_concurrent_resolutions: usize,
+    ) -> Self {
+        let mut config = GraphQlConfig::default();
+        config.subscription.max_concurrent_resolutions = max_concurrent_resolutions;
+        let (cluster, _controller) = Self::new_inner(false, true, config).await;
+        cluster
+    }
+
+    /// Same as `new()`, but caps per-subscriber delivery at `budget` output nodes per second so tests
+    /// can observe the reactive throttle pacing payloads.
+    pub async fn new_with_throttle_budget(budget: u32) -> Self {
+        let (cluster, _controller) = Self::new_inner(false, false, throttle_config(budget)).await;
+        cluster
+    }
+
+    /// Same as `new_with_ledger_history()`, but with a per-subscriber delivery budget so tests can
+    /// observe the throttle pacing the transaction subscription's backfill.
+    pub async fn new_with_ledger_history_and_throttle_budget(budget: u32) -> Self {
+        let (cluster, _controller) = Self::new_inner(false, true, throttle_config(budget)).await;
+        cluster
+    }
+
+    async fn new_inner(
+        use_proxy: bool,
+        ledger_history: bool,
+        graphql_config: GraphQlConfig,
+    ) -> (Self, ProxyController) {
         let ingestion_dir = tempfile::tempdir().expect("Failed to create ingestion dir");
-        let validator = TestClusterBuilder::new()
+        let mut builder = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_data_ingestion_dir(ingestion_dir.path().to_owned())
-            .build()
-            .await;
+            .with_data_ingestion_dir(ingestion_dir.path().to_owned());
+        if ledger_history {
+            // The transaction subscription backfills through the validator's v2alpha
+            // LedgerService (bitmap-backed `list_transactions`), which requires ledger-history
+            // indexing; disable pruning so backfilled checkpoints stay queryable.
+            builder = builder
+                .disable_fullnode_pruning()
+                .with_rpc_config(RpcConfig {
+                    enable_indexing: Some(true),
+                    ledger_history: Some(LedgerHistoryConfig::default()),
+                    ..Default::default()
+                });
+        }
+        let validator = builder.build().await;
 
         let db = TempDb::new().expect("Failed to create TempDb");
         let database_url = db.database().url().clone();
@@ -128,9 +192,13 @@ impl SubscriptionTestCluster {
         // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
         let kv_args = KvArgs {
             ledger_grpc_url: Some(rpc_url.parse().unwrap()),
+            // Enables the v2alpha `list_transactions` reader the transaction subscription
+            // backfill scans through (paired with ledger-history indexing on the validator).
+            enable_list_apis: Some(ledger_history),
             ..Default::default()
         };
 
+        let registry = Registry::new();
         let service = start_graphql(
             Some(database_url),
             FullnodeArgs::new(rpc_url.parse().unwrap()),
@@ -146,9 +214,9 @@ impl SubscriptionTestCluster {
                 checkpoint_stream_url: Some(stream_url.parse().unwrap()),
             },
             "0.0.0",
-            GraphQlConfig::default(),
+            graphql_config,
             vec!["kv_packages".to_string()],
-            &Registry::new(),
+            &registry,
         )
         .await
         .expect("Failed to start GraphQL server");
@@ -161,12 +229,35 @@ impl SubscriptionTestCluster {
                     "http://{}/graphql/subscriptions",
                     graphql_listen_address
                 ),
+                registry,
                 service,
                 indexer,
                 ingestion_dir,
             },
             controller,
         )
+    }
+
+    /// Total ledger-gRPC calls whose method name contains `method_contains` (e.g.
+    /// "BatchGetTransactions"), read from the `requests_received` counter. Lets a test assert how the
+    /// `KvLoader` coalesces content reads under concurrent resolution.
+    pub fn ledger_grpc_call_count(&self, method_contains: &str) -> u64 {
+        let mut total = 0u64;
+        for mf in self.registry.gather() {
+            if !mf.name().ends_with("requests_received") {
+                continue;
+            }
+            for m in mf.get_metric() {
+                let matches = m
+                    .get_label()
+                    .iter()
+                    .any(|l| l.name() == "method" && l.value().contains(method_contains));
+                if matches {
+                    total += m.get_counter().value() as u64;
+                }
+            }
+        }
+        total
     }
 
     /// Latest checkpoint sequence number produced by the validator (the
@@ -182,15 +273,23 @@ impl SubscriptionTestCluster {
 
     /// Subscribe and return a stream of GraphQL payloads.
     /// Use `tokio_stream::StreamExt` methods (`next`, `take`, `collect`, etc.) to consume.
-    /// Optionally pass GraphQL variables (e.g. `json!({"sender": "0x..."})`).
     pub async fn subscribe(
         &self,
         query: &str,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
-        self.subscribe_with_variables(query, None).await
+        self.post_subscription(query, None).await
     }
 
+    /// Like `subscribe`, but binds GraphQL variables (e.g. `json!({"sender": "0x..."})`).
     pub async fn subscribe_with_variables(
+        &self,
+        query: &str,
+        variables: Option<Value>,
+    ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
+        self.post_subscription(query, variables).await
+    }
+
+    async fn post_subscription(
         &self,
         query: &str,
         variables: Option<Value>,
@@ -200,10 +299,12 @@ impl SubscriptionTestCluster {
             payload["variables"] = vars;
         }
 
-        let response = reqwest::Client::new()
+        let request = reqwest::Client::new()
             .post(&self.subscription_url)
             .header("Accept", "text/event-stream")
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+
+        let response = request
             .json(&payload)
             .send()
             .await
@@ -268,6 +369,33 @@ fn parse_sse_events(
             }
         }
     }
+}
+
+/// A GraphQL config that caps per-subscriber delivery at `budget` output nodes per second, leaving
+/// every other setting at its default.
+fn throttle_config(budget: u32) -> GraphQlConfig {
+    let mut config = GraphQlConfig::default();
+    config
+        .subscription
+        .per_subscriber_max_output_nodes_per_second = budget;
+    config
+}
+
+/// Take the next `n` payloads from `stream`, each paired with the elapsed time since this call. With
+/// a ready backlog, the gaps between arrivals reflect the throttle's pacing, not the source's rate.
+pub async fn collect_next_n_arrivals(
+    stream: &mut Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>>,
+    n: usize,
+) -> Vec<(Duration, Value)> {
+    let start = Instant::now();
+    let mut arrivals = Vec::with_capacity(n);
+    for _ in 0..n {
+        let payload = tokio_stream::StreamExt::next(stream)
+            .await
+            .expect("subscription stream ended before n payloads");
+        arrivals.push((start.elapsed(), payload));
+    }
+    arrivals
 }
 
 /// Execute SUI transfers as a soft bundle and return Base58-encoded digests.
@@ -405,8 +533,8 @@ pub fn graphql_redactions() -> insta::Settings {
     settings
 }
 
-/// Extract digest from a top-level transaction subscription response.
-/// Path: data.transactions.node.digest
+/// Extract the digest from a top-level transaction subscription response. Each payload is a single
+/// edge. Path: data.transactions.node.digest
 pub fn transaction_digest(item: &Value) -> Vec<&str> {
     item["data"]["transactions"]["node"]["digest"]
         .as_str()

@@ -1,0 +1,105 @@
+---
+title: What is the Move Registry?
+description: Use the Move Registry (MVR) for uniform naming service to reference packages and types by name across the Sui ecosystem, regardless of network.
+keywords: [ MVR, Move Registry, package naming, versioning, PackageInfo, SuiNS, Mainnet, Testnet, PTB ]
+goal:
+  description: >-
+    Reader understands what the Move Registry (MVR) is, how it provides uniform
+    package naming across networks, and how to register packages and types
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is the Move Registry (MVR) on Sui?
+  - How does MVR resolve package names to addresses?
+  - How do I register a package with MVR?
+answer: >-
+  The Move Registry (MVR) is a uniform naming service for Sui packages that
+  lets you reference packages and types by name in PTBs and Move dependencies,
+  resolving addresses automatically regardless of network.
+---
+
+Move Registry (MVR, pronounced mover) provides a uniform naming service for interacting and building with packages from the Sui ecosystem. You can reference packages by their names, and MVR resolves the package address for you, regardless of network.
+
+You can access the front end of the Move Registry online at https://www.moveregistry.com/apps.
+
+Use MVR to:
+
+- Reference both packages and types by name in programmable transaction blocks (PTBs).
+
+- Depend on other packages when developing with Move.
+
+Additionally, MVR can help you manage package versioning. With MVR, you call a specific version of a package without having to resolve the addresses yourself. You also do not need to worry about the package being updated, because if you use a name without a specified version, MVR automatically defaults to the latest version available.
+
+:::info
+
+MVR default service currently supports Mainnet and Testnet networks.
+
+:::
+
+## Design
+
+- `PackageInfo` registration: Exists independently on each network.
+- MVR registration: A single source of truth located on Mainnet.
+
+The following diagram shows the MVR design at a high level.
+
+![High level design](/img/mvr/mvr-overall.svg)
+
+## `PackageInfo` objects
+
+The first step when publishing a package is to register its metadata object. This metadata object serves as a key source of information for:
+
+1. Locating the source code across different versions of the package.
+2. (Future) Providing text-based metadata (title, description, tags) for the package, which the MVR search engine can use.
+
+This metadata object can be reused when authorizing any package upgrades to supply source information for the new version. Sui indexers can index the metadata as it cannot be stored within another object.
+
+![Package Info Objects](/img/mvr/mvr-package-info.svg)
+
+See [Managing Package Metadata](./managing-package-info.mdx) for examples of working with `PackageInfo` objects.
+
+## MVR name
+
+A MVR name consists of a SuiNS name and a package name, in the format `<suins_name>/<pkg_name>`. For example, if your SuiNS name is `myname.sui`, and your package name is `mypackage`, the MVR name can be `@myname/mypackage` or `myname.sui/mypackage`.
+
+The MVR standard supports an optional `/<version>` that allows you to specify which onchain version to resolve to. For example, if your MVR name is `@myname/mypackage` and there are multiple versions of the package, you can specify `@myname/mypackage/2` to use version 2.
+
+## MVR registration
+
+MVR registration is separate from the `PackageInfo` registration process. This separation is necessary because the `PackageInfo` object acts as both the source of truth for package metadata and a proof of package ownership, whereas MVR registers applications that MVR tooling can resolve.
+
+To register a package:
+
+1. Using your SuiNS name, register an application.
+2. Based on the network, associate the application name with a `PackageInfo` object:
+- **Mainnet:** Associate the application name with a complete `PackageInfo` object, which provides the full metadata and ownership proof.
+- **Other networks:** Associate the application name with the `PackageInfo` object ID, acting as a pointer without ensuring a full mapping.
+
+![Move Registry](/img/mvr/mvr-registry.svg)
+
+:::info
+
+The registry that stores name resolution for MVR exists only on Mainnet.
+
+:::
+
+See [Managing MVR Names](./mvr-names.mdx) for examples of MVR registration.
+
+## Development status
+
+MVR is currently in beta.
+
+### Source code
+
+The open source code for MVR is located within both the [Sui](https://github.com/MystenLabs/sui) and [MVR](https://github.com/MystenLabs/mvr) repositories on GitHub.
+
+- The MVR repository houses the [MVR-CLI](https://github.com/MystenLabs/mvr/tree/main/crates/mvr-cli) and [MVR web app](https://github.com/MystenLabs/mvr/tree/main/app) code.
+- Sui repository houses the [MVR GraphQL](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/src/types/move_registry) code.
+- The TypeScript SDK repository houses the [MVR plugin for Sui TypeScript SDK](https://github.com/MystenLabs/ts-sdks/tree/main/packages/typescript/src/transactions/plugins/NamedPackagesPlugin.ts) and [MVR static tool](https://github.com/MystenLabs/ts-sdks/tree/main/packages/mvr-static).

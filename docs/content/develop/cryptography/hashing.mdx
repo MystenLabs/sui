@@ -46,14 +46,18 @@ answer: >-
   functions.
 ---
 
-A cryptographic hash function is a widely used cryptographic primitive that maps an arbitrary length input to a fixed length output, the hash value. The hash function is designed to be a one-way function, which means that it is infeasible to invert the function to find the input data from a given hash value, and to be collision resistant, which means that it is infeasible to find two different inputs that map to the same hash value.
+Cryptographic hash functions map arbitrary-length input to a fixed-length output (the hash value). These functions are one-way, meaning you cannot recover the input from the hash, and collision-resistant, meaning you cannot find two different inputs that produce the same hash. You use hash functions on Sui for data integrity verification, commitment schemes, and content addressing.
 
-The Sui Move API supports the following cryptographic hash functions:
+Sui supports the following cryptographic hash functions:
 
-* SHA2-256 as `std::hash::sha2_256`
-* SHA3-256 as `std::hash::sha3_256`
-* Keccak256 as `sui::hash::keccak256`
-* Blake2b-256 as `sui::hash::blake2b256`
+| Hash function | Module | Output size | Use case |
+|---|---|---|---|
+| SHA2-256 | `std::hash::sha2_256` | 32 bytes | General-purpose hashing, interoperability with Bitcoin and TLS |
+| SHA3-256 | `std::hash::sha3_256` | 32 bytes | General-purpose hashing, NIST-standardized alternative to SHA2 |
+| Keccak256 | `sui::hash::keccak256` | 32 bytes | Ethereum compatibility (Keccak256 is the hash function used in Ethereum for address derivation and signatures) |
+| Blake2b-256 | `sui::hash::blake2b256` | 32 bytes | High-performance hashing, used internally by Sui for object ID computation |
+
+SHA2-256 and SHA3-256 are in the Move Standard Library (`std::hash`). Keccak256 and Blake2b-256 are in the Sui Framework (`sui::hash`). The difference affects how you import them in your module.
 
 ## Usage
 

@@ -297,15 +297,6 @@ impl Indexer {
     ) -> anyhow::Result<Self> {
         let metrics_prefix = Some(METRICS_PREFIX);
 
-        // Load the persisted pruning watermarks into the
-        // in-memory bitmap floor so the bitmap CFs' compaction
-        // filters resume against the on-disk watermark instead of
-        // the process-default zero (which would prune nothing).
-        store
-            .schema()
-            .refresh_pruning_atomics()
-            .context("Failed to refresh pruning watermarks")?;
-
         let sync = Synchronizer::new(
             store.db().clone(),
             consistency_config.buffer_size,
@@ -545,9 +536,9 @@ impl Indexer {
             pruner: pruner_setup,
         } = self;
 
-        // Capture a `Db` handle for the pruner before `indexer.run`
-        // consumes the framework indexer (and with it the store).
-        let db = indexer.store().db().clone();
+        // Capture the store for the pruner before `indexer.run`
+        // consumes the framework indexer.
+        let store = indexer.store().clone();
 
         let mut sync_join_set = indexer
             .store()
@@ -573,7 +564,7 @@ impl Indexer {
         // configured: it advances the retention floor and deletes
         // history without extending the indexer's lifetime.
         if let Some((config, metrics)) = pruner_setup {
-            let s_pruner = pruner::start_pruner(db, config, metrics)
+            let s_pruner = pruner::start_pruner(store, config, metrics)
                 .context("Failed to start the rpc-store pruner")?;
             service = service.attach(s_pruner);
         }

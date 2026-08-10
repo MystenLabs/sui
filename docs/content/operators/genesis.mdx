@@ -31,40 +31,33 @@ questions:
 answer: Genesis refers to the initial state of the Sui blockchain at launch.
 ---
 
-Genesis is the initial state of the Sui blockchain at network launch. The genesis process produces a `genesis.blob` file that every node (validator and full node) uses to initialize its state.
+Genesis is the initial state of the Sui blockchain. To launch a network, the initial committee of validators collaborate by providing their validator information (public keys, network addresses, and so on) to a shared workspace. After all of the initial validators have contributed their information, Sui generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0) and each validator provides their signature. Sui aggregates these signatures to form a certificate on the genesis checkpoint. Sui bundles this checkpoint, as well as the initial objects, together into a single `genesis.blob` file that is used to initialize the state when running the `sui-node` binary for both validators and full nodes.
 
-## Genesis ceremony
+## Download genesis.blob
 
-To launch a new Sui network, the initial committee of validators performs a genesis ceremony:
+Each Sui network (Mainnet, Testnet, Devnet) has its own `genesis.blob` file. Download the file for your target network:
 
-1. **Validator registration.** Each validator provides their public keys, network addresses, and stake information to a shared workspace (typically a Git repository).
-2. **Genesis checkpoint generation.** After all validators have contributed their information, the genesis tooling generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0). This checkpoint contains the initial system objects, the validator set, and the framework packages.
-3. **Validator signing.** Each validator signs the genesis checkpoint with their private key.
-4. **Certificate aggregation.** The tooling aggregates the validator signatures into a certificate on the genesis checkpoint.
-5. **Genesis blob creation.** The signed checkpoint and all initial objects are bundled into a single `genesis.blob` file.
+```sh
+# Replace <network> with mainnet, testnet, or devnet
+$ curl -fLO https://github.com/MystenLabs/sui-genesis/raw/main/<network>/genesis.blob
+```
 
-## Initial objects
+Place the file where your `fullnode.yaml` configuration points. The default template uses `genesis-file-location: "/opt/sui/config/genesis.blob"`. Use an absolute path to avoid ambiguity. Relative paths resolve from the process working directory (the directory where you run `sui-node`), not from the directory containing `fullnode.yaml`.
 
-The genesis checkpoint creates several system objects that exist from the start of the network:
+All genesis files are hosted in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository. See [Sui Full Node Configuration](/operators/full-node/sui-full-node#setting-up-a-full-node) for the complete setup steps.
 
-- **Sui Framework packages** (`0x1` for Move stdlib, `0x2` for Sui framework)
-- **System state object** containing the validator set and epoch information
-- **Clock object** (`0x6`) for timestamp access
-- **DenyList object** (`0x403`) for regulated token deny-listing
-- **Initial gas coins** distributed according to the token allocation plan
+## Network identity
 
-## Genesis blob locations
+The `genesis.blob` file determines the network identity. The node derives a chain identifier from the genesis checkpoint digest and uses it to verify that peers, snapshots, and archive data belong to the same network. If you use the wrong `genesis.blob` for your target network, the node or related tooling (such as snapshot restore) fails with a chain identifier mismatch error. For example, `sui-tool` reports:
 
-The `genesis.blob` files for each network are in the [sui-genesis](https://github.com/MystenLabs/sui-genesis) repository:
+```
+Genesis file is for chain <X>, but formal snapshot download is configured for --network <Y>.
+```
 
-| Network | Repository path |
-|---|---|
-| Mainnet | [sui-genesis/main/mainnet](https://github.com/MystenLabs/sui-genesis) |
-| Testnet | [sui-genesis/main/testnet](https://github.com/MystenLabs/sui-genesis) |
-| Devnet | [sui-genesis/main/devnet](https://github.com/MystenLabs/sui-genesis) |
+A normal `sui-node` startup with a mismatched genesis file causes the node to reject peer connections and checkpoint data from the actual network. If the node's database was already initialized with the wrong genesis, the node asserts that the stored and configured checkpoint-0 digests match and refuses to start.
 
-See [Sui Full Node](/operators/full-node/sui-full-node) for instructions on downloading the `genesis.blob` file and configuring your node.
+To fix a mismatch, download the correct `genesis.blob` for your target network using the command above. If the database was initialized with the wrong genesis, you must also delete the existing database and restore from a [snapshot](/operators/snapshots) for the correct network before restarting.
 
-## Local network genesis
+## File format
 
-When you run `sui genesis` locally, it creates a local genesis blob with a preconfigured validator set and test accounts. This is useful for development and testing. See [Create a Local Sui Network](/getting-started/onboarding/local-network) for setup instructions.
+The `genesis.blob` file is a BCS-serialized binary containing the genesis checkpoint, its certificate (aggregated validator signatures), and the initial onchain objects (system packages, the Sui framework, and validator staking objects). It is not human-readable. The node deserializes it at startup to initialize its state.

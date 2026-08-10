@@ -6,12 +6,13 @@ use std::time::Duration;
 
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::traits::KeyPair;
+use shared_crypto::intent::{Intent, IntentScope};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
+use sui_types::crypto::{AccountKeyPair, AuthoritySignInfo, get_account_key_pair};
 use sui_types::digests::TransactionEffectsDigest;
-use sui_types::effects::TransactionEffectsAPI as _;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI as _};
 use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
@@ -551,5 +552,91 @@ async fn test_wait_for_effects_ping() {
             "Expected Expired response, got {:?}",
             response
         );
+    }
+}
+
+#[tokio::test]
+async fn test_wait_for_effects_refuses_contradicting_previously_signed() {
+    // If the validator has signed effects for a transaction, WaitForEffects must never
+    // acknowledge a different effects digest for it, even though the acknowledgment is
+    // unsigned. Simulates divergent re-execution by recording a signed digest that differs
+    // from the executed effects.
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let (effects, _) = test_context
+        .state
+        .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
+        .unwrap();
+
+    let previously_signed_digest = TransactionEffectsDigest::random();
+    assert_ne!(previously_signed_digest, effects.digest());
+    let signature = AuthoritySignInfo::new(
+        epoch_store.epoch(),
+        &TransactionEffects::default(),
+        Intent::sui_app(IntentScope::TransactionEffects),
+        test_context.state.name,
+        &*test_context.state.secret,
+    );
+    epoch_store
+        .insert_effects_digest_and_signature(&tx_digest, &previously_signed_digest, &signature)
+        .unwrap();
+
+    let request = WaitForEffectsRequest {
+        transaction_digest: Some(tx_digest),
+        consensus_position: None,
+        include_details: true,
+        ping_type: None,
+    };
+
+    let error = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error.into_inner(),
+        SuiErrorKind::GenericAuthorityError { error }
+            if error.contains("differs from previously signed effects digest")
+    ));
+}
+
+#[tokio::test]
+async fn test_wait_for_effects_allows_matching_previously_signed() {
+    // A previously signed digest that matches the executed effects does not block
+    // WaitForEffects.
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let (effects, _) = test_context
+        .state
+        .try_execute_immediately(&transaction, ExecutionEnv::new(), &epoch_store)
+        .unwrap();
+    test_context
+        .state
+        .sign_effects(effects.clone(), &epoch_store)
+        .unwrap();
+
+    let request = WaitForEffectsRequest {
+        transaction_digest: Some(tx_digest),
+        consensus_position: None,
+        include_details: true,
+        ping_type: None,
+    };
+
+    let response = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap();
+    match response {
+        WaitForEffectsResponse::Executed { effects_digest, .. } => {
+            assert_eq!(effects_digest, effects.digest());
+        }
+        _ => panic!("Expected Executed response"),
     }
 }

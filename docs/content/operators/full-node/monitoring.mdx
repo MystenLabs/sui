@@ -39,7 +39,7 @@ These instructions are for advanced users. If you just need a local development 
 
 :::
 
-Nodes expose metrics on `localhost:9184/metrics` by default.
+The examples below scrape `localhost:9184/metrics`, but the default full node template binds metrics to `0.0.0.0:9184`. Restrict `metrics-address` with a firewall or bind it to a private interface in production.
 
 You can view the metrics in the metrics UI, or use a tool like `curl` to get the metrics in a format that is easy to parse.
 
@@ -49,46 +49,44 @@ $ curl -s http://localhost:9184/metrics | grep -E 'sui_validator|sui_fullnode'
 
 ## Key metrics
 
-The following metrics are useful for monitoring node health:
+The following metrics are the most important for monitoring node health:
 
-| Metric | Description |
-|---|---|
-| `uptime` | Time since the node process started |
-| `highest_synced_checkpoint` | The latest checkpoint the node has synced |
-| `last_executed_checkpoint` | The latest checkpoint the node has executed |
-| `sui_fullnode_highest_known_checkpoint` | The highest checkpoint known to the network (compare against `highest_synced_checkpoint` to detect sync lag) |
-| `total_transactions` | Total number of transactions processed |
+| Metric | Type | What it tells you |
+|--------|------|-------------------|
+| `highest_known_checkpoint` | Gauge | Highest checkpoint the node knows about from the network |
+| `highest_synced_checkpoint` | Gauge | Highest checkpoint fully synced (contents and effects) |
+| `last_executed_checkpoint` | Gauge | Last checkpoint the node executed |
+| `last_executed_checkpoint_timestamp_ms` | Gauge | Timestamp of the last executed checkpoint |
+| `current_epoch` | Gauge | Current epoch ID |
+| `uptime` | Counter | Node uptime in seconds (includes `version` and `chain_identifier` labels) |
+| `total_transaction_certificates` | Counter | Total transaction certificates handled |
 
-{/* TODO: Citation needed — verify these metric names against the current Sui node Prometheus output */}
+**Sync health check:** Compare `highest_known_checkpoint` with `highest_synced_checkpoint`. If the gap grows, the node is falling behind. Compare your node's `highest_synced_checkpoint` against a trusted public endpoint to measure absolute lag:
+
+```sh
+# Check your node's sync progress
+$ curl -s http://localhost:9184/metrics | grep -E 'highest_known_checkpoint|highest_synced_checkpoint|last_executed_checkpoint'
+```
 
 ## Production monitoring
 
 For production monitoring, use [Prometheus](https://prometheus.io/) to scrape metrics and [Grafana](https://grafana.com/) to visualize them.
 
-### Prometheus configuration
-
-Add a scrape target for your Sui node in your `prometheus.yml`:
+Add a scrape target for your node in your Prometheus configuration:
 
 ```yaml
 scrape_configs:
-  - job_name: 'sui-node'
+  - job_name: 'sui-fullnode'
     static_configs:
-      - targets: ['HOSTNAME:9184']
+      - targets: ['localhost:9184']
+    scrape_interval: 15s
 ```
 
-Replace `HOSTNAME` with your node's hostname or IP address. The default metrics port is **9184**.
-
-### Grafana setup
-
-1. Add Prometheus as a data source in Grafana (Settings > Data Sources > Add data source > Prometheus).
-2. Set the Prometheus URL to your Prometheus instance (for example, `http://localhost:9090`).
-3. Create a dashboard with panels for key metrics like `highest_synced_checkpoint`, `last_executed_checkpoint`, and `total_transactions`.
-
-### Alerting
+### Suggested alerts
 
 Set up alerts for the following conditions:
 
-- **Sync lag:** Alert when `highest_synced_checkpoint` falls more than 100 checkpoints behind `sui_fullnode_highest_known_checkpoint`.
-- **Node down:** Alert when the Prometheus target is unreachable for more than 5 minutes.
-- **High resource usage:** Alert on CPU or memory usage thresholds specific to your infrastructure.
+- **Sync lag:** `highest_known_checkpoint - highest_synced_checkpoint > 100` sustained for 5 minutes indicates the node is falling behind.
+- **Node down:** `up{job="sui-fullnode"} == 0` sustained for 2 minutes indicates the node is unreachable.
+- **Execution lag:** `last_executed_checkpoint_timestamp_ms > 0 and time() - last_executed_checkpoint_timestamp_ms / 1000 > 120` sustained for 2 minutes indicates that the node is executing checkpoints more than 2 minutes behind chain time. This alert also fires while a healthy node catches up after an outage or snapshot restore. The `> 0` guard avoids false alerts during startup, when the timestamp has not yet been populated. To detect a stalled executor separately, alert when `last_executed_checkpoint` does not advance over a suitable interval.
 

@@ -13,12 +13,12 @@
 //! operand against the existing on-disk bitmap and emits a single
 //! consolidated value optimized for the on-disk encoding.
 //!
-//! A per-bucket compaction filter reads the shared `tx_seq`
-//! pruning floor from
-//! [`pruning_watermark::tx_seq_floor`](super::pruning_watermark::tx_seq_floor)
-//! and drops buckets whose entire `tx_seq` range sits below the
-//! floor.
+//! A per-bucket compaction filter reads the database schema's
+//! `tx_seq` pruning floor and drops buckets whose entire `tx_seq`
+//! range sits below it.
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use bytes::Buf;
@@ -35,7 +35,6 @@ use sui_consistent_store::error::Error;
 use sui_consistent_store::reader::Reader;
 
 use crate::proto::BitmapBlob;
-use crate::schema::pruning_watermark::tx_seq_floor;
 
 pub const NAME: &str = "transaction_bitmap";
 
@@ -83,12 +82,14 @@ impl Decode for Key {
 /// CF options: install the bitmap-union merge operator and a
 /// per-bucket compaction filter that drops buckets whose entire
 /// `tx_seq` range sits below the pruning floor.
-pub fn options(resolver: &sui_consistent_store::CfOptionsResolver) -> rocksdb::Options {
+pub fn options(
+    resolver: &sui_consistent_store::CfOptionsResolver,
+    tx_seq_pruning_floor: Arc<AtomicU64>,
+) -> rocksdb::Options {
     let mut opts = resolver.options(NAME);
     opts.set_merge_operator_associative("transaction_bitmap_merge", merge);
-    let floor = tx_seq_floor().clone();
     opts.set_compaction_filter("transaction_bitmap_pruning", move |_level, key, _value| {
-        let pruned_exclusive = floor.load(Ordering::Relaxed);
+        let pruned_exclusive = tx_seq_pruning_floor.load(Ordering::Relaxed);
         if should_remove_bucket(key, pruned_exclusive) {
             rocksdb::CompactionDecision::Remove
         } else {

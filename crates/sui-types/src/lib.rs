@@ -190,8 +190,8 @@ pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
 /// brackets). Parsing succeeds if and only if `s` matches this format exactly, with no remaining
 /// input. This function is intended for use within the authority codebase.
 pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
-    use move_core_types::parsing::types::ParsedStructType;
-    ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
+    use move_core_types::parsing::types::ParsedDatatype;
+    ParsedDatatype::parse(s)?.into_struct_tag(&resolve_address)
 }
 
 /// Parse `s` as a type: Either a struct type (see `parse_sui_struct_tag`), a primitive type, or a

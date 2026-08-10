@@ -60,8 +60,8 @@ state-archive-read-config:
     # How many objects to read ahead when catching up
     concurrency: 5
     remote-store-options:
-      - ["aws_access_key_id", <YOUR_AWS_ACCESS_KEY_ID|PATH_TO_AWS_ACCESS_KEY>]
-      - ["aws_secret_access_key", <AWS_SECRET_ACCESS_KEY|PATH_TO_AWS_SECRET_ACCESS_KEY>]
+      # Required for this Requester Pays bucket
+      - ["aws_request_payer", "true"]
 ```
 
 </TabItem>
@@ -76,3 +76,36 @@ state-archive-read-config:
 
 </TabItem>
 </Tabs>
+
+:::info
+
+Mainnet archival fallback requires AWS credentials for the S3 Requester Pays bucket. Run the node on EC2 with an instance profile that grants access to the bucket; the archive client retrieves these credentials from EC2 instance metadata. Do not put access keys in `fullnode.yaml`: the node configuration can be exposed through administrative diagnostics. Other AWS credential providers, including environment variables, ECS task roles, and IRSA, are not loaded by this configuration. State sync explicitly rejects `checkpoints.mainnet.sui.io` as an archive source. Testnet uses a public HTTPS endpoint that does not require credentials.
+
+:::
+
+### Verify archival fallback
+
+After adding the configuration and restarting your node, check the node logs for archive-related messages. You can also monitor the `checkpoints_synced_from_archive` Prometheus metric to confirm the node is fetching data from the archive:
+
+```sh
+$ curl -s http://localhost:9184/metrics | grep checkpoints_synced_from_archive
+```
+
+If the counter increases over time, the archival fallback is active.
+
+### When to use each archive source {#archive-sources}
+
+| Source | Retention | Credentials | Use case |
+|--------|-----------|-------------|----------|
+| `https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints` | Full history | AWS credentials | Mainnet archival fallback and full-retention backfill |
+| `https://checkpoints.testnet.sui.io` | 30 days | None | Testnet archival fallback |
+| `gs://mysten-mainnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Mainnet checkpoint ingestion for indexers (GCS Requester Pays) |
+| `gs://mysten-testnet-checkpoints-use4` | Full history | GCS credentials and `x-goog-user-project` billing header | Testnet checkpoint ingestion for indexers (GCS Requester Pays) |
+
+:::caution
+
+Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. State sync rejects this endpoint. Use the S3 or GCS bucket instead. When you use a GCS Requester Pays bucket, configure credentials and pass your billing project in the `x-goog-user-project` header; see [Requester Pays checkpoint buckets](/operators/data-management/indexer-stack-setup#requester-pays).
+
+:::
+
+For starting a new full node, always use a [snapshot](/operators/snapshots) rather than syncing from the archive.

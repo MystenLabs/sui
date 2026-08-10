@@ -345,6 +345,7 @@ impl<F> PinnedDrop for MetricsFuture<F> {
             let client_sdk_type = client.sdk_type.as_deref().unwrap_or("");
             let client_sdk_version = client.sdk_version.as_deref().unwrap_or("");
             let elapsed_ms = timer.stop_and_record() * 1000.0;
+            ext.metrics.queries_in_flight.dec();
             ext.metrics.queries_cancelled.inc();
             info!(%uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, "Request cancelled");
         }
@@ -769,5 +770,32 @@ mod tests {
                 .get(),
             3,
         );
+    }
+
+    #[test]
+    fn queries_in_flight_decrements_on_cancellation() {
+        let registry = Registry::new();
+        let metrics = RpcMetrics::new(&registry);
+        let ext = LoggingExt {
+            session: Arc::new(OnceLock::new()),
+            query: Arc::new(OnceLock::new()),
+            operation_name: Arc::new(OnceLock::new()),
+            metrics: metrics.clone(),
+        };
+        let _ = ext.session.set(Session::new("0.0.0.0:0".parse().unwrap()));
+
+        let fut = MetricsFuture::request(&ext, std::future::pending::<Response>());
+        assert_eq!(metrics.queries_in_flight.get(), 1);
+
+        // Simulate a client disconnect or upstream timeout cancelling the request before it
+        // resolves, dropping the future mid-flight rather than polling it to completion.
+        drop(fut);
+
+        assert_eq!(
+            metrics.queries_in_flight.get(),
+            0,
+            "queries_in_flight must be decremented on cancellation, not just on normal completion"
+        );
+        assert_eq!(metrics.queries_cancelled.get(), 1);
     }
 }

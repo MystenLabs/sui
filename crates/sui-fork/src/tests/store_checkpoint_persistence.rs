@@ -1,22 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Checkpoint persistence tests for [`crate::store::DataStore`]. Lives under
+//! Checkpoint persistence tests for [`crate::store::ForkStore`]. Lives under
 //! `src/tests/` but is a child of the `store` module via a `#[path]` wiring
 //! in `store.rs`, so it retains `super::*` access to `pub(crate)` items.
 
 use std::num::NonZeroUsize;
+use std::path::Path;
 
+use fastcrypto::encoding::Base64 as FastCryptoBase64;
 use rand::rngs::OsRng;
+use serde_json::json;
 use simulacrum::Simulacrum;
 use simulacrum::store::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::ObjectID;
+use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
+use sui_types::storage::ReadStore;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::body_partial_json;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+
+use crate::services::ServiceManager;
 
 use super::*;
 
@@ -28,10 +41,201 @@ fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
     )
 }
 
+fn open_test_services(
+    root: &Path,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+) -> ServiceManager {
+    ServiceManager::open(
+        root,
+        "custom".to_owned(),
+        forked_at_checkpoint,
+        CheckpointDigest::new([9; 32]).into(),
+    )
+    .expect("service manager should open")
+}
+
+fn test_data_store(root: &Path) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, 0);
+    let store = ForkStore::new_for_testing(root.to_path_buf(), services.local_store());
+    (store, services)
+}
+
+fn test_data_store_with_remote(
+    root: &Path,
+    gql_url: String,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+) -> (ForkStore, ServiceManager) {
+    let services = open_test_services(root, forked_at_checkpoint);
+    let store = ForkStore::new_for_testing_with_remote(
+        root.to_path_buf(),
+        gql_url,
+        forked_at_checkpoint,
+        services.local_store(),
+    );
+    (store, services)
+}
+
+fn checkpoint_response_body(
+    checkpoint: &VerifiedCheckpoint,
+    contents: &CheckpointContents,
+) -> serde_json::Value {
+    json!({
+        "data": {
+            "checkpoint": {
+                "summaryBcs": FastCryptoBase64::from_bytes(
+                    &bcs::to_bytes(checkpoint.data()).expect("summary should serialize"),
+                )
+                .encoded(),
+                "contentBcs": FastCryptoBase64::from_bytes(
+                    &bcs::to_bytes(contents).expect("contents should serialize"),
+                )
+                .encoded(),
+                "validatorSignatures": {
+                    "signature": FastCryptoBase64::from_bytes(
+                        checkpoint.auth_sig().signature.as_ref(),
+                    )
+                    .encoded(),
+                    "signersMap": checkpoint
+                        .auth_sig()
+                        .signers_map
+                        .iter()
+                        .map(|index| i32::try_from(index).expect("signer index fits in i32"))
+                        .collect::<Vec<_>>(),
+                },
+            }
+        }
+    })
+}
+
+async fn mount_checkpoint_mock(
+    server: &MockServer,
+    checkpoint: &VerifiedCheckpoint,
+    contents: &CheckpointContents,
+) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(json!({
+            "variables": {
+                "sequenceNumber": checkpoint.data().sequence_number,
+            }
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(checkpoint_response_body(checkpoint, contents)),
+        )
+        .mount(server)
+        .await;
+}
+
+fn make_gas_object(id: ObjectID, version: u64) -> Object {
+    use sui_types::object::Data;
+    use sui_types::object::MoveObject;
+    use sui_types::object::ObjectInner;
+    use sui_types::object::Owner;
+
+    let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
+    ObjectInner {
+        owner: Owner::Immutable,
+        data: Data::Move(move_obj),
+        previous_transaction: sui_types::digests::TransactionDigest::genesis_marker(),
+        storage_rebate: 0,
+    }
+    .into()
+}
+
+/// A crash between execution and seal must leave no durable trace: staged
+/// object diffs live only in memory, so a restart resumes from the previous
+/// tip instead of on top of state whose creating transaction was never
+/// recorded.
 #[test]
-fn insert_checkpoint_pair_persists_both_to_disk() {
+fn unsealed_execution_leaves_no_durable_state_across_reopen() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
+    let object_id = ObjectID::random();
+
+    {
+        let (mut store, _services) = test_data_store(temp.path());
+        let object = make_gas_object(object_id, 1);
+        store.update_objects(BTreeMap::from([(object_id, object.clone())]), vec![]);
+
+        // The overlay serves the staged write...
+        assert_eq!(
+            ForkStore::get_object(&store, &object_id).expect("staged read should not error"),
+            Some(object),
+        );
+        // ...but nothing is durable before the seal.
+        assert_eq!(
+            store
+                .local_store()
+                .get_latest_object_status(object_id)
+                .unwrap(),
+            None,
+        );
+        // Simulated crash: drop the store with the checkpoint unsealed.
+    }
+
+    let (store, _services) = test_data_store(temp.path());
+    assert_eq!(
+        store
+            .local_store()
+            .get_latest_object_status(object_id)
+            .unwrap(),
+        None,
+        "an unsealed diff must not survive a restart",
+    );
+    assert_eq!(
+        store.local_store().highest_checkpoint_sequence().unwrap(),
+        None,
+        "no checkpoint may exist for the crashed execution",
+    );
+}
+
+/// The seal is the only durability point: object rows, their pinned versions,
+/// and the checkpoint commit in one batch, staged diffs replay in arrival
+/// order, and the overlay drains once the rows are durable.
+#[test]
+fn seal_persists_staged_object_diffs_atomically_with_the_checkpoint() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (mut store, _services) = test_data_store(temp.path());
+    let object_id = ObjectID::random();
+    let v1 = make_gas_object(object_id, 1);
+    let v2 = make_gas_object(object_id, 2);
+
+    store.update_objects(BTreeMap::from([(object_id, v1.clone())]), vec![]);
+    store.update_objects(BTreeMap::from([(object_id, v2.clone())]), vec![]);
+
+    let (checkpoint, contents) = build_checkpoint(1);
+    store.insert_checkpoint(checkpoint);
+    store.insert_checkpoint_contents(contents);
+
+    let local = store.local_store();
+    assert_eq!(
+        local.get_latest_object_status(object_id).unwrap(),
+        Some((SequenceNumber::from_u64(2), Status::Live(v2))),
+        "the later staged diff wins currency after the seal",
+    );
+    assert_eq!(
+        local
+            .get_object_status_at_version(object_id, SequenceNumber::from_u64(1))
+            .unwrap(),
+        Some(Status::Live(v1)),
+        "earlier staged versions persist as history",
+    );
+    assert_eq!(local.highest_checkpoint_sequence().unwrap(), Some(1));
+    assert!(
+        store
+            .inner
+            .pending
+            .staged_object_diffs()
+            .unwrap()
+            .is_empty(),
+        "the seal must drain the staged diffs",
+    );
+}
+
+#[test]
+fn insert_checkpoint_pair_saves_both_to_rpc_store() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (mut store, _services) = test_data_store(temp.path());
     let (checkpoint, contents) = build_checkpoint(42);
     let sequence = checkpoint.data().sequence_number;
 
@@ -50,41 +254,95 @@ fn insert_checkpoint_pair_persists_both_to_disk() {
 #[test]
 fn post_fork_sequence_miss_returns_none_without_remote() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let store = DataStore::new_for_testing(temp.path().to_path_buf());
+    let (store, _services) = test_data_store(temp.path());
     // `new_for_testing` pins `forked_at_checkpoint = 0`, so any positive
     // sequence is "post-fork". The dummy GraphQL endpoint is unreachable,
     // so reaching the network would surface as an error here.
-    let result = DataStore::get_checkpoint_by_sequence_number(&store, 42)
+    let result = ForkStore::get_checkpoint_by_sequence_number(&store, 42)
         .expect("post-fork miss should short-circuit before the remote");
     assert!(result.is_none());
 }
 
-#[test]
-fn insert_checkpoint_and_contents_are_independent() {
+#[tokio::test]
+async fn remote_checkpoint_fetch_saves_into_rpc_store() {
+    let server = MockServer::start().await;
+    let (checkpoint, contents) = build_checkpoint(11);
+    mount_checkpoint_mock(&server, &checkpoint, &contents).await;
+
     let temp = tempfile::tempdir().expect("tempdir");
-    let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
+    let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+
+    let loaded = ForkStore::get_checkpoint_by_sequence_number(&store, 11)
+        .expect("remote checkpoint fetch should succeed")
+        .expect("checkpoint should exist");
+    assert_eq!(loaded.data(), checkpoint.data());
+
+    let reader = services.reader();
+    let rpc_checkpoint = ReadStore::get_checkpoint_by_sequence_number(&reader, 11)
+        .expect("checkpoint should be saved in rpc store");
+    assert_eq!(rpc_checkpoint.data(), checkpoint.data());
+    assert!(
+        ReadStore::get_checkpoint_by_digest(&reader, checkpoint.digest()).is_some(),
+        "checkpoint digest index should be saved",
+    );
+    let rpc_contents = ReadStore::get_checkpoint_contents_by_sequence_number(&reader, 11)
+        .expect("checkpoint contents should be saved in rpc store");
+    assert_eq!(rpc_contents.digest(), contents.digest());
+    assert_eq!(
+        rpc_contents.clone().into_inner(),
+        contents.clone().into_inner()
+    );
+
+    let fallback_temp = tempfile::tempdir().expect("tempdir");
+    let fallback_store = ForkStore::new_for_testing_with_remote(
+        fallback_temp.path().to_path_buf(),
+        "http://localhost:1".to_owned(),
+        checkpoint.data().sequence_number,
+        services.local_store(),
+    );
+
+    let fallback_checkpoint = ForkStore::get_checkpoint_by_sequence_number(&fallback_store, 11)
+        .expect("rpc-store checkpoint lookup should succeed")
+        .expect("checkpoint should be read from rpc store");
+    assert_eq!(fallback_checkpoint.data(), checkpoint.data());
+    assert!(
+        ForkStore::get_checkpoint_by_digest_from_local_store(&fallback_store, checkpoint.digest())
+            .expect("rpc-store digest lookup should succeed")
+            .is_some(),
+        "checkpoint digest should be read from rpc store",
+    );
+    let fallback_contents =
+        ForkStore::get_checkpoint_contents_by_sequence_number(&fallback_store, 11)
+            .expect("rpc-store contents lookup should succeed")
+            .expect("contents should be read from rpc store");
+    assert_eq!(fallback_contents.digest(), contents.digest());
+    assert_eq!(fallback_contents.into_inner(), contents.into_inner());
+}
+
+#[test]
+fn insert_checkpoint_summary_is_pending_until_contents_arrive() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (mut store, _services) = test_data_store(temp.path());
     let (checkpoint, contents) = build_checkpoint(5);
 
-    // Insert contents first, then the summary: contents are content-addressed
-    // so there is no ordering dependency between the two halves.
+    store.insert_checkpoint(checkpoint.clone());
+    assert!(
+        SimulatorStore::get_highest_checkpint(&store).is_none(),
+        "summary alone should remain pending until contents arrive",
+    );
+
     store.insert_checkpoint_contents(contents.clone());
+    let highest = SimulatorStore::get_highest_checkpint(&store)
+        .expect("latest marker should advance after matching contents insert");
+    assert_eq!(
+        highest.data().sequence_number,
+        checkpoint.data().sequence_number,
+    );
     assert_eq!(
         SimulatorStore::get_checkpoint_contents(&store, contents.digest())
             .expect("contents should be retrievable by digest")
             .digest(),
         contents.digest(),
-    );
-    assert!(
-        SimulatorStore::get_highest_checkpint(&store).is_none(),
-        "latest marker should not advance until a summary is inserted",
-    );
-
-    store.insert_checkpoint(checkpoint.clone());
-    let highest = SimulatorStore::get_highest_checkpint(&store)
-        .expect("latest marker should advance after summary insert");
-    assert_eq!(
-        highest.data().sequence_number,
-        checkpoint.data().sequence_number,
     );
 }
 
@@ -96,26 +354,41 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
         .rng(&mut rng)
         .deterministic_committee_size(NonZeroUsize::MIN)
         .build();
-    let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
-    let written: BTreeMap<ObjectID, Object> = config
-        .genesis
-        .objects()
-        .iter()
-        .map(|object| (object.id(), object.clone()))
-        .collect();
-    store.update_objects(written, vec![]);
 
-    let (checkpoint, contents) = build_checkpoint(5);
-    store.insert_checkpoint(checkpoint.clone());
-    store.insert_checkpoint_contents(contents);
+    // Session 1: persist genesis objects and an advanced local tip, then drop
+    // every handle so the data dir can be reopened like a real restart.
+    let tip = {
+        let (mut store, _services) = test_data_store(temp.path());
+        let written: BTreeMap<ObjectID, Object> = config
+            .genesis
+            .objects()
+            .iter()
+            .map(|object| (object.id(), object.clone()))
+            .collect();
+        store.update_objects(written, vec![]);
+
+        let (checkpoint, contents) = build_checkpoint(5);
+        store.insert_checkpoint(checkpoint.clone());
+        store.insert_checkpoint_contents(contents);
+        checkpoint
+    };
+
+    // Session 2: resume from the reopened store. The production base-checkpoint
+    // selection must pick the local tip, not the fork point — re-seeding from
+    // the fork point would rebuild an already-persisted sequence number and
+    // panic the seal. Sealing executes system transactions whose dynamic-field
+    // probes reach the remote, so the store needs a reachable mock that
+    // reports the objects absent.
+    let gql_server = crate::test_support::absent_objects_gql_server().await;
+    let (store, _services) = test_data_store_with_remote(temp.path(), gql_server.uri(), 0);
+    let base = crate::startup::resume_base_checkpoint(&store)
+        .expect("resume base checkpoint should resolve");
+    assert_eq!(base.data().sequence_number, tip.data().sequence_number);
 
     let keystore = KeyStore::from_network_config(&config);
     let mut sim = Simulacrum::new_from_custom_state(
         keystore,
-        store
-            .get_highest_verified_checkpoint()
-            .expect("highest checkpoint lookup should not fail")
-            .expect("highest checkpoint should exist"),
+        base.clone(),
         config.genesis.sui_system_object(),
         &config,
         store,
@@ -123,8 +396,14 @@ async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoin
     );
 
     let next = sim.create_checkpoint();
-    assert_eq!(
-        next.data().sequence_number,
-        checkpoint.data().sequence_number + 1,
+    assert_eq!(next.data().sequence_number, tip.data().sequence_number + 1,);
+    assert_eq!(next.data().previous_digest, Some(*base.digest()));
+    assert!(
+        ReadStore::get_checkpoint_by_sequence_number(
+            sim.store().local_store().reader(),
+            next.data().sequence_number,
+        )
+        .is_some(),
+        "resumed checkpoint should seal into the rpc-store",
     );
 }

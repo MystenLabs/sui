@@ -1,0 +1,178 @@
+---
+title: User Guide
+sidebar_label: Users
+description: Register and manage your SuiNS names, update avatars, link addresses, and create sui.id websites using the Sui Name Service.
+keywords: [ SuiNS, users, register names, renew names, avatars, linked address, sui.id, IPFS ]
+goal:
+  description: >-
+    Reader can register and manage SuiNS names, update avatars, link addresses,
+    and create sui.id websites
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I register a SuiNS name?
+  - How do I renew a SuiNS name?
+  - How do I link a wallet address to my SuiNS name?
+answer: >-
+  Register a SuiNS name at suins.io by searching for an available name and
+  purchasing it for 1 year, then manage it through the dashboard to renew,
+  update avatars, link addresses, or create a sui.id website.
+---
+
+Build your onchain identity in Web3 with Sui Name Service (SuiNS). Using SuiNS, you can register a name (any available name) and use it for onchain transactions.
+
+You can use the **SuiNS Dashboard** link in the top nav bar to jump over to SuiNS and register some names, or configure the ones you already own.
+
+## Register names {#register-names}
+
+To enjoy the benefits of SuiNS, you must first register names. When you register available names, you purchase the rights to those names for 1 year. After registration, you can [renew your names](#renew-names) for multiple years.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/c6Ze1CLgJCM" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+
+To register a name:
+
+1. Go to the [SuiNS site](https://suins.io/) and tap or click the name search bar to open the SuiNS search dialog. This search bar is available at the top of the site when navigating the dashboard.
+    <div className="w-[600px]">
+    ![Name search](/img/ui/name-search.png)
+    </div>
+1. Type a name of interest in the search field between 3 and 63 characters, inclusive. Press <kbd>Enter</kbd> or tap or click the magnifying glass icon to initiate the search. Search results show whether the name is available and the price in SUI for 1 year of registration.
+1. Tap or click a name to open the **Register Name** dialog.
+    <div className="w-[600px]">
+    ![Register name](/img/ui/register-name.png)
+    </div>
+1. Tap or click the **Set as Default** toggle to identify whether the name should be default for the address, apply a coupon code if you have one, then tap or click **Register name**.
+1. Approve the transaction using your connected wallet. If registration is successful, SuiNS opens the **Names** page of the dashboard. The new name appears in the list. If there is an error, fix the issue SuiNS raises and try again.
+
+## Renew names {#renew-names}
+
+You can renew, or extend the expiration date, for any of your registered names for up to 5 years.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/b7RaedoSrLs" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+
+To renew registered names:
+
+1. Tap or click the **Connect Wallet** button in the upper right.
+    <div className="w-[150px] -mb-4">
+    ![Connect button](/img/ui/connect-btn.png)
+    </div>
+    If your wallet is already connected, your address or SuiNS name appears here instead.
+1. Follow the prompts to connect your Sui or Stashed Wallet, if not already connected.
+1. After connecting, the **Connect Wallet** button displays your address (or connected SuiNS default name). Tap or click the button to open the account dialog.
+    <div className="w-[600px]">
+    ![Dialog](/img/ui/view-names.png)
+    </div>
+1. Tap or click the **View names you own** button in the dialog. The **Names** view opens with a list of names associated with the connected account.
+1. Hover your cursor over or tap the icon for the name you want to change and click the ellipses (...) that appears in the upper-right corner to open the context menu for the name.
+1. Select **Renew name** from the menu to open the dialog.
+1. Use the **Registration Period** field to set the number of years to retain the rights to the name. The maximum value is 5 years minus the current registration period. So, if you just registered the name, the maximum number of years you can renew is 4. As you increase or decrease the value, SuiNS updates the amount in SUI and the registration expiration date based on the value.
+    <div className="w-[600px]">
+    ![Extend](/img/ui/renew.png)
+    </div>
+1. Tap or click **Extend Name Expiry** button.
+1. Approve the transaction using your connected wallet.
+
+### Renewal grace period
+
+When the current date surpasses the last day of your registration period, the SuiNS name expires. You have a 30-day grace period within which you can renew the registration. After that, you must [register](#register-names) the name again, if it is available.
+
+![Grace](/img/ui/expired.png)
+
+## Update avatars {#update-avatars}
+
+Have a special NFT that you want to represent your identity onchain? After you [register a name](#register-names), you can set the avatar to associate with that name.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/fxtn1iTyG38" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+
+To assign an owned NFT to your SuiNS name:
+
+1. Tap or click the **Connect Wallet** button in the upper right.
+    <div className="w-[150px] -mb-4">
+    ![Connect button](/img/ui/connect-btn.png)
+    </div>
+    If your wallet is already connected, your address or SuiNS name appears here instead.
+1. Follow the prompts to connect your Sui or Stashed Wallet, if not already connected.
+1. After connecting, the **Connect Wallet** button displays your address (or connected SuiNS default name). Tap or click the button to open the account dialog.
+    <div className="w-[600px]">
+    ![Dialog](/img/ui/view-names.png)
+    </div>
+1. Tap or click the **View names you own** button in the dialog. The **Names** view opens with a list of names associated with the connected account.
+1. Hover your cursor over or tap the icon for the name you want to change and click the ellipses (...) that appears in the upper-right corner to open the context menu for the name.
+1. Select **Personalize Avatar** from the menu to open the avatar dialog.
+    <div className="w-[600px]">
+    ![Personalize avatar](/img/ui/personalize.png)
+    </div>
+1. The dialog lists the NFTs for your address. Select the one you want to use and click **Update Avatar**.
+    <div className="w-[600px]">
+    ![Update avatar](/img/ui/avatar.png)
+    </div>
+1. Approve the transaction using your connected wallet. After the transaction completes, your avatar becomes associated with your address and appears with your SuiNS name wherever avatars are supported.
+    <div className="w-[600px]">
+    ![Update avatar](/img/ui/avatar-login.png)
+    </div>
+
+## Linked address {#linked-address}
+
+You can change the address that your SuiNS name resolves to. The original address that registered the SuiNS name retains control over its configuration, but the name points to the address you provide.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/2BtbQfDheVI" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+
+To link an address to your SuiNS name:
+
+1. Tap or click the **Connect Wallet** button in the upper right.
+    <div className="w-[150px] -mb-4">
+    ![Connect button](/img/ui/connect-btn.png)
+    </div>
+    If your wallet is already connected, your address or SuiNS name appears here instead.
+1. Follow the prompts to connect your Sui or Stashed Wallet, if not already connected.
+1. After connecting, the **Connect Wallet** button displays your address (or connected SuiNS default name). Tap or click the button to open the account dialog.
+    <div className="w-[600px]">
+    ![Dialog](/img/ui/view-names.png)
+    </div>
+1. Tap or click the **View names you own** button in the dialog. The **Names** view opens with a list of names associated with the connected account.
+1. Hover your cursor over or tap the icon for the name you want to change and click the ellipses (...) that appears in the upper-right corner to open the context menu for the name.
+1. Select **Link To Wallet Address** from the menu to open the **Set Linked Address** dialog.
+1. Type in the new address the name should resolve to in the **Enter Target Address** field. By default, the linked address is the address that registered the name. SuiNS warns you if you enter an address that has no onchain transactions.
+    - If you previously changed the linked address, the dialog notifies you and displays a **Set your address** link to quickly set the address back to the one that registered the name.
+1. Tap or click **Apply**. Alternatively, click **Cancel** to close the dialog without making any changes.
+    <div className="w-[400px]">
+    ![Set linked name](/img/ui/set-linked.png)
+    </div>
+1. Approve the transaction using your connected wallet. SuiNS updates the address the name points to, but the address that registered the name retains control of the SuiNS name and the SuiNS NFT remains in the wallet of the registered address, as well.
+
+## sui.id {#sui-id}
+
+Using [IPFS](https://ipfs.tech/), you can create a `sui.id` address connected to your SuiNS name to claim a spot on the decentralized web. The IPFS protocol enables hosting peer-to-peer static sites or media that you can associate with your SuiNS name.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/cdHzHkjWQ3A" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
+
+You need a content identifier (CID) to map your SuiNS name to your IPFS asset. To get the CID, download and use the [IPFS desktop app](https://docs.ipfs.tech/install/ipfs-desktop/) for your operating system.
+
+1. Open the IPFS desktop app.
+1. Select the **FILES** option from the main menu and import relevant files into IPFS.
+1. Tap or click the ellipses (...) for the uploaded file or folder that you want to have your sui.id name point to and select **Copy CID**.
+1. Navigate a browser to [suins.io](https://suins.io/).
+1. Tap or click the **Connect Wallet** button in the upper right.
+    <div className="w-[150px] -mb-4">
+    ![Connect button](/img/ui/connect-btn.png)
+    </div>
+    If your wallet is already connected, your address or SuiNS name appears here instead.
+1. Follow the prompts to connect your Sui or Stashed Wallet, if not already connected.
+1. After connecting, the **Connect Wallet** button displays your address (or connected SuiNS default name). Tap or click the button to open the account dialog.
+    <div className="w-[600px]">
+    ![Dialog](/img/ui/view-names.png)
+    </div>
+1. Tap or click the **View names you own** button in the dialog. The **Names** view opens with a list of names associated with the connected account.
+1. Hover your cursor over or tap the icon for the name you want to change and click the ellipses (...) that appears in the upper-right corner to open the context menu for the name.
+1. From the context menu, select **Link to IPFS Website** to open the **Set IPFS CID** dialog.
+    <div className="w-[600px]">
+    ![IPFS link site](/img/ui/ipfs-link.png)
+    </div>
+1. Paste the CID copied from the earlier step into the field and tap or click **Apply**. Alternatively, tap or click **Cancel** to close the dialog without making any changes.
+1. Navigate your browser to `https://<YOUR-NAME>.sui.id` to see your asset, being sure to change `<YOUR-NAME>` to your actual SuiNS name.
