@@ -18,6 +18,7 @@ use crate::{
     runtime::MoveRuntime,
     shared::type_size_formulae::{LinearForm, LinearTerm, MaxPlusForm, MaxPlusTerm, TypeSize},
     shared::{
+        constants::MAX_TYPE_INSTANTIATION_NODES,
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId, VersionId},
@@ -26,7 +27,7 @@ use crate::{
 use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
-    errors::{VMError, VMResult},
+    errors::{PartialVMResult, VMError, VMResult},
     file_format::{
         AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex, empty_module,
     },
@@ -256,12 +257,14 @@ impl Adapter {
 
     /// The concrete [`TypeSize`] of a fully-substituted type.
     fn type_size_of(&self, ty: &Type) -> TypeSize {
+        self.try_type_size_of(ty)
+            .expect("sizing a concrete type should succeed")
+    }
+
+    fn try_type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        session
-            .virtual_tables
-            .type_size_of(ty)
-            .expect("sizing a concrete type should succeed")
+        session.virtual_tables.type_size_of(ty)
     }
 
     /// The number of nodes in the runtime layout generated for `ty`.
@@ -927,7 +930,7 @@ fn test_nested_application_formulas() {
 fn test_term_formula_argument_order() {
     use crate::{
         cache::arena::ArenaBuilder,
-        jit::execution::ast::{ArenaType, SizedType},
+        jit::execution::ast::{ArenaType, SizedArenaType},
         shared::type_size_formulae::ArenaTypeSizeFormula,
     };
 
@@ -958,7 +961,7 @@ fn test_term_formula_argument_order() {
 
     // T<u64, vector<u64>>: type 4 nodes / 3 deep; value depth max(2, 1+1, 2+2) = 4 (3 if the
     // arguments were swapped); layout 2 + 1 + 2 = 5.
-    let sized = |ty: ArenaType| SizedType {
+    let sized = |ty: ArenaType| SizedArenaType {
         size_formula: ArenaTypeSizeFormula::from_term(&ty, &arena).unwrap(),
         ty,
     };
@@ -1042,8 +1045,9 @@ fn test_layout_size_matches_generated_layout() {
     }
 }
 
-/// `type_size_of` recurs structurally over a concrete type; a near-limit nesting must be sized
-/// without overflowing the stack.
+/// `type_size_of` recurs structurally over a concrete type; a nesting at the depth limit must
+/// be sized without overflowing the stack, and one past the limit must be rejected by the
+/// traversal budget (no runtime-created type can exceed it, but the walk meters anyway).
 #[test]
 fn test_type_size_of_deep_no_overflow() {
     let data_store = InMemoryStorage::new();
@@ -1052,16 +1056,26 @@ fn test_type_size_of_deep_no_overflow() {
     adapter.publish_package(get_depth_tests_modules());
 
     // `vector<vector<...<u8>>>`, `depth` levels deep.
-    let depth = 200u64;
-    let mut ty = Type::U8;
-    for _ in 1..depth {
-        ty = Type::Vector(Box::new(ty));
-    }
-    let size = adapter.type_size_of(&ty);
+    let nested_vec = |depth: u64| {
+        let mut ty = Type::U8;
+        for _ in 1..depth {
+            ty = Type::Vector(Box::new(ty));
+        }
+        ty
+    };
+
+    // On a linear chain the node limit (128) binds before the depth limit (256).
+    let depth = MAX_TYPE_INSTANTIATION_NODES;
+    let size = adapter.type_size_of(&nested_vec(depth));
     assert_eq!(size.type_size, depth);
     assert_eq!(size.type_depth, depth);
     assert_eq!(size.value_depth, depth);
     assert_eq!(size.layout_size, depth);
+
+    let err = adapter
+        .try_type_size_of(&nested_vec(MAX_TYPE_INSTANTIATION_NODES + 1))
+        .unwrap_err();
+    assert_eq!(err.major_status(), StatusCode::VM_MAX_TYPE_NODES_REACHED);
 }
 
 #[test]

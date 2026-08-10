@@ -12,14 +12,14 @@ use crate::{
     execution::{interpreter::state::TypeArguments, vm::DatatypeInfo},
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, FunctionInstantiation, Package,
-        SizedType, StructInstantiation, Type, VariantInstantiation,
+        SizedArenaType, StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
         TypeTraversalBudget,
         bounded_map::BoundedMap,
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES,
-            SIZE_FORMULA_CACHE_CAPACITY, VALUE_DEPTH_MAX,
+            SIZE_FORMULA_CACHE_CAPACITY,
         },
         linkage_context::LinkageContext,
         type_size_formulae::{PartialTypeSizeFormula, TypeSize, check_syntactic_limits},
@@ -31,7 +31,7 @@ use crate::{
 use move_binary_format::{
     errors::{Location, PartialVMResult, VMResult},
     file_format::AbilitySet,
-    partial_vm_error,
+    partial_vm_error, safe_unwrap,
 };
 use move_core_types::{
     annotated_value,
@@ -575,7 +575,7 @@ impl VMDispatchTables {
     // memoized per key in `size_formulas`. A datatype's dependencies are listed directly on its
     // formula (`ArenaTypeSizeFormula::vtable_keys`), so resolution is an iterative DFS over keys
     // with the cache consulted in the loop -- no recursion through type structure. Type terms
-    // carry their own JIT-compiled formulae (`SizedType`) and close the same way
+    // carry their own JIT-compiled formulae (`SizedArenaType`) and close the same way
     // (`term_size_formula`); `type_size_of` then solves a concrete runtime type to a `TypeSize`.
 
     /// The resolved formula of a datatype under this linkage: an iterative DFS over the datatype
@@ -611,7 +611,7 @@ impl VMDispatchTables {
     /// the JIT-compiled formula standing in for a cached one. No type is ever walked.
     pub(crate) fn term_size_formula(
         &self,
-        term: &SizedType,
+        term: &SizedArenaType,
     ) -> PartialVMResult<PartialTypeSizeFormula> {
         self.resolve_size_formulas(term.size_formula.vtable_keys())?;
         term.size_formula.evaluate(&self.size_formulas)
@@ -668,81 +668,99 @@ impl VMDispatchTables {
 
     /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
     /// resolve through the cache.
-    ///
-    /// Note: `ty` is depth-bound by construction here.
     pub(crate) fn type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
-        Ok(match ty {
-            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
-                TypeSize::wrap(self.type_size_of(inner)?)
-            }
-            Type::Datatype(key) => self.virtual_key_size_formula(key)?.solved()?,
-            Type::DatatypeInstantiation(inst) => {
-                let (key, args) = &**inst;
-                let arg_sizes = args
-                    .iter()
-                    .map(|arg| self.type_size_of(arg))
-                    .collect::<PartialVMResult<Vec<_>>>()?;
-                self.virtual_key_size_formula(key)?.solve(&arg_sizes)?
-            }
-            Type::TyParam(_) => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Type parameter should be fully resolved"
-                ));
-            }
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address
-            | Type::Signer => TypeSize::PRIMITIVE,
+        self.type_size_of_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
+    }
+
+    fn type_size_of_impl(
+        &self,
+        ty: &Type,
+        type_size_budget: &mut TypeTraversalBudget,
+    ) -> PartialVMResult<TypeSize> {
+        type_size_budget.enter_type(|type_size_budget| {
+            Ok(match ty {
+                Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                    self.type_size_of_impl(inner, type_size_budget)?.wrap()
+                }
+                Type::Datatype(key) => self.virtual_key_size_formula(key)?.solved()?,
+                Type::DatatypeInstantiation(inst) => {
+                    let (key, args) = &**inst;
+                    let arg_sizes = args
+                        .iter()
+                        .map(|arg| self.type_size_of_impl(arg, type_size_budget))
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    self.virtual_key_size_formula(key)?.solve(&arg_sizes)?
+                }
+                Type::TyParam(_) => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Type parameter should be fully resolved"
+                    ));
+                }
+                Type::Bool
+                | Type::U8
+                | Type::U16
+                | Type::U32
+                | Type::U64
+                | Type::U128
+                | Type::U256
+                | Type::Address
+                | Type::Signer => TypeSize::PRIMITIVE,
+            })
         })
     }
 
     /// The `value_depth` of a concrete type -- the single measure `Pack`/`PackVariant` need,
-    /// computed without the other three. `ty` is depth-bound by construction.
+    /// computed without the other three.
     pub(crate) fn value_depth_of(&self, ty: &Type) -> PartialVMResult<u64> {
-        Ok(match ty {
-            Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
-                self.value_depth_of(inner)?.saturating_add(1)
-            }
-            Type::Datatype(key) => self.virtual_key_size_formula(key)?.value_depth.solve(&[])?,
-            Type::DatatypeInstantiation(inst) => {
-                let (key, args) = &**inst;
-                let arg_depths = args
-                    .iter()
-                    .map(|arg| self.value_depth_of(arg))
-                    .collect::<PartialVMResult<Vec<_>>>()?;
-                self.virtual_key_size_formula(key)?
-                    .value_depth
-                    .solve(&arg_depths)?
-            }
-            Type::TyParam(_) => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Type parameter should be fully resolved"
-                ));
-            }
-            Type::Bool
-            | Type::U8
-            | Type::U16
-            | Type::U32
-            | Type::U64
-            | Type::U128
-            | Type::U256
-            | Type::Address
-            | Type::Signer => 1,
+        self.value_depth_of_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
+    }
+
+    fn value_depth_of_impl(
+        &self,
+        ty: &Type,
+        type_size_budget: &mut TypeTraversalBudget,
+    ) -> PartialVMResult<u64> {
+        type_size_budget.enter_type(|type_size_budget| {
+            Ok(match ty {
+                Type::Vector(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+                    self.value_depth_of_impl(inner, type_size_budget)?
+                        .saturating_add(1)
+                }
+                Type::Datatype(key) => self.virtual_key_size_formula(key)?.value_depth.solve(&[])?,
+                Type::DatatypeInstantiation(inst) => {
+                    let (key, args) = &**inst;
+                    let arg_depths = args
+                        .iter()
+                        .map(|arg| self.value_depth_of_impl(arg, type_size_budget))
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    self.virtual_key_size_formula(key)?
+                        .value_depth
+                        .solve(&arg_depths)?
+                }
+                Type::TyParam(_) => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Type parameter should be fully resolved"
+                    ));
+                }
+                Type::Bool
+                | Type::U8
+                | Type::U16
+                | Type::U32
+                | Type::U64
+                | Type::U128
+                | Type::U256
+                | Type::Address
+                | Type::Signer => 1,
+            })
         })
     }
 
-    /// Check a computed value's `value_depth` against the configured limit (if any).
+    /// Check a computed value's `value_depth` against the configured limit.
     fn check_value_depth(&self, value_depth: u64) -> PartialVMResult<()> {
-        if let Some(max) = self.vm_config.runtime_limits_config.max_value_nest_depth
-            && value_depth > max
-        {
+        let max = safe_unwrap!(self.vm_config.runtime_limits_config.max_value_nest_depth);
+        if value_depth > max {
             return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
         }
         Ok(())
@@ -756,7 +774,7 @@ impl VMDispatchTables {
     /// come from the one formula solve.
     pub(crate) fn check_vector_element(
         &self,
-        elem: &SizedType,
+        elem: &SizedArenaType,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
         let formula = self.term_size_formula(elem)?;
@@ -879,11 +897,7 @@ impl VMDispatchTables {
     fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
         let size = self.type_size_of(ty)?;
         if size.value_depth
-            > self
-                .vm_config
-                .runtime_limits_config
-                .max_value_nest_depth
-                .unwrap_or(VALUE_DEPTH_MAX)
+            > safe_unwrap!(self.vm_config.runtime_limits_config.max_value_nest_depth)
         {
             return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
         }
@@ -1148,7 +1162,7 @@ impl VMDispatchTables {
     /// directly, with no dependency resolution and no cache traffic at all.
     fn realize_type(
         &self,
-        term: &SizedType,
+        term: &SizedArenaType,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<(Type, u64)> {
         let sizes = ty_args.sizes();
@@ -1193,7 +1207,7 @@ impl VMDispatchTables {
     /// limits first -- the type is built only if it fits.
     pub(crate) fn subst_type(
         &self,
-        term: &SizedType,
+        term: &SizedArenaType,
         ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         Ok(self.realize_type(term, ty_args)?.0)
@@ -1262,7 +1276,7 @@ impl VMDispatchTables {
     fn instantiate_datatype_type(
         &self,
         datatype_key: &VirtualTableKey,
-        type_params: &[SizedType],
+        type_params: &[SizedArenaType],
         ty_args: &TypeArguments,
     ) -> PartialVMResult<Type> {
         let instantiation = type_params
@@ -1282,7 +1296,7 @@ impl VMDispatchTables {
     fn check_instantiation(
         &self,
         datatype_key: &VirtualTableKey,
-        type_params: &[SizedType],
+        type_params: &[SizedArenaType],
         ty_args: &TypeArguments,
     ) -> PartialVMResult<()> {
         // Realize each type-parameter term's size against the frame's argument sizes, checking

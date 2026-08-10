@@ -113,10 +113,10 @@ pub(crate) struct Module {
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
 
-    /// a map from signatures in instantiations to the `ArenaVec<SizedType>` that represents
+    /// a map from signatures in instantiations to the `ArenaVec<SizedArenaType>` that represents
     /// it -- each entry paired with its JIT-compiled size formula.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub instantiation_signatures: ArenaVec<ArenaVec<SizedType>>,
+    pub instantiation_signatures: ArenaVec<ArenaVec<SizedArenaType>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -152,9 +152,9 @@ pub(crate) struct Function {
     pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     pub code: ArenaVec<Bytecode>,
-    pub parameters: ArenaVec<SizedType>,
-    pub locals: ArenaVec<SizedType>,
-    pub return_: ArenaVec<SizedType>,
+    pub parameters: ArenaVec<SizedArenaType>,
+    pub locals: ArenaVec<SizedArenaType>,
+    pub return_: ArenaVec<SizedArenaType>,
     pub type_parameters: ArenaVec<AbilitySet>,
     // NOTE: This field is manually dropped in Function::drop() to prevent Arc leaks
     // Any value holding a `Function` needs to ensure it is correctly dropped.
@@ -235,7 +235,7 @@ pub(crate) struct VariantDef {
 #[derive(Debug)]
 pub(crate) struct FunctionInstantiation {
     pub handle: CallType,
-    pub(crate) instantiation: VMPointer<ArenaVec<SizedType>>,
+    pub(crate) instantiation: VMPointer<ArenaVec<SizedArenaType>>,
 }
 
 #[derive(Debug)]
@@ -243,7 +243,7 @@ pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
-    pub(crate) type_params: VMPointer<ArenaVec<SizedType>>,
+    pub(crate) type_params: VMPointer<ArenaVec<SizedArenaType>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -267,7 +267,7 @@ pub(crate) struct EnumInstantiation {
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<SizedType>>,
+    pub type_params: VMPointer<ArenaVec<SizedArenaType>>,
 }
 
 // A variant instantiation.
@@ -303,7 +303,7 @@ pub(crate) enum ArenaType {
 /// size of (instruction operands, instantiation signature entries, function parameter/return
 /// types). These are used to avoid re-deriving the size formulae from the type's structure.
 #[derive(Debug)]
-pub(crate) struct SizedType {
+pub(crate) struct SizedArenaType {
     pub ty: ArenaType,
     pub size_formula: ArenaTypeSizeFormula,
 }
@@ -743,51 +743,51 @@ pub(crate) enum Bytecode {
     /// Stack transition:
     ///
     /// ```..., e1, e2, ..., eN -> ..., vec[e1, e2, ..., eN]```
-    VecPack(VMPointer<SizedType>, u64),
+    VecPack(VMPointer<SizedArenaType>, u64),
     /// Return the length of the vector,
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., u64_value```
-    VecLen(VMPointer<SizedType>),
+    VecLen(VMPointer<SizedArenaType>),
     /// Acquire an immutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecImmBorrow(VMPointer<SizedType>),
+    VecImmBorrow(VMPointer<SizedArenaType>),
     /// Acquire a mutable reference to the element at a given index of the vector. Abort the
     /// execution if the index is out of bounds.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, u64_value -> .., element_reference```
-    VecMutBorrow(VMPointer<SizedType>),
+    VecMutBorrow(VMPointer<SizedArenaType>),
     /// Add an element to the end of the vector.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference, element -> ...```
-    VecPushBack(VMPointer<SizedType>),
+    VecPushBack(VMPointer<SizedArenaType>),
     /// Pop an element from the end of vector. Aborts if the vector is empty.
     ///
     /// Stack transition:
     ///
     /// ```..., vector_reference -> ..., element```
-    VecPopBack(VMPointer<SizedType>),
+    VecPopBack(VMPointer<SizedArenaType>),
     /// Destroy the vector and unpack a statically known number of elements onto the stack. Aborts
     /// if the vector does not have a length N.
     ///
     /// Stack transition:
     ///
     /// ```..., vec[e1, e2, ..., eN] -> ..., e1, e2, ..., eN```
-    VecUnpack(VMPointer<SizedType>, u64),
+    VecUnpack(VMPointer<SizedArenaType>, u64),
     /// Swaps the elements at two indices in the vector. Abort the execution if any of the indices
     /// is out of bounds.
     ///
     /// ```..., vector_reference, u64_value(1), u64_value(2) -> ...```
-    VecSwap(VMPointer<SizedType>),
+    VecSwap(VMPointer<SizedArenaType>),
     /// Push a U16 constant onto the stack.
     ///
     /// Stack transition:
@@ -1552,7 +1552,7 @@ impl<B: std::fmt::Write> InternedDisplay<B> for VirtualTableKey {
     }
 }
 
-impl<B: std::fmt::Write> InternedDisplay<B> for SizedType {
+impl<B: std::fmt::Write> InternedDisplay<B> for SizedArenaType {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
         self.ty.fmt(f, interner)
     }
