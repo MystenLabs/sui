@@ -627,6 +627,10 @@ fn enum_variants(
 // Constants
 //**************************************************************************************************
 
+// TODO(cross-module-constants): a follow-up constant-pool pass here should synthesize pool names
+// and perform common-pool elimination/CSE, giving the IR a pooled representation to eliminate
+// duplicates and reduce IR size.
+
 fn constants(
     context: &mut Context,
     m: &ModuleIdent,

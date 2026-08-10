@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W09011]: unused constant
+warning[WC09011]: unused constant
   ┌─ tests/move_2024/constants/package_const_unused.move:9:23
   │
 9 │ public(package) const UNUSED: u64 = 100;

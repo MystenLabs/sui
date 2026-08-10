@@ -258,9 +258,6 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
     mdef.functions
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
-    mdef.constants
-        .iter()
-        .for_each(|(_, _, cdef)| constant(context, cdef));
 }
 
 //**************************************************************************************************
@@ -282,15 +279,6 @@ fn function(context: &mut Context, fdef: &T::Function) {
 fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
     types(context, sig.parameters.iter().map(|(_, _, st)| st));
     type_(context, &sig.return_type)
-}
-
-//**************************************************************************************************
-// Constants
-//**************************************************************************************************
-
-fn constant(context: &mut Context, cdef: &T::Constant) {
-    type_(context, &cdef.signature);
-    exp(context, &cdef.value)
 }
 
 //**************************************************************************************************
@@ -504,9 +492,10 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
-        E::Constant(m, _) => context.add_usage(*m, e.exp.loc),
-
-        E::Unit { .. }
+        // constant uses are fully resolved at compile time (folded into definitions and copied
+        // into using modules during CFGIR), so they create no module dependency
+        E::Constant(..)
+        | E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
         | E::Copy { .. }
@@ -537,7 +526,6 @@ fn pat(context: &mut Context, p: &T::MatchPattern) {
             pat(context, lhs);
             pat(context, rhs);
         }
-        P::Constant(m, _) => context.add_usage(*m, p.pat.loc),
-        P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
+        P::Constant(_, _) | P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
     }
 }

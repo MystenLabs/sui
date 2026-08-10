@@ -2,9 +2,9 @@
 
 // Constant copies are synthesized on demand in each using module: 0x42::b gets copies of
 // 'USED' and 'BYTES', 0x42::c gets its own copy of 'USED', and 'LOCAL_ONLY' is copied
-// nowhere. Copy names lead with the defining module's dependency order, so the constants of
-// 'x' and 'x_A' -- which would both mangle to '_x_A_B' under module-name-only mangling --
-// get distinct names in 0x42::user
+// nowhere. Copy names lead with the defining module's id in the compilation's module list, so
+// the constants of 'x' and 'x_A' -- which would both mangle to '_x_A_B' under module-name-only
+// mangling -- get distinct names in 0x42::user
 
 //# print-bytecode
 module 0x42::a {

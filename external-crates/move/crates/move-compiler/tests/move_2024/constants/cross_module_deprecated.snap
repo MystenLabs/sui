@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/constants/cross_module_deprecated.move:18:19
    │
 18 │ const D: u64 = a::OLD;
@@ -13,7 +13,7 @@ warning[W04037]: deprecated usage
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: deprecated usage
+warning[WC04037]: deprecated usage
    ┌─ tests/move_2024/constants/cross_module_deprecated.move:20:28
    │
 20 │ public fun old(): u64 { a::OLD }

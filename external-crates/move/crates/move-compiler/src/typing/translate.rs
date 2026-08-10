@@ -4327,18 +4327,16 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
                 )));
                 return;
             };
+            // A cross-module '#[error]' use is unreachable without a prior error: '#[error]' +
+            // 'public(package)' is rejected during expansion, and any other cross-module access
+            // is a visibility error
             if !context.is_current_module(module_ident) {
-                let msg = format!(
-                    "Invalid use of '#[error]' constant '{}::{}' in {}",
-                    module_ident, constant_name, abort_or_assert_str
+                ice_assert!(
+                    context.reporter,
+                    context.env().has_errors(),
+                    *const_loc,
+                    "cross-module '#[error]' constant use without a prior error"
                 );
-                let defined_msg =
-                    "'#[error]' constants can only be used in the module that defines them";
-                context.add_diag(diag!(
-                    TypeSafety::InvalidErrorUsage,
-                    (*const_loc, msg),
-                    (defined_loc, defined_msg)
-                ));
             }
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,

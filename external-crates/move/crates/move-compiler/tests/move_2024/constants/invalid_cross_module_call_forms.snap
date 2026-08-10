@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E03022]: invalid usage position
+error[EC03022]: invalid usage position
    ┌─ tests/move_2024/constants/invalid_cross_module_call_forms.move:18:32
    │
 18 │ public fun call_const(): u64 { a::MAX() }

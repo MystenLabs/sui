@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E08001]: cannot compute constant value
+error[EC08001]: cannot compute constant value
   ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable_use_only.move:9:34
   │
 9 │ public(package) const BAD: u64 = 1 / 0;
   │                                  ^^^^^ Invalid expression in 'const'. This expression could not be evaluated to a value
 
-error[E08001]: cannot compute constant value
+error[EC08001]: cannot compute constant value
    ┌─ tests/move_2024/constants/invalid_cross_module_unfoldable_use_only.move:18:5
    │
  9 │ public(package) const BAD: u64 = 1 / 0;

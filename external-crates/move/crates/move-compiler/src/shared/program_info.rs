@@ -42,7 +42,6 @@ pub struct ConstantInfo {
     pub index: usize,
     pub attributes: Attributes,
     pub defined_loc: Loc,
-    /// `public(package)` makes the constant usable in other modules of the package
     pub visibility: Visibility,
     pub signature: Type,
     // Set after compilation

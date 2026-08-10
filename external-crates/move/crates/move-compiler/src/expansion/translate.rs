@@ -1413,6 +1413,30 @@ fn check_visibility_modifiers(
         }
     }
     for (_, _, constant) in constants {
+        // error constants are encoded against their defining module's tables, so they cannot be
+        // given any visibility
+        if let Some(error_attr) = constant
+            .attributes
+            .get_(&known_attributes::AttributeKind_::Error)
+            && !matches!(constant.visibility, E::Visibility::Internal)
+        {
+            let vis_loc = constant
+                .visibility
+                .loc()
+                .expect("ICE non-internal visibility must have a loc");
+            let msg = format!(
+                "Invalid constant declaration. '#[{}]' constants cannot be declared '{}'",
+                known_attributes::ErrorAttribute::ERROR,
+                E::Visibility::PACKAGE,
+            );
+            let attr_msg = "Error constants are encoded against their defining module \
+                            and cannot be used outside of it";
+            context.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (vis_loc, msg),
+                (error_attr.loc, attr_msg)
+            ));
+        }
         match constant.visibility {
             E::Visibility::Package(loc) => {
                 context.check_feature(package_name, FeatureGate::CrossModuleConstants, loc);

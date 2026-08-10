@@ -436,8 +436,6 @@ pub struct Constant {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
-    /// `public(package)` makes the constant usable in other modules of the package; no other
-    /// visibility is valid on constants
     pub visibility: Visibility,
     pub signature: Type,
     pub name: ConstantName,

@@ -257,7 +257,6 @@ pub struct Constant {
     pub index: usize,
     pub attributes: Attributes,
     pub loc: Loc,
-    /// `public(package)` makes the constant usable in other modules of the package
     pub visibility: Visibility,
     pub signature: Type,
     pub value: Exp,
