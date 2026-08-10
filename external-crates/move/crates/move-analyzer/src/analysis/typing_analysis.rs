@@ -1318,6 +1318,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 | TE::Give(_, e)
                 | TE::Dereference(e)
                 | TE::UnaryExp(_, e)
+                | TE::MacroExpansion(_, e)
                 | TE::TempBorrow(_, e) => {
                     visitor.visit_exp(e);
                     true

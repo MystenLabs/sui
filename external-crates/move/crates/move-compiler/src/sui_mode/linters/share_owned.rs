@@ -311,7 +311,7 @@ impl ShareOwnedVerifierAI<'_> {
         let d = diag!(
             SuiLintCode::ShareOwned.diag_info(),
             (*loc, msg),
-            (f.arguments[0].exp.loc, uid_msg),
+            (f.arguments[0].exp.loc(), uid_msg),
             (*not_fresh_loc, not_fresh_msg),
             (*tloc, tmsg),
         );

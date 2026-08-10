@@ -19,9 +19,11 @@ use crate::{
         VariantName,
     },
     shared::{
+        macro_expansion::MacroExpansionKind,
         matching::{MATCH_TEMP_PREFIX, MatchContext, new_match_var_name},
         program_info::TypingProgramInfo,
         string_utils::debug_print,
+        syntax_info::{SyntaxContext, SyntaxInfo, SyntaxInfoEntry, ssp},
         unique_map::UniqueMap,
         *,
     },
@@ -145,6 +147,13 @@ pub(super) struct Context<'env> {
     named_block_types: UniqueMap<H::BlockLabel, H::Type>,
     /// collects all struct fields used in the current module
     used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
+    /// Chain of syntactic contexts (macro expansions) enclosing the code
+    /// currently being lowered; pushed/popped at MacroExpansion nodes.
+    /// Every expression created during lowering is stamped with the chain
+    /// current at its creation point. The `Arc` nodes built here are shared
+    /// between `S::MacroExpansion` statements and the expressions lowered
+    /// within them, so that each expansion has a single identity.
+    syntax_context: SyntaxContext,
 }
 
 impl<'env> Context<'env> {
@@ -167,6 +176,7 @@ impl<'env> Context<'env> {
             signature: None,
             tmp_counter: 0,
             used_fields: BTreeMap::new(),
+            syntax_context: None,
             named_block_binders: UniqueMap::new(),
             named_block_types: UniqueMap::new(),
         }
@@ -493,7 +503,7 @@ fn function_body_defined(
     context.signature = Some(signature.clone());
     let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
     if let Some(ret_exp) = final_value {
-        let ret_loc = ret_exp.exp.loc;
+        let ret_loc = ret_exp.exp.loc();
         let ret_command = H::Command_::Return {
             from_user: false,
             exp: ret_exp,
@@ -801,7 +811,10 @@ fn body(
     seq: VecDeque<T::SequenceItem>,
 ) -> (Block, Option<H::Exp>) {
     if seq.is_empty() {
-        (make_block!(), Some(unit_exp(loc)))
+        (
+            make_block!(),
+            Some(unit_exp(loc, context.syntax_context.clone())),
+        )
     } else {
         let mut block = make_block!();
         let final_exp = tail_block(context, &mut block, expected_type, seq);
@@ -818,7 +831,7 @@ fn tail(
 ) -> Option<H::Exp> {
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
-            Some(unit_exp(e.exp.loc))
+            Some(unit_exp(e.exp.loc, context.syntax_context.clone()))
         } else {
             None
         };
@@ -944,7 +957,7 @@ fn tail(
         // While loops can't yield values, so we treat them as statements with no binders.
         e_ @ E::While(_, _, _) => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(trailing_unit_exp(eloc))
+            Some(trailing_unit_exp(eloc, context.syntax_context.clone()))
         }
         E::Loop {
             name,
@@ -955,7 +968,7 @@ fn tail(
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             let result = if binders.is_empty() {
                 // need to swap the implicit unit out for a trailing unit in tail position
-                trailing_unit_exp(eloc)
+                trailing_unit_exp(eloc, context.syntax_context.clone())
             } else {
                 maybe_freeze(context, block, expected_type.cloned(), bound_exp)
             };
@@ -983,7 +996,7 @@ fn tail(
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             let result = if binders.is_empty() {
                 // need to swap the implicit unit out for a trailing unit in tail position
-                trailing_unit_exp(eloc)
+                trailing_unit_exp(eloc, context.syntax_context.clone())
             } else {
                 maybe_freeze(context, block, expected_type.cloned(), bound_exp)
             };
@@ -1054,6 +1067,37 @@ fn tail_block(
 // Value Position
 // -------------------------------------------------------------------------------------------------
 
+/// Re-attributes a macro or lambda result, including compiler-generated
+/// wrappers around its result reads, to the caller's syntax context.
+/// For example:
+///
+/// ```move
+/// fun mut_refs(x: &mut u64, y: &mut u64): (&mut u64, &mut u64) { (x, y) }
+/// macro fun through($x: &mut u64, $y: &mut u64): (&u64, &u64) {
+///     mut_refs($x, $y)
+/// }
+/// fun test(x: &mut u64, y: &mut u64): (&u64, &u64) { through!(x, y) }
+/// ```
+///
+/// `through` is evaluated in its macro context, but its implicit conversions
+/// to immutable references happen while returning the result to `test`.
+/// Lowering represents this result with `Multiple` and `Freeze` wrappers, so
+/// those wrappers and their result reads all receive the caller's context.
+fn reattribute_expansion_result(e: &mut H::Exp, syntax_context: &SyntaxContext) {
+    use H::UnannotatedExp_ as E;
+
+    e.exp.sloc.syntax_info.clone_from(syntax_context);
+    match &mut e.exp.value {
+        E::Freeze(e) => reattribute_expansion_result(e, syntax_context),
+        E::Multiple(es) => {
+            for e in es {
+                reattribute_expansion_result(e, syntax_context);
+            }
+        }
+        _ => (),
+    }
+}
+
 #[growing_stack]
 fn value(
     context: &mut Context,
@@ -1066,11 +1110,11 @@ fn value(
     // we pull outthese cases because it's easier to process them without destructuring `e` first.
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
-            unit_exp(e.exp.loc)
+            unit_exp(e.exp.loc, context.syntax_context.clone())
         } else {
             H::exp(
                 type_(&context.reporter, &e.ty),
-                sp(e.exp.loc, HE::Unreachable),
+                ssp(e.exp.loc, context.syntax_context.clone(), HE::Unreachable),
             )
         };
         statement(context, block, e);
@@ -1087,7 +1131,10 @@ fn value(
             context,
             block,
             expected_type.cloned(),
-            H::exp(out_type, sp(eloc, HE::Multiple(out_vec))),
+            H::exp(
+                out_type,
+                ssp(eloc, context.syntax_context.clone(), HE::Multiple(out_vec)),
+            ),
         );
     }
 
@@ -1096,7 +1143,8 @@ fn value(
         exp: sp!(eloc, e_),
     } = e;
     let out_type = type_(&context.reporter, in_type);
-    let make_exp = |exp| H::exp(out_type.clone(), sp(eloc, exp));
+    let ambient = context.syntax_context.clone();
+    let make_exp = |exp| H::exp(out_type.clone(), ssp(eloc, ambient.clone(), exp));
 
     let preresult: H::Exp = match e_ {
         // ---------------------------------------------------------------------------------------
@@ -1120,7 +1168,7 @@ fn value(
                             eloc,
                             "invalid assert call should have caused an error during typing"
                         );
-                        return error_exp(eloc);
+                        return error_exp(eloc, context.syntax_context.clone());
                     }
                 },
                 _ => {
@@ -1131,7 +1179,7 @@ fn value(
                         eloc,
                         "invalid assert call should have caused an error during typing"
                     );
-                    return error_exp(eloc);
+                    return error_exp(eloc, context.syntax_context.clone());
                 }
             };
             let (econd, ecode) = match (cond_item, code_item) {
@@ -1139,7 +1187,7 @@ fn value(
                 _ => {
                     debug_assert!(false, "there should be no splat items yet");
                     context.add_diag(ice!((eloc, "type checking assert failed")));
-                    return error_exp(eloc);
+                    return error_exp(eloc, context.syntax_context.clone());
                 }
             };
             let if_block = make_block!();
@@ -1159,7 +1207,7 @@ fn value(
                 let code = bind_exp(context, block, code_value);
                 (cond, code)
             };
-            else_block.push_back(make_command(eloc, C::Abort(code.exp.loc, code)));
+            else_block.push_back(make_command(eloc, C::Abort(code.exp.loc(), code)));
             block.push_back(sp(
                 eloc,
                 S::IfElse {
@@ -1168,7 +1216,7 @@ fn value(
                     else_block,
                 },
             ));
-            unit_exp(eloc)
+            unit_exp(eloc, context.syntax_context.clone())
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1269,7 +1317,7 @@ fn value(
         // While loops can't yield values, so we treat them as statements with no binders.
         e_ @ E::While(_, _, _) => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            unit_exp(eloc)
+            unit_exp(eloc, context.syntax_context.clone())
         }
         E::Loop {
             name,
@@ -1419,7 +1467,7 @@ fn value(
                             debug_display!(bound_exp)
                         )
                     )));
-                    return error_exp(eloc);
+                    return error_exp(eloc, context.syntax_context.clone());
                 }
             };
             make_exp(HE::BorrowLocal(mut_, tmp))
@@ -1444,7 +1492,7 @@ fn value(
                             debug_display_verbose!(rhs_ty)
                         )
                     )));
-                    return error_exp(eloc);
+                    return error_exp(eloc, context.syntax_context.clone());
                 }
             };
             make_exp(HE::Cast(Box::new(new_base), bt))
@@ -1452,6 +1500,49 @@ fn value(
         E::Annotate(base, rhs_ty) => {
             let annotated_type = type_(&context.reporter, rhs_ty.as_ref());
             value(context, block, Some(&annotated_type), *base)
+        }
+        E::MacroExpansion(macro_info, base) => {
+            // Statements produced by lowering the expansion go into a marked
+            // region, which CFG lowering stamps with the expansion info. The
+            // returned result expression is *not* part of the region: it
+            // compiles into the command its consumer eventually builds, so
+            // its syntactic context must match where its value belongs. For
+            //
+            //     macro fun add1($x: u64): u64 { $x + 1 }
+            //     fun test(v: u64): u64 { add1!(v) }
+            //
+            // * Argument regions: the result IS the argument's computation.
+            //   The Argument expansion for `$x` lowers to no statements at
+            //   all -- its result is just the read of `v` -- and that read
+            //   belongs to the argument, so the result keeps the context it
+            //   was constructed under: this expansion's.
+            // * MacroBody/Lambda regions: the result is the read of the
+            //   expansion's result binder. For `add1!(v)` that read is
+            //   located at the call site in `test` and compiles into
+            //   whatever command consumes the macro's value there, so it is
+            //   re-attributed to the surrounding scope below.
+            let is_argument = matches!(macro_info.kind, MacroExpansionKind::Argument);
+            let info = Arc::new(SyntaxInfo::new(
+                SyntaxInfoEntry::MacroExpansion(macro_info),
+                context.syntax_context.clone(),
+            ));
+            let saved = context.syntax_context.replace(info.clone());
+            let mut region = make_block!();
+            let mut base_exp = value(context, &mut region, expected_type, *base);
+            context.syntax_context.clone_from(&saved);
+            if !region.is_empty() {
+                block.push_back(sp(
+                    eloc,
+                    S::MacroExpansion {
+                        info: info.clone(),
+                        body: region,
+                    },
+                ));
+            }
+            if !is_argument {
+                reattribute_expansion_result(&mut base_exp, &saved);
+            }
+            base_exp
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1504,7 +1595,7 @@ fn value(
         | E::Assign(_, _, _)
         | E::Mutate(_, _) => {
             context.add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
-            error_exp(eloc)
+            error_exp(eloc, context.syntax_context.clone())
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1512,7 +1603,7 @@ fn value(
         // -----------------------------------------------------------------------------------------
         E::Use(_) => {
             context.add_diag(ice!((eloc, "ICE unexpanded use")));
-            error_exp(eloc)
+            error_exp(eloc, context.syntax_context.clone())
         }
         E::UnresolvedError => {
             assert!(context.env.has_errors() || context.env.ide_mode());
@@ -1622,11 +1713,11 @@ fn value_block(
         Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
         Some(sp!(loc, _)) => {
             context.add_diag(ice!((loc, "ICE last sequence item should be an exp")));
-            error_exp(loc)
+            error_exp(loc, context.syntax_context.clone())
         }
         None => {
             context.add_diag(ice!((seq_loc, "ICE empty sequence in value position")));
-            error_exp(seq_loc)
+            error_exp(seq_loc, context.syntax_context.clone())
         }
     }
 }
@@ -1699,7 +1790,7 @@ fn value_list_items_to_vec(
                 Freeze::Sub(_) => {
                     let current_exp = H::Exp {
                         ty: current_ty,
-                        exp: sp(loc, HE::Multiple(es)),
+                        exp: ssp(loc, context.syntax_context.clone(), HE::Multiple(es)),
                     };
                     let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
                     result.append(&mut freeze_block);
@@ -1761,10 +1852,10 @@ fn value_list_opt(
     }
 }
 
-fn error_exp(loc: Loc) -> H::Exp {
+fn error_exp(loc: Loc, ctx: SyntaxContext) -> H::Exp {
     H::exp(
         H::Type_::base(sp(loc, H::BaseType_::UnresolvedError)),
-        sp(loc, H::UnannotatedExp_::UnresolvedError),
+        ssp(loc, ctx, H::UnannotatedExp_::UnresolvedError),
     )
 }
 
@@ -1886,7 +1977,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         }
         E::Abort(rhs) => {
             let exp = value(context, block, None, *rhs);
-            block.push_back(make_command(eloc, C::Abort(exp.exp.loc, exp)));
+            block.push_back(make_command(eloc, C::Abort(exp.exp.loc(), exp)));
         }
         E::Give(name, rhs) => {
             let out_name = translate_block_label(name);
@@ -1954,6 +2045,35 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::UnresolvedError
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
+        E::MacroExpansion(macro_info, base) => {
+            // Group the statements lowered for the expansion in an
+            // S::MacroExpansion region, which tells CFG lowering to stamp
+            // them with the expansion info. For
+            //
+            //     macro fun bump($x: &mut u64) { *$x = *$x + 1 }
+            //     fun test(v: &mut u64) { bump!(v); }
+            //
+            // the mutation in `bump`'s body lowers to a command inside the
+            // region, and the stamp attributes it to `bump`'s expansion. In
+            // statement position this is the whole story: every command the
+            // expansion generates lands inside the region, and no value
+            // flows out to the caller. (Contrast the E::MacroExpansion case
+            // in `value()`, where the expansion's result escapes the region
+            // and needs its own attribution.) An empty region is not
+            // emitted: it would stamp nothing.
+            let info = Arc::new(SyntaxInfo::new(
+                SyntaxInfoEntry::MacroExpansion(macro_info),
+                context.syntax_context.clone(),
+            ));
+            let saved = context.syntax_context.replace(info.clone());
+            let mut region = make_block!();
+            statement(context, &mut region, *base);
+            context.syntax_context = saved;
+            if !region.is_empty() {
+                block.push_back(sp(eloc, S::MacroExpansion { info, body: region }));
+            }
+        }
+
         E::Value(_) | E::Unit { .. } => (),
 
         // -----------------------------------------------------------------------------------------
@@ -2011,11 +2131,12 @@ fn tbool(loc: Loc) -> H::Type {
     H::Type_::bool(loc)
 }
 
-fn bool_exp(loc: Loc, value: bool) -> H::Exp {
+fn bool_exp(loc: Loc, ctx: SyntaxContext, value: bool) -> H::Exp {
     H::exp(
         tbool(loc),
-        sp(
+        ssp(
             loc,
+            ctx,
             H::UnannotatedExp_::Value(sp(loc, H::Value_::Bool(value))),
         ),
     )
@@ -2032,11 +2153,12 @@ fn typing_unit_exp(loc: Loc) -> T::Exp {
     )
 }
 
-fn unit_exp(loc: Loc) -> H::Exp {
+fn unit_exp(loc: Loc, ctx: SyntaxContext) -> H::Exp {
     H::exp(
         tunit(loc),
-        sp(
+        ssp(
             loc,
+            ctx,
             H::UnannotatedExp_::Unit {
                 case: H::UnitCase::Implicit,
             },
@@ -2044,11 +2166,12 @@ fn unit_exp(loc: Loc) -> H::Exp {
     )
 }
 
-fn trailing_unit_exp(loc: Loc) -> H::Exp {
+fn trailing_unit_exp(loc: Loc, ctx: SyntaxContext) -> H::Exp {
     H::exp(
         tunit(loc),
-        sp(
+        ssp(
             loc,
+            ctx,
             H::UnannotatedExp_::Unit {
                 case: H::UnitCase::Trailing,
             },
@@ -2128,6 +2251,7 @@ fn still_has_break(name: &BlockLabel, block: &Block) -> bool {
                 block,
             } => has_break_block(name, block),
             S::NamedBlock { name: _, block } => has_break_block(name, block),
+            S::MacroExpansion { body, .. } => has_break_block(name, body),
             hcmd!(C::Break(break_name)) => break_name == name,
             S::Command(_) => false,
             S::VariantMatch {
@@ -2264,19 +2388,23 @@ fn assign(
             let unused_assignment = tfields.is_empty();
 
             let tmp = context.new_temp(loc, rvalue_ty.clone());
+            let ambient = context.syntax_context.clone();
             let copy_tmp = || {
                 let copy_tmp_ = E::Copy {
                     from_user: false,
                     var: tmp,
                 };
-                H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
+                H::exp(
+                    H::Type_::single(rvalue_ty.clone()),
+                    ssp(loc, ambient.clone(), copy_tmp_),
+                )
             };
             let from_unpack = Some(loc);
             for (f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
                 let floc = tfa.loc;
                 let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
-                let borrow = H::exp(borrow_ty, sp(floc, borrow_));
+                let borrow = H::exp(borrow_ty, ssp(floc, ambient.clone(), borrow_));
                 make_assignments(context, &mut after, floc, case, sp(floc, vec![tfa]), borrow);
             }
             L::Var {
@@ -2389,7 +2517,7 @@ fn assign_fields(
 
 fn make_ignore_and_pop(block: &mut Block, exp: H::Exp) {
     use H::UnannotatedExp_ as E;
-    let loc = exp.exp.loc;
+    let loc = exp.exp.loc();
     if exp.is_unreachable() {
         return;
     }
@@ -2469,9 +2597,22 @@ fn value_evaluation_order(
 }
 
 fn bind_exp(context: &mut Context, stmts: &mut Block, e: H::Exp) -> H::Exp {
-    let loc = e.exp.loc;
+    let loc = e.exp.loc();
     let ty = e.ty.clone();
-    let (binders, var_exp) = make_binders(context, loc, ty.clone());
+    let (binders, mut var_exp) = make_binders(context, loc, ty.clone());
+    // The temp's read stands in for the bound value and is located at that
+    // value's expression, so it carries the value's syntactic context, not
+    // the (possibly different) context `bind_exp` was called under. For
+    //
+    //     macro fun add1($x: u64): u64 { $x + 1 }
+    //     macro fun double($x: u64): u64 { $x + $x }
+    //     fun test(v: u64): u64 { double!(add1!(v)) }
+    //
+    // lowering `double`'s body binds the value of its argument `add1!(v)`
+    // to a temp. The temp's read is located at `add1!(v)` (in `test`) and
+    // must stay attributed to the argument, not to the body of `double`
+    // where the binding takes place.
+    var_exp.exp.sloc.syntax_info = e.exp.sloc.syntax_info.clone();
     bind_value_in_block(context, binders, Some(ty), stmts, e);
     var_exp
 }
@@ -2507,7 +2648,7 @@ fn bind_value_in_block(
         return;
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
-    let loc = rhs_exp.exp.loc;
+    let loc = rhs_exp.exp.loc();
     stmts.push_back(sp(
         loc,
         S::Command(sp(loc, C::Assign(H::AssignCase::Let, binders, rhs_exp))),
@@ -2522,8 +2663,9 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
             vec![],
             H::exp(
                 tunit(loc),
-                sp(
+                ssp(
                     loc,
+                    context.syntax_context.clone(),
                     E::Unit {
                         case: H::UnitCase::Implicit,
                     },
@@ -2543,7 +2685,11 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
                 binders,
                 H::exp(
                     sp(loc, T::Multiple(types)),
-                    sp(loc, H::UnannotatedExp_::Multiple(vars)),
+                    ssp(
+                        loc,
+                        context.syntax_context.clone(),
+                        H::UnannotatedExp_::Multiple(vars),
+                    ),
                 ),
             )
         }
@@ -2558,8 +2704,9 @@ fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::
         unused_assignment: false,
     };
     let lvalue = sp(loc, lvalue_);
-    let uexp = sp(
+    let uexp = ssp(
         loc,
+        context.syntax_context.clone(),
         H::UnannotatedExp_::Move {
             annotation: MoveOpAnnotation::InferredLastUsage,
             var: binder,
@@ -2788,7 +2935,14 @@ fn process_binops(
                 }
                 input_block.extend(lhs_block);
                 input_block.extend(rhs_block);
-                H::exp(result_type, sp(exp_loc, make_binop(lhs_exp, op, rhs_exp)))
+                H::exp(
+                    result_type,
+                    ssp(
+                        exp_loc,
+                        context.syntax_context.clone(),
+                        make_binop(lhs_exp, op, rhs_exp),
+                    ),
+                )
             }
             BinopEntry::ShortCircuitAnd { loc, tests, last } => {
                 let bool_ty = tbool(loc);
@@ -2814,7 +2968,7 @@ fn process_binops(
                         binders.clone(),
                         Some(bool_ty.clone()),
                         &mut else_block,
-                        bool_exp(loc, false),
+                        bool_exp(loc, context.syntax_context.clone(), false),
                     );
                     let if_stmt_ = H::Statement_::IfElse {
                         cond,
@@ -2851,7 +3005,7 @@ fn process_binops(
                         binders.clone(),
                         Some(bool_ty.clone()),
                         &mut if_block,
-                        bool_exp(loc, true),
+                        bool_exp(loc, context.syntax_context.clone(), true),
                     );
                     let if_stmt_ = H::Statement_::IfElse {
                         cond,
@@ -2956,7 +3110,7 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
             let bound_rhs = bind_exp(context, &mut bind_stmts, e);
             if let H::Exp {
                 ty: _,
-                exp: sp!(eloc, E::Multiple(exps)),
+                exp: ssp!(eloc, _, E::Multiple(exps)),
             } = bound_rhs
             {
                 assert!(exps.len() == points.len());
@@ -2981,7 +3135,10 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
                     .collect();
                 (
                     bind_stmts,
-                    H::exp(sp(eloc, T::Multiple(tys)), sp(eloc, E::Multiple(exps))),
+                    H::exp(
+                        sp(eloc, T::Multiple(tys)),
+                        ssp(eloc, context.syntax_context.clone(), E::Multiple(exps)),
+                    ),
                 )
             } else {
                 unreachable!("ICE needs_freeze failed")
@@ -2992,9 +3149,10 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
 
 fn freeze_point(e: H::Exp) -> H::Exp {
     let frozen_ty = freeze_ty(e.ty.clone());
-    let eloc = e.exp.loc;
+    let eloc = e.exp.sloc.loc;
+    let ctx = e.exp.sloc.syntax_info.clone();
     let e_ = H::UnannotatedExp_::Freeze(Box::new(e));
-    H::exp(frozen_ty, sp(eloc, e_))
+    H::exp(frozen_ty, ssp(eloc, ctx, e_))
 }
 
 fn freeze_ty(sp!(tloc, t): H::Type) -> H::Type {

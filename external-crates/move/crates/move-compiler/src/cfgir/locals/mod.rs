@@ -4,7 +4,10 @@
 
 pub mod state;
 
-use super::absint::*;
+use super::{
+    absint::*,
+    ast::{SyntaxCommand, ssp},
+};
 use crate::{
     cfgir::CFGContext,
     diag,
@@ -163,7 +166,7 @@ impl TransferFunctions for LocalsSafety<'_> {
         pre: &mut Self::State,
         _lbl: Label,
         _idx: usize,
-        cmd: &Command,
+        cmd: &SyntaxCommand,
     ) -> Diagnostics {
         let mut context = Context::new(self, pre);
         command(&mut context, cmd);
@@ -216,7 +219,8 @@ fn unused_let_muts<T>(
 //**************************************************************************************************
 
 #[growing_stack]
-fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
+fn command(context: &mut Context, ssp!(sloc, cmd_): &SyntaxCommand) {
+    let loc = &sloc.loc;
     use Command_ as C;
     match cmd_ {
         C::Assign(case, ls, e) => {
@@ -366,7 +370,7 @@ fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
 #[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) {
     use UnannotatedExp_ as E;
-    let eloc = &parent_e.exp.loc;
+    let eloc = &parent_e.exp.loc();
     match &parent_e.exp.value {
         E::Unit { .. }
         | E::Value(_)
