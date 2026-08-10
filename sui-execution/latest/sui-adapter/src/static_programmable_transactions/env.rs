@@ -509,14 +509,6 @@ where
                     type_arguments,
                 }))
             }
-
-            VRT::Type::TyParam(_) => {
-                invariant_violation!(
-                    "Unexpected type parameter in VM type: {:?}. This should not happen as we should \
-                     have resolved all type parameters before this point.",
-                    vm_type
-                );
-            }
         })
     }
 
