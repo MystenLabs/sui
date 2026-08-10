@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::DiagnosticReporter,
     expansion::ast::{Address, ModuleIdent, ModuleIdent_},
+    ice_assert,
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
-    shared::{CompilationEnv, NumericalAddress},
+    shared::{CompilationEnv, Identifier, NumericalAddress},
 };
 use move_core_types::account_address::AccountAddress as MoveAddress;
 use move_ir_types::ast as IR;
@@ -28,6 +30,7 @@ pub type DatatypeDeclarations =
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
     pub env: &'a CompilationEnv,
+    pub reporter: DiagnosticReporter<'a>,
     current_package: Option<Symbol>,
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
@@ -40,8 +43,10 @@ impl<'a> Context<'a> {
         current_package: Option<Symbol>,
         current_module: Option<&'a ModuleIdent>,
     ) -> Self {
+        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
+            reporter,
             current_package,
             current_module,
             seen_datatypes: BTreeSet::new(),
@@ -263,17 +268,21 @@ impl<'a> Context<'a> {
     //**********************************************************************************************
 
     pub fn struct_definition_name(&self, m: &ModuleIdent, s: DatatypeName) -> IR::DatatypeName {
-        assert!(
+        ice_assert!(
+            self.reporter,
             self.is_current_module(m),
-            "ICE invalid struct definition lookup"
+            s.loc(),
+            "invalid struct definition lookup"
         );
         Self::translate_datatype_name(s)
     }
 
     pub fn enum_definition_name(&self, m: &ModuleIdent, e: DatatypeName) -> IR::DatatypeName {
-        assert!(
+        ice_assert!(
+            self.reporter,
             self.is_current_module(m),
-            "ICE invalid enum definition lookup"
+            e.loc(),
+            "invalid enum definition lookup"
         );
         Self::translate_datatype_name(e)
     }
@@ -298,9 +307,11 @@ impl<'a> Context<'a> {
     }
 
     pub fn function_definition_name(&self, m: &ModuleIdent, f: FunctionName) -> IR::FunctionName {
-        assert!(
+        ice_assert!(
+            self.reporter,
             self.current_module == Some(m),
-            "ICE invalid function definition lookup"
+            f.loc(),
+            "invalid function definition lookup"
         );
         Self::translate_function_name(f)
     }
@@ -321,9 +332,11 @@ impl<'a> Context<'a> {
     }
 
     pub fn constant_definition_name(&self, m: &ModuleIdent, f: ConstantName) -> IR::ConstantName {
-        assert!(
+        ice_assert!(
+            self.reporter,
             self.current_module == Some(m),
-            "ICE invalid constant definition lookup"
+            f.loc(),
+            "invalid constant definition lookup"
         );
         Self::translate_constant_name(f)
     }
