@@ -56,9 +56,25 @@ const MAX_AUTHORITIES_TO_FETCH_PER_BLOCK: usize = 2;
 // Max number of peers to request missing blocks concurrently in periodic sync.
 const MAX_PERIODIC_SYNC_PEERS: usize = 3;
 
-/// Bound on the exact-fetch lane. Sized for its two feeders — reconstruction
-/// failures (ambiguity or digest mismatch, both rare in practice) and dead
-/// frontier slots — with two orders of magnitude of headroom over observation.
+/// Bound on refs resident on the exact-fetch lane.
+///
+/// Deliberately unchanged at 128. The lane's real defect was retention, not
+/// width: refs retired only on reaching DagState, so a fetched block that
+/// BlockManager suspended for its own missing ancestors held its slot until GC
+/// while being re-downloaded every pass. `RetireExactRefs` fixes that, and it is
+/// the change worth measuring on its own.
+///
+/// Widening was tried and backed out. `fetch_exact_refs` sends the whole lane to
+/// ONE peer in ONE request under a 2s timeout, so the lane width IS the request
+/// size, and a larger request is likelier to time out and return nothing. A pass
+/// that returns nothing retires nothing, which pins the lane until GC -- so
+/// widening feeds the very stall it was meant to relieve. Decoupling request size
+/// from lane size is the prerequisite for any future increase.
+///
+/// The per-author share is `MAX / committee + 1`, which at 128 against a
+/// committee of 127 is 2 -- the number most likely to be binding. The refusal
+/// counter could not say so until this change split it by predicate, so size this
+/// from `exact_author_share` versus `exact_lane_full`, not by argument.
 const MAX_PENDING_EXACT_REQUESTS: usize = 128;
 
 /// How long commit must be stalled before periodic sync kicks in as fallback.
@@ -181,6 +197,10 @@ enum Command {
     RegisterMissingBlock {
         block_ref: BlockRef,
     },
+    /// Releases exact-lane slots for refs that have completed a fetch pass.
+    RetireExactRefs {
+        refs: Vec<BlockRef>,
+    },
     /// Installs the shared per-authority floor of pending reconstruction slots, so
     /// periodic passes can range-repair parked frontiers. Sent once at startup.
     FetchOwnLastBlock,
@@ -214,10 +234,6 @@ impl SynchronizerHandle {
             .map_err(|_err| ConsensusError::Shutdown)?;
         receiver.await.map_err(|_err| ConsensusError::Shutdown)?
     }
-
-    /// Installs the pending-slot floor; fire-and-forget at startup (the command
-    /// channel is empty then, so try_send cannot realistically fail, and a missed
-    /// install only delays slot repair until restart).
 
     /// Durably registers `block_ref` for periodic fetching until it is accepted or
     /// GC'ed. Unlike `fetch_blocks`, registration survives queue saturation and empty
@@ -487,19 +503,67 @@ where
                                 .count();
                             let lane_bound = MAX_PENDING_EXACT_REQUESTS
                                 .min(self.context.parameters.max_blocks_per_fetch);
-                            if round_ok
-                                && author_count < author_share
-                                && self.pending_exact_requests.len() < lane_bound
-                            {
-                                self.pending_exact_requests.insert(block_ref);
-                            } else {
+                            // One label per predicate. They were reported under a
+                            // single "exact_lane_full" bucket, which cannot answer the
+                            // question the counter exists to answer: whether the lane
+                            // is globally full, whether one author has exhausted its
+                            // share, or whether the receiver is simply too far behind
+                            // the claim for the round gate. Those call for different
+                            // fixes, and the aggregate silently invites the wrong one.
+                            if !round_ok {
+                                self.context
+                                    .metrics
+                                    .node_metrics
+                                    .synchronizer_skipped_fetch_requests
+                                    .with_label_values(&["exact_round_gate"])
+                                    .inc();
+                            } else if author_count >= author_share {
+                                self.context
+                                    .metrics
+                                    .node_metrics
+                                    .synchronizer_skipped_fetch_requests
+                                    .with_label_values(&["exact_author_share"])
+                                    .inc();
+                            } else if self.pending_exact_requests.len() >= lane_bound {
                                 self.context
                                     .metrics
                                     .node_metrics
                                     .synchronizer_skipped_fetch_requests
                                     .with_label_values(&["exact_lane_full"])
                                     .inc();
+                            } else {
+                                self.pending_exact_requests.insert(block_ref);
                             }
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .synchronizer_exact_lane_occupancy
+                                .set(self.pending_exact_requests.len() as i64);
+                        }
+                        Command::RetireExactRefs { refs } => {
+                            // Refs retire once a fetch has DELIVERED them, not once
+                            // they reach DagState. A fetched block whose own ancestors
+                            // are missing is suspended inside BlockManager: it is not
+                            // in DagState, so a DagState-only test cannot tell "never
+                            // fetched" from "fetched and safely suspended", and the ref
+                            // would sit here being re-downloaded on every pass to hand
+                            // BlockManager a payload it already owns. Once delivered it
+                            // is BlockManager's to recover, through its own missing set.
+                            //
+                            // Keyed on delivery rather than on the attempt: the lane's
+                            // feeders are not only the stale sweep, which could re-offer
+                            // a dropped ref, but also dead frontier slots, ambiguity and
+                            // reinflation failure, whose refs are not retained anywhere
+                            // that would re-offer them. Freeing a slot for a ref no peer
+                            // returned would lose those recoveries outright.
+                            for block_ref in refs {
+                                self.pending_exact_requests.remove(&block_ref);
+                            }
+                            self.context
+                                .metrics
+                                .node_metrics
+                                .synchronizer_exact_lane_occupancy
+                                .set(self.pending_exact_requests.len() as i64);
                         }
                         Command::FetchOwnLastBlock => {
                             if self.fetch_own_last_block_task.is_empty() {
@@ -619,6 +683,7 @@ where
                                 round_tracker.clone(),
                                 "live",
                                 context.parameters.max_blocks_per_sync,
+                                false,
                             ).await {
                                 warn!("Error while processing fetched blocks from peer {}: {err}", peer.hostname(&context));
                                 context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
@@ -662,6 +727,12 @@ where
         // limit, mirroring the server's response sizing; inferring it here from the
         // guard was wrong for refs-only catch-up requests.
         processing_limit: usize,
+        // Whether this pass drew on the exact-fetch lane. Only then is a retirement
+        // command worth sending: the live path never registers there, and the
+        // periodic path draws on it only when the lane was non-empty, so gating here
+        // keeps a command per fetch response off the synchronizer's command loop for
+        // the overwhelming majority of responses.
+        retire_exact_refs: bool,
     ) -> ConsensusResult<()> {
         if serialized_blocks.is_empty() {
             return Ok(());
@@ -679,6 +750,28 @@ where
 
         if context.protocol_config.transaction_voting_enabled() {
             transaction_vote_tracker.add_voted_blocks(voted_blocks);
+        }
+
+        // Release the exact-lane slots for refs this response actually delivered.
+        //
+        // Retirement is keyed on delivery rather than on attempt. Attempt-keyed
+        // retirement would free slots for refs the peer never returned, and the
+        // exact lane has feeders other than the stale sweep -- dead frontier slots,
+        // ambiguity, reinflation failure -- whose refs are not retained in the
+        // pending map and so would never be re-offered. Those would lose their only
+        // recovery. Delivery-keyed retirement is what the lane actually needs
+        // anyway: a delivered block is BlockManager's problem from here, whether it
+        // accepts it or suspends it for its own missing ancestors, and it is exactly
+        // the suspended case that a DagState-only test could never retire.
+        //
+        // Refs no peer returns keep their slots until GC, as before. That leak is
+        // bounded by the GC window and is the price of not dropping recoveries.
+        if retire_exact_refs && !blocks.is_empty() {
+            let _ = commands_sender
+                .send(Command::RetireExactRefs {
+                    refs: blocks.iter().map(|block| block.reference()).collect(),
+                })
+                .await;
         }
 
         // Record commit votes from the verified blocks.
@@ -1105,6 +1198,7 @@ where
                 // carries both refs and rounds is served under the (much smaller)
                 // live-sync response limit, so combining lanes silently truncates
                 // exactly the refs registered for recovery.
+                let exact_lane_active = !pending_exact.is_empty();
                 let mut results = if pending_exact.is_empty() {
                     Vec::new()
                 } else {
@@ -1171,6 +1265,7 @@ where
                         round_tracker.clone(),
                         "periodic",
                         processing_limit,
+                        exact_lane_active,
                     )
                     .await
                     {
@@ -2589,6 +2684,7 @@ mod tests {
             round_tracker,
             "test",
             context.parameters.max_blocks_per_sync,
+            false,
         )
         .await;
 
@@ -2668,6 +2764,7 @@ mod tests {
             round_tracker,
             "test",
             context.parameters.max_blocks_per_fetch,
+            false,
         )
         .await;
         assert!(result.is_ok());

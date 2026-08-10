@@ -155,10 +155,10 @@ impl SeenDigests {
         // or commit-sync thread recording identity is never made to wait on
         // reconstruction; a full channel drops the wakeup, which costs latency only
         // -- the stale-dependent sweep still recovers the block.
-        if !resolved.is_empty() {
-            if let Some(tx) = self.wakeup.get() {
-                let _ = tx.try_send(resolved.clone());
-            }
+        if !resolved.is_empty()
+            && let Some(tx) = self.wakeup.get()
+        {
+            let _ = tx.try_send(resolved.clone());
         }
         resolved
     }

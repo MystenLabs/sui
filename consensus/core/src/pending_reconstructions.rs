@@ -68,12 +68,6 @@ pub(crate) const MAX_PARKED_BYTES_PER_PEER: usize = 4 << 20;
 /// aggregate memory two orders of magnitude below what per-peer quotas alone permit.
 const MAX_PARKED_BYTES_TOTAL: usize = 128 << 20;
 
-/// Sidecars held for blocks that were not parked (refused admission or terminal
-/// without acceptance). Propagation hints survive the block's refusal and are
-/// delivered when it is accepted through any path. Charged against the same
-/// per-peer and aggregate byte caps as pending entries, released on delivery
-/// or GC through the same path.
-
 pub(crate) struct PendingMinimal {
     pub(crate) minimal: Bytes,
     pub(crate) excluded_ancestors: Vec<Vec<u8>>,
@@ -178,6 +172,13 @@ pub(crate) struct PendingReconstructions {
     /// When commit-lag shedding first engaged, for the quiesce hysteresis. Cleared
     /// by the first non-lagging receipt.
     lag_shed_since: Option<tokio::time::Instant>,
+    /// Where the last sweep stopped, so the next one resumes instead of restarting
+    /// at the lowest ref. Without it a backlog deeper than one retry period's worth
+    /// of sweeps strands its own tail permanently: the scan never reaches past the
+    /// first `cap * RETRY / INTERVAL` entries, and since `pending` orders by round,
+    /// the stranded tail is the rounds nearest the tip — the ones whose recovery
+    /// actually moves the threshold clock.
+    sweep_cursor: Option<BlockRef>,
 
     per_peer_bytes: Vec<usize>,
     total_bytes: usize,
@@ -194,6 +195,7 @@ impl PendingReconstructions {
             pending: BTreeMap::new(),
             missing_slots: BTreeMap::new(),
             occupancy: BTreeMap::new(),
+            sweep_cursor: None,
             held_sidecars: BTreeMap::new(),
             seen,
             lag_shed_since: None,
@@ -326,27 +328,45 @@ impl PendingReconstructions {
         None
     }
 
-    /// Dependents parked past a grace window, for the periodic exact-ref sweep
-    /// that replaced the slot floor: each ref's digest is already known from the
-    /// claim, so the refs-only lane fetches the full dependent; its arrival
-    /// supersedes the parked entry and block_manager's digest-addressed recovery
-    /// takes over. The grace keeps the sweep off the claim/acceptance race it
-    /// would otherwise duplicate, and the retry spacing rotates attempts across
-    /// the population under the caller's lane bound.
     /// Snapshot of currently-missing slots, for the worker's reconcile pass.
     pub(crate) fn missing_slot_snapshot(&self) -> Vec<Slot> {
         self.missing_slots.keys().copied().collect()
     }
 
+    /// Dependents parked past a grace window, for the periodic exact-ref sweep:
+    /// each ref's digest is already known from the claim, so the refs-only lane
+    /// fetches the full dependent; its arrival supersedes the parked entry and
+    /// block_manager's digest-addressed recovery takes over.
+    ///
+    /// Grace and retry are set from the measured resolve distribution, which is
+    /// sharply bimodal: a slot that is going to fill from its own block's arrival
+    /// does so in tens of milliseconds (fleet median 22ms), and one that is not
+    /// fills only when something fetches it. A grace far above the fast mode buys
+    /// no extra natural resolutions and costs the slow mode a fixed delay on every
+    /// entry — at 17 rounds/s the old 300ms was five rounds of pure latency before
+    /// recovery could even be attempted.
     pub(crate) fn stale_dependents(&mut self, cap: usize) -> Vec<BlockRef> {
-        const GRACE: std::time::Duration = std::time::Duration::from_millis(300);
-        const RETRY: std::time::Duration = std::time::Duration::from_millis(1500);
+        const GRACE: std::time::Duration = std::time::Duration::from_millis(100);
+        const RETRY: std::time::Duration = std::time::Duration::from_millis(500);
         let now = tokio::time::Instant::now();
         let mut out = Vec::new();
-        for (block_ref, entry) in self.pending.iter_mut() {
+        // Two passes: from the cursor to the end, then from the start back to it.
+        // Together they visit every entry exactly once, so a full rotation costs one
+        // scan of `pending` no matter where the cursor sits.
+        let start = self.sweep_cursor.take().unwrap_or(BlockRef::MIN);
+        let total = self.pending.len();
+        let mut visited = 0usize;
+        let mut cursor = None;
+        for (block_ref, entry) in self
+            .pending
+            .range(start..)
+            .chain(self.pending.range(..start))
+        {
             if out.len() >= cap {
+                cursor = Some(*block_ref);
                 break;
             }
+            visited += 1;
             if now.duration_since(entry.parked_at) < GRACE {
                 continue;
             }
@@ -356,9 +376,16 @@ impl PendingReconstructions {
             {
                 continue;
             }
-            entry.last_swept = Some(now);
             out.push(*block_ref);
         }
+        for block_ref in &out {
+            if let Some(entry) = self.pending.get_mut(block_ref) {
+                entry.last_swept = Some(now);
+            }
+        }
+        // A completed rotation resets to the start; a truncated one resumes where it
+        // stopped so the next tick makes progress on entries this one never reached.
+        self.sweep_cursor = if visited >= total { None } else { cursor };
         out
     }
 
@@ -843,14 +870,38 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
     // Exact-dependent sweep (the slot floor's replacement): entries parked past the
     // grace window get their known refs registered on the refs-only lane; the
     // fetched full dependent supersedes the park and block_manager recovers its
-    // ancestors by digest. Cadence well above the claim/acceptance race window.
-    const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_millis(700);
-    const SWEEP_CAP: usize = 32;
+    // ancestors by digest.
+    //
+    // Cadence and cap set the sweep's SERVICE RATE, and it has to exceed the rate at
+    // which parks fail to resolve on their own or the pending set grows without
+    // bound. A committee of 128 at 17 rounds/s offers ~2.2k blocks/s; even a low
+    // single-digit percentage that outlives the grace window is a few hundred per
+    // second. The original 32-per-700ms drained 46/s, roughly an order of magnitude
+    // under that, and the fleet showed exactly the queueing collapse that implies:
+    // 30k entries resident, resolve p99 pinned at the top histogram bucket, and
+    // nodes that fell into the backlog never climbing out. These values drain
+    // ~1.3k/s, comfortably above the failure rate and still well under the offered
+    // rate, so the sweep cannot degenerate into fetching every block.
+    //
+    // Draining faster is also what keeps total fetches DOWN. A shallow queue lets
+    // the natural path — the ancestor's own arrival, median 22ms — win the race for
+    // most entries; a deep one holds blocks long past the point where arrival would
+    // have resolved them, so every one of them eventually costs a fetch.
+    const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+    const SWEEP_CAP: usize = 128;
     let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
     sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     // Bounds concurrent sidecar deliveries and lane registrations spawned by the
     // drain arm; acquired inside each task so the drain itself never waits.
     let delivery_permits = std::sync::Arc::new(tokio::sync::Semaphore::new(64));
+    // The sweep gets its own permit rather than sharing the delivery pool. Sharing
+    // would let a burst of sidecar deliveries hold all 64 and make the sweep's
+    // non-blocking acquire fail on every tick, starving the one path that recovers
+    // blocks whose ancestors never arrive -- and starving it exactly when the node
+    // is busiest, which is when it is needed. One permit is the right depth: batches
+    // register sequentially, so a second concurrent batch would only race the first
+    // for the same command channel.
+    let sweep_permit = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
     // Acceptance and GC arrive on Core's existing accepted-block broadcast, which
     // is already sent AFTER the DagState write guard is released (and already
     // consumed by the observer service): the receive path adds zero work inside
@@ -983,10 +1034,42 @@ pub(crate) async fn run_reconstruction_worker<S: crate::network::ValidatorNetwor
                 );
             }
             _ = sweep.tick() => {
-                let stale = pending_reconstructions.lock().stale_dependents(SWEEP_CAP);
-                for block_ref in stale {
-                    if registry.register_missing_block(block_ref).await.is_err() {
-                        return;
+                // Registration goes off the select loop. Each call awaits the
+                // synchronizer's command channel, so running a whole batch of them
+                // inline let a busy synchronizer stall the arms that deliver wake-ups
+                // and acceptance -- the two things that resolve parked entries with no
+                // fetch at all. Backpressure there must slow the sweep, never the
+                // resolution path the sweep exists to back up.
+                //
+                // The permit is taken BEFORE selecting, and a tick that cannot get one
+                // does nothing. Acquiring inside the spawned task would bound only the
+                // tasks holding permits, not the ones queued for them: at a 100ms
+                // cadence a slow synchronizer would leave a detached task behind every
+                // tick with nothing bounding the pile. Skipping is also the more honest
+                // behaviour -- entries keep their place in the sweep rotation and their
+                // last_swept stamp is never spent on an attempt that was not made.
+                // The permit is the sweep's own, so a failure here means the previous
+                // batch is still registering, never that deliveries have crowded it out.
+                if let Ok(permit) = sweep_permit.clone().try_acquire_owned() {
+                    let stale = pending_reconstructions.lock().stale_dependents(SWEEP_CAP);
+                    if !stale.is_empty() {
+                        context
+                            .metrics
+                            .node_metrics
+                            .minimal_block_sweep_registrations
+                            .inc_by(stale.len() as u64);
+                        let registry = registry.clone();
+                        tokio::spawn(async move {
+                            let _permit = permit;
+                            for block_ref in stale {
+                                if registry.register_missing_block(block_ref).await.is_err() {
+                                    // The synchronizer is gone. The worker's own
+                                    // channels close on the same shutdown, so it leaves
+                                    // through its normal path.
+                                    return;
+                                }
+                            }
+                        });
                     }
                 }
             }
@@ -1514,6 +1597,53 @@ mod tests {
         // Once the retry window passes, swept entries qualify again.
         tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
         assert_eq!(pending.stale_dependents(8).len(), 3);
+        pending.assert_invariants();
+    }
+
+    /// A backlog deeper than one retry period's worth of capped sweeps must still
+    /// reach every entry. The sweep resumes from where it stopped, so consecutive
+    /// ticks walk the whole population; restarting at the lowest ref each time
+    /// would strand everything past `cap * RETRY / INTERVAL` — and because
+    /// `pending` orders by round, the stranded tail is the rounds nearest the tip.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn sweep_rotates_through_a_backlog_deeper_than_its_cap() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mut pending = PendingReconstructions::new(
+            context.clone(),
+            Arc::new(SeenDigests::new(context.clone())),
+        );
+        let peer = context.committee.to_authority_index(1).unwrap();
+        let missing = vec![Slot::new(
+            9,
+            context.committee.to_authority_index(2).unwrap(),
+        )];
+        const BACKLOG: Round = 40;
+        for i in 0..BACKLOG {
+            pending
+                .try_admit(
+                    BlockRef::new(10 + i, peer, BlockDigest::MIN),
+                    Bytes::from(vec![0u8; 32]),
+                    vec![],
+                    peer,
+                    missing.clone(),
+                    0,
+                    10,
+                )
+                .unwrap();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        // Ten ticks at cap 4, spaced well inside the retry window so no entry can
+        // qualify twice: full coverage is only possible by resuming the scan.
+        let mut swept = BTreeSet::new();
+        for _ in 0..10 {
+            swept.extend(pending.stale_dependents(4));
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(swept.len(), BACKLOG as usize);
+        // In particular the highest rounds, which a restarting scan never reaches.
+        assert!(swept.contains(&BlockRef::new(10 + BACKLOG - 1, peer, BlockDigest::MIN)));
         pending.assert_invariants();
     }
 }

@@ -46,9 +46,6 @@ use crate::{
 /// is reachable but not proposing gets resubscribed to on every timeout.
 const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Malformed minimal encodings tolerated per subscription session before the stream is
-/// reset (reconnect backoff is the peer's penalty). Honest senders produce none.
-
 /// Floor delay before reconnecting after a reset this node initiated for cause
 /// (quota overflow, recovery horizon, malformed threshold). The regular backoff can
 /// be cleared by any admitted block, so a peer interleaving valid blocks with

@@ -188,6 +188,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) minimal_block_recovery_outcomes: IntCounterVec,
     pub(crate) minimal_block_seen_digests: IntGauge,
     pub(crate) minimal_block_seen_digests_refused: IntCounter,
+    pub(crate) minimal_block_sweep_registrations: IntCounter,
+    pub(crate) synchronizer_exact_lane_occupancy: IntGauge,
     pub(crate) minimal_block_gate_transitions: IntCounterVec,
     pub(crate) minimal_block_missing_slots_at_park: Histogram,
     pub(crate) minimal_block_park_resolve_ms: HistogramVec,
@@ -635,6 +637,16 @@ impl NodeMetrics {
             minimal_block_seen_digests_refused: register_int_counter_with_registry!(
                 "minimal_block_seen_digests_refused",
                 "Slots not admitted to the seen-digest map because a shard hit its cap. Non-zero means GC has stalled; reconstruction degrades to fetching, it does not fail",
+                registry,
+            ).unwrap(),
+            minimal_block_sweep_registrations: register_int_counter_with_registry!(
+                "minimal_block_sweep_registrations",
+                "Parked blocks SELECTED by the stale sweep and offered to the exact-fetch lane. This counts offers, not recoveries: a selection still has to acquire a permit, enqueue a command, pass exact-lane admission, complete an RPC and be processed by Core. Compare against synchronizer_skipped_fetch_requests to see how many offers survive admission",
+                registry,
+            ).unwrap(),
+            synchronizer_exact_lane_occupancy: register_int_gauge_with_registry!(
+                "synchronizer_exact_lane_occupancy",
+                "Refs resident in the exact-fetch lane. Pinned at the lane bound means recovery is admission-limited; near zero while parked blocks accumulate means the bottleneck is elsewhere",
                 registry,
             ).unwrap(),
             minimal_block_gate_transitions: register_int_counter_vec_with_registry!(

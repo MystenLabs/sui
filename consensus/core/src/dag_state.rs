@@ -1202,9 +1202,6 @@ impl DagState {
         commit_round.saturating_sub(self.context.protocol_config.gc_depth())
     }
 
-    /// Wires the minimal-block pending_reconstructions hook; called once at startup on
-    /// validators. Observers never set it.
-
     /// Flushes unpersisted blocks, commits and commit info to storage.
     ///
     /// REQUIRED: when buffering a block, all of its ancestors and the latest commit which sets the GC round
