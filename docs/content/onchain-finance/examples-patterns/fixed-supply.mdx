@@ -39,7 +39,7 @@ A fixed-supply coin has a predetermined total supply that cannot increase after 
 
 This pattern involves 3 steps during the module's `init` function:
 
-1. **Create the currency:** Call `coin::create_currency` with a [One-Time Witness](/develop/write-move/one-time-witness) to create the `TreasuryCap` and `CoinMetadata`. The `create_currency` function takes parameters for the coin's decimals, symbol, name, description, and icon URL.
+1. **Create the currency:** Call `coin::create_currency` with a [One-Time Witness](https://move-book.com/programmability/one-time-witness/) to create the `TreasuryCap` and `CoinMetadata`. The `create_currency` function takes parameters for the coin's decimals, symbol, name, description, and icon URL.
 2. **Mint the total supply:** Call `coin::mint` with the `TreasuryCap` to create all tokens at once. The amount is specified in the smallest unit (base units). For example, if your coin has 9 decimals, a supply of `10_000_000_000_000_000_000` represents 10 billion coins.
 3. **Lock the `TreasuryCap`:** Store the `TreasuryCap` as a [dynamic object field](/develop/objects/dynamic-fields) on a permanent object. This prevents anyone from calling `coin::mint` again because the `TreasuryCap` is no longer directly accessible. You can also freeze or destroy the `TreasuryCap` depending on your requirements.
 
