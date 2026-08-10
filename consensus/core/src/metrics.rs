@@ -146,6 +146,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
+    pub(crate) block_sync_service_read_blocks_count: IntCounter,
     pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
@@ -388,6 +389,11 @@ impl NodeMetrics {
                 "blocks_pruned_on_commit",
                 "Number of blocks that got pruned due to garbage collection during a commit. This is not an accurate metric and measures the pruned blocks on the edge of the commit.",
                 &["authority", "commit_status"],
+                registry,
+            ).unwrap(),
+            block_sync_service_read_blocks_count: register_int_counter_with_registry!(
+                "block_sync_service_read_blocks_count",
+                "Number of times the block sync service needs to read blocks from the store",
                 registry,
             ).unwrap(),
             commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(

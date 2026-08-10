@@ -72,6 +72,12 @@ impl BlockSyncService {
         if block_refs.is_empty() && (fetch_missing_ancestors || fetch_after_rounds.is_empty()) {
             return Err(ConsensusError::InvalidFetchBlocksRequest("When no block refs are provided, fetch_after_rounds must be provided and fetch_missing_ancestors must be false".to_string()));
         }
+        if fetch_missing_ancestors && fetch_after_rounds.is_empty() {
+            return Err(ConsensusError::InvalidFetchBlocksRequest(
+                "When fetch_missing_ancestors is true, fetch_after_rounds must be provided"
+                    .to_string(),
+            ));
+        }
         if !fetch_after_rounds.is_empty()
             && fetch_after_rounds.len() != self.context.committee.size()
         {
@@ -111,7 +117,7 @@ impl BlockSyncService {
         // targets recently accepted blocks, capped at max_blocks_per_sync, which are
         // almost always in the DagState cache; reading the store first would only add a
         // wasted store read per request.
-        let mut blocks = if fetch_after_rounds.is_empty() && !fetch_missing_ancestors {
+        let mut blocks = if fetch_after_rounds.is_empty() {
             self.read_blocks(&block_refs)?
         } else {
             self.dag_state
@@ -224,6 +230,11 @@ impl BlockSyncService {
     /// `get_blocks`' internal store read, and honest requesters never ask for those.
     /// Blocks found nowhere are dropped from the result.
     fn read_blocks(&self, block_refs: &[BlockRef]) -> ConsensusResult<Vec<VerifiedBlock>> {
+        self.context
+            .metrics
+            .node_metrics
+            .block_sync_service_read_blocks_count
+            .inc();
         let mut blocks = self.store.read_blocks(block_refs)?;
         let missing: Vec<(usize, BlockRef)> = blocks
             .iter()
