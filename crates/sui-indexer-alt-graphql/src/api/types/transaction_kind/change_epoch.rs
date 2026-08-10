@@ -107,10 +107,11 @@ impl ChangeEpochTransaction {
                         TransactionDigest::ZERO,
                     );
 
-                    // Create MovePackage directly from native object for efficiency
-                    let package =
-                        MovePackage::from_native_object(self.scope.clone(), native_object)
-                            .context("Failed to create MovePackage from system package object")?;
+                    // Pin the root version: the package is synthesized at the version baked into
+                    // this transaction, which the scope's checkpoint may not resolve to.
+                    let scope = self.scope.clone().with_root_version(version.value());
+                    let package = MovePackage::from_object_contents(scope, native_object)
+                        .context("Failed to create MovePackage from system package object")?;
 
                     Ok(package)
                 })
