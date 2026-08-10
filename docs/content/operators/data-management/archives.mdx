@@ -109,32 +109,3 @@ Do not use `https://checkpoints.mainnet.sui.io` for Mainnet archival fallback. S
 :::
 
 For starting a new full node, always use a [snapshot](/operators/snapshots) rather than syncing from the archive.
-
-## Storage requirements
-
-Archival fallback does not store archive data locally by default. Your node downloads checkpoint data from the archive on demand when it detects sync lag. This means archival fallback adds network bandwidth usage but minimal disk overhead.
-
-If you run your own archive writer (uploading your node's checkpoints to a bucket), storage grows with the chain's history. Mainnet full history is multiple terabytes and grows continuously. Monitor your bucket storage costs and set lifecycle policies to manage growth.
-
-{/* TODO: Citation needed — verify current Mainnet archive size and growth rate */}
-
-## Tuning the concurrency parameter
-
-The `concurrency` parameter controls how many checkpoint objects the node reads ahead when catching up from the archive. Higher values catch up faster but use more memory and network bandwidth:
-
-| Value | Use case |
-|---|---|
-| 5 (default) | Standard full nodes with moderate bandwidth |
-| 10-20 | Nodes with high bandwidth that need to catch up quickly after a restart |
-| 1-2 | Nodes with limited bandwidth or memory |
-
-Adjust based on your infrastructure. If you see out-of-memory errors during archival catch-up, reduce the concurrency value.
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `checkpoints_synced_from_archive` metric does not increase | Archive configuration missing or incorrect | Verify `state-archive-read-config` is present in `fullnode.yaml` and restart the node |
-| Authentication errors on Mainnet archive | Missing or incorrect AWS credentials | Run the node on EC2 with an instance profile that grants S3 access. Do not use access keys in the config. |
-| Node falls behind despite archive fallback | Archive source has insufficient retention | Use the S3 or GCS full-retention bucket. The HTTPS endpoints retain only 30 days. |
-| Slow archival catch-up | Concurrency too low or limited bandwidth | Increase the `concurrency` parameter. Consider using a snapshot for large gaps instead. |
