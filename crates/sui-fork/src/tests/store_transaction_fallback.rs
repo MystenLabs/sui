@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Transaction fallback tests for [`crate::store::ForkStore`]. Covers the local-hit
-//! path and the remote-fallback pre-fork guard. Wired in from `store.rs` via a
-//! `#[path]` module so it has `super::*` access to `pub(crate)` items.
+//! Transaction fallback tests for [`crate::store::ForkStore`]. They cover the local-hit path and
+//! the remote-fallback pre-fork guard. Wired in from `store.rs` via a `#[path]` module so
+//! `super::*` reaches `pub(crate)` items.
 
 use std::path::Path;
 

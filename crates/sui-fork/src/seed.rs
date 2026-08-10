@@ -3,18 +3,11 @@
 
 //! Fork manifest and seed resolution for seed-bounded index reads.
 //!
-//! Seeding happens once, at fork creation, in two steps. Resolution enumerates
-//! the requested addresses and objects against GraphQL pinned at the fork
-//! checkpoint and records the resulting object references in an immutable
-//! manifest; that enumeration is the part that must be complete and must happen
-//! while the question is still answerable, because nothing the fork does
-//! afterwards reconstructs it. The load then hydrates those references and
-//! hands them to `sui-rpc-store`'s `Restore` pipelines, which is where the
+//! Seeding happens once, at fork creation, in two steps. Resolution enumerates the requested
+//! addresses and objects against GraphQL pinned at the fork checkpoint and records the resulting
+//! object references in an immutable manifest stored on disk. The fork fetches that data from the
+//! live netork RPC and hands them to `sui-rpc-store`'s `Restore` pipelines, which is where the
 //! fork's whole pre-fork derived-index surface comes from.
-//!
-//! Everything downstream is bounded by that: an owner, parent, or type outside
-//! the seed set is not indexed, and reads for it answer empty rather than
-//! reaching for the remote at read time.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -41,16 +34,16 @@ use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
 
-/// Objects hydrated per remote round-trip. The load commits as one batch
-/// regardless; this only bounds the size of an individual GraphQL query.
-const HYDRATE_CHUNK: usize = 50;
+/// Objects fetched per GraphQL query when querying for seed objects. The load commits as one batch
+/// regardless, and this only bounds the size of an individual query.
+const OBJECTS_PER_QUERY: usize = 50;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
 pub struct SeedInput {
     /// Addresses whose owned objects should be recorded in the seed manifest.
     pub addresses: BTreeSet<SuiAddress>,
-    /// Object IDs to fetch and seed when they are owned by an address.
+    /// Object IDs to fetch and seed.
     pub object_ids: BTreeSet<ObjectID>,
 }
 
@@ -65,9 +58,9 @@ pub(crate) struct SeedEntry {
 pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
-    /// Addresses that were fully enumerated to produce this manifest. Nothing
-    /// reads this; it is a record for whoever inspects the fork directory of
-    /// which addresses the seeding used.
+    /// Addresses that were fully enumerated to produce this manifest. Nothing reads the list, and
+    /// it exists as a record for whoever inspects the fork directory of which addresses the seeding
+    /// used.
     #[serde(default)]
     pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
@@ -164,17 +157,15 @@ pub(crate) async fn prepare_seed_manifest(
     Ok(manifest)
 }
 
-/// Load every manifest entry into the rpc-store with its full derived-index
-/// surface, once, before the fork executes anything.
+/// Load every manifest entry into the rpc-store with its full derived-index surface, once, before
+/// the fork executes anything.
 ///
-/// The manifest holds object references, not objects. This function will fetch each object by its
-/// version and id, and then pass them to be restored into the local store (RocksDB) to reconstruct
-/// the owned object indexes and other various derived indexes.
-///
-/// Runs at most once per fork directory. `Balance` accumulates through a merge
-/// operator, so a second pass would double-count every seeded coin. The load
-/// commits its own completion marker atomically with the rows to make that
-/// unrepeatable rather than merely unlikely.
+/// The manifest holds object references rather than objects, so each entry is fetched by id and
+/// version and handed to the restore pipelines, which rebuild the owned-object index and the rest
+/// of the derived surface. The load runs at most once per fork directory, because `Balance`
+/// accumulates through a merge operator and a second pass would double-count every seeded coin, and
+/// it commits its own completion marker atomically with the rows to make that unrepeatable rather
+/// than merely unlikely.
 pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> Result<(), Error> {
     if store.local_store().seed_load_complete()? {
         return Ok(());
@@ -187,13 +178,14 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
         .collect();
 
     let mut objects = Vec::with_capacity(object_refs.len());
-    for chunk in object_refs.chunks(HYDRATE_CHUNK) {
+    for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
         objects.extend(store.fetch_seed_objects(chunk)?);
     }
 
     store.local_store().restore_seed_objects(&objects)
 }
 
+/// Resolve the owned objects and balances belonging to `address`.
 async fn resolve_address_seed(
     remote: &RemoteSource,
     address: SuiAddress,
@@ -210,18 +202,17 @@ async fn resolve_address_seed(
 
 /// Resolve the accumulator balance fields belonging to `address`.
 ///
-/// An address balance is not an object the address owns but a dynamic field
-/// under the accumulator root, so the owned-object enumeration above never
-/// surfaces it, and seeding an address without this would establish its coins
-/// while silently leaving its balance at zero. Local execution does maintain address balances, so a
-/// withdrawal would then apply a delta to a baseline that was never seeded.
+/// An address balance lives in a dynamic field under the accumulator root rather than in an object
+/// the address owns, so the owned-object enumeration above never surfaces it, and seeding an
+/// address without this step would establish its coins while silently leaving its balance at zero.
+/// Local execution does maintain address balances, so a withdrawal would then apply a delta to a
+/// baseline that was never seeded.
 ///
-/// The field's id is derivable from `(address, coin type)`, so the only thing
-/// that has to come from the remote is which coin types to derive for, which is
-/// the one part nothing local can know. Each derived id is then resolved like
-/// any other object reference and seeded as an ordinary object, so the stock
-/// `Balance` restore pipeline picks it up through its accumulator-root arm
-/// without this crate writing a balance row itself.
+/// The field's id is derivable from `(address, coin type)`, so the only thing that has to come from
+/// the remote is which coin types to derive for, which is the one part nothing local can know. Each
+/// derived id is then resolved like any other object reference and seeded as an ordinary object, so
+/// the stock `Balance` restore pipeline picks it up through its accumulator-root arm without this
+/// crate writing a balance row itself.
 async fn resolve_address_balance_seed(
     remote: &RemoteSource,
     address: SuiAddress,
@@ -267,10 +258,10 @@ async fn resolve_address_balance_seed(
     Ok(entries)
 }
 
-/// Object id of the accumulator field holding `address`'s balance of `coin_type`.
+/// Derive the object id of the accumulator field holding `address`'s balance of `coin_type`.
 ///
-/// `coin_type` arrives as the inner type (`0x2::sui::SUI`); the accumulator keys
-/// on the wrapped `0x2::balance::Balance<T>`.
+/// `coin_type` arrives as the inner type (`0x2::sui::SUI`), while the accumulator keys its fields
+/// on the wrapped `0x2::balance::Balance<T>`, so the id is derived from the wrapped form.
 fn accumulator_field_id(address: SuiAddress, coin_type: &str) -> Result<ObjectID, Error> {
     let inner: TypeTag = coin_type
         .parse()
@@ -328,15 +319,23 @@ async fn resolve_seeds(
     } else {
         let lowest_available = store.remote().lowest_available_checkpoint_objects()?;
         if checkpoint < lowest_available {
+            let message = format!(
+                "ignoring --address seeds: checkpoint {checkpoint} is older than the remote's \
+                 object-ownership window (available from checkpoint {lowest_available}, roughly \
+                 the last hour). If the object IDs are known, seed them directly with --object \
+                 instead."
+            );
             warn!(
                 addresses = ?input.addresses,
                 checkpoint,
                 lowest_available,
-                "ignoring --address seeds: checkpoint {checkpoint} is older than the remote's \
-                 object-ownership window (available from checkpoint {lowest_available}, roughly \
-                 the last hour). If the object IDs are known, seed them directly with --object \
-                 instead.",
+                "{message}",
             );
+            // The CLI may run without a tracing subscriber, and a silently
+            // dropped seed address would read as a bug, so the warning also
+            // goes to stderr directly.
+            eprintln!("warning: {message}");
+
             Vec::new()
         } else {
             input.addresses.iter().copied().collect()
@@ -730,9 +729,8 @@ mod tests {
         })
     }
 
-    /// The owned-objects and balances queries take the same variables, so both
-    /// mocks must discriminate on the selection set or the first-mounted one
-    /// swallows the other's requests.
+    /// The owned-objects and balances queries take the same variables, so both mocks must
+    /// discriminate on the selection set or the first-mounted one swallows the other's requests.
     async fn mock_address_objects(
         server: &MockServer,
         checkpoint: u64,
@@ -866,11 +864,10 @@ mod tests {
         assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
     }
 
-    /// An address balance lives in a dynamic field under the accumulator root,
-    /// not on the address, so the owned-object scan never reaches it. Seeding
-    /// has to derive the field id from `(address, coin type)` and pull it in as
-    /// an ordinary object, or the address seeds with its coins and a silently
-    /// zero balance.
+    /// An address balance lives in a dynamic field under the accumulator root, not on the address,
+    /// so the owned-object scan never reaches it. Seeding has to derive the field id from
+    /// `(address, coin type)` and pull it in as an ordinary object, or the address seeds with its
+    /// coins and a silently zero balance.
     #[tokio::test]
     async fn address_seed_pulls_in_the_accumulator_balance_field() {
         let server = MockServer::start().await;
@@ -937,9 +934,8 @@ mod tests {
         );
     }
 
-    /// A coin type reported with no accumulator balance has no field to seed;
-    /// deriving and fetching one would be a wasted round-trip per coin type the
-    /// address merely holds coins of.
+    /// A coin type reported with no accumulator balance has no field to seed; deriving and fetching
+    /// one would be a wasted round-trip per coin type the address merely holds coins of.
     #[tokio::test]
     async fn address_seed_skips_coin_types_without_an_accumulator_balance() {
         let server = MockServer::start().await;
@@ -972,9 +968,9 @@ mod tests {
         assert!(manifest.entries.is_empty());
     }
 
-    /// The accumulator keys on the wrapped `Balance<T>`, while the balances
-    /// connection reports the inner `T`. Getting that wrapping wrong yields a
-    /// plausible-looking id that simply never resolves.
+    /// The accumulator keys on the wrapped `Balance<T>`, while the balances connection reports the
+    /// inner `T`. Getting that wrapping wrong yields a plausible-looking id that simply never
+    /// resolves.
     #[test]
     fn accumulator_field_id_keys_on_the_wrapped_balance_type() {
         let owner = SuiAddress::random_for_testing_only();

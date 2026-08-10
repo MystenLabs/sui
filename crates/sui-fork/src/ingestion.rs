@@ -20,8 +20,7 @@ use crate::store::ForkStore;
 
 type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
-/// Pull-side checkpoint source for the fork's embedded `sui-rpc-store`
-/// indexer.
+/// Checkpoint source for the fork's embedded indexer.
 pub(crate) struct SimulacrumIngestion {
     simulacrum: Arc<RwLock<ForkedSimulacrum>>,
     chain_identifier: ChainIdentifier,

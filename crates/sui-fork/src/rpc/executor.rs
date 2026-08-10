@@ -3,8 +3,7 @@
 
 //! Adapter that exposes the forked-network's Simulacrum through the
 //! `sui_types::transaction_executor::TransactionExecutor` trait so that the
-//! `TransactionExecutionService` gRPC endpoints served by `sui-rpc-api` can
-//! drive it.
+//! `TransactionExecutionService` gRPC endpoints served by `sui-rpc-api` can drive it.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -30,11 +29,10 @@ use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
 
-/// `TransactionExecutor` implementation that runs transactions against the
-/// forked network's Simulacrum. Empty-signature transactions explicitly
-/// request sender impersonation; signed transactions keep Simulacrum's normal
-/// user-signature verification. Each accepted execution is sealed into a fresh
-/// Simulacrum checkpoint and published to checkpoint subscribers.
+/// `TransactionExecutor` implementation that runs transactions against the forked network's
+/// Simulacrum. Empty-signature transactions explicitly request sender impersonation, while signed
+/// transactions keep Simulacrum's normal user-signature verification. Each accepted execution is
+/// sealed into a fresh Simulacrum checkpoint and published to checkpoint subscribers.
 pub(crate) struct ForkedTransactionExecutor {
     context: Arc<Context>,
 }
