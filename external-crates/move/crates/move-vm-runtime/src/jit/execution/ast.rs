@@ -353,7 +353,6 @@ pub enum Type {
     DatatypeInstantiation(Box<(VirtualTableKey, Vec<Type>)>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
-    TyParam(u16),
     U16,
     U32,
     U256,
@@ -995,21 +994,20 @@ impl VariantInstantiation {
 }
 
 impl ArenaType {
-    /// Convert to a runtime type by performing a deep copy. The copy is equivalent to
-    /// substituting each `TyParam` for itself. Size checking is the dispatch tables' concern
-    /// (the interpreter over types), so this is a straight structural conversion.
+    /// Convert to a runtime type by performing a deep copy. Runtime types are always fully
+    /// instantiated (`Type` has no ty-param variant), so `self` must be concrete; a
+    /// `TyParam` here is an invariant violation. Size checking is the dispatch tables'
+    /// concern (the interpreter over types), so this is a straight structural conversion --
+    /// the traversal (and recursion depth) is bounded by the size of `self`, which was
+    /// already bounded when the arena type was built at translation time.
     pub fn to_type(&self) -> PartialVMResult<Type> {
-        Ok(self.to_type_unchecked())
-    }
-
-    /// Deep-copy into a runtime type without checking limits. The traversal (and recursion
-    /// depth) is bounded by the size of `self`, which was already bounded when the arena type
-    /// was built at translation time. Crate-private by design: the checked routes
-    /// ([`ArenaType::to_type`], the dispatch tables' `subst_type`) verify the term's sizes
-    /// against the limits first.
-    pub(crate) fn to_type_unchecked(&self) -> Type {
-        match self {
-            ArenaType::TyParam(idx) => Type::TyParam(*idx),
+        Ok(match self {
+            ArenaType::TyParam(idx) => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "cannot convert uninstantiated type parameter T{idx} to a runtime type"
+                ));
+            }
             ArenaType::Bool => Type::Bool,
             ArenaType::U8 => Type::U8,
             ArenaType::U16 => Type::U16,
@@ -1019,21 +1017,19 @@ impl ArenaType {
             ArenaType::U256 => Type::U256,
             ArenaType::Address => Type::Address,
             ArenaType::Signer => Type::Signer,
-            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_unchecked())),
-            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type_unchecked())),
-            ArenaType::MutableReference(ty) => {
-                Type::MutableReference(Box::new(ty.to_type_unchecked()))
-            }
+            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type()?)),
+            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type()?)),
+            ArenaType::MutableReference(ty) => Type::MutableReference(Box::new(ty.to_type()?)),
             ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
             ArenaType::DatatypeInstantiation(def_inst) => {
                 let (def_idx, instantiation) = &**def_inst;
                 let inst = instantiation
                     .iter()
-                    .map(|ty| ty.to_type_unchecked())
-                    .collect::<Vec<_>>();
+                    .map(|ty| ty.to_type())
+                    .collect::<PartialVMResult<Vec<_>>>()?;
                 Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
             }
-        }
+        })
     }
 }
 
@@ -1225,8 +1221,7 @@ impl Type {
             | Type::U256
             | Type::Address
             | Type::Signer
-            | Type::Datatype(_)
-            | Type::TyParam(_) => (1, 1),
+            | Type::Datatype(_) => (1, 1),
         }
     }
 }
