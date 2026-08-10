@@ -47,13 +47,8 @@ pub struct WalletMonitoringEntry {
     name: String,
     cron_schedule: String,
     sql_query: String,
-    // Decimals of the coin whose base units `sql_query` reports, used to render incident text in
-    // whole tokens. SUI and WAL are 9, DEEP and NS are 6. Required rather than defaulted: a wrong
-    // value silently misstates the balance an incident reports.
     decimals: u32,
-    // Optional freshness guard, set together with `max_data_age_secs`. Must return the age in
-    // seconds of the data behind `sql_query`. A stale snapshot yields no breaching rows, which is
-    // indistinguishable from a healthy run, so without this a stalled pipeline mutes the monitor.
+    // Optional freshness guard, set together with `max_data_age_secs`
     #[serde(default)]
     freshness_sql: Option<String>,
     #[serde(default)]
