@@ -1,0 +1,144 @@
+---
+title: TypeScript SDK Migration Guide
+description: >-
+  Migrate from @mysten/sui.js to @mysten/sui with updated imports,
+  renamed methods, and new transaction building patterns.
+keywords:
+  - SDK migration
+  - TypeScript SDK
+  - breaking changes
+  - sui.js
+  - '@mysten/sui'
+  - TransactionBlock
+  - Transaction
+  - SDK 2.0
+goal:
+  description: >-
+    Reader can migrate their TypeScript code from @mysten/sui.js to
+    @mysten/sui by following the rename and API change tables
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I migrate from @mysten/sui.js to @mysten/sui?
+  - What changed in the Sui TypeScript SDK 2.0?
+  - What is the replacement for TransactionBlock?
+  - How do I fix import errors after updating the Sui SDK?
+answer: >-
+  Migrate from @mysten/sui.js to @mysten/sui by updating the package
+  name, renaming TransactionBlock to Transaction, updating pure value
+  calls, and switching to the new verification and signing methods.
+---
+
+The Sui TypeScript SDK was renamed from `@mysten/sui.js` to `@mysten/sui`. This migration guide covers the breaking changes and provides mapping tables to update your code. For the full reference, see the [SDK migration docs on sdk.mystenlabs.com](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0).
+
+## Package rename
+
+Update your dependency and all imports:
+
+```sh
+$ npm uninstall @mysten/sui.js && npm install @mysten/sui
+```
+
+Replace all import paths:
+
+| Before | After |
+|---|---|
+| `@mysten/sui.js` | `@mysten/sui` |
+| `@mysten/sui.js/client` | `@mysten/sui/client` |
+| `@mysten/sui.js/transactions` | `@mysten/sui/transactions` |
+| `@mysten/sui.js/bcs` | `@mysten/sui/bcs` |
+| `@mysten/sui.js/zklogin` | `@mysten/sui/zklogin` |
+
+## Transaction API renames
+
+The `TransactionBlock` class and all related methods were renamed to `Transaction` ([SDK migration reference](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0)):
+
+| Before | After |
+|---|---|
+| `TransactionBlock` | `Transaction` |
+| `isTransactionBlock` | `isTransaction` |
+| `TransactionBlockInput` | `TransactionInput` |
+| `signer.signTransactionBlock` | `signer.signTransaction` |
+| `pubkey.verifyTransactionBlock` | `pubkey.verifyTransaction` |
+| `suiClient.waitForTransactionBlock()` | `suiClient.waitForTransaction()` |
+| `suiClient.signAndExecuteTransactionBlock()` | `suiClient.signAndExecuteTransaction()` |
+| `transaction.serialize()` | `await transaction.toJSON()` |
+| `new TransactionBlock(oldTx)` | `Transaction.from(oldTx)` |
+| `transaction.blockData` | `transaction.getData()` |
+
+## Pure value changes
+
+The `transaction.pure()` method now requires explicit type methods instead of inferred types ([SDK migration reference](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0)):
+
+| Before | After |
+|---|---|
+| `tx.pure('0x123')` | `tx.pure.address('0x123')` |
+| `tx.pure(123)` | `tx.pure.u64(123n)` |
+| `tx.pure(123, 'u64')` | `tx.pure.u64(123n)` |
+| `tx.pure(true)` | `tx.pure.bool(true)` |
+
+For complex types, use BCS serialization directly:
+
+{/* TODO: Import code from MystenLabs/ts-sdks — show BCS vector serialization with tx.pure() */}
+{/* Description: Example of tx.pure(bcs.vector(bcs.Address).serialize(['0x123'])) */}
+
+## Signing and verification
+
+| Before | After |
+|---|---|
+| `keypair.signData(data)` | `await keypair.sign(data)` |
+| `verifyTransactionBlock` (from `@mysten/sui.js/verify`) | `verifyTransactionSignature` (from `@mysten/sui/verify`) |
+| `verifyPersonalMessage` (from `@mysten/sui.js/verify`) | `verifyPersonalMessageSignature` (from `@mysten/sui/verify`) |
+| `publicKeyFromSuiBytes` (from `@mysten/sui.js/multisig`) | `publicKeyFromSuiBytes` (from `@mysten/sui/verify`) |
+
+## BCS changes
+
+- The type registry is removed. Use direct `BcsType` instances instead of registering types.
+- Parsed enums now include a `$kind` discriminator property.
+- The `size` option in `BcsWriter` is renamed to `initialSize`.
+- New convenience methods: `fromBase64()`, `fromBase58()`, `fromHex()` on all `BcsType` instances.
+
+## dApp Kit changes
+
+If you use `@mysten/dapp-kit`, update hook names and parameters ([SDK migration reference](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0)):
+
+| Before | After |
+|---|---|
+| `useSignTransactionBlock()` | `useSignTransaction()` |
+| `useSignAndExecuteTransactionBlock()` | `useSignAndExecuteTransaction()` |
+| `{ transactionBlock }` parameter | `{ transaction }` parameter |
+| `{ transactionBlockBytes }` response | `{ bytes }` response |
+
+## Related package changes
+
+Other packages in the `@mysten` ecosystem follow the same rename pattern ([SDK migration reference](https://sdk.mystenlabs.com/typescript/migrations/sui-1.0)):
+
+| Package | Change |
+|---|---|
+| `@mysten/kiosk` | `{ transactionBlock }` → `{ transaction }` |
+| `@mysten/enoki` | `sponsorAndExecuteTransactionBlock` → `sponsorAndExecuteTransaction` |
+| `@mysten/zksend` | `getSentTransactionBlocksWithLinks` → `getSentTransactionsWithLinks` |
+
+## Verify your migration
+
+After updating your code, verify the migration:
+
+1. Search your codebase for any remaining `sui.js` imports:
+   ```sh
+   $ grep -r "sui\.js" src/
+   ```
+2. Search for any remaining `TransactionBlock` references:
+   ```sh
+   $ grep -r "TransactionBlock" src/
+   ```
+3. Run your test suite to catch runtime errors from renamed methods.

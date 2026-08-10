@@ -332,3 +332,20 @@ assert!(&t1 != &t2, 1);
 ```
 
 This is unlikely to be the definition of equality that you want.
+
+## Debugging dynamic field errors
+
+Dynamic field operations are a common source of runtime `MoveAbort` errors. The following table lists the most frequent errors, their causes, and how to fix them ([`sui::dynamic_field` source](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/dynamic_field.move)):
+
+| Error | Abort code | Cause | Fix |
+|---|---|---|---|
+| `EFieldDoesNotExist` | 1 | You called `borrow`, `borrow_mut`, or `remove` on a field name that does not exist on the parent object. | Check that the field was added with `add` before accessing it. Use `exists_` to verify before borrowing. |
+| `EFieldAlreadyExists` | 0 | You called `add` with a field name that already exists on the parent object. | Check with `exists_` before adding, or use `remove` first if you want to overwrite. |
+| `EBCSSerializationFailure` | 3 | The BCS serialization of the field name or value failed. This typically happens when the type does not match the stored field's type. | Verify that the type parameters you pass to `borrow`, `borrow_mut`, or `remove` match the types used when the field was added. |
+| `borrow_child_object` failure | Varies | A transaction attempted to access a dynamic object field that does not exist at the expected child object ID. This commonly occurs when the parent object was modified between reads, or when using a stale object reference. | Re-read the parent object to get the current state. If using [programmable transaction blocks](/develop/transactions/ptbs/prog-txn-blocks), ensure the parent object input is fresh. |
+
+### Common debugging patterns
+
+- **Field name type mismatch:** The most common cause of `EFieldDoesNotExist` is passing the wrong type for the field name. Dynamic fields are keyed by both name value and name type. A field added with key type `vector<u8>` cannot be accessed with key type `String`, even if the bytes are identical.
+- **Deleted parent object:** If the parent object was deleted or wrapped between the time you read it and the time you access its dynamic field, the transaction aborts. Ensure the parent object exists and is accessible in your transaction.
+- **Object vs field confusion:** `dynamic_field::borrow` returns the stored value directly. `dynamic_object_field::borrow` returns a reference to a child object. Using the wrong module for your field type causes type mismatches.

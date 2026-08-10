@@ -120,6 +120,7 @@ const references = [
 		},
 		items: [
 			'references/sdk-comparison',
+			'references/sdk-migration',
 			{
 				type: 'link',
 				label: 'dApp Kit',
