@@ -502,6 +502,25 @@ async fn test_event_subscription_resume_backfill_then_live() {
 }
 
 #[tokio::test]
+async fn test_event_subscription_start_too_far_ahead_errors() {
+    let cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+
+    // Well past the default window allowed ahead of the tip (~300 checkpoints, about a minute).
+    let far_ahead = cluster.validator_checkpoint_tip() + 1_000;
+    let query = format!(
+        "subscription {{ events(filter: {{ afterCheckpoint: {far_ahead} }}) {{ node {{ sequenceNumber }} }} }}",
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let item = stream.next().await.unwrap();
+    let message = item["errors"][0]["message"].as_str().unwrap_or_default();
+    assert_eq!(
+        message,
+        "Cannot start a subscription more than 300 checkpoints ahead of the current tip"
+    );
+}
+
+#[tokio::test]
 async fn test_event_subscription_empty_backfill_hands_off_to_live() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
     let package_id = emit_event_harness::publish(&mut cluster.validator).await;

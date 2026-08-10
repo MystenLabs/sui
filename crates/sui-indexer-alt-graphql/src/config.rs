@@ -292,6 +292,13 @@ pub struct SubscriptionConfig {
     /// already rejects a query whose worst case is too large, so this bounds the sustained rate, not
     /// the peak.
     pub per_subscriber_max_output_nodes_per_second: u32,
+
+    /// Maximum number of checkpoints ahead of the current tip a subscription may start from. There
+    /// is nothing to backfill ahead of the tip, so a request beyond it just waits for the chain to
+    /// reach that checkpoint; a far-future request would hold a connection open indefinitely, so it
+    /// is rejected instead. Raising this admits starts further past the tip, at the cost of
+    /// connections parked waiting longer.
+    pub max_start_checkpoints_ahead_of_tip: u64,
 }
 
 impl Default for SubscriptionConfig {
@@ -304,6 +311,8 @@ impl Default for SubscriptionConfig {
             per_subscriber_scan_max_concurrent_fetches: 50,
             max_concurrent_resolutions: 100,
             per_subscriber_max_output_nodes_per_second: 1_000_000,
+            // About a minute at the average checkpoint rate.
+            max_start_checkpoints_ahead_of_tip: 300,
         }
     }
 }
@@ -318,6 +327,7 @@ pub struct SubscriptionLayer {
     pub per_subscriber_scan_max_concurrent_fetches: Option<usize>,
     pub max_concurrent_resolutions: Option<usize>,
     pub per_subscriber_max_output_nodes_per_second: Option<u32>,
+    pub max_start_checkpoints_ahead_of_tip: Option<u64>,
 }
 
 impl SubscriptionLayer {
@@ -342,6 +352,9 @@ impl SubscriptionLayer {
             per_subscriber_max_output_nodes_per_second: self
                 .per_subscriber_max_output_nodes_per_second
                 .unwrap_or(base.per_subscriber_max_output_nodes_per_second),
+            max_start_checkpoints_ahead_of_tip: self
+                .max_start_checkpoints_ahead_of_tip
+                .unwrap_or(base.max_start_checkpoints_ahead_of_tip),
         }
     }
 }
@@ -666,6 +679,7 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
             per_subscriber_max_output_nodes_per_second: Some(
                 value.per_subscriber_max_output_nodes_per_second,
             ),
+            max_start_checkpoints_ahead_of_tip: Some(value.max_start_checkpoints_ahead_of_tip),
         }
     }
 }
