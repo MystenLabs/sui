@@ -31,6 +31,15 @@ use crate::{
 /// The subscription is gated at `COMMIT_LAG_MULTIPLIER` (5) batches of lag, where the
 /// observer service starts rejecting streamed blocks anyway; the band between the two
 /// thresholds is hysteresis preventing rapid gate flapping.
+///
+/// The value must stay within `1..=COMMIT_LAG_MULTIPLIER`:
+/// - `>= 1` is load-bearing for liveness: commit sync never fetches partial batches, so
+///   it can leave up to `commit_sync_batch_size - 1` commits of residual lag that only
+///   streamed blocks can close. With `0`, the resume condition (zero lag) would be
+///   unreachable and the subscription would stay gated forever.
+/// - `<= COMMIT_LAG_MULTIPLIER`, or the subscription resumes while still commit-lagging
+///   and the in-stream lag check immediately drops it again, churning reconnects until
+///   commit sync shrinks the lag below the gate threshold.
 const RESUBSCRIBE_LAG_BATCHES: u32 = 1;
 
 /// How often a gated subscription re-evaluates commit lag.
