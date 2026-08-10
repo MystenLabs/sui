@@ -140,7 +140,7 @@ pub(crate) struct PackageCursor {
 
 /// Cursor for iterating over package publishes on the gRPC path, which scans transactions that
 /// wrote packages, in transaction order. Points at one package write within one transaction.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
 pub struct PackageToken {
     /// Hint for the checkpoint the transaction belongs to (0 = unknown).
     checkpoint: u64,
@@ -1175,7 +1175,7 @@ impl MovePackage {
             let package = Self::from_object_contents(scope.clone(), object.clone())
                 .with_context(|| format!("Object {id} written as a package is not a package"))?;
 
-            let cursor = CPackage::new(OpaqueCursor::new(token.clone())).encode_cursor();
+            let cursor = CPackage::new(OpaqueCursor::new(*token)).encode_cursor();
             edges.push(Edge::new(cursor, package));
         }
 
@@ -1190,12 +1190,9 @@ impl MovePackage {
 
         let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
             let end = if trimmed {
-                expanded.last().map(|(t, _, _)| t.clone())
+                expanded.last().map(|(t, _, _)| *t)
             } else {
-                last_pos.map(|t| PackageToken {
-                    write_index: u32::MAX,
-                    ..t
-                })
+                last_pos.map(|t| t.with_write_index(u32::MAX))
             };
             (page.after().is_some(), trimmed || more, first_pos, end)
         } else {
@@ -1204,14 +1201,11 @@ impl MovePackage {
             // page), `last_cursor` — or the trimmed tail — is furthest back (the ascending
             // start).
             let start = if trimmed {
-                expanded.last().map(|(t, _, _)| t.clone())
+                expanded.last().map(|(t, _, _)| *t)
             } else {
                 last_pos
             };
-            let end = first_pos.map(|t| PackageToken {
-                write_index: u32::MAX,
-                ..t
-            });
+            let end = first_pos.map(|t| t.with_write_index(u32::MAX));
             (trimmed || more, page.before().is_some(), start, end)
         };
 
@@ -1370,10 +1364,10 @@ impl PackageToken {
         })
     }
 
-    fn with_write_index(&self, write_index: u32) -> Self {
+    fn with_write_index(self, write_index: u32) -> Self {
         Self {
             write_index,
-            ..self.clone()
+            ..self
         }
     }
 }
@@ -1384,7 +1378,7 @@ impl CPackage {
     /// transaction-order scan.
     fn token(&self) -> Result<PackageToken, RpcError> {
         match self {
-            CPackage::Primary(c) => Ok((**c).clone()),
+            CPackage::Primary(c) => Ok(**c),
             CPackage::Secondary(_) => Err(pagination::Error::UnusableCursor.into()),
         }
     }
