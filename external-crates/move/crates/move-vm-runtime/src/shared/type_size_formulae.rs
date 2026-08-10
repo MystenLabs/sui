@@ -51,11 +51,9 @@ use crate::{
 use move_binary_format::{
     checked_as,
     errors::{PartialVMError, PartialVMResult},
+    file_format::TypeParameterIndex,
     partial_vm_error,
 };
-
-/// Index of a type parameter.
-pub(crate) type TyParamIndex = u16;
 
 // -------------------------------------------------------------------------------------------------
 // TypeSize
@@ -80,14 +78,14 @@ impl TypeSize {
         layout_size: 1,
     };
 
-    /// The sizes of `vector<inner>` / `&inner` / `&mut inner`: one node and one level on top of
+    /// The sizes of `vector<self>` / `&self` / `&mut self`: one node and one level on top of
     /// the element in every measure.
-    pub(crate) fn wrap(inner: TypeSize) -> TypeSize {
+    pub(crate) fn wrap(self) -> TypeSize {
         TypeSize {
-            type_size: inner.type_size.saturating_add(1),
-            type_depth: inner.type_depth.saturating_add(1),
-            value_depth: inner.value_depth.saturating_add(1),
-            layout_size: inner.layout_size.saturating_add(1),
+            type_size: self.type_size.saturating_add(1),
+            type_depth: self.type_depth.saturating_add(1),
+            value_depth: self.value_depth.saturating_add(1),
+            layout_size: self.layout_size.saturating_add(1),
         }
     }
 }
@@ -104,11 +102,46 @@ pub(crate) fn check_syntactic_limits(type_size: u64, type_depth: u64) -> Partial
     Ok(())
 }
 
-fn out_of_bounds_parameter(param: TyParamIndex, len: usize) -> PartialVMError {
+fn out_of_bounds_parameter(param: TypeParameterIndex, len: usize) -> PartialVMError {
     partial_vm_error!(
         UNKNOWN_INVARIANT_VIOLATION_ERROR,
         "type parameter {param} out of bounds -- len {len}"
     )
+}
+
+// The solve loops, shared between the heap forms and their arena flavors (which differ only in
+// where the term slice lives).
+
+fn solve_linear_terms(constant: u64, terms: &[LinearTerm], args: &[u64]) -> PartialVMResult<u64> {
+    let mut acc = constant;
+    for term in terms {
+        let value = args
+            .get(term.param as usize)
+            .ok_or_else(|| out_of_bounds_parameter(term.param, args.len()))?;
+        acc = acc.saturating_add(term.coefficient.saturating_mul(*value));
+    }
+    // Every measure of a real type is at least one node/level, and argument measures are
+    // themselves solved measures, so a zero here means a broken formula.
+    debug_assert_ne!(acc, 0, "linear form solved to zero");
+    Ok(acc)
+}
+
+fn solve_max_plus_terms(
+    constant: u64,
+    terms: &[MaxPlusTerm],
+    args: &[u64],
+) -> PartialVMResult<u64> {
+    let mut acc = constant;
+    for term in terms {
+        let value = args
+            .get(term.param as usize)
+            .ok_or_else(|| out_of_bounds_parameter(term.param, args.len()))?;
+        acc = acc.max(term.offset.saturating_add(*value));
+    }
+    // Every measure of a real type is at least one node/level, and argument measures are
+    // themselves solved measures, so a zero here means a broken formula.
+    debug_assert_ne!(acc, 0, "max-plus form solved to zero");
+    Ok(acc)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -118,14 +151,14 @@ fn out_of_bounds_parameter(param: TyParamIndex, len: usize) -> PartialVMError {
 /// One term of a [`LinearForm`]: `coefficient · x_param`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LinearTerm {
-    pub(crate) param: TyParamIndex,
+    pub(crate) param: TypeParameterIndex,
     pub(crate) coefficient: u64,
 }
 
 /// One term of a [`MaxPlusForm`]: `offset + x_param`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MaxPlusTerm {
-    pub(crate) param: TyParamIndex,
+    pub(crate) param: TypeParameterIndex,
     pub(crate) offset: u64,
 }
 
@@ -154,7 +187,7 @@ impl LinearForm {
     }
 
     /// The form of a bare parameter: `x_param`.
-    pub(crate) fn parameter(param: TyParamIndex) -> Self {
+    pub(crate) fn parameter(param: TypeParameterIndex) -> Self {
         Self {
             constant: 0,
             terms: vec![LinearTerm {
@@ -208,18 +241,21 @@ impl LinearForm {
     ///
     /// Example: `self = 1 + 2·x0 + x1`, `args = [4, 5]` gives `1 + 2·4 + 5 = 14`.
     pub(crate) fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
-        let mut acc = self.constant;
-        for term in &self.terms {
-            let value = args
-                .get(term.param as usize)
-                .ok_or_else(|| out_of_bounds_parameter(term.param, args.len()))?;
-            acc = acc.saturating_add(term.coefficient.saturating_mul(*value));
-        }
-        Ok(acc)
+        solve_linear_terms(self.constant, &self.terms, args)
     }
 
     fn canonicalize(&mut self) {
         self.terms.sort_unstable_by_key(|t| t.param);
+    }
+
+    /// Move this form's terms into the package arena for storage in the execution AST. The
+    /// arena never runs destructors, so arena-resident structures must hold the arena flavor
+    /// rather than this heap-owning one.
+    fn into_arena(self, arena: &ArenaBuilder) -> PartialVMResult<ArenaLinearForm> {
+        Ok(ArenaLinearForm {
+            constant: self.constant,
+            terms: arena.alloc_vec(self.terms.into_iter())?,
+        })
     }
 }
 
@@ -232,7 +268,7 @@ impl MaxPlusForm {
     }
 
     /// The form of a bare parameter: `x_param`.
-    pub(crate) fn parameter(param: TyParamIndex) -> Self {
+    pub(crate) fn parameter(param: TypeParameterIndex) -> Self {
         Self {
             constant: 0,
             terms: vec![MaxPlusTerm { param, offset: 0 }],
@@ -281,18 +317,74 @@ impl MaxPlusForm {
     ///
     /// Example: `self = max(1, 2+x0, x1)`, `args = [3, 5]` gives `max(1, 2+3, 5) = 5`.
     pub(crate) fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
-        let mut acc = self.constant;
-        for term in &self.terms {
-            let value = args
-                .get(term.param as usize)
-                .ok_or_else(|| out_of_bounds_parameter(term.param, args.len()))?;
-            acc = acc.max(term.offset.saturating_add(*value));
-        }
-        Ok(acc)
+        solve_max_plus_terms(self.constant, &self.terms, args)
     }
 
     fn canonicalize(&mut self) {
         self.terms.sort_unstable_by_key(|t| t.param);
+    }
+
+    /// Move this form's terms into the package arena for storage in the execution AST. The
+    /// arena never runs destructors, so arena-resident structures must hold the arena flavor
+    /// rather than this heap-owning one.
+    fn into_arena(self, arena: &ArenaBuilder) -> PartialVMResult<ArenaMaxPlusForm> {
+        Ok(ArenaMaxPlusForm {
+            constant: self.constant,
+            terms: arena.alloc_vec(self.terms.into_iter())?,
+        })
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Arena forms
+// -------------------------------------------------------------------------------------------------
+
+// The package arena never runs destructors (see `ArenaBuilder::alloc_box`'s safety note), so an
+// arena-resident structure must not own heap memory -- a heap `Vec` stored in the arena would
+// leak its buffer when the package is evicted. These are the arena flavors of the two forms:
+// identical shape, terms in the arena. The JIT builds the heap flavor (term merging needs
+// mutation) and converts at the arena boundary (`into_arena`); symbolic work at execution time
+// converts back ([`to_form`](ArenaLinearForm::to_form)).
+
+/// Arena-resident flavor of [`LinearForm`].
+#[derive(Debug)]
+pub(crate) struct ArenaLinearForm {
+    constant: u64,
+    terms: ArenaVec<LinearTerm>,
+}
+
+impl ArenaLinearForm {
+    fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
+        solve_linear_terms(self.constant, &self.terms, args)
+    }
+
+    /// Clone back to the heap flavor for symbolic work (`evaluate`'s absorb/substitute passes).
+    fn to_form(&self) -> LinearForm {
+        LinearForm {
+            constant: self.constant,
+            terms: self.terms.to_vec(),
+        }
+    }
+}
+
+/// Arena-resident flavor of [`MaxPlusForm`].
+#[derive(Debug)]
+pub(crate) struct ArenaMaxPlusForm {
+    constant: u64,
+    terms: ArenaVec<MaxPlusTerm>,
+}
+
+impl ArenaMaxPlusForm {
+    fn solve(&self, args: &[u64]) -> PartialVMResult<u64> {
+        solve_max_plus_terms(self.constant, &self.terms, args)
+    }
+
+    /// Clone back to the heap flavor for symbolic work (`evaluate`'s absorb/substitute passes).
+    fn to_form(&self) -> MaxPlusForm {
+        MaxPlusForm {
+            constant: self.constant,
+            terms: self.terms.to_vec(),
+        }
     }
 }
 
@@ -313,7 +405,7 @@ pub(crate) struct PartialTypeSizeFormula {
 
 impl PartialTypeSizeFormula {
     /// The form of parameter `param`: every measure is that parameter's own measure.
-    pub(crate) fn parameter(param: TyParamIndex) -> Self {
+    pub(crate) fn parameter(param: TypeParameterIndex) -> Self {
         Self {
             type_size: LinearForm::parameter(param),
             type_depth: MaxPlusForm::parameter(param),
@@ -473,7 +565,7 @@ pub(crate) enum ArgumentBase {
     /// The enclosing datatype's (or, for a term, function's) type parameter `i`: the identity
     /// formula `xi`. This is what
     /// makes evaluation produce a *formula* over the datatype's parameters rather than a number.
-    TypeParameter(TyParamIndex),
+    TypeParameter(TypeParameterIndex),
     /// The result of an earlier application -- how nesting reads after linearization: for
     /// datatypes `R` and `S`, in `R<S<u64>>` the entry for `S<u64>` precedes `R`'s, which
     /// references it here.
@@ -504,10 +596,10 @@ pub(crate) enum ArgumentBase {
 /// `layout_size_local = 3` (the `W` node, the `u64`, the vector).
 #[derive(Debug)]
 pub(crate) struct ArenaTypeSizeFormula {
-    pub(crate) type_size: LinearForm,
-    pub(crate) type_depth: MaxPlusForm,
-    pub(crate) value_depth_local: MaxPlusForm,
-    pub(crate) layout_size_local: LinearForm,
+    type_size: ArenaLinearForm,
+    type_depth: ArenaMaxPlusForm,
+    value_depth_local: ArenaMaxPlusForm,
+    layout_size_local: ArenaLinearForm,
     /// Every datatype mentioned by the field (or term) types (deduplicated, first-mention
     /// order). These are exactly the formulae [`evaluate`](Self::evaluate) must be handed; the
     /// dispatch tables' resolution work queue reads this list directly, so dependency
@@ -613,10 +705,26 @@ impl Linearizer {
                                 work.push(Item::Compile(arg));
                             }
                         }
-                        _ => compiled.push(Argument {
+                        ArenaType::Bool
+                        | ArenaType::U8
+                        | ArenaType::U16
+                        | ArenaType::U32
+                        | ArenaType::U64
+                        | ArenaType::U128
+                        | ArenaType::U256
+                        | ArenaType::Address
+                        | ArenaType::Signer => compiled.push(Argument {
                             vector_layers,
                             base: ArgumentBase::Primitive,
                         }),
+                        ArenaType::Vector(_)
+                        | ArenaType::Reference(_)
+                        | ArenaType::MutableReference(_) => {
+                            return Err(partial_vm_error!(
+                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                                "vector/reference layers were stripped above"
+                            ));
+                        }
                     }
                 }
                 Item::Assemble {
@@ -743,7 +851,15 @@ fn visit_field(
                     .field_depth = Some(prefix_depth);
                 return Ok(());
             }
-            _ => {
+            ArenaType::Bool
+            | ArenaType::U8
+            | ArenaType::U16
+            | ArenaType::U32
+            | ArenaType::U64
+            | ArenaType::U128
+            | ArenaType::U256
+            | ArenaType::Address
+            | ArenaType::Signer => {
                 value_depth_local.constant = value_depth_local
                     .constant
                     .max(prefix_depth.saturating_add(1));
@@ -807,10 +923,10 @@ impl ArenaTypeSizeFormula {
             layout_size_local.canonicalize();
             let (keys, applications) = linearizer.finish(arena)?;
             Ok(ArenaTypeSizeFormula {
-                type_size,
-                type_depth,
-                value_depth_local,
-                layout_size_local,
+                type_size: type_size.into_arena(arena)?,
+                type_depth: type_depth.into_arena(arena)?,
+                value_depth_local: value_depth_local.into_arena(arena)?,
+                layout_size_local: layout_size_local.into_arena(arena)?,
                 keys,
                 applications,
             })
@@ -895,7 +1011,16 @@ impl ArenaTypeSizeFormula {
                     }
                 }
                 // Primitives and uninstantiated datatypes: one node, one level.
-                _ => {
+                ArenaType::Bool
+                | ArenaType::U8
+                | ArenaType::U16
+                | ArenaType::U32
+                | ArenaType::U64
+                | ArenaType::U128
+                | ArenaType::U256
+                | ArenaType::Address
+                | ArenaType::Signer
+                | ArenaType::Datatype(_) => {
                     type_size.constant = type_size.constant.saturating_add(1);
                     type_depth.constant = type_depth.constant.max(depth.saturating_add(1));
                 }
@@ -920,10 +1045,10 @@ impl ArenaTypeSizeFormula {
         layout_size_local.canonicalize();
         let (keys, applications) = linearizer.finish(arena)?;
         Ok(ArenaTypeSizeFormula {
-            type_size,
-            type_depth,
-            value_depth_local,
-            layout_size_local,
+            type_size: type_size.into_arena(arena)?,
+            type_depth: type_depth.into_arena(arena)?,
+            value_depth_local: value_depth_local.into_arena(arena)?,
+            layout_size_local: layout_size_local.into_arena(arena)?,
             keys,
             applications,
         })
@@ -993,8 +1118,8 @@ impl ArenaTypeSizeFormula {
         // returns a reference into the cache -- no per-lookup clones.
         let key_formulae = key_formulae.read();
         let mut results: Vec<PartialTypeSizeFormula> = Vec::with_capacity(self.applications.len());
-        let mut value_depth = self.value_depth_local.clone();
-        let mut layout_size = self.layout_size_local.clone();
+        let mut value_depth = self.value_depth_local.to_form();
+        let mut layout_size = self.layout_size_local.to_form();
         for application in self.applications.iter() {
             let args = application
                 .arguments
@@ -1028,8 +1153,8 @@ impl ArenaTypeSizeFormula {
         value_depth.canonicalize();
         layout_size.canonicalize();
         Ok(PartialTypeSizeFormula {
-            type_size: self.type_size.clone(),
-            type_depth: self.type_depth.clone(),
+            type_size: self.type_size.to_form(),
+            type_depth: self.type_depth.to_form(),
             value_depth,
             layout_size,
         })

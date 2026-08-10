@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-use move_binary_format::{checked_as, errors::*, partial_vm_error};
+use move_binary_format::{checked_as, errors::*, partial_vm_error, safe_unwrap};
 use move_core_types::{
     gas_algebra::{NumArgs, NumBytes},
     vm_status::StatusType,
@@ -762,14 +762,14 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_len()?;
-            let value = vec_ref.len_internal(specialization)?;
+            let value = vec_ref.len_specialized(specialization)?;
             state.push_operand(value)?;
         }
         Bytecode::VecImmBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
-            let res = vec_ref.borrow_elem_internal(idx, specialization);
+            let res = vec_ref.borrow_elem_specialized(idx, specialization);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
         }
@@ -777,7 +777,7 @@ fn op_step_impl(
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
-            let res = vec_ref.borrow_elem_internal(idx, specialization);
+            let res = vec_ref.borrow_elem_specialized(idx, specialization);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
         }
@@ -786,7 +786,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_push_back(&elem)?;
-            vec_ref.push_back_internal(
+            vec_ref.push_back_specialized(
                 elem,
                 specialization,
                 run_context.vm_config.runtime_limits_config.vector_len_max,
@@ -795,7 +795,7 @@ fn op_step_impl(
         Bytecode::VecPopBack(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
-            let res = vec_ref.pop_internal(specialization);
+            let res = vec_ref.pop_specialized(specialization);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
@@ -803,7 +803,7 @@ fn op_step_impl(
             let vec_val = state.pop_operand_as::<Vector>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
-            let elements = vec_val.unpack_internal(specialization, *num)?;
+            let elements = vec_val.unpack_specialized(specialization, *num)?;
             for value in elements {
                 state.push_operand(value)?;
             }
@@ -814,7 +814,7 @@ fn op_step_impl(
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_swap()?;
-            vec_ref.swap_internal(idx1, idx2, specialization)?;
+            vec_ref.swap_specialized(idx1, idx2, specialization)?;
         }
         Bytecode::PackVariant(variant_def_ptr) => {
             let enum_type = variant_def_ptr.datatype();
@@ -1175,13 +1175,12 @@ fn vector_spec(elem: &ArenaType, ty_args: &TypeArguments) -> PartialVMResult<Vec
 /// type is never walked field by field. `ty` is depth-bounded by construction, so `type_size_of`'s
 /// recursion over it is safe.
 fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<()> {
-    let Some(max_depth) = run_context
-        .vm_config
-        .runtime_limits_config
-        .max_value_nest_depth
-    else {
-        return Ok(());
-    };
+    let max_depth = safe_unwrap!(
+        run_context
+            .vm_config
+            .runtime_limits_config
+            .max_value_nest_depth
+    );
     if run_context.vtables.value_depth_of(ty)? > max_depth {
         return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
     }
