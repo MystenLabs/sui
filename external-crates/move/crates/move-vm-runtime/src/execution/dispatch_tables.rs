@@ -498,11 +498,6 @@ impl VMDispatchTables {
                 Type::Reference(_) | Type::MutableReference(_) => Ok(AbilitySet::REFERENCES),
                 Type::Signer => Ok(AbilitySet::SIGNER),
 
-                Type::TyParam(_) => Err(partial_vm_error!(
-                    UNREACHABLE,
-                    "Unexpected TyParam type after translating from TypeTag to Type"
-                )),
-
                 Type::Vector(ty) => AbilitySet::polymorphic_abilities(
                     AbilitySet::VECTOR,
                     vec![false],
@@ -541,7 +536,6 @@ impl VMDispatchTables {
             | Type::Vector(_)
             | Type::Reference(_)
             | Type::MutableReference(_)
-            | Type::TyParam(_)
             | Type::U16
             | Type::U32
             | Type::U256 => None,
@@ -691,12 +685,6 @@ impl VMDispatchTables {
                         .collect::<PartialVMResult<Vec<_>>>()?;
                     self.virtual_key_size_formula(key)?.solve(&arg_sizes)?
                 }
-                Type::TyParam(_) => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Type parameter should be fully resolved"
-                    ));
-                }
                 Type::Bool
                 | Type::U8
                 | Type::U16
@@ -737,12 +725,6 @@ impl VMDispatchTables {
                     self.virtual_key_size_formula(key)?
                         .value_depth
                         .solve(&arg_depths)?
-                }
-                Type::TyParam(_) => {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "Type parameter should be fully resolved"
-                    ));
                 }
                 Type::Bool
                 | Type::U8
@@ -864,7 +846,7 @@ impl VMDispatchTables {
                         type_size_budget,
                     )?))
                 }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                Type::Reference(_) | Type::MutableReference(_) => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "no type tag for {:?}",
@@ -985,7 +967,7 @@ impl VMDispatchTables {
                     let (gidx, ty_args) = &**inst;
                     datatype_to_type_layout(tables, gidx, ty_args)?.into_layout()
                 }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                Type::Reference(_) | Type::MutableReference(_) => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "no type layout for {:?}",
@@ -1115,7 +1097,7 @@ impl VMDispatchTables {
                     let (gidx, ty_args) = &**inst;
                     datatype_to_fully_annotated_layout(tables, gidx, ty_args)?.into_layout()
                 }
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+                Type::Reference(_) | Type::MutableReference(_) => {
                     return Err(partial_vm_error!(
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "no type layout for {:?}",
