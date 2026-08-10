@@ -62,9 +62,10 @@ fn next(seed: &mut u64) -> u64 {
 }
 
 /// A random linear form over `n_params` parameters. Built with `absorb`, so terms merge by
-/// parameter. Coefficients and constant are kept small so no measure saturates.
+/// parameter. Coefficients and constant are kept small so no measure saturates, and constants
+/// stay >= 1 like every real formula's (`solve` debug-asserts nonzero results).
 fn rand_linear(seed: &mut u64, n_params: u16) -> LinearForm {
-    let mut form = LinearForm::constant(next(seed) % 5);
+    let mut form = LinearForm::constant(1 + next(seed) % 4);
     for _ in 0..(next(seed) % 4) {
         let param = (next(seed) % n_params.max(1) as u64) as u16;
         form.absorb(next(seed) % 4, &LinearForm::parameter(param));
@@ -73,9 +74,10 @@ fn rand_linear(seed: &mut u64, n_params: u16) -> LinearForm {
 }
 
 /// A random max-plus form over `n_params` parameters. Built with `absorb`, so terms merge by
-/// parameter (taking the max offset).
+/// parameter (taking the max offset). Constants stay >= 1 like every real formula's (`solve`
+/// debug-asserts nonzero results).
 fn rand_maxplus(seed: &mut u64, n_params: u16) -> MaxPlusForm {
-    let mut form = MaxPlusForm::constant(next(seed) % 5);
+    let mut form = MaxPlusForm::constant(1 + next(seed) % 4);
     for _ in 0..(next(seed) % 4) {
         let param = (next(seed) % n_params.max(1) as u64) as u16;
         form.absorb(next(seed) % 4, &MaxPlusForm::parameter(param));
@@ -94,7 +96,7 @@ fn linear_form_substitute_composes() {
         let (p, q) = (3u16, 3u16);
         let f = rand_linear(&mut seed, p);
         let gs: Vec<LinearForm> = (0..p).map(|_| rand_linear(&mut seed, q)).collect();
-        let xs: Vec<u64> = (0..q).map(|_| next(&mut seed) % 5).collect();
+        let xs: Vec<u64> = (0..q).map(|_| 1 + next(&mut seed) % 4).collect();
 
         let composed = f.substitute(&gs).unwrap().solve(&xs).unwrap();
         let solved_args: Vec<u64> = gs.iter().map(|g| g.solve(&xs).unwrap()).collect();
@@ -110,7 +112,7 @@ fn maxplus_form_substitute_composes() {
         let (p, q) = (3u16, 3u16);
         let f = rand_maxplus(&mut seed, p);
         let gs: Vec<MaxPlusForm> = (0..p).map(|_| rand_maxplus(&mut seed, q)).collect();
-        let xs: Vec<u64> = (0..q).map(|_| next(&mut seed) % 5).collect();
+        let xs: Vec<u64> = (0..q).map(|_| 1 + next(&mut seed) % 4).collect();
 
         let composed = f.substitute(&gs).unwrap().solve(&xs).unwrap();
         let solved_args: Vec<u64> = gs.iter().map(|g| g.solve(&xs).unwrap()).collect();
@@ -134,10 +136,10 @@ fn partial_formula_substitute_composes() {
         let gs: Vec<PartialTypeSizeFormula> = (0..p).map(|_| mk(&mut seed, q)).collect();
         let xs: Vec<TypeSize> = (0..q)
             .map(|_| TypeSize {
-                type_size: next(&mut seed) % 5,
-                type_depth: next(&mut seed) % 5,
-                value_depth: next(&mut seed) % 5,
-                layout_size: next(&mut seed) % 5,
+                type_size: 1 + next(&mut seed) % 4,
+                type_depth: 1 + next(&mut seed) % 4,
+                value_depth: 1 + next(&mut seed) % 4,
+                layout_size: 1 + next(&mut seed) % 4,
             })
             .collect();
 
@@ -171,7 +173,7 @@ fn wrap_adds_one_level_to_every_measure() {
         .wrap()
         .solve(&[inner])
         .unwrap();
-    assert_eq!(wrapped, TypeSize::wrap(inner));
+    assert_eq!(wrapped, inner.wrap());
 }
 
 // -------------------------------------------------------------------------------------------------
