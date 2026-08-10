@@ -438,8 +438,8 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
         }
         E::Loop { body, .. } => exp(context, body),
-        E::NamedBlock(_, seq) => sequence(context, seq),
-        E::Block(seq) => sequence(context, seq),
+        E::NamedBlock(_, _, seq) => sequence(context, seq),
+        E::Block(_, seq) => sequence(context, seq),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);
             for ty_opt in ty_opts {

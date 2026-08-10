@@ -1,0 +1,62 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+source 0x..91d7f:
+   1 | // Tests two things about macro frame transitions for `add1!(x) + p`
+   2 | // called inside a lambda:
+   3 | // 1. Parent chain: MacroBody(add1) should be nested under
+   4 | //    [MacroBody(apply), Lambda], not standalone.
+   5 | // 2. Scope visibility: MacroBody(add1) should appear as a distinct
+   6 | //    scope in frame transitions (not absorbed into Lambda).
+   7 | module A::m {
+   8 |     macro fun add1($x: u64): u64 {
+   9 |         $x + 1
+  10 |     }
+  11 | 
+  12 |     macro fun apply($f: |u64| -> u64): u64 {
+  13 |         let arg = 1;
+  14 |         $f(arg)
+  15 |     }
+  16 | 
+  17 |     public fun test(p: u64): u64 {
+  18 |         apply!(|x|
+  19 |             add1!(x) + p
+  20 |         )
+  21 |     }
+  22 | }
+
+module 41::m
+
+function test:
+  location: 17:5-21:6 `public fun test(p: u64): u64 { ...`
+  definition: 17:16-17:20 `test`
+  parameters:
+    0 p#0#0: 17:21-17:22 `p`
+  returns:
+    0: 17:30-17:33 `u64`
+  code_map:
+    0: 9:9-9:15 `$x + 1`
+    1: 19:24-19:25 `p`
+    2: 19:22-19:23 `+`
+    3: 18:9-20:10 `apply!(|x| ...`
+  macro_frame_info:
+    [0] MacroBody(41::m::apply)
+        parent: -
+        source: 12:5-15:6 `macro fun apply($f: |u64| -> u64): u64 { ...`
+        call: 18:9-20:10 `apply!(|x| ...`
+    [1] Lambda
+        parent: 0
+        source: 18:16-19:25 `|x| ...`
+        call: 14:9-14:16 `$f(arg)`
+    [2] MacroBody(41::m::add1)
+        parent: 1
+        source: 8:5-10:6 `macro fun add1($x: u64): u64 { ...`
+        call: 19:13-19:21 `add1!(x)`
+  macro_color_map:
+    0 -> 2
+    1 -> 1
+    3 -> -

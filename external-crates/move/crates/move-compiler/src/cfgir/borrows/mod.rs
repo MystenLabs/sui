@@ -190,7 +190,7 @@ macro_rules! assert_non_ref {
 }
 
 #[growing_stack]
-fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
+fn command(context: &mut Context, csp!(loc, _, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
         C::Assign(_, ls, e) => {

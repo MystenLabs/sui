@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/macro_arg_macro_call.move:16:9
+   │
+ 8 │         $a + 1
+   │         -- [3,6] Argument
+   ·
+12 │         $b + $b
+   │         --   -- [4] Argument
+   │         │     
+   │         [1] Argument
+   ·
+16 │         double!(inc!(v))
+   │         ^^^^^^^^^^^^^^^^
+   │         │       │
+   │         │       [2,5] MacroBody
+   │         [0] MacroBody(0x41::m::double)
+   │
+   = Frame transitions (test):
+       16: `double!(inc!(v))`
+           [] -> [0:MacroBody(double), 1:Argument, 2:MacroBody(inc), 3:Argument]
+       8: `$a + 1`
+           [0:MacroBody(double), 1:Argument, 2:MacroBody(inc), 3:Argument] -> [0:MacroBody(double), 1:Argument, 2:MacroBody(inc)]
+       16: `double!(inc!(v))`
+           [0:MacroBody(double), 1:Argument, 2:MacroBody(inc)] -> [0:MacroBody(double), 1:Argument]
+       16: `double!(inc!(v))`
+           [0:MacroBody(double), 1:Argument] -> [0:MacroBody(double), 4:Argument, 5:MacroBody(inc), 6:Argument]
+       8: `$a + 1`
+           [0:MacroBody(double), 4:Argument, 5:MacroBody(inc), 6:Argument] -> [0:MacroBody(double), 4:Argument, 5:MacroBody(inc)]
+       16: `double!(inc!(v))`
+           [0:MacroBody(double), 4:Argument, 5:MacroBody(inc)] -> [0:MacroBody(double), 4:Argument]
+       16: `double!(inc!(v))`
+           [0:MacroBody(double), 4:Argument] -> [0:MacroBody(double), 1:Argument]
+       16: `double!(inc!(v))`
+           [0:MacroBody(double), 1:Argument] -> [0:MacroBody(double), 4:Argument]
+       12: `$b + $b`
+           [0:MacroBody(double), 4:Argument] -> [0:MacroBody(double)]
+       16: `double!(inc!(v))`
+           [0:MacroBody(double)] -> []

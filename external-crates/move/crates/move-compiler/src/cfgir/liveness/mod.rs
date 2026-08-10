@@ -81,7 +81,7 @@ fn analyze(
 }
 
 #[growing_stack]
-fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
+fn command(state: &mut LivenessState, csp!(_, _, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
         C::Assign(_, ls, e) => {
@@ -243,7 +243,7 @@ mod last_usage {
     }
 
     #[growing_stack]
-    fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
+    fn command(context: &mut Context, csp!(_, _, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
             C::Assign(_, ls, e) => {
@@ -480,10 +480,10 @@ fn pop_ref(loc: Loc, var: Var, ty: SingleType) -> Command {
         annotation: MoveOpAnnotation::InferredLastUsage,
         var,
     };
-    let move_e = H::exp(Type_::single(ty), sp(loc, move_e_));
+    let move_e = H::exp(Type_::single(ty), csp(loc, None, move_e_));
     let pop_ = C::IgnoreAndPop {
         pop_num: 1,
         exp: move_e,
     };
-    sp(loc, pop_)
+    csp(loc, None, pop_)
 }

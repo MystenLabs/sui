@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/block_in_lambda.move:12:9
+   │  
+ 8 │           $f(1)
+   │           ----- [1] Lambda
+   ·  
+12 │ ╭         apply!(|x| {
+13 │ │             let y = x + p;
+14 │ │             if (y > 1) { y } else { 0 }
+15 │ │         })
+   │ ╰──────────^ [0] MacroBody(0x41::m::apply)
+   │  
+   = Frame transitions (test):
+       8: `$f(1)`
+           [] -> [0:MacroBody(apply)]
+       13: `let y = x + p;`
+           [0:MacroBody(apply)] -> [0:MacroBody(apply), 1:Lambda]
+       12: `apply!(|x| {`
+           [0:MacroBody(apply), 1:Lambda] -> []

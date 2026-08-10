@@ -65,10 +65,10 @@ fn tail(context: &mut Context, exp: &T::Exp) {
                 tail(context, rhs);
             }
         }
-        T::UnannotatedExp_::NamedBlock(_, (_, seq)) => {
+        T::UnannotatedExp_::NamedBlock(_, _, (_, seq)) => {
             tail_block(context, seq);
         }
-        T::UnannotatedExp_::Block((_, seq)) => {
+        T::UnannotatedExp_::Block(_, (_, seq)) => {
             tail_block(context, seq);
         }
         T::UnannotatedExp_::Return(rhs) => {
@@ -165,7 +165,7 @@ fn returnable_value(context: &mut Context, exp: &T::Exp) -> bool {
         // value is intended.
         T::UnannotatedExp_::Loop { .. } => true,
 
-        T::UnannotatedExp_::NamedBlock(_, (_, seq)) | T::UnannotatedExp_::Block((_, seq)) => {
+        T::UnannotatedExp_::NamedBlock(_, _, (_, seq)) | T::UnannotatedExp_::Block(_, (_, seq)) => {
             let Some(last) = seq.back() else { return false };
             match &last.value {
                 T::SequenceItem_::Seq(exp) => returnable_value(context, exp),

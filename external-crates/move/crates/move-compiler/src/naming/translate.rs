@@ -3018,12 +3018,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             NE::Block(N::Block {
                 name: Some(label),
                 from_macro_argument: None,
+                expansion_color: None,
                 seq,
             })
         }
         EE::Block(None, eseq) => NE::Block(N::Block {
             name: None,
             from_macro_argument: None,
+            expansion_color: None,
             seq: sequence(context, eseq),
         }),
         EE::Lambda(elambda_binds, ety_opt, body) => {
@@ -4622,6 +4624,7 @@ fn remove_unused_bindings_exp(
         N::Exp_::Block(N::Block {
             name: _,
             from_macro_argument: _,
+            expansion_color: _,
             seq,
         }) => remove_unused_bindings_seq(context, used, seq),
         N::Exp_::Lambda(N::Lambda {

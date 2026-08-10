@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/argument_frame_transition.move:13:9
+   │
+ 9 │         base + $x
+   │                -- [1] Argument
+   ·
+13 │         process!(p + 1)
+   │         ^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::process)
+   │
+   = Frame transitions (test):
+       8: `let base = identity(1);`
+           [] -> [0:MacroBody(process)]
+       13: `process!(p + 1)`
+           [0:MacroBody(process)] -> [0:MacroBody(process), 1:Argument]
+       9: `base + $x`
+           [0:MacroBody(process), 1:Argument] -> [0:MacroBody(process)]
+       13: `process!(p + 1)`
+           [0:MacroBody(process)] -> []

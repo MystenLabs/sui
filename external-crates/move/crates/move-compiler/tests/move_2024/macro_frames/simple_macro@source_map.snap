@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+source 0x..277da:
+   1 | // Tests all three frame types together: MacroBody, Lambda, and Argument.
+   2 | module A::m {
+   3 |     macro fun apply($f: |u64| -> u64, $x: u64): u64 {
+   4 |         $f($x)
+   5 |     }
+   6 | 
+   7 |     public fun test(v: u64): u64 {
+   8 |         apply!(|x| x + 1, v)
+   9 |     }
+  10 | }
+
+module 41::m
+
+function test:
+  location: 7:5-9:6 `public fun test(v: u64): u64 { ...`
+  definition: 7:16-7:20 `test`
+  parameters:
+    0 v#0#0: 7:21-7:22 `v`
+  returns:
+    0: 7:30-7:33 `u64`
+  code_map:
+    0: 8:27-8:28 `v`
+    1: 8:24-8:25 `1`
+    2: 8:22-8:23 `+`
+    3: 8:9-8:29 `apply!(|x| x + 1, v)`
+  macro_frame_info:
+    [0] MacroBody(41::m::apply)
+        parent: -
+        source: 3:5-5:6 `macro fun apply($f: |u64| -> u64, $x: u64): u64 { ...`
+        call: 8:9-8:29 `apply!(|x| x + 1, v)`
+    [1] Argument
+        parent: 0
+        source: 8:27-8:28 `v`
+        call: 4:12-4:14 `$x`
+    [2] Lambda
+        parent: 0
+        source: 8:16-8:25 `|x| x + 1`
+        call: 4:9-4:15 `$f($x)`
+  macro_color_map:
+    0 -> 1
+    1 -> 2
+    3 -> -

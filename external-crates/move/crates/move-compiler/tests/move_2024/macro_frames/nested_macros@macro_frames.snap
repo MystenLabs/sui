@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/nested_macros.move:12:9
+   │
+ 8 │         double!($x) + double!($x)
+   │         -----------   -----------
+   │         │       │     │       │
+   │         │       │     │       [3] Argument
+   │         │       │     [4] MacroBody(0x41::m::double)
+   │         │       [1] Argument
+   │         [2] MacroBody(0x41::m::double)
+   ·
+12 │         quad!(v)
+   │         ^^^^^^^^ [0] MacroBody(0x41::m::quad)
+   │
+   = Frame transitions (test):
+       12: `quad!(v)`
+           [] -> [0:MacroBody(quad), 1:Argument]
+       4: `$x + $x`
+           [0:MacroBody(quad), 1:Argument] -> [0:MacroBody(quad), 2:MacroBody(double)]
+       8: `double!($x) + double!($x)`
+           [0:MacroBody(quad), 2:MacroBody(double)] -> [0:MacroBody(quad)]
+       12: `quad!(v)`
+           [0:MacroBody(quad)] -> [0:MacroBody(quad), 3:Argument]
+       4: `$x + $x`
+           [0:MacroBody(quad), 3:Argument] -> [0:MacroBody(quad), 4:MacroBody(double)]
+       8: `double!($x) + double!($x)`
+           [0:MacroBody(quad), 4:MacroBody(double)] -> [0:MacroBody(quad)]
+       12: `quad!(v)`
+           [0:MacroBody(quad)] -> []

@@ -55,6 +55,7 @@ pub mod ast_debug;
 pub mod files;
 pub mod ide;
 pub mod known_attributes;
+pub mod macro_frames;
 pub mod matching;
 pub mod program_info;
 pub mod remembering_unique_map;
@@ -64,6 +65,16 @@ pub mod unique_map;
 pub mod unique_set;
 
 pub use ast_debug::AstDebug;
+
+/// Like `Spanned<T>`, but also carries the macro expansion color for debugger
+/// frame tracking. The `C` parameter defaults to `ExpansionColor` (always
+/// present, for `Command`/`Statement`).
+pub type ColorSpanned<T, C = macro_frames::ExpansionColor> =
+    move_ir_types::location::ColorSpanned<T, C>;
+
+/// A `ColorSpanned` with optional color, used for HLIR `UnannotatedExp`.
+/// `None` color means "inherit from the enclosing command's color".
+pub type OptColorSpanned<T> = ColorSpanned<T, Option<macro_frames::ExpansionColor>>;
 
 //**************************************************************************************************
 // Numbers

@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/simple_nested_macros.move:12:9
+   │
+ 8 │         inner!($x)
+   │         ----------
+   │         │      │
+   │         │      [1] Argument
+   │         [2] MacroBody(0x41::m::inner)
+   ·
+12 │         outer!(v)
+   │         ^^^^^^^^^ [0] MacroBody(0x41::m::outer)
+   │
+   = Frame transitions (test):
+       12: `outer!(v)`
+           [] -> [0:MacroBody(outer), 1:Argument]
+       4: `$x + 1`
+           [0:MacroBody(outer), 1:Argument] -> [0:MacroBody(outer), 2:MacroBody(inner)]
+       12: `outer!(v)`
+           [0:MacroBody(outer), 2:MacroBody(inner)] -> []

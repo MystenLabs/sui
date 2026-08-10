@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/lambda_computed_arg.move:17:17
+   │
+ 7 │         $f(ret)
+   │         ------- [1] Lambda
+   ·
+13 │         $f(ret + ret)
+   │         ------------- [3] Lambda
+   ·
+17 │         let a = apply_simple!(|x| x + p);
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::apply_simple)
+18 │         a + apply_computed!(|x| x + p)
+   │             -------------------------- [2] MacroBody(0x41::m::apply_computed)
+   │
+   = Frame transitions (test):
+       6: `let ret = 42;`
+           [] -> [0:MacroBody(apply_simple)]
+       17: `let a = apply_simple!(|x| x + p);`
+           [0:MacroBody(apply_simple)] -> [0:MacroBody(apply_simple), 1:Lambda]
+       18: `a + apply_computed!(|x| x + p)`
+           [0:MacroBody(apply_simple), 1:Lambda] -> []
+       12: `let ret = 42;`
+           [] -> [2:MacroBody(apply_computed)]
+       18: `a + apply_computed!(|x| x + p)`
+           [2:MacroBody(apply_computed)] -> [2:MacroBody(apply_computed), 3:Lambda]
+       18: `a + apply_computed!(|x| x + p)`
+           [2:MacroBody(apply_computed), 3:Lambda] -> []
