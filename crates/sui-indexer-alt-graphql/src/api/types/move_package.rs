@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use anyhow::Context as _;
@@ -10,12 +11,18 @@ use async_graphql::Object;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
+use async_graphql::connection::PageInfo;
 use async_graphql::dataloader::DataLoader;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::sql_types::Bool;
+use prost_types::FieldMask;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::objects::VersionedObjectKey;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -24,9 +31,15 @@ use sui_indexer_alt_schema::packages::StoredPackage;
 use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::effects::TransactionEffects as NativeTransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::move_package::MovePackage as NativeMovePackage;
 use sui_types::object::Object as NativeObject;
 use tokio::sync::OnceCell;
@@ -34,7 +47,10 @@ use tokio::sync::OnceCell;
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor::BcsCursor;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::sui_address::SuiAddress;
@@ -44,6 +60,7 @@ use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::balance;
 use crate::api::types::balance::Balance;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::linkage::Linkage;
 use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_object::MoveObject;
@@ -66,8 +83,10 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::extensions::query_limits;
+use crate::pagination;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -110,12 +129,25 @@ pub(crate) struct PackageCheckpointFilter {
     pub(crate) before_checkpoint: Option<UInt53>,
 }
 
-/// Inner struct for the cursor produced while iterating over all package publishes.
+/// Inner struct for the cursor produced while iterating over all package publishes on the
+/// Postgres path, ordered by `(cp_sequence_number, original_id, package_version)`.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub(crate) struct PackageCursor {
     pub cp_sequence_number: u64,
     pub original_id: Vec<u8>,
     pub package_version: u64,
+}
+
+/// Cursor for iterating over package publishes on the gRPC path, which scans transactions that
+/// wrote packages, in transaction order. Points at one package write within one transaction.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+pub struct PackageToken {
+    /// Hint for the checkpoint the transaction belongs to (0 = unknown).
+    checkpoint: u64,
+    tx_seq: u64,
+    /// Position among the transaction's package writes, in effects order. `u32::MAX` marks a
+    /// resume point past every write in the transaction (minted from a scan-frontier cursor).
+    write_index: u32,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -132,9 +164,14 @@ pub(crate) enum Error {
 /// Cursor for iterating over modules in a package. Points to the module by its name.
 pub(crate) type CModule = JsonCursor<String>;
 
-/// Cursor for iterating over package publishes. Points to the publish of a particular
-/// version of a package, in a given checkpoint.
-pub(crate) type CPackage = BcsCursor<PackageCursor>;
+/// Cursor for iterating over package publishes. The Postgres and gRPC paths iterate in different
+/// orders — `(checkpoint, original_id, version)` vs. transaction order — so their cursors are not
+/// interchangeable; each path rejects the other's.
+pub(crate) type CPackage = MultiCursor<OpaqueCursor<PackageToken>, BcsCursor<PackageCursor>>;
+
+/// Custom `Connection` for packages, to support the partially-filled pages the gRPC scan can
+/// produce.
+pub(crate) type MovePackageConnection = StreamConnection<MovePackage>;
 
 /// Cursor for iterating over system packages. Points at a particular system package, by its ID.
 pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
@@ -455,7 +492,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         let version = self.version(ctx).await.ok()??;
 
         Some(
@@ -471,7 +508,7 @@ impl MovePackage {
                     after_version: Some(version),
                     ..VersionFilter::default()
                 }) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(MovePackageConnection::empty());
                 };
 
                 MovePackage::paginate_by_version(
@@ -482,6 +519,7 @@ impl MovePackage {
                     filter,
                 )
                 .await
+                .map(Into::into)
             }
             .await,
         )
@@ -496,7 +534,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         let version = self.version(ctx).await.ok()??;
 
         Some(
@@ -512,7 +550,7 @@ impl MovePackage {
                     before_version: Some(version),
                     ..VersionFilter::default()
                 }) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(MovePackageConnection::empty());
                 };
 
                 MovePackage::paginate_by_version(
@@ -523,6 +561,7 @@ impl MovePackage {
                     filter,
                 )
                 .await
+                .map(Into::into)
             }
             .await,
         )
@@ -763,16 +802,21 @@ impl MovePackage {
         let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
             .context("Failed to deserialize package as object")?;
 
-        let Some(package) = native.data.try_as_package().cloned() else {
-            return Ok(None);
-        };
+        Ok(Self::from_object_contents(scope, native))
+    }
+
+    /// Construct a GraphQL representation of a `MovePackage` from a full native object. Returns
+    /// `None` if the object is not a package. Unlike [`Self::from_native_object`], the scope's
+    /// root version is left unpinned, matching the checkpoint-listing paths.
+    fn from_object_contents(scope: Scope, native: NativeObject) -> Option<Self> {
+        let package = native.data.try_as_package().cloned()?;
 
         let super_ = Object::from_contents(scope, native);
-        Ok(Some(Self {
+        Some(Self {
             super_,
             native: Arc::new(OnceCell::from(Some(package))),
             parsed: Arc::new(OnceCell::new()),
-        }))
+        })
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -876,14 +920,19 @@ impl MovePackage {
         scope: Scope,
         page: Page<CPackage>,
         filter: PackageCheckpointFilter,
-    ) -> Result<Connection<String, MovePackage>, RpcError> {
+    ) -> Result<MovePackageConnection, RpcError> {
         use kv_packages::dsl as p;
 
+        query_limits::rich::debit(ctx)?;
+
+        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
+            return Self::paginate_grpc_by_checkpoint(ctx, reader, scope, page, filter).await;
+        }
+
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
+            return Ok(MovePackageConnection::empty());
         };
 
-        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
@@ -912,6 +961,7 @@ impl MovePackage {
         };
 
         if let Some(after) = page.after() {
+            let after = after.legacy()?;
             query = query.filter(sql!(as Bool,
                 "(cp_sequence_number, original_id, package_version) >= ({BigInt}, {Bytea}, {BigInt})",
                 after.cp_sequence_number as i64,
@@ -921,6 +971,7 @@ impl MovePackage {
         }
 
         if let Some(before) = page.before() {
+            let before = before.legacy()?;
             query = query.filter(sql!(as Bool,
                 "(cp_sequence_number, original_id, package_version) <= ({BigInt}, {Bytea}, {BigInt})",
                 before.cp_sequence_number as i64,
@@ -946,14 +997,284 @@ impl MovePackage {
         page.paginate_results(
             results,
             |p| {
-                BcsCursor::new(PackageCursor {
+                CPackage::Secondary(BcsCursor::new(PackageCursor {
                     cp_sequence_number: p.cp_sequence_number as u64,
                     original_id: p.original_id.clone(),
                     package_version: p.package_version as u64,
-                })
+                }))
             },
             |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
         )
+        .map(Into::into)
+    }
+
+    /// Serve package pagination from ledger history: scan transactions that wrote packages (the
+    /// `AnyPackageWrite` bitmap, via the `package_write` filter predicate), expand each into its
+    /// package writes from the effects, and load the package contents by the exact `(id, version)`
+    /// the effects reference. Iterates in transaction order, unlike the Postgres path's
+    /// `(checkpoint, original_id, version)` order. Pages may be partially filled, with valid
+    /// cursors if there are more pages to paginate through.
+    async fn paginate_grpc_by_checkpoint(
+        ctx: &Context<'_>,
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        page: Page<CPackage>,
+        filter: PackageCheckpointFilter,
+    ) -> Result<MovePackageConnection, RpcError> {
+        if page.limit() == 0 {
+            return Ok(MovePackageConnection::empty());
+        }
+
+        // Consistency upper bound; empty when scope has no checkpoint set.
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(MovePackageConnection::empty());
+        };
+
+        // TODO: LedgerService expose available checkpoint range for `reader_lo`.
+        let reader_lo = 0;
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint.map(u64::from),
+            None,
+            filter.before_checkpoint.map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(MovePackageConnection::empty());
+        };
+
+        let after = page.after().map(|c| c.token()).transpose()?;
+        let before = page.before().map(|c| c.token()).transpose()?;
+
+        // The wire cursors address transactions, so a cursor pointing mid-transaction widens to
+        // re-include its transaction; the writes already returned are skipped client-side during
+        // expansion. Checkpoint hints on widened bounds are reset to unknown (0 for `after`,
+        // `u64::MAX` for `before`) because the adjacent transaction may fall in a neighboring
+        // checkpoint.
+        let wire_after = after.as_ref().and_then(|t| {
+            let position = if t.write_index == u32::MAX {
+                Position::Transactions {
+                    checkpoint: t.checkpoint,
+                    tx_seq: t.tx_seq,
+                }
+            } else if t.tx_seq == 0 {
+                // Nothing precedes the first transaction; resume from the range start and skip
+                // client-side.
+                return None;
+            } else {
+                Position::Transactions {
+                    checkpoint: 0,
+                    tx_seq: t.tx_seq - 1,
+                }
+            };
+            Some(CursorToken::item(position).encode())
+        });
+
+        let wire_before = before.as_ref().map(|t| {
+            let position = if t.write_index == 0 {
+                Position::Transactions {
+                    // Pg-minted package cursors don't reach this path, but a 0 hint would
+                    // collapse the checkpoint window all the same.
+                    checkpoint: if t.checkpoint == 0 {
+                        u64::MAX
+                    } else {
+                        t.checkpoint
+                    },
+                    tx_seq: t.tx_seq,
+                }
+            } else {
+                Position::Transactions {
+                    checkpoint: u64::MAX,
+                    tx_seq: t.tx_seq.saturating_add(1),
+                }
+            };
+            CursorToken::item(position).encode()
+        });
+
+        let mut options = v2::QueryOptions::default();
+        // One extra transaction: a re-included boundary transaction may contribute no further
+        // packages, while every other matched transaction contributes at least one.
+        options.limit = Some(page.limit() as u32 + 1);
+        options.after = wire_after;
+        options.before = wire_before;
+        options.ordering = Some(if page.is_from_front() {
+            v2::Ordering::Ascending as i32
+        } else {
+            v2::Ordering::Descending as i32
+        });
+
+        let mut request = v2::ListTransactionsRequest::default();
+        // Only the effects are needed to identify package writes; contents load separately.
+        request.read_mask = Some(FieldMask::from_paths(["effects.bcs"]));
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.filter = Some(package_write_filter());
+        request.options = Some(options);
+
+        let result = reader
+            .list_transactions(request)
+            .await
+            .context("Failed to list transactions")?;
+
+        Self::build_grpc_package_connection(ctx, scope, &page, after, before, result).await
+    }
+
+    /// Translate a page of package-writing transactions into a page of packages. Expands each
+    /// transaction's effects into its package writes (skipping writes a boundary cursor has
+    /// already covered), trims to the page size, and loads package contents in one batched
+    /// lookup.
+    async fn build_grpc_package_connection(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: &Page<CPackage>,
+        after: Option<PackageToken>,
+        before: Option<PackageToken>,
+        result: StreamPage<v2::ExecutedTransaction>,
+    ) -> Result<MovePackageConnection, RpcError> {
+        let more = result.has_more();
+
+        // Convert a scan cursor (a transaction position) into a package resume point covering the
+        // whole transaction: `write_index` 0 resumes before all of its writes, `u32::MAX` after.
+        let tx_cursor_token = |bytes: &[u8], write_index: u32| -> Result<PackageToken, RpcError> {
+            let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
+            let Position::Transactions { checkpoint, tx_seq } = token.position else {
+                return Err(anyhow::anyhow!("Unexpected position in stream cursor").into());
+            };
+            Ok(PackageToken {
+                checkpoint,
+                tx_seq,
+                write_index,
+            })
+        };
+
+        let mut expanded: Vec<(PackageToken, ObjectID, u64)> = vec![];
+        for item in &result.items {
+            let position = tx_cursor_token(&item.cursor, 0)?;
+
+            let effects: NativeTransactionEffects = item
+                .payload
+                .effects
+                .as_ref()
+                .and_then(|fx| fx.bcs.as_ref())
+                .context("ListTransactions item missing effects")?
+                .deserialize()
+                .context("Failed to deserialize effects")?;
+
+            // Package writes are the written refs of published packages; `written()` preserves
+            // effects order, which `write_index` is defined over.
+            let published: BTreeSet<ObjectID> = effects.published_packages().into_iter().collect();
+            let mut writes: Vec<(u32, ObjectID, u64)> = effects
+                .written()
+                .into_iter()
+                .filter(|(id, _, _)| published.contains(id))
+                .enumerate()
+                .map(|(i, (id, version, _))| (i as u32, id, version.value()))
+                .collect();
+
+            if !page.is_from_front() {
+                writes.reverse();
+            }
+
+            for (write_index, id, version) in writes {
+                // Skip writes a boundary cursor has already covered — its transaction was
+                // deliberately re-included by the widened wire bounds.
+                if let Some(a) = &after
+                    && position.tx_seq == a.tx_seq
+                    && write_index <= a.write_index
+                {
+                    continue;
+                }
+                if let Some(b) = &before
+                    && position.tx_seq == b.tx_seq
+                    && write_index >= b.write_index
+                {
+                    continue;
+                }
+
+                let token = PackageToken {
+                    write_index,
+                    ..position.clone()
+                };
+                expanded.push((token, id, version));
+            }
+        }
+
+        // More matches than the page can hold: trim the scan-direction tail and resume from the
+        // last edge kept rather than the scan frontier.
+        let trimmed = expanded.len() > page.limit();
+        expanded.truncate(page.limit());
+
+        let kv_loader: &KvLoader = ctx.data()?;
+        let objects = kv_loader
+            .load_many_objects(
+                expanded
+                    .iter()
+                    .map(|(_, id, version)| VersionedObjectKey(*id, *version))
+                    .collect(),
+            )
+            .await
+            .context("Failed to load package objects")?;
+
+        let mut edges = Vec::with_capacity(expanded.len());
+        for (token, id, version) in &expanded {
+            let object = objects
+                .get(&VersionedObjectKey(*id, *version))
+                .with_context(|| format!("Missing package object {id} at version {version}"))?;
+
+            let package = Self::from_object_contents(scope.clone(), object.clone())
+                .with_context(|| format!("Object {id} written as a package is not a package"))?;
+
+            let cursor = CPackage::new(OpaqueCursor::new(token.clone())).encode_cursor();
+            edges.push(Edge::new(cursor, package));
+        }
+
+        let first_pos = result
+            .first_cursor()
+            .map(|c| tx_cursor_token(c, 0))
+            .transpose()?;
+        let last_pos = result
+            .last_cursor()
+            .map(|c| tx_cursor_token(c, 0))
+            .transpose()?;
+
+        let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
+            let end = if trimmed {
+                expanded.last().map(|(t, _, _)| t.clone())
+            } else {
+                last_pos.map(|t| PackageToken {
+                    write_index: u32::MAX,
+                    ..t
+                })
+            };
+            (page.after().is_some(), trimmed || more, first_pos, end)
+        } else {
+            edges.reverse();
+            // Descending scan: `first_cursor` is nearest `before` (the ascending end of the
+            // page), `last_cursor` — or the trimmed tail — is furthest back (the ascending
+            // start).
+            let start = if trimmed {
+                expanded.last().map(|(t, _, _)| t.clone())
+            } else {
+                last_pos
+            };
+            let end = first_pos.map(|t| PackageToken {
+                write_index: u32::MAX,
+                ..t
+            });
+            (trimmed || more, page.before().is_some(), start, end)
+        };
+
+        let encode = |t: PackageToken| CPackage::new(OpaqueCursor::new(t)).encode_cursor();
+        Ok(MovePackageConnection {
+            edges,
+            page_info: PageInfo {
+                has_previous_page,
+                has_next_page,
+                start_cursor: start.map(encode),
+                end_cursor: end.map(encode),
+            },
+        })
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -1083,4 +1404,65 @@ impl MovePackage {
             })
             .await
     }
+}
+
+impl CPackage {
+    /// View the cursor as a package-write position for the gRPC path. Fails if it was minted by
+    /// the Postgres path, whose `(checkpoint, original_id, version)` positions cannot seek a
+    /// transaction-order scan.
+    fn token(&self) -> Result<PackageToken, RpcError> {
+        match self {
+            CPackage::Primary(c) => Ok((**c).clone()),
+            CPackage::Secondary(_) => Err(pagination::Error::UnusableCursor.into()),
+        }
+    }
+
+    /// View the cursor as a `(checkpoint, original_id, version)` position for the Postgres path.
+    /// Fails if it was minted by the gRPC path, whose transaction-order positions cannot seek the
+    /// `kv_packages` table.
+    fn legacy(&self) -> Result<&PackageCursor, RpcError> {
+        match self {
+            CPackage::Primary(_) => Err(pagination::Error::UnusableCursor.into()),
+            CPackage::Secondary(c) => Ok(&**c),
+        }
+    }
+}
+
+impl Eq for CPackage {}
+
+/// The two wire formats occupy disjoint position spaces, so cursors only compare equal within a
+/// format.
+impl PartialEq for CPackage {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (CPackage::Primary(a), CPackage::Primary(b)) => a == b,
+            (CPackage::Secondary(a), CPackage::Secondary(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl ByteCursor for PackageToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        Ok(bcs::from_bytes(bytes)?)
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        bcs::to_bytes(self)
+            .expect("serialization cannot fail for a plain struct")
+            .into()
+    }
+}
+
+/// A filter matching every transaction that wrote a Move package — first publishes and upgrades
+/// alike (the `AnyPackageWrite` bitmap dimension).
+fn package_write_filter() -> v2::TransactionFilter {
+    let mut literal = v2::TransactionLiteral::default();
+    literal.predicate = Some(v2::transaction_literal::Predicate::PackageWrite(
+        v2::PackageWriteFilter::default(),
+    ));
+
+    v2::TransactionFilter::default().with_terms(vec![
+        v2::TransactionTerm::default().with_literals(vec![literal]),
+    ])
 }

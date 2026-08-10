@@ -20,6 +20,7 @@ use sui_sql_macro::query;
 
 use crate::api::scalars::cursor::JsonCursor;
 use crate::api::types::event::Event;
+use crate::api::types::move_package::MovePackage;
 use crate::api::types::transaction::Transaction;
 use crate::error::RpcError;
 
@@ -82,6 +83,9 @@ pub(crate) enum Error {
 
     #[error("Page size of {limit} exceeds max of {max} for connection")]
     TooLarge { limit: u64, max: u32 },
+
+    #[error("Cursor was minted under a different service configuration and cannot be used here")]
+    UnusableCursor,
 }
 
 impl PaginationConfig {
@@ -403,6 +407,7 @@ where
 
 #[Object(
     concrete(name = "EventConnection", params(Event)),
+    concrete(name = "MovePackageConnection", params(MovePackage)),
     concrete(name = "TransactionConnection", params(Transaction))
 )]
 impl<N: OutputType> StreamConnection<N> {
