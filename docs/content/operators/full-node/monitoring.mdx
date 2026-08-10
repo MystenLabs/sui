@@ -70,9 +70,7 @@ $ curl -s http://localhost:9184/metrics | grep -E 'highest_known_checkpoint|high
 
 ## Production monitoring
 
-For production monitoring, [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/) are recommended.
-
-You can use Grafana Agent, Grafana Alloy, or another tool to scrape the metrics from your node.
+For production monitoring, use [Prometheus](https://prometheus.io/) to scrape metrics and [Grafana](https://grafana.com/) to visualize them.
 
 Add a scrape target for your node in your Prometheus configuration:
 
