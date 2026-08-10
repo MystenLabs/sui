@@ -49,7 +49,7 @@ Using the Sui [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, 
 
 In this example, the Admin sends `LOYALTY` tokens to the users of your service as a reward for their continued business. The example creates a `GiftShop` where holders can spend `LOYALTY` tokens to buy `Gift`s.
 
-The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the [One-Time Witness](/develop/write-move/one-time-witness) (OTW), a struct with the same name as the module (`LOYALTY`) that has only the `drop` ability and no fields. The OTW ensures that the currency can only be created once, during the module's `init` function.
+The `loyalty.move` source file contains the `examples::loyalty` module code that creates the loyalty token. The module includes the [One-Time Witness](https://move-book.com/programmability/one-time-witness/) (OTW), a struct with the same name as the module (`LOYALTY`) that has only the `drop` ability and no fields. The OTW ensures that the currency can only be created once, during the module's `init` function.
 
 <ImportContent source="examples/move/token/sources/loyalty.move" mode="code" struct="LOYALTY" />
 
