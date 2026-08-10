@@ -106,7 +106,7 @@ The client references pools, coins, and margin pools by SDK key. On Testnet it a
 
 Every margin operation that values a position (borrow, withdraw, order placement, risk read) reads the pool's Pyth `PriceInfoObject` for both the base and the quote coin, and reverts if that price is older than the pool's maximum age. The [`pool_proxy`](https://github.com/MystenLabs/deepbookv3/blob/main/packages/deepbook_margin/sources/pool_proxy.move) entry points take both price objects as arguments. Spot trading has no such dependency, so this is the step that most often surprises people coming from the spot workflow.
 
-The SDK refreshes the feeds for you as part of the transaction that depends on them. `getPriceInfoObjects` returns the existing object IDs when the onchain price is still fresh, and appends the Pyth verify-and-update commands to your transaction when it is stale:
+The SDK refreshes the feeds for you as part of the transaction that depends on them. [`getPriceInfoObjects`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/deepbook-v3/src/queries/priceFeedQueries.ts) returns the existing object IDs when the onchain price is still fresh, and appends the Pyth verify-and-update commands to your transaction when it is stale:
 
 <ImportContent
 	source="packages/deepbook-v3/src/queries/priceFeedQueries.ts"

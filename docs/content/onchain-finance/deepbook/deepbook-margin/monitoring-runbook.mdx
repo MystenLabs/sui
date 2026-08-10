@@ -127,7 +127,7 @@ Keep the values you land on in configuration rather than scattered through your 
 | Positions liquidatable but no `LiquidationEvent` following | Keepers are not running, or cannot execute | Operator | Check keeper liveness and whether feeds are fresh enough to permit liquidation |
 | `pool_default` nonzero in a `LiquidationEvent` | A liquidation left bad debt with the lending pool | Operator | Review pool risk parameters and utilization |
 
-The first row is the one to build first, and it is not hypothetical. During a Testnet run for this documentation, all four Pyth feeds backing the margin pools were roughly 73 hours stale against a protocol ceiling of 1 hour, and **14 of 14 indebted positions returned a refusal rather than a risk ratio**. Monitoring that treats an unreadable ratio as "no news" would have reported a healthy book.
+The first row is the one to build first, and it is not hypothetical. During a Testnet run for this documentation, all four Pyth feeds backing the margin pools were roughly 73 hours stale against a protocol ceiling of 1 hour, and **14 of 14 indebted positions returned a refusal rather than a risk ratio**. Monitoring that treated an unreadable ratio as an absence of bad news would have reported a healthy book.
 
 ## If you hold the position {#if-you-hold-the-position}
 
