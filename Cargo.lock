@@ -17107,18 +17107,15 @@ name = "sui-security-watchdog"
 version = "1.78.0"
 dependencies = [
  "anyhow",
- "arrow-array",
  "async-trait",
  "chrono",
  "clap",
  "env_logger",
- "lexical-util",
  "mysten-metrics",
  "prometheus",
  "reqwest",
  "serde",
  "serde_json",
- "snowflake-api",
  "telemetry-subscribers",
  "tokio",
  "tokio-cron-scheduler",

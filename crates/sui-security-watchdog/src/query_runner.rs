@@ -2,17 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::SecurityWatchdogConfig;
-use anyhow::anyhow;
-use arrow_array::cast::AsArray;
-use arrow_array::types::{
-    Decimal128Type, Float16Type, Float32Type, Float64Type, Int8Type, Int16Type, Int32Type,
-    Int64Type, UInt8Type, UInt16Type, UInt32Type, UInt64Type,
-};
-use arrow_array::{Array, Float32Array, RecordBatch};
-use lexical_util::num::AsPrimitive;
-use snowflake_api::{QueryResult, SnowflakeApi};
+use anyhow::{Context, anyhow};
+use reqwest::Client;
+use serde::Deserialize;
+use serde_json::Value;
 use std::any::Any;
 use std::collections::HashMap;
+use std::time::Duration;
 use tracing::info;
 
 pub type Row = HashMap<String, Box<dyn Any + Send>>;
@@ -28,195 +24,311 @@ pub trait QueryRunner: Send + Sync + 'static {
     async fn run(&self, query: &str) -> anyhow::Result<Vec<Row>>;
 }
 
-macro_rules! insert_primitive_values {
-    ($rows:expr, $column:expr, $name:expr, $type:ty) => {
-        if let Some(value) = $column.as_primitive_opt::<$type>() {
-            for i in 0..value.len() {
-                let entry = $rows.get_mut(i);
-                if let Some(entry) = entry {
-                    entry.insert($name.clone(), Box::new(value.value(i)));
-                } else {
-                    $rows.push(HashMap::new());
-                    $rows
-                        .last_mut()
-                        .unwrap()
-                        .insert($name.clone(), Box::new(value.value(i)));
-                }
-            }
-            continue;
-        }
-    };
+/// Column descriptor from the `meta` section of a ClickHouse `JSON` response. The declared type
+/// is what tells us how to interpret the JSON value, which can be a number or a string for the
+/// same column depending on width.
+#[derive(Deserialize)]
+struct ColumnMeta {
+    name: String,
+    #[serde(rename = "type")]
+    ty: String,
 }
 
-macro_rules! insert_string_values {
-    ($rows:expr, $column:expr, $name:expr, $type:ty) => {
-        if let Some(value) = $column.as_string_opt::<$type>() {
-            for i in 0..value.len() {
-                let entry = $rows.get_mut(i);
-                if let Some(entry) = entry {
-                    entry.insert($name.clone(), Box::new(value.value(i).to_string()));
-                } else {
-                    $rows.push(HashMap::new());
-                    $rows
-                        .last_mut()
-                        .unwrap()
-                        .insert($name.clone(), Box::new(value.value(i).to_string()));
-                }
-            }
-            continue;
-        }
-    };
+#[derive(Deserialize)]
+struct QueryResponse {
+    meta: Vec<ColumnMeta>,
+    data: Vec<HashMap<String, Value>>,
 }
 
-pub struct SnowflakeQueryRunner {
-    account_identifier: String,
-    warehouse: String,
+pub struct ClickHouseQueryRunner {
+    client: Client,
+    url: String,
     database: String,
-    schema: String,
     user: String,
-    role: String,
     passwd: String,
 }
 
-impl SnowflakeQueryRunner {
-    /// Creates a new `SnowflakeQueryRunner` with the specified connection parameters.
+impl ClickHouseQueryRunner {
+    /// Creates a new `ClickHouseQueryRunner` targeting the HTTP interface.
     ///
     /// # Arguments
-    /// * `account_identifier` - Snowflake account identifier.
-    /// * `warehouse` - The Snowflake warehouse to use.
+    /// * `host` - ClickHouse host name.
+    /// * `port` - Port of the HTTP interface (8443 for TLS, 8123 for plain HTTP).
     /// * `database` - The database to query against.
-    /// * `schema` - The schema within the database.
     /// * `user` - Username for authentication.
-    /// * `role` - User role for executing queries.
     /// * `passwd` - Password for authentication.
+    /// * `no_tls` - Connect over plain HTTP instead of HTTPS.
+    /// * `query_timeout_secs` - Per-request timeout.
     pub fn new(
-        account_identifier: &str,
-        warehouse: &str,
+        host: &str,
+        port: u16,
         database: &str,
-        schema: &str,
         user: &str,
-        role: &str,
         passwd: &str,
+        no_tls: bool,
+        query_timeout_secs: u64,
     ) -> anyhow::Result<Self> {
+        let scheme = if no_tls { "http" } else { "https" };
+        let client = Client::builder()
+            .timeout(Duration::from_secs(query_timeout_secs))
+            .build()?;
         Ok(Self {
-            account_identifier: account_identifier.to_string(),
-            warehouse: warehouse.to_string(),
+            client,
+            url: format!("{}://{}:{}/", scheme, host, port),
             database: database.to_string(),
-            schema: schema.to_string(),
             user: user.to_string(),
-            role: role.to_string(),
             passwd: passwd.to_string(),
         })
     }
 
     pub fn from_config(
         config: &SecurityWatchdogConfig,
-        sf_password: String,
+        ch_password: String,
     ) -> anyhow::Result<Self> {
         Self::new(
-            config
-                .sf_account_identifier
-                .as_ref()
-                .cloned()
-                .unwrap()
-                .as_str(),
-            config.sf_warehouse.as_ref().cloned().unwrap().as_str(),
-            config.sf_database.as_ref().cloned().unwrap().as_str(),
-            config.sf_schema.as_ref().cloned().unwrap().as_str(),
-            config.sf_username.as_ref().cloned().unwrap().as_str(),
-            config.sf_role.as_ref().cloned().unwrap().as_str(),
-            sf_password.clone().as_str(),
+            &config.ch_host,
+            config.ch_port,
+            &config.ch_database,
+            &config.ch_user,
+            &ch_password,
+            config.ch_no_tls,
+            config.ch_query_timeout_secs,
         )
     }
 
-    pub fn make_snowflake_api(&self) -> anyhow::Result<SnowflakeApi> {
-        let api = SnowflakeApi::with_password_auth(
-            &self.account_identifier,
-            Some(&self.warehouse),
-            Some(&self.database),
-            Some(&self.schema),
-            &self.user,
-            Some(&self.role),
-            &self.passwd,
-        )?;
-        Ok(api)
-    }
-
-    /// Parses the result of a Snowflake query from a `Vec<RecordBatch>` into a single `f64` value.
-    fn parse(&self, res: Vec<RecordBatch>) -> anyhow::Result<f64> {
-        let value = res
-            .first()
-            .ok_or_else(|| anyhow!("No results found in RecordBatch"))?
-            .columns()
-            .first()
-            .ok_or_else(|| anyhow!("No columns found in record"))?
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .ok_or_else(|| anyhow!("Column is not Float32Array"))?
-            .value(0)
-            .as_f64();
-        Ok(value)
-    }
-
-    fn parse_record_batch(&self, batch: RecordBatch) -> anyhow::Result<Vec<Row>> {
-        let mut rows: Vec<Row> = Vec::new();
-        for (index, column) in batch.columns().iter().enumerate() {
-            let name = batch.schema().fields()[index].name().clone();
-            insert_primitive_values!(rows, column, name, Int8Type);
-            insert_primitive_values!(rows, column, name, Int16Type);
-            insert_primitive_values!(rows, column, name, Int32Type);
-            insert_primitive_values!(rows, column, name, Int64Type);
-            insert_primitive_values!(rows, column, name, UInt8Type);
-            insert_primitive_values!(rows, column, name, UInt16Type);
-            insert_primitive_values!(rows, column, name, UInt32Type);
-            insert_primitive_values!(rows, column, name, UInt64Type);
-            insert_primitive_values!(rows, column, name, Float16Type);
-            insert_primitive_values!(rows, column, name, Float32Type);
-            insert_primitive_values!(rows, column, name, Float64Type);
-            insert_primitive_values!(rows, column, name, Decimal128Type);
-            insert_string_values!(rows, column, name, i32);
-            insert_string_values!(rows, column, name, i64);
-            let schema = batch.schema();
-            let data_type = schema.fields()[index].data_type();
-            let metadata = schema.fields()[index].metadata();
-            info!(
-                "Skipping column: {}, data_type: {:?}, metadata: {:?}",
-                name, data_type, metadata
-            );
+    async fn exec(&self, query: &str) -> anyhow::Result<QueryResponse> {
+        let response = self
+            .client
+            .post(&self.url)
+            .query(&[
+                ("database", self.database.as_str()),
+                ("default_format", "JSON"),
+            ])
+            .basic_auth(&self.user, Some(&self.passwd))
+            .body(query.to_string())
+            .send()
+            .await?;
+        // ClickHouse reports query errors in the body, so surface it rather than just the status.
+        let status = response.status();
+        let body = response.text().await?;
+        if !status.is_success() {
+            return Err(anyhow!(
+                "ClickHouse query failed with status {}: {}",
+                status,
+                body.trim()
+            ));
         }
-        Ok(rows)
+        serde_json::from_str(&body)
+            .with_context(|| format!("Failed to parse ClickHouse response: {}", body.trim()))
+    }
+}
+
+/// Unwraps the type modifiers that do not change how a value is encoded in JSON.
+fn base_type(ty: &str) -> &str {
+    let mut ty = ty.trim();
+    loop {
+        let unwrapped = ["Nullable(", "LowCardinality("].iter().find_map(|prefix| {
+            ty.strip_prefix(prefix)
+                .and_then(|inner| inner.strip_suffix(')'))
+        });
+        match unwrapped {
+            Some(inner) => ty = inner.trim(),
+            None => return ty,
+        }
+    }
+}
+
+/// ClickHouse encodes integers wider than 32 bits as JSON strings to avoid the precision loss of
+/// a double, so accept both encodings. Decimals arrive with a fractional part and are truncated.
+fn json_to_i128(value: &Value) -> Option<i128> {
+    match value {
+        Value::Number(number) => number
+            .as_i64()
+            .map(|value| value as i128)
+            .or_else(|| number.as_f64().map(|value| value as i128)),
+        Value::String(string) => string
+            .parse::<i128>()
+            .ok()
+            .or_else(|| string.parse::<f64>().ok().map(|value| value as i128)),
+        _ => None,
+    }
+}
+
+fn json_to_f64(value: &Value) -> Option<f64> {
+    match value {
+        Value::Number(number) => number.as_f64(),
+        // `inf`/`nan` and wide integers are quoted.
+        Value::String(string) => string.parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+/// Boxes a JSON value as the Rust type matching its declared ClickHouse type. Integers are
+/// widened to `i128` so a single downcast covers every integer column. Returns `None` for SQL
+/// NULL, which is left out of the row entirely.
+fn to_any(ty: &str, value: &Value) -> Option<Box<dyn Any + Send>> {
+    if value.is_null() {
+        return None;
+    }
+    let ty = base_type(ty);
+    if ty.starts_with("Int") || ty.starts_with("UInt") || ty.starts_with("Decimal") {
+        return json_to_i128(value).map(|value| Box::new(value) as Box<dyn Any + Send>);
+    }
+    if ty.starts_with("Float") {
+        return json_to_f64(value).map(|value| Box::new(value) as Box<dyn Any + Send>);
+    }
+    // String, FixedString, UUID, Date and DateTime all arrive as JSON strings. Anything left
+    // (arrays, tuples, maps) keeps its JSON encoding rather than being dropped.
+    match value {
+        Value::String(string) => Some(Box::new(string.clone()) as Box<dyn Any + Send>),
+        other => Some(Box::new(other.to_string()) as Box<dyn Any + Send>),
+    }
+}
+
+#[async_trait::async_trait]
+impl QueryRunner for ClickHouseQueryRunner {
+    async fn run_single_entry(&self, query: &str) -> anyhow::Result<f64> {
+        let response = self.exec(query).await?;
+        let column = response
+            .meta
+            .first()
+            .ok_or_else(|| anyhow!("No columns found in query result"))?;
+        let value = response
+            .data
+            .first()
+            .ok_or_else(|| anyhow!("No rows found in query result"))?
+            .get(&column.name)
+            .ok_or_else(|| anyhow!("Missing column {} in query result", column.name))?;
+        json_to_f64(value)
+            .ok_or_else(|| anyhow!("Column {} is not a number: {}", column.name, value))
     }
 
-    fn parse_record_batches(&self, batches: Vec<RecordBatch>) -> anyhow::Result<Vec<Row>> {
-        let mut rows: Vec<Row> = Vec::new();
-        for batch in batches {
-            let mut batch_rows = self.parse_record_batch(batch)?;
-            rows.append(&mut batch_rows);
-        }
+    async fn run(&self, query: &str) -> anyhow::Result<Vec<Row>> {
+        info!("Running query: {}", query);
+        let response = self.exec(query).await?;
+        let rows: Vec<Row> = response
+            .data
+            .iter()
+            .map(|record| {
+                response
+                    .meta
+                    .iter()
+                    .filter_map(|column| {
+                        let value = record.get(&column.name)?;
+                        Some((column.name.clone(), to_any(&column.ty, value)?))
+                    })
+                    .collect()
+            })
+            .collect();
         info!("Found {} rows", rows.len());
         Ok(rows)
     }
 }
 
-#[async_trait::async_trait]
-impl QueryRunner for SnowflakeQueryRunner {
-    async fn run_single_entry(&self, query: &str) -> anyhow::Result<f64> {
-        let res = self.make_snowflake_api()?.exec(query).await?;
-        match res {
-            QueryResult::Arrow(records) => self.parse(records),
-            // Handle other result types (Json, Empty) with a unified error message
-            _ => Err(anyhow!("Unexpected query result type")),
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_base_type_unwraps_modifiers() {
+        assert_eq!(base_type("Int64"), "Int64");
+        assert_eq!(base_type("Nullable(Float64)"), "Float64");
+        assert_eq!(base_type("LowCardinality(Nullable(String))"), "String");
     }
 
-    async fn run(&self, query: &str) -> anyhow::Result<Vec<Row>> {
-        info!("Running query: {}", query);
-        let res = self.make_snowflake_api()?.exec(query).await?;
-        match res {
-            QueryResult::Arrow(records) => self.parse_record_batches(records),
-            QueryResult::Empty => Ok(Vec::new()),
-            // Handle other result types Json with a unified error message
-            _ => Err(anyhow!("Unexpected query result type")),
+    #[test]
+    fn test_json_to_i128_accepts_both_encodings() {
+        assert_eq!(json_to_i128(&serde_json::json!(42)), Some(42));
+        // Wide integers arrive quoted; going through f64 here would lose precision.
+        assert_eq!(
+            json_to_i128(&serde_json::json!("87500000000000001")),
+            Some(87500000000000001)
+        );
+        assert_eq!(json_to_i128(&serde_json::json!("123.9")), Some(123));
+        assert_eq!(json_to_i128(&serde_json::json!(null)), None);
+    }
+
+    /// Exercises the full path against a live ClickHouse using a wallet-monitoring shaped query.
+    /// Ignored by default since it needs credentials and network:
+    ///   CH_HOST=.. CH_USER=.. CH_PASSWORD=.. cargo test -p sui-security-watchdog -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn test_live_wallet_monitoring_query() {
+        let (Ok(host), Ok(user), Ok(passwd)) = (
+            std::env::var("CH_HOST"),
+            std::env::var("CH_USER"),
+            std::env::var("CH_PASSWORD"),
+        ) else {
+            panic!("CH_HOST, CH_USER and CH_PASSWORD must be set");
+        };
+        let runner =
+            ClickHouseQueryRunner::new(&host, 8443, "ds_prod", &user, &passwd, false, 60).unwrap();
+
+        // Same shape as the configured jobs, with the breach predicate inverted so rows come back
+        // on a healthy dataset.
+        let rows = runner
+            .run(
+                "SELECT locked_address AS wallet_id, \
+                 toInt64(round(current_balance * 1e6)) AS current_balance, \
+                 toInt64(round(coalesce(locked_min_amount, 0) * 1e6)) AS lower_bound \
+                 FROM ds_prod.locked_wallet_balances_gold FINAL \
+                 WHERE cohort = 'DEEP' AND current_locked_difference >= 0 LIMIT 5",
+            )
+            .await
+            .unwrap();
+        assert!(!rows.is_empty(), "expected rows from the gold table");
+        for row in &rows {
+            assert!(
+                row.get("wallet_id")
+                    .unwrap()
+                    .downcast_ref::<String>()
+                    .is_some()
+            );
+            assert!(
+                row.get("current_balance")
+                    .unwrap()
+                    .downcast_ref::<i128>()
+                    .is_some()
+            );
+            assert!(
+                row.get("lower_bound")
+                    .unwrap()
+                    .downcast_ref::<i128>()
+                    .is_some()
+            );
         }
+
+        // The freshness guard's query must come back as a plain number.
+        let age = runner
+            .run_single_entry(
+                "SELECT toFloat64(dateDiff('second', max(run_ts), now('UTC'))) \
+                 FROM ds_prod.locked_wallet_balances_gold",
+            )
+            .await
+            .unwrap();
+        assert!(age >= 0.0, "data age should not be negative, got {}", age);
+
+        // A bad query must surface ClickHouse's error rather than silently yielding no rows.
+        assert!(
+            runner
+                .run("SELECT * FROM ds_prod.no_such_table")
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_to_any_maps_declared_types() {
+        let wallet = to_any("String", &serde_json::json!("0xabc")).unwrap();
+        assert_eq!(wallet.downcast_ref::<String>().unwrap(), "0xabc");
+
+        // Every integer width lands on i128 so callers need only one downcast.
+        let balance = to_any("Int64", &serde_json::json!("87500000000000000")).unwrap();
+        assert_eq!(balance.downcast_ref::<i128>().unwrap(), &87500000000000000);
+
+        let difference = to_any("Nullable(Float64)", &serde_json::json!(-1.5)).unwrap();
+        assert_eq!(difference.downcast_ref::<f64>().unwrap(), &-1.5);
+
+        assert!(to_any("Nullable(Int64)", &serde_json::json!(null)).is_none());
     }
 }

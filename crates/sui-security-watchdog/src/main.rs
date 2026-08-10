@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     env_logger::init();
     let config = SecurityWatchdogConfig::parse();
     let pd_api_key = env::var("PD_API_KEY").expect("PD_API_KEY env var must be set");
-    let sf_password = env::var("SF_PASSWORD").expect("SF_PASSWORD env var must be set");
+    let ch_password = env::var("CH_PASSWORD").expect("CH_PASSWORD env var must be set");
 
     let registry_service = mysten_metrics::start_prometheus_server(
         format!(
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
             "N/A",
         ))
         .unwrap();
-    let service = SchedulerService::new(&config, &registry, pd_api_key, sf_password).await?;
+    let service = SchedulerService::new(&config, &registry, pd_api_key, ch_password).await?;
     service.schedule().await?;
     service.start().await?;
     tokio::signal::ctrl_c().await?;

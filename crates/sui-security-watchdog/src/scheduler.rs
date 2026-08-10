@@ -4,7 +4,7 @@
 use crate::SecurityWatchdogConfig;
 use crate::metrics::WatchdogMetrics;
 use crate::pagerduty::{Body, CreateIncident, Incident, Pagerduty, Service};
-use crate::query_runner::{QueryRunner, SnowflakeQueryRunner};
+use crate::query_runner::{ClickHouseQueryRunner, QueryRunner, Row};
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use prometheus::{IntGauge, Registry};
@@ -18,7 +18,12 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{error, info};
 use uuid::Uuid;
 
-const MIST_PER_SUI: i128 = 1_000_000_000;
+// Decimals of SUI, and the default for entries that do not declare their own.
+const SUI_DECIMALS: u32 = 9;
+
+fn default_decimals() -> u32 {
+    SUI_DECIMALS
+}
 
 // MonitoringEntry is an enum that represents the types of monitoring entries that can be scheduled.
 #[derive(Serialize, Deserialize)]
@@ -49,6 +54,18 @@ pub struct WalletMonitoringEntry {
     name: String,
     cron_schedule: String,
     sql_query: String,
+    // Decimals of the coin whose base units `sql_query` reports, used to render incident text in
+    // whole tokens. SUI and WAL are 9, DEEP and NS are 6.
+    #[serde(default = "default_decimals")]
+    decimals: u32,
+    // Optional freshness guard, set together with `max_data_age_secs`. Must return the age in
+    // seconds of the data backing `sql_query`. The balances come from a snapshot built upstream,
+    // and a stale snapshot yields no breaching rows, which is indistinguishable from a healthy
+    // run -- so without this a stalled pipeline silently disables the monitor.
+    #[serde(default)]
+    freshness_sql: Option<String>,
+    #[serde(default)]
+    max_data_age_secs: Option<u64>,
 }
 
 pub struct SchedulerService {
@@ -65,12 +82,12 @@ impl SchedulerService {
         config: &SecurityWatchdogConfig,
         registry: &Registry,
         pd_api_key: String,
-        sf_password: String,
+        ch_password: String,
     ) -> anyhow::Result<Self> {
         let scheduler = JobScheduler::new().await?;
         Ok(Self {
             scheduler,
-            query_runner: Arc::new(SnowflakeQueryRunner::from_config(config, sf_password)?),
+            query_runner: Arc::new(ClickHouseQueryRunner::from_config(config, ch_password)?),
             metrics: Arc::new(WatchdogMetrics::new(registry)),
             entries: Self::from_config(config)?,
             pagerduty: Pagerduty::new(pd_api_key.clone()),
@@ -166,26 +183,22 @@ impl SchedulerService {
         entry: &WalletMonitoringEntry,
     ) -> anyhow::Result<()> {
         let WalletMonitoringEntry {
-            sql_query, name, ..
+            sql_query,
+            name,
+            decimals,
+            ..
         } = entry;
+        Self::check_freshness(query_runner, entry).await?;
         let rows = query_runner.run(sql_query).await?;
         for row in rows {
-            let wallet_id = row
-                .get("WALLET_ID")
-                .ok_or_else(|| anyhow!("Missing wallet_id"))?
+            let wallet_id = Self::get_column(&row, "wallet_id")?
                 .downcast_ref::<String>()
                 .ok_or(anyhow!("Failed to downcast wallet_id"))?
                 .clone();
-            let current_balance = Self::extract_i128(
-                row.get("CURRENT_BALANCE")
-                    .ok_or_else(|| anyhow!("Missing current_balance"))?,
-            )
-            .ok_or(anyhow!("Failed to downcast current_balance"))?;
-            let lower_bound = Self::extract_i128(
-                row.get("LOWER_BOUND")
-                    .ok_or_else(|| anyhow!("Missing lower_bound"))?,
-            )
-            .ok_or(anyhow!("Failed to downcast lower_bound"))?;
+            let current_balance = Self::extract_i128(Self::get_column(&row, "current_balance")?)
+                .ok_or(anyhow!("Failed to downcast current_balance"))?;
+            let lower_bound = Self::extract_i128(Self::get_column(&row, "lower_bound")?)
+                .ok_or(anyhow!("Failed to downcast lower_bound"))?;
             Self::create_wallet_monitoring_incident(
                 pagerduty,
                 &wallet_id,
@@ -193,10 +206,51 @@ impl SchedulerService {
                 lower_bound,
                 service_id,
                 name,
+                *decimals,
             )
             .await?;
         }
         Ok(())
+    }
+
+    /// Fails the job when the snapshot behind `sql_query` is older than the entry allows, so a
+    /// stalled upstream pipeline surfaces as an error instead of a run that finds no breaches.
+    async fn check_freshness(
+        query_runner: &Arc<dyn QueryRunner>,
+        entry: &WalletMonitoringEntry,
+    ) -> anyhow::Result<()> {
+        match (&entry.freshness_sql, entry.max_data_age_secs) {
+            (Some(freshness_sql), Some(max_data_age_secs)) => {
+                let age_secs = query_runner.run_single_entry(freshness_sql).await?;
+                if age_secs > max_data_age_secs as f64 {
+                    return Err(anyhow!(
+                        "Data backing job {} is stale: age {:.0}s exceeds max {}s",
+                        entry.name,
+                        age_secs,
+                        max_data_age_secs
+                    ));
+                }
+                Ok(())
+            }
+            (None, None) => Ok(()),
+            // Half a guard is worse than none, since it reads as configured but never fires.
+            _ => Err(anyhow!(
+                "Job {}: freshness_sql and max_data_age_secs must be set together",
+                entry.name
+            )),
+        }
+    }
+
+    /// Looks a column up case-insensitively. Snowflake upper-cased unquoted aliases while
+    /// ClickHouse returns them verbatim, so neither casing should break the job.
+    fn get_column<'a>(row: &'a Row, name: &str) -> anyhow::Result<&'a (dyn Any + Send)> {
+        if let Some(value) = row.get(name) {
+            return Ok(value.as_ref());
+        }
+        row.iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_ref())
+            .ok_or_else(|| anyhow!("Missing {} in query result", name))
     }
 
     async fn create_wallet_monitoring_incident(
@@ -206,16 +260,20 @@ impl SchedulerService {
         lower_bound: i128,
         service_id: &str,
         name: &str,
+        decimals: u32,
     ) -> anyhow::Result<()> {
         let service = Service {
             id: service_id.to_string(),
             ..Default::default()
         };
+        // Balances arrive in the coin's base units, so scale by its own decimals rather than
+        // always by SUI's, which understated the 6-decimal coins by a factor of 1000.
+        let per_token = 10i128.pow(decimals);
         let incident_body = Body {
             details: format!(
                 "Current balance: {}, Lower bound: {}, for job: {}",
-                current_balance / MIST_PER_SUI,
-                lower_bound / MIST_PER_SUI,
+                current_balance / per_token,
+                lower_bound / per_token,
                 name
             ),
             ..Default::default()
@@ -300,7 +358,7 @@ impl SchedulerService {
         limits.range(..Utc::now()).next_back().map(|(_, val)| *val)
     }
 
-    fn extract_i128(value: &Box<dyn Any + Send>) -> Option<i128> {
+    fn extract_i128(value: &(dyn Any + Send)) -> Option<i128> {
         if let Some(value) = value.downcast_ref::<i128>() {
             Some(*value)
         } else if let Some(value) = value.downcast_ref::<u32>() {
@@ -318,5 +376,79 @@ impl SchedulerService {
         } else {
             value.downcast_ref::<i8>().map(|value| *value as i128)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Mirrors a deployed wallet-monitoring entry. The config lives in the security-watchdog repo,
+    // so a rename here fails at startup in production rather than at build time.
+    const WALLET_ENTRY: &str = r#"[{
+        "type": "WalletMonitoringEntry",
+        "name": "DEEP Wallet Balance Check",
+        "cron_schedule": "0 */10 * * * *",
+        "decimals": 6,
+        "sql_query": "SELECT locked_address AS wallet_id FROM ds_prod.locked_wallet_balances_gold",
+        "freshness_sql": "SELECT toFloat64(1)",
+        "max_data_age_secs": 345600
+    }]"#;
+
+    #[test]
+    fn test_deserialize_wallet_monitoring_entry() {
+        let entries: Vec<MonitoringEntry> = serde_json::from_str(WALLET_ENTRY).unwrap();
+        let MonitoringEntry::WalletMonitoringEntry(entry) = &entries[0] else {
+            panic!("expected a WalletMonitoringEntry");
+        };
+        assert_eq!(entry.decimals, 6);
+        assert_eq!(entry.max_data_age_secs, Some(345600));
+        assert!(entry.freshness_sql.is_some());
+    }
+
+    #[test]
+    fn test_entry_without_optional_fields_defaults_to_sui() {
+        let json = r#"[{
+            "type": "WalletMonitoringEntry",
+            "name": "Main Wallet Balance Check",
+            "cron_schedule": "0 */10 * * * *",
+            "sql_query": "SELECT 1"
+        }]"#;
+        let entries: Vec<MonitoringEntry> = serde_json::from_str(json).unwrap();
+        let MonitoringEntry::WalletMonitoringEntry(entry) = &entries[0] else {
+            panic!("expected a WalletMonitoringEntry");
+        };
+        assert_eq!(entry.decimals, SUI_DECIMALS);
+        assert_eq!(entry.freshness_sql, None);
+    }
+
+    #[test]
+    fn test_incident_scaling_uses_entry_decimals() {
+        // 55_330_643 DEEP in base units must not render as 55_330 the way a SUI divisor would.
+        let deep_base_units: i128 = 55_330_643_000_000;
+        assert_eq!(deep_base_units / 10i128.pow(6), 55_330_643);
+        assert_eq!(deep_base_units / 10i128.pow(SUI_DECIMALS), 55_330);
+    }
+
+    #[tokio::test]
+    async fn test_freshness_config_must_be_complete() {
+        // Only one half of the guard set: it would look configured but never fire, so reject it.
+        let entry = WalletMonitoringEntry {
+            name: "partial".to_string(),
+            cron_schedule: "0 */10 * * * *".to_string(),
+            sql_query: "SELECT 1".to_string(),
+            decimals: 9,
+            freshness_sql: Some("SELECT 1".to_string()),
+            max_data_age_secs: None,
+        };
+        let runner: Arc<dyn QueryRunner> = Arc::new(
+            ClickHouseQueryRunner::new("localhost", 8123, "ds_prod", "user", "passwd", true, 1)
+                .unwrap(),
+        );
+        assert!(
+            SchedulerService::check_freshness(&runner, &entry)
+                .await
+                .is_err()
+        );
     }
 }
