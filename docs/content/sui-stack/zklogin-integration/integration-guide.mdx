@@ -294,6 +294,16 @@ const zkLoginUserAddress = jwtToAddress(jwt, userSalt, false);
 
 The same `sub` + `iss` + `aud` + `user_salt` always produces the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full derivation formula.
 
+### Pass the derived address to a fiat on-ramp provider
+
+After deriving the zkLogin address, you can use it as the destination address for fiat on-ramp providers. The on-ramp provider sends purchased tokens (SUI, USDC, or other supported assets) directly to the user's zkLogin address. Pass the derived address to the provider's widget or API as the `walletAddress` or equivalent parameter:
+
+1. Derive the address with `jwtToAddress` as shown above.
+2. Pass `zkLoginUserAddress` to the on-ramp provider's configuration (for example, Banxa, Stripe, or Meld). Each provider accepts a destination address parameter in their widget SDK or API. See [Fiat On-Ramps](/onchain-finance/asset-custody/fiat-on-ramps) for provider-specific documentation links.
+3. The provider delivers the purchased tokens to the zkLogin address. The user can then sign transactions with their ephemeral key pair and zero-knowledge proof.
+
+The zkLogin address is deterministic. The same OAuth identity and salt always produce the same address, so the user can receive tokens from an on-ramp provider across multiple sessions without re-deriving.
+
 ## Step 6: Get the zero-knowledge proof
 
 The zero-knowledge proof attests that the ephemeral key pair is valid and bound to the user's OAuth identity, without revealing the JWT onchain.
