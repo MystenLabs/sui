@@ -120,7 +120,11 @@ const references = [
 		},
 		items: [
 			'references/sdk-comparison',
-			'references/sdk-migration',
+			{
+				type: 'link',
+				label: 'SDK Migration Guide',
+				href: 'https://sdk.mystenlabs.com/sui/migrations/sui-2.0',
+			},
 			{
 				type: 'link',
 				label: 'dApp Kit',
