@@ -6,6 +6,7 @@
 use crate::interface::{EventFilter, Tracer, Writer};
 use crate::tracers::nop::NopTracer;
 use crate::value::SerializableMoveValue;
+use educe::Educe;
 use move_binary_format::{
     file_format::FunctionDefinitionIndex as BinaryFunctionDefinitionIndex,
     file_format_common::Opcodes,
@@ -161,7 +162,8 @@ pub struct DataLoad {
 
 /// A TraceEvent is a single event in the Move VM, external events can also be interleaved in the
 /// trace. MoveVM events, are well structured, and can be a frame event or an instruction event.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Educe, Serialize, Deserialize)]
+#[educe(PartialEq, Eq)]
 pub enum TraceEvent {
     OpenFrame {
         frame: Box<Frame>,
@@ -179,7 +181,13 @@ pub enum TraceEvent {
         instruction: Box<String>,
     },
     Effect(Box<Effect>),
-    External(Box<serde_json::Value>),
+    // `serde_json::value::RawValue` implements neither `PartialEq` nor `Eq`, so the external
+    // payload is compared by its raw JSON text via `raw_value_eq`
+    External(#[educe(PartialEq(method(raw_value_eq)))] Box<serde_json::value::RawValue>),
+}
+
+fn raw_value_eq(a: &serde_json::value::RawValue, b: &serde_json::value::RawValue) -> bool {
+    a.get() == b.get()
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -551,10 +559,13 @@ impl<R: std::io::Read> Iterator for MoveTraceReader<'_, R> {
 fn emit_trace() {
     let mut builder = MoveTraceBuilder::new();
     for i in 0..10 {
-        builder.push_event(TraceEvent::External(Box::new(serde_json::json!({
-            "event": "external",
-            "data": i,
-        }))));
+        builder.push_event(TraceEvent::External(
+            serde_json::value::to_raw_value(&serde_json::json!({
+                "event": "external",
+                "data": i,
+            }))
+            .unwrap(),
+        ));
     }
 
     let bytes = builder.into_trace().into_compressed_json_bytes();
@@ -566,6 +577,7 @@ fn emit_trace() {
         let TraceEvent::External(event) = event else {
             panic!("unexpected event: {:?}", event);
         };
+        let event: serde_json::Value = serde_json::from_str(event.get()).unwrap();
         assert_eq!(event.get("data").unwrap().as_u64().unwrap(), i as u64);
     }
 }

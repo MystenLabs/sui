@@ -60,6 +60,7 @@ dir-diff = "0.3.2"
 dirs-next = "2.0.0"
 dunce = "1.0.2"
 ed25519-dalek = { version = "0.1.0", package = "ed25519-dalek-fiat", default-features = false, features = ["std", "serde", "u64_backend"] }
+educe = "0.6.0"
 ethnum = "1.0.4"
 fail = "0.4.0"
 file_diff = "1.0.0"

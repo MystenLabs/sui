@@ -8,11 +8,12 @@ publish = false
 edition = "2024"
 
 [dependencies]
+educe.workspace = true
 move-core-types.workspace = true
 serde.workspace = true
 move-binary-format.workspace = true
 zstd.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
 
 [features]
 default = []
