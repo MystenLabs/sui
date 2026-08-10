@@ -20,16 +20,16 @@ pub struct SecurityWatchdogConfig {
     #[clap(long)]
     pub config: PathBuf,
     /// Host serving the ClickHouse HTTPS interface.
-    #[clap(long, global = true)]
+    #[clap(long)]
     pub ch_host: String,
     /// Port of the ClickHouse HTTPS interface.
-    #[clap(long, default_value = "8443", global = true)]
+    #[clap(long, default_value = "8443")]
     pub ch_port: u16,
     /// Database that queries in the config file are resolved against.
-    #[clap(long, default_value = "ds_prod", global = true)]
+    #[clap(long, default_value = "ds_prod")]
     pub ch_database: String,
     /// ClickHouse user to authenticate as.
-    #[clap(long, global = true)]
+    #[clap(long)]
     pub ch_user: String,
     /// The url of the metrics client to connect to.
     #[clap(long, default_value = "127.0.0.1", global = true)]

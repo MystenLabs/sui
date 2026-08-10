@@ -18,13 +18,6 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{error, info};
 use uuid::Uuid;
 
-// Default for entries that do not declare their own.
-const SUI_DECIMALS: u32 = 9;
-
-fn default_decimals() -> u32 {
-    SUI_DECIMALS
-}
-
 // MonitoringEntry is an enum that represents the types of monitoring entries that can be scheduled.
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -55,8 +48,8 @@ pub struct WalletMonitoringEntry {
     cron_schedule: String,
     sql_query: String,
     // Decimals of the coin whose base units `sql_query` reports, used to render incident text in
-    // whole tokens. SUI and WAL are 9, DEEP and NS are 6.
-    #[serde(default = "default_decimals")]
+    // whole tokens. SUI and WAL are 9, DEEP and NS are 6. Required rather than defaulted: a wrong
+    // value silently misstates the balance an incident reports.
     decimals: u32,
     // Optional freshness guard, set together with `max_data_age_secs`. Must return the age in
     // seconds of the data behind `sql_query`. A stale snapshot yields no breaching rows, which is
@@ -404,18 +397,29 @@ mod tests {
     }
 
     #[test]
-    fn test_entry_without_optional_fields_defaults_to_sui() {
+    fn test_decimals_is_required() {
         let json = r#"[{
             "type": "WalletMonitoringEntry",
             "name": "Main Wallet Balance Check",
-            "cron_schedule": "0 */10 * * * *",
+            "cron_schedule": "0 0 */4 * * *",
             "sql_query": "SELECT 1"
+        }]"#;
+        assert!(serde_json::from_str::<Vec<MonitoringEntry>>(json).is_err());
+    }
+
+    #[test]
+    fn test_entry_without_freshness_guard_parses() {
+        let json = r#"[{
+            "type": "WalletMonitoringEntry",
+            "name": "Main Wallet Balance Check",
+            "cron_schedule": "0 0 */4 * * *",
+            "sql_query": "SELECT 1",
+            "decimals": 9
         }]"#;
         let entries: Vec<MonitoringEntry> = serde_json::from_str(json).unwrap();
         let MonitoringEntry::WalletMonitoringEntry(entry) = &entries[0] else {
             panic!("expected a WalletMonitoringEntry");
         };
-        assert_eq!(entry.decimals, SUI_DECIMALS);
         assert_eq!(entry.freshness_sql, None);
     }
 
@@ -424,7 +428,7 @@ mod tests {
         // 55_330_643 DEEP in base units must not render as 55_330 the way a SUI divisor would.
         let deep_base_units: i128 = 55_330_643_000_000;
         assert_eq!(deep_base_units / 10i128.pow(6), 55_330_643);
-        assert_eq!(deep_base_units / 10i128.pow(SUI_DECIMALS), 55_330);
+        assert_eq!(deep_base_units / 10i128.pow(9), 55_330);
     }
 
     #[tokio::test]
