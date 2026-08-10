@@ -108,7 +108,11 @@ function getArchetype(relPath, data, body) {
   // Onchain finance
   if (relPath.startsWith('onchain-finance/')) {
     if (relPath.includes('-sdk/') || relPath.includes('-sdk.mdx')) return 'sdk-reference';
-    if (relPath.includes('examples-patterns/')) return 'example';
+    // examples-patterns/ pages are code snippet galleries with explanations,
+    // not bootcamp-style examples with setup/run/troubleshooting sections.
+    // Classify as 'guide' so they use min_words: 300 instead of 800 and
+    // do not require bootcamp headings (BEDU-805).
+    if (relPath.includes('examples-patterns/')) return 'guide';
     return 'guide';
   }
 
