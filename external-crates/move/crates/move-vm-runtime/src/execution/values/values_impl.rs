@@ -1038,10 +1038,10 @@ impl VectorRef {
     /// Borrows an element from the container, returning it as a reference wrapped in `ValueImpl::Reference`.
     /// The result is a `PartialVmResult<ValueImpl>` containing the element as a `Reference`.
     pub fn borrow_elem(&self, index: usize, type_param: &Type) -> PartialVMResult<Value> {
-        self.borrow_elem_internal(index, VectorSpecialization::try_from(type_param)?)
+        self.borrow_elem_specialized(index, VectorSpecialization::try_from(type_param)?)
     }
 
-    pub(crate) fn borrow_elem_internal(
+    pub(crate) fn borrow_elem_specialized(
         &self,
         index: usize,
         specialization: VectorSpecialization,
@@ -2006,10 +2006,10 @@ impl std::ops::Deref for VecU8Ref<'_> {
 
 impl VectorRef {
     pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
-        self.len_internal(VectorSpecialization::try_from(type_param)?)
+        self.len_specialized(VectorSpecialization::try_from(type_param)?)
     }
 
-    pub(crate) fn len_internal(
+    pub(crate) fn len_specialized(
         &self,
         specialization: VectorSpecialization,
     ) -> PartialVMResult<Value> {
@@ -2022,10 +2022,10 @@ impl VectorRef {
     }
 
     pub fn push_back(&self, e: Value, type_param: &Type, capacity: u64) -> PartialVMResult<()> {
-        self.push_back_internal(e, VectorSpecialization::try_from(type_param)?, capacity)
+        self.push_back_specialized(e, VectorSpecialization::try_from(type_param)?, capacity)
     }
 
-    pub(crate) fn push_back_internal(
+    pub(crate) fn push_back_specialized(
         &self,
         e: Value,
         specialization: VectorSpecialization,
@@ -2091,10 +2091,10 @@ impl VectorRef {
     }
 
     pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
-        self.pop_internal(VectorSpecialization::try_from(type_param)?)
+        self.pop_specialized(VectorSpecialization::try_from(type_param)?)
     }
 
-    pub(crate) fn pop_internal(
+    pub(crate) fn pop_specialized(
         &self,
         specialization: VectorSpecialization,
     ) -> PartialVMResult<Value> {
@@ -2130,10 +2130,10 @@ impl VectorRef {
     }
 
     pub fn swap(&self, idx1: usize, idx2: usize, type_param: &Type) -> PartialVMResult<()> {
-        self.swap_internal(idx1, idx2, VectorSpecialization::try_from(type_param)?)
+        self.swap_specialized(idx1, idx2, VectorSpecialization::try_from(type_param)?)
     }
 
-    pub(crate) fn swap_internal(
+    pub(crate) fn swap_specialized(
         &self,
         idx1: usize,
         idx2: usize,
@@ -2295,10 +2295,10 @@ impl Vector {
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
-        self.unpack_internal(VectorSpecialization::try_from(type_param)?, expected_num)
+        self.unpack_specialized(VectorSpecialization::try_from(type_param)?, expected_num)
     }
 
-    pub(crate) fn unpack_internal(
+    pub(crate) fn unpack_specialized(
         self,
         specialization: VectorSpecialization,
         expected_num: u64,
