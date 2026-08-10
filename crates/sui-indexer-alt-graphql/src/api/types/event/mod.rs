@@ -378,6 +378,12 @@ impl CEvent {
         }
     }
 
+    /// The checkpoint this cursor points at. Legacy JSON cursors carry no checkpoint, so they
+    /// report 0.
+    pub(crate) fn checkpoint(&self) -> u64 {
+        self.token().checkpoint
+    }
+
     /// View the cursor as validated event coordinates, regardless of wire format. Legacy JSON
     /// cursors carry no checkpoint, so their hint defaults to 0 (unknown).
     fn token(&self) -> EventToken {

@@ -509,6 +509,25 @@ async fn test_subscription_resume_with_after_checkpoint() {
 }
 
 #[tokio::test]
+async fn test_subscription_start_too_far_ahead_errors() {
+    let cluster = SubscriptionTestCluster::new().await;
+
+    // Well past the default window allowed ahead of the tip (~300 checkpoints, about a minute).
+    let far_ahead = cluster.validator_checkpoint_tip() + 1_000;
+    let query = format!(
+        "subscription {{ checkpoints(afterCheckpoint: {far_ahead}) {{ node {{ sequenceNumber }} }} }}",
+    );
+    let mut stream = cluster.subscribe(&query).await;
+
+    let item = stream.next().await.unwrap();
+    let message = item["errors"][0]["message"].as_str().unwrap_or_default();
+    assert_eq!(
+        message,
+        "Cannot start a subscription more than 300 checkpoints ahead of the current tip"
+    );
+}
+
+#[tokio::test]
 async fn test_subscription_resume_long_backfill() {
     let cluster = SubscriptionTestCluster::new().await;
 
