@@ -149,6 +149,19 @@ Regardless of whether you used `suiup`, Homebrew, or Chocolately, Sui stores a p
 
 - Keystore location, which specifies where Sui stores your address' private keys.
 
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `sui: command not found` after installation | Open a new terminal window. If still not found, add `~/.sui/bin` (or the path shown by `suiup show`) to your shell's `PATH` variable. |
+| `suiup: command not found` | The install script did not update your `PATH`. Run `source ~/.bashrc` (or `~/.zshrc` on macOS) or open a new terminal. |
+| Installation hangs or takes a long time | Homebrew and Chocolatey installations compile from source and can take several minutes. Use `suiup` instead for a faster prebuilt binary install. |
+| `Client/server API version mismatch` | Your CLI version does not match the network's protocol version. Run `suiup update` to update to the latest version compatible with your active network. |
+| Permission denied during installation | On Linux or macOS, the install script writes to `~/.sui/`. If that directory has incorrect permissions, run `chmod -R u+rwx ~/.sui/` and retry. |
+| Need a specific version for a network | Run `suiup install sui@NETWORK` (for example, `suiup install sui@testnet`) to install the version compatible with that network. |
+
+For issues not listed here, visit the [Sui Discord](https://discord.gg/sui) or open an issue on [GitHub](https://github.com/MystenLabs/sui/issues/new/choose).
+
 <div className="next-steps-module">
   <div className="next-steps-header">
     <h3>Next steps</h3>
