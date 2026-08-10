@@ -12,8 +12,8 @@
 //! store, and runs the checkpoint broadcast pipeline used by RPC subscriptions.
 //!
 //! The module deliberately stays below orchestration concerns. `startup` chooses the remote
-//! checkpoint, initializes remote readers, seeds Simulacrum state, and builds the RPC server,
-//! while this module keeps the opened store and indexer service alive for the rest of the process.
+//! checkpoint, initializes remote readers, seeds Simulacrum state, and builds the RPC server, while
+//! this module keeps the opened store and indexer service alive for the rest of the process.
 
 use std::fs;
 use std::path::Path;
@@ -126,8 +126,8 @@ impl ServiceManager {
     ///
     /// Everything a reader depends on is established here, before any reader exists. Metadata is
     /// written or matched against what is already on disk, the rpc-store is opened, and the chain
-    /// identifier is recorded. Reusing a directory that describes a different network or
-    /// checkpoint fails rather than reinterpreting it.
+    /// identifier is recorded. Reusing a directory that describes a different network or checkpoint
+    /// fails rather than reinterpreting it.
     pub(crate) fn open(
         root: &Path,
         network: String,
@@ -167,8 +167,8 @@ impl ServiceManager {
         })
     }
 
-    /// Return the checkpoint an existing fork directory was forked at, or `None` if `root` holds
-    /// no fork yet.
+    /// Return the checkpoint an existing fork directory was forked at, or `None` if `root` holds no
+    /// fork yet.
     ///
     /// The metadata sidecar is read without opening the store, so startup can decide whether it is
     /// resuming a fork or creating one before committing to either. A directory that belongs to a
@@ -208,8 +208,8 @@ impl ServiceManager {
     ///
     /// Ingestion reads checkpoints back out of `simulacrum`, starting at the checkpoint after the
     /// fork point, because everything at or below it is pre-fork state the seed load already
-    /// placed. Registers the pipelines in [`Self::pipeline_layer`] plus the broadcast pipeline
-    /// that feeds RPC subscriptions, and errors if an indexer is already running.
+    /// placed. Registers the pipelines in [`Self::pipeline_layer`] plus the broadcast pipeline that
+    /// feeds RPC subscriptions, and errors if an indexer is already running.
     pub(crate) async fn start_indexer(
         &mut self,
         simulacrum: Arc<RwLock<ForkedSimulacrum>>,
@@ -283,10 +283,10 @@ impl ServiceManager {
     ///
     /// Two of the enabled pipelines are load-bearing in ways that are easy to miss.
     /// `package_versions` is the only writer for a package published after the fork point, since
-    /// `stage_local_object_diff` never stages a package-version row, so disabling it would
-    /// silently lose those rows. `balance` accumulates through a merge operator, so its writers
-    /// must stay disjoint. The fork writes pre-fork balances during the seed load and the indexer
-    /// writes post-fork ones, and any overlap doubles the value rather than being idempotent.
+    /// `stage_local_object_diff` never stages a package-version row, so disabling it would silently
+    /// lose those rows. `balance` accumulates through a merge operator, so its writers must stay
+    /// disjoint. The fork writes pre-fork balances during the seed load and the indexer writes
+    /// post-fork ones, and any overlap doubles the value rather than being idempotent.
     fn pipeline_layer() -> PipelineLayer {
         PipelineLayer {
             object_by_owner: Some(CommitterLayer::default()),
@@ -313,8 +313,8 @@ impl ServiceManager {
         RpcStoreReader::new(self.db.clone(), self.schema.clone())
     }
 
-    /// Return a [`LocalStore`] handle over the same rpc-store, pinned at the fork checkpoint.
-    /// Cheap to call, because the underlying db and schema are shared.
+    /// Return a [`LocalStore`] handle over the same rpc-store, pinned at the fork checkpoint. Cheap
+    /// to call, because the underlying db and schema are shared.
     pub(crate) fn local_store(&self) -> LocalStore {
         LocalStore::new(
             self.db.clone(),
@@ -360,11 +360,10 @@ impl ServiceManager {
     }
 
     /// Return the highest checkpoint every indexer pipeline has committed, which is the lowest of
-    /// their watermarks, since a checkpoint is only fully indexed once the slowest pipeline has
-    /// it.
+    /// their watermarks, since a checkpoint is only fully indexed once the slowest pipeline has it.
     ///
-    /// Returns `None` when the value is not yet meaningful, either because no indexer is running
-    /// or because a pipeline has not written a watermark at all.
+    /// Returns `None` when the value is not yet meaningful, either because no indexer is running or
+    /// because a pipeline has not written a watermark at all.
     fn highest_indexed_checkpoint(&self) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
         if self.indexer_pipelines.is_empty() {
             return Ok(None);
@@ -469,14 +468,13 @@ mod tests {
 
     use super::*;
 
-    /// The indexer must own exactly the column families `LocalStore` does not write, and no
-    /// others.
+    /// The indexer must own exactly the column families `LocalStore` does not write, and no others.
     ///
     /// Both directions bite silently. Enabling one the fork already writes duplicates every row of
     /// it per checkpoint, and for `balance`, which accumulates through a merge operator,
-    /// duplication would double the value rather than being idempotent. Disabling one the fork
-    /// does not write loses those rows outright. `package_versions` is the only writer for a
-    /// package published after the fork point, since `stage_local_object_diff` never stages a
+    /// duplication would double the value rather than being idempotent. Disabling one the fork does
+    /// not write loses those rows outright. `package_versions` is the only writer for a package
+    /// published after the fork point, since `stage_local_object_diff` never stages a
     /// package-version row.
     ///
     /// Neither failure shows up as a test error elsewhere, so the split is pinned here.

@@ -36,14 +36,13 @@ const GQL_RUNTIME_WORKER_THREADS: usize = 2;
 /// The runtime every GraphQL request runs on, for the life of the process.
 ///
 /// The storage traits this crate implements are synchronous, so each GraphQL call has to block
-/// somewhere. Building a runtime per call, the obvious way to do that, silently corrupts
-/// connection reuse, because hyper spawns a per-connection dispatch task onto whichever runtime is
-/// current when the connection opens, so dropping that runtime kills the task while the connection
-/// itself stays in the shared [`reqwest::Client`]'s idle pool. The next call to draw that
-/// connection fails with `dispatch task is gone: runtime dropped the dispatch task`, which
-/// surfaces during execution as a `STORAGE_ERROR` and an invariant violation. It is intermittent
-/// by construction, because it depends on the pool handing back a connection whose runtime has
-/// died.
+/// somewhere. Building a runtime per call, the obvious way to do that, silently corrupts connection
+/// reuse, because hyper spawns a per-connection dispatch task onto whichever runtime is current
+/// when the connection opens, so dropping that runtime kills the task while the connection itself
+/// stays in the shared [`reqwest::Client`]'s idle pool. The next call to draw that connection fails
+/// with `dispatch task is gone: runtime dropped the dispatch task`, which surfaces during execution
+/// as a `STORAGE_ERROR` and an invariant violation. It is intermittent by construction, because it
+/// depends on the pool handing back a connection whose runtime has died.
 ///
 /// A single process-lifetime runtime keeps those dispatch tasks alive as long as the connections
 /// they serve. It is parked on its own thread and deliberately never dropped, because dropping a
@@ -170,8 +169,8 @@ impl TransactionRead for GraphQLClient {
 }
 
 impl GraphQLClient {
-    /// Fetch metadata for objects owned by an address at a checkpoint, paginating through
-    /// the checkpoint-scoped ownership connection.
+    /// Fetch metadata for objects owned by an address at a checkpoint, paginating through the
+    /// checkpoint-scoped ownership connection.
     pub(crate) async fn get_address_owned_objects_at_checkpoint(
         &self,
         address: SuiAddress,
@@ -180,9 +179,8 @@ impl GraphQLClient {
         queries::address_owned_objects_query::query(address, checkpoint, self).await
     }
 
-    /// Coin types for which `address` holds an accumulator balance at a
-    /// checkpoint. See [`queries::address_balances_query`] for why the seed
-    /// needs to ask.
+    /// Coin types for which `address` holds an accumulator balance at a checkpoint. See
+    /// [`queries::address_balances_query`] for why the seed needs to ask.
     pub(crate) async fn get_address_balance_coin_types_at_checkpoint(
         &self,
         address: SuiAddress,
@@ -191,8 +189,8 @@ impl GraphQLClient {
         queries::address_balances_query::query(address, checkpoint, self).await
     }
 
-    /// Resolve object references at a checkpoint without an owner check, for
-    /// ids the fork derived rather than the user named.
+    /// Resolve object references at a checkpoint without an owner check, for ids the fork derived
+    /// rather than the user named.
     pub(crate) async fn get_object_refs_at_checkpoint(
         &self,
         object_ids: &[ObjectID],
@@ -226,8 +224,8 @@ impl GraphQLClient {
         queries::checkpoint_query::query(sequence_number, self).await
     }
 
-    /// Fetch all events for a transaction, paginating through the GraphQL
-    /// events connection. Returns `None` if the transaction doesn't exist.
+    /// Fetch all events for a transaction, paginating through the GraphQL events connection.
+    /// Returns `None` if the transaction doesn't exist.
     pub(crate) fn get_transaction_events(
         &self,
         tx_digest: &str,
@@ -235,8 +233,8 @@ impl GraphQLClient {
         block_on!(queries::events_query::query(tx_digest, self))
     }
 
-    /// Query `serviceConfig.availableRange` for both "Checkpoint" and
-    /// "Transaction" types and return the max of their `first.sequenceNumber`.
+    /// Query `serviceConfig.availableRange` for both "Checkpoint" and "Transaction" types and
+    /// return the max of their `first.sequenceNumber`.
     pub(crate) fn get_lowest_available_checkpoint(
         &self,
     ) -> Result<CheckpointSequenceNumber, Error> {
@@ -246,8 +244,7 @@ impl GraphQLClient {
         Ok(checkpoint_low.max(transaction_low))
     }
 
-    /// Query `serviceConfig.availableRange` for "Object" type and return
-    /// `first.sequenceNumber`.
+    /// Query `serviceConfig.availableRange` for "Object" type and return `first.sequenceNumber`.
     pub(crate) fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> Result<CheckpointSequenceNumber, Error> {
@@ -585,10 +582,9 @@ mod tests {
         assert!(!query.contains("atCheckpoint"));
     }
 
-    /// Seeding hydrates every manifest entry through this path, so a regression
-    /// to one request per object is the difference between two round trips and
-    /// seventy. Nothing about the returned values would reveal it — only the
-    /// request count does.
+    /// Seeding hydrates every manifest entry through this path, so a regression to one request per
+    /// object is the difference between two round trips and seventy. Nothing about the returned
+    /// values would reveal it — only the request count does.
     #[tokio::test]
     async fn test_exact_versions_at_one_checkpoint_batch_into_a_single_request() {
         let server = MockServer::start().await;

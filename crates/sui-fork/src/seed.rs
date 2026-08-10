@@ -59,8 +59,8 @@ pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
     /// Addresses that were fully enumerated to produce this manifest. Nothing reads the list, and
-    /// it exists as a record for whoever inspects the fork directory of which addresses the
-    /// seeding used.
+    /// it exists as a record for whoever inspects the fork directory of which addresses the seeding
+    /// used.
     #[serde(default)]
     pub(crate) addresses: Vec<SuiAddress>,
     pub(crate) entries: Vec<SeedEntry>,
@@ -163,9 +163,9 @@ pub(crate) async fn prepare_seed_manifest(
 /// The manifest holds object references rather than objects, so each entry is fetched by id and
 /// version and handed to the restore pipelines, which rebuild the owned-object index and the rest
 /// of the derived surface. The load runs at most once per fork directory, because `Balance`
-/// accumulates through a merge operator and a second pass would double-count every seeded coin,
-/// and it commits its own completion marker atomically with the rows to make that unrepeatable
-/// rather than merely unlikely.
+/// accumulates through a merge operator and a second pass would double-count every seeded coin, and
+/// it commits its own completion marker atomically with the rows to make that unrepeatable rather
+/// than merely unlikely.
 pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> Result<(), Error> {
     if store.local_store().seed_load_complete()? {
         return Ok(());
@@ -208,11 +208,11 @@ async fn resolve_address_seed(
 /// Local execution does maintain address balances, so a withdrawal would then apply a delta to a
 /// baseline that was never seeded.
 ///
-/// The field's id is derivable from `(address, coin type)`, so the only thing that has to come
-/// from the remote is which coin types to derive for, which is the one part nothing local can
-/// know. Each derived id is then resolved like any other object reference and seeded as an
-/// ordinary object, so the stock `Balance` restore pipeline picks it up through its
-/// accumulator-root arm without this crate writing a balance row itself.
+/// The field's id is derivable from `(address, coin type)`, so the only thing that has to come from
+/// the remote is which coin types to derive for, which is the one part nothing local can know. Each
+/// derived id is then resolved like any other object reference and seeded as an ordinary object, so
+/// the stock `Balance` restore pipeline picks it up through its accumulator-root arm without this
+/// crate writing a balance row itself.
 async fn resolve_address_balance_seed(
     remote: &RemoteSource,
     address: SuiAddress,
@@ -729,9 +729,8 @@ mod tests {
         })
     }
 
-    /// The owned-objects and balances queries take the same variables, so both
-    /// mocks must discriminate on the selection set or the first-mounted one
-    /// swallows the other's requests.
+    /// The owned-objects and balances queries take the same variables, so both mocks must
+    /// discriminate on the selection set or the first-mounted one swallows the other's requests.
     async fn mock_address_objects(
         server: &MockServer,
         checkpoint: u64,
@@ -865,11 +864,10 @@ mod tests {
         assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
     }
 
-    /// An address balance lives in a dynamic field under the accumulator root,
-    /// not on the address, so the owned-object scan never reaches it. Seeding
-    /// has to derive the field id from `(address, coin type)` and pull it in as
-    /// an ordinary object, or the address seeds with its coins and a silently
-    /// zero balance.
+    /// An address balance lives in a dynamic field under the accumulator root, not on the address,
+    /// so the owned-object scan never reaches it. Seeding has to derive the field id from
+    /// `(address, coin type)` and pull it in as an ordinary object, or the address seeds with its
+    /// coins and a silently zero balance.
     #[tokio::test]
     async fn address_seed_pulls_in_the_accumulator_balance_field() {
         let server = MockServer::start().await;
@@ -936,9 +934,8 @@ mod tests {
         );
     }
 
-    /// A coin type reported with no accumulator balance has no field to seed;
-    /// deriving and fetching one would be a wasted round-trip per coin type the
-    /// address merely holds coins of.
+    /// A coin type reported with no accumulator balance has no field to seed; deriving and fetching
+    /// one would be a wasted round-trip per coin type the address merely holds coins of.
     #[tokio::test]
     async fn address_seed_skips_coin_types_without_an_accumulator_balance() {
         let server = MockServer::start().await;
@@ -971,9 +968,9 @@ mod tests {
         assert!(manifest.entries.is_empty());
     }
 
-    /// The accumulator keys on the wrapped `Balance<T>`, while the balances
-    /// connection reports the inner `T`. Getting that wrapping wrong yields a
-    /// plausible-looking id that simply never resolves.
+    /// The accumulator keys on the wrapped `Balance<T>`, while the balances connection reports the
+    /// inner `T`. Getting that wrapping wrong yields a plausible-looking id that simply never
+    /// resolves.
     #[test]
     fn accumulator_field_id_keys_on_the_wrapped_balance_type() {
         let owner = SuiAddress::random_for_testing_only();

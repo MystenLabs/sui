@@ -4,9 +4,9 @@
 //! Checkpoint-pinned GraphQL queries.
 //!
 //! [`RemoteSource`] owns every GraphQL round-trip the store makes and the fork's remote-read
-//! policy. Object queries are pinned at the fork checkpoint, and checkpoint and transaction
-//! lookups refuse to return anything finalized after the fork point, so upstream activity that
-//! happened after the fork cannot leak into a fork that has already diverged.
+//! policy. Object queries are pinned at the fork checkpoint, and checkpoint and transaction lookups
+//! refuse to return anything finalized after the fork point, so upstream activity that happened
+//! after the fork cannot leak into a fork that has already diverged.
 
 use anyhow::Context as _;
 use anyhow::anyhow;
@@ -50,8 +50,7 @@ impl RemoteSource {
         }
     }
 
-    /// Return the chain the live network RPC serves, derived from its configured node
-    /// identity.
+    /// Return the chain the live network RPC serves, derived from its configured node identity.
     pub(crate) fn chain(&self) -> Chain {
         self.gql.chain()
     }

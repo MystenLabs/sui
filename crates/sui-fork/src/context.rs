@@ -44,9 +44,9 @@ impl Context {
     /// Build a `Context` whose Simulacrum is backed by a started [`ServiceManager`].
     ///
     /// Starts the embedded `sui-rpc-store` indexer over `checkpoint_sender` before returning, so
-    /// committed local checkpoints get indexed for RPC reads. The indexer's broadcast pipeline
-    /// owns `checkpoint_sender` from here on and is what publishes to subscribers, so their
-    /// ordering follows indexing rather than sealing.
+    /// committed local checkpoints get indexed for RPC reads. The indexer's broadcast pipeline owns
+    /// `checkpoint_sender` from here on and is what publishes to subscribers, so their ordering
+    /// follows indexing rather than sealing.
     pub(crate) async fn new(
         simulacrum: Simulacrum<OsRng, ForkStore>,
         mut services: ServiceManager,

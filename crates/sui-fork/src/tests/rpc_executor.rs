@@ -418,9 +418,9 @@ async fn test_rpc_reads_serve_indexed_post_fork_data_from_rpc_store() {
 }
 
 /// The embedded indexer is the sole writer of derived indexes (owner, type, balance, package) for
-/// local checkpoints, and checkpoint publication blocks until it has indexed the sealed
-/// checkpoint. After an execution returns, owner and balance lookups must therefore already serve
-/// the transfer through the stock rpc-store reader.
+/// local checkpoints, and checkpoint publication blocks until it has indexed the sealed checkpoint.
+/// After an execution returns, owner and balance lookups must therefore already serve the transfer
+/// through the stock rpc-store reader.
 #[tokio::test]
 async fn test_indexer_populates_derived_indexes_for_local_execution() {
     let mut harness = TestHarness::new().await;

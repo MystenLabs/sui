@@ -221,8 +221,8 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
         .ok_or_else(|| anyhow!("no local checkpoint available to resume from"))
 }
 
-/// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to `rpc_addr`, backed by
-/// the `ForkStore`'s RPC trait impls, then blocks on Ctrl+C.
+/// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to `rpc_addr`, backed by the
+/// `ForkStore`'s RPC trait impls, then blocks on Ctrl+C.
 pub async fn run(
     context: Context,
     subscription_handle: SubscriptionServiceHandle,

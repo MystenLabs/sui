@@ -133,10 +133,10 @@ impl LocalStore {
     /// fork is currently producing. A row there is the fork's authority, because it was written
     /// either by local execution or by a pre-fork materialization that resolved the object as of
     /// the fork checkpoint, and absence means the fork has no knowledge of the object at all, so
-    /// the caller should consult GraphQL. The raw `objects` rows cannot resolve an object's
-    /// current state, because they are sparse from caching arbitrary historical versions on
-    /// demand, so the greatest row present is not necessarily current, and a scan that returns no
-    /// data cannot separate "removed" from "never cached".
+    /// the caller should consult GraphQL. The raw `objects` rows cannot resolve an object's current
+    /// state, because they are sparse from caching arbitrary historical versions on demand, so the
+    /// greatest row present is not necessarily current, and a scan that returns no data cannot
+    /// separate "removed" from "never cached".
     pub(crate) fn get_latest_object_status(
         &self,
         id: ObjectID,
@@ -403,10 +403,10 @@ impl LocalStore {
 
     /// Report whether the seed load has already committed.
     ///
-    /// The seed load must run exactly once over the lifetime of a fork directory, because
-    /// `Balance` writes through a merge operator and replaying it would double-count every seeded
-    /// coin. The marker is written inside the load's own batch, so it is set if and only if that
-    /// batch landed.
+    /// The seed load must run exactly once over the lifetime of a fork directory, because `Balance`
+    /// writes through a merge operator and replaying it would double-count every seeded coin. The
+    /// marker is written inside the load's own batch, so it is set if and only if that batch
+    /// landed.
     pub(crate) fn seed_load_complete(&self) -> anyhow::Result<bool> {
         let state = FrameworkSchema::new(self.db.clone())
             .restore
@@ -498,8 +498,8 @@ impl LocalStore {
     /// When the same result both removes and writes an object (e.g. wrapped then written again),
     /// the object stays current because the write is staged after the removal, while an object
     /// created and terminally deleted in the same result is kept only as a historical row.
-    /// `PendingCheckpointBuffer::record_object_diff` follows the same rules, so overlay reads
-    /// match what these rows will say once committed.
+    /// `PendingCheckpointBuffer::record_object_diff` follows the same rules, so overlay reads match
+    /// what these rows will say once committed.
     pub(crate) fn stage_local_object_diff(
         &self,
         batch: &mut sui_consistent_store::Batch,
@@ -720,9 +720,9 @@ mod tests {
         .into()
     }
 
-    /// Stage-and-commit shorthand standing in for the production seal. It stages a single diff
-    /// into a single batch keyed at the executing checkpoint, which is exactly the sealed
-    /// checkpoint's sequence number at the moment a real seal runs.
+    /// Stage-and-commit shorthand standing in for the production seal. It stages a single diff into
+    /// a single batch keyed at the executing checkpoint, which is exactly the sealed checkpoint's
+    /// sequence number at the moment a real seal runs.
     fn apply_diff(
         store: &LocalStore,
         written: &BTreeMap<ObjectID, Object>,
@@ -765,8 +765,8 @@ mod tests {
     /// was created in, would make this read resolve to the older version.
     ///
     /// System packages are what make the scenario reachable, since an upgraded user package lives
-    /// under a fresh object id while `0x2` and friends carry every version they have ever had
-    /// under one id.
+    /// under a fresh object id while `0x2` and friends carry every version they have ever had under
+    /// one id.
     #[test]
     fn exact_version_fetch_does_not_displace_established_currency() {
         let (_dir, store) = fresh_store();
@@ -792,8 +792,8 @@ mod tests {
     }
 
     /// Pre-fork materialization claims currency as of the fork checkpoint, so its row belongs at
-    /// that checkpoint and nowhere else. A row above it would outrank locally executed
-    /// checkpoints, and one below would lose to the indexer's synthetic floors.
+    /// that checkpoint and nowhere else. A row above it would outrank locally executed checkpoints,
+    /// and one below would lose to the indexer's synthetic floors.
     #[test]
     fn pre_fork_materialization_is_recorded_at_the_fork_checkpoint() {
         let (_dir, store) = fresh_store();

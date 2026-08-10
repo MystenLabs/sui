@@ -47,9 +47,9 @@ use sui_types::transaction::VerifiedTransaction;
 // ============================================================================
 
 /// Signed transaction envelope paired with its execution effects and the checkpoint it was
-/// finalized in. The checkpoint is used by [`crate::store::ForkStore`] as a pre-fork guard,
-/// because remote results whose `checkpoint > forked_at_checkpoint` must not leak into a fork that
-/// has already diverged from the upstream chain.
+/// finalized in. The checkpoint is used by [`crate::store::ForkStore`] as a pre-fork guard, because
+/// remote results whose `checkpoint > forked_at_checkpoint` must not leak into a fork that has
+/// already diverged from the upstream chain.
 #[derive(Clone, Debug)]
 pub(crate) struct TransactionInfo {
     pub(crate) transaction: VerifiedTransaction,
@@ -59,8 +59,8 @@ pub(crate) struct TransactionInfo {
 
 /// `TransactionRead` trait is used to retrieve transaction data for a given digest.
 pub(crate) trait TransactionRead {
-    /// Given a transaction digest, return the signed transaction, its effects, and the
-    /// checkpoint it was finalized in. Returns `None` if the transaction is not found.
+    /// Given a transaction digest, return the signed transaction, its effects, and the checkpoint
+    /// it was finalized in. Returns `None` if the transaction is not found.
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,
@@ -91,8 +91,8 @@ pub(crate) enum VersionQuery {
 pub(crate) trait ObjectRead {
     /// Retrieve objects by their keys, with different query options.
     ///
-    /// If the object is not found, the element in the vector is `None`.
-    /// Otherwise each tuple contains:
+    /// If the object is not found, the element in the vector is `None`. Otherwise each tuple
+    /// contains:
     /// - `Object`: The object data
     /// - `u64`: The actual version of the object
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error>;
@@ -100,8 +100,8 @@ pub(crate) trait ObjectRead {
 
 /// Checkpoint read data.
 pub(crate) trait CheckpointRead {
-    /// Return the verified checkpoint summary together with its decoded
-    /// contents. If `sequence` is `None`, return the latest checkpoint.
+    /// Return the verified checkpoint summary together with its decoded contents. If `sequence` is
+    /// `None`, return the latest checkpoint.
     fn get_checkpoint(
         &self,
         sequence: Option<CheckpointSequenceNumber>,

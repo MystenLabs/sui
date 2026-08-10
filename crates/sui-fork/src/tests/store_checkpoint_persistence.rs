@@ -143,9 +143,9 @@ fn make_gas_object(id: ObjectID, version: u64) -> Object {
     .into()
 }
 
-/// A crash between execution and seal must leave no durable trace, because staged object diffs
-/// live only in memory, so a restart resumes from the previous tip instead of on top of state
-/// whose creating transaction was never recorded.
+/// A crash between execution and seal must leave no durable trace, because staged object diffs live
+/// only in memory, so a restart resumes from the previous tip instead of on top of state whose
+/// creating transaction was never recorded.
 #[test]
 fn unsealed_execution_leaves_no_durable_state_across_reopen() {
     let temp = tempfile::tempdir().expect("tempdir");

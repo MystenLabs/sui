@@ -65,8 +65,8 @@ impl MetadataStore {
         Self::base_path_from_env(|key| env::var_os(key))
     }
 
-    /// Resolve the default base path for on-disk metadata, using the provided `get_env` function
-    /// to access environment variables.
+    /// Resolve the default base path for on-disk metadata, using the provided `get_env` function to
+    /// access environment variables.
     fn base_path_from_env(
         mut get_env: impl FnMut(&str) -> Option<OsString>,
     ) -> Result<PathBuf, Error> {

@@ -158,8 +158,8 @@ fn make_gas_object(id: ObjectID, version: u64, owner: Owner) -> Object {
     .into()
 }
 
-/// Exact versions pinned at a checkpoint are fetched through a checkpoint-scoped
-/// `multiGetObjects`, so the response is a list even for a single object.
+/// Exact versions pinned at a checkpoint are fetched through a checkpoint-scoped `multiGetObjects`,
+/// so the response is a list even for a single object.
 fn object_at_checkpoint_response(objects: &[&Object]) -> serde_json::Value {
     serde_json::json!({
         "data": {
@@ -435,8 +435,8 @@ async fn test_seed_load_survives_restart_without_remote() {
     );
 }
 
-/// `ObjectByOwner::restore` keys object-owned children under their parent, so a
-/// seeded child is reachable as a dynamic field without any read-time scan.
+/// `ObjectByOwner::restore` keys object-owned children under their parent, so a seeded child is
+/// reachable as a dynamic field without any read-time scan.
 #[test]
 fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
     let (_temp, store) = data_store();
@@ -457,8 +457,8 @@ fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
     assert_eq!(fields[0].field_id, child_id);
 }
 
-/// Coin metadata is assembled from three type-keyed lookups against the type
-/// index, which `ObjectByType::restore` populates during the seed load.
+/// Coin metadata is assembled from three type-keyed lookups against the type index, which
+/// `ObjectByType::restore` populates during the seed load.
 #[test]
 fn test_rpc_get_coin_info_reads_seeded_type_index() {
     let (_temp, store) = data_store();
@@ -563,8 +563,8 @@ async fn mock_available_range(server: &MockServer, first_sequence_number: u64) {
         .await;
 }
 
-/// A remote whose retention window has passed the fork point must not make
-/// the fork report its own locally held range as unavailable.
+/// A remote whose retention window has passed the fork point must not make the fork report its own
+/// locally held range as unavailable.
 #[tokio::test]
 async fn test_availability_floor_is_clamped_at_the_fork_checkpoint() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -579,8 +579,8 @@ async fn test_availability_floor_is_clamped_at_the_fork_checkpoint() {
     );
 }
 
-/// A remote floor below the fork point passes through unchanged, so pre-fork
-/// availability keeps tracking the remote's retention window.
+/// A remote floor below the fork point passes through unchanged, so pre-fork availability keeps
+/// tracking the remote's retention window.
 #[tokio::test]
 async fn test_availability_floor_below_the_fork_passes_through() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -790,9 +790,9 @@ fn test_read_child_object_uses_highest_local_version_within_bound() {
     assert_eq!(child, child_v5);
 }
 
-/// Bounded child reads must see versions the in-flight checkpoint staged but
-/// has not yet sealed, or execution of a later transaction in the same
-/// checkpoint would resolve dynamic fields against pre-checkpoint state.
+/// Bounded child reads must see versions the in-flight checkpoint staged but has not yet sealed, or
+/// execution of a later transaction in the same checkpoint would resolve dynamic fields against
+/// pre-checkpoint state.
 #[test]
 fn test_read_child_object_sees_staged_versions_within_bound() {
     let (_temp, mut store) = data_store();
@@ -1181,9 +1181,9 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
     assert_eq!(infos[0].object_id, object_id);
 }
 
-/// A store or remote failure during a child read must surface as an error:
-/// swallowed into `Ok(None)`, it would reach Move execution as "child not
-/// found" and be durably committed as a wrong result.
+/// A store or remote failure during a child read must surface as an error: swallowed into
+/// `Ok(None)`, it would reach Move execution as "child not found" and be durably committed as a
+/// wrong result.
 #[tokio::test]
 async fn test_read_child_object_propagates_store_errors() {
     let (_temp, store) = data_store();

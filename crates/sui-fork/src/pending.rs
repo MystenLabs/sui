@@ -12,17 +12,16 @@
 //! reader that runs before seal. Each transaction in the in-flight checkpoint, including the
 //! settlement and barrier system transactions sealed with it, resolves its inputs through the
 //! store, so the staged diffs serve as a read overlay over the rpc-store until the seal commits
-//! them. A read returns the overlay entry when one exists and falls through to the store
-//! otherwise. No version comparison is needed, because an overlay entry is always newer than any
-//! persisted row. Local execution Lamport-bumps past every live version, while remote fetches
-//! stay pinned at or below the fork checkpoint. Checkpoint, transaction, effects, and event
-//! entries stay write-only because their only readers run after execution returns, and sealing
-//! completes synchronously inside checkpoint publication, so those rows are already in the
-//! rpc-store by then.
+//! them. A read returns the overlay entry when one exists and falls through to the store otherwise.
+//! No version comparison is needed, because an overlay entry is always newer than any persisted
+//! row. Local execution Lamport-bumps past every live version, while remote fetches stay pinned at
+//! or below the fork checkpoint. Checkpoint, transaction, effects, and event entries stay
+//! write-only because their only readers run after execution returns, and sealing completes
+//! synchronously inside checkpoint publication, so those rows are already in the rpc-store by then.
 //!
-//! Nothing here is persisted. Staged entries that have not been sealed are lost on process
-//! restart, which is the crash-safety contract, because a checkpoint either commits whole at seal
-//! time or leaves no trace.
+//! Nothing here is persisted. Staged entries that have not been sealed are lost on process restart,
+//! which is the crash-safety contract, because a checkpoint either commits whole at seal time or
+//! leaves no trace.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -70,8 +69,8 @@ pub(crate) struct ObjectDiff {
 
 /// Staged object diffs plus the merged views the read overlay serves.
 ///
-/// The views mirror the rows `LocalStore::stage_local_object_diff` will write at seal, and they
-/// are maintained on record rather than derived on read so overlay lookups stay O(log n) on the
+/// The views mirror the rows `LocalStore::stage_local_object_diff` will write at seal, and they are
+/// maintained on record rather than derived on read so overlay lookups stay O(log n) on the
 /// execution hot path.
 #[derive(Default)]
 struct PendingObjects {
@@ -266,8 +265,8 @@ impl PendingCheckpointBuffer {
         Ok(pending.diffs.clone())
     }
 
-    /// Return the staged checkpoint matching `contents`, validating that the contents digest is
-    /// the one the checkpoint committed to.
+    /// Return the staged checkpoint matching `contents`, validating that the contents digest is the
+    /// one the checkpoint committed to.
     pub(crate) fn checkpoint_for_contents(
         &self,
         contents: &CheckpointContents,
