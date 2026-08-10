@@ -164,9 +164,8 @@ pub(crate) enum Error {
 /// Cursor for iterating over modules in a package. Points to the module by its name.
 pub(crate) type CModule = JsonCursor<String>;
 
-/// Cursor for iterating over package publishes. The Postgres and gRPC paths iterate in different
-/// orders — `(checkpoint, original_id, version)` vs. transaction order — so their cursors are not
-/// interchangeable; each path rejects the other's.
+/// Cursor for iterating over package publishes. gRPC iterates on transaction order, while Postgres
+/// is on `(checkpoint, original_id, version)`, so the cursors are not interchangeable.
 pub(crate) type CPackage = MultiCursor<OpaqueCursor<PackageToken>, BcsCursor<PackageCursor>>;
 
 /// Custom `Connection` for packages, to support the partially-filled pages the gRPC scan can
@@ -643,19 +642,6 @@ impl MovePackage {
         }
     }
 
-    /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
-    /// is not a package. This is more efficient when you already have the native object.
-    pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
-        let package = native.data.try_as_package()?.clone();
-        let scope = scope.with_root_version(package.version().value());
-        let super_ = Object::from_contents(scope, native);
-        Some(Self {
-            super_,
-            native: Arc::new(OnceCell::from(Some(package))),
-            parsed: Arc::new(OnceCell::new()),
-        })
-    }
-
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
     /// contents cannot be fetched, or it is not a package.
     pub(crate) async fn from_object(
@@ -806,9 +792,8 @@ impl MovePackage {
     }
 
     /// Construct a GraphQL representation of a `MovePackage` from a full native object. Returns
-    /// `None` if the object is not a package. Unlike [`Self::from_native_object`], the scope's
-    /// root version is left unpinned, matching the checkpoint-listing paths.
-    fn from_object_contents(scope: Scope, native: NativeObject) -> Option<Self> {
+    /// `None` if the object is not a package.
+    pub(crate) fn from_object_contents(scope: Scope, native: NativeObject) -> Option<Self> {
         let package = native.data.try_as_package().cloned()?;
 
         let super_ = Object::from_contents(scope, native);
