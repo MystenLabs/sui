@@ -82,7 +82,7 @@ struct Definitions {
     field_handles: Vec<VMPointer<FieldHandle>>,
     field_instantiations: Vec<VMPointer<FieldInstantiation>>,
     function_instantiations: Vec<VMPointer<FunctionInstantiation>>,
-    signatures: Vec<VMPointer<ArenaVec<SizedType>>>,
+    signatures: Vec<VMPointer<ArenaVec<SizedArenaType>>>,
     constants: Vec<VMPointer<Constant>>,
 }
 
@@ -156,7 +156,7 @@ impl FunctionContext<'_, '_> {
     fn get_vec_type(
         &self,
         signature_index: &SignatureIndex,
-    ) -> PartialVMResult<VMPointer<SizedType>> {
+    ) -> PartialVMResult<VMPointer<SizedArenaType>> {
         let Some(tys) = self.definitions.signatures.get(signature_index.0 as usize) else {
             return Err(partial_vm_error!(
                 VERIFIER_INVARIANT_VIOLATION,
@@ -786,8 +786,8 @@ fn cache_signatures(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
 ) -> PartialVMResult<(
-    ArenaVec<ArenaVec<SizedType>>,
-    BTreeMap<SignatureIndex, VMPointer<ArenaVec<SizedType>>>,
+    ArenaVec<ArenaVec<SizedArenaType>>,
+    BTreeMap<SignatureIndex, VMPointer<ArenaVec<SizedArenaType>>>,
 )> {
     let signatures = module
         .signatures()
@@ -864,7 +864,7 @@ fn struct_instantiations(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
     structs: &[StructDef],
-    signatures: &[VMPointer<ArenaVec<SizedType>>],
+    signatures: &[VMPointer<ArenaVec<SizedArenaType>>],
 ) -> PartialVMResult<ArenaVec<StructInstantiation>> {
     let struct_insts = module
         .struct_instantiations()
@@ -892,7 +892,7 @@ fn enum_instantiations(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
     enums: &[EnumDef],
-    signatures: &[VMPointer<ArenaVec<SizedType>>],
+    signatures: &[VMPointer<ArenaVec<SizedArenaType>>],
 ) -> PartialVMResult<ArenaVec<EnumInstantiation>> {
     let enum_insts = module
         .enum_instantiations()
@@ -930,7 +930,7 @@ fn enum_instantiations(
 fn function_instantiations(
     package_context: &mut PackageContext,
     module: &CompiledModule,
-    signatures: &[VMPointer<ArenaVec<SizedType>>],
+    signatures: &[VMPointer<ArenaVec<SizedArenaType>>],
 ) -> PartialVMResult<ArenaVec<FunctionInstantiation>> {
     dbg_println!(flag: function_list_sizes, "handle size: {}", module.function_handles().len());
 
@@ -1672,10 +1672,10 @@ fn make_sized_type(
     context: &PackageContext,
     module: &CompiledModule,
     tok: &SignatureToken,
-) -> PartialVMResult<SizedType> {
+) -> PartialVMResult<SizedArenaType> {
     let ty = make_arena_type(context, module, tok)?;
     let size_formula = ArenaTypeSizeFormula::from_term(&ty, &context.package_arena)?;
-    Ok(SizedType { ty, size_formula })
+    Ok(SizedArenaType { ty, size_formula })
 }
 
 /// Convert a signature token type into its execution counterpart, including converting datatypes

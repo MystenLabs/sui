@@ -8,7 +8,7 @@ use crate::{
         dispatch_tables::VMDispatchTables, interpreter, interpreter::state::TypeArguments,
         tracing::tracer::VMTracer, values::Value,
     },
-    jit::execution::ast::{Function, SizedType, Type},
+    jit::execution::ast::{Function, SizedArenaType, Type},
     natives::extensions::NativeExtensions,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
@@ -430,7 +430,7 @@ impl<'extensions> MoveVM<'extensions> {
         // before building it.
         let ty_args = TypeArguments::new(&self.virtual_tables, ty_args.to_vec())
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
-        let instantiate = |ty: &SizedType| self.virtual_tables.subst_type(ty, &ty_args);
+        let instantiate = |ty: &SizedArenaType| self.virtual_tables.subst_type(ty, &ty_args);
 
         let parameters = fun_ref
             .parameters

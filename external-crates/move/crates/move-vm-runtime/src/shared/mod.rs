@@ -2,14 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::shared::{
-    constants::{
-        HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX,
-        VALUE_DEPTH_MAX,
-    },
+    constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
     safe_ops::SafeArithmetic as _,
 };
 use move_binary_format::{errors::PartialVMResult, partial_vm_error};
-use move_vm_config::runtime::VMConfig;
 use std::{collections::HashMap, hash::Hash};
 
 pub mod binary_cache;
@@ -70,21 +66,6 @@ impl TypeTraversalBudget {
             node_count: 0,
             max_depth: TYPE_DEPTH_MAX,
             max_nodes: MAX_TYPE_INSTANTIATION_NODES,
-        }
-    }
-
-    /// Custom limits for "value"/layout traversal.
-    pub fn from_vm_config_for_value_depth(vm_config: &VMConfig) -> Self {
-        Self {
-            depth: 0,
-            node_count: 0,
-            max_depth: vm_config
-                .runtime_limits_config
-                .max_value_nest_depth
-                .unwrap_or(VALUE_DEPTH_MAX),
-            max_nodes: vm_config
-                .max_type_to_layout_nodes
-                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES),
         }
     }
 
