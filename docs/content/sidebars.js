@@ -363,7 +363,6 @@ export default {
                 'onchain-finance/fungible-tokens/create-a-fungible-token',
             ],
           },
-          'onchain-finance/fungible-tokens/integrating-with-stablecoins',
           'onchain-finance/fungible-tokens/regulated-tokens',
           'onchain-finance/fungible-tokens/token-vesting-strategies',
           'onchain-finance/fungible-tokens/sui-bridging',

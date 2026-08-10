@@ -34,7 +34,7 @@ answer: >-
   provided policy instead of owning them outright.
 ---
 
-Renting non-fungible tokens (NFTs) is a mechanism that allows individuals to temporarily use the benefits of an NFT without ownership or possession. This implementation uses the [Kiosk Apps standard](/onchain-finance/kiosk/kiosk-apps) to establish an infrastructure for rental transactions. This approach aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+NFT rental is a mechanism that allows users to temporarily access the benefits of an NFT without owning it. The borrower pays a fee, gains access for a defined duration, and the NFT returns to the lender after the rental period expires. This implementation uses the [Kiosk Apps standard](/onchain-finance/kiosk/kiosk-apps) to establish rental infrastructure on Sui. The approach aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard.
 
 NFT rentals apply to several real-world scenarios:
 
@@ -90,5 +90,17 @@ Transferring kiosks might result in unexpected behaviors while an asset is being
 This implementation charges a rental fee based on days. You can update the logic to support charging per hour or per second.
 
 :::
+
+## Implement NFT rentals step by step
+
+To add rental support to an existing NFT type, follow these steps:
+
+1. **Set up the rentable type.** Call `setup_renting` for your NFT type. This creates the rental infrastructure and a `TransferPolicy` with an optional lock rule that keeps the NFT in the kiosk during the rental period.
+2. **Install the kiosk extension.** Both the lender and borrower must install the rental extension in their respective kiosks. If a user does not have a kiosk, create one first.
+3. **List for renting.** The lender calls `list` to make their NFT available for rent. The listing specifies the rental duration and fee (denominated in SUI or another coin type).
+4. **Rent the NFT.** The borrower calls `rent`, paying the rental fee. The NFT remains in the lender's kiosk but the borrower gains access through the extension.
+5. **Use the rented NFT.** The borrower accesses the NFT through `borrow` (immutable reference) or `borrow_val` (mutable reference, for use cases where the NFT state changes during rental).
+6. **Reclaim after expiry.** After the rental period ends, the lender calls `reclaim` to regain full control of the NFT. The NFT can then be sold, rented again, or transferred normally.
+
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental/sources/nft_rental.move).

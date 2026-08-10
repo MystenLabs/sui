@@ -42,9 +42,11 @@ answer: >-
   currency within a game application.
 ---
 
-Using the Sui [Closed-Loop Token](/onchain-finance/closed-loop-token) standard, you can create in-game currencies. These might be in the form of in-game assets such as gems and diamonds that you can grant to players for their actions or make available for purchase. You mint the currency on Sui, but players can only use the currency within the economy of the game itself. You typically mint them in predefined amounts to maintain scarcity and the game economy.
+In-game currencies can use [closed-loop tokens](/onchain-finance/closed-loop-token) to create assets that players earn and spend within your game's economy. You mint the currency on Sui, but players can only use it within the workflows you define (for example, buying items, upgrading characters, or trading with other players through a governed marketplace). Common examples include gems, diamonds, credits, and gold.
 
-This example implements a governance-controlled currency in Move. Transferring the currency requires an approval, which is implemented using custom rule logic. The currency in this example is called King Credits, and it can only be transferred with approval from the Crown Council.
+Closed-loop tokens differ from standard `Coin` types because they restrict what actions holders can perform. You configure a [`TokenPolicy`](/onchain-finance/closed-loop-token/token-policy) with rules that gate minting, spending, and transferring. This lets you control the game economy onchain while preventing players from extracting currency outside the game's intended flows.
+
+This example implements a governance-controlled currency called King Credits. Transferring the currency requires approval from a Crown Council, which you configure as a custom rule. This pattern is useful when you want human or programmatic oversight over currency movement (for example, anti-cheat measures or economy balancing).
 
 ## Initialize the currency
 
@@ -65,5 +67,34 @@ In another Move package, implement the `add_rule_config` function to initialize 
 The `add_council_member` and `remove_council_member` functions add and remove members from the council. The `prove` function checks whether the request sender is a council member and adds an approval for the rule if they are:
 
 <ImportContent source="I3/king_credits/sources/crown_council_rule.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" noComments />
+
+## Deploy and test
+
+To deploy the King Credits currency:
+
+1. Build both packages (the currency and the council rule):
+   ```sh
+   $ sui move build
+   ```
+2. Publish the currency package first, then publish the council rule package (which depends on the currency package).
+3. After publishing, the `init` function runs automatically and creates the `TreasuryCap`, `TokenPolicy`, and initial token configuration.
+4. Add council members by calling `add_council_member` with the `TreasuryCap`.
+5. Test a transfer by minting tokens to a user, then having a council member call `prove` to approve the transfer.
+
+## Implementation considerations
+
+- **Protect the `TreasuryCap`.** The holder can mint unlimited tokens, disrupting the game economy. Store it in a multisig address or dedicated custody ([Security Best Practices](/develop/security/best-practices)).
+- **Council member management.** The `add_council_member` and `remove_council_member` functions should be gated by the `TreasuryCap` holder. Log all membership changes as events for auditability.
+- **Supply management.** Decide your supply model early. If you mint tokens on demand (for example, as player rewards), monitor the total supply to prevent inflation that undermines your game economy.
+
+## When to use this pattern
+
+Use governance-controlled in-game currencies when:
+
+- You need human or programmatic approval for transfers (anti-cheat, economy balancing).
+- The currency should not be freely tradable outside the game.
+- You want onchain transparency for all currency operations.
+
+For currencies that do not need transfer approval, use the [loyalty tokens](/onchain-finance/examples-patterns/loyalty-tokens) pattern instead, which uses simpler spend-only rules.
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/I3).
