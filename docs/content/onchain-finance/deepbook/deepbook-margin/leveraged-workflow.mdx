@@ -71,9 +71,11 @@ This walkthrough uses the `SUI_DBUSDC` pool, borrowing the stable quote asset (D
 
 The samples live in the `examples/deepbook-margin` package, type-checked with `tsc --noEmit` against `@mysten/deepbook-v3` and `@mysten/sui`, and reference pools, coins, and margin pools by SDK key rather than hardcoding onchain IDs.
 
-:::caution[Testnet status as of 2026-08-07]
+:::info[Testnet support]
 
-You cannot complete this walkthrough on Testnet right now. Every Pyth feed the Testnet margin pools depend on (SUI, DBUSDC, DEEP, DBTC) is roughly 73 hours stale, and the margin protocol caps `max_price_age` at 1 hour, so every call that values a position reverts on the age check. Refreshing does not help, because the update Hermes serves carries the same old publish time. Steps up to and including creating a manager still work; deposit, borrow, order placement, and risk reads do not. Recheck the feed age before you start, as [Keep the price feeds fresh](#keep-the-price-feeds-fresh) shows.
+The setup steps run on Testnet today: reading the pool's risk parameters, checking borrow liquidity, and creating a `MarginManager` all work.
+
+The steps that value a position (deposit, borrow, order placement, and risk reads) additionally need fresh Pyth prices, and that support is not yet in place on Testnet. The margin protocol caps `max_price_age` at 1 hour, and the Testnet feeds the margin pools depend on currently publish less often than that, so those calls revert on the age check rather than returning a stale value. Check the current feed age before you start, as [Keep the price feeds fresh](#keep-the-price-feeds-fresh) shows, and run the oracle-dependent steps once the feeds are publishing inside the pool's window.
 
 :::
 

@@ -182,30 +182,7 @@ Placing an order requires a trade proof and a long argument list. The TypeScript
 <Tabs groupId="ptb-interface">
 <TabItem value="ts" label="TypeScript (SDK)">
 
-```tsx
-import { Transaction } from '@mysten/sui/transactions';
-
-// `client` is a Sui client extended with the deepbook() plugin.
-// See the DeepBookV3 SDK page for setup.
-const tx = new Transaction();
-
-// 1. Deposit into the balance manager.
-tx.add(client.deepbook.balanceManager.depositIntoManager('MANAGER_1', 'DBUSDC', 100));
-
-// 2. Place a limit bid in the same PTB.
-// Order calls live on the `deepBook` contract namespace, not on the client.
-tx.add(
-	client.deepbook.deepBook.placeLimitOrder({
-		poolKey: 'SUI_DBUSDC',
-		balanceManagerKey: 'MANAGER_1',
-		clientOrderId: '1',
-		price: 2.5,
-		quantity: 10,
-		isBid: true,
-		payWithDeep: true,
-	}),
-);
-```
+<ImportContent source="examples/deepbook-spot/src/compose.ts" mode="code" tag="fund-order" />
 
 See [Balance Manager](/onchain-finance/deepbook/deepbookv3-sdk/balance-manager) and [Orders](/onchain-finance/deepbook/deepbookv3-sdk/orders) for the full parameter set and cancel and modify calls.
 
@@ -232,22 +209,7 @@ A flash loan returns a `FlashLoan` hot potato that you must return in the same t
 <Tabs groupId="ptb-interface">
 <TabItem value="ts" label="TypeScript (SDK)">
 
-```tsx
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-
-// Borrow base asset. `flashLoan` is the hot potato you must return.
-const [base, flashLoan] = tx.add(client.deepbook.flashLoans.borrowBaseAsset('DEEP_SUI', 1000));
-
-// ... use `base` here, for example swap it through another pool ...
-
-// Repay in the same PTB. The remaining coin returns to you.
-const remainder = tx.add(
-	client.deepbook.flashLoans.returnBaseAsset('DEEP_SUI', 1000, base, flashLoan),
-);
-tx.transferObjects([remainder], SENDER);
-```
+<ImportContent source="examples/deepbook-spot/src/compose.ts" mode="code" tag="flash-loan" />
 
 See [Flash Loans](/onchain-finance/deepbook/deepbookv3-sdk/flash-loans) for the quote-asset variants.
 

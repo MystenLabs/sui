@@ -108,8 +108,6 @@ There is no Testnet DEEP faucet, by design: the DEEP token's treasury cap is loc
 - **Token-request form (reliable):** the [DeepBook Testnet token request form](https://tally.so/r/Xx102L) grants DEEP and quote assets such as DBUSDC directly. Use it as the default, and always for quote assets.
 - **Swap SUI for DEEP (when the book has liquidity):** on the whitelisted `DEEP_SUI` pool, faucet SUI converts to DEEP with no BalanceManager. The Testnet `DEEP_SUI` book is thin and intermittent, so treat this as a convenience, not a guarantee.
 
-If neither route works, or you want a book with reliable liquidity, run DeepBook locally instead. The [DeepBook Sandbox](https://github.com/MystenLabs/deepbook-sandbox) deploys the protocol to a private localnet with its own DEEP and USDC faucet and a market maker seeding the pools. See [Run the same flow locally](/onchain-finance/deepbook/deepbookv3/spot-workflow#run-the-same-flow-locally).
-
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 - [x] A current CLI, updated with `suiup update`: version skew between your CLI and the network produces confusing failures. Confirm the client and server API versions match with `sui --version`. See [Install Sui](/references/cli/client).

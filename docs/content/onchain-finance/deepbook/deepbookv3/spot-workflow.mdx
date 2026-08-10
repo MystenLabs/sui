@@ -70,19 +70,19 @@ The client references pools and coins by SDK key. Read-only calls work without a
 
 ## Sign and execute
 
-Every builder on this page returns an unsigned `Transaction`. Every later step submits one through a helper like this one, taken from the [DeepBook Sandbox](https://github.com/MystenLabs/deepbook-sandbox). Nothing in it is network-specific, so it works against Testnet exactly as it does against the sandbox's localnet:
+Every builder on this page returns an unsigned `Transaction`. Every later step submits one through a helper like this one, from the DeepBookV3 SDK's own examples:
 
 <ImportContent
-	source="examples/sandbox/setup.ts"
+	source="packages/deepbook-v3/examples/deepbookMarketMaker.ts"
 	mode="code"
 	org="MystenLabs"
-	repo="deepbook-sandbox"
+	repo="ts-sdks"
 	fun="signAndExecute"
 />
 
 :::caution
 
-Wait for each transaction before building the next one. Execution returns as soon as the transaction finalizes, but the node you read from can still serve the pre-transaction state, and a transaction built against that stale state fails with a version-unavailable error. Every step in this workflow depends on the one before it, so `waitForTransaction` is not optional here.
+Wait for each transaction before building the next one. Execution returns as soon as the transaction finalizes, but the node you read from can still serve the pre-transaction state, and a transaction built against that stale state fails with a version-unavailable error. Every step in this workflow depends on the one before it, so call `client.core.waitForTransaction({ digest })` after each execute before building the next transaction.
 
 :::
 
@@ -98,7 +98,7 @@ If that returns nothing (you have never created one, or the indexer has not caug
 
 <ImportContent source="examples/deepbook-spot/src/create-manager.ts" mode="code" tag="create-manager" />
 
-`createAndShareBalanceManager` returns nothing you can capture, so read the new manager's ID out of the transaction effects instead. Ask for `objectTypes` alongside `effects` when you execute, then find the created object whose type contains `BalanceManager`. The sandbox's `setupWithBalanceManager` in [Run the same flow locally](#run-the-same-flow-locally) does exactly this, in its step 3.
+`createAndShareBalanceManager` returns nothing you can capture, so read the new manager's ID out of the transaction effects instead. Ask for `objectTypes` alongside `effects` when you execute, then find the created object whose type contains `BalanceManager`.
 
 **Observe:** the effects contain a created shared object whose type ends in `BalanceManager`. Save that ID and pass it to the client as a named manager.
 
@@ -173,38 +173,6 @@ If a later deposit fails for insufficient funds even though you funded the key, 
 <ImportContent source="examples/deepbook-spot/src/manager.ts" mode="code" tag="report-managers" />
 
 Withdraw each non-empty manager with `withdrawAllFromManager`, then reuse one manager going forward so funds stop fragmenting across orphans.
-
-## Run the same flow locally
-
-If you cannot obtain Testnet DEEP, or you want a book with reliable liquidity to trade against, run this workflow against a local deployment instead. The [DeepBook Sandbox](https://github.com/MystenLabs/deepbook-sandbox) deploys the full protocol (token, order book, margin, oracle, and a test USDC) to a private localnet in one command, seeds the pools with a market maker, and exposes a faucet for SUI, DEEP, and USDC:
-
-```sh
-$ git clone --recurse-submodules https://github.com/MystenLabs/deepbook-sandbox.git
-$ cd deepbook-sandbox/sandbox
-$ pnpm install
-$ pnpm deploy-all
-```
-
-The sandbox ships runnable versions of the steps on this page. Its `place-limit-order.ts` covers manager creation, deposit, and order placement end to end, and shows one detail this walkthrough leaves to you: reading the mid price, then rounding your price down to the pool's tick size before placing, so the order cannot fail the tick check.
-
-<ImportContent
-	source="examples/sandbox/place-limit-order.ts"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbook-sandbox"
-/>
-
-Its `setupWithBalanceManager` covers manager creation end to end, including the effects read that recovers the new manager's ID:
-
-<ImportContent
-	source="examples/sandbox/setup.ts"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbook-sandbox"
-	fun="setupWithBalanceManager"
-/>
-
-Because the sandbox deploys its own packages, its client reads package, coin, and pool IDs from a generated manifest rather than the SDK's Testnet constants, and it funds a fresh keypair from a local faucet. Those two steps are localnet-only. Everything else, including the effects extraction and the `waitForTransaction` gate, is the same SDK surface this page uses.
 
 ## Troubleshooting
 
