@@ -66,11 +66,7 @@ fn extract_decls(
                             mident.loc,
                             "typing module info with no dependency order"
                         )));
-                        // placeholder value -- it only affects dependency-declaration ordering,
-                        // and bytecode generation is skipped once an ICE is reported. `0` (rather
-                        // than, say, `usize::MAX`) keeps the `+ 1 + max_ordering` computation for
-                        // source modules below from overflowing
-                        0
+                        0 // placeholder while bailing after ICE
                     });
                     (*mident, dependency_order)
                 })
@@ -1020,8 +1016,7 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
                 bt_loc,
                 "should not have reached compilation if there are errors"
             )));
-            // placeholder type; bytecode generation is skipped once an ICE is reported
-            IRT::Bool
+            IRT::Bool // placeholder while bailing after ICE
         }
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Address))), _) => IRT::Address,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Signer))), _) => IRT::Signer,
@@ -1042,8 +1037,7 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
             );
             match args.pop() {
                 Some(arg) => IRT::Vector(Box::new(base_type(context, arg))),
-                // placeholder type; bytecode generation is skipped once an ICE is reported
-                None => IRT::Bool,
+                None => IRT::Bool, // placeholder while bailing after ICE
             }
         }
         B::Apply(_, sp!(_, TN::ModuleType(m, s)), tys) => {
@@ -1261,16 +1255,16 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                     }
                 }
                 v_ @ V::Address(_) | v_ @ V::Vector(_, _) => {
-                    let mut tys = types(context, e.ty);
-                    ice_assert!(
-                        context.reporter,
-                        tys.len() == 1,
-                        loc,
-                        "value type should have one element"
-                    );
-                    // placeholder type on failure; bytecode generation is skipped once an ICE is
-                    // reported
-                    let ty = tys.pop().unwrap_or_else(|| sp(loc, IR::Type_::Bool));
+                    let tys: Result<[IR::Type; 1], _> = types(context, e.ty).try_into();
+                    let ty = match tys {
+                        Ok([ty]) => ty,
+                        Err(_) => {
+                            context
+                                .reporter
+                                .add_diag(ice!((loc, "value type should have one element")));
+                            sp(loc, IR::Type_::Bool) // placeholder while bailing after ICE
+                        }
+                    };
                     B::LdConst(ty, move_value_from_value_(v_))
                 }
             };
