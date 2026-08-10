@@ -67,8 +67,6 @@ The Pyth and Wormhole state object IDs and the Hermes endpoint come from the [Py
 
 `pyth-sui-js` 4.0.0 reads through the `@mysten/sui` 2.x unified `.core` API, so it accepts either a `SuiGrpcClient` or a `SuiJsonRpcClient`. Earlier releases bundled the 1.x SDK and worked only over JSON-RPC, which meant pointing at a JSON-RPC provider because the Mysten Testnet fullnode serves gRPC. On 4.0.0 that workaround is unnecessary.
 
-The Switchboard sample is a separate `examples/oracle-adapter/ts-switchboard` package pinned to `@mysten/sui` 1.x, because `@switchboard-xyz/sui-sdk` has not migrated to 2.x and the two SDKs' `Transaction` types are not interchangeable.
-
 :::
 
 ## Set up the clients
@@ -103,10 +101,12 @@ A price that has not been updated recently is stale. Reading it with a tight max
 
 Switchboard is also pull, with a different shape. Instead of a shared price object you update, you hold an `Aggregator` feed and pull a fresh oracle response into your transaction with `fetchUpdateTx`, which must be the first action in the [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks). Your Move consumer then reads `switchboard::aggregator::current_result`.
 
-This sample builds its transaction with the 1.x SDK, for the reason given above.
+`current_result` returns a `CurrentResult` exposing the median `result()` (a `Decimal`) along with `min_timestamp_ms()` and `max_timestamp_ms()`. Unlike Pyth's `get_price_no_older_than`, it does not gate on age, so the consumer checks the timestamps against the clock itself.
 
-<ImportContent source="examples/oracle-adapter/ts-switchboard/src/switchboard.ts" mode="code" tag="switchboard" />
+:::caution
 
-`current_result` returns a `CurrentResult` exposing the median `result()` (a `Decimal`) along with `min_timestamp_ms()` and `max_timestamp_ms()`. Unlike Pyth's `get_price_no_older_than`, it does not gate on age, so the consumer checks the timestamps against the clock itself. See the [Switchboard Sui docs](https://docs.switchboard.xyz/product-documentation/data-feeds/sui) for feed creation and the on-demand flow.
+`@switchboard-xyz/sui-sdk` still requires `@mysten/sui` 1.x, which is built on the deprecated JSON-RPC API. This page shows no Switchboard sample for that reason: code written against the 1.x client would not carry over to the gRPC stack the rest of these docs use. See the [Switchboard Sui docs](https://docs.switchboard.xyz/product-documentation/data-feeds/sui) for feed creation and the on-demand flow, and check whether a 2.x-compatible release is available before you build on it.
+
+:::
 
 Next, wrap a provider read behind a single internal interface with the safety checks built in: [The Move adapter pattern](/onchain-finance/oracles/move-adapter).

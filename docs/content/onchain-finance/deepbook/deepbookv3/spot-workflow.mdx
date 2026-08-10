@@ -82,7 +82,7 @@ Every builder on this page returns an unsigned `Transaction`. Every later step s
 
 :::caution
 
-Wait for each transaction before building the next one. Execution returns as soon as the transaction finalizes, but the node you read from can still serve the pre-transaction state, and a transaction built against that stale state fails with a version-unavailable error. Every step in this workflow depends on the one before it, so call `client.core.waitForTransaction({ digest })` after each execute before building the next transaction.
+Wait for each transaction before building the next one. Execution returns as soon as the transaction finalizes, but the node you read from can still serve the pre-transaction state, and a transaction built against that stale state fails with a version-unavailable error. Every step in this workflow depends on the one before it, so call `client.waitForTransaction({ digest })` after each execute before building the next transaction.
 
 :::
 

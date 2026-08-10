@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Transaction } from '@mysten/sui/transactions';
-import type { ClientWithCoreApi } from '@mysten/sui/client';
+import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import type { SuiPythClient, SuiPriceServiceConnection } from '@pythnetwork/pyth-sui-js';
 
 // docs::#update-read
@@ -41,7 +41,7 @@ export async function buildUpdateAndRead(
 // public function returning a value, which a real transaction could not leave
 // unconsumed; disabling checks lets the simulation call it directly.
 export async function checkStale(
-	sui: ClientWithCoreApi,
+	sui: SuiGrpcClient,
 	pyth: SuiPythClient,
 	pythStateId: string,
 	feedId: string,
@@ -57,7 +57,7 @@ export async function checkStale(
 		target: `${pythPackageId}::pyth::get_price_no_older_than`,
 		arguments: [tx.object(priceInfoObjectId), tx.object.clock(), tx.pure.u64(maxAgeSecs)],
 	});
-	const r = await sui.core.simulateTransaction({
+	const r = await sui.simulateTransaction({
 		transaction: tx,
 		checksEnabled: false,
 	});

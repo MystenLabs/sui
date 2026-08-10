@@ -3,7 +3,7 @@
 
 // docs::#keeper
 import { Transaction } from '@mysten/sui/transactions';
-import type { ClientWithCoreApi } from '@mysten/sui/client';
+import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import type { Signer } from '@mysten/sui/cryptography';
 import type { SuiPythClient, SuiPriceServiceConnection } from '@pythnetwork/pyth-sui-js';
 
@@ -16,7 +16,7 @@ import type { SuiPythClient, SuiPriceServiceConnection } from '@pythnetwork/pyth
 // choose an interval that balances freshness against cost. A push consumer must
 // still check the stored price's age, because the keeper can fall behind.
 export async function pushOnce(
-	sui: ClientWithCoreApi,
+	sui: SuiGrpcClient,
 	pyth: SuiPythClient,
 	hermes: SuiPriceServiceConnection,
 	signer: Signer,
@@ -26,7 +26,7 @@ export async function pushOnce(
 	const tx = new Transaction();
 	await pyth.updatePriceFeeds(tx, updates, [feedId]);
 	tx.setGasBudget(150_000_000n);
-	const r = await sui.core.signAndExecuteTransaction({
+	const r = await sui.signAndExecuteTransaction({
 		transaction: tx,
 		signer,
 		include: { effects: true },
@@ -35,7 +35,7 @@ export async function pushOnce(
 		throw new Error(`push failed: ${r.FailedTransaction.status.error?.message}`);
 	}
 	// Wait before the next cycle builds against the object this one just wrote.
-	await sui.core.waitForTransaction({ digest: r.Transaction.digest });
+	await sui.waitForTransaction({ digest: r.Transaction.digest });
 	return r.Transaction.digest;
 }
 
