@@ -1119,44 +1119,11 @@ impl MovePackage {
     ) -> Result<MovePackageConnection, RpcError> {
         let more = result.has_more();
 
-        // Convert a scan cursor (a transaction position) into a package resume point covering the
-        // whole transaction: `write_index` 0 resumes before all of its writes, `u32::MAX` after.
-        let tx_cursor_token = |bytes: &[u8], write_index: u32| -> Result<PackageToken, RpcError> {
-            let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
-            let Position::Transactions { checkpoint, tx_seq } = token.position else {
-                return Err(anyhow::anyhow!("Unexpected position in stream cursor").into());
-            };
-            Ok(PackageToken {
-                checkpoint,
-                tx_seq,
-                write_index,
-            })
-        };
-
         let mut expanded: Vec<(PackageToken, ObjectID, u64)> = vec![];
         for item in &result.items {
-            let position = tx_cursor_token(&item.cursor, 0)?;
+            let position = PackageToken::from_cursor(&item.cursor)?;
 
-            let effects: NativeTransactionEffects = item
-                .payload
-                .effects
-                .as_ref()
-                .and_then(|fx| fx.bcs.as_ref())
-                .context("ListTransactions item missing effects")?
-                .deserialize()
-                .context("Failed to deserialize effects")?;
-
-            // Package writes are the written refs of published packages; `written()` preserves
-            // effects order, which `write_index` is defined over.
-            let published: BTreeSet<ObjectID> = effects.published_packages().into_iter().collect();
-            let mut writes: Vec<(u32, ObjectID, u64)> = effects
-                .written()
-                .into_iter()
-                .filter(|(id, _, _)| published.contains(id))
-                .enumerate()
-                .map(|(i, (id, version, _))| (i as u32, id, version.value()))
-                .collect();
-
+            let mut writes = package_writes(&item.payload)?;
             if !page.is_from_front() {
                 writes.reverse();
             }
@@ -1177,10 +1144,8 @@ impl MovePackage {
                     continue;
                 }
 
-                let token = PackageToken {
-                    write_index,
-                    ..position.clone()
-                };
+                let token = position.with_write_index(write_index);
+
                 expanded.push((token, id, version));
             }
         }
@@ -1216,11 +1181,11 @@ impl MovePackage {
 
         let first_pos = result
             .first_cursor()
-            .map(|c| tx_cursor_token(c, 0))
+            .map(|c| PackageToken::from_cursor(c))
             .transpose()?;
         let last_pos = result
             .last_cursor()
-            .map(|c| tx_cursor_token(c, 0))
+            .map(|c| PackageToken::from_cursor(c))
             .transpose()?;
 
         let (has_previous_page, has_next_page, start, end) = if page.is_from_front() {
@@ -1391,6 +1356,28 @@ impl MovePackage {
     }
 }
 
+impl PackageToken {
+    /// Converts an encoded `CursorToken` into a package resume point representing the start of a transaction.
+    fn from_cursor(bytes: &[u8]) -> Result<Self, RpcError> {
+        let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
+        let Position::Transactions { checkpoint, tx_seq } = token.position else {
+            return Err(anyhow::anyhow!("Unexpected position in stream cursor").into());
+        };
+        Ok(PackageToken {
+            checkpoint,
+            tx_seq,
+            write_index: 0,
+        })
+    }
+
+    fn with_write_index(&self, write_index: u32) -> Self {
+        Self {
+            write_index,
+            ..self.clone()
+        }
+    }
+}
+
 impl CPackage {
     /// View the cursor as a package-write position for the gRPC path. Fails if it was minted by
     /// the Postgres path, whose `(checkpoint, original_id, version)` positions cannot seek a
@@ -1437,6 +1424,30 @@ impl ByteCursor for PackageToken {
             .expect("serialization cannot fail for a plain struct")
             .into()
     }
+}
+
+/// Extract a transaction's package writes from its effects: the written refs of published
+/// packages, paired with their index in effects order (`written()` preserves it), which
+/// `PackageToken::write_index` is defined over.
+fn package_writes(
+    transaction: &v2::ExecutedTransaction,
+) -> Result<Vec<(u32, ObjectID, u64)>, RpcError> {
+    let effects: NativeTransactionEffects = transaction
+        .effects
+        .as_ref()
+        .and_then(|fx| fx.bcs.as_ref())
+        .context("ListTransactions item missing effects")?
+        .deserialize()
+        .context("Failed to deserialize effects")?;
+
+    let published: BTreeSet<ObjectID> = effects.published_packages().into_iter().collect();
+    Ok(effects
+        .written()
+        .into_iter()
+        .filter(|(id, _, _)| published.contains(id))
+        .enumerate()
+        .map(|(i, (id, version, _))| (i as u32, id, version.value()))
+        .collect())
 }
 
 /// A filter matching every transaction that wrote a Move package — first publishes and upgrades
