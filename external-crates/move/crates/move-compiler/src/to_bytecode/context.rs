@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::DiagnosticReporter,
+    diagnostics::{DiagnosticReporter, IceReporter, filter::FilterScope},
     expansion::ast::{Address, ModuleIdent, ModuleIdent_},
     ice_assert,
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
@@ -30,7 +30,11 @@ pub type DatatypeDeclarations =
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
     pub env: &'a CompilationEnv,
-    pub reporter: DiagnosticReporter<'a>,
+    // Bytecode generation runs after all user-facing diagnostics have been reported, so any
+    // diagnostic raised in this pass is an internal invariant violation. The one exception is
+    // unfulfilled `#[expect(...)]` warnings, reported via `finalize_warning_filter`.
+    pub reporter: IceReporter<'a>,
+    env_reporter: DiagnosticReporter<'a>,
     current_package: Option<Symbol>,
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
@@ -43,14 +47,25 @@ impl<'a> Context<'a> {
         current_package: Option<Symbol>,
         current_module: Option<&'a ModuleIdent>,
     ) -> Self {
-        let reporter = env.diagnostic_reporter_at_top_level();
+        let env_reporter = env.diagnostic_reporter_at_top_level();
+        let reporter = IceReporter::new(env_reporter.clone());
         Self {
             env,
             reporter,
+            env_reporter,
             current_package,
             current_module,
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
+        }
+    }
+
+    /// Reports any unfulfilled `#[expect(...)]` diagnostics from the given warning filter scope.
+    /// This is the only sanctioned non-ICE reporting in this pass -- everything else goes through
+    /// the ICE-only `reporter`.
+    pub fn finalize_warning_filter(&self, filter: FilterScope) {
+        for diag in filter.finalize() {
+            self.env_reporter.add_diag(diag)
         }
     }
 

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::{diagnostics::DiagnosticReporter, ice};
+use crate::{diagnostics::IceReporter, ice};
 use move_binary_format::{
     CompiledModule,
     file_format::{
@@ -67,7 +67,7 @@ macro_rules! remap {
 
 /// Apply canonicalization to a compiled module.
 pub fn in_module(
-    reporter: &DiagnosticReporter,
+    reporter: &IceReporter,
     loc: Loc,
     module: &mut CompiledModule,
     address_names: &HashMap<(AccountAddress, &str), Symbol>,

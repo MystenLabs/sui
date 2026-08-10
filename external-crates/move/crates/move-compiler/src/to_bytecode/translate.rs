@@ -265,7 +265,6 @@ pub fn program(
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = Vec::new();
-    let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
@@ -278,15 +277,7 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(
-            compilation_env,
-            &reporter,
-            m,
-            mdef,
-            &orderings,
-            &ddecls,
-            &fdecls,
-        ) {
+        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
             units.push(unit);
         }
     }
@@ -295,7 +286,6 @@ pub fn program(
 
 fn module(
     compilation_env: &CompilationEnv,
-    reporter: &DiagnosticReporter,
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
@@ -318,11 +308,8 @@ fn module(
         functions: gfunctions,
     } = mdef;
 
-    for d in module_filter.finalize() {
-        reporter.add_diag(d);
-    }
-
     let mut context = Context::new(compilation_env, package_name, Some(&ident));
+    context.finalize_warning_filter(module_filter);
     let structs = struct_defs(&mut context, &ident, gstructs);
     let enums = enum_defs(&mut context, &ident, genums);
     let constants = constants(&mut context, &ident, gconstants);
@@ -341,6 +328,9 @@ fn module(
         | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
+    // `materialize` consumes the context; keep the ICE-only reporter for the remaining
+    // bytecode-generation steps
+    let reporter = context.reporter.clone();
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
         datatype_declarations,
@@ -388,7 +378,7 @@ fn module(
             }
         };
     canonicalize_handles::in_module(
-        reporter,
+        &reporter,
         ident_loc,
         &mut module,
         &address_names(dependency_orderings.keys()),
@@ -521,10 +511,7 @@ fn struct_def(
         type_parameters: tys,
         fields,
     } = sdef;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| context.reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
@@ -599,10 +586,7 @@ fn enum_def(
         type_parameters: tys,
         variants,
     } = edef;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| context.reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let loc = e.loc();
     let name = context.enum_definition_name(m, e);
     let abilities = abilities(&abs);
@@ -674,10 +658,7 @@ fn constant(
         signature,
         value,
     } = c;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| context.reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
@@ -732,10 +713,7 @@ fn function(
         signature,
         body,
     } = fdef;
-    warning_filter
-        .finalize()
-        .into_iter()
-        .for_each(|d| context.reporter.add_diag(d));
+    context.finalize_warning_filter(warning_filter);
     let v = visibility(context, v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
