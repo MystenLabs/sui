@@ -63,6 +63,7 @@ impl<'a> Context<'a> {
     /// Reports any unfulfilled `#[expect(...)]` diagnostics from the given warning filter scope.
     /// This is the only sanctioned non-ICE reporting in this pass -- everything else goes through
     /// the ICE-only `reporter`.
+    /// TODO: consider discharging expects outside of this pass instead
     pub fn finalize_warning_filter(&self, filter: FilterScope) {
         for diag in filter.finalize() {
             self.env_reporter.add_diag(diag)
