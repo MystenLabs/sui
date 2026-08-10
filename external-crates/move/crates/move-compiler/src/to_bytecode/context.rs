@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cfgir::ast::SyntaxInfo,
     expansion::ast::{Address, ModuleIdent, ModuleIdent_},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
     shared::{CompilationEnv, NumericalAddress},
@@ -13,6 +14,7 @@ use move_symbol_pool::Symbol;
 use std::{
     clone::Clone,
     collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
 };
 
 #[derive(Debug)]
@@ -32,6 +34,16 @@ pub struct Context<'a> {
     current_module: Option<&'a ModuleIdent>,
     seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
+    /// Syntactic context (macro expansion chain) of the command currently
+    /// being compiled, taken from its `SyntaxLoc`. `None` = user code.
+    pub syntax_info: Option<Arc<SyntaxInfo>>,
+    /// Per-instruction syntactic context for the basic block currently
+    /// being built. Each `push_instr` call appends `self.syntax_info` in
+    /// parallel with the instruction.
+    pub current_block_info: Vec<Option<Arc<SyntaxInfo>>>,
+    /// Per-function, per-instruction syntactic context for populating the
+    /// source map's macro frame info.
+    pub function_syntax_info: BTreeMap<Symbol, Vec<Option<Arc<SyntaxInfo>>>>,
 }
 
 impl<'a> Context<'a> {
@@ -46,6 +58,9 @@ impl<'a> Context<'a> {
             current_module,
             seen_datatypes: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
+            syntax_info: None,
+            current_block_info: Vec::new(),
+            function_syntax_info: BTreeMap::new(),
         }
     }
 

@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/deep_forwarding.move:16:9
+   │
+ 4 │         $x + 1
+   │         -- [3] Argument
+   ·
+ 8 │         a!($x)
+   │         ------
+   │         │  │
+   │         │  [4] Argument
+   │         [2] MacroBody(0x41::m::a)
+   ·
+12 │         b!($x)
+   │         ------
+   │         │  │
+   │         │  [5] Argument
+   │         [1] MacroBody(0x41::m::b)
+   ·
+16 │         c!(v)
+   │         ^^^^^ [0] MacroBody(0x41::m::c)
+   │
+   = Frame transitions (test):
+       16: `c!(v)`
+           [] -> [0:MacroBody(c), 1:MacroBody(b), 2:MacroBody(a), 3:Argument, 4:Argument, 5:Argument]
+       4: `$x + 1`
+           [0:MacroBody(c), 1:MacroBody(b), 2:MacroBody(a), 3:Argument, 4:Argument, 5:Argument] -> [0:MacroBody(c), 1:MacroBody(b), 2:MacroBody(a)]
+       16: `c!(v)`
+           [0:MacroBody(c), 1:MacroBody(b), 2:MacroBody(a)] -> []

@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15008]: macro frame info
+   ┌─ tests/move_2024/macro_frames/abort_in_macro.move:12:9
+   │
+ 5 │         if ($b == 0) {
+   │             -- [1] Argument
+   ·
+ 8 │         $a / $b
+   │         --   -- [3] Argument
+   │         │     
+   │         [2] Argument
+   ·
+12 │         checked_div!(x, y)
+   │         ^^^^^^^^^^^^^^^^^^ [0] MacroBody(0x41::m::checked_div)
+   │
+   = Frame transitions (test):
+       12: `checked_div!(x, y)`
+           [] -> [0:MacroBody(checked_div), 1:Argument]
+       5: `if ($b == 0) {`
+           [0:MacroBody(checked_div), 1:Argument] -> [0:MacroBody(checked_div)]
+       12: `checked_div!(x, y)`
+           [0:MacroBody(checked_div)] -> [0:MacroBody(checked_div), 2:Argument]
+       12: `checked_div!(x, y)`
+           [0:MacroBody(checked_div), 2:Argument] -> [0:MacroBody(checked_div), 3:Argument]
+       8: `$a / $b`
+           [0:MacroBody(checked_div), 3:Argument] -> [0:MacroBody(checked_div)]
+       12: `checked_div!(x, y)`
+           [0:MacroBody(checked_div)] -> []
