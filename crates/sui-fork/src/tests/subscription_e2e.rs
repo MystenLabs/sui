@@ -72,7 +72,9 @@ impl ServerHarness {
             forked_at_checkpoint,
             services.local_store(),
         );
-        store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
+        store
+            .local_store()
+            .save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()

@@ -179,7 +179,11 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
 
     let mut objects = Vec::with_capacity(object_refs.len());
     for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
-        objects.extend(store.fetch_seed_objects(chunk)?);
+        objects.extend(
+            store
+                .remote()
+                .fetch_objects_by_obj_refs(chunk, "seed objects")?,
+        );
     }
 
     store.local_store().restore_seed_objects(&objects)

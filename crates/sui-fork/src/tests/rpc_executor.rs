@@ -101,6 +101,7 @@ impl TestHarness {
             services.local_store(),
         );
         store
+            .local_store()
             .save_checkpoint(&genesis_checkpoint, &genesis_contents)
             .expect("genesis checkpoint should be saved");
         let written: BTreeMap<ObjectID, Object> = config
