@@ -115,8 +115,8 @@ Two arms are easy to miss. Not every fork-policy read has a remote leg: the dige
 checkpoint reads have none because the GraphQL checkpoint query is keyed by sequence number,
 so there is nothing to ask; and the tip reads have none by choice, because the local executor
 is the source of truth for "latest" in a forked network. In the other direction, two reads
-never touch local state at all — the availability bounds are facts about the *forked-from*
-chain, so they are answered by asking it, on every call.
+never touch local state at all — the availability bounds are facts about the *live*
+network, so they are answered by asking it, on every call.
 
 ```mermaid
 flowchart TD
@@ -153,7 +153,7 @@ flowchart TD
 Only the last of those three writes is conditional, and the condition is load-bearing rather
 than defensive: nothing holds a lock across the miss and the write, so an execution can land
 in between. If one did, the fetched object is still worth keeping as history — it is what the
-forked-from chain held at the fork point, which stays true — but it must not claim currency.
+live network held at the fork point, which stays true — but it must not claim currency.
 
 ### Immutably-keyed reads: exact versions, transactions, checkpoints
 

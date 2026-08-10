@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 A fork node executes transactions locally on top of a chain whose state it mostly does not
 have. Its storage therefore answers two questions at once. *What has this fork written?* is
 served from a stock `sui-rpc-store` RocksDB, the same schema and indexes a real RPC node
-uses. *What did the forked-from chain look like?* is answered by querying GraphQL pinned at
+uses. *What did the live network look like?* is answered by querying GraphQL pinned at
 the fork checkpoint and caching the result into that same database.
 
 When that second question gets asked splits the design in two. A request that carries a key —
@@ -46,7 +46,7 @@ local-first reads and remote fallback and the sealing of checkpoints; it delegat
 access to `LocalStore` (object materialization, checkpoint and transaction persistence, the
 latest-object-status lookup) and every GraphQL round-trip to `RemoteSource`. Those
 round-trips are pinned at the fork checkpoint wherever the request allows it, so they cannot
-see what the forked-from chain did afterwards. Everything above the fork point is the fork's
+see what the live network did afterwards. Everything above the fork point is the fork's
 own and comes from the local store.
 
 ## The object live state
@@ -125,7 +125,7 @@ liveness watchdog, instead of appearing later as a publication timeout.
 ## Seeding
 
 Seeding is how the fork acquires pre-fork state that no read can ask for by key. A user names
-addresses and objects at startup; the fork resolves them against the forked-from chain and
+addresses and objects at startup; the fork resolves them against the live network and
 loads them, once, before anything executes.
 
 It happens once because it cannot happen twice. The enumeration behind an address seed is a
@@ -217,7 +217,7 @@ below some bound, which is how child objects are read during execution. A stored
 below the bound is only trustworthy if the fork knows nothing newer can exist below it, which
 holds when that row carries live-state authority or is a tombstone. Absent that, the sparse
 cache may hold some older version that an unrelated historical read left behind, and serving
-it would be wrong, so the bound must also be resolved against the forked-from chain and the
+it would be wrong, so the bound must also be resolved against the live network and the
 higher of the two answers taken.
 
 ### Derived reads compose over policy
@@ -341,7 +341,7 @@ for is the frozen pair: `CoinMetadata` and `RegulatedCoinMetadata` are immutable
 creation, seed resolution admits only address-owned objects, and no read-time path fetches
 them. The gap is therefore a coin type's *history*, not the method. Closing it means what
 "Derived reads compose over policy" already prescribes: resolve each wrapper as a targeted
-type-keyed lookup against the forked-from chain when something asks, and cache the resulting
+type-keyed lookup against the live network when something asks, and cache the resulting
 object like any other. This is not a limit of forking — unlike the ledger range below — just
 work not done.
 
@@ -350,7 +350,7 @@ planned as a follow-up.
 
 The remote leg of a bounded read is not pinned at the fork point. Where the latest and
 exact-version object queries carry the fork checkpoint explicitly, the bounded query carries
-only its version bound, so it resolves against the forked-from chain's *current* state.
+only its version bound, so it resolves against the live network's *current* state.
 Post-fork history on the other chain can therefore answer a read inside this fork, which is
 the one thing every other remote path is built to prevent. It reaches `read_child_object` on
 both the RPC and executor paths, so it can skew execution rather than only reads.
