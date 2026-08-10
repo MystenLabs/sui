@@ -35,7 +35,7 @@ use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
 use tracing::debug;
 
-/// Read access to the forked-from chain, pinned at the fork checkpoint.
+/// Read access to the live network RPC, pinned at the fork checkpoint.
 #[derive(Clone)]
 pub(crate) struct RemoteSource {
     gql: GraphQLClient,
@@ -50,7 +50,7 @@ impl RemoteSource {
         }
     }
 
-    /// Return the chain the forked-from endpoint serves, derived from its configured node
+    /// Return the chain the live network RPC serves, derived from its configured node
     /// identity.
     pub(crate) fn chain(&self) -> Chain {
         self.gql.chain()

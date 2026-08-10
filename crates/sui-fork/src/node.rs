@@ -16,6 +16,7 @@ pub(crate) const MAINNET_GQL_URL: &str = "https://graphql.mainnet.sui.io/graphql
 pub(crate) const TESTNET_GQL_URL: &str = "https://graphql.testnet.sui.io/graphql";
 /// GraphQL endpoint for Sui devnet.
 pub(crate) const DEVNET_GQL_URL: &str = "https://graphql.devnet.sui.io/graphql";
+
 /// Represents a Sui network node configuration.
 ///
 /// Used to specify which network the data store should connect to.

@@ -5,14 +5,9 @@
 //!
 //! Seeding happens once, at fork creation, in two steps. Resolution enumerates the requested
 //! addresses and objects against GraphQL pinned at the fork checkpoint and records the resulting
-//! object references in an immutable manifest, and that enumeration is the part that must be
-//! complete and must happen while the enumeration is still possible, because nothing the fork does
-//! afterwards reconstructs it. The load then hydrates those references and hands them to
-//! `sui-rpc-store`'s `Restore` pipelines, which is where the fork's whole pre-fork derived-index
-//! surface comes from.
-//!
-//! Everything downstream is bounded by that. An owner, parent, or type outside the seed set is not
-//! indexed, and reads for it come back empty rather than reaching for the remote at read time.
+//! object references in an immutable manifest stored on disk. The fork fetches that data from the
+//! live netork RPC and hands them to `sui-rpc-store`'s `Restore` pipelines, which is where the
+//! fork's whole pre-fork derived-index surface comes from.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -39,16 +34,16 @@ use crate::gql::ObjectSeedMetadata;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
 
-/// Objects hydrated per remote round-trip. The load commits as one batch regardless, and this only
-/// bounds the size of an individual GraphQL query.
-const HYDRATE_CHUNK: usize = 50;
+/// Objects fetched per GraphQL query when querying for seed objects. The load commits as one batch
+/// regardless, and this only bounds the size of an individual query.
+const OBJECTS_PER_QUERY: usize = 50;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
 pub struct SeedInput {
     /// Addresses whose owned objects should be recorded in the seed manifest.
     pub addresses: BTreeSet<SuiAddress>,
-    /// Object IDs to fetch and seed when they are owned by an address.
+    /// Object IDs to fetch and seed.
     pub object_ids: BTreeSet<ObjectID>,
 }
 
@@ -183,13 +178,14 @@ pub(crate) fn load_seed_objects(store: &ForkStore, manifest: &SeedManifest) -> R
         .collect();
 
     let mut objects = Vec::with_capacity(object_refs.len());
-    for chunk in object_refs.chunks(HYDRATE_CHUNK) {
+    for chunk in object_refs.chunks(OBJECTS_PER_QUERY) {
         objects.extend(store.fetch_seed_objects(chunk)?);
     }
 
     store.local_store().restore_seed_objects(&objects)
 }
 
+/// Resolve the owned objects and balances belonging to `address`.
 async fn resolve_address_seed(
     remote: &RemoteSource,
     address: SuiAddress,
@@ -323,15 +319,23 @@ async fn resolve_seeds(
     } else {
         let lowest_available = store.remote().lowest_available_checkpoint_objects()?;
         if checkpoint < lowest_available {
+            let message = format!(
+                "ignoring --address seeds: checkpoint {checkpoint} is older than the remote's \
+                 object-ownership window (available from checkpoint {lowest_available}, roughly \
+                 the last hour). If the object IDs are known, seed them directly with --object \
+                 instead."
+            );
             warn!(
                 addresses = ?input.addresses,
                 checkpoint,
                 lowest_available,
-                "ignoring --address seeds: checkpoint {checkpoint} is older than the remote's \
-                 object-ownership window (available from checkpoint {lowest_available}, roughly \
-                 the last hour). If the object IDs are known, seed them directly with --object \
-                 instead.",
+                "{message}",
             );
+            // The CLI may run without a tracing subscriber, and a silently
+            // dropped seed address would read as a bug, so the warning also
+            // goes to stderr directly.
+            eprintln!("warning: {message}");
+
             Vec::new()
         } else {
             input.addresses.iter().copied().collect()

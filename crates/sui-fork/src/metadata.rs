@@ -3,8 +3,8 @@
 
 //! Fork-local metadata sidecar.
 //!
-//! Raw chain data lives in `sui-rpc-store`. This module only owns data-dir
-//! layout and the immutable seed manifest.
+//! Raw chain data lives in the local DB. This module only owns data-dir layout and the immutable
+//! seed manifest.
 
 use std::env;
 use std::ffi::OsString;

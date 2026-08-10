@@ -84,7 +84,7 @@ pub struct ForkStore {
 
 struct ForkStoreInner {
     forked_at_checkpoint: CheckpointSequenceNumber,
-    /// Checkpoint-pinned GraphQL access to the forked-from chain, owning all pre-fork and
+    /// Checkpoint-pinned GraphQL access to the live network, owning all pre-fork and
     /// post-fork remote-read policy.
     remote: RemoteSource,
     metadata: MetadataStore,
@@ -130,7 +130,7 @@ impl ForkStore {
             .map_err(|_| anyhow!("local snapshot lock poisoned"))
     }
 
-    /// Return checkpoint-pinned read access to the forked-from chain, for callers that run their
+    /// Return checkpoint-pinned read access to the live network, for callers that run their
     /// own remote queries (seed resolution).
     ///
     /// Handing out the policy type rather than the raw GraphQL client keeps every reachable query
@@ -309,8 +309,8 @@ impl ForkStore {
     /// TODO(fork): this trusts the highest local row at or below the bound, which is only the true
     /// highest when the local history is complete below the bound. A sparse cache polluted by an
     /// exact-historical-version read (e.g. an RPC client fetching an old dynamic-field version)
-    /// can hold a lower live row than the chain's true highest at the bound, and that stale row
-    /// then wins here without the remote ever being consulted. Reachable from `read_child_object`
+    /// can hold a lower live row than the chain's true highest at the bound, and this read then
+    /// serves that stale row without the remote ever being consulted. Reachable from `read_child_object`
     /// on both the RPC and the executor paths, so it can skew execution as well as reads.
     /// Candidate fix (undecided): short-circuit only on an authoritative current version at or
     /// below the bound, or on a tombstone, and otherwise query the remote `RootVersion(bound)` and
@@ -564,7 +564,7 @@ impl ForkStore {
             .map_err(|e| StorageError::custom(e.to_string()))
     }
 
-    /// Fetch the objects behind a batch of seed references from the forked-from chain, pinned at
+    /// Fetch the objects behind a batch of seed references from the live network, pinned at
     /// the fork checkpoint.
     ///
     /// Every reference names an exact `(id, version)`, so this is an immutable key. The remote
@@ -618,7 +618,7 @@ impl ForkStore {
     /// seed-bounded. Owner, dynamic-field, type, and balance lookups resolve from the local index
     /// alone, which holds the seed set loaded at fork creation plus whatever local execution has
     /// produced since, and an owner, parent, or type outside the seed set reads as empty rather
-    /// than being resolved against the forked-from chain, because the checkpoint-pinned
+    /// than being resolved against the live network, because the checkpoint-pinned
     /// enumeration that could resolve it belongs to fork creation and cannot be re-run at read
     /// time.
     fn stock_reader(&self) -> &RpcStoreReader {

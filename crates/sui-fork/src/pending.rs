@@ -6,17 +6,19 @@
 //! Simulacrum hands the store a checkpoint summary, then its transactions, effects, events, and
 //! object diffs piecemeal through the `SimulatorStore` insert methods, and finally the checkpoint
 //! contents. This buffer holds those pieces until the contents arrive, so the caller can persist
-//! the whole checkpoint into the rpc-store as one atomic batch.
+//! the whole checkpoint into the DB as one atomic batch.
 //!
-//! Object diffs are the one staged entry reads consult. Execution resolves the next transaction's
-//! inputs (and the settlement and barrier system transactions sealed with the checkpoint) through
-//! the store, so the staged diffs double as a read overlay over the rpc-store until the seal
-//! commits them. Overlay versions always outrank persisted ones, because local execution
-//! Lamport-bumps past every live version while remote fetches are pinned at or below the fork
-//! checkpoint, so a read takes the overlay's entry when one exists and falls through to the store
-//! otherwise. Checkpoint, transaction, effects, and event entries stay write-only, since sealing
-//! completes synchronously inside the checkpoint publication path, so by the time an execution
-//! returns, its rows are already in the rpc-store.
+//! Object diffs are the only staged entries that reads consult, because execution is the only
+//! reader that runs before seal. Each transaction in the in-flight checkpoint, including the
+//! settlement and barrier system transactions sealed with it, resolves its inputs through the
+//! store, so the staged diffs serve as a read overlay over the rpc-store until the seal commits
+//! them. A read returns the overlay entry when one exists and falls through to the store
+//! otherwise. No version comparison is needed, because an overlay entry is always newer than any
+//! persisted row. Local execution Lamport-bumps past every live version, while remote fetches
+//! stay pinned at or below the fork checkpoint. Checkpoint, transaction, effects, and event
+//! entries stay write-only because their only readers run after execution returns, and sealing
+//! completes synchronously inside checkpoint publication, so those rows are already in the
+//! rpc-store by then.
 //!
 //! Nothing here is persisted. Staged entries that have not been sealed are lost on process
 //! restart, which is the crash-safety contract, because a checkpoint either commits whole at seal

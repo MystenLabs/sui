@@ -112,8 +112,7 @@ pub(crate) struct ServiceManager {
     indexer_service: Option<tokio::sync::Mutex<Service>>,
 }
 
-/// What fork a data directory belongs to, written once and thereafter compared on every open.
-/// Equality is the whole check, so every field is part of the fork's identity.
+/// Various fork metadata, written to a JSON file in the fork data directory.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct Metadata {
     format_version: u32,
@@ -390,7 +389,7 @@ impl ServiceManager {
         Ok(indexed)
     }
 
-    /// The forked-from chain's identifier, as recorded in fork metadata.
+    /// The live network's chain identifier, as recorded in fork metadata.
     fn chain_identifier(&self) -> ChainIdentifier {
         CheckpointDigest::new(self.metadata.chain_identifier).into()
     }
@@ -429,7 +428,7 @@ impl ServiceManager {
         crate::metadata::write_json_exclusive(&path, expected, "fork metadata")
     }
 
-    /// Record the forked-from chain identifier in the rpc-store, under the fork's own pipeline
+    /// Record the live network's chain identifier in the rpc-store, under the fork's own pipeline
     /// key.
     ///
     /// The store pins each pipeline to the chain it first ingested and refuses checkpoints from
