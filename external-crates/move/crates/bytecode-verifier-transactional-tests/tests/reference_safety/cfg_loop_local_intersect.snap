@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 27-50:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::intersect_drops_extension_use'. Got VMError: {
+    major_status: MOVELOC_UNAVAILABLE_ERROR,
+    sub_status: None,
+    location: 0x3::intersect_drops_extension_use,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 16)],
+}

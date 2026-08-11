@@ -1,0 +1,57 @@
+// the caller models multiple mut results as pairwise disjoint, so the callee Ret check must
+// reject aliasing on any path
+
+//# publish
+mvir 0x2::alias_in_one_branch_invalid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun split(s: &mut Self::S, cond: bool): &mut u64 * &mut u64 {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    x = &mut copy(s).S::f;
+    jump_if (move(cond)) b2;
+label b1:
+    y = &mut copy(s).S::g;
+    jump b3;
+label b2:
+    // aliases x on this path only
+    y = &mut copy(s).S::f;
+    jump b3;
+label b3:
+    _ = move(s);
+    return (move(x), move(y));
+}
+
+}
+
+//# publish
+mvir 0x3::alias_via_nested_call_branch_invalid {
+
+public struct S has copy, drop { f: u64, g: u64 }
+
+fun id(r: &mut u64): &mut u64 {
+label b0:
+    return move(r);
+}
+
+// on one path y is a dot-star extension of x
+fun split(s: &mut Self::S, cond: bool): &mut u64 * &mut u64 {
+    let x: &mut u64;
+    let y: &mut u64;
+label b0:
+    x = &mut copy(s).S::f;
+    jump_if (move(cond)) b2;
+label b1:
+    y = &mut copy(s).S::g;
+    jump b3;
+label b2:
+    y = Self::id(copy(x));
+    jump b3;
+label b3:
+    _ = move(s);
+    return (move(x), move(y));
+}
+
+}

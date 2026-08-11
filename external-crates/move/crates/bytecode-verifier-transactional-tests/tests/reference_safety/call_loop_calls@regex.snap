@@ -1,0 +1,34 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 4-31:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::loop_call_second_iteration_invalid'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x2::loop_call_second_iteration_invalid,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 5)],
+}
+
+task 2, lines 61-85:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::loop_call_self_extension'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::loop_call_self_extension,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 12)],
+}
+
+task 4, lines 117-143:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::loop_call_result_escapes_into_next_iteration'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x6::loop_call_result_escapes_into_next_iteration,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 5)],
+}

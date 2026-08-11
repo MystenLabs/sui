@@ -1,0 +1,78 @@
+// a &mut return with no &mut parameter gets an empty source set, so it is disjoint from
+// everything, including the local root
+
+//# run
+mvir 0x2::escapes_local_borrow_check {
+
+fun boom(): &mut u64 {
+label b0:
+    abort 7;
+}
+
+// (&u64) -> &mut u64 verifies
+fun launder(x: &u64): &mut u64 {
+label b0:
+    _ = move(x);
+    return Self::boom();
+}
+
+// laundering the local through launder() erases the edge to the local root
+fun leak(): &mut u64 {
+    let a: u64;
+    let m: &mut u64;
+label b0:
+    a = 0;
+    m = Self::launder(&a);
+    return move(m);
+}
+
+entry fun t() {
+    let m: &mut u64;
+label b0:
+    m = Self::leak();
+    *copy(m) = 1;
+    _ = move(m);
+    return;
+}
+
+}
+
+//# publish
+mvir 0x3::control_no_launder {
+
+fun id(m: &mut u64): &mut u64 {
+label b0:
+    return move(m);
+}
+
+// the same shape without laundering: rejected
+fun leak(): &mut u64 {
+    let a: u64;
+    let m: &mut u64;
+label b0:
+    a = 0;
+    m = Self::id(&mut a);
+    return move(m);
+}
+
+}
+
+//# publish
+mvir 0x4::zero_source_imm_returns {
+
+fun two(): &u64 * &u64 {
+label b0:
+    abort 0;
+}
+
+fun t() {
+    let a: &u64;
+    let b: &u64;
+label b0:
+    a, b = Self::two();
+    _ = move(a);
+    _ = move(b);
+    return;
+}
+
+}

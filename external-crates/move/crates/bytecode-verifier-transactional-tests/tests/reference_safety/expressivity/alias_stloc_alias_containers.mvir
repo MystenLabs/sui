@@ -1,0 +1,66 @@
+// StLoc over a whole-local (epsilon) alias, for container-shaped locals
+
+//# run
+mvir 0x2::stloc_over_struct_alias {
+
+public struct Inner has copy, drop { v: u64 }
+public struct S has copy, drop { f: Self::Inner }
+
+entry fun t() {
+    let a: Self::S;
+    let x: &mut Self::S;
+    let inner: &mut Self::Inner;
+label b0:
+    a = S { f: Inner { v: 0 } };
+    x = &mut a;
+    a = S { f: Inner { v: 9 } };
+    inner = &mut copy(x).S::f;
+    assert(*&mut move(inner).Inner::v == 9, 42);
+    // the alias still writes into the live local
+    *move(x) = S { f: Inner { v: 3 } };
+    assert(*&(&(&a).S::f).Inner::v == 3, 43);
+    return;
+}
+
+}
+
+//# run
+mvir 0x3::stloc_over_enum_alias_changes_variant {
+
+public enum E has copy, drop {
+    One { a: u64 },
+    Two { b: address },
+}
+
+entry fun t() {
+    let e: Self::E;
+    let x: &mut Self::E;
+    let b: &address;
+label b0:
+    e = E::One { a: 0 };
+    x = &mut e;
+    // the store changes the active variant
+    e = E::Two { b: 0x7 };
+    &E::Two { b: b } = freeze(move(x));
+    assert(*move(b) == 0x7, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x4::stloc_over_vector_alias {
+
+entry fun t() {
+    let v: vector<u64>;
+    let x: &mut vector<u64>;
+label b0:
+    v = vector<u64; 1>(1);
+    x = &mut v;
+    v = vector<u64; 3>(4, 5, 6);
+    assert(vec_len<u64>(freeze(copy(x))) == 3, 42);
+    assert(*vec_imm_borrow<u64>(freeze(move(x)), 2) == 6, 43);
+    return;
+}
+
+}

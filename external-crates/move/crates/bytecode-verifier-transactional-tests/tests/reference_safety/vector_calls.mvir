@@ -1,0 +1,122 @@
+// the callee may grow or shrink the vector, so a live element ref must block passing it
+
+//# run
+mvir 0x51::pass_vec_ref_with_live_elem {
+
+fun grow(v: &mut vector<u64>) {
+label b0:
+    vec_push_back<u64>(move(v), 1);
+    return;
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    Self::grow(copy(vr));
+    *move(e) = 5;
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0x52::pass_vec_ref_and_elem_together {
+
+fun both(v: &mut vector<u64>, e: &mut u64) {
+label b0:
+    _ = vec_len<u64>(freeze(move(v)));
+    *move(e) = 1;
+    return;
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    Self::both(move(vr), move(e));
+    return;
+}
+
+}
+
+//# run
+mvir 0x53::imm_elem_from_call_then_push {
+
+fun first(v: &vector<u64>): &u64 {
+label b0:
+    return vec_imm_borrow<u64>(move(v), 0);
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = Self::first(freeze(copy(vr)));
+    vec_push_back<u64>(copy(vr), 1);
+    _ = *move(e);
+    _ = move(vr);
+    return;
+}
+
+}
+
+//# run
+mvir 0x54::pass_vec_ref_after_elem_dead_ok {
+
+fun grow(v: &mut vector<u64>) {
+label b0:
+    vec_push_back<u64>(move(v), 1);
+    return;
+}
+
+entry fun t() {
+    let v: vector<u64>;
+    let vr: &mut vector<u64>;
+    let e: &mut u64;
+label b0:
+    v = vector<u64; 1>(0);
+    vr = &mut v;
+    e = vec_mut_borrow<u64>(copy(vr), 0);
+    *move(e) = 5;
+    Self::grow(copy(vr));
+    assert(vec_len<u64>(freeze(move(vr))) == 2, 42);
+    return;
+}
+
+}
+
+//# run
+mvir 0x55::callee_grows_while_holding_own_elem {
+
+fun bad(v: &mut vector<u64>) {
+    let e: &mut u64;
+label b0:
+    e = vec_mut_borrow<u64>(copy(v), 0);
+    vec_push_back<u64>(copy(v), 1);
+    *move(e) = 5;
+    _ = move(v);
+    return;
+}
+
+entry fun t() {
+    let v: vector<u64>;
+label b0:
+    v = vector<u64; 1>(0);
+    Self::bad(&mut v);
+    return;
+}
+
+}

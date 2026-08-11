@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 4-32:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::imm_arg_live_mut_ext_release_first'. Got VMError: {
+    major_status: BORROWLOC_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::imm_arg_live_mut_ext_release_first,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 7)],
+}
