@@ -67,7 +67,9 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     TypeTag,
     accumulator_event::AccumulatorEvent,
-    accumulator_root::{self, AccumulatorObjId},
+    accumulator_root::{
+        self, AccumulatorObjId, SETTLEMENT_MAX_TYPE_INSTANTIATION_NODES, is_settle_u128_call,
+    },
     balance::Balance,
     base_types::{
         MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR, SequenceNumber,
@@ -981,6 +983,12 @@ where
                         .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
                 })
                 .collect::<Result<Vec<_>, Mode::Error>>()?;
+            let max_type_nodes = is_settle_u128_call(
+                function.original_mid.address(),
+                function.original_mid.name(),
+                &function.name,
+            )
+            .then_some(SETTLEMENT_MAX_TYPE_INSTANTIATION_NODES);
             let result = self.execute_function_bypass_visibility_with_vm(
                 vm,
                 &function.original_mid,
@@ -989,6 +997,7 @@ where
                 args,
                 &function.linkage,
                 trace_builder_opt,
+                max_type_nodes,
             )?;
             self.take_user_events(
                 vm,
@@ -1010,16 +1019,18 @@ where
         args: Vec<CtxValue>,
         linkage: &ExecutableLinkage,
         tracer: &mut Option<MoveTraceBuilder>,
+        max_type_nodes: Option<u64>,
     ) -> Result<Vec<CtxValue>, Mode::Error> {
         let gas_status = self.gas_charger.move_gas_status_mut();
         let values = vm
-            .execute_function_bypass_visibility(
+            .execute_function_bypass_visibility_with_max_type_nodes(
                 original_mid,
                 function_name,
                 ty_args,
                 args.into_iter().map(|v| v.0.into()).collect(),
                 &mut SuiGasMeter(gas_status),
                 tracer.as_mut(),
+                max_type_nodes,
             )
             .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
         Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
@@ -1243,6 +1254,7 @@ where
                 args,
                 linkage,
                 trace_builder_opt,
+                None,
             )?;
             trace_utils::trace_move_call_end(trace_builder_opt);
 
