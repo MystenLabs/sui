@@ -39,8 +39,8 @@ pub(crate) struct Context {
     /// query.
     pg_loader: Arc<DataLoader<PgReader>>,
 
-    /// Access to the kv store for performing point look-ups. This may either be backed by Bigtable
-    /// or Postgres db, depending on the configuration.
+    /// Access to the kv store for performing point look-ups. This may either be backed by the
+    /// Ledger gRPC service or Postgres db, depending on the configuration.
     kv_loader: KvLoader,
 
     /// Access to the database for accessing information about types from their packages (again
@@ -67,9 +67,8 @@ pub(crate) struct Context {
 impl Context {
     /// Set-up access to the stores through all the interfaces available in the context.
     ///
-    /// KV lookups are routed based on `kv_args`: if a Bigtable instance is configured, lookups go
-    /// directly to Bigtable; if a Ledger gRPC URL is configured, lookups go through kv-rpc;
-    /// otherwise they fall back to Postgres.
+    /// KV lookups are routed based on `kv_args`: if a Ledger gRPC URL is configured, lookups go
+    /// through kv-rpc; otherwise they fall back to Postgres.
     ///
     /// If `database_url` is `None`, the Postgres-backed interfaces will be set-up but will fail to
     /// accept any connections.
@@ -88,9 +87,6 @@ impl Context {
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = KvLoader::from_kv_sources(
-            kv_args
-                .bigtable_reader("indexer-alt-jsonrpc".to_owned(), registry)
-                .await?,
             kv_args
                 .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
                 .await?,
@@ -160,7 +156,7 @@ impl Context {
     }
 
     /// For performing point look-ups on the kv store. Depends on the configuration of the indexer,
-    /// the kv store may be backed by either Bigtable or Postgres.
+    /// the kv store may be backed by either the Ledger gRPC service or Postgres.
     pub(crate) fn kv_loader(&self) -> &KvLoader {
         &self.kv_loader
     }
