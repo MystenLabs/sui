@@ -4,7 +4,6 @@
 use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Object;
-use async_graphql::connection::Connection;
 use move_binary_format::CompiledModule;
 use move_binary_format::errors::PartialVMResult;
 use sui_types::digests::TransactionDigest;
@@ -16,6 +15,7 @@ use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_package::MovePackageConnection;
 use crate::api::types::protocol_configs::ProtocolConfigs;
 use crate::error::RpcError;
 use crate::pagination::Page;
@@ -82,7 +82,7 @@ impl ChangeEpochTransaction {
         after: Option<CSystemPackage>,
         last: Option<u64>,
         before: Option<CSystemPackage>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         Some(
             async {
                 let pagination: &PaginationConfig = ctx.data()?;
@@ -107,13 +107,15 @@ impl ChangeEpochTransaction {
                         TransactionDigest::ZERO,
                     );
 
-                    // Create MovePackage directly from native object for efficiency
-                    let package =
-                        MovePackage::from_native_object(self.scope.clone(), native_object)
-                            .context("Failed to create MovePackage from system package object")?;
+                    // Pin the root version: the package is synthesized at the version baked into
+                    // this transaction, which the scope's checkpoint may not resolve to.
+                    let scope = self.scope.clone().with_root_version(version.value());
+                    let package = MovePackage::from_object_contents(scope, native_object)
+                        .context("Failed to create MovePackage from system package object")?;
 
                     Ok(package)
                 })
+                .map(Into::into)
             }
             .await,
         )

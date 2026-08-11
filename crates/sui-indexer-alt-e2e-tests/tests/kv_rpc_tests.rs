@@ -32,6 +32,8 @@ use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::ListEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListEventsResponse;
+use sui_rpc::proto::sui::rpc::v2::ListPackagesRequest;
+use sui_rpc::proto::sui::rpc::v2::ListPackagesResponse;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2::MoveCallFilter;
@@ -47,6 +49,7 @@ use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2::move_package_service_client::MovePackageServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
@@ -4564,4 +4567,133 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
             "ListCheckpoints terminal reason (ascending={ascending}): {reason:?}"
         );
     }
+}
+
+struct PackagesResult {
+    packages: Vec<ListPackagesResponse>,
+    end: bool,
+    end_cursor: Option<prost::bytes::Bytes>,
+    end_reason: Option<QueryEndReason>,
+}
+
+async fn list_packages_result(
+    client: &mut MovePackageServiceClient<Channel>,
+    request: ListPackagesRequest,
+) -> PackagesResult {
+    let mut stream = client.list_packages(request).await.unwrap().into_inner();
+    let mut packages = Vec::new();
+    let mut end = false;
+    let mut end_cursor = None;
+    let mut end_reason = None;
+    while let Some(response) = stream.message().await.unwrap() {
+        assert!(!end, "frame after end");
+        if let Some(c) = response.watermark.as_ref().and_then(|w| w.cursor.clone()) {
+            end_cursor = Some(c);
+        }
+        if let Some(end_frame) = &response.end {
+            end = true;
+            end_reason = Some(end_frame.reason());
+        }
+        if response.package.is_some() {
+            assert!(
+                response.watermark.is_some(),
+                "package item must carry a watermark"
+            );
+            packages.push(response);
+        }
+    }
+    PackagesResult {
+        packages,
+        end,
+        end_cursor,
+        end_reason,
+    }
+}
+
+fn package_ids(result: &PackagesResult) -> Vec<String> {
+    result
+        .packages
+        .iter()
+        .map(|response| {
+            let reference = response.package.as_ref().unwrap();
+            assert_eq!(reference.version, Some(1), "publishes mint version 1");
+            assert!(reference.digest.is_some(), "refs carry the object digest");
+            reference.object_id.clone().unwrap()
+        })
+        .collect()
+}
+
+/// `MovePackageService.ListPackages` serves package writes from the
+/// `AnyPackageWrite` bitmap in transaction order, with write-granular cursors:
+/// forward and backward drains, ItemLimit resume, and the genesis framework
+/// publishes when the range starts at checkpoint 0. Multi-write transactions
+/// (`write_index > 0`) are covered by unit tests; publishes here mint one
+/// package per transaction.
+#[tokio::test]
+async fn test_move_package_service_lists_package_writes() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+    cluster.create_checkpoint().await;
+
+    let (pkg_a, gas) =
+        publish_package(&mut cluster, sender, &kp, gas, emit_test_event_pkg_path()).await;
+    cluster.create_checkpoint().await;
+    let (pkg_b, gas) = publish_package(
+        &mut cluster,
+        sender,
+        &kp,
+        gas,
+        authenticated_event_pkg_path(),
+    )
+    .await;
+    let (pkg_c, _) =
+        publish_package(&mut cluster, sender, &kp, gas, generic_event_pkg_path()).await;
+    let checkpoint = cluster.create_checkpoint().await;
+    wait_for_kv_checkpoint(&cluster, checkpoint.sequence_number).await;
+
+    let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+    let expected: Vec<String> = [pkg_a, pkg_b, pkg_c]
+        .iter()
+        .map(|id| id.to_canonical_string(true))
+        .collect();
+
+    // Full ascending drain from checkpoint 1 (checkpoint 0 publishes the
+    // framework packages).
+    let mut request = ListPackagesRequest::default();
+    request.start_checkpoint = Some(1);
+    let all = list_packages_result(&mut client, request.clone()).await;
+    assert!(all.end);
+    assert_eq!(all.end_reason, Some(QueryEndReason::LedgerTip));
+    assert_eq!(package_ids(&all), expected);
+
+    // ItemLimit fuses onto the final item frame; resuming from its cursor
+    // serves the remainder without repeating or skipping.
+    request.options = Some(query_options(1));
+    let first = list_packages_result(&mut client, request.clone()).await;
+    assert_eq!(first.end_reason, Some(QueryEndReason::ItemLimit));
+    assert_eq!(package_ids(&first), expected[..1]);
+
+    request.options = Some(query_options_after(
+        10,
+        first.end_cursor.clone().expect("resume cursor"),
+    ));
+    let rest = list_packages_result(&mut client, request.clone()).await;
+    assert_eq!(package_ids(&rest), expected[1..]);
+
+    // Descending drains the same set in reverse.
+    let mut options = query_options(10);
+    options.ordering = Some(Ordering::Descending as i32);
+    request.options = Some(options);
+    let descending = list_packages_result(&mut client, request).await;
+    let mut reversed = expected.clone();
+    reversed.reverse();
+    assert_eq!(package_ids(&descending), reversed);
+
+    // A scan from genesis serves the framework publishes ahead of ours.
+    let genesis = list_packages_result(&mut client, ListPackagesRequest::default()).await;
+    assert!(genesis.packages.len() > expected.len());
+    let ids = package_ids(&genesis);
+    assert_eq!(ids[ids.len() - 3..], expected[..]);
 }

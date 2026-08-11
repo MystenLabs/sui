@@ -16,6 +16,10 @@ use diesel::QueryDsl;
 use diesel::sql_types::Bool;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::objects::VersionedObjectKey;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -24,8 +28,13 @@ use sui_indexer_alt_schema::packages::StoredPackage;
 use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
+use sui_rpc::proto::sui::rpc::v2;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_sql_macro::query;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::move_package::MovePackage as NativeMovePackage;
 use sui_types::object::Object as NativeObject;
@@ -34,7 +43,10 @@ use tokio::sync::OnceCell;
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor::BcsCursor;
+use crate::api::scalars::cursor::ByteCursor;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::cursor::MultiCursor;
+use crate::api::scalars::cursor::OpaqueCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::sui_address::SuiAddress;
@@ -44,6 +56,7 @@ use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::balance;
 use crate::api::types::balance::Balance;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::linkage::Linkage;
 use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_object::MoveObject;
@@ -66,8 +79,10 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
 use crate::extensions::query_limits;
+use crate::pagination;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
+use crate::pagination::StreamConnection;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
 
@@ -110,7 +125,8 @@ pub(crate) struct PackageCheckpointFilter {
     pub(crate) before_checkpoint: Option<UInt53>,
 }
 
-/// Inner struct for the cursor produced while iterating over all package publishes.
+/// Inner struct for the cursor produced while iterating over all package publishes on the
+/// Postgres path, ordered by `(cp_sequence_number, original_id, package_version)`.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub(crate) struct PackageCursor {
     pub cp_sequence_number: u64,
@@ -132,9 +148,25 @@ pub(crate) enum Error {
 /// Cursor for iterating over modules in a package. Points to the module by its name.
 pub(crate) type CModule = JsonCursor<String>;
 
-/// Cursor for iterating over package publishes. Points to the publish of a particular
-/// version of a package, in a given checkpoint.
-pub(crate) type CPackage = BcsCursor<PackageCursor>;
+/// Cursor token for the gRPC path: one package write within one transaction, in transaction
+/// order. Wraps the wire `CursorToken` minted by `MovePackageService.ListPackages`, so
+/// server-minted cursors round-trip exactly.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PackageToken {
+    /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
+    kind: CursorKind,
+    checkpoint: u64,
+    tx_seq: u64,
+    write_index: u32,
+}
+
+/// Cursor for iterating over package publishes. gRPC iterates on transaction order, while Postgres
+/// is on `(checkpoint, original_id, version)`, so the cursors are not interchangeable.
+pub(crate) type CPackage = MultiCursor<OpaqueCursor<PackageToken>, BcsCursor<PackageCursor>>;
+
+/// Custom `Connection` for packages, to support the partially-filled pages the gRPC scan can
+/// produce.
+pub(crate) type MovePackageConnection = StreamConnection<MovePackage>;
 
 /// Cursor for iterating over system packages. Points at a particular system package, by its ID.
 pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
@@ -455,7 +487,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         let version = self.version(ctx).await.ok()??;
 
         Some(
@@ -471,7 +503,7 @@ impl MovePackage {
                     after_version: Some(version),
                     ..VersionFilter::default()
                 }) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(MovePackageConnection::empty());
                 };
 
                 MovePackage::paginate_by_version(
@@ -482,6 +514,7 @@ impl MovePackage {
                     filter,
                 )
                 .await
+                .map(Into::into)
             }
             .await,
         )
@@ -496,7 +529,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+    ) -> Option<Result<MovePackageConnection, RpcError>> {
         let version = self.version(ctx).await.ok()??;
 
         Some(
@@ -512,7 +545,7 @@ impl MovePackage {
                     before_version: Some(version),
                     ..VersionFilter::default()
                 }) else {
-                    return Ok(Connection::new(false, false));
+                    return Ok(MovePackageConnection::empty());
                 };
 
                 MovePackage::paginate_by_version(
@@ -523,6 +556,7 @@ impl MovePackage {
                     filter,
                 )
                 .await
+                .map(Into::into)
             }
             .await,
         )
@@ -602,19 +636,6 @@ impl MovePackage {
             native: Arc::new(OnceCell::new()),
             parsed: Arc::new(OnceCell::new()),
         }
-    }
-
-    /// Create a `MovePackage` directly from a `NativeObject`. Returns `None` if the object
-    /// is not a package. This is more efficient when you already have the native object.
-    pub(crate) fn from_native_object(scope: Scope, native: NativeObject) -> Option<Self> {
-        let package = native.data.try_as_package()?.clone();
-        let scope = scope.with_root_version(package.version().value());
-        let super_ = Object::from_contents(scope, native);
-        Some(Self {
-            super_,
-            native: Arc::new(OnceCell::from(Some(package))),
-            parsed: Arc::new(OnceCell::new()),
-        })
     }
 
     /// Try to downcast an `Object` to a `MovePackage`. This function returns `None` if `object`'s
@@ -763,16 +784,20 @@ impl MovePackage {
         let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
             .context("Failed to deserialize package as object")?;
 
-        let Some(package) = native.data.try_as_package().cloned() else {
-            return Ok(None);
-        };
+        Ok(Self::from_object_contents(scope, native))
+    }
+
+    /// Construct a GraphQL representation of a `MovePackage` from a full native object. Returns
+    /// `None` if the object is not a package.
+    pub(crate) fn from_object_contents(scope: Scope, native: NativeObject) -> Option<Self> {
+        let package = native.data.try_as_package().cloned()?;
 
         let super_ = Object::from_contents(scope, native);
-        Ok(Some(Self {
+        Some(Self {
             super_,
             native: Arc::new(OnceCell::from(Some(package))),
             parsed: Arc::new(OnceCell::new()),
-        }))
+        })
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -876,14 +901,19 @@ impl MovePackage {
         scope: Scope,
         page: Page<CPackage>,
         filter: PackageCheckpointFilter,
-    ) -> Result<Connection<String, MovePackage>, RpcError> {
+    ) -> Result<MovePackageConnection, RpcError> {
         use kv_packages::dsl as p;
 
+        query_limits::rich::debit(ctx)?;
+
+        if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
+            return Self::paginate_grpc_by_checkpoint(ctx, reader, scope, page, filter).await;
+        }
+
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
-            return Ok(Connection::new(false, false));
+            return Ok(MovePackageConnection::empty());
         };
 
-        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
@@ -912,6 +942,7 @@ impl MovePackage {
         };
 
         if let Some(after) = page.after() {
+            let after = after.legacy()?;
             query = query.filter(sql!(as Bool,
                 "(cp_sequence_number, original_id, package_version) >= ({BigInt}, {Bytea}, {BigInt})",
                 after.cp_sequence_number as i64,
@@ -921,6 +952,7 @@ impl MovePackage {
         }
 
         if let Some(before) = page.before() {
+            let before = before.legacy()?;
             query = query.filter(sql!(as Bool,
                 "(cp_sequence_number, original_id, package_version) <= ({BigInt}, {Bytea}, {BigInt})",
                 before.cp_sequence_number as i64,
@@ -946,14 +978,112 @@ impl MovePackage {
         page.paginate_results(
             results,
             |p| {
-                BcsCursor::new(PackageCursor {
+                CPackage::Secondary(BcsCursor::new(PackageCursor {
                     cp_sequence_number: p.cp_sequence_number as u64,
                     original_id: p.original_id.clone(),
                     package_version: p.package_version as u64,
-                })
+                }))
             },
             |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
         )
+        .map(Into::into)
+    }
+
+    /// Serve package pagination from ledger history: scan transactions that wrote packages (the
+    /// `AnyPackageWrite` bitmap, via the `package_write` filter predicate), expand each into its
+    /// package writes from the effects, and load the package contents by the exact `(id, version)`
+    /// the effects reference. Iterates in transaction order, unlike the Postgres path's
+    /// `(checkpoint, original_id, version)` order. Pages may be partially filled, with valid
+    /// cursors if there are more pages to paginate through.
+    async fn paginate_grpc_by_checkpoint(
+        ctx: &Context<'_>,
+        reader: &AlphaLedgerGrpcReader,
+        scope: Scope,
+        page: Page<CPackage>,
+        filter: PackageCheckpointFilter,
+    ) -> Result<MovePackageConnection, RpcError> {
+        if page.limit() == 0 {
+            return Ok(MovePackageConnection::empty());
+        }
+
+        // Consistency upper bound; empty when scope has no checkpoint set.
+        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+            return Ok(MovePackageConnection::empty());
+        };
+
+        // TODO: LedgerService expose available checkpoint range for `reader_lo`.
+        let reader_lo = 0;
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint.map(u64::from),
+            None,
+            filter.before_checkpoint.map(u64::from),
+            reader_lo,
+            checkpoint_viewed_at,
+        ) else {
+            return Ok(MovePackageConnection::empty());
+        };
+
+        let after = page.after().map(|c| c.token()).transpose()?;
+        let before = page.before().map(|c| c.token()).transpose()?;
+
+        let mut options = v2::QueryOptions::default();
+        options.limit = Some(page.limit() as u32);
+        options.after = after.as_ref().map(|t| CursorToken::from(t).encode());
+        options.before = before.as_ref().map(|t| CursorToken::from(t).encode());
+        options.ordering = Some(if page.is_from_front() {
+            v2::Ordering::Ascending as i32
+        } else {
+            v2::Ordering::Descending as i32
+        });
+
+        let mut request = v2::ListPackagesRequest::default();
+        request.start_checkpoint = Some(*cp_bounds.start());
+        // `cp_bounds` end is inclusive; the request bound is exclusive.
+        request.end_checkpoint = Some(cp_bounds.end().saturating_add(1));
+        request.options = Some(options);
+
+        let result = reader
+            .list_packages(request)
+            .await
+            .context("Failed to list package writes")?;
+
+        Self::build_grpc_package_connection(ctx, scope, &page, result).await
+    }
+
+    /// Translate a page of package writes into a `MovePackageConnection`: load package contents
+    /// in one batched lookup, then hand the page to the stream paginator like any other list
+    /// stream.
+    async fn build_grpc_package_connection(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: &Page<CPackage>,
+        result: StreamPage<ObjectRef>,
+    ) -> Result<MovePackageConnection, RpcError> {
+        // Batch-load the package contents up front; the stream paginator's node callback then
+        // only looks them up.
+        let kv_loader: &KvLoader = ctx.data()?;
+        let objects = kv_loader
+            .load_many_objects(
+                result
+                    .items
+                    .iter()
+                    .map(|item| VersionedObjectKey(item.payload.0, item.payload.1.value()))
+                    .collect(),
+            )
+            .await
+            .context("Failed to load package objects")?;
+
+        page.paginate_stream_results(result, |&(id, version, _)| {
+            let object = objects
+                .get(&VersionedObjectKey(id, version.value()))
+                .with_context(|| format!("Missing package object {id} at version {version}"))?;
+
+            let package = Self::from_object_contents(scope.clone(), object.clone())
+                .with_context(|| format!("Object {id} written as a package is not a package"))?;
+
+            Ok(package)
+        })
     }
 
     /// Paginate through versions of a package, identified by its original ID. `address` points to
@@ -1082,5 +1212,103 @@ impl MovePackage {
                 Ok(Some(parsed))
             })
             .await
+    }
+}
+
+impl CPackage {
+    /// View the cursor as a package-write position for the gRPC path. Fails if it was minted by
+    /// the Postgres path, whose `(checkpoint, original_id, version)` positions cannot seek a
+    /// transaction-order scan.
+    fn token(&self) -> Result<PackageToken, RpcError> {
+        match self {
+            CPackage::Primary(c) => Ok(**c),
+            CPackage::Secondary(_) => Err(pagination::Error::UnusableCursor.into()),
+        }
+    }
+
+    /// View the cursor as a `(checkpoint, original_id, version)` position for the Postgres path.
+    /// Fails if it was minted by the gRPC path, whose transaction-order positions cannot seek the
+    /// `kv_packages` table.
+    fn legacy(&self) -> Result<&PackageCursor, RpcError> {
+        match self {
+            CPackage::Primary(_) => Err(pagination::Error::UnusableCursor.into()),
+            CPackage::Secondary(c) => Ok(&**c),
+        }
+    }
+}
+
+impl Eq for CPackage {}
+
+/// The two wire formats occupy disjoint position spaces, so cursors only compare equal within a
+/// format.
+impl PartialEq for CPackage {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (CPackage::Primary(a), CPackage::Primary(b)) => a == b,
+            (CPackage::Secondary(a), CPackage::Secondary(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for PackageToken {}
+
+/// Cursors minted by different scans may disagree on the checkpoint hint and kind, so pagination
+/// only compares the write coordinates.
+impl PartialEq for PackageToken {
+    fn eq(&self, other: &Self) -> bool {
+        (self.tx_seq, self.write_index) == (other.tx_seq, other.write_index)
+    }
+}
+
+impl ByteCursor for PackageToken {
+    fn decode_cursor(bytes: &[u8]) -> anyhow::Result<Self> {
+        CursorToken::decode(bytes)?.try_into()
+    }
+
+    fn encode_cursor(&self) -> bytes::Bytes {
+        CursorToken::from(self).encode()
+    }
+}
+
+impl From<&PackageToken> for CursorToken {
+    fn from(token: &PackageToken) -> Self {
+        CursorToken {
+            kind: token.kind,
+            position: Position::Packages {
+                checkpoint: token.checkpoint,
+                tx_seq: token.tx_seq,
+                write_index: token.write_index,
+            },
+        }
+    }
+}
+
+impl TryFrom<CursorToken> for PackageToken {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        let Position::Packages {
+            checkpoint,
+            tx_seq,
+            write_index,
+        } = token.position
+        else {
+            anyhow::bail!("invalid cursor");
+        };
+        Ok(Self {
+            kind: token.kind,
+            checkpoint,
+            tx_seq,
+            write_index,
+        })
+    }
+}
+
+impl TryFrom<CursorToken> for CPackage {
+    type Error = anyhow::Error;
+
+    fn try_from(token: CursorToken) -> anyhow::Result<Self> {
+        Ok(Self::new(OpaqueCursor::new(PackageToken::try_from(token)?)))
     }
 }
