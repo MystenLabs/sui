@@ -187,17 +187,29 @@ async fn forward_pagination_resumes_from_end_cursor() {
     assert!(page.page_info.has_next_page);
     assert!(!page.page_info.has_previous_page);
 
-    let rest = packages(&cluster, Some(2), page.page_info.end_cursor.clone(), None, None)
-        .await
-        .expect("second page");
+    let rest = packages(
+        &cluster,
+        Some(2),
+        page.page_info.end_cursor.clone(),
+        None,
+        None,
+    )
+    .await
+    .expect("second page");
     assert_eq!(addresses(&rest), [canonical(c)]);
     assert!(rest.page_info.has_previous_page);
     assert!(!rest.page_info.has_next_page);
 
     // Resuming from the drained connection's end cursor serves nothing further.
-    let empty = packages(&cluster, Some(2), all.page_info.end_cursor.clone(), None, None)
-        .await
-        .expect("page after the end");
+    let empty = packages(
+        &cluster,
+        Some(2),
+        all.page_info.end_cursor.clone(),
+        None,
+        None,
+    )
+    .await
+    .expect("page after the end");
     assert!(empty.edges.is_empty());
     assert!(!empty.page_info.has_next_page);
 }
@@ -242,9 +254,15 @@ async fn backward_pagination_resumes_from_start_cursor() {
     assert!(page.page_info.has_previous_page);
     assert!(!page.page_info.has_next_page);
 
-    let rest = packages(&cluster, None, None, Some(2), page.page_info.start_cursor.clone())
-        .await
-        .expect("previous page");
+    let rest = packages(
+        &cluster,
+        None,
+        None,
+        Some(2),
+        page.page_info.start_cursor.clone(),
+    )
+    .await
+    .expect("previous page");
     assert_eq!(addresses(&rest), [canonical(a)]);
     assert!(!rest.page_info.has_previous_page);
     assert!(rest.page_info.has_next_page);
