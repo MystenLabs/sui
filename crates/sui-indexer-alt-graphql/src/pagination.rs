@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
 use anyhow::Context as _;
 use async_graphql::Object;
 use async_graphql::OutputType;
+use async_graphql::TypeName;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
@@ -19,8 +21,6 @@ use sui_rpc_cursor::CursorToken;
 use sui_sql_macro::query;
 
 use crate::api::scalars::cursor::JsonCursor;
-use crate::api::types::event::Event;
-use crate::api::types::transaction::Transaction;
 use crate::error::RpcError;
 
 /// Configuration for page size limits, specifying a max multi-get size, as well as a default and
@@ -401,10 +401,7 @@ where
     }
 }
 
-#[Object(
-    concrete(name = "EventConnection", params(Event)),
-    concrete(name = "TransactionConnection", params(Transaction))
-)]
+#[Object(name_type)]
 impl<N: OutputType> StreamConnection<N> {
     /// Information to aid in pagination.
     async fn page_info(&self) -> &PageInfo {
@@ -433,6 +430,15 @@ impl<N: OutputType> StreamConnection<N> {
                 end_cursor: None,
             },
         }
+    }
+}
+
+impl<N: OutputType> TypeName for StreamConnection<N> {
+    /// Names each instantiation `{Node}Connection`, matching the convention of the stock
+    /// `Connection`, so new node types are registered in the schema without needing an explicit
+    /// `concrete(...)` entry.
+    fn type_name() -> Cow<'static, str> {
+        format!("{}Connection", N::type_name()).into()
     }
 }
 
