@@ -51,6 +51,39 @@ pub fn unique_map<Key: Hash + Eq, Value>(
     Ok(map)
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct TypeLimits {
+    max_type_nodes: u64,
+    max_type_depth: u64,
+}
+
+impl TypeLimits {
+    pub const VM_DEFAULT: Self = Self {
+        max_type_nodes: MAX_TYPE_INSTANTIATION_NODES,
+        max_type_depth: TYPE_DEPTH_MAX,
+    };
+
+    pub fn raise_max_type_nodes_to(self, max_type_nodes: u64) -> Self {
+        Self {
+            max_type_nodes: max_type_nodes.max(self.max_type_nodes),
+            ..self
+        }
+    }
+
+    pub fn max_type_nodes(&self) -> u64 {
+        self.max_type_nodes
+    }
+
+    pub fn traversal(&self) -> TypeSize {
+        TypeSize {
+            depth: 0,
+            node_count: 0,
+            max_depth: self.max_type_depth,
+            max_nodes: self.max_type_nodes,
+        }
+    }
+}
+
 /// Tracks depth and node count during recursive type traversal, enforcing configurable
 /// limits on both.
 pub struct TypeSize {
@@ -64,12 +97,7 @@ impl TypeSize {
     /// Standard limits for normal type traversal (i.e., not factoring in field types or
     /// "values"/layouts of that type): `TYPE_DEPTH_MAX` depth, `MAX_TYPE_INSTANTIATION_NODES` nodes.
     pub fn for_type_traversal() -> Self {
-        Self {
-            depth: 0,
-            node_count: 0,
-            max_depth: TYPE_DEPTH_MAX,
-            max_nodes: MAX_TYPE_INSTANTIATION_NODES,
-        }
+        TypeLimits::VM_DEFAULT.traversal()
     }
 
     /// Custom limits for "value"/layout traversal.
