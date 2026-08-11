@@ -117,12 +117,12 @@ task 15, lines 116-118:
 //# programmable
 // a generic &mut T return unifying to &mut TxContext cannot become a result
 //> test::m::gen_mut_id<sui::tx_context::TxContext>();
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
 
 task 16, lines 120-122:
 //# programmable
 // a generic &T return unifying to &TxContext cannot become a result
 //> test::m::gen_imm_id<sui::tx_context::TxContext>();
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }

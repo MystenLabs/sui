@@ -325,6 +325,8 @@ CommandArgumentError:
       CannotWriteToExtendedReference: UNIT
     18:
       InvalidReferenceArgument: UNIT
+    19:
+      InvalidTxContext: UNIT
 CompressedSignature:
   ENUM:
     0:

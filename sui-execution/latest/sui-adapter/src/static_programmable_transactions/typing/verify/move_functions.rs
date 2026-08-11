@@ -115,56 +115,78 @@ fn check_tx_context<Mode: ExecutionMode>(
     if !env.protocol_config.ptb_tx_context_restrictions() {
         return Ok(());
     }
-    let mut first_mut_idx = None;
-    let mut num_tx_context_refs = 0usize;
-    for (idx, param) in function.signature.parameters.iter().enumerate() {
-        match param.is_tx_context() {
-            TxContextKind::Mutable => {
-                num_tx_context_refs = num_tx_context_refs.saturating_add(1);
-                if first_mut_idx.is_none() {
-                    first_mut_idx = Some(idx);
-                }
-            }
-            TxContextKind::Immutable => {
-                num_tx_context_refs = num_tx_context_refs.saturating_add(1);
-            }
-            TxContextKind::None => {
-                if param.is_tx_context_by_value() {
-                    return Err(Mode::Error::new_with_source(
-                        ExecutionErrorKind::command_argument_error(
-                            CommandArgumentError::TypeMismatch,
-                            checked_as!(idx, u16)?,
-                        ),
-                        "TxContext cannot be taken by value",
-                    ));
-                }
-            }
-        }
-    }
-    if let Some(mut_idx) = first_mut_idx
-        && num_tx_context_refs > 1
-    {
-        return Err(Mode::Error::new_with_source(
+    check_no_tx_context_by_value::<Mode::Error>(&function.signature.parameters)?;
+    check_tx_context_refs::<Mode::Error>(&function.signature.parameters)?;
+    check_no_tx_context_return::<Mode::Error>(&function.signature.return_)?;
+    Ok(())
+}
+
+/// `TxContext` can never be taken by value
+fn check_no_tx_context_by_value<E: ExecutionErrorTrait>(parameters: &[Type]) -> Result<(), E> {
+    let Some(idx) = parameters
+        .iter()
+        .position(|param| param.is_tx_context_by_value())
+    else {
+        return Ok(());
+    };
+    Err(E::new_with_source(
+        ExecutionErrorKind::command_argument_error(
+            CommandArgumentError::InvalidTxContext,
+            checked_as!(idx, u16)?,
+        ),
+        "TxContext cannot be taken by value",
+    ))
+}
+
+/// If `&mut TxContext` appears, it must be the only `TxContext` parameter: no other `TxContext`
+/// reference, mutable or immutable, may appear alongside it
+fn check_tx_context_refs<E: ExecutionErrorTrait>(parameters: &[Type]) -> Result<(), E> {
+    let mut mut_idxs = parameters
+        .iter()
+        .enumerate()
+        .filter(|(_, param)| param.is_tx_context() == TxContextKind::Mutable)
+        .map(|(idx, _)| idx);
+    let Some(first_mut_idx) = mut_idxs.next() else {
+        return Ok(());
+    };
+    if let Some(second_mut_idx) = mut_idxs.next() {
+        return Err(E::new_with_source(
             ExecutionErrorKind::command_argument_error(
-                CommandArgumentError::InvalidReferenceArgument,
-                checked_as!(mut_idx, u16)?,
+                CommandArgumentError::InvalidTxContext,
+                checked_as!(second_mut_idx, u16)?,
             ),
-            "&mut TxContext must be the only TxContext parameter when it is used mutably",
+            "TxContext can be taken by mutable reference at most once",
         ));
     }
-    for (idx, return_ty) in function.signature.return_.iter().enumerate() {
-        let is_tx_context =
-            return_ty.is_tx_context() != TxContextKind::None || return_ty.is_tx_context_by_value();
-        if is_tx_context {
-            return Err(Mode::Error::new_with_source(
-                ExecutionErrorKind::InvalidPublicFunctionReturnType {
-                    idx: checked_as!(idx, u16)?,
-                },
-                "TxContext cannot be returned from a Move call",
-            ));
-        }
+    if parameters
+        .iter()
+        .any(|param| param.is_tx_context() == TxContextKind::Immutable)
+    {
+        return Err(E::new_with_source(
+            ExecutionErrorKind::command_argument_error(
+                CommandArgumentError::InvalidTxContext,
+                checked_as!(first_mut_idx, u16)?,
+            ),
+            "&mut TxContext cannot be used alongside other TxContext parameters",
+        ));
     }
     Ok(())
+}
+
+/// `TxContext` can never appear in return position, by value or by reference
+fn check_no_tx_context_return<E: ExecutionErrorTrait>(return_: &[Type]) -> Result<(), E> {
+    let Some(idx) = return_.iter().position(|return_ty| {
+        return_ty.is_tx_context() != TxContextKind::None || return_ty.is_tx_context_by_value()
+    }) else {
+        return Ok(());
+    };
+    Err(E::new_with_source(
+        ExecutionErrorKind::command_argument_error(
+            CommandArgumentError::InvalidTxContext,
+            checked_as!(idx, u16)?,
+        ),
+        "TxContext cannot be returned from a Move call",
+    ))
 }
 
 fn check_visibility<Mode: ExecutionMode>(

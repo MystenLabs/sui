@@ -1,56 +1,78 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 9 tasks
+processed 12 tasks
 
-task 1, lines 8-30:
+task 1, lines 8-39:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5380800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 33-34:
+task 2, lines 42-43:
 //# programmable
 //> test::m::mut_mut();
-Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext }, source: Some("TxContext can be taken by mutable reference at most once"), command: Some(0) } }
 
-task 3, lines 36-37:
+task 3, lines 45-46:
 //# programmable
 //> test::m::mut_imm();
-Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }
 
-task 4, lines 39-40:
+task 4, lines 48-49:
 //# programmable
 //> test::m::imm_mut();
-Error: Transaction Effects Status: Invalid command argument at 1. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }
 
-task 5, lines 42-43:
+task 5, lines 51-52:
 //# programmable --inputs 0
 //> test::m::imm_u64_mut(Input(0));
-Error: Transaction Effects Status: Invalid command argument at 2. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 2. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }
 
-task 6, lines 45-46:
+task 6, lines 54-55:
 //# programmable --inputs 0
 //> test::m::mut_u64_imm(Input(0));
-Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }
 
-task 7, lines 48-51:
+task 7, lines 57-59:
+//# programmable --inputs 0
+// the duplicate mutable usage is reported at the second &mut TxContext
+//> test::m::mut_u64_mut(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 2. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidTxContext }, source: Some("TxContext can be taken by mutable reference at most once"), command: Some(0) } }
+
+task 8, lines 61-63:
+//# programmable
+// both violations at once: the duplicate mutable usage is reported, not the mixed usage
+//> test::m::mut_imm_mut();
+Error: Transaction Effects Status: Invalid command argument at 2. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidTxContext }, source: Some("TxContext can be taken by mutable reference at most once"), command: Some(0) } }
+
+task 9, lines 65-68:
 //# programmable
 // a generic &mut T unifying to &mut TxContext alongside a concrete &mut TxContext is two mutable
 // usages
 //> test::m::gen_mut_mut<sui::tx_context::TxContext>();
-Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext }, source: Some("TxContext can be taken by mutable reference at most once"), command: Some(0) } }
 
-task 8, lines 53-56:
+task 10, lines 70-73:
 //# programmable
 // a generic &mut T unifying to &mut TxContext alongside a concrete &TxContext mixes mutable and
 // immutable usages
 //> test::m::gen_mut_imm<sui::tx_context::TxContext>();
-Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: Some("&mut TxContext must be the only TxContext parameter when it is used mutably"), command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }
+
+task 11, lines 75-78:
+//# programmable
+// a generic &T unifying to &TxContext alongside a concrete &mut TxContext mixes mutable and
+// immutable usages
+//> test::m::gen_imm_mut<sui::tx_context::TxContext>();
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidTxContext }, source: Some("&mut TxContext cannot be used alongside other TxContext parameters"), command: Some(0) } }

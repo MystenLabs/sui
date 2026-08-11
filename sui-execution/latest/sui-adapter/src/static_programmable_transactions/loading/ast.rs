@@ -243,10 +243,7 @@ impl Type {
 
     /// Is this the `TxContext` datatype itself, not behind a reference?
     pub fn is_tx_context_by_value(&self) -> bool {
-        match self {
-            Type::Datatype(dt) => dt.qualified_ident() == RESOLVED_TX_CONTEXT,
-            _ => false,
-        }
+        matches!(self, Type::Datatype(dt) if dt.qualified_ident() == RESOLVED_TX_CONTEXT)
     }
     pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
         match self {

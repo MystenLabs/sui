@@ -48,5 +48,5 @@ task 6, lines 43-50:
 //> test::m::owned_mut(Result(1));
 //> test::m::owned_mut(Result(2));
 //> test::m::owned_mut(Input(2));
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: TypeMismatch } in command 0
-Execution Error: CommandArgumentError { arg_idx: 0, kind: TypeMismatch } in command 0
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in command 0
