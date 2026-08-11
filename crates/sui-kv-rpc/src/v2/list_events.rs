@@ -813,20 +813,16 @@ async fn resolve_event_range(
     options: &QueryOptions,
 ) -> Result<ResolvedEventRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
-    if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
-                .await?;
-        return Ok(ResolvedEventRange::empty_at(
-            cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_boundary),
-            cp_range.exhaustion,
-        ));
-    }
-
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
+    if cp_range.is_empty() {
+        return Ok(ResolvedEventRange::empty_at(
+            cp_range.terminal_checkpoint(options.ordering),
+            EventPosition::start_of_tx(tx_range.start),
+            cp_range.exhaustion,
+        ));
+    }
     Ok(options.apply_event_cursor_bounds(ResolvedEventRange {
         bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
         entry_checkpoint: if options.is_ascending() {
@@ -845,16 +841,6 @@ async fn resolve_event_range(
         },
         exhaustion: cp_range.exhaustion,
     }))
-}
-
-async fn checkpoint_to_tx_boundary(
-    client: &BigTableClient,
-    checkpoint: u64,
-) -> Result<u64, RpcError> {
-    if checkpoint == 0 {
-        return Ok(0);
-    }
-    Ok(client.checkpoint_to_tx_range(0..checkpoint).await?.end)
 }
 
 #[cfg(test)]

@@ -623,45 +623,13 @@ async fn resolve_tx_range(
     options: &QueryOptions,
 ) -> Result<ResolvedRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
+    let tx_range = client
+        .checkpoint_to_tx_range(cp_range.range.clone())
+        .await?;
     if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(client, cp_range.terminal_checkpoint(options.ordering))
-                .await?;
-        return Ok(cp_range.with_range(tx_boundary..tx_boundary, options.ordering));
+        return Ok(cp_range.with_range(tx_range, options.ordering));
     }
-
-    let start_fut = {
-        let client = client.clone();
-        let start_cp = cp_range.range.start;
-        async move {
-            if start_cp == 0 {
-                return Ok(0);
-            }
-            Ok(client
-                .checkpoint_to_tx_range(start_cp..start_cp + 1)
-                .await?
-                .start)
-        }
-    };
-
-    let end_fut = {
-        let client = client.clone();
-        let end_cp = cp_range.range.end;
-        async move { Ok::<u64, RpcError>(client.checkpoint_to_tx_range(0..end_cp).await?.end) }
-    };
-
-    let (start_tx, end_tx) = tokio::try_join!(start_fut, end_fut)?;
-    Ok(options.apply_cursor_bounds(cp_range.with_range(start_tx..end_tx, options.ordering)))
-}
-
-async fn checkpoint_to_tx_boundary(
-    client: &BigTableClient,
-    checkpoint: u64,
-) -> Result<u64, RpcError> {
-    if checkpoint == 0 {
-        return Ok(0);
-    }
-    Ok(client.checkpoint_to_tx_range(0..checkpoint).await?.end)
+    Ok(options.apply_cursor_bounds(cp_range.with_range(tx_range, options.ordering)))
 }
 
 fn transaction_item_response(

@@ -48,7 +48,6 @@ use super::event_scan::drain_event_bitmap_hits;
 use super::event_scan::event_frontier_checkpoint;
 use super::event_scan::next_unfiltered_event_refs;
 use super::ledger_read::checkpoint_hi_exclusive;
-use super::ledger_read::checkpoint_to_tx_boundary;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
@@ -755,17 +754,15 @@ fn resolve_event_range(
     options: &QueryOptions,
 ) -> Result<ResolvedEventRange, RpcError> {
     let cp_range = checkpoint_range.resolve(options);
+    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     if cp_range.is_empty() {
-        let tx_boundary =
-            checkpoint_to_tx_boundary(service, cp_range.terminal_checkpoint(options.ordering))?;
         return Ok(ResolvedEventRange::empty_at(
             cp_range.terminal_checkpoint(options.ordering),
-            EventPosition::start_of_tx(tx_boundary),
+            EventPosition::start_of_tx(tx_range.start),
             cp_range.exhaustion,
         ));
     }
 
-    let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let mut resolved = ResolvedEventRange {
         bounds: EventScanBounds::tx_span(tx_range.start, tx_range.end),
         entry_checkpoint: if options.is_ascending() {
