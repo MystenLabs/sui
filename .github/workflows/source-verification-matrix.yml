@@ -76,11 +76,6 @@ jobs:
           cargo test -p sui-source-verification --test version_matrix
           -- --ignored --nocapture historical_sweep
 
-  # A scheduled failure means an old toolchain stopped verifying against the current CLI. This job is
-  # owned by devx tooling, so it dispatches its own sui-operations event type, which resolves the
-  # `DevX - Tooling` oncall and posts to #core-tooling-team. Reusing `nightly-build-failure` would
-  # page the release captain in #build-failures-sui instead, which is what it used to do.
-  # On-demand sweeps are not alerted.
   notify:
     name: Notify on failure
     needs: [version-matrix]
