@@ -6,7 +6,6 @@
 use crate::interface::{EventFilter, Tracer, Writer};
 use crate::tracers::nop::NopTracer;
 use crate::value::SerializableMoveValue;
-use educe::Educe;
 use move_binary_format::{
     file_format::FunctionDefinitionIndex as BinaryFunctionDefinitionIndex,
     file_format_common::Opcodes,
@@ -162,8 +161,7 @@ pub struct DataLoad {
 
 /// A TraceEvent is a single event in the Move VM, external events can also be interleaved in the
 /// trace. MoveVM events, are well structured, and can be a frame event or an instruction event.
-#[derive(Debug, Clone, Educe, Serialize, Deserialize)]
-#[educe(PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TraceEvent {
     OpenFrame {
         frame: Box<Frame>,
@@ -181,13 +179,7 @@ pub enum TraceEvent {
         instruction: Box<String>,
     },
     Effect(Box<Effect>),
-    // `serde_json::value::RawValue` implements neither `PartialEq` nor `Eq`, so the external
-    // payload is compared by its raw JSON text via `raw_value_eq`
-    External(#[educe(PartialEq(method(raw_value_eq)))] Box<serde_json::value::RawValue>),
-}
-
-fn raw_value_eq(a: &serde_json::value::RawValue, b: &serde_json::value::RawValue) -> bool {
-    a.get() == b.get()
+    External(Box<serde_json::value::RawValue>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

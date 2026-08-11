@@ -8,7 +8,6 @@ publish = false
 edition = "2024"
 
 [dependencies]
-educe.workspace = true
 move-core-types.workspace = true
 serde.workspace = true
 move-binary-format.workspace = true

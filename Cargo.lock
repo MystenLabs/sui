@@ -9322,7 +9322,6 @@ dependencies = [
 name = "move-trace-format"
 version = "0.0.1"
 dependencies = [
- "educe",
  "move-binary-format",
  "move-core-types",
  "serde",
