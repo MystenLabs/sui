@@ -51,11 +51,11 @@ use sui::{
     sui_commands::{SuiCommand, parse_host_port},
 };
 use sui_config::{
-    PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
+    Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
     SUI_KEYSTORE_ALIASES_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
-use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_package_alt::SuiFlavor;
@@ -5901,6 +5901,52 @@ async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Resu
     );
 
     temp_dir.close()?;
+    Ok(())
+}
+
+#[tokio::test]
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
+async fn test_keytool_keystore_path_override() -> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let config_dir = temp_dir.path();
+
+    let primary_path = config_dir.join(SUI_KEYSTORE_FILENAME);
+    let mut primary_keystore = FileBasedKeystore::load_or_create(&primary_path)?;
+    let primary_keypair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let primary_address = SuiAddress::from(&primary_keypair.public());
+    primary_keystore.import(None, primary_keypair).await?;
+
+    let secondary_path = config_dir.join("secondary.keystore");
+    let mut secondary_keystore = FileBasedKeystore::load_or_create(&secondary_path)?;
+    let secondary_keypair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let secondary_address = SuiAddress::from(&secondary_keypair.public());
+    secondary_keystore.import(None, secondary_keypair).await?;
+
+    SuiClientConfig::new(Keystore::from(primary_keystore))
+        .save(config_dir.join(SUI_CLIENT_CONFIG))?;
+
+    let output = assert_cmd::Command::cargo_bin("sui")?
+        .env("SUI_CONFIG_DIR", config_dir)
+        .args([
+            "keytool",
+            "--keystore-path",
+            secondary_path.to_str().unwrap(),
+            "--json",
+            "list",
+        ])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "keytool failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let listed_keys: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let listed_keys = listed_keys.as_array().unwrap();
+    assert_eq!(listed_keys.len(), 1);
+    assert_eq!(listed_keys[0]["suiAddress"], secondary_address.to_string());
+    assert_ne!(listed_keys[0]["suiAddress"], primary_address.to_string());
+
     Ok(())
 }
 
