@@ -4,7 +4,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main, measurement::Measurement};
 use language_benchmarks::measurement::wall_time_measurement;
-use language_benchmarks::move_vm::bench;
+use language_benchmarks::move_vm::{bench, bench_pinned_pkg_call};
 
 //
 // MoveVM benchmarks
@@ -91,6 +91,19 @@ fn interpreter_step<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "interpreter_step.move");
 }
 
+/// Cross-package call dispatch with the callee published as a regular package — every call
+/// pays the vtable lookup. Baseline for `cross_pkg_call_pinned` (MystenLabs/sui#26508).
+fn cross_pkg_call_unpinned<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench_pinned_pkg_call(c, "cross_pkg_call.move", /* pinned */ false);
+}
+
+/// Cross-package call dispatch with the callee installed as a pinned system package — the JIT
+/// rewrites the user package's calls into it as direct function pointers, eliminating the
+/// per-call vtable lookup (MystenLabs/sui#26508).
+fn cross_pkg_call_pinned<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench_pinned_pkg_call(c, "cross_pkg_call.move", /* pinned */ true);
+}
+
 criterion_group!(
     name = vm_benches;
     config = wall_time_measurement();
@@ -112,6 +125,8 @@ criterion_group!(
         deep_calls,
         constants,
         interpreter_step,
+        cross_pkg_call_unpinned,
+        cross_pkg_call_pinned,
         // cross_module, // TODO: broken — uses multi-address packages not supported by current setup
 );
 
