@@ -101,7 +101,9 @@ impl PackageToken {
     /// Decode from the proto wire format.
     pub fn decode(bytes: &[u8]) -> anyhow::Result<Self> {
         let wire = WireToken::decode(bytes).context("Failed to decode package token")?;
-        let checkpoint = wire.checkpoint.context("Package token missing checkpoint")?;
+        let checkpoint = wire
+            .checkpoint
+            .context("Package token missing checkpoint")?;
         let tx_seq = wire.tx_seq.context("Package token missing tx_seq")?;
         let position = match wire.write_index {
             Some(write_index) => PackagePosition::Tx {
