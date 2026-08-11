@@ -1,15 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A write-granularity view over the LedgerService's transaction-granularity scan: list every
-//! Move package write (publishes and upgrades) in a checkpoint range, in transaction order.
-//!
-//! The wire only addresses transactions (the `AnyPackageWrite` bitmap dimension), so this module
-//! bridges the granularity gap client-side: it scans matching transactions, expands each into its
-//! package writes from the effects, trims to the requested limit, and re-mints the result as a
-//! write-granularity [`StreamPage`] — one item per package write, with [`PackageToken`] cursors,
-//! and scan frontiers in the watermark slots. Consumers can treat it exactly like a page drained
-//! from a write-granularity list API.
+//! Package-granularity view over LedgerService list transaction scan. Lists every package write
+//! (publish or upgrade) as they appear in the transaction effects.
 
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
@@ -22,19 +15,13 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 
 use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use crate::alpha_ledger_grpc_reader::PageItem;
 use crate::alpha_ledger_grpc_reader::StreamPage;
-
-/// One package write served by the scan: the storage ID and version the effects reference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PackageWrite {
-    pub id: ObjectID,
-    pub version: u64,
-}
 
 /// Resume token for a package-write scan. Points at one package write within one transaction, or
 /// at scan progress through a transaction that served nothing.
@@ -145,33 +132,90 @@ impl PackageToken {
     }
 
     fn tx_seq(&self) -> u64 {
-        match self.position {
-            PackagePosition::Tx { tx_seq, .. } | PackagePosition::Scan { tx_seq } => tx_seq,
+        self.position.tx_seq()
+    }
+
+    /// The wire `after` bound that resumes this token's scan.
+    ///
+    /// The server honors cursor kind on the start bound (`Item` resumes past the position,
+    /// `Boundary` resumes at it), so both variants bound inclusively on their own transaction: a
+    /// `Scan` frontier's transaction may not have been processed yet, and a `Tx` position's
+    /// transaction may hold further writes. Either way the transaction is re-scanned — its
+    /// already-covered writes are skipped client-side during expansion — and bounding on the
+    /// position itself keeps the checkpoint hint accurate.
+    fn wire_after(&self) -> Bytes {
+        CursorToken::boundary(Position::Transactions {
+            checkpoint: self.checkpoint,
+            tx_seq: self.tx_seq(),
+        })
+        .encode()
+    }
+
+    /// The wire `before` bound that resumes this token's scan, or `None` when no expressible
+    /// bound re-includes the cursor's transaction.
+    ///
+    /// Unlike the start bound, the server treats the end bound as exclusive regardless of cursor
+    /// kind, so re-including a partially-served transaction must bound on its successor — which
+    /// does not exist above `u64::MAX`, where the bound is dropped and the covered writes are
+    /// skipped client-side.
+    fn wire_before(&self) -> Option<Bytes> {
+        let position = match self.position {
+            // A scan frontier, or a cursor at a transaction's first write: everything from the
+            // transaction's start onward is on the served side, so the exclusive end lands on
+            // the transaction itself.
+            PackagePosition::Scan { tx_seq }
+            | PackagePosition::Tx {
+                tx_seq,
+                write_index: 0,
+            } => Position::Transactions {
+                // A 0 hint would collapse the checkpoint window, so treat it as unknown.
+                checkpoint: if self.checkpoint == 0 {
+                    u64::MAX
+                } else {
+                    self.checkpoint
+                },
+                tx_seq,
+            },
+            // Writes before the cursor still belong to the backward page; re-include the
+            // transaction by bounding on its successor.
+            PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
+                checkpoint: u64::MAX,
+                tx_seq: tx_seq.checked_add(1)?,
+            },
+        };
+        Some(CursorToken::boundary(position).encode())
+    }
+}
+
+impl PackagePosition {
+    fn tx_seq(&self) -> u64 {
+        match self {
+            PackagePosition::Tx { tx_seq, .. } | PackagePosition::Scan { tx_seq } => *tx_seq,
         }
     }
 
-    /// Whether the write at `write_index` of transaction `tx_seq` is behind this token when it is
-    /// used as an `after` bound.
+    /// Whether the write at `write_index` of transaction `tx_seq` is behind this position when it
+    /// is used as an `after` bound.
     fn covers_up_to(&self, tx_seq: u64, write_index: u32) -> bool {
         self.tx_seq() == tx_seq
-            && match self.position {
+            && match self {
                 PackagePosition::Tx {
                     write_index: served,
                     ..
-                } => write_index <= served,
+                } => write_index <= *served,
                 PackagePosition::Scan { .. } => true,
             }
     }
 
-    /// Whether the write at `write_index` of transaction `tx_seq` is behind this token when it is
-    /// used as a `before` bound.
+    /// Whether the write at `write_index` of transaction `tx_seq` is behind this position when it
+    /// is used as a `before` bound.
     fn covers_from(&self, tx_seq: u64, write_index: u32) -> bool {
         self.tx_seq() == tx_seq
-            && match self.position {
+            && match self {
                 PackagePosition::Tx {
                     write_index: served,
                     ..
-                } => write_index >= served,
+                } => write_index >= *served,
                 PackagePosition::Scan { .. } => true,
             }
     }
@@ -181,10 +225,11 @@ impl AlphaLedgerGrpcReader {
     /// List package writes in `cp_bounds` (inclusive), in transaction order, `ascending` or
     /// descending, starting from the optional `after`/`before` resume tokens.
     ///
-    /// At most `limit` writes are returned, one [`StreamPage`] item per write, each carrying an
-    /// encoded [`PackageToken`] cursor. Scan frontiers that are not an item's own position occupy
-    /// the page's watermark slots, so `first_cursor()`/`last_cursor()` are always valid resume
-    /// points; a page trimmed client-side reports `has_more()`.
+    /// At most `limit` writes are returned, one [`StreamPage`] item per write: the payload is the
+    /// written package's `ObjectRef` from the effects, and the cursor an encoded
+    /// [`PackageToken`]. Scan frontiers that are not an item's own position occupy the page's
+    /// watermark slots, so `first_cursor()`/`last_cursor()` are always valid resume points; a
+    /// page trimmed client-side reports `has_more()`.
     pub async fn list_package_writes(
         &self,
         cp_bounds: RangeInclusive<u64>,
@@ -192,7 +237,7 @@ impl AlphaLedgerGrpcReader {
         ascending: bool,
         after: Option<PackageToken>,
         before: Option<PackageToken>,
-    ) -> anyhow::Result<StreamPage<PackageWrite>> {
+    ) -> anyhow::Result<StreamPage<ObjectRef>> {
         let request = scan_request(
             &cp_bounds,
             limit,
@@ -206,13 +251,8 @@ impl AlphaLedgerGrpcReader {
     }
 }
 
-/// Build the `ListTransactions` request scanning `cp_bounds` for package-writing transactions.
-///
-/// The wire cursors address transactions, so a `Tx` cursor widens to re-include its transaction —
-/// the writes it has already covered are skipped client-side during expansion — while a `Scan`
-/// cursor bounds on its transaction directly. Checkpoint hints on widened bounds are reset to
-/// unknown (0 for `after`, `u64::MAX` for `before`) because the neighboring transaction may fall
-/// in a different checkpoint.
+/// Build the `ListTransactions` request scanning `cp_bounds` for package-writing transactions,
+/// bounded by the wire translations of the `after`/`before` resume tokens.
 fn scan_request(
     cp_bounds: &RangeInclusive<u64>,
     limit: usize,
@@ -220,58 +260,12 @@ fn scan_request(
     after: Option<&PackageToken>,
     before: Option<&PackageToken>,
 ) -> proto::ListTransactionsRequest {
-    let wire_after = after.and_then(|t| {
-        let position = match t.position {
-            // Nothing was served from a scan frontier; bound on it directly.
-            PackagePosition::Scan { tx_seq } => Position::Transactions {
-                checkpoint: t.checkpoint,
-                tx_seq,
-            },
-            // Nothing precedes the first transaction; resume from the range start and skip
-            // client-side.
-            PackagePosition::Tx { tx_seq: 0, .. } => return None,
-            // The cursor's transaction may hold further writes; re-include it.
-            PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
-                checkpoint: 0,
-                tx_seq: tx_seq - 1,
-            },
-        };
-        Some(CursorToken::item(position).encode())
-    });
-
-    let wire_before = before.map(|t| {
-        let position = match t.position {
-            // A scan frontier, or a cursor at a transaction's first write: everything from the
-            // transaction's start onward is on the served side, so bound on it directly.
-            PackagePosition::Scan { tx_seq }
-            | PackagePosition::Tx {
-                tx_seq,
-                write_index: 0,
-            } => Position::Transactions {
-                // A 0 hint would collapse the checkpoint window, so treat it as unknown.
-                checkpoint: if t.checkpoint == 0 {
-                    u64::MAX
-                } else {
-                    t.checkpoint
-                },
-                tx_seq,
-            },
-            // Writes before the cursor still belong to the backward page; re-include the
-            // transaction.
-            PackagePosition::Tx { tx_seq, .. } => Position::Transactions {
-                checkpoint: u64::MAX,
-                tx_seq: tx_seq.saturating_add(1),
-            },
-        };
-        CursorToken::item(position).encode()
-    });
-
     let mut options = proto::QueryOptions::default();
     // One extra transaction: a re-included boundary transaction may contribute no further
     // packages, while every other matched transaction contributes at least one.
     options.limit = Some(limit as u32 + 1);
-    options.after = wire_after;
-    options.before = wire_before;
+    options.after = after.map(PackageToken::wire_after);
+    options.before = before.and_then(PackageToken::wire_before);
     options.ordering = Some(if ascending {
         proto::Ordering::Ascending as i32
     } else {
@@ -297,7 +291,7 @@ fn expand_package_writes(
     after: Option<PackageToken>,
     before: Option<PackageToken>,
     items: &[PageItem<proto::ExecutedTransaction>],
-) -> anyhow::Result<Vec<(PackageToken, PackageWrite)>> {
+) -> anyhow::Result<Vec<(PackageToken, ObjectRef)>> {
     let mut expanded = vec![];
     for item in items {
         let position = PackageToken::from_stream_cursor(&item.cursor)?;
@@ -308,10 +302,10 @@ fn expand_package_writes(
         }
 
         for (write_index, write) in writes {
-            if after.is_some_and(|a| a.covers_up_to(position.tx_seq(), write_index)) {
+            if after.is_some_and(|a| a.position.covers_up_to(position.tx_seq(), write_index)) {
                 continue;
             }
-            if before.is_some_and(|b| b.covers_from(position.tx_seq(), write_index)) {
+            if before.is_some_and(|b| b.position.covers_from(position.tx_seq(), write_index)) {
                 continue;
             }
 
@@ -332,9 +326,9 @@ fn expand_package_writes(
 /// the last kept item) and folds the trim into the end reason, so `has_more()` reports it.
 fn paginate_package_writes(
     limit: usize,
-    mut expanded: Vec<(PackageToken, PackageWrite)>,
+    mut expanded: Vec<(PackageToken, ObjectRef)>,
     result: &StreamPage<proto::ExecutedTransaction>,
-) -> anyhow::Result<StreamPage<PackageWrite>> {
+) -> anyhow::Result<StreamPage<ObjectRef>> {
     // More matches than the page can hold: trim the scan-direction tail and resume from the last
     // write kept rather than the scan frontier.
     let trimmed = expanded.len() > limit;
@@ -398,7 +392,7 @@ fn paginate_package_writes(
 /// `PackageToken`'s write index is defined over.
 fn package_writes(
     transaction: &proto::ExecutedTransaction,
-) -> anyhow::Result<Vec<(u32, PackageWrite)>> {
+) -> anyhow::Result<Vec<(u32, ObjectRef)>> {
     let effects: TransactionEffects = transaction
         .effects
         .as_ref()
@@ -413,15 +407,7 @@ fn package_writes(
         .into_iter()
         .filter(|(id, _, _)| published.contains(id))
         .enumerate()
-        .map(|(i, (id, version, _))| {
-            (
-                i as u32,
-                PackageWrite {
-                    id,
-                    version: version.value(),
-                },
-            )
-        })
+        .map(|(i, write)| (i as u32, write))
         .collect())
 }
 
@@ -440,6 +426,7 @@ fn package_write_filter() -> proto::TransactionFilter {
 
 #[cfg(test)]
 mod tests {
+    use sui_rpc_cursor::CursorKind;
     use sui_types::base_types::SequenceNumber;
     use sui_types::base_types::SuiAddress;
     use sui_types::base_types::random_object_ref;
@@ -521,7 +508,7 @@ mod tests {
         after: Option<PackageToken>,
         before: Option<PackageToken>,
         result: &StreamPage<proto::ExecutedTransaction>,
-    ) -> StreamPage<PackageWrite> {
+    ) -> StreamPage<ObjectRef> {
         let expanded =
             expand_package_writes(ascending, after, before, &result.items).expect("expand");
         paginate_package_writes(limit, expanded, result).expect("paginate")
@@ -529,7 +516,7 @@ mod tests {
 
     /// The served items, flattened to `(tx_seq, write_index, id, version)` by decoding each
     /// item's cursor.
-    fn served(page: &StreamPage<PackageWrite>) -> Vec<(u64, u32, ObjectID, u64)> {
+    fn served(page: &StreamPage<ObjectRef>) -> Vec<(u64, u32, ObjectID, u64)> {
         page.items
             .iter()
             .map(|item| {
@@ -541,7 +528,7 @@ mod tests {
                 else {
                     panic!("item cursor must be a `Tx` position");
                 };
-                (tx_seq, write_index, item.payload.id, item.payload.version)
+                (tx_seq, write_index, item.payload.0, item.payload.1.value())
             })
             .collect()
     }
@@ -551,9 +538,11 @@ mod tests {
         PackageToken::decode(cursor.expect("cursor present")).expect("decode page cursor")
     }
 
-    /// Decode a wire bound back into `(checkpoint, tx_seq)`.
+    /// Decode a wire bound back into `(checkpoint, tx_seq)`, asserting it carries `Boundary`
+    /// kind (all the bounds this module mints are range fences, not served items).
     fn wire_position(bytes: &Bytes) -> (u64, u64) {
         let token = CursorToken::decode(bytes).expect("decode wire cursor");
+        assert_eq!(token.kind, CursorKind::Boundary);
         let Position::Transactions { checkpoint, tx_seq } = token.position else {
             panic!("expected transactions position, got {:?}", token.position);
         };
@@ -729,28 +718,30 @@ mod tests {
         assert_eq!(options.ordering, Some(proto::Ordering::Descending as i32));
     }
 
-    /// A `Scan` after-bound excludes its transaction directly, hint intact.
+    /// Every after-bound resumes inclusively at its own transaction (`Boundary` kind): a `Scan`
+    /// frontier may not have been processed yet, and a `Tx` position's transaction may hold
+    /// further writes. The checkpoint hint stays intact, and `tx_seq` 0 needs no special case.
     #[test]
-    fn scan_request_after_scan_bounds_directly() {
+    fn scan_request_after_resumes_at_own_transaction() {
         let request = scan_request(&(0..=9), 5, true, Some(&scan(4, 17)), None);
         let after = request.options.expect("options").after.expect("after");
         assert_eq!(wire_position(&after), (4, 17));
-    }
 
-    /// A `Tx` after-bound widens to re-include its transaction, hint reset to unknown.
-    #[test]
-    fn scan_request_after_tx_widens() {
         let request = scan_request(&(0..=9), 5, true, Some(&tx(17, 2)), None);
         let after = request.options.expect("options").after.expect("after");
-        assert_eq!(wire_position(&after), (0, 16));
+        assert_eq!(wire_position(&after), (CP, 17));
+
+        let request = scan_request(&(0..=9), 5, true, Some(&tx(0, 2)), None);
+        let after = request.options.expect("options").after.expect("after");
+        assert_eq!(wire_position(&after), (CP, 0));
     }
 
-    /// Nothing precedes the first transaction: a `Tx` after-bound at `tx_seq` 0 resumes from the
-    /// range start.
+    /// The end bound is exclusive regardless of kind, so re-including `tx_seq` `u64::MAX` has no
+    /// expressible successor to bound on: the bound is dropped so the transaction is re-included.
     #[test]
-    fn scan_request_after_tx_zero_unbounded() {
-        let request = scan_request(&(0..=9), 5, true, Some(&tx(0, 2)), None);
-        assert_eq!(request.options.expect("options").after, None);
+    fn scan_request_before_tx_max_unbounded() {
+        let request = scan_request(&(0..=9), 5, true, None, Some(&tx(u64::MAX, 2)));
+        assert_eq!(request.options.expect("options").before, None);
     }
 
     /// `Scan` and first-write `Tx` before-bounds exclude their transaction directly, hint intact;
@@ -770,7 +761,8 @@ mod tests {
         assert_eq!(wire_position(&before), (u64::MAX, 17));
     }
 
-    /// A mid-transaction `Tx` before-bound widens to re-include its transaction.
+    /// A mid-transaction `Tx` before-bound re-includes its transaction by bounding on its
+    /// successor (the end bound is exclusive regardless of kind).
     #[test]
     fn scan_request_before_tx_widens() {
         let request = scan_request(&(0..=9), 5, true, None, Some(&tx(17, 3)));

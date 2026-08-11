@@ -21,7 +21,6 @@ use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::objects::VersionedObjectKey;
 use sui_indexer_alt_reader::package_writes::PackageToken;
-use sui_indexer_alt_reader::package_writes::PackageWrite;
 use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
 use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
 use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
@@ -32,6 +31,7 @@ use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
 use sui_sql_macro::query;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::move_package::MovePackage as NativeMovePackage;
 use sui_types::object::Object as NativeObject;
@@ -1027,7 +1027,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         scope: Scope,
         page: &Page<CPackage>,
-        result: StreamPage<PackageWrite>,
+        result: StreamPage<ObjectRef>,
     ) -> Result<MovePackageConnection, RpcError> {
         // Batch-load the package contents up front; the stream paginator's node callback then
         // only looks them up.
@@ -1037,26 +1037,19 @@ impl MovePackage {
                 result
                     .items
                     .iter()
-                    .map(|item| VersionedObjectKey(item.payload.id, item.payload.version))
+                    .map(|item| VersionedObjectKey(item.payload.0, item.payload.1.value()))
                     .collect(),
             )
             .await
             .context("Failed to load package objects")?;
 
-        page.paginate_stream_results(result, |write| {
+        page.paginate_stream_results(result, |&(id, version, _)| {
             let object = objects
-                .get(&VersionedObjectKey(write.id, write.version))
-                .with_context(|| {
-                    format!(
-                        "Missing package object {} at version {}",
-                        write.id, write.version
-                    )
-                })?;
+                .get(&VersionedObjectKey(id, version.value()))
+                .with_context(|| format!("Missing package object {id} at version {version}"))?;
 
-            let package =
-                Self::from_object_contents(scope.clone(), object.clone()).with_context(|| {
-                    format!("Object {} written as a package is not a package", write.id)
-                })?;
+            let package = Self::from_object_contents(scope.clone(), object.clone())
+                .with_context(|| format!("Object {id} written as a package is not a package"))?;
 
             Ok(package)
         })
