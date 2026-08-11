@@ -17,6 +17,7 @@ use crate::{
     storage::{ObjectStore, RuntimeObjectResolver},
 };
 use move_core_types::{
+    account_address::AccountAddress,
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
@@ -35,6 +36,18 @@ pub const ACCUMULATOR_ROOT_SETTLEMENT_SETTLE_EVENTS_FUNC: &IdentStr = ident_str!
 
 const ACCUMULATOR_KEY_TYPE: &IdentStr = ident_str!("Key");
 const ACCUMULATOR_U128_TYPE: &IdentStr = ident_str!("U128");
+
+pub const SETTLEMENT_MAX_TYPE_INSTANTIATION_NODES: u64 = 512;
+
+pub fn is_settle_u128_call(
+    module_address: &AccountAddress,
+    module: &IdentStr,
+    function: &IdentStr,
+) -> bool {
+    *module_address == SUI_FRAMEWORK_ADDRESS
+        && module == ACCUMULATOR_SETTLEMENT_MODULE
+        && function == ACCUMULATOR_ROOT_SETTLE_U128_FUNC
+}
 
 pub fn get_accumulator_root_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
