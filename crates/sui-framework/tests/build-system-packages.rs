@@ -306,9 +306,10 @@ fn serialize_modules_to_file<'a>(
     file: &Path,
 ) -> Result<Vec<String>> {
     let mut serialized_modules = Vec::new();
-    let mut members = vec![];
+    let mut members = BTreeMap::new();
     for module in modules {
         let module_name = module.self_id().short_str_lossless();
+        let members = members.entry(module_name.clone()).or_insert_with(Vec::new);
         for def in module.struct_defs() {
             let sh = module.datatype_handle_at(def.struct_handle);
             let sn = module.identifier_at(sh.name);
@@ -353,5 +354,5 @@ fn serialize_modules_to_file<'a>(
 
     fs::write(file, binary)?;
 
-    Ok(members)
+    Ok(members.into_values().flatten().collect())
 }

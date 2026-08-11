@@ -47,11 +47,27 @@ To report an issue with Sui, [create an issue](https://github.com/MystenLabs/sui
 
 ## Fork Sui to contribute {#fork-sui-contribute}
 
-To contribute to Sui source code or documentation, you need only a GitHub account. You can commit updates and then submit a PR directly from the GitHub website, or create a fork of the repo to your local environment and use your favorite tools to make changes. Always submit PRs to the `main` branch.
+To contribute to Sui source code or documentation, you need only a GitHub account. Follow these steps to submit a contribution:
 
-See [Sui Environment Setup](/references/contribute/sui-environment) for instructions on forking the Sui repository, if necessary.
+1. Fork the [MystenLabs/sui](https://github.com/MystenLabs/sui) repository by clicking **Fork** on the GitHub page.
+2. Clone your fork locally:
+   ```sh
+   $ git clone https://github.com/YOUR_USERNAME/sui.git
+   ```
+3. Create a feature branch from `main`:
+   ```sh
+   $ git checkout -b your-branch-name main
+   ```
+4. Make your changes and commit them with a descriptive message.
+5. Push your branch to your fork:
+   ```sh
+   $ git push origin your-branch-name
+   ```
+6. Open a pull request from your branch to the `main` branch of [MystenLabs/sui](https://github.com/MystenLabs/sui/compare).
+
+Always submit PRs to the `main` branch. See [Sui Environment Setup](/references/contribute/sui-environment) for additional instructions on configuring your local environment.
 
 ## Contribute through the Sui Improvement Proposal (SIP) process {#SIP}
 
-The Sui Network is an open source, decentralized, and permissionless protocol that welcomes community contributions. If you have an idea regarding a core protocol upgrade, the best way to make your voice heard is by submitting a Sui Improvement Proposal (SIP). For more information on SIPs, see [Contribute to Sui through SIPs](https://blog.sui.io/sui-improvement-proposals-sips/).
+The Sui Network is an open source, decentralized, and permissionless protocol that welcomes community contributions. If you have an idea regarding a core protocol upgrade, submit a [Sui Improvement Proposal (SIP)](https://sips.sui.io). For more information on the SIP process, see [Contribute to Sui through SIPs](https://blog.sui.io/sui-improvement-proposals-sips/).
 

@@ -3,6 +3,7 @@
 
 use std::sync::{Arc, Weak};
 
+use mysten_common::sync::execution_permit::set_execution_permit;
 use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
@@ -120,7 +121,11 @@ pub async fn execution_process(
         let blocking_span = execution_span.clone();
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
-            let _permit = permit;
+            // `permit` is moved into the blocking closure below and installed on the
+            // execution thread, so that a blocking sync primitive can release it if
+            // execution has to wait on work that another execution must perform (which
+            // would otherwise deadlock under limited concurrency). Until then it is held
+            // by this task, and the early returns below drop it, freeing the slot.
             if authority.is_tx_already_executed(&digest) {
                 return;
             }
@@ -138,6 +143,11 @@ pub async fn execution_process(
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
             tokio::task::spawn_blocking(move || {
+                // Install the permit so a blocking sync primitive can release it while
+                // execution waits; otherwise it is released when this guard drops at the
+                // end of execution. Not re-acquired after a release - any transient
+                // over-subscription resolves itself as tasks complete.
+                let _permit_guard = set_execution_permit(Box::new(permit));
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(

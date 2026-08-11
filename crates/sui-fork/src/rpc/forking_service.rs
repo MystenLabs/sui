@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! gRPC service for administrative control of the forked network:
-//! advancing the clock, creating checkpoints, and querying status.
+//! gRPC service for administrative control of the forked network: advancing the clock, creating
+//! checkpoints, and querying status.
 
 use std::sync::Arc;
 use std::time::Duration;

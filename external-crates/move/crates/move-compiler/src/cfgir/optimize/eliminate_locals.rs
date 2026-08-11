@@ -225,10 +225,12 @@ mod count {
             | E::ModuleCall(_)
             | E::Move { .. }
             | E::Borrow(_, _, _, _) => false,
+            // The `Cast` can abort. If the cast is "pure", it will be dealt with
+            // by folding first
+            E::Cast(_, _) => false,
 
             E::Unit { .. } | E::Value(_) | E::Constant(_) => true,
 
-            E::Cast(e, _) => can_subst_exp_single(e),
             E::UnaryExp(op, e) => can_subst_exp_unary(op) && can_subst_exp_single(e),
             E::BinopExp(e1, op, e2) => {
                 can_subst_exp_binary(op) && can_subst_exp_single(e1) && can_subst_exp_single(e2)

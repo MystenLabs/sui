@@ -47,7 +47,6 @@ serde_json.workspace = true
 shared-crypto.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
-timeout-tracing.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 toml.workspace = true

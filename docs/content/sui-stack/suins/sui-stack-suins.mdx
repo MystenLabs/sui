@@ -134,8 +134,33 @@ Both resolution types are available onchain in Move and offchain through the Sui
 
 Lookups work with 2 types of addresses:
 
-- **Target address:** The address that a SuiNS name points to. The NFT holder sets this. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`.
-- **Default address:** The SuiNS name that the owner of a wallet address has designated to represent that address. For example, if you own `example.sui` and its target address is your wallet, you can set `example.sui` as the default name for your wallet. The owner must sign a set-default transaction to establish this connection. The default address resets any time the target address changes.
+- **Target address:** The address that a SuiNS name points to. The NFT holder sets this. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`. Multiple names can point to the same target address.
+- **Default address:** The SuiNS name that the owner of a wallet address has designated to represent that address. For example, if you own `example.sui` and its target address is your wallet, you can set `example.sui` as the default name for your wallet. The owner must sign a set-default transaction to establish this connection.
+
+When you display names in your UI, use the default address (reverse lookup) rather than the target address. The default address is guaranteed onchain because the wallet owner explicitly signed a transaction to set it.
+
+### Default address reset behavior
+
+The default name for a wallet address resets automatically any time the target address of that name changes. This prevents stale mappings where a name displays for an address it no longer points to.
+
+For example, if `alice.sui` points to address `0xA` and `0xA` has set `alice.sui` as its default name:
+
+1. The NFT holder changes the target address of `alice.sui` from `0xA` to `0xB`.
+2. The default name for `0xA` resets to empty. Reverse lookup for `0xA` now returns `null`.
+3. `0xB` does not automatically inherit the default. The owner of `0xB` must sign a new set-default transaction to display `alice.sui`.
+
+Account for this reset in your app logic. If a user's default name suddenly returns `null`, the target address of their name might have changed.
+
+### NFT mutability and ownership
+
+A SuiNS NFT (`SuinsRegistration`) acts as a capability object, not an identity token. The NFT grants the holder permission to:
+
+- Change the target address the name points to
+- Create subnames (if applicable)
+- Renew the registration
+- Transfer the NFT to another address
+
+Because the NFT is transferable, the holder of the NFT might not be the address that the name points to. The NFT can change hands at any time without affecting the current target address until the new holder explicitly updates it.
 
 :::caution
 Do not use SuiNS NFT ownership as a resolution method. A SuiNS NFT acts as a capability to change the target address, but it does not identify any specific address. Use the target address for lookup resolution and the default address for reverse lookup resolution.
@@ -212,31 +237,37 @@ Pass the `SuiNS` [shared object](/develop/objects/object-ownership/shared) as an
 
 ## Offchain resolution
 
-For offchain resolution in a TypeScript or JavaScript app, use the Sui RPC endpoints. No additional package is required beyond `@mysten/sui`. For a higher-level TypeScript client that wraps these calls, see the [SuiNS SDK](https://docs.suins.io/developer/sdk).
+For offchain resolution in a TypeScript or JavaScript app, you have 2 options:
 
-**Lookup (name to address)** uses the `suix_resolveNameServiceAddress` JSON-RPC method:
+- **`@mysten/sui` convenience methods:** The `SuiClient` provides `resolveNameServiceAddress` and `resolveNameServiceNames` methods for basic lookups.
+- **`@mysten/suins` SDK extension:** The SuiNS SDK adds higher-level methods like `getNameRecord` to any `SuiClient` through the `$extend` pattern. Use this when you need name record details beyond the target address (expiration, metadata, avatar).
 
-```ts
-import { SuiClient } from '@mysten/sui/client';
+### Lookup with `@mysten/sui`
 
-const client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443' });
 
-const address = await client.resolveNameServiceAddress({
-  name: 'example.sui',
-});
-// Returns: '0x2' or null if the name does not exist
+{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceAddress example */}
+{/* Description: Basic name-to-address resolution using SuiClient.resolveNameServiceAddress */}
+
+{/* TODO: Import code from MystenLabs/sui-typescript — show resolveNameServiceNames example */}
+{/* Description: Reverse lookup (address to default name) using SuiClient.resolveNameServiceNames */}
+
+For [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc), use the `resolveSuinsAddress` query for lookup and the `defaultSuinsName` field on the `Address` type for reverse lookup. See the [Sui GraphQL reference](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address) for the full schema.
+
+### Lookup with the SuiNS SDK extension
+
+The `@mysten/suins` package provides the `suins()` extension function. Attach it to any `SuiClient` through `$extend` to add SuiNS methods. The extension uses `ClientWithCoreApi` and `PackageInfo` internally, and automatically loads the correct constants for Mainnet and Testnet:
+
+<ImportContent source="src/suins-client.ts" mode="code" org="MystenLabs" repo="suins-contracts" tag="suins-extension-example" language="ts" />
+
+{/* TODO: If the suins-client.ts file does not have a docs:: tag for the extension example, import using the doc comment example at the top of the suins() function instead */}
+
+The `getNameRecord` method returns the full name record including expiration timestamp and metadata fields. Use this when you need to check expiry or retrieve associated data like avatars and content hashes.
+
+Install the SuiNS SDK with:
+
+```sh
+$ npm i @mysten/suins
 ```
-
-**Reverse lookup (address to default name)** uses the `suix_resolveNameServiceNames` JSON-RPC method, or the `defaultSuinsName` field in GraphQL:
-
-```ts
-const names = await client.resolveNameServiceNames({
-  address: '0x2',
-});
-// Returns: { data: ['example.sui'], hasNextPage: false, nextCursor: null }
-```
-
-For GraphQL, use the `resolveSuinsAddress` query for lookup and the `defaultSuinsName` field on the `Address` type for reverse lookup. See the [Sui GraphQL reference](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address) for the full schema.
 
 In Sui Messenger, the `useUserSubname` hook resolves the subname for the connected wallet by querying the Enoki subname API rather than the SuiNS registry directly. This is because subnames under `sui-stack.sui` are provisioned programmatically through Enoki rather than registered by users through the SuiNS portal:
 
@@ -269,6 +300,39 @@ Use the SuiNS SDK or RPC directly when:
 
 The key limitation of the Enoki approach is that each user gets at most 1 subname per domain when using a public API key with zkLogin. You need a private API key to specify an arbitrary target address or create multiple subnames per user. See the [Enoki subname documentation](https://docs.enoki.mystenlabs.com/subnames) for full API details.
 
+## End-to-end onchain verification
+
+When you resolve a SuiNS name to send assets or authorize actions, verify 4 conditions before using the result. Skipping any check can result in assets sent to the wrong address, expired names, or unresolvable targets.
+
+
+Follow this sequence for every onchain resolution:
+
+1. **Verify the name exists.** Call `lookup` on the SuiNS registry. If the result is `None`, the name is not registered or has been released after expiry. Abort the transaction.
+2. **Check expiration.** Call `has_expired` with a `Clock` reference. Expired names remain in the registry but should not be trusted. Abort if expired.
+3. **Confirm the target address is set.** Call `target_address` on the name record. A name can exist without pointing to any address until the holder sets one. Abort if `None`.
+4. **Match the expected address (optional).** If you expect the name to resolve to a specific address (for example, a counterparty in a trade), compare the resolved target address to the expected value. This prevents a time-of-check to time-of-use (TOCTOU) issue where the NFT holder changes the target address between your lookup and the actual transfer.
+
+The Move example in the [onchain resolution](#onchain-resolution) section demonstrates steps 1 through 3. Step 4 depends on your app's requirements.
+
+### Target address snapshots
+
+The target address returned by `lookup` is a snapshot of the current registry state at the time of the transaction. Between the time you read the target address and the time the transaction executes, the NFT holder could change the target. On Sui, this is safe within a single [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) because the registry read and the transfer happen atomically. If you separate the lookup and the action across multiple transactions, the target address might change between them.
+
+### Offchain verification
+
+For offchain verification (for example, in a backend service), combine the SuiNS SDK `getNameRecord` method with expiry checks. The verification follows the same 3-step sequence as the onchain approach:
+
+1. Call `getNameRecord` and check for a `null` return (name does not exist).
+2. Compare `expirationTimestampMs` against the current time to confirm the name has not expired.
+3. Check that `targetAddress` is set and non-empty before using it.
+
+{/* TODO: Import code from MystenLabs/suins-contracts or a Sui example repo — show offchain verification pattern using getNameRecord with expiry and target address checks */}
+{/* Description: TypeScript function that resolves a SuiNS name, validates expiry, and confirms target address before use */}
+
+### Reverse lookup verification
+
+When you display a name for an address in your UI, use reverse lookup (`resolveNameServiceNames`) rather than scanning all names that point to that address. The reverse lookup returns only the name that the address owner has explicitly set as their default through a signed transaction. This guarantees that the address owner consented to being identified by that name ([SuiNS developer reference](https://docs.suins.io/developer)).
+
 ## Indexing
 
 For queries beyond a single name or address lookup (for example, all subnames under a parent domain, or all names pointing to a given address), run your own instance of the [`suins-indexer`](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer). See the [custom indexer documentation](/develop/accessing-data/custom-indexer) for setup instructions.
@@ -297,6 +361,51 @@ The following table summarizes the key differences:
 | Reverse registry | Yes | Yes |
 | Transfer ownership | Yes, through NFT | No |
 | Revoke | No (except post-expiration) | Yes, parent holder can revoke |
+
+### Choosing a subname type
+
+Choose the subname type based on how you want to manage ownership and lifecycle:
+
+- **Use leaf subnames** when your app creates and manages subnames on behalf of users. Leaf subnames are lighter (no NFT overhead), the parent holder controls them fully, and you can revoke them at any time. This is the right choice for app-assigned identities.
+- **Use node subnames** when you want the subname holder to have independent control. Node subnames have their own NFT, so the holder can update the target address, create child subnames, and transfer ownership without the parent's involvement.
+
+### Creating subnames
+
+You can create subnames through 3 methods:
+
+##### Step 1:
+
+Choose your creation method based on your use case:
+
+- **SuiNS portal ([suins.io](https://suins.io/)):** Create subnames manually through the web interface. Navigate to your domain, select the subnames tab, and create a new subname. You need to own the parent domain NFT in your connected wallet.
+- **Enoki subname API:** Create subnames programmatically through a REST API. Best for apps that assign subnames to users automatically. See the [Enoki subname documentation](https://docs.enoki.mystenlabs.com/subnames) for API details.
+- **Onchain through Move:** Create subnames directly in your smart contract using the SuiNS subnames package. Use this when your subname creation logic is part of an onchain workflow.
+
+##### Step 2:
+
+Configure the subname with the following parameters:
+
+- **Name:** The label for the subname (for example, `alice` for `alice.myapp.sui`). Labels follow the same character rules as SuiNS names: lowercase alphanumeric characters and hyphens, 3 to 63 characters.
+- **Target address:** The address the subname points to. Required for leaf subnames. Optional for node subnames (can be set later by the NFT holder).
+- **Expiration (node subnames only):** The timestamp when the node subname expires. Must not exceed the parent domain's expiration.
+
+##### Step 3:
+
+Set up resolution so the subname can be looked up. The subname is resolvable immediately after creation through onchain `lookup` and offchain `resolveNameServiceAddress`. If the target address owner wants the subname as their default name, they must sign a separate set-default transaction. Both node and leaf subnames support reverse lookup registration.
+
+### Subname configuration and parent rules
+
+The parent domain holder configures rules that govern child subname behavior:
+
+- **Allow child creation:** The parent can enable or disable subname creation under their domain. If disabled, no new subnames can be created.
+- **Allow expiration extension:** For node subnames, the parent can permit the subname holder to extend the expiration up to the parent's own expiration date.
+- **Revocation:** The parent holder can revoke leaf subnames at any time. Node subnames cannot be revoked by the parent until they expire.
+
+:::info
+
+If the parent domain expires, all subnames under it stop resolving, regardless of whether they are node or leaf subnames. Renew the parent domain at [suins.io](https://suins.io/) before the 30-day grace period ends to avoid losing subname resolution.
+
+:::
 
 In Sui Messenger, each user receives a leaf subname under `sui-stack.sui`. Leaf subnames are the right choice here because the app manages them programmatically through Enoki. Users do not own or transfer their subnames. The Enoki API provisions a leaf subname for each address that authenticates with the app.
 

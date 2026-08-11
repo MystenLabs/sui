@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end tests for the checkpoint subscription gRPC. Spins up the full
-//! tonic stack (forking admin RPCs + the canonical sui-rpc-api streaming
-//! RPC), drives checkpoint-producing admin calls, and asserts subscribers
-//! see each checkpoint on the stream.
+//! End-to-end tests for the checkpoint subscription gRPC. They spin up the full tonic stack
+//! (forking admin RPCs plus the canonical sui-rpc-api streaming RPC), drive checkpoint-producing
+//! admin calls, and assert subscribers see each checkpoint on the stream.
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
@@ -18,7 +17,6 @@ use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
-use sui_protocol_config::Chain;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
@@ -37,17 +35,20 @@ use crate::context::Context;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
-use crate::store::DataStore;
+use crate::services::ServiceManager;
+use crate::store::ForkStore;
 
-/// In-process gRPC harness: builds a fresh Simulacrum from a genesis
-/// `NetworkConfig`, wires up the subscription broker, and starts a tonic
-/// server on an ephemeral port. The server task is aborted when the
-/// harness is dropped.
+/// In-process gRPC harness. It builds a fresh Simulacrum from a genesis `NetworkConfig`, wires up
+/// the subscription broker, and starts a tonic server on an ephemeral port. The server task is
+/// aborted when the harness is dropped.
 struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
-    // Held to keep the on-disk store alive for the lifetime of the server.
+    // Held to keep the RPC store alive for the lifetime of the server.
+    // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
+    // Held so remote object probes keep resolving to "not found".
+    _gql_server: wiremock::MockServer,
 }
 
 impl ServerHarness {
@@ -59,24 +60,39 @@ impl ServerHarness {
             .deterministic_committee_size(NonZeroUsize::MIN)
             .build();
 
-        let mut data_store = DataStore::new_for_testing(temp.path().to_path_buf());
+        let genesis_checkpoint = config.genesis.checkpoint();
+        let genesis_contents = config.genesis.checkpoint_contents().clone();
+        let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
+        let chain_identifier = (*genesis_checkpoint.digest()).into();
+        let services = ServiceManager::open(
+            temp.path(),
+            "localnet".to_owned(),
+            forked_at_checkpoint,
+            chain_identifier,
+        )?;
+        let gql_server = crate::test_support::absent_objects_gql_server().await;
+        let mut store = ForkStore::new_for_testing_with_remote(
+            temp.path().to_path_buf(),
+            gql_server.uri(),
+            forked_at_checkpoint,
+            services.local_store(),
+        );
+        store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
         let written: BTreeMap<ObjectID, Object> = config
             .genesis
             .objects()
             .iter()
             .map(|o| (o.id(), o.clone()))
             .collect();
-        data_store.update_objects(written, vec![]);
-        data_store.insert_checkpoint(config.genesis.checkpoint());
-        data_store.insert_checkpoint_contents(config.genesis.checkpoint_contents().clone());
+        store.update_objects(written, vec![]);
 
         let keystore = KeyStore::from_network_config(&config);
         let sim = Simulacrum::new_from_custom_state(
             keystore,
-            config.genesis.checkpoint(),
+            genesis_checkpoint,
             config.genesis.sui_system_object(),
             &config,
-            data_store.clone(),
+            store.clone(),
             rng,
         );
 
@@ -84,9 +100,16 @@ impl ServerHarness {
         let (checkpoint_sender, subscription_handle) =
             SubscriptionService::build(&registry, None, None, None, None);
 
-        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
+        // Service-backed on purpose: subscribers are published to by the
+        // indexer's broadcast pipeline, so a service-less context would
+        // exercise a publication path production never takes.
+        let context = Arc::new(
+            Context::new(sim, services, checkpoint_sender, &registry)
+                .await
+                .expect("service-backed context should initialize"),
+        );
 
-        let reader: Arc<dyn RpcStateReader> = Arc::new(data_store);
+        let reader: Arc<dyn RpcStateReader> = Arc::new(store);
         let mut service = RpcService::new(reader);
         service.with_server_version(ServerVersion::new("sui-fork", "test"));
         service.with_subscription_service(subscription_handle);
@@ -117,6 +140,7 @@ impl ServerHarness {
                     server_task,
                     grpc_endpoint,
                     _temp: temp,
+                    _gql_server: gql_server,
                 });
             }
             tokio::time::sleep(Duration::from_millis(20)).await;

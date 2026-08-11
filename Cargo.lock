@@ -9649,8 +9649,10 @@ dependencies = [
  "antithesis_sdk",
  "either",
  "futures",
+ "msim",
  "mysten-metrics",
  "once_cell",
+ "oneshot",
  "parking_lot 0.12.3",
  "prost-types 0.14.1",
  "rand 0.8.5",
@@ -10327,6 +10329,12 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 dependencies = [
  "portable-atomic",
 ]
+
+[[package]]
+name = "oneshot"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe21416a02c693fb9f980befcb230ecc70b0b3d1cc4abf88b9675c4c1457f0c"
 
 [[package]]
 name = "oorandom"
@@ -15119,6 +15127,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bin-version",
+ "bytes",
  "chrono",
  "clap",
  "cynic",
@@ -15134,8 +15143,12 @@ dependencies = [
  "serde",
  "serde_json",
  "simulacrum",
+ "sui-consistent-store",
+ "sui-futures",
+ "sui-indexer-alt-framework",
  "sui-protocol-config",
  "sui-rpc-api",
+ "sui-rpc-store",
  "sui-swarm-config",
  "sui-types",
  "tempfile",
@@ -15220,10 +15233,13 @@ version = "1.78.0"
 dependencies = [
  "anyhow",
  "futures",
+ "pin-project",
  "tap",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "tracing-error",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -15563,7 +15579,6 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
- "timeout-tracing",
  "tokio",
  "tokio-stream",
  "toml 0.7.4",
@@ -18410,18 +18425,6 @@ checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
-]
-
-[[package]]
-name = "timeout-tracing"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4215a5d507354cba4bca5cd7c0dffdec3b7483758ddf4116cf21186bb73e913"
-dependencies = [
- "pin-project-lite",
- "tokio",
- "tracing",
- "tracing-error",
 ]
 
 [[package]]
