@@ -1245,4 +1245,3 @@ impl TryFrom<&[u8]> for CPackage {
         Ok(Self::new(OpaqueCursor::new(PackageToken::decode(bytes)?)))
     }
 }
-
