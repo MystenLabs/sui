@@ -70,12 +70,20 @@ pub(super) fn checkpoint_to_tx_boundary(
         })
 }
 
+/// Resolve a half-open checkpoint range to the tx_sequence_number range it
+/// spans. Checkpoint 0 resolves to tx_sequence_number 0. An empty checkpoint
+/// range can only be of the form [x, x) and maps to an empty transaction
+/// range [t, t).
 pub(super) fn checkpoint_to_tx_range(
     service: &RpcService,
     checkpoint_range: Range<u64>,
 ) -> Result<Range<u64>, RpcError> {
     let start = checkpoint_to_tx_boundary(service, checkpoint_range.start)?;
-    let end = checkpoint_to_tx_boundary(service, checkpoint_range.end)?;
+    let end = if checkpoint_range.is_empty() {
+        start
+    } else {
+        checkpoint_to_tx_boundary(service, checkpoint_range.end)?
+    };
     Ok(start..end)
 }
 
