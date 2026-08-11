@@ -287,18 +287,29 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
         .ok_or_else(|| anyhow!("no local checkpoint available to resume from"))
 }
 
-/// Bind `listen_address` and serve the fork's gRPC surface over it, returning the bound address
-/// and the server as a [`Service`].
+/// Bind the fork's RPC listener.
 ///
 /// The fork binds its own listener rather than using the `sui-rpc-api` serving entry point, so
 /// that a requested port 0 resolves to a real ephemeral port the caller can report, and a bind
-/// failure is an error here rather than a panic in a background task. The returned [`Service`]
-/// carries a shutdown signal that drains the server gracefully. It does not include the embedded
-/// indexer, which the caller merges in to tie both lifetimes together.
+/// failure is an error rather than a panic in a background task. Binding is separate from
+/// [`serve`] so it can run before initialization touches anything durable: a port conflict, the
+/// most common environmental failure, then errors before the data directory, seed manifest, or
+/// metric registrations exist.
+pub(crate) async fn bind(listen_address: SocketAddr) -> Result<tokio::net::TcpListener> {
+    tokio::net::TcpListener::bind(listen_address)
+        .await
+        .with_context(|| format!("failed to bind fork RPC server to {listen_address}"))
+}
+
+/// Serve the fork's gRPC surface over a listener from [`bind`], returning the bound address and
+/// the server as a [`Service`].
+///
+/// The returned [`Service`] carries a shutdown signal that drains the server gracefully. It does
+/// not include the embedded indexer, which the caller merges in to tie both lifetimes together.
 pub(crate) async fn serve(
     context: Arc<Context>,
     subscription_handle: SubscriptionServiceHandle,
-    listen_address: SocketAddr,
+    listener: tokio::net::TcpListener,
     version: &'static str,
     registry: &Registry,
 ) -> Result<(SocketAddr, Service)> {
@@ -319,9 +330,6 @@ pub(crate) async fn serve(
     service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(context)));
     service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
 
-    let listener = tokio::net::TcpListener::bind(listen_address)
-        .await
-        .with_context(|| format!("failed to bind fork RPC server to {listen_address}"))?;
     let rpc_address = listener
         .local_addr()
         .context("failed to read the fork RPC server's bound address")?;

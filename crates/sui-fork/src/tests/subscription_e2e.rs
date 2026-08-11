@@ -115,7 +115,7 @@ impl ServerHarness {
                 starting_checkpoint: forked_at_checkpoint,
             },
             false,
-            "127.0.0.1:0".parse()?,
+            crate::startup::bind("127.0.0.1:0".parse()?).await?,
             "test",
             &registry,
         )
@@ -323,14 +323,14 @@ async fn in_process_admin_ops_share_the_grpc_contract() -> Result<()> {
     let advanced = harness
         .fork
         .advance_clock(Duration::from_millis(1_000))
-        .await?;
-    let created = harness.fork.create_checkpoint().await?;
+        .await;
+    let created = harness.fork.create_checkpoint().await;
     assert_eq!(
         created.sequence_number,
         advanced.checkpoint.sequence_number + 1
     );
 
-    let status = harness.fork.status().await?;
+    let status = harness.fork.status().await;
     assert_eq!(status.checkpoint_sequence_number, created.sequence_number);
     assert_eq!(status.timestamp_ms, advanced.timestamp_ms);
 

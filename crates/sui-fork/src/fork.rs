@@ -26,6 +26,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio::net::TcpListener;
 
 use crate::Node;
 use crate::context::Context;
@@ -34,12 +35,16 @@ use crate::startup;
 use crate::startup::ForkParts;
 
 /// Default address the fork's RPC server binds when none is configured.
-pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
+///
+/// The port is deliberately clear of the defaults of the services a fork runs next to: 9000
+/// (fullnode RPC, also `sui start`'s default), 9123 (faucet), 9124 (consistent store), and 9184
+/// (metrics).
+pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9126";
 
 /// Everything needed to start a fork node.
 ///
 /// The defaults fork mainnet at its latest checkpoint, store fork state under the default data
-/// root, seed nothing, and serve on `127.0.0.1:9000`.
+/// root, seed nothing, and serve on `127.0.0.1:9126`.
 #[derive(clap::Args, Clone, Debug)]
 pub struct ForkArgs {
     /// Network to fork from: mainnet, testnet, devnet, or a custom GraphQL URL.
@@ -121,10 +126,19 @@ impl ForkNode {
     /// network or checkpoint than the one requested.
     ///
     /// `version` is reported as the server version of the gRPC service and in
-    /// requests to the forked-from network's GraphQL endpoint. Metrics for the
+    /// requests to the live network's GraphQL endpoint. Metrics for the
     /// RPC server, the subscription broker, and the embedded indexer are
     /// registered into `registry`; use one registry per fork, since a second
     /// registration of the same collectors fails.
+    ///
+    /// The listener is bound before anything durable is touched, so the most
+    /// common environmental failure — the port is already taken — errors
+    /// before a data directory, seed manifest, or metric registration exists,
+    /// and a retry starts from a clean slate. The bound port accepts TCP
+    /// connections from that moment: a client that connects while startup is
+    /// still initializing queues in the accept backlog instead of being
+    /// refused, so give clients request deadlines rather than treating a
+    /// successful connect as readiness.
     ///
     /// No signal handlers are installed and tracing is never initialized —
     /// both belong to the embedding binary. The fork's background tasks live
@@ -148,6 +162,7 @@ impl ForkNode {
             object_ids: object_ids.into_iter().collect(),
         };
 
+        let listener = startup::bind(rpc_listen_address).await?;
         let (forked_at_checkpoint, resumed) =
             startup::resolve_fork_point(&network, checkpoint, data_dir.as_deref(), version).await?;
         let parts = startup::initialize(
@@ -159,7 +174,7 @@ impl ForkNode {
             registry,
         )
         .await?;
-        Self::from_parts(parts, resumed, rpc_listen_address, version, registry).await
+        Self::from_parts(parts, resumed, listener, version, registry).await
     }
 
     /// Serve an already-initialized fork. The seam between building fork state
@@ -168,7 +183,7 @@ impl ForkNode {
     pub(crate) async fn from_parts(
         parts: ForkParts,
         resumed: bool,
-        listen_address: SocketAddr,
+        listener: TcpListener,
         version: &'static str,
         registry: &Registry,
     ) -> Result<ForkNode> {
@@ -184,9 +199,9 @@ impl ForkNode {
 
         let context = Arc::new(context);
         let (rpc_address, server) = startup::serve(
-            context.clone(),
+            Arc::clone(&context),
             subscription_handle,
-            listen_address,
+            listener,
             version,
             registry,
         )
@@ -210,7 +225,7 @@ impl ForkNode {
         self.rpc_address
     }
 
-    /// Name of the forked-from network (`mainnet`, `testnet`, `devnet`, or the
+    /// Name of the live network (`mainnet`, `testnet`, `devnet`, or the
     /// custom endpoint URL).
     pub fn network_name(&self) -> &str {
         &self.network_name
@@ -237,28 +252,48 @@ impl ForkNode {
         self.resumed
     }
 
+    /// A cheap, cloneable handle carrying the in-process admin methods.
+    ///
+    /// Take one before [`Self::into_service`] to keep driving the fork after
+    /// surrendering its tasks, or to drive it concurrently with
+    /// [`Self::join`], which holds `&mut self`.
+    pub fn admin(&self) -> ForkAdmin {
+        ForkAdmin {
+            context: Arc::clone(&self.context),
+        }
+    }
+
     /// Advance the fork's clock by `duration` and seal the resulting clock
     /// transaction into a checkpoint. Same contract as the forking gRPC
     /// service's `AdvanceClock`; both delegate to one implementation.
-    pub async fn advance_clock(&self, duration: Duration) -> Result<ClockAdvanced> {
-        Ok(self.context.advance_clock(duration).await)
+    ///
+    /// The result is durable when this returns. If the embedded indexer fails
+    /// to index the sealed checkpoint in time, the call still succeeds after
+    /// logging an error; until the indexer catches up, derived reads (owned
+    /// objects, balances) lag raw reads and subscribers are not notified.
+    pub async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
+        self.context.advance_clock(duration).await
     }
 
     /// Seal all pending transactions into a new checkpoint. Same contract as
-    /// the forking gRPC service's `AdvanceCheckpoint`.
-    pub async fn create_checkpoint(&self) -> Result<CreatedCheckpoint> {
-        Ok(self.context.create_checkpoint().await)
+    /// the forking gRPC service's `AdvanceCheckpoint`; the indexing caveat on
+    /// [`Self::advance_clock`] applies here too.
+    pub async fn create_checkpoint(&self) -> CreatedCheckpoint {
+        self.context.create_checkpoint().await
     }
 
     /// The fork's current epoch, checkpoint tip, clock, and fork point. Same
     /// contract as the forking gRPC service's `GetStatus`.
-    pub async fn status(&self) -> Result<ForkStatus> {
-        Ok(self.context.status().await)
+    pub async fn status(&self) -> ForkStatus {
+        self.context.status().await
     }
 
-    /// Resolves when any of the fork's tasks stops: the task error if the
-    /// server or an indexer pipeline failed, `Ok(())` if all tasks completed.
-    /// Either way the fork is no longer serving; this is the liveness watchdog.
+    /// Resolves with the error when one of the fork's tasks — the server or
+    /// an indexer pipeline — fails, or with `Ok(())` once every task has
+    /// completed. A panicked task resumes unwinding here. A wedged indexer
+    /// does not surface through this method: its framework retries failures
+    /// indefinitely, so a stall shows up as error logs and 30-second waits on
+    /// checkpoint-producing calls instead.
     pub async fn join(&mut self) -> Result<()> {
         self.service.join().await
     }
@@ -274,11 +309,44 @@ impl ForkNode {
     }
 
     /// Surrender the fork's tasks as a [`Service`] for composition with other
-    /// services (`host_service.merge(fork.into_service())`). The in-process
-    /// admin methods go with the handle; the gRPC surface at
-    /// [`Self::rpc_address`] remains.
+    /// services (`host_service.merge(fork.into_service())`). The gRPC surface
+    /// at [`Self::rpc_address`] remains; take [`Self::admin`] first to keep
+    /// the in-process admin methods as well.
     pub fn into_service(self) -> Service {
         self.service
+    }
+}
+
+/// Cloneable handle for driving a running fork in-process, detached from the
+/// fork's lifetime management.
+///
+/// Obtained from [`ForkNode::admin`]. The methods are the same as
+/// [`ForkNode`]'s and share its contracts; this handle exists so they survive
+/// [`ForkNode::into_service`] and can run concurrently with
+/// [`ForkNode::join`]. It does not keep the fork's tasks alive, but it does
+/// keep the state store alive: after the fork stops, checkpoint-producing
+/// calls still execute against the store and seal durable checkpoints (after
+/// a 30-second indexing wait), and [`Self::status`] keeps answering. Do not
+/// drive a fork after shutting it down.
+#[derive(Clone)]
+pub struct ForkAdmin {
+    context: Arc<Context>,
+}
+
+impl ForkAdmin {
+    /// See [`ForkNode::advance_clock`].
+    pub async fn advance_clock(&self, duration: Duration) -> ClockAdvanced {
+        self.context.advance_clock(duration).await
+    }
+
+    /// See [`ForkNode::create_checkpoint`].
+    pub async fn create_checkpoint(&self) -> CreatedCheckpoint {
+        self.context.create_checkpoint().await
+    }
+
+    /// See [`ForkNode::status`].
+    pub async fn status(&self) -> ForkStatus {
+        self.context.status().await
     }
 }
 

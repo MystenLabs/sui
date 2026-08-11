@@ -44,6 +44,7 @@ mod test_support;
 pub use fork::ClockAdvanced;
 pub use fork::CreatedCheckpoint;
 pub use fork::DEFAULT_RPC_ADDR;
+pub use fork::ForkAdmin;
 pub use fork::ForkArgs;
 pub use fork::ForkNode;
 pub use fork::ForkStatus;

@@ -47,7 +47,7 @@ sui-fork start
 
 > [!TIP]
 > By default, if no flags are specified, the fork starts from mainnet at the latest known checkpoint.
-> The fork serves Sui gRPC on `127.0.0.1:9000` by default.
+> The fork serves Sui gRPC on `127.0.0.1:9126` by default.
 
 **From latest checkpoint on testnet**
 
@@ -86,7 +86,7 @@ sui-fork status
 #### 4. Add the fork as a Sui CLI environment
 
 ```bash
-sui client new-env --alias local-fork --rpc http://127.0.0.1:9000
+sui client new-env --alias local-fork --rpc http://127.0.0.1:9126
 sui client switch --env local-fork
 ```
 

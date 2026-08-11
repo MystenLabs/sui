@@ -58,6 +58,9 @@ is accepting connections:
 
 ```
 ForkNode::start(args, version, registry)
+  ├─ bind the listener            (first, before anything durable exists: a taken port —
+  │                                the most likely failure — errors out while a retry can
+  │                                still start from a clean slate)
   ├─ resolve the fork point       (local fork state if inspectable, else the requested
   │                                checkpoint, else the network's latest)
   ├─ open or create the data dir  (fork_metadata.json validated, rpc-store RocksDB opened)
@@ -65,8 +68,8 @@ ForkNode::start(args, version, registry)
   │                                as a no-op — see storage.md, "Seeding")
   ├─ build the executor           (Simulacrum over ForkStore, local validator keys)
   ├─ start the embedded indexer   (a sui-futures Service, merged into the fork's own)
-  └─ bind and serve               (a listener bound by the fork itself, so the true
-                                   address is known and bind failures are errors)
+  └─ serve                        (over the already-bound listener, so the reported
+                                   address is the true one even when port 0 was asked for)
 ```
 
 Fork-point resolution sits behind `start` because every caller wants the same policy and
@@ -86,7 +89,9 @@ embedded next to anything else that does.
 ## The shape of the entry point
 
 The arguments are a plain struct with public fields, a `Default` (mainnet, latest, default
-data root, no seeds, `127.0.0.1:9000`), and a `clap::Args` derive whose flag defaults are
+data root, no seeds, `127.0.0.1:9126` — a port deliberately clear of the fullnode's 9000,
+the faucet's 9123, and the consistent store's 9124, since a fork's natural habitat is next
+to exactly those services), and a `clap::Args` derive whose flag defaults are
 read from that `Default` — one struct serves the command line and the programmatic caller,
 and the two sets of defaults cannot drift. The services `sui start` composes take their
 options the same way (the indexer's and consistent store's args derive both), while the
@@ -114,7 +119,14 @@ The stock serving entry in `sui-rpc-api` takes an address, panics if the bind fa
 never reports the bound socket; the service also exposes its assembled router, so `start`
 binds its own listener, returns bind failures as errors, and serves the router with a
 shutdown wired to the handle. The crate's tests used to probe a free port and race to
-rebind it; serving this way removed that race.
+rebind it; serving this way removed that race. The bind also comes first, before the data
+directory, the seed manifest, or any metric registration exists, because startup's side
+effects are not idempotent — prometheus panics on re-registered collectors and a written
+seed manifest refuses new seed flags — so the failure most likely to be environmental must
+fire before the side effects that would poison the retry. The cost is that the bound port
+accepts TCP connections for the whole of initialization: a client that connects early waits
+in the accept backlog instead of being refused, so a successful connect is not readiness and
+clients should carry request deadlines.
 
 ## The handle
 
@@ -134,14 +146,35 @@ methods on the fork's shared context — so the in-process and remote surfaces c
 apart, and a host that just started a fork can advance its clock without dialing the socket
 it opened.
 
+Checkpoint-producing calls succeed once the checkpoint is sealed, which happens before the
+indexing wait. An indexer that misses the wait therefore cannot fail the call — reporting
+failure for a durable state change would invite retries that execute twice, the worse
+outcome by far — and it cannot panic the host either, which `panic=abort` release builds
+would turn into process death. The miss is logged as an error and the fork limps: derived
+reads lag raw reads and subscribers are not notified until the indexer catches up. No
+background watchdog polices this. The fork is a command-driven sequential node — one user
+transaction, then its checkpoint — so every indexing cycle that matters is already observed
+by the call that produced it, and a watchdog would only add false positives on an idle fork.
+The checkpoint-producing closure itself runs on a blocking thread, because it executes the
+Move VM and can make synchronous remote reads, either of which would otherwise park a
+runtime worker for as long as the simulacrum write lock is held.
+
+`ForkNode::admin` returns a cheap cloneable handle carrying the same three methods. It
+exists because the two ways a host holds a running fork both make the methods on the node
+itself unreachable: `into_service` consumes the node, and `join` borrows it mutably for as
+long as the watch lasts. A host takes the admin handle first and keeps driving the fork
+either way; the handle does not keep the fork alive.
+
 The third question is the fork's lifetime. Underneath, the fork's tasks — the server and
 the embedded indexer — live in one `sui-futures` `Service`, the abstraction every off-chain
-service in `sui start` returns. `join` resolves when any task stops, taking over the
-watchdog role a hand-rolled select loop used to play: an indexer failure surfaces
-immediately instead of as a publication timeout on the next executed transaction. `shutdown` stops the server and winds down the indexer.
+service in `sui start` returns. `join` resolves when a task fails or panics, taking over
+the watchdog role a hand-rolled select loop used to play. A wedged indexer is the one
+failure `join` does not see, because the indexer framework retries its own failures
+indefinitely; it surfaces as the logged stalls described above. `shutdown` stops the server and winds down the indexer.
 `into_service` surrenders the tasks for composition — a host merges the fork with the other
-services it manages and keeps ownership of its own signals. The admin methods leave with the
-handle; the gRPC surface at the bound address remains.
+services it manages and keeps ownership of its own signals. The gRPC surface at the bound
+address remains, and a `ForkNode::admin` handle taken beforehand keeps the in-process admin
+methods.
 
 ## Stopping
 
@@ -160,9 +193,9 @@ guarantees.
 
 The executor handle is the largest omission. Exposing the simulacrum would put `ForkStore`
 and the executor's locking discipline into the public surface, and its simulation path
-blocks the calling thread — it panics when invoked from an async context, which is why the
-gRPC executor dispatches it on a blocking thread. An embedder holding the raw lock inherits
-that trap along with every internal type it can reach. In-process execution and simulation
+blocks the calling thread with Move execution and synchronous remote reads, which is why
+the checkpoint-producing path dispatches it on a blocking thread. An embedder holding the
+raw lock inherits that trap along with every internal type it can reach. In-process execution and simulation
 are left out for the same reason: the gRPC execution path already exists, carries the
 sender-impersonation rules, and owns the blocking dispatch.
 

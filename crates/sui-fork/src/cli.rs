@@ -351,8 +351,11 @@ mod tests {
                 Command::Start { .. } => panic!("expected client command"),
             };
 
-            assert_eq!(rpc_addr, Url::parse("http://127.0.0.1:9000").unwrap());
-            assert_eq!(rpc_endpoint(&rpc_addr), "http://127.0.0.1:9000/");
+            // Pin the literal so an accidental change to the default (e.g. back onto the
+            // fullnode's 9000) fails here instead of shipping silently.
+            assert_eq!(DEFAULT_RPC_ADDR, "127.0.0.1:9126");
+            assert_eq!(rpc_addr, Url::parse("http://127.0.0.1:9126").unwrap());
+            assert_eq!(rpc_endpoint(&rpc_addr), "http://127.0.0.1:9126/");
         }
     }
 
