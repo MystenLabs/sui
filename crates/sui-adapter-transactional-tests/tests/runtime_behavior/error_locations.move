@@ -7,7 +7,8 @@
 
 //# publish
 
-#[allow(always_errors)] module test::m {
+#[allow(always_errors)]
+module test::m {
     entry fun abort_() {
         // should be offset 1
         abort 0
