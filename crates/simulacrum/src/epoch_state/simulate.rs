@@ -5,8 +5,8 @@
 //!
 //! TODO: This module is a copy of `AuthorityState::simulate_transaction` (and the private
 //! helpers it relies on) from `sui-core`, adapted to simulacrum's store/epoch model — no
-//! congestion tracker (`suggested_gas_price` is always `None`), no certificate deny set, and
-//! no fullnode-only policy checks. The two implementations need to be merged in a more unified
+//! congestion tracker (`suggested_gas_price` is always the reference gas price), no certificate
+//! deny set, and no fullnode-only policy checks. The two implementations need to be merged in a more unified
 //! way so that simulacrum and the fullnode share a single simulation code path instead of two
 //! copies that must be kept in sync.
 
@@ -321,8 +321,9 @@ impl EpochState {
             execution_result,
             mock_gas_id,
             unchanged_loaded_runtime_objects,
-            // Simulacrum has no congestion tracker to suggest gas prices from.
-            suggested_gas_price: None,
+            // Simulacrum has no congestion tracker, so nothing is ever congested and the
+            // reference gas price is always sufficient for inclusion.
+            suggested_gas_price: Some(self.reference_gas_price()),
         })
     }
 }

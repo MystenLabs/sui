@@ -1094,7 +1094,7 @@ mod tests {
         assert!(result.effects.status().is_ok());
         // Explicit gas payment was provided, so no mock gas is injected.
         assert!(result.mock_gas_id.is_none());
-        assert!(result.suggested_gas_price.is_none());
+        assert_eq!(result.suggested_gas_price, Some(sim.reference_gas_price()));
         // Nothing was committed: the recipient owns nothing and the transaction is not in the
         // store.
         assert_eq!(sim.store().owned_objects(recipient).count(), 0);
