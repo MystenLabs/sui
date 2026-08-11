@@ -103,10 +103,15 @@ impl WriteTestCluster {
         let rpc_url = Url::parse(&format!("http://{}/", rpc_listen_address))
             .expect("Failed to parse RPC URL");
 
+        let kv_args = KvArgs {
+            ledger_grpc_url: Some(fullnode_grpc_url.parse().unwrap()),
+            ..Default::default()
+        };
+
         let rpc_service = start_rpc(
             Some(database_url),
             DbArgs::default(),
-            KvArgs::default(),
+            kv_args,
             ConsistentReaderArgs::default(),
             RpcArgs {
                 rpc_listen_address,

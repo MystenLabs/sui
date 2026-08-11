@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
-use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
@@ -29,10 +28,8 @@ use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
 
 use crate::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
-use crate::checkpoints::CheckpointDigestKey;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
-use crate::events::StoredTransactionEvents;
 use crate::events::TransactionEventsKey;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
@@ -40,13 +37,11 @@ use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use crate::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
 use crate::objects::VersionedObjectKey;
-use crate::pg_reader::PgReader;
 use crate::transactions::ProtoEffectsKey;
 use crate::transactions::TransactionKey;
 use crate::transactions::TransactionTimestampKey;
 
-/// Arguments for configuring KV store access via the Ledger gRPC service, with a Postgres
-/// fallback.
+/// Arguments for configuring KV store access via the Ledger gRPC service.
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct KvArgs {
     /// Maximum gRPC decoding message size for KV responses, in bytes.
@@ -67,22 +62,18 @@ pub struct KvArgs {
     pub kv_statement_timeout_ms: Option<u64>,
 }
 
-/// A loader for point lookups in kv stores backed by either Postgres or KV gRPC.
+/// A loader for point lookups against the Ledger gRPC service.
 /// Supported lookups:
 /// - Objects by id and version
 /// - Checkpoints by sequence number
 /// - Transactions by digest
 #[derive(Clone)]
-pub enum KvLoader {
-    Pg(Arc<DataLoader<PgReader>>),
-    LedgerGrpc(Arc<DataLoader<LedgerGrpcReader>>),
-}
+pub struct KvLoader(Arc<DataLoader<LedgerGrpcReader>>);
 
-/// A wrapper for the contents of a transaction, either from Postgres, Ledger gRPC, or just executed.
+/// A wrapper for the contents of a transaction, either from Ledger gRPC or just executed.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum TransactionContents {
-    Pg(StoredTransaction),
     LedgerGrpc(CheckpointedTransaction),
     ExecutedTransaction(ExecutedTransactionData),
 }
@@ -105,13 +96,6 @@ pub struct ExecutedTransactionData {
     pub timestamp_ms: Option<u64>,
     /// Checkpoint sequence number. Set for streamed/checkpointed transactions, None for mutations.
     pub cp_sequence_number: Option<u64>,
-}
-
-/// A wrapper for the contents of a transaction's events, either deserialized (from Ledger gRPC)
-/// or serialized (from Postgres).
-pub enum TransactionEventsContents {
-    Deserialized(KVTransactionEventsData),
-    Serialized(StoredTransactionEvents),
 }
 
 // A wrapper for a single balance change, either from gRPC or from native type.
@@ -190,17 +174,8 @@ impl KvArgs {
 }
 
 impl KvLoader {
-    /// Create a KvLoader from the available KV sources, preferring Ledger gRPC, with a fallback
-    /// to the shared Postgres `DataLoader`.
-    pub fn from_kv_sources(
-        ledger_grpc: Option<LedgerGrpcReader>,
-        pg_loader: Arc<DataLoader<PgReader>>,
-    ) -> Self {
-        if let Some(reader) = ledger_grpc {
-            Self::LedgerGrpc(Arc::new(reader.as_data_loader()))
-        } else {
-            Self::Pg(pg_loader)
-        }
+    pub fn new(ledger_grpc: LedgerGrpcReader) -> Self {
+        Self(Arc::new(ledger_grpc.as_data_loader()))
     }
 
     pub async fn load_one_object(
@@ -208,45 +183,14 @@ impl KvLoader {
         id: ObjectID,
         version: u64,
     ) -> Result<Option<Object>, Error> {
-        let key = VersionedObjectKey(id, version);
-        match self {
-            Self::Pg(loader) => loader
-                .load_one(key)
-                .await?
-                .and_then(|stored| {
-                    stored
-                        .serialized_object
-                        .map(|serialized_object| -> Result<Object, Error> {
-                            Ok(bcs::from_bytes(serialized_object.as_slice())
-                                .context("Failed to deserialize object")?)
-                        })
-                })
-                .transpose(),
-            Self::LedgerGrpc(loader) => loader.load_one(key).await,
-        }
+        self.0.load_one(VersionedObjectKey(id, version)).await
     }
 
     pub async fn load_many_objects(
         &self,
         keys: Vec<VersionedObjectKey>,
     ) -> Result<HashMap<VersionedObjectKey, Object>, Error> {
-        match self {
-            Self::Pg(loader) => {
-                let stored_objects = loader.load_many(keys).await?;
-                let mut results = HashMap::new();
-
-                for (key, stored) in stored_objects {
-                    if let Some(serialized_object) = stored.serialized_object {
-                        let object = bcs::from_bytes(serialized_object.as_slice())
-                            .context("Failed to deserialize object")?;
-                        results.insert(key, object);
-                    }
-                }
-
-                Ok(results)
-            }
-            Self::LedgerGrpc(loader) => loader.load_many(keys).await,
-        }
+        self.0.load_many(keys).await
     }
 
     pub async fn load_one_checkpoint(
@@ -260,110 +204,69 @@ impl KvLoader {
         )>,
         Error,
     > {
-        let key = CheckpointKey(sequence_number);
-        match self {
-            Self::Pg(loader) => loader
-                .load_one(key)
-                .await?
-                .map(|stored| {
-                    let summary: CheckpointSummary = bcs::from_bytes(&stored.checkpoint_summary)
-                        .context("Failed to deserialize checkpoint summary")?;
-
-                    let contents: CheckpointContents = bcs::from_bytes(&stored.checkpoint_contents)
-                        .context("Failed to deserialize checkpoint contents")?;
-
-                    let signature: AuthorityQuorumSignInfo<true> =
-                        bcs::from_bytes(&stored.validator_signatures)
-                            .context("Failed to deserialize validator signatures")?;
-
-                    Ok((summary, contents, signature))
-                })
-                .transpose(),
-            Self::LedgerGrpc(loader) => loader.load_one(key).await,
-        }
+        self.0.load_one(CheckpointKey(sequence_number)).await
     }
 
     /// Resolve a checkpoint digest to its sequence number. Returns `None` if the digest is not
-    /// found in the configured reader. Used by `Query.checkpoint(digest:)` to translate a
-    /// caller-supplied digest into the sequence number that downstream resolvers consume.
+    /// found. Used by `Query.checkpoint(digest:)` to translate a caller-supplied digest into the
+    /// sequence number that downstream resolvers consume.
     ///
-    /// Only the PG path goes through the DataLoader (its `Loader<CheckpointDigestKey>` impl can
-    /// batch via `eq_any`). The LedgerGrpc path calls the reader directly because its backend only
-    /// supports single-digest lookup, so DataLoader can't add real batching; it would only fan
-    /// keys out into N parallel backend requests.
+    /// Calls the reader directly rather than through the `DataLoader`, since the ledger gRPC
+    /// backend only supports single-digest lookup — `DataLoader` can't add real batching here; it
+    /// would only fan keys out into N parallel backend requests.
     pub async fn load_one_checkpoint_seq_by_digest(
         &self,
         digest: CheckpointDigest,
     ) -> Result<Option<u64>, Error> {
-        match self {
-            Self::Pg(loader) => loader.load_one(CheckpointDigestKey(digest)).await,
-            Self::LedgerGrpc(loader) => loader
-                .loader()
-                .checkpoint_seq_by_digest(digest)
-                .await
-                .map_err(Error::from),
-        }
+        self.0
+            .loader()
+            .checkpoint_seq_by_digest(digest)
+            .await
+            .map_err(Error::from)
     }
 
     pub async fn load_one_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<Option<TransactionContents>, Error> {
-        let key = TransactionKey(digest);
-        match self {
-            Self::Pg(loader) => Ok(loader.load_one(key).await?.map(TransactionContents::Pg)),
-            Self::LedgerGrpc(loader) => Ok(loader
-                .load_one(key)
-                .await?
-                .map(TransactionContents::LedgerGrpc)),
-        }
+        Ok(self
+            .0
+            .load_one(TransactionKey(digest))
+            .await?
+            .map(TransactionContents::LedgerGrpc))
     }
 
     pub async fn load_one_transaction_timestamp(
         &self,
         digest: TransactionDigest,
     ) -> Result<Option<u64>, Error> {
-        let key = TransactionTimestampKey(digest);
-        match self {
-            Self::Pg(loader) => loader.load_one(key).await,
-            Self::LedgerGrpc(loader) => loader.load_one(key).await,
-        }
+        self.0.load_one(TransactionTimestampKey(digest)).await
     }
 
-    /// Load a transaction's effects as rendered by the ledger service, otherwise `None`, as these
-    /// backends do not render additional data.
+    /// Load a transaction's effects as rendered by the ledger service.
     pub async fn load_one_rendered_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<Option<grpc::TransactionEffects>, Error> {
-        match self {
-            Self::LedgerGrpc(loader) => loader.load_one(ProtoEffectsKey(digest)).await,
-            Self::Pg(_) => Ok(None),
-        }
+        self.0.load_one(ProtoEffectsKey(digest)).await
     }
 
     pub async fn load_many_transaction_events(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> Result<HashMap<TransactionDigest, TransactionEventsContents>, Arc<Error>> {
+    ) -> Result<HashMap<TransactionDigest, KVTransactionEventsData>, Arc<Error>> {
         let keys = digests
             .iter()
             .map(|d| TransactionEventsKey(*d))
             .collect::<Vec<_>>();
-        match self {
-            Self::Pg(loader) => Ok(loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .map(|(key, stored)| (key.0, TransactionEventsContents::Serialized(stored)))
-                .collect()),
-            Self::LedgerGrpc(loader) => Ok(loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .map(|(key, data)| (key.0, TransactionEventsContents::Deserialized(data)))
-                .collect()),
-        }
+
+        Ok(self
+            .0
+            .load_many(keys)
+            .await?
+            .into_iter()
+            .map(|(key, data)| (key.0, data))
+            .collect())
     }
 
     pub async fn load_many_transactions(
@@ -374,20 +277,14 @@ impl KvLoader {
             .iter()
             .map(|d| TransactionKey(*d))
             .collect::<Vec<_>>();
-        match self {
-            Self::Pg(loader) => Ok(loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .map(|(key, stored)| (key.0, TransactionContents::Pg(stored)))
-                .collect()),
-            Self::LedgerGrpc(loader) => Ok(loader
-                .load_many(keys)
-                .await?
-                .into_iter()
-                .map(|(key, txn)| (key.0, TransactionContents::LedgerGrpc(txn)))
-                .collect()),
-        }
+
+        Ok(self
+            .0
+            .load_many(keys)
+            .await?
+            .into_iter()
+            .map(|(key, txn)| (key.0, TransactionContents::LedgerGrpc(txn)))
+            .collect())
     }
 }
 
@@ -437,8 +334,6 @@ impl TransactionContents {
 
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
-            Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
-                .context("Failed to deserialize transaction data"),
             Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),
             Self::ExecutedTransaction(tx) => Ok(tx.transaction_data.as_ref().clone()),
         }
@@ -446,8 +341,6 @@ impl TransactionContents {
 
     pub fn digest(&self) -> anyhow::Result<TransactionDigest> {
         match self {
-            Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
-                .context("Failed to deserialize transaction digest"),
             Self::LedgerGrpc(txn) => Ok(*txn.effects.as_ref().transaction_digest()),
             Self::ExecutedTransaction(tx) => Ok(*tx.effects.as_ref().transaction_digest()),
         }
@@ -455,12 +348,6 @@ impl TransactionContents {
 
     pub fn effects_digest(&self) -> anyhow::Result<TransactionEffectsDigest> {
         match self {
-            Self::Pg(stored) => {
-                let effects: TransactionEffects = bcs::from_bytes(&stored.raw_effects)
-                    .context("Failed to deserialize effects")?;
-
-                Ok(effects.digest())
-            }
             Self::LedgerGrpc(txn) => Ok(txn.effects.digest()),
             Self::ExecutedTransaction(tx) => Ok(tx.effects.digest()),
         }
@@ -468,9 +355,6 @@ impl TransactionContents {
 
     pub fn signatures(&self) -> anyhow::Result<Vec<GenericSignature>> {
         match self {
-            Self::Pg(stored) => {
-                bcs::from_bytes(&stored.user_signatures).context("Failed to deserialize signatures")
-            }
             Self::LedgerGrpc(txn) => Ok(txn.signatures.clone()),
             Self::ExecutedTransaction(tx) => Ok(tx.signatures.clone()),
         }
@@ -478,9 +362,6 @@ impl TransactionContents {
 
     pub fn effects(&self) -> anyhow::Result<TransactionEffects> {
         match self {
-            Self::Pg(stored) => {
-                bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
-            }
             Self::LedgerGrpc(txn) => Ok(txn.effects.as_ref().clone()),
             Self::ExecutedTransaction(tx) => Ok(tx.effects.as_ref().clone()),
         }
@@ -495,9 +376,6 @@ impl TransactionContents {
             events.into_iter().map(Arc::new).collect()
         }
         match self {
-            Self::Pg(stored) => bcs::from_bytes(&stored.events)
-                .context("Failed to deserialize events")
-                .map(wrap),
             Self::LedgerGrpc(txn) => Ok(wrap(txn.events.clone().unwrap_or_default())),
             Self::ExecutedTransaction(tx) => Ok(tx.events.clone()),
         }
@@ -517,7 +395,6 @@ impl TransactionContents {
                     .map(|c| BalanceChangeContents::Grpc(c.clone()))
                     .collect(),
             ),
-            _ => None,
         }
     }
 
@@ -525,7 +402,7 @@ impl TransactionContents {
     pub fn cached_proto_effects(&self) -> Option<&grpc::TransactionEffects> {
         match self {
             Self::ExecutedTransaction(tx) => tx.proto_effects.as_ref(),
-            _ => None,
+            Self::LedgerGrpc(_) => None,
         }
     }
 
@@ -543,11 +420,6 @@ impl TransactionContents {
 
         // TODO: fullnode-rendered protos also include clever error rendering, which sui-kv-rpc does
         // not implement (though it has the package resolver required).
-        //
-        // TODO: The local BCS conversion is a transitional fallback, reachable only on the `Pg`
-        // `KvLoader` variant (no ledger service to ask). It lacks object type annotations and
-        // runtime-loaded objects, which are not derivable from the effects BCS. This path will be
-        // unreachable once the `Pg` variant is deprecated.
 
         match kv_loader
             .load_one_rendered_effects(self.digest()?)
@@ -573,13 +445,12 @@ impl TransactionContents {
                     Ok(self.data()?.into())
                 }
             }
-            _ => Ok(self.data()?.into()),
+            Self::LedgerGrpc(_) => Ok(self.data()?.into()),
         }
     }
 
     pub fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
         match self {
-            Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
             Self::LedgerGrpc(txn) => bcs::to_bytes(txn.transaction_data.as_ref())
                 .context("Failed to serialize transaction"),
             Self::ExecutedTransaction(tx) => bcs::to_bytes(tx.transaction_data.as_ref())
@@ -589,7 +460,6 @@ impl TransactionContents {
 
     pub fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
         match self {
-            Self::Pg(stored) => Ok(stored.raw_effects.clone()),
             Self::LedgerGrpc(txn) => {
                 bcs::to_bytes(txn.effects.as_ref()).context("Failed to serialize effects")
             }
@@ -601,7 +471,6 @@ impl TransactionContents {
 
     pub fn timestamp_ms(&self) -> Option<u64> {
         match self {
-            Self::Pg(stored) => Some(stored.timestamp_ms as u64),
             Self::LedgerGrpc(txn) => txn.timestamp_ms,
             Self::ExecutedTransaction(tx) => tx.timestamp_ms,
         }
@@ -609,27 +478,8 @@ impl TransactionContents {
 
     pub fn cp_sequence_number(&self) -> Option<u64> {
         match self {
-            Self::Pg(stored) => Some(stored.cp_sequence_number as u64),
             Self::LedgerGrpc(txn) => txn.cp_sequence_number,
             Self::ExecutedTransaction(tx) => tx.cp_sequence_number,
-        }
-    }
-}
-
-impl TransactionEventsContents {
-    pub fn events(&self) -> anyhow::Result<Vec<Event>> {
-        match self {
-            Self::Serialized(stored) => {
-                bcs::from_bytes(&stored.events).context("Failed to deserialize events")
-            }
-            Self::Deserialized(kv) => Ok(kv.events.clone()),
-        }
-    }
-
-    pub fn timestamp_ms(&self) -> Option<u64> {
-        match self {
-            Self::Serialized(stored) => Some(stored.timestamp_ms as u64),
-            Self::Deserialized(kv) => Some(kv.timestamp_ms),
         }
     }
 }

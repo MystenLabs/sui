@@ -1,16 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use anyhow::Context;
-use async_graphql::dataloader::Loader;
-use diesel::ExpressionMethods;
-use diesel::QueryDsl;
 use prost_types::FieldMask;
-use sui_indexer_alt_schema::schema::kv_transactions;
-use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as proto;
@@ -20,7 +14,6 @@ use crate::error::Error;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::ChunkedLoader;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
-use crate::pg_reader::PgReader;
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,43 +28,6 @@ pub struct TransactionTimestampKey(pub TransactionDigest);
 /// runtime-loaded objects).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ProtoEffectsKey(pub TransactionDigest);
-
-#[async_trait::async_trait]
-impl Loader<TransactionKey> for PgReader {
-    type Value = StoredTransaction;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[TransactionKey],
-    ) -> Result<HashMap<TransactionKey, Self::Value>, Error> {
-        use kv_transactions::dsl as t;
-
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let mut conn = self.connect().await?;
-
-        let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
-        let transactions: Vec<StoredTransaction> = conn
-            .results(t::kv_transactions.filter(t::tx_digest.eq_any(digests)))
-            .await?;
-
-        let digest_to_stored: HashMap<_, _> = transactions
-            .into_iter()
-            .map(|stored| (stored.tx_digest.clone(), stored))
-            .collect();
-
-        Ok(keys
-            .iter()
-            .filter_map(|key| {
-                let slice: &[u8] = key.0.as_ref();
-                Some((*key, digest_to_stored.get(slice).cloned()?))
-            })
-            .collect())
-    }
-}
 
 #[async_trait::async_trait]
 impl ChunkedLoader<TransactionKey> for LedgerGrpcReader {
@@ -107,44 +63,6 @@ impl ChunkedLoader<TransactionKey> for LedgerGrpcReader {
             }
         }
         Ok(results)
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<TransactionTimestampKey> for PgReader {
-    type Value = u64;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[TransactionTimestampKey],
-    ) -> Result<HashMap<TransactionTimestampKey, Self::Value>, Error> {
-        use kv_transactions::dsl as t;
-
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let mut conn = self.connect().await?;
-
-        let digests: BTreeSet<_> = keys.iter().map(|d| d.0.into_inner()).collect();
-        let timestamps: Vec<(Vec<u8>, i64)> = conn
-            .results(
-                t::kv_transactions
-                    .select((t::tx_digest, t::timestamp_ms))
-                    .filter(t::tx_digest.eq_any(digests)),
-            )
-            .await?;
-
-        let digest_to_timestamp: HashMap<_, _> = timestamps.into_iter().collect();
-
-        Ok(keys
-            .iter()
-            .filter_map(|key| {
-                let slice: &[u8] = key.0.as_ref();
-                Some((*key, *digest_to_timestamp.get(slice)? as u64))
-            })
-            .collect())
     }
 }
 
@@ -250,6 +168,8 @@ impl ChunkedLoader<ProtoEffectsKey> for LedgerGrpcReader {
 
 #[cfg(test)]
 mod tests {
+    use async_graphql::dataloader::Loader;
+
     use super::*;
     use crate::ledger_grpc_reader::test_support::assert_chunked;
     use crate::ledger_grpc_reader::test_support::mock_reader;

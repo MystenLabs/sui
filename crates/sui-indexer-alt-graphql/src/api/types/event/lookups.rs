@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use itertools::Either;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
+use sui_kvstore::TransactionEventsData;
 use sui_types::digests::TransactionDigest;
 use tokio::sync::OnceCell;
 
@@ -61,9 +61,7 @@ pub(crate) async fn events_from_sequence_numbers(
 fn tx_events_paginated<'e>(
     scope: &Scope,
     page: &Page<CEvent>,
-    contents: impl Iterator<
-        Item = anyhow::Result<(u64, TransactionDigest, &'e TransactionEventsContents)>,
-    >,
+    contents: impl Iterator<Item = anyhow::Result<(u64, TransactionDigest, &'e TransactionEventsData)>>,
     filter: &EventFilter,
 ) -> Result<Vec<(EventCursor, Event)>, RpcError> {
     let mut results = Vec::new();
@@ -71,7 +69,7 @@ fn tx_events_paginated<'e>(
 
     'outer: for events in contents {
         let (tx_sequence_number, transaction_digest, contents) = events?;
-        let events = contents.events()?;
+        let events = &contents.events;
 
         let bounds: Either<Range<usize>, Rev<Range<usize>>> = if page.is_from_front() {
             Either::Left(tx_ev_bounds(page, tx_sequence_number, events.len()))
@@ -97,7 +95,7 @@ fn tx_events_paginated<'e>(
                 native: Arc::new(native.clone()),
                 transaction_digest,
                 sequence_number: ev_sequence_number as u64,
-                timestamp_ms: OnceCell::from(contents.timestamp_ms()),
+                timestamp_ms: OnceCell::from(Some(contents.timestamp_ms)),
             };
 
             results.push((event_cursor, event));

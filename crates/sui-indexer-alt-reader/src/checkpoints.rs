@@ -1,66 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use anyhow::Context;
 use async_graphql::dataloader::Loader;
-use diesel::ExpressionMethods;
-use diesel::QueryDsl;
 use futures::future::try_join_all;
 use prost_types::FieldMask;
-use sui_indexer_alt_schema::checkpoints::StoredCheckpoint;
-use sui_indexer_alt_schema::checkpoints::StoredCpDigest;
-use sui_indexer_alt_schema::schema::cp_digests;
-use sui_indexer_alt_schema::schema::kv_checkpoints;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_types::crypto::AuthorityQuorumSignInfo;
-use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 
 use crate::error::Error;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
-use crate::pg_reader::PgReader;
 
 /// Key for fetching a checkpoint's content by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CheckpointKey(pub u64);
-
-/// Key for resolving a checkpoint's sequence number from its digest.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CheckpointDigestKey(pub CheckpointDigest);
-
-#[async_trait::async_trait]
-impl Loader<CheckpointKey> for PgReader {
-    type Value = StoredCheckpoint;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[CheckpointKey],
-    ) -> Result<HashMap<CheckpointKey, Self::Value>, Error> {
-        use kv_checkpoints::dsl as c;
-
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let mut conn = self.connect().await?;
-
-        let seqs: BTreeSet<_> = keys.iter().map(|d| d.0 as i64).collect();
-        let checkpoints: Vec<StoredCheckpoint> = conn
-            .results(c::kv_checkpoints.filter(c::sequence_number.eq_any(seqs)))
-            .await?;
-
-        Ok(checkpoints
-            .into_iter()
-            .map(|c| (CheckpointKey(c.sequence_number as u64), c))
-            .collect())
-    }
-}
 
 #[async_trait::async_trait]
 impl Loader<CheckpointKey> for LedgerGrpcReader {
@@ -121,40 +79,5 @@ impl Loader<CheckpointKey> for LedgerGrpcReader {
 
         let results: Vec<_> = try_join_all(futures).await?;
         Ok(results.into_iter().flatten().collect())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<CheckpointDigestKey> for PgReader {
-    type Value = u64;
-    type Error = Error;
-
-    async fn load(
-        &self,
-        keys: &[CheckpointDigestKey],
-    ) -> Result<HashMap<CheckpointDigestKey, Self::Value>, Error> {
-        use cp_digests::dsl as c;
-
-        if keys.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let mut conn = self.connect().await?;
-
-        let digests: BTreeSet<Vec<u8>> = keys.iter().map(|k| k.0.inner().to_vec()).collect();
-        let rows: Vec<StoredCpDigest> = conn
-            .results(c::cp_digests.filter(c::cp_digest.eq_any(digests)))
-            .await?;
-
-        Ok(rows
-            .into_iter()
-            .filter_map(|r| {
-                let bytes: [u8; 32] = r.cp_digest.try_into().ok()?;
-                Some((
-                    CheckpointDigestKey(CheckpointDigest::new(bytes)),
-                    r.cp_sequence_number as u64,
-                ))
-            })
-            .collect())
     }
 }
