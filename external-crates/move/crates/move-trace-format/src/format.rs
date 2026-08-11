@@ -634,3 +634,25 @@ fn large_numeric_values_in_trace() {
         }
     }
 }
+
+// `Writer::push` -- the generic hook tracers use to add external events -- should handle an integer
+// larger than `u64::MAX`, preserving its exact value in the trace.
+#[test]
+fn external_event_with_large_integer() {
+    let mut trace = MoveTrace::new();
+    Writer(&mut trace).push(SerializableMoveValue::U128(u128::MAX));
+
+    let bytes = trace.into_compressed_json_bytes();
+    let reader = MoveTraceReader::new(std::io::Cursor::new(bytes)).unwrap();
+
+    let expected = u128::MAX.to_string();
+    let mut saw_external = false;
+    for event in reader {
+        let TraceEvent::External(event) = event.unwrap() else {
+            panic!("expected an external event");
+        };
+        assert!(event.get().contains(expected.as_str()));
+        saw_external = true;
+    }
+    assert!(saw_external, "expected to read back the external event");
+}
