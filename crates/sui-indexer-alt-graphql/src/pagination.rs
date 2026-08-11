@@ -15,6 +15,7 @@ use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_pg_db::query::Query;
+use sui_rpc_cursor::CursorToken;
 use sui_sql_macro::query;
 
 use crate::api::scalars::cursor::JsonCursor;
@@ -351,7 +352,7 @@ impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
 
 impl<C> Page<C>
 where
-    C: CursorType + for<'a> TryFrom<&'a [u8], Error = anyhow::Error>,
+    C: CursorType + TryFrom<CursorToken, Error = anyhow::Error>,
 {
     /// Translate a `StreamPage` into a `StreamConnection`. The server is expected to have already
     /// applied page bounds and limit.
@@ -395,11 +396,11 @@ where
         })
     }
 
-    /// Re-encode a stream-minted cursor as a GraphQL cursor string in this page's cursor format.
-    /// Each cursor type knows what its stream's raw bytes decode as — a wire `CursorToken` for
-    /// server-drained streams, or a reader-minted token for derived views.
+    /// Re-encode a server-minted cursor (raw encoded `CursorToken` bytes from the gRPC stream)
+    /// as a GraphQL cursor string in this page's cursor format.
     fn encode_stream_cursor(bytes: &[u8]) -> Result<String, RpcError> {
-        let cursor = C::try_from(bytes).context("Unexpected stream cursor")?;
+        let token = CursorToken::decode(bytes).context("Failed to decode stream cursor")?;
+        let cursor = C::try_from(token).context("Unexpected position in stream cursor")?;
         Ok(cursor.encode_cursor())
     }
 }
