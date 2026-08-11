@@ -17,5 +17,6 @@ module 0x42::m {
     public fun used_directly(): u64 { ONE }
 
     // the cast cannot be folded, so it remains and errors at runtime
+    #[allow(always_errors)]
     public fun unfoldable(): u8 { MAX_U16 as u8 }
 }

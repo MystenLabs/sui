@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 2 tasks
 
-task 1, lines 3-21:
+task 1, lines 3-22:
 //# print-bytecode
 // Move bytecode v7
 module 42.m {
