@@ -276,17 +276,15 @@ mod test {
     /// rpc fullnode which are needed to run the benchmark.
     fn get_keep_alive_nodes(cluster: &TestCluster) -> HashSet<sui_simulator::task::NodeId> {
         let mut keep_alive_nodes = HashSet::new();
-        // The first fullnode in the swarm ins the rpc fullnode.
         keep_alive_nodes.insert(
             cluster
-                .swarm
-                .fullnodes()
-                .next()
-                .unwrap()
-                .get_node_handle()
-                .unwrap()
+                .fullnode_handle
+                .sui_node
                 .with(|n| n.get_sim_node_id()),
         );
+        // The observer fullnode is deliberately NOT kept alive: the cluster holds no
+        // handle to it, so the simulator can kill and restart it like any validator,
+        // and the final catch-up assertion covers its crash recovery.
         keep_alive_nodes.insert(sui_simulator::current_simnode_id());
         keep_alive_nodes
     }
@@ -1125,6 +1123,11 @@ mod test {
             ))
             .disable_fullnode_pruning()
             .with_synthetic_execution_time_injection();
+        // The standard setup includes an observer fullnode subscribed to the first
+        // validator, so that every scenario also exercises consensus block streaming.
+        if get_var("SIM_STRESS_TEST_OBSERVER", 1u8) != 0 {
+            builder = builder.with_observer_fullnode();
+        }
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
         }
@@ -1486,6 +1489,7 @@ mod test {
         });
 
         if enable_surfer {
+            let surfer_cluster = test_cluster.clone();
             let surfer_task = tokio::spawn(async move {
                 // now do a sui-surfer test
                 let mut test_packages_dir = benchmark_move_base_dir();
@@ -1504,7 +1508,7 @@ mod test {
                     surf_strategy,
                     test_duration,
                     test_package_paths,
-                    test_cluster,
+                    surfer_cluster,
                     1, // skip first account for use by bench_task
                 )
                 .await;
@@ -1518,6 +1522,10 @@ mod test {
             info!("Surfer disabled, running only benchmark task");
             bench_task.await.unwrap();
         }
+
+        // With load stopped, the observer (when present) must be able to reach the
+        // network's latest checkpoint via block streaming, in any scenario.
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
     }
 
     // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
