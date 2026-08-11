@@ -11,7 +11,7 @@ A fork node can be started from inside another Rust program through one call:
 let fork = ForkNode::start(args, version, registry).await?;
 ```
 
-`ForkArgs` says what to fork and where to serve it; the returned `ForkNode` is the running
+`StartArgs` says what to fork and where to serve it; the returned `ForkNode` is the running
 fork — it reports what was started, drives the fork's clock and checkpoints in-process, and
 controls when the fork stops. The crate's own binary is the first consumer; the intended one
 is the Sui CLI, which would start a fork the same way it already starts its faucet, indexer,
@@ -23,7 +23,7 @@ starts, observes, and stops a fork.
 
 ```rust
 #[derive(clap::Args, Clone, Debug)]
-pub struct ForkArgs {
+pub struct StartArgs {
     /// Network to fork from: mainnet, testnet, devnet, or a custom GraphQL URL.
     #[arg(long, default_value_t = Self::default().network)]
     pub network: Node,
@@ -46,7 +46,7 @@ pub struct ForkArgs {
 
 impl ForkNode {
     pub async fn start(
-        args: ForkArgs,
+        args: StartArgs,
         version: &'static str,
         registry: &prometheus::Registry,
     ) -> Result<ForkNode>;
@@ -89,9 +89,10 @@ embedded next to anything else that does.
 ## The shape of the entry point
 
 The arguments are a plain struct with public fields, a `Default` (mainnet, latest, default
-data root, no seeds, `127.0.0.1:9126` — a port deliberately clear of the fullnode's 9000,
-the faucet's 9123, and the consistent store's 9124, since a fork's natural habitat is next
-to exactly those services), and a `clap::Args` derive whose flag defaults are
+data root, no seeds, `127.0.0.1:9000` — the fullnode RPC default, on purpose: the fork
+stands in for a fullnode, so clients that default to `localhost:9000` reach it unchanged,
+and running next to a real fullnode is the exception that picks another port and fails
+loudly at bind time otherwise), and a `clap::Args` derive whose flag defaults are
 read from that `Default` — one struct serves the command line and the programmatic caller,
 and the two sets of defaults cannot drift. The services `sui start` composes take their
 options the same way (the indexer's and consistent store's args derive both), while the
@@ -200,7 +201,7 @@ are left out for the same reason: the gRPC execution path already exists, carrie
 sender-impersonation rules, and owns the blocking dispatch.
 
 The rest of the crate narrows to match. The GraphQL client, the startup internals, the seed
-input, and the store become crate-private; the public surface is `ForkArgs`, `ForkNode` and
+input, and the store become crate-private; the public surface is `StartArgs`, `ForkNode` and
 its return types, `Node`, the command-line types, and the forking-service client types a
 host binary needs for client-side subcommands against an already-running fork. The crate was
 not a workspace dependency before this change, so nothing outside it could name any of the

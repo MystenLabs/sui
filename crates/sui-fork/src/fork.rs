@@ -3,7 +3,7 @@
 
 //! Programmatic entry point for running a fork node inside another program.
 //!
-//! [`ForkArgs`] describes what to fork and where to serve it; it derives
+//! [`StartArgs`] describes what to fork and where to serve it; it derives
 //! `clap::Args` so a binary can flatten it into its own command line, and
 //! `Default` so a library caller can construct it directly — clap reads its
 //! defaults from the `Default` impl, so the two cannot drift.
@@ -36,17 +36,17 @@ use crate::startup::ForkParts;
 
 /// Default address the fork's RPC server binds when none is configured.
 ///
-/// The port is deliberately clear of the defaults of the services a fork runs next to: 9000
-/// (fullnode RPC, also `sui start`'s default), 9123 (faucet), 9124 (consistent store), and 9184
-/// (metrics).
-pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9126";
+/// The port matches the fullnode RPC default (9000) on purpose: the fork stands in for a
+/// fullnode, so clients that default to `localhost:9000` reach it unchanged. Pass `--rpc-addr`
+/// when running next to a real local fullnode or `sui start`, which claim the same port.
+pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
 
 /// Everything needed to start a fork node.
 ///
 /// The defaults fork mainnet at its latest checkpoint, store fork state under the default data
-/// root, seed nothing, and serve on `127.0.0.1:9126`.
+/// root, seed nothing, and serve on `127.0.0.1:9000`.
 #[derive(clap::Args, Clone, Debug)]
-pub struct ForkArgs {
+pub struct StartArgs {
     /// Network to fork from: mainnet, testnet, devnet, or a custom GraphQL URL.
     #[arg(long, default_value_t = Self::default().network)]
     pub network: Node,
@@ -81,7 +81,7 @@ pub struct ForkArgs {
     pub rpc_listen_address: SocketAddr,
 }
 
-impl Default for ForkArgs {
+impl Default for StartArgs {
     fn default() -> Self {
         Self {
             network: Node::Mainnet,
@@ -145,11 +145,11 @@ impl ForkNode {
     /// in the returned handle and are cleaned up when it is dropped, shut
     /// down, or converted into a [`Service`].
     pub async fn start(
-        args: ForkArgs,
+        args: StartArgs,
         version: &'static str,
         registry: &Registry,
     ) -> Result<ForkNode> {
-        let ForkArgs {
+        let StartArgs {
             network,
             checkpoint,
             data_dir,

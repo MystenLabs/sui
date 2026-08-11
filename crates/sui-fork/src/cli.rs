@@ -16,10 +16,10 @@ use tracing::info;
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
 use crate::DEFAULT_RPC_ADDR;
-use crate::ForkArgs;
 use crate::ForkNode;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
+use crate::StartArgs;
 
 #[derive(Parser)]
 #[command(name = "sui-fork", about = "Fork and interact with a Sui network")]
@@ -37,7 +37,7 @@ enum Command {
     /// Start a forked Sui network
     Start {
         #[command(flatten)]
-        args: ForkArgs,
+        args: StartArgs,
     },
 
     /// Advance the network clock by a given duration
@@ -134,7 +134,7 @@ fn print_output<T: Serialize + std::fmt::Display>(value: &T, json_output: bool) 
     }
 }
 
-async fn cmd_start(args: ForkArgs, json_output: bool, version: &'static str) -> Result<()> {
+async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) -> Result<()> {
     let registry = Registry::new();
     let fork = ForkNode::start(args, version, &registry).await?;
 
@@ -351,11 +351,11 @@ mod tests {
                 Command::Start { .. } => panic!("expected client command"),
             };
 
-            // Pin the literal so an accidental change to the default (e.g. back onto the
-            // fullnode's 9000) fails here instead of shipping silently.
-            assert_eq!(DEFAULT_RPC_ADDR, "127.0.0.1:9126");
-            assert_eq!(rpc_addr, Url::parse("http://127.0.0.1:9126").unwrap());
-            assert_eq!(rpc_endpoint(&rpc_addr), "http://127.0.0.1:9126/");
+            // Pin the literal so an accidental change to the default fails here
+            // instead of shipping silently.
+            assert_eq!(DEFAULT_RPC_ADDR, "127.0.0.1:9000");
+            assert_eq!(rpc_addr, Url::parse("http://127.0.0.1:9000").unwrap());
+            assert_eq!(rpc_endpoint(&rpc_addr), "http://127.0.0.1:9000/");
         }
     }
 

@@ -16,7 +16,7 @@
 //! crate's `design/` directory.
 //!
 //! There are two ways in. Programs embed a fork through [`ForkNode::start`],
-//! which takes [`ForkArgs`], a version string, and a metrics registry, and
+//! which takes [`StartArgs`], a version string, and a metrics registry, and
 //! returns a running [`ForkNode`]. The `sui-fork` binary wraps the same entry
 //! point behind [`cli::Cli`], whose client subcommands drive a running fork
 //! over the forking service ([`ForkingServiceClient`]).
@@ -45,9 +45,9 @@ pub use fork::ClockAdvanced;
 pub use fork::CreatedCheckpoint;
 pub use fork::DEFAULT_RPC_ADDR;
 pub use fork::ForkAdmin;
-pub use fork::ForkArgs;
 pub use fork::ForkNode;
 pub use fork::ForkStatus;
+pub use fork::StartArgs;
 pub use node::Node;
 pub use proto::forking::AdvanceCheckpointRequest;
 pub use proto::forking::AdvanceClockRequest;
