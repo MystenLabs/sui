@@ -540,13 +540,8 @@ impl DagState {
         blocks
     }
 
-    /// Gets all uncommitted blocks in a round.
-    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
-    pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        if round <= self.last_commit_round() {
-            panic!("Round {} have committed blocks!", round);
-        }
-
+    /// Gets all cached blocks in a round, including committed blocks.
+    pub(crate) fn get_cached_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
         let mut blocks = vec![];
         for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
@@ -559,6 +554,16 @@ impl DagState {
             blocks.push(block_info.block.clone())
         }
         blocks
+    }
+
+    /// Gets all uncommitted blocks in a round.
+    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
+    pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
+        if round <= self.last_commit_round() {
+            panic!("Round {} have committed blocks!", round);
+        }
+
+        self.get_cached_blocks_at_round(round)
     }
 
     #[cfg(test)]
