@@ -521,12 +521,16 @@ impl SuiCommand {
             }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool {
-                keystore_path: _,
+                keystore_path,
                 json,
                 cmd,
             } => {
                 let config_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
                 let mut context = WalletContext::new(&config_path)?;
+                if let Some(keystore_path) = keystore_path {
+                    context.config.keystore =
+                        Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
+                }
 
                 cmd.execute(&mut context).await?.print(!json);
                 Ok(())
